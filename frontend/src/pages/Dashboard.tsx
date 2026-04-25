@@ -169,16 +169,67 @@ export default function Dashboard() {
 
   const maxQuestions = Math.max(1, ...subjectStats.map((s) => s.questions));
 
-  // Suggestion CTA dynamique
+  // Suggestion CTA dynamique — ne propose que les séances du jour NON terminées,
+  // sinon cherche la prochaine séance en attente dans le calendrier, sinon
+  // félicite et propose les fallbacks (examens / lacunes / plan / diagnostic).
   const continueCta = useMemo(() => {
-    if (todaySessions[0]) {
-      const s = todaySessions[0];
+    const isPending = (s: any) => s?.status !== 'completed' && s?.status !== 'skipped';
+
+    // 1) Séances d'aujourd'hui non terminées
+    const pendingToday = (todaySessions || []).filter(isPending);
+    if (pendingToday.length > 0) {
+      const s = pendingToday[0];
       const subj = s.subjects?.name_fr || 'matière';
       return {
-        text: `Tu as ${todaySessions.length} session${todaySessions.length > 1 ? 's' : ''} à faire en ${subj}`,
+        text: `Tu as ${pendingToday.length} session${pendingToday.length > 1 ? 's' : ''} à faire en ${subj}`,
         href: `/session/${s.chapter_id}`,
       };
     }
+
+    const todayHadSessions = (todaySessions || []).length > 0;
+    const todayAllDone = todayHadSessions && pendingToday.length === 0;
+
+    // 2) Prochaine séance future en attente (la plus proche)
+    const byDate = allSessionsData?.sessions_by_date || {};
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const futureDates = Object.keys(byDate)
+      .filter((iso) => iso > todayISO)
+      .sort();
+    for (const iso of futureDates) {
+      const list = (byDate[iso] || []).filter(isPending);
+      if (list.length > 0) {
+        const s = list[0];
+        const subj = s.subjects?.name_fr || 'matière';
+        const d = new Date(iso + 'T00:00:00');
+        const dayLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        if (todayAllDone) {
+          return {
+            text: `🎉 Bravo, journée terminée ! Prochaine séance ${dayLabel} en ${subj}`,
+            href: '/coaching/plan',
+          };
+        }
+        return {
+          text: `Prochaine séance ${dayLabel} en ${subj}`,
+          href: '/coaching/plan',
+        };
+      }
+    }
+
+    // 3) Aujourd'hui terminé mais aucune séance future trouvée
+    if (todayAllDone) {
+      if (inProgressCount > 0) {
+        return {
+          text: `🎉 Journée terminée ! Tu peux finir ${inProgressCount} examen${inProgressCount > 1 ? 's' : ''} en cours`,
+          href: '/exam',
+        };
+      }
+      return {
+        text: '🎉 Bravo, journée terminée ! Prends de l\'avance avec un examen',
+        href: '/exam',
+      };
+    }
+
+    // 4) Fallbacks existants
     if (inProgressCount > 0) {
       return {
         text: `${inProgressCount} examen${inProgressCount > 1 ? 's' : ''} en cours à terminer`,
@@ -195,7 +246,7 @@ export default function Dashboard() {
       return { text: 'Continue ton plan personnalisé', href: '/coaching/plan' };
     }
     return { text: 'Lance ton diagnostic pour commencer', href: '/coaching/diagnostic' };
-  }, [todaySessions, inProgressCount, totalLacunes, hasPlan]);
+  }, [todaySessions, allSessionsData, inProgressCount, totalLacunes, hasPlan]);
 
   return (
     <MoalimShell>
