@@ -787,10 +787,10 @@ export default function ExamPractice() {
             </div>
 
             {/* Separator */}
-            {!isExtractedExam && <div className="w-px h-7 bg-white/10 mx-1 hidden md:block" />}
+            {!isExtractedExam && <div className="w-px h-7 bg-white/10 mx-1 hidden lg:block" />}
 
             {/* Question dots - scrollable */}
-            <div className={`flex-1 min-w-0 hidden md:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none ${isExtractedExam ? 'invisible' : ''}`}>
+            <div className={`flex-1 min-w-0 hidden lg:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none ${isExtractedExam ? 'invisible' : ''}`}>
               {exam.questions.map((_q, qIdx) => {
                 const isCurrent = qIdx === currentQ;
                 const qBadge = TYPE_BADGE[_q.type || 'open'];
@@ -829,7 +829,7 @@ export default function ExamPractice() {
             {/* Autosave indicator */}
             {lastSavedAt && (
               <div
-                className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-[10px] font-semibold flex-shrink-0"
+                className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-[10px] font-semibold flex-shrink-0"
                 title={`Sauvegarde : ${timeAgo(lastSavedAt)}`}
               >
                 <Save className="w-3 h-3" />
@@ -850,8 +850,8 @@ export default function ExamPractice() {
 
       {/* ===================== 2-COLUMN BODY ===================== */}
       <div className="flex-1 min-h-0 flex">
-        {/* --- LEFT PANEL: Question + Documents --- */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-white/10">
+        {/* --- LEFT PANEL: Question + Documents (lg+ only — phones use stacked) --- */}
+        <div className="hidden lg:block flex-1 min-w-0 overflow-y-auto border-r border-white/10">
           <div className="max-w-2xl mx-auto px-3 lg:px-5 py-3 space-y-2">
             {/* Type badge + exercise name */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -873,8 +873,8 @@ export default function ExamPractice() {
           </div>
         </div>
 
-        {/* --- RIGHT PANEL: Answer + Feedback --- */}
-        <div className="w-[48%] lg:w-[52%] flex-shrink-0 overflow-y-auto bg-[#070718]/40 hidden md:block">
+        {/* --- RIGHT PANEL: Answer + Feedback (lg+ only) --- */}
+        <div className="lg:w-[52%] flex-shrink-0 overflow-y-auto bg-[#070718]/40 hidden lg:block">
           <div className="px-3 lg:px-5 py-3 space-y-3 max-w-2xl">
             {/* Answer input */}
             <AnswerInput
@@ -920,8 +920,8 @@ export default function ExamPractice() {
           </div>
         </div>
 
-        {/* --- MOBILE: stacked layout (visible on small screens only) --- */}
-        <div className="md:hidden flex-1 min-w-0 overflow-y-auto">
+        {/* --- MOBILE + LANDSCAPE PHONE: stacked layout (<lg) --- */}
+        <div className="lg:hidden flex-1 min-w-0 overflow-y-auto">
           <div className="px-3 py-3 space-y-3">
             {/* Type badge */}
             <div className="flex items-center gap-2">

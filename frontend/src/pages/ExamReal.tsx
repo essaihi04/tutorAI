@@ -771,7 +771,7 @@ export default function ExamReal() {
             {/* Autosave indicator */}
             {lastSavedAt && (
               <div
-                className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-[10px] font-semibold flex-shrink-0"
+                className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-[10px] font-semibold flex-shrink-0"
                 title={`Dernière sauvegarde : ${timeAgo(lastSavedAt)}`}
               >
                 <Save className="w-3 h-3" />
@@ -780,10 +780,10 @@ export default function ExamReal() {
             )}
 
             {/* Separator */}
-            <div className="w-px h-7 bg-white/10 mx-1 hidden md:block" />
+            <div className="w-px h-7 bg-white/10 mx-1 hidden lg:block" />
 
             {/* Question dots - scrollable */}
-            <div className="flex-1 min-w-0 hidden md:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
+            <div className="flex-1 min-w-0 hidden lg:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
               {exam.questions.map((_q, qIdx) => {
                 const isCurrent = qIdx === currentQ;
                 return (
@@ -830,8 +830,8 @@ export default function ExamReal() {
 
       {/* ===================== 2-COLUMN BODY ===================== */}
       <div className="flex-1 min-h-0 flex">
-        {/* --- LEFT PANEL: Question + Documents --- */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-white/10">
+        {/* --- LEFT PANEL: Question + Documents (lg+ only — phones use stacked) --- */}
+        <div className="hidden lg:block flex-1 min-w-0 overflow-y-auto border-r border-white/10">
           <div className="max-w-2xl mx-auto px-3 lg:px-5 py-3 space-y-2">
             {/* Type badge + exercise name */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -851,8 +851,8 @@ export default function ExamReal() {
           </div>
         </div>
 
-        {/* --- RIGHT PANEL: Answer --- */}
-        <div className="w-[45%] lg:w-[48%] flex-shrink-0 overflow-y-auto bg-[#070718]/40 hidden md:block">
+        {/* --- RIGHT PANEL: Answer (lg+ only) --- */}
+        <div className="lg:w-[48%] flex-shrink-0 overflow-y-auto bg-[#070718]/40 hidden lg:block">
           <div className="px-3 lg:px-4 py-3 space-y-3 max-w-xl">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 rounded-md bg-red-500/20 flex items-center justify-center">
@@ -886,8 +886,8 @@ export default function ExamReal() {
           </div>
         </div>
 
-        {/* --- MOBILE: stacked layout --- */}
-        <div className="md:hidden flex-1 min-w-0 overflow-y-auto">
+        {/* --- MOBILE + LANDSCAPE PHONE: stacked layout (<lg) --- */}
+        <div className="lg:hidden flex-1 min-w-0 overflow-y-auto">
           <div className="px-3 py-3 space-y-3">
             <div className="flex items-center gap-2">
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.text}`}>{badge.label}</span>
