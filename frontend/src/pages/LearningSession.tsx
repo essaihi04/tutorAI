@@ -1693,11 +1693,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           )}
 
-          {/* Floating AI message preview toast (when chat is hidden) */}
+          {/* Floating AI message preview toast at the TOP (when chat is hidden)
+              — placed at top so it never blocks the QuickActions / VoiceInput at the bottom */}
           {!showChat && aiPreview && (
             <button
               onClick={() => setShowChat(true)}
-              className="absolute left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md bottom-[120px] z-30 text-left px-3 py-2 rounded-2xl bg-[#0c0c1d]/95 backdrop-blur-xl border border-indigo-400/30 shadow-2xl shadow-indigo-500/20 animate-[fadeSlideIn_0.3s_ease-out] flex items-start gap-2"
+              className="absolute top-2 left-2 right-2 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md z-30 text-left px-3 py-2 rounded-2xl bg-[#0c0c1d]/95 backdrop-blur-xl border border-indigo-400/30 shadow-2xl shadow-indigo-500/20 animate-[fadeSlideIn_0.3s_ease-out] flex items-start gap-2"
               title="Ouvrir le chat"
             >
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shrink-0 shadow-md">
@@ -1708,24 +1709,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 <p className="text-[12px] text-white/80 leading-snug line-clamp-2">{aiPreview.text}</p>
               </div>
               <span className="text-white/40 text-xs shrink-0">→</span>
-            </button>
-          )}
-
-          {/* Floating chat FAB (visible when chat is hidden) */}
-          {!showChat && (
-            <button
-              onClick={() => setShowChat(true)}
-              className="absolute left-3 bottom-[72px] sm:bottom-[80px] z-30 w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 shadow-2xl shadow-indigo-600/40 border border-indigo-400/30 flex items-center justify-center transition-all active:scale-95"
-              title="Ouvrir le chat"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-rose-500/40 ring-2 ring-[#080816] animate-pulse">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
             </button>
           )}
 
