@@ -1,0 +1,536 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore';
+import { useSessionStore, type SessionLanguage } from '../stores/sessionStore';
+import { wsService } from '../services/websocket';
+import { getLessons, startSession, endSession } from '../services/api';
+import { speechService } from '../services/speechService';
+import VoiceInput from '../components/session/VoiceInput';
+import AIAvatar from '../components/session/AIAvatar';
+import ChatHistory from '../components/session/ChatHistory';
+import { SessionMediaDisplay } from '../components/session/MediaViewer';
+import AIWhiteboard from '../components/session/AIWhiteboard';
+import ExamExercisePanel from '../components/session/ExamExercisePanel';
+import type { ExamExercise } from '../components/session/ExamExercisePanel';
+
+interface LearningSessionProps {
+  mode?: 'standard' | 'libre';
+}
+
+export default function LearningSession({ mode = 'standard' }: LearningSessionProps) {
+  const { chapterId } = useParams<{ chapterId: string }>();
+  const isLibre = mode === 'libre';
+  const navigate = useNavigate();
+  const { token, student } = useAuthStore();
+  const {
+    sessionId, setSessionId, setPhase,
+    isProcessing, processingStage, setProcessing,
+    isSpeaking, setSpeaking, addMessage, updateMessage, conversation,
+    setLanguage, clearSession, language,
+  } = useSessionStore();
+
+  const [connected, setConnected] = useState(false);
+  const [lessonInfo, setLessonInfo] = useState<any>(null);
+  const [currentMedia, setCurrentMedia] = useState<any>(null);
+  const [showMedia, setShowMedia] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showChat, setShowChat] = useState(true);
+  const [ttsErrorMessage, setTtsErrorMessage] = useState<string | null>(null);
+  const [whiteboardData, setWhiteboardData] = useState<any[] | null>(null);
+  const [whiteboardSchemaId, setWhiteboardSchemaId] = useState<string | null>(null);
+  const [boardContent, setBoardContent] = useState<any | null>(null);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [currentExercise, setCurrentExercise] = useState<any | null>(null);
+  const [showExercise, setShowExercise] = useState(false);
+  const [examExercises, setExamExercises] = useState<ExamExercise[]>([]);
+  const [showExamPanel, setShowExamPanel] = useState(false);
+  const [examQuery, setExamQuery] = useState<string>('');
+  const [whiteboardFromExam, setWhiteboardFromExam] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const initCalledRef = useRef(false);
+  const handlersRegisteredRef = useRef(false);
+  const showExamPanelRef = useRef(false);
+
+  // Keep ref in sync so WS handlers always read current value
+  useEffect(() => { showExamPanelRef.current = showExamPanel; }, [showExamPanel]);
+
+  const handleSimulationUpdate = useCallback((simulationState: any) => {
+    console.log('[LearningSession] Simulation message received:', simulationState?.type, simulationState);
+    if (!wsService.isConnected) {
+      console.warn('[LearningSession] WebSocket not connected, cannot forward simulation message');
+      return;
+    }
+    const originalType = simulationState?.type;
+    const { type: _ignoredType, ...simulationPayload } = simulationState || {};
+    if (originalType === 'simulation_manifest') {
+      console.log('[LearningSession] Forwarding simulation_manifest to backend');
+      wsService.sendJson({
+        ...simulationPayload,
+        type: 'simulation_manifest'
+      });
+    } else {
+      wsService.sendJson({
+        ...simulationPayload,
+        type: 'simulation_update'
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    // Prevent double init from React StrictMode
+    if (initCalledRef.current) return;
+    initCalledRef.current = true;
+
+    // Check authentication first
+    if (!token) {
+      setError('Vous devez être connecté pour accéder à cette page.');
+      setTimeout(() => navigate('/login'), 2000);
+      return;
+    }
+    
+    initSession();
+    return () => {
+      speechService.stop();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+      audioChunksRef.current = [];
+      isPlayingChunksRef.current = false;
+      expectedChunksRef.current = 0;
+      streamingTextRef.current = '';
+      streamingMsgIdRef.current = null;
+      if (streamingRafRef.current) cancelAnimationFrame(streamingRafRef.current);
+      streamingRafRef.current = null;
+      handlersRegisteredRef.current = false;
+      wsService.disconnect();
+      if (sessionId) endSession(sessionId).catch(() => {});
+      clearSession();
+    };
+  }, []);
+
+  const initSession = async () => {
+    if (!token || (!chapterId && !isLibre)) {
+      setIsLoading(false);
+      return;
+    }
+
+    const preferredLanguage = ((student?.preferred_language as SessionLanguage) || 'fr');
+    setLanguage(preferredLanguage === 'mixed' ? 'mixed' : preferredLanguage);
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (isLibre) {
+        // --- LIBRE MODE: no chapter/lesson, connect WS directly ---
+        console.log('[Session] Libre mode — setting up handlers then connecting');
+        setupWSHandlers();
+
+        await wsService.connect(token);
+        console.log('[Session] WebSocket connected (libre)');
+        setConnected(true);
+
+        wsService.sendJson({
+          type: 'init_session',
+          mode: 'libre',
+          subject: 'Général',
+          chapter_title: '',
+          lesson_title: 'Mode Libre',
+          objective: "Répondre aux questions de l'étudiant sur toutes les matières du BAC",
+          scenario: '',
+          student_name: student?.full_name || 'l\'étudiant',
+          proficiency: 'intermédiaire',
+          language: preferredLanguage,
+          teaching_mode: 'Socratique',
+        });
+        console.log('[Session] init_session sent (libre)');
+        setIsLoading(false);
+        return;
+      }
+
+      // --- STANDARD MODE: load chapter/lesson ---
+      const lessonsRes = await getLessons(chapterId!);
+      const lesson = lessonsRes.data[0];
+      
+      if (!lesson) {
+        setError('Aucune leçon trouvée pour ce chapitre.');
+        setTimeout(() => navigate('/dashboard'), 2000);
+        return;
+      }
+      
+      setLessonInfo(lesson);
+
+      // Create session in DB
+      try {
+        const sessionRes = await startSession(lesson.id);
+        setSessionId(sessionRes.data.id);
+      } catch (sessionErr: any) {
+        if (sessionErr.response?.status === 401) {
+          setError('Votre session a expiré. Veuillez vous reconnecter.');
+          setTimeout(() => {
+            useAuthStore.getState().logout();
+            navigate('/login');
+          }, 2000);
+          return;
+        }
+        throw sessionErr;
+      }
+
+      // Connect WebSocket
+      console.log('[Session] Connecting WebSocket with token:', token?.substring(0, 20) + '...');
+      await wsService.connect(token);
+      console.log('[Session] WebSocket connected');
+      setConnected(true);
+
+      // Set up WebSocket handlers
+      setupWSHandlers();
+
+      // Initialize AI session
+      console.log('[Session] Sending init_session with lesson_id:', lesson.id);
+      wsService.sendJson({
+        type: 'init_session',
+        lesson_id: lesson.id,  // IMPORTANT: needed for loading resources
+        subject: 'SVT',
+        chapter_title: '',
+        lesson_title: lesson.title_fr,
+        objective: lesson.learning_objectives?.[0] || '',
+        phase: 'activation',
+        student_name: 'l\'étudiant',
+        language: preferredLanguage,
+        teaching_mode: 'Socratique',
+      });
+      console.log('[Session] init_session sent');
+
+      setIsLoading(false);
+
+    } catch (err: any) {
+      console.error('Failed to init session:', err);
+      setError(
+        err.response?.status === 401
+          ? 'Session expirée. Reconnexion nécessaire...'
+          : 'Erreur lors de l\'initialisation. Veuillez réessayer.'
+      );
+      setIsLoading(false);
+      
+      if (err.response?.status === 401) {
+        setTimeout(() => {
+          useAuthStore.getState().logout();
+          navigate('/login');
+        }, 2000);
+      }
+    }
+  };
+
+  const audioReceivedRef = useRef(false);
+  const pendingMediaRef = useRef<any>(null);
+  const lastAiTextRef = useRef<string>('');
+  const audioChunksRef = useRef<Array<{index: number, audio: string, format: string}>>([]);
+  const isPlayingChunksRef = useRef(false);
+  const expectedChunksRef = useRef<number>(0);
+  const streamingTextRef = useRef<string>('');
+  const streamingMsgIdRef = useRef<string | null>(null);
+  const streamingRafRef = useRef<number | null>(null);
+
+  const revealPendingMedia = () => {
+    if (pendingMediaRef.current) {
+      setShowWhiteboard(false);
+      setCurrentMedia(pendingMediaRef.current);
+      setShowMedia(true);
+      pendingMediaRef.current = null;
+    }
+  };
+
+
+  const setupWSHandlers = () => {
+    if (handlersRegisteredRef.current) return;
+    wsService.clearHandlers();
+    handlersRegisteredRef.current = true;
+
+    wsService.on('all', (data) => {
+      console.log('[WebSocket] Received message:', data?.type, data);
+    });
+
+    wsService.on('error', (data) => {
+      console.error('[WebSocket] Error message from backend:', data);
+      setConnected(false);
+      setProcessing(false);
+    });
+
+    wsService.on('disconnected', () => {
+      console.warn('[WebSocket] Disconnected');
+      setConnected(false);
+      setProcessing(false);
+    });
+
+    wsService.on('ai_response', (data) => {
+      // Skip if streaming is active (avoid duplicate with ai_response_chunk)
+      if (streamingMsgIdRef.current || streamingTextRef.current) return;
+      lastAiTextRef.current = data.text;
+      audioReceivedRef.current = false;
+      setTtsErrorMessage(null);
+      // Clean drawing commands from displayed text (including truncated ones)
+      let displayText = data.text;
+      displayText = displayText.replace(/DESSINER_SCHEMA:.*?(\n|$)/g, '');
+      displayText = displayText.replace(/<draw>[\s\S]*?<\/draw>/g, '');
+      displayText = displayText.replace(/<draw>[\s\S]*/g, '');  // truncated
+      displayText = displayText.trim();
+      addMessage('ai', displayText || data.text);
+      setProcessing(false);
+    });
+
+    // Streaming: receive batched tokens for real-time display
+    // Tags are already filtered by backend, so just append directly
+    // Throttled with rAF to avoid re-rendering on every token
+    wsService.on('ai_response_chunk', (data) => {
+      setProcessing(false);
+      setTtsErrorMessage(null);
+      streamingTextRef.current += (data.token || '');
+      if (streamingRafRef.current) return; // already scheduled
+      streamingRafRef.current = requestAnimationFrame(() => {
+        streamingRafRef.current = null;
+        const text = streamingTextRef.current.trim();
+        if (!text) return;
+        if (streamingMsgIdRef.current) {
+          updateMessage(streamingMsgIdRef.current, text);
+        } else {
+          streamingMsgIdRef.current = addMessage('ai', text);
+        }
+      });
+    });
+
+    // Streaming done: flush any pending rAF update and finalize
+    wsService.on('ai_response_done', () => {
+      // Cancel pending rAF and do final update
+      if (streamingRafRef.current) {
+        cancelAnimationFrame(streamingRafRef.current);
+        streamingRafRef.current = null;
+      }
+      const finalText = streamingTextRef.current.trim();
+      if (finalText && streamingMsgIdRef.current) {
+        updateMessage(streamingMsgIdRef.current, finalText);
+      }
+      if (streamingTextRef.current) {
+        lastAiTextRef.current = streamingTextRef.current;
+        audioReceivedRef.current = false;
+      }
+      streamingTextRef.current = '';
+      streamingMsgIdRef.current = null;
+    });
+
+    wsService.on('transcription', (data) => {
+      addMessage('student', data.text);
+    });
+
+    wsService.on('audio_response', (data) => {
+      console.log('[Handler] audio_response received');
+      audioReceivedRef.current = true;
+      setProcessing(false);
+      setTtsErrorMessage(null);
+      playAudio(data.audio, data.format);
+    });
+
+    wsService.on('audio_chunk', (data) => {
+      audioReceivedRef.current = true;
+      setProcessing(false);
+      setTtsErrorMessage(null);
+      
+      console.log(`[Audio Chunk] Received chunk ${data.chunk_index + 1}/${data.total_chunks}`);
+      
+      audioChunksRef.current.push({
+        index: data.chunk_index,
+        audio: data.audio,
+        format: data.format
+      });
+      audioChunksRef.current.sort((a, b) => a.index - b.index);
+      expectedChunksRef.current = data.total_chunks;
+      
+      // Start playing as soon as chunk 0 is available
+      if (!isPlayingChunksRef.current && audioChunksRef.current[0]?.index === 0) {
+        playAudioChunks();
+      }
+    });
+
+    wsService.on('tts_error', (data) => {
+      setProcessing(false);
+      const errorMsg = data?.message || 'Gemini TTS error';
+      
+      setTtsErrorMessage(`⚠️ Erreur audio: ${errorMsg}`);
+      
+      console.error('[TTS Error]', errorMsg);
+      revealPendingMedia();
+    });
+
+    wsService.on('processing', (data) => {
+      if (data.stage === 'tts') return;
+      setProcessing(true, data.stage);
+    });
+
+    wsService.on('phase_changed', (data) => {
+      setPhase(data.phase);
+    });
+
+    wsService.on('show_media', (data) => {
+      if (!data || !data.media) {
+        console.error('[Display][ERROR] show_media received without a valid media payload:', data);
+        return;
+      }
+      console.log('[Display] Showing media, hiding whiteboard', {
+        mediaType: data.media?.type,
+        title: data.media?.title || data.media?.name || data.media?.resource_name || 'unknown',
+      });
+      pendingMediaRef.current = null;
+      setShowWhiteboard(false);
+      setCurrentMedia(data.media);
+      setShowMedia(true);
+    });
+
+    wsService.on('hide_media', () => {
+      if (!currentMedia) {
+        console.warn('[Display][WARN] hide_media received while no media is currently shown');
+      }
+      pendingMediaRef.current = null;
+      setShowMedia(false);
+    });
+
+    wsService.on('hide_whiteboard', () => {
+      if (!whiteboardData && !whiteboardSchemaId && !boardContent) {
+        console.warn('[Display][WARN] hide_whiteboard received while the whiteboard is already empty');
+      }
+      console.log('[Display] Hiding whiteboard');
+      setShowWhiteboard(false);
+    });
+
+    wsService.on('clear_whiteboard', () => {
+      console.log('[Display] Clearing/resetting whiteboard explicitly');
+      if (!whiteboardData && !whiteboardSchemaId && !boardContent) {
+        console.warn('[Display][WARN] clear_whiteboard received but there was no active whiteboard content to clear');
+      }
+      // Force clear all whiteboard data to trigger AIWhiteboard reset
+      setShowExamPanel(false);
+      setExamExercises([]);
+    }
+    setWhiteboardFromExam(false);
+  }
+
+  pendingMediaRef.current = null;
+  setWhiteboardSchemaId(null);
+  setBoardContent(null);
+  // Force clear by setting null first, then new data after a tick
+  // This ensures React detects the change and AIWhiteboard resets
+  setWhiteboardData(null);
+  setShowWhiteboard(true);
+  setShowMedia(false);
+  setShowExercise(false);
+  setTimeout(() => {
+    setWhiteboardData(normalizedSteps);
+  }, 50);
+});
+
+// ...
+
+{
+  showWhiteboard && (
+    <div className="absolute inset-0 z-30 bg-[#0a0e1a]/95 backdrop-blur-md animate-[fadeSlideIn_0.5s_ease-out]">
+      <div className="absolute top-2 right-2 z-40 flex items-center gap-2">
+        {whiteboardFromExam && showExamPanel && (
+          <button
+            onClick={() => setShowWhiteboard(false)}
+            className="flex items-center gap-2 text-amber-400 hover:text-amber-300 text-xs px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 transition-all font-medium"
+            title="Retour à l'examen"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span>Retour à l'examen</span>
+          </button>
+        )}
+        <button
+          onClick={() => {
+            setShowWhiteboard(false);
+            setWhiteboardFromExam(false);
+          }}
+          className="flex items-center gap-2 text-white/50 hover:text-white/90 text-xs px-2.5 py-1 rounded-xl bg-black/40 hover:bg-black/60 backdrop-blur-sm border border-white/10 transition-all"
+          title="Fermer le tableau"
+        >
+          <span>✕</span>
+          <span>Fermer le tableau</span>
+        </button>
+                  />
+                </div>
+              </div>
+            </>
+          ) : showMedia && currentMedia ? (
+            <>
+              {/* Small floating avatar pip */}
+              <div className="absolute top-2 right-2 z-20 transition-all duration-500">
+                <div className="scale-[0.4] origin-top-right">
+                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
+                </div>
+              </div>
+
+              {/* Close button */}
+              <div className="absolute top-2 left-2 z-20">
+                <button
+                  onClick={() => setShowMedia(false)}
+                  className="flex items-center gap-2 text-white/50 hover:text-white/90 text-xs px-2.5 py-1 rounded-xl bg-black/40 hover:bg-black/60 backdrop-blur-sm border border-white/10 transition-all"
+                  title="Fermer la présentation"
+                >
+                  <span>✕</span>
+                  <span>Fermer</span>
+                </button>
+              </div>
+
+              {/* Media fills the entire center zone */}
+              <div className="flex-1 min-h-0 flex items-center justify-center p-2 animate-[fadeSlideIn_0.5s_ease-out]">
+                <div className="w-full h-full rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md overflow-hidden shadow-2xl shadow-black/40">
+                  <SessionMediaDisplay 
+                    media={currentMedia} 
+                    isVisible={showMedia}
+                    onSimulationUpdate={handleSimulationUpdate}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* No media: avatar centered as main element */}
+              <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
+                {!connected && (
+                  <div className="flex items-center gap-2 text-amber-400/60 text-xs animate-pulse">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    Connexion...
+                  </div>
+                )}
+                {connected && !conversation.length && !isProcessing && (
+                  <div className="flex items-center gap-2 text-emerald-400/60 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    Connecté
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Voice input when chat is hidden */}
+          {!showChat && (
+            <div className="shrink-0 w-full max-w-3xl mx-auto px-6 pb-4">
+              <VoiceInput
+                onTextSend={handleSendText}
+                disabled={!connected}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

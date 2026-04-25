@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulation Respiration Cellulaire</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 2rem;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { color: #333; margin-bottom: 1rem; font-size: clamp(1.5rem, 4vw, 2rem); }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+    button {
+      flex: 1;
+      min-width: 140px;
+      padding: 1rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 600;
+    }
+    .btn-o2 { background: #10b981; color: white; }
+    .btn-o2:hover { background: #059669; transform: translateY(-2px); }
+    .btn-no-o2 { background: #ef4444; color: white; }
+    .btn-no-o2:hover { background: #dc2626; transform: translateY(-2px); }
+    .result {
+      background: #f3f4f6;
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-top: 1.5rem;
+      min-height: 200px;
+    }
+    .result h2 { color: #1f2937; margin-bottom: 1rem; }
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: white;
+      margin: 0.5rem 0;
+      border-radius: 8px;
+      border-left: 4px solid #3b82f6;
+    }
+    .stat-label { font-weight: 600; color: #4b5563; }
+    .stat-value { color: #1f2937; font-weight: bold; }
+    .atp-display {
+      font-size: 2rem;
+      text-align: center;
+      margin: 1rem 0;
+      color: #10b981;
+      font-weight: bold;
+    }
+    @media (max-width: 640px) {
+      .container { padding: 1rem; }
+      .controls { flex-direction: column; }
+      button { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔬 Simulation: Respiration Cellulaire</h1>
+    <p>Manipule les conditions pour observer le rendement énergétique</p>
+    
+    <div class="controls">
+      <button class="btn-o2" onclick="simulate(true)">✅ Avec O₂</button>
+      <button class="btn-no-o2" onclick="simulate(false)">❌ Sans O₂</button>
+    </div>
+    
+    <div class="result" id="result">
+      <p style="text-align:center; color:#6b7280;">Clique sur un bouton pour démarrer la simulation</p>
+    </div>
+  </div>
+
+  <script>
+    let studentActions = [];
+    
+    function simulate(withO2) {
+      const action = withO2 ? 'clicked_with_o2' : 'clicked_without_o2';
+      studentActions.push(action);
+      
+      const state = withO2 ? {
+        oxygen_present: true,
+        pathway: 'respiration_aerobic',
+        location: 'mitochondrie',
+        atp_produced: 36,
+        steps: ['glycolyse', 'krebs', 'chaine_respiratoire']
+      } : {
+        oxygen_present: false,
+        pathway: 'fermentation',
+        location: 'cytoplasme',
+        atp_produced: 2,
+        steps: ['glycolyse']
+      };
+      
+      displayResult(state);
+      sendStateToAI(state);
+    }
+    
+    function displayResult(state) {
+      const html = `
+        <h2>${state.oxygen_present ? '✅ Respiration Aérobie' : '❌ Fermentation'}</h2>
+        <div class="atp-display">${state.atp_produced} ATP</div>
+        <div class="stat">
+          <span class="stat-label">Lieu:</span>
+          <span class="stat-value">${state.location}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Voie métabolique:</span>
+          <span class="stat-value">${state.pathway}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Étapes:</span>
+          <span class="stat-value">${state.steps.join(' → ')}</span>
+        </div>
+      `;
+      document.getElementById('result').innerHTML = html;
+    }
+    
+    function sendStateToAI(state) {
+      const message = {
+        type: 'simulation_state',
+        simulation_id: 'respiration_cellulaire',
+        student_actions: studentActions,
+        current_state: state,
+        objective_progress: calculateProgress(),
+        timestamp: Date.now()
+      };
+      
+      window.parent.postMessage(message, '*');
+      console.log('[Simulation] État envoyé à l\'IA:', message);
+    }
+    
+    function calculateProgress() {
+      const hasTestedBoth = studentActions.includes('clicked_with_o2') && 
+                           studentActions.includes('clicked_without_o2');
+      return hasTestedBoth ? 1.0 : 0.5;
+    }
+    
+    window.addEventListener('message', (event) => {
+      if (event.data.type === 'simulation_control' && 
+          event.data.simulation_id === 'respiration_cellulaire') {
+        
+        console.log('[Simulation] Commande IA reçue:', event.data);
+        
+        const { command, parameters, guidance_text } = event.data;
+        
+        // Afficher le guidage si présent
+        if (guidance_text) {
+          showGuidanceMessage(guidance_text);
+        }
+        
+        // Exécuter la commande
+        executeAICommand(command, parameters);
+      }
+    });
+    
+    function executeAICommand(command, params) {
+      console.log('[Simulation] Exécution commande:', command, params);
+      
+      switch(command) {
+        case 'start':
+          // Démarrer automatiquement avec O2
+          simulate(true);
+          break;
+          
+        case 'reset':
+          // Réinitialiser
+          studentActions = [];
+          document.getElementById('result').innerHTML = 
+            '<p style="text-align:center; color:#6b7280;">Clique sur un bouton pour démarrer la simulation</p>';
+          break;
+          
+        case 'set_oxygen':
+          // Forcer un test spécifique
+          const withO2 = params?.oxygen_present ?? true;
+          simulate(withO2);
+          break;
+          
+        case 'highlight_button':
+          // Mettre en évidence un bouton
+          const buttonClass = params?.button === 'with_o2' ? '.btn-o2' : '.btn-no-o2';
+          const button = document.querySelector(buttonClass);
+          if (button) {
+            button.style.animation = 'pulse 1s ease-in-out 3';
+          }
+          break;
+          
+        default:
+          console.warn('[Simulation] Commande inconnue:', command);
+      }
+    }
+    
+    function showGuidanceMessage(text) {
+      // Afficher temporairement le message dans la simulation
+      const existingMsg = document.getElementById('ai-guidance-msg');
+      if (existingMsg) existingMsg.remove();
+      
+      const msg = document.createElement('div');
+      msg.id = 'ai-guidance-msg';
+      msg.style.cssText = `
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #3b82f6;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 1000;
+        max-width: 80%;
+        text-align: center;
+        animation: fadeIn 0.3s ease-in;
+      `;
+      msg.textContent = text;
+      document.body.appendChild(msg);
+      
+      setTimeout(() => {
+        msg.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => msg.remove(), 300);
+      }, 4000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+
+    async def _load_lesson_resources(self, lesson_id: str):
+        """Load all resources for the current lesson from lesson_resources table."""
+        try:
+            supabase = get_supabase()
+            result = supabase.table("lesson_resources")\
+                .select("*")\
+                .eq("lesson_id", lesson_id)\
+                .order("order_index")\
+                .execute()
+            
+            self.lesson_resources = result.data if result.data else []
+            print(f"[Resources] Loaded {len(self.lesson_resources)} resources for lesson {lesson_id}")
+        except Exception as e:
+            print(f"[Resources] Error loading resources: {e}")
+            self.lesson_resources = []
+
+    def _find_best_resource(self, concepts: list[str], resource_type: str = None, phase: str = None) -> dict:
+        """Find the best matching resource based on concepts, type, and phase."""
+        if not self.lesson_resources:
+            return None
+        
+        # Filter by phase if specified
+        phase_filter = phase or self.current_phase
+        candidates = [r for r in self.lesson_resources if not r.get('phase') or r.get('phase') == phase_filter]
+        
+        # Filter by type if specified
+        if resource_type:
+            candidates = [r for r in candidates if r.get('resource_type') == resource_type]
+        
+        if not candidates:
+            candidates = self.lesson_resources
+        
+        # Score each resource based on concept overlap
+        scored = []
+        for resource in candidates:
+            resource_concepts = resource.get('concepts', [])
+            if not resource_concepts:
+                score = 0
+            else:
+                # Count matching concepts
+                matches = sum(1 for c in concepts if any(rc.lower() in c.lower() or c.lower() in rc.lower() for rc in resource_concepts))
+                score = matches
+            
+            scored.append((score, resource))
+        
+        # Sort by score descending
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        # Return best match if score > 0
+        if scored and scored[0][0] > 0:
+            return scored[0][1]
+        
+        # Fallback: return first resource of matching type/phase
+        if candidates:
+            return candidates[0]
+        
+        return None
+
+    async def _auto_suggest_resource(self, student_input: str, ai_response: str):
+        """Automatically suggest a relevant resource based on detected concepts."""
+        if not self.lesson_resources:
+            return
+        
+        # Extract potential concepts from student input and AI response
+        combined_text = (student_input + " " + ai_response).lower()
+        
+        # Collect all concepts from available resources
+        all_concepts = set()
+        for resource in self.lesson_resources:
+            all_concepts.update([c.lower() for c in resource.get('concepts', [])])
+        
+        # Find mentioned concepts
+        mentioned_concepts = [c for c in all_concepts if c in combined_text]
+        
+        if not mentioned_concepts:
+            return
+        
+        # Check if student seems confused or asks for help
+        confusion_triggers = ["comprends pas", "je ne comprends pas", "c'est quoi", "explique", "aide", "difficile", "je sais pas"]
+        is_confused = any(trigger in combined_text for trigger in confusion_triggers)
+        
+        if is_confused:
+            # Prioritize images and simulations for confused students
+            resource = self._find_best_resource(mentioned_concepts, resource_type='image')
+            if not resource:
+                resource = self._find_best_resource(mentioned_concepts, resource_type='simulation')
+            if not resource:
+                resource = self._find_best_resource(mentioned_concepts)
+            
+            if resource:
+                await self._display_resource(resource)
+
+    async def _display_resource(self, resource: dict):
+        """Display a resource to the student."""
+        resource_type = resource.get('resource_type')
+        file_path = resource.get('file_path')
+        title = resource.get('title', '')
+        description = resource.get('description', '')
+        
+        if not file_path and not resource.get('external_url'):
+            return
+        
+        url = file_path or resource.get('external_url')
+        
+        if resource_type == 'image':
+            await self.websocket.send_json({
+                "type": "show_media",
+                "media": {
+                    "type": "image",
+                    "url": url,
+                    "caption": title,
+                    "trigger": description
+                }
+            })
+        elif resource_type == 'video':
+            await self.websocket.send_json({
+                "type": "show_media",
+                "media": {
+                    "type": "video",
+                    "url": url,
+                    "caption": title
+                }
+            })
+        elif resource_type == 'simulation':
+            await self.websocket.send_json({
+                "type": "show_media",
+                "media": {
+                    "type": "simulation",
+                    "url": url,
+                    "caption": title
+                }
+            })
+        elif resource_type == 'exam':
+            await self.websocket.send_json({
+                "type": "show_exam",
+                "exam_url": url,
+                "title": title,
+                "description": description
+            })
+        
+        print(f"[Resources] Displayed {resource_type}: {title}")

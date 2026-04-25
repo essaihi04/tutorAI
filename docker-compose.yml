@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  # ── PostgreSQL Database ──
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_tutor_bac
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis Cache ──
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Backend ──
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/ai_tutor_bac
+      DATABASE_URL_SYNC: postgresql://postgres:password@db:5432/ai_tutor_bac
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-change-in-production
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/service-account.json
+      CORS_ORIGINS: http://localhost:5173
+      APP_ENV: development
+    volumes:
+      - ./backend/app:/app/app
+      - ./credentials:/app/credentials:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
