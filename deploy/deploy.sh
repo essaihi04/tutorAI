@@ -33,12 +33,19 @@ if ! grep -qi "almalinux\|rhel\|rocky\|centos" /etc/os-release; then
     warn "Cet OS n'est pas RHEL/AlmaLinux. Le script peut nécessiter des adaptations."
 fi
 
-# Vérifier que le port backend est libre (n'écrase aucune autre app)
+# Vérifier que le port backend est libre (n'écrase aucune autre app).
+# On tolère que ce soit NOTRE propre service moalim-backend (re-déploiement).
 if ss -ltnp | grep -q ":${BACKEND_PORT}\b"; then
-    err "Le port ${BACKEND_PORT} est déjà utilisé par une autre app !"
-    ss -ltnp | grep ":${BACKEND_PORT}\b" || true
-    err "Modifie BACKEND_PORT dans ce script (et dans nginx.conf + service) puis relance."
-    exit 1
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        log "Port ${BACKEND_PORT} occupé par notre propre $SERVICE_NAME — on l'arrête pour re-déployer"
+        systemctl stop "$SERVICE_NAME"
+        sleep 2
+    else
+        err "Le port ${BACKEND_PORT} est déjà utilisé par une autre app !"
+        ss -ltnp | grep ":${BACKEND_PORT}\b" || true
+        err "Modifie BACKEND_PORT dans ce script (et dans nginx.conf + service) puis relance."
+        exit 1
+    fi
 fi
 
 # ── 1. Repos & paquets système ─────────────────────────────────────
