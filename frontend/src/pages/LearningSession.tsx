@@ -1170,9 +1170,9 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
       {/* Header */}
       <header className="shrink-0 bg-[#0c0c1d]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="w-full px-3 py-1.5 flex items-center justify-between gap-3">
+        <div className="w-full px-2 sm:px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap">
           {/* Left: Back + Title */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button
               onClick={handleEndSession}
               className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors border border-white/5"
@@ -1182,14 +1182,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <div>
-              <h1 className="text-xs font-semibold text-white/90 leading-tight">{mode === 'explain' ? 'Explication Examen' : isLibre ? 'Mode Libre' : (lessonInfo?.title_fr || 'Session')}</h1>
-              <p className="text-[10px] text-white/30 leading-tight">{mode === 'explain' ? 'Aide interactive au tableau' : isLibre ? 'Pose tes questions sur toutes les matières' : (lessonInfo?.title_ar || 'SVT - 2ème BAC')}</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xs font-semibold text-white/90 leading-tight truncate">{mode === 'explain' ? 'Explication Examen' : isLibre ? 'Mode Libre' : (lessonInfo?.title_fr || 'Session')}</h1>
+              <p className="text-[10px] text-white/30 leading-tight truncate hidden sm:block">{mode === 'explain' ? 'Aide interactive au tableau' : isLibre ? 'Pose tes questions sur toutes les matières' : (lessonInfo?.title_ar || 'SVT - 2ème BAC')}</p>
             </div>
           </div>
 
           {/* Right: Language + Controls */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
             {/* Explain mode: prominent return button */}
             {mode === 'explain' && (
               <button
@@ -1249,7 +1249,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                       setShowMedia(false);
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all ${
+                  className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs rounded-md transition-all ${
                     showWhiteboard 
                       ? 'bg-cyan-600/30 text-cyan-300 shadow-sm' 
                       : 'text-white/40 hover:text-white/60'
@@ -1259,7 +1259,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                   </svg>
-                  Tableau
+                  <span className="hidden sm:inline">Tableau</span>
                 </button>
               )}
               {/* Media/Image toggle */}
@@ -1274,7 +1274,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                       setShowExamPanel(false);
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all ${
+                  className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs rounded-md transition-all ${
                     showMedia 
                       ? 'bg-emerald-600/30 text-emerald-300 shadow-sm' 
                       : 'text-white/40 hover:text-white/60'
@@ -1284,7 +1284,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                   </svg>
-                  Image
+                  <span className="hidden sm:inline">Image</span>
                 </button>
               )}
               {/* Exam exercise panel toggle */}
@@ -1300,7 +1300,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                       setShowExercise(false);
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all ${
+                  className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs rounded-md transition-all ${
                     showExamPanel 
                       ? 'bg-amber-600/30 text-amber-300 shadow-sm' 
                       : 'text-white/40 hover:text-white/60'
@@ -1310,7 +1310,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342" />
                   </svg>
-                  Examen
+                  <span className="hidden sm:inline">Examen</span>
                 </button>
               )}
             </div>
@@ -1368,7 +1368,13 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         </div>
 
         {showChat && (
-          <div className="w-[280px] shrink-0 border-r border-white/5 bg-[#0a0a18]/80 backdrop-blur-sm flex flex-col min-w-0">
+          <>
+            {/* Mobile backdrop */}
+            <div
+              className="md:hidden fixed inset-0 bg-black/60 z-30"
+              onClick={() => setShowChat(false)}
+            />
+          <div className="fixed md:relative inset-y-0 left-0 z-40 w-[85vw] max-w-[320px] md:w-[280px] shrink-0 border-r border-white/5 bg-[#0a0a18]/95 md:bg-[#0a0a18]/80 backdrop-blur-sm flex flex-col min-w-0">
             <ChatHistory messages={conversation} isProcessing={isProcessing} />
             {contextSuggestions.length > 0 && (
               <QuickActions
@@ -1396,6 +1402,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               injectKey={injectKey}
             />
           </div>
+          </>
         )}
 
         <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
@@ -1616,7 +1623,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
           {/* Voice input when chat is hidden */}
           {!showChat && (
-            <div className="shrink-0 w-full max-w-3xl mx-auto px-6 pb-4">
+            <div className="shrink-0 w-full max-w-3xl mx-auto px-3 sm:px-6 pb-3 sm:pb-4">
               <QuickActions
                 actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
                 onInject={handleQuickInject}

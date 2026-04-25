@@ -252,7 +252,7 @@ export default function LibreSession() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-700">
               <ArrowLeft className="w-5 h-5" />
@@ -273,7 +273,7 @@ export default function LibreSession() {
 
       {/* Messages */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-3 sm:space-y-4">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
               {error}
@@ -311,7 +311,7 @@ export default function LibreSession() {
           {/* Message list */}
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.speaker === 'student' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${
+              <div className={`max-w-[88%] sm:max-w-[80%] rounded-2xl px-3.5 sm:px-5 py-2.5 sm:py-3 ${
                 msg.speaker === 'student'
                   ? 'bg-blue-600 text-white rounded-br-md'
                   : 'bg-white border text-gray-800 rounded-bl-md shadow-sm'
@@ -329,7 +329,7 @@ export default function LibreSession() {
           {/* Streaming AI response */}
           {currentAiText && (
             <div className="flex justify-start">
-              <div className="max-w-[80%] bg-white border rounded-2xl rounded-bl-md px-5 py-3 shadow-sm">
+              <div className="max-w-[88%] sm:max-w-[80%] bg-white border rounded-2xl rounded-bl-md px-3.5 sm:px-5 py-2.5 sm:py-3 shadow-sm">
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{currentAiText}</p>
               </div>
             </div>
@@ -363,8 +363,8 @@ export default function LibreSession() {
           title="Raccourcis"
         />
 
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <div className="flex items-end gap-3">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="flex items-end gap-2 sm:gap-3">
             <textarea
               ref={inputRef}
               value={input}

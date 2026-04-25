@@ -576,7 +576,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-600 rounded-xl">
@@ -618,7 +618,7 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Tabs */}
         <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border mb-6">
           {tabs.map(t => (
@@ -712,12 +712,12 @@ export default function AdminDashboard() {
             {/* Promo code stats */}
             {users.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm border">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                    <Key className="w-5 h-5 text-indigo-600" /> Répartition par code promo
-                    <span className="text-xs font-normal text-gray-400 ml-2">({usersInPromoWindow.length} utilisateurs)</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-1.5 mr-auto whitespace-nowrap">
+                    <Key className="w-4 h-4 text-indigo-600" /> Codes promo
+                    <span className="text-[11px] font-normal text-gray-400">({usersInPromoWindow.length})</span>
                   </h3>
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5">
                     {([
                       { key: 'all', label: 'Tout' },
                       { key: '7d', label: '7j' },
@@ -726,26 +726,27 @@ export default function AdminDashboard() {
                       { key: 'month', label: 'Mois' },
                     ] as const).map(p => (
                       <button key={p.key} onClick={() => setPromoPeriod(p.key)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          promoPeriod === p.key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
+                          promoPeriod === p.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white'
                         }`}>
                         {p.label}
                       </button>
                     ))}
-                    {promoPeriod === 'month' && (
-                      <input type="month" value={promoMonth} onChange={e => setPromoMonth(e.target.value)}
-                        className="px-3 py-1.5 border rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
-                    )}
-                    <span className="w-px h-5 bg-gray-200 mx-1" />
+                  </div>
+                  {promoPeriod === 'month' && (
+                    <input type="month" value={promoMonth} onChange={e => setPromoMonth(e.target.value)}
+                      className="px-2 py-1 border rounded-md text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  )}
+                  <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5">
                     {([
                       { key: 'all', label: 'Tous' },
-                      { key: 'permanent', label: 'Permanent' },
+                      { key: 'permanent', label: 'Perm.' },
                       { key: 'test', label: 'Test' },
-                      { key: 'expired', label: 'Expiré' },
+                      { key: 'expired', label: 'Exp.' },
                     ] as const).map(t => (
                       <button key={t.key} onClick={() => setPromoType(t.key)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          promoType === t.key ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
+                          promoType === t.key ? 'bg-amber-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white'
                         }`}>
                         {t.label}
                       </button>
