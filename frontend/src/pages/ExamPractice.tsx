@@ -679,9 +679,9 @@ export default function ExamPractice() {
   /* ---------- Loading ---------- */
   if (loading || !exam) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 gap-4">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-        <p className="text-sm text-slate-500 animate-pulse">Chargement de l'examen…</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#070718] text-white gap-4">
+        <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
+        <p className="text-sm text-white/60 animate-pulse">Chargement de l'examen…</p>
       </div>
     );
   }
@@ -730,7 +730,7 @@ export default function ExamPractice() {
   const isExtractedExam = exam.source === 'extracted';
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 relative">
+    <div className="h-screen flex flex-col bg-[#070718] text-white relative">
 
       {/* Resume toast */}
       {resumeToast && (
@@ -1072,9 +1072,13 @@ function ExamPracticeResults({
   })();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+    <div className="min-h-screen bg-[#070718] text-white relative overflow-hidden">
+      {/* Decorative orbs */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 left-1/3 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[140px] anim-pulse-glow" />
+      </div>
       {/* Header */}
-      <header className="bg-white border-b border-slate-200">
+      <header className="relative z-20 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5">
         <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-3">
           <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-500">
             <ArrowLeft className="w-5 h-5" />

@@ -253,16 +253,21 @@ export default function ExamHub() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#070718]">
+        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#070718] text-white relative overflow-hidden">
+      {/* Decorative orbs */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 left-1/3 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[140px] anim-pulse-glow" />
+        <div className="absolute bottom-0 right-[10%] w-[500px] h-[500px] rounded-full bg-amber-500/10 blur-[140px] anim-pulse-glow" style={{ animationDelay: '2s' }} />
+      </div>
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <header className="relative z-20 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5 sticky top-0">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <button

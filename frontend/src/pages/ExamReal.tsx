@@ -305,8 +305,8 @@ export default function ExamReal() {
 
   if (loading || !exam) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#070718]">
+        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
       </div>
     );
   }
@@ -337,9 +337,14 @@ export default function ExamReal() {
     const parts = Array.from(partsAgg.entries());
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+      <div className="min-h-screen bg-[#070718] text-white relative overflow-hidden">
+        {/* Decorative orbs */}
+        <div className="pointer-events-none fixed inset-0 z-0">
+          <div className="absolute top-0 left-1/3 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[140px] anim-pulse-glow" />
+          <div className="absolute bottom-0 right-[10%] w-[500px] h-[500px] rounded-full bg-amber-500/10 blur-[140px] anim-pulse-glow" style={{ animationDelay: '2s' }} />
+        </div>
         {/* Header */}
-        <header className="bg-white border-b border-slate-200">
+        <header className="relative z-20 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5">
           <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-3">
             <button onClick={() => navigate('/exam')} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-500">
               <ArrowLeft className="w-5 h-5" />
@@ -561,7 +566,7 @@ export default function ExamReal() {
       const answeredCount = Object.values(resumePrompt.state.answers || {}).filter((v) => (v || '').toString().trim()).length;
       const remainingSec = Math.max(0, exam.duration_minutes * 60 - (resumePrompt.state.elapsedSeconds || 0));
       return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-[#070718] text-white flex items-center justify-center p-4 relative overflow-hidden">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white">
               <div className="flex items-center gap-3">
@@ -613,7 +618,7 @@ export default function ExamReal() {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#070718] text-white flex items-center justify-center p-4 relative overflow-hidden">
         <div className="bg-white rounded-3xl shadow-xl max-w-xl w-full overflow-hidden">
           {/* Header band */}
           <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 px-6 py-5">
@@ -725,7 +730,7 @@ export default function ExamReal() {
   const goPrev = () => { if (currentQ > 0) setCurrentQ(currentQ - 1); };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
+    <div className="h-screen flex flex-col bg-[#070718] text-white">
       {/* ===================== COMPACT HEADER ===================== */}
       <header className={`border-b flex-shrink-0 z-30 ${isLowTime ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200/60'}`}>
         <div className="max-w-[1600px] mx-auto px-3 lg:px-5">

@@ -263,7 +263,7 @@ export default function DiagnosticQuiz() {
   // ══ PHASE: INTRO ══
   if (phase === 'intro') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6 flex items-center">
+      <div className="min-h-screen bg-[#070718] text-white p-6 flex items-center relative overflow-hidden">
         <div className="max-w-3xl mx-auto w-full">
           <button
             onClick={() => navigate('/dashboard')}
@@ -344,7 +344,7 @@ export default function DiagnosticQuiz() {
     const total = subjects.length || 1;
     const pct = Math.round((preloadDone / total) * 100);
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#070718] text-white flex items-center justify-center p-6 relative overflow-hidden">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-10 text-center">
           <div className="relative inline-block mb-6">
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
@@ -419,9 +419,9 @@ export default function DiagnosticQuiz() {
     };
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-screen bg-[#070718] text-white relative overflow-hidden">
         {/* Sticky header */}
-        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div className="sticky top-0 z-10 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5">
           <div className="max-w-4xl mx-auto px-4 py-2">
             {/* Subject navigation row */}
             <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1">
@@ -661,7 +661,7 @@ export default function DiagnosticQuiz() {
   // ══ PHASE: RESULTS ══
   if (phase === 'results') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
+      <div className="min-h-screen bg-[#070718] text-white p-6 relative overflow-hidden">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl mb-4 shadow-lg shadow-emerald-500/30">

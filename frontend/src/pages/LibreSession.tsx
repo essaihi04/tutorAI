@@ -249,9 +249,14 @@ export default function LibreSession() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#070718] text-white flex flex-col relative overflow-hidden">
+      {/* Decorative orbs */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 left-1/3 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[140px] anim-pulse-glow" />
+        <div className="absolute bottom-0 right-[10%] w-[500px] h-[500px] rounded-full bg-cyan-500/10 blur-[140px] anim-pulse-glow" style={{ animationDelay: '2s' }} />
+      </div>
       {/* Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-10">
+      <header className="relative z-20 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5 sticky top-0">
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-700">

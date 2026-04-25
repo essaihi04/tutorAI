@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginStudent, getMe } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
-import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, LogIn, AlertCircle, ArrowLeft } from 'lucide-react';
+import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -16,28 +17,18 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
     if (!email || !password) {
       setError('Veuillez remplir tous les champs');
       return;
     }
-
     setLoading(true);
     try {
       const res = await loginStudent({ email, password });
       const accessToken = res.data.access_token;
       const refreshToken = res.data.refresh_token;
-      // Persist tokens immediately so the axios interceptor attaches them to /auth/me
       localStorage.setItem('token', accessToken);
       if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
-      // Fetch the real student record so the dashboard can greet them by name
-      let student = {
-        id: '',
-        username: '',
-        email,
-        full_name: '',
-        preferred_language: 'fr',
-      };
+      let student = { id: '', username: '', email, full_name: '', preferred_language: 'fr' };
       try {
         const meRes = await getMe();
         student = {
@@ -53,139 +44,125 @@ export default function Login() {
       login(accessToken, student, refreshToken);
       navigate('/dashboard');
     } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || 'Erreur de connexion. Vérifiez vos identifiants.';
-      setError(errorMsg);
+      setError(err.response?.data?.detail || 'Erreur de connexion. Vérifiez vos identifiants.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <img src="/media/logo.png" alt="معلم" className="h-16 w-auto mx-auto mb-4" />
-          <h1 className="text-4xl font-bold text-gray-900 mb-2 font-brand">معلم</h1>
-          <p className="text-gray-600">Connecte-toi pour continuer ton apprentissage</p>
-        </div>
+    <MoalimShell>
+      {/* Top bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <Link to="/"><MoalimLogo /></Link>
+        <Link to="/" className="text-sm text-white/50 hover:text-white flex items-center gap-1.5 transition">
+          <ArrowLeft className="w-4 h-4" /> Retour
+        </Link>
+      </div>
 
-        {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-100">
-          {/* Error Alert */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-red-800">Erreur de connexion</p>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+      {/* Centered card */}
+      <div className="flex items-center justify-center px-4 py-12 min-h-[calc(100vh-80px)]">
+        <div className="w-full max-w-md anim-fade-up">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl sm:text-4xl font-black mb-2">
+              Bon retour <span className="gradient-text">parmi nous</span>
+            </h1>
+            <p className="text-white/55 text-sm">Connecte-toi pour reprendre ton apprentissage</p>
+          </div>
+
+          <div className="glass rounded-3xl p-7 shadow-2xl shadow-indigo-500/10">
+            {error && (
+              <div className="mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-rose-200">Erreur de connexion</p>
+                  <p className="text-xs text-rose-300/80 mt-0.5">{error}</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                Adresse email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                placeholder="exemple@email.com"
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                Mot de passe
-              </label>
-              <div className="relative">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">
+                  Adresse email
+                </label>
                 <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  placeholder="••••••••"
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="moalim-input"
+                  placeholder="exemple@email.com"
                   required
-                  autoComplete="current-password"
+                  autoComplete="email"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">
+                  Mot de passe
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="moalim-input pr-12"
+                    placeholder="••••••••"
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
+                {loading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Connexion en cours…</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-5 h-5" />
+                    <span>Se connecter</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/10" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-4 bg-[#070718] text-white/40 uppercase tracking-widest">ou</span>
               </div>
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Connexion en cours...</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  <span>Se connecter</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">ou</span>
+            <div className="text-center">
+              <p className="text-sm text-white/55">
+                Pas encore de compte ?{' '}
+                <Link to="/inscription" className="font-semibold text-indigo-300 hover:text-indigo-200 transition">
+                  Demander une inscription
+                </Link>
+              </p>
             </div>
           </div>
 
-          {/* Sign Up Link */}
-          <div className="text-center">
-            <p className="text-gray-600">
-              Pas encore de compte ?{' '}
-              <Link 
-                to="/signup" 
-                className="font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                Créer un compte
-              </Link>
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-          <p className="text-sm font-medium text-blue-900 mb-2">Connexion</p>
-          <p className="text-xs text-blue-700">
-            Utilise un compte que tu as créé via l'inscription.
-          </p>
-          <p className="text-xs text-blue-700 mt-1">
-            Si ton compte vient d'être créé, vérifie aussi la confirmation email si elle est activée dans Supabase.
+          <p className="text-center text-xs text-white/35 mt-6">
+            Données chiffrées · Cadre de référence officiel 2BAC PC BIOF
           </p>
         </div>
       </div>
-    </div>
+    </MoalimShell>
   );
 }
