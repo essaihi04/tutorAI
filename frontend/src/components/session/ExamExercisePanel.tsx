@@ -246,10 +246,10 @@ ${textPart}
           </div>
 
           {/* Separator */}
-          <div className="w-px h-7 bg-slate-200 mx-1 hidden md:block" />
+          <div className="w-px h-7 bg-slate-200 mx-1 hidden lg:block" />
 
           {/* Question pills — scrollable */}
-          <div className="flex-1 min-w-0 hidden md:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
+          <div className="flex-1 min-w-0 hidden lg:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
             {ex.questions.map((_q, qIdx) => {
               const key = `${currentExIdx}-${qIdx}`;
               const isCurrent = qIdx === currentQIdx;
@@ -301,10 +301,10 @@ ${textPart}
         </div>
       </header>
 
-      {/* ===================== 2-COLUMN BODY ===================== */}
+      {/* ===================== 2-COLUMN BODY (lg+) / stacked (mobile + landscape phones) ===================== */}
       <div className="flex-1 min-h-0 flex">
-        {/* LEFT: Question + Documents */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-slate-200/60">
+        {/* LEFT: Question + Documents — visible only on lg+ to avoid duplication on phones (portrait & landscape) */}
+        <div className="hidden lg:block flex-1 min-w-0 overflow-y-auto border-r border-slate-200/60">
           <div className="max-w-2xl mx-auto px-3 lg:px-5 py-3 space-y-2">
             {/* Exercise/Part badges */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -327,8 +327,8 @@ ${textPart}
           </div>
         </div>
 
-        {/* RIGHT: Answer input + Aide au tableau */}
-        <div className="w-[45%] lg:w-[48%] flex-shrink-0 overflow-y-auto bg-white hidden md:block">
+        {/* RIGHT: Answer input + Aide au tableau — lg+ only (phones use the stacked layout) */}
+        <div className="lg:w-[48%] flex-shrink-0 overflow-y-auto bg-white hidden lg:block">
           <div className="px-3 lg:px-4 py-3 space-y-3 max-w-xl">
             {/* Answer input (Texte / Dessin / Photo / Symboles) */}
             <AnswerInput
@@ -371,8 +371,8 @@ ${textPart}
           </div>
         </div>
 
-        {/* MOBILE stacked layout */}
-        <div className="md:hidden flex-1 min-w-0 overflow-y-auto">
+        {/* MOBILE + LANDSCAPE PHONE stacked layout (<lg) */}
+        <div className="lg:hidden flex-1 min-w-0 overflow-y-auto">
           <div className="px-3 py-3 space-y-3">
             <QuestionRenderer
               question={adaptedQuestion as any}
