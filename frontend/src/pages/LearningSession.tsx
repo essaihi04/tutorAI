@@ -225,7 +225,22 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [showMedia, setShowMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showChat, setShowChat] = useState(true);
+  // Mobile-first: chat collapsed by default on phones so the board/avatar fills
+  // the screen. On tablet/desktop (>=768px) the side panel stays visible.
+  const [showChat, setShowChat] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.matchMedia('(min-width: 768px)').matches;
+  });
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+  // Counts AI messages that arrived while the chat drawer was hidden
+  const [unreadCount, setUnreadCount] = useState(0);
+  // Floating "last AI message" toast shown when chat is masked on mobile
+  const [aiPreview, setAiPreview] = useState<{ id: string; text: string } | null>(null);
+  const lastConversationLenRef = useRef(0);
+  const aiPreviewTimerRef = useRef<number | null>(null);
   const [ttsErrorMessage, setTtsErrorMessage] = useState<string | null>(null);
   const [whiteboardData, setWhiteboardData] = useState<any[] | null>(null);
   const [whiteboardSchemaId, setWhiteboardSchemaId] = useState<string | null>(null);
@@ -259,6 +274,58 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
   // Keep ref in sync so WS handlers always read current value
   useEffect(() => { showExamPanelRef.current = showExamPanel; }, [showExamPanel]);
+
+  // ── Mobile viewport tracking ──────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = (e: MediaQueryListEvent | MediaQueryList) => setIsMobile(e.matches);
+    onChange(mq);
+    mq.addEventListener?.('change', onChange as any);
+    return () => mq.removeEventListener?.('change', onChange as any);
+  }, []);
+
+  // ── Auto-collapse chat on mobile when a content panel takes the stage ──
+  useEffect(() => {
+    if (!isMobile) return;
+    const anyPanelOpen = showWhiteboard || showMedia || showExamPanel || showExercise;
+    if (anyPanelOpen && showChat) {
+      setShowChat(false);
+    }
+    // Don't auto-reopen — user keeps control via FAB / header toggle.
+  }, [isMobile, showWhiteboard, showMedia, showExamPanel, showExercise]);
+  // (intentionally excluding showChat from deps to avoid re-closing after manual reopen)
+
+  // ── Track new AI messages: unread badge + floating preview toast ──
+  useEffect(() => {
+    const prevLen = lastConversationLenRef.current;
+    const len = conversation.length;
+    lastConversationLenRef.current = len;
+    if (len <= prevLen) return;
+    const last = conversation[len - 1];
+    if (!last || last.speaker !== 'ai') return;
+    if (showChat) return; // chat visible → user already sees it
+    // New AI message while chat hidden
+    setUnreadCount((c) => c + 1);
+    const text = (last.text || '').trim();
+    if (text) {
+      setAiPreview({ id: last.id, text });
+      if (aiPreviewTimerRef.current) window.clearTimeout(aiPreviewTimerRef.current);
+      aiPreviewTimerRef.current = window.setTimeout(() => setAiPreview(null), 6000);
+    }
+  }, [conversation, showChat]);
+
+  // Reset unread + preview when user opens chat
+  useEffect(() => {
+    if (showChat) {
+      setUnreadCount(0);
+      setAiPreview(null);
+      if (aiPreviewTimerRef.current) {
+        window.clearTimeout(aiPreviewTimerRef.current);
+        aiPreviewTimerRef.current = null;
+      }
+    }
+  }, [showChat]);
 
   const handleSimulationUpdate = useCallback((simulationState: any) => {
     console.log('[LearningSession] Simulation message received:', simulationState?.type, simulationState);
@@ -1318,7 +1385,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             {/* Chat toggle */}
             <button
               onClick={() => setShowChat(!showChat)}
-              className={`w-7 h-7 rounded-full flex items-center justify-center transition-all border ${
+              className={`relative w-7 h-7 rounded-full flex items-center justify-center transition-all border ${
                 showChat ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/5 text-white/40 hover:text-white/60'
               }`}
               title="Afficher/masquer le chat"
@@ -1326,6 +1393,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
               </svg>
+              {!showChat && unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow-lg shadow-rose-500/40 animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* End session */}
@@ -1410,8 +1482,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           {showExamPanel && examExercises.length > 0 ? (
             <>
               {/* Exam panel - HIGHEST PRIORITY */}
-              <div className="flex-1 min-h-0 flex items-center justify-center p-2 animate-[fadeSlideIn_0.5s_ease-out]">
-                <div className="w-full h-full rounded-2xl border border-white/10 bg-gradient-to-br from-purple-900/20 to-blue-900/20 backdrop-blur-md overflow-hidden shadow-2xl shadow-black/40">
+              <div className="flex-1 min-h-0 flex items-center justify-center p-0 md:p-2 animate-[fadeSlideIn_0.5s_ease-out]">
+                <div className="w-full h-full rounded-none border-0 md:rounded-2xl md:border md:border-white/10 bg-gradient-to-br from-purple-900/20 to-blue-900/20 backdrop-blur-md overflow-hidden shadow-2xl shadow-black/40">
                   <ExamExercisePanel
                     exercises={examExercises}
                     query={examQuery}
@@ -1556,8 +1628,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               </div>
 
               {/* Whiteboard fills the entire center zone */}
-              <div className="flex-1 min-h-0 flex items-center justify-center p-2 animate-[fadeSlideIn_0.5s_ease-out]">
-                <div className="w-full h-full rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-black/40">
+              <div className="flex-1 min-h-0 flex items-center justify-center p-0 md:p-2 animate-[fadeSlideIn_0.5s_ease-out]">
+                <div className="w-full h-full rounded-none border-0 md:rounded-2xl md:border md:border-white/10 overflow-hidden shadow-2xl shadow-black/40">
                   <AIWhiteboard
                     drawCommands={whiteboardData}
                     schemaId={whiteboardSchemaId}
@@ -1619,6 +1691,42 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 )}
               </div>
             </>
+          )}
+
+          {/* Floating AI message preview toast (when chat is hidden) */}
+          {!showChat && aiPreview && (
+            <button
+              onClick={() => setShowChat(true)}
+              className="absolute left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md bottom-[120px] z-30 text-left px-3 py-2 rounded-2xl bg-[#0c0c1d]/95 backdrop-blur-xl border border-indigo-400/30 shadow-2xl shadow-indigo-500/20 animate-[fadeSlideIn_0.3s_ease-out] flex items-start gap-2"
+              title="Ouvrir le chat"
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shrink-0 shadow-md">
+                <span className="text-white text-[10px] font-bold">IA</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-indigo-300 font-semibold mb-0.5">Nouveau message</p>
+                <p className="text-[12px] text-white/80 leading-snug line-clamp-2">{aiPreview.text}</p>
+              </div>
+              <span className="text-white/40 text-xs shrink-0">→</span>
+            </button>
+          )}
+
+          {/* Floating chat FAB (visible when chat is hidden) */}
+          {!showChat && (
+            <button
+              onClick={() => setShowChat(true)}
+              className="absolute left-3 bottom-[72px] sm:bottom-[80px] z-30 w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 shadow-2xl shadow-indigo-600/40 border border-indigo-400/30 flex items-center justify-center transition-all active:scale-95"
+              title="Ouvrir le chat"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-rose-500/40 ring-2 ring-[#080816] animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
           )}
 
           {/* Voice input when chat is hidden */}
