@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getExamCountdown, getStudyPlan, getTodaySchedule, getProficiency, getMyExamStats, getMe,
+  getExamCountdown, getStudyPlan, getTodaySchedule, getProficiency, getMyExamStats, getMe, getAllSessions,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import {
-  GraduationCap, MessageCircle, Calendar, Play, LogOut, Settings, Trophy,
-  BookOpen, Award, BarChart3, ArrowRight, Clock, PenLine, Flame, Star,
-  ChevronRight, Target,
+  GraduationCap, MessageCircle, Calendar, Play, LogOut, Trophy,
+  Award, BarChart3, ArrowRight, Clock, PenLine, Flame,
+  ChevronRight, Target, ChevronLeft, CheckCircle, X as XIcon,
 } from 'lucide-react';
 import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
 
@@ -43,6 +43,9 @@ export default function Dashboard() {
   const [todaySessions, setTodaySessions] = useState<any[]>([]);
   const [proficiency, setProficiency] = useState<any>(null);
   const [examStats, setExamStats] = useState<any>(null);
+  const [allSessionsData, setAllSessionsData] = useState<any>(null);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const navigate = useNavigate();
   const { student, logout, setStudent } = useAuthStore();
 
@@ -66,11 +69,12 @@ export default function Dashboard() {
     try {
       const countdownRes = await getExamCountdown().catch(() => null);
       if (countdownRes) setCountdown(countdownRes.data);
-      const [planRes, todayRes, profRes, examStatsRes] = await Promise.all([
+      const [planRes, todayRes, profRes, examStatsRes, allSessRes] = await Promise.all([
         getStudyPlan().catch(() => null),
         getTodaySchedule().catch(() => null),
         getProficiency().catch(() => null),
         getMyExamStats().catch(() => null),
+        getAllSessions().catch(() => null),
       ]);
       if (planRes?.data?.has_plan) {
         setHasPlan(true);
@@ -79,6 +83,7 @@ export default function Dashboard() {
       if (todayRes?.data?.sessions) setTodaySessions(todayRes.data.sessions);
       if (profRes?.data) setProficiency(profRes.data);
       if (examStatsRes?.data) setExamStats(examStatsRes.data);
+      if (allSessRes?.data) setAllSessionsData(allSessRes.data);
     } catch {
       /* api not ready */
     }
@@ -154,7 +159,7 @@ export default function Dashboard() {
     <MoalimShell>
       <div className="min-h-screen flex flex-col lg:flex-row">
         {/* ═══ SIDEBAR ═══ */}
-        <Sidebar firstName={firstName} timeGreeting={timeGreeting} onLogout={logout} onSettings={() => navigate('/admin/resources')} />
+        <Sidebar firstName={firstName} timeGreeting={timeGreeting} onLogout={logout} />
 
         {/* ═══ MAIN ═══ */}
         <main className="flex-1 min-w-0 p-4 sm:p-5 lg:p-6 space-y-4 sm:space-y-5">
@@ -253,41 +258,16 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Bottom row : Aujourd'hui + Priorités */}
-          <div className="grid lg:grid-cols-2 gap-3 sm:gap-4 pb-6">
-            <Panel
-              icon={<Calendar className="w-4 h-4 text-indigo-300" />}
-              title="Aujourd'hui"
-              badge={todaySessions.length > 0 ? `${todaySessions.length} session${todaySessions.length > 1 ? 's' : ''}` : undefined}
-              badgeColor="bg-indigo-500/20 text-indigo-200"
-            >
-              {hasPlan && todaySessions.length > 0 ? (
-                todaySessions.slice(0, 4).map((session: any) => (
-                  <div key={session.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[.03] hover:bg-white/[.06] transition-colors">
-                    <div className={`w-1 h-9 rounded-full ${session.priority === 'high' ? 'bg-rose-400' : session.priority === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-semibold text-white truncate">{session.subjects?.name_fr || 'Matière'}</p>
-                      <p className="text-[10px] text-white/45 truncate">
-                        Ch.{session.chapters?.chapter_number} — {session.chapters?.title_fr}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => navigate(`/session/${session.chapter_id}`)}
-                      className="w-7 h-7 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white flex items-center justify-center hover:shadow-lg hover:shadow-indigo-500/40 transition-all shrink-0"
-                    >
-                      <Play className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <EmptyState
-                  icon={<Star className="w-8 h-8 text-amber-300/70 mb-2" />}
-                  title={hasPlan ? "Aucune session aujourd'hui" : 'Pas encore de programme'}
-                  cta={hasPlan ? 'Voir le calendrier' : 'Lancer le diagnostic'}
-                  onCta={() => navigate(hasPlan ? '/coaching/plan' : '/coaching/diagnostic')}
-                />
-              )}
-            </Panel>
+          {/* Bottom row : Calendrier coaching + Priorités */}
+          <div className="grid lg:grid-cols-[1.4fr_1fr] gap-3 sm:gap-4 pb-6">
+            <CalendarPanel
+              month={calendarMonth}
+              setMonth={setCalendarMonth}
+              sessionsByDate={allSessionsData?.sessions_by_date || {}}
+              onSelectDay={setSelectedDay}
+              hasPlan={hasPlan}
+              onCta={() => navigate(hasPlan ? '/coaching/plan' : '/coaching/diagnostic')}
+            />
 
             <Panel
               icon={<Target className="w-4 h-4 text-rose-300" />}
@@ -338,6 +318,19 @@ export default function Dashboard() {
             </Panel>
           </div>
 
+          {/* Day detail modal */}
+          {selectedDay && (
+            <DayDetailModal
+              dayISO={selectedDay}
+              sessions={allSessionsData?.sessions_by_date?.[selectedDay] || []}
+              onClose={() => setSelectedDay(null)}
+              onStartSession={(chapterId) => {
+                setSelectedDay(null);
+                navigate(`/session/${chapterId}`);
+              }}
+            />
+          )}
+
           {/* Plan progress (si plan actif) */}
           {hasPlan && (
             <div className="glass rounded-2xl p-4 mb-6 hidden sm:block">
@@ -362,17 +355,15 @@ export default function Dashboard() {
 // ═════════════════════════════════════════════════════════════
 //   SIDEBAR
 // ═════════════════════════════════════════════════════════════
-function Sidebar({ firstName, timeGreeting, onLogout, onSettings }: {
-  firstName: string; timeGreeting: string; onLogout: () => void; onSettings: () => void;
+function Sidebar({ firstName, timeGreeting, onLogout }: {
+  firstName: string; timeGreeting: string; onLogout: () => void;
 }) {
   const navigate = useNavigate();
   const items = [
-    { icon: BarChart3,    label: 'Tableau de bord', path: '/dashboard',         active: true },
-    { icon: GraduationCap,label: 'Coaching IA',     path: '/coaching/plan',     active: false },
-    { icon: MessageCircle,label: 'Mode libre',      path: '/libre',             active: false },
-    { icon: Trophy,       label: 'Examens réels',   path: '/exam',              active: false },
-    { icon: BookOpen,     label: 'Mes cours',       path: '/coaching/plan',     active: false },
-    { icon: Award,        label: 'Progression',     path: '/coaching/plan',     active: false },
+    { icon: BarChart3,    label: 'Tableau de bord', path: '/dashboard',     active: true },
+    { icon: GraduationCap,label: 'Coaching IA',     path: '/coaching/plan', active: false },
+    { icon: MessageCircle,label: 'Mode libre',      path: '/libre',         active: false },
+    { icon: Trophy,       label: 'Examens réels',   path: '/exam',          active: false },
   ];
 
   return (
@@ -380,14 +371,9 @@ function Sidebar({ firstName, timeGreeting, onLogout, onSettings }: {
       {/* Mobile top bar */}
       <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/5 backdrop-blur-2xl bg-[#070718]/70 sticky top-0 z-30">
         <MoalimLogo size="sm" />
-        <div className="flex items-center gap-1.5">
-          <button onClick={onSettings} className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-            <Settings className="w-4 h-4" />
-          </button>
-          <button onClick={onLogout} className="p-2 text-white/40 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors">
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+        <button onClick={onLogout} className="p-2 text-white/40 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors">
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Desktop sidebar */}
@@ -417,10 +403,7 @@ function Sidebar({ firstName, timeGreeting, onLogout, onSettings }: {
           ))}
         </nav>
 
-        <div className="mt-auto pt-6 space-y-1">
-          <button onClick={onSettings} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/45 hover:text-white hover:bg-white/[.04] transition-colors">
-            <Settings className="w-3.5 h-3.5" /> Paramètres
-          </button>
+        <div className="mt-auto pt-6">
           <button onClick={onLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/45 hover:text-rose-300 hover:bg-rose-500/10 transition-colors">
             <LogOut className="w-3.5 h-3.5" /> Déconnexion
           </button>
@@ -577,6 +560,320 @@ function EmptyChart({ icon, title, hint, cta, onCta }: {
           {cta} <ChevronRight className="w-3 h-3" />
         </button>
       )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+//   CALENDAR PANEL — version dark-theme du calendrier coaching
+// ═════════════════════════════════════════════════════════════
+const FRENCH_MONTHS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+];
+const FRENCH_WEEKDAYS_INITIAL = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+const toISODateLocal = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const subjectHueDot: Record<string, string> = {
+  Physique: 'bg-indigo-400',
+  Chimie: 'bg-rose-400',
+  'Mathématiques': 'bg-amber-400',
+  Mathematiques: 'bg-amber-400',
+  SVT: 'bg-emerald-400',
+};
+
+function CalendarPanel({
+  month, setMonth, sessionsByDate, onSelectDay, hasPlan, onCta,
+}: {
+  month: Date;
+  setMonth: (d: Date) => void;
+  sessionsByDate: Record<string, any[]>;
+  onSelectDay: (date: string) => void;
+  hasPlan: boolean;
+  onCta: () => void;
+}) {
+  const today = new Date();
+  const todayISO = toISODateLocal(today);
+  const year = month.getFullYear();
+  const monthIdx = month.getMonth();
+
+  const firstOfMonth = new Date(year, monthIdx, 1);
+  const jsWeekday = firstOfMonth.getDay();
+  const offset = (jsWeekday + 6) % 7; // Monday-first
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
+  const cells: Array<{ date: Date | null; iso: string | null }> = [];
+  for (let i = 0; i < offset; i++) cells.push({ date: null, iso: null });
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, monthIdx, d);
+    cells.push({ date, iso: toISODateLocal(date) });
+  }
+  while (cells.length % 7 !== 0) cells.push({ date: null, iso: null });
+
+  const totalSessionsThisMonth = Object.entries(sessionsByDate).reduce((acc, [iso, list]) => {
+    if (iso.startsWith(`${year}-${String(monthIdx + 1).padStart(2, '0')}`)) {
+      return acc + (list?.length || 0);
+    }
+    return acc;
+  }, 0);
+
+  return (
+    <div className="glass rounded-2xl overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-gradient-to-r from-indigo-600/30 via-purple-600/20 to-cyan-600/20">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-indigo-300" />
+          <h3 className="text-sm font-bold text-white">Calendrier</h3>
+          {totalSessionsThisMonth > 0 && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200">
+              {totalSessionsThisMonth} sessions
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setMonth(new Date(year, monthIdx - 1, 1))}
+            className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setMonth(new Date())}
+            className="text-xs font-bold text-white px-2 py-1 rounded-lg hover:bg-white/5 transition tabular-nums"
+          >
+            {FRENCH_MONTHS[monthIdx]} {year}
+          </button>
+          <button
+            onClick={() => setMonth(new Date(year, monthIdx + 1, 1))}
+            className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {!hasPlan ? (
+        <div className="p-6">
+          <EmptyState
+            icon={
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 flex items-center justify-center mb-2 border border-white/5">
+                <Calendar className="w-6 h-6 text-indigo-300" />
+              </div>
+            }
+            title="Aucun programme actif"
+            hint="Lance ton diagnostic pour générer un calendrier personnalisé jusqu'au BAC."
+            cta="Lancer le diagnostic"
+            onCta={onCta}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Weekday row */}
+          <div className="grid grid-cols-7 border-b border-white/5">
+            {FRENCH_WEEKDAYS_INITIAL.map((d, i) => (
+              <div key={i} className="py-1.5 text-center text-[10px] font-bold text-white/40 uppercase">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div className="grid grid-cols-7 p-1.5 gap-0.5">
+            {cells.map((cell, i) => {
+              if (!cell.date || !cell.iso) {
+                return <div key={i} className="h-11" />;
+              }
+              const daySessions = sessionsByDate[cell.iso] || [];
+              const totalSessions = daySessions.length;
+              const completed = daySessions.filter((s: any) => s.status === 'completed').length;
+              const allDone = totalSessions > 0 && completed === totalSessions;
+              const isToday = cell.iso === todayISO;
+              const isPast = cell.iso < todayISO;
+              const hasContent = totalSessions > 0;
+
+              return (
+                <button
+                  key={i}
+                  onClick={() => hasContent && onSelectDay(cell.iso!)}
+                  disabled={!hasContent}
+                  className={`relative h-11 flex flex-col items-center justify-center rounded-lg transition-all ${
+                    isToday
+                      ? 'bg-indigo-500/15 ring-1 ring-indigo-400/40'
+                      : hasContent
+                        ? 'hover:bg-white/[.06] cursor-pointer'
+                        : ''
+                  }`}
+                >
+                  <span
+                    className={`text-xs font-semibold leading-none ${
+                      isToday
+                        ? 'w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30'
+                        : isPast
+                          ? 'text-white/25'
+                          : hasContent
+                            ? 'text-white'
+                            : 'text-white/40'
+                    }`}
+                  >
+                    {cell.date.getDate()}
+                  </span>
+                  {totalSessions > 0 && (
+                    <div className="flex items-center gap-0.5 mt-1">
+                      {daySessions.slice(0, 3).map((s: any, idx: number) => {
+                        const isDone = s.status === 'completed';
+                        const subj = s.subjects?.name_fr || '';
+                        const dotClass = isDone ? 'bg-emerald-400' : (subjectHueDot[subj] || 'bg-white/40');
+                        return <div key={idx} className={`w-1 h-1 rounded-full ${dotClass}`} />;
+                      })}
+                      {totalSessions > 3 && <span className="text-[7px] font-bold text-white/40">+</span>}
+                    </div>
+                  )}
+                  {allDone && (
+                    <CheckCircle className="absolute top-0.5 right-0.5 w-2.5 h-2.5 text-emerald-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Légende */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 border-t border-white/5 text-[10px] text-white/55">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-400" />PC</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400" />Chimie</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" />Math</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" />Terminé</span>
+            <span className="ml-auto text-[10px] text-white/40">Clique sur un jour</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+//   DAY DETAIL MODAL (dark)
+// ═════════════════════════════════════════════════════════════
+function DayDetailModal({
+  dayISO, sessions, onClose, onStartSession,
+}: {
+  dayISO: string;
+  sessions: any[];
+  onClose: () => void;
+  onStartSession: (chapterId: string) => void;
+}) {
+  const date = new Date(dayISO + 'T00:00:00');
+  const weekday = date.toLocaleDateString('fr-FR', { weekday: 'long' });
+  const dayNum = date.getDate();
+  const monthName = FRENCH_MONTHS[date.getMonth()];
+  const todayISO = toISODateLocal(new Date());
+  const isToday = dayISO === todayISO;
+  const totalMin = sessions.reduce((a, s) => a + (s.duration_minutes || 0), 0);
+  const completed = sessions.filter((s) => s.status === 'completed').length;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass-strong rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-indigo-500/20 border border-white/10 anim-fade-up"
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-cyan-500 p-6 text-white relative overflow-hidden">
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/20 blur-3xl" />
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur flex items-center justify-center transition-all"
+          >
+            <XIcon className="w-5 h-5" />
+          </button>
+          <div className="relative flex items-end gap-4">
+            <div className="bg-white/15 backdrop-blur rounded-2xl p-3 text-center min-w-[80px] border border-white/20">
+              <p className="text-xs uppercase tracking-wider font-bold text-white/85">{weekday.slice(0, 3)}</p>
+              <p className="text-4xl font-black leading-none mt-1">{dayNum}</p>
+              <p className="text-[10px] font-semibold text-white/85 mt-1">{monthName.slice(0, 4).toUpperCase()}</p>
+            </div>
+            <div className="flex-1 pb-1 min-w-0">
+              <p className="text-xs uppercase tracking-wider font-bold text-white/85">
+                {isToday ? "Aujourd'hui" : 'Sessions planifiées'}
+              </p>
+              <h3 className="text-2xl font-black capitalize mt-1 truncate">
+                {weekday} {dayNum} {monthName}
+              </h3>
+              <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
+                <span className="bg-white/20 backdrop-blur rounded-lg px-2.5 py-1 font-semibold">
+                  {sessions.length} session{sessions.length > 1 ? 's' : ''}
+                </span>
+                <span className="bg-white/20 backdrop-blur rounded-lg px-2.5 py-1 font-semibold">
+                  {Math.round(totalMin / 60 * 10) / 10}h
+                </span>
+                <span className="bg-white/20 backdrop-blur rounded-lg px-2.5 py-1 font-semibold">
+                  {completed}/{sessions.length} terminées
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sessions list */}
+        <div className="flex-1 overflow-y-auto moalim-scroll p-4 space-y-2">
+          {sessions.length === 0 ? (
+            <div className="text-center py-10 text-white/45 text-sm">Aucune session ce jour-là.</div>
+          ) : sessions.map((s) => {
+            const subj = s.subjects?.name_fr || '';
+            const dot = subjectHueDot[subj] || 'bg-white/40';
+            const isDone = s.status === 'completed';
+            return (
+              <div
+                key={s.id}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                  isDone
+                    ? 'bg-emerald-500/5 border-emerald-500/20'
+                    : 'bg-white/[.04] border-white/10 hover:bg-white/[.07]'
+                }`}
+              >
+                <div className={`w-1.5 h-12 rounded-full ${isDone ? 'bg-emerald-400' : dot}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-white truncate">{subj}</span>
+                    {isDone && (
+                      <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-xs text-white/55 truncate">
+                    Ch.{s.chapters?.chapter_number} — {s.chapters?.title_fr}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-white/40">
+                    <Clock className="w-3 h-3" />
+                    {s.duration_minutes || 0} min
+                    {s.scheduled_time && (
+                      <>
+                        <span>·</span>
+                        <span>{s.scheduled_time}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {!isDone && (
+                  <button
+                    onClick={() => onStartSession(s.chapter_id)}
+                    className="px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-xs font-semibold flex items-center gap-1.5 hover:shadow-lg hover:shadow-indigo-500/40 transition-all flex-shrink-0"
+                  >
+                    <Play className="w-3 h-3" /> Démarrer
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
