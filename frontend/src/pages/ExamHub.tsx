@@ -77,7 +77,7 @@ const SUBJECT_CONFIG: Record<string, SubjectCfg> = {
     icon: '🧬',
     gradient: 'from-emerald-500 via-green-500 to-teal-600',
     ring: 'ring-emerald-400',
-    soft: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    soft: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30',
     text: 'text-emerald-700',
     pattern:
       'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18) 0, transparent 30%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.12) 0, transparent 35%)',
@@ -87,7 +87,7 @@ const SUBJECT_CONFIG: Record<string, SubjectCfg> = {
     icon: '⚛️',
     gradient: 'from-sky-500 via-blue-500 to-indigo-600',
     ring: 'ring-blue-400',
-    soft: 'bg-blue-50 text-blue-700 border-blue-200',
+    soft: 'bg-blue-500/15 text-blue-200 border-blue-400/30',
     text: 'text-blue-700',
     pattern:
       'radial-gradient(circle at 10% 30%, rgba(255,255,255,0.18) 0, transparent 32%), radial-gradient(circle at 90% 80%, rgba(255,255,255,0.12) 0, transparent 35%)',
@@ -97,7 +97,7 @@ const SUBJECT_CONFIG: Record<string, SubjectCfg> = {
     icon: '📐',
     gradient: 'from-purple-500 via-violet-500 to-fuchsia-600',
     ring: 'ring-purple-400',
-    soft: 'bg-purple-50 text-purple-700 border-purple-200',
+    soft: 'bg-purple-500/15 text-purple-200 border-purple-400/30',
     text: 'text-purple-700',
     pattern:
       'radial-gradient(circle at 25% 75%, rgba(255,255,255,0.18) 0, transparent 30%), radial-gradient(circle at 85% 25%, rgba(255,255,255,0.12) 0, transparent 35%)',
@@ -109,8 +109,8 @@ const FALLBACK_CFG: SubjectCfg = {
   icon: '📝',
   gradient: 'from-slate-500 to-slate-700',
   ring: 'ring-slate-400',
-  soft: 'bg-slate-50 text-slate-700 border-slate-200',
-  text: 'text-slate-700',
+  soft: 'bg-slate-50 text-white/85 border-white/10',
+  text: 'text-white/85',
   pattern: '',
 };
 
@@ -272,18 +272,18 @@ export default function ExamHub() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
-              className="p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+              className="p-2 -ml-2 rounded-lg hover:bg-white/10 text-white/55 transition-colors"
               aria-label="Retour"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-slate-900">Mode Examen</h1>
-              <p className="text-sm text-slate-500 truncate">
+              <h1 className="text-xl font-bold text-white">Mode Examen</h1>
+              <p className="text-sm text-white/55 truncate">
                 Examens Nationaux BAC — Sciences Physiques BIOF
               </p>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 text-white/70 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" /> {exams.length} examens
             </div>
           </div>
@@ -301,14 +301,14 @@ export default function ExamHub() {
 
         {/* In-progress attempts */}
         {inProgressAttempts.length > 0 && (
-          <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 p-4">
+          <section className="rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-yellow-500/10 p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm">
                 <RotateCcw className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-900">Examens en cours</p>
-                <p className="text-[11px] text-slate-500">{inProgressAttempts.length} examen{inProgressAttempts.length > 1 ? 's' : ''} non terminé{inProgressAttempts.length > 1 ? 's' : ''}</p>
+                <p className="text-sm font-bold text-white">Examens en cours</p>
+                <p className="text-[11px] text-white/55">{inProgressAttempts.length} examen{inProgressAttempts.length > 1 ? 's' : ''} non terminé{inProgressAttempts.length > 1 ? 's' : ''}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -326,21 +326,21 @@ export default function ExamHub() {
                   <button
                     key={attempt.id}
                     onClick={() => navigate(route)}
-                    className="flex items-center gap-3 p-3 bg-white rounded-xl border border-amber-200 hover:border-amber-400 hover:shadow-md transition-all text-left group"
+                    className="flex items-center gap-3 p-3 glass rounded-xl border border-amber-400/30 hover:border-amber-300/50 hover:shadow-md transition-all text-left group"
                   >
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${cfg.gradient} flex items-center justify-center text-lg shrink-0`}>
                       {cfg.icon}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">
+                      <p className="text-sm font-bold text-white truncate">
                         {cfg.label} — {attempt.exam_year} {session}
                       </p>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-                        <span className={`px-1.5 py-0.5 rounded font-semibold ${attempt.mode === 'real' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
+                      <div className="flex items-center gap-2 text-[10px] text-white/55 mt-0.5">
+                        <span className={`px-1.5 py-0.5 rounded font-semibold ${attempt.mode === 'real' ? 'bg-rose-500/15 text-rose-200' : 'bg-blue-500/15 text-blue-200'}`}>
                           {modeLabel}
                         </span>
                         <span>{attempt.answered_count} rép.</span>
-                        <span className="text-slate-400">{agoLabel}</span>
+                        <span className="text-white/40">{agoLabel}</span>
                       </div>
                     </div>
                     <span className="text-amber-600 font-bold text-xs group-hover:translate-x-0.5 transition-transform">
@@ -359,9 +359,9 @@ export default function ExamHub() {
           <aside className="lg:w-64 xl:w-72 shrink-0">
             <div className="lg:sticky lg:top-[73px] space-y-3">
               {/* Filter card */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
+              <div className="rounded-2xl border border-white/10 glass p-3 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-slate-600">
+                  <div className="flex items-center gap-1.5 text-white/70">
                     <Filter className="w-3.5 h-3.5" />
                     <p className="text-[11px] font-bold uppercase tracking-widest">
                       Filtres
@@ -374,7 +374,7 @@ export default function ExamHub() {
                         setFilterYear('all');
                         setFilterSession('all');
                       }}
-                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/55 hover:text-white transition-colors"
                     >
                       <X className="w-3 h-3" />
                       Effacer ({activeFiltersCount})
@@ -384,7 +384,7 @@ export default function ExamHub() {
 
                 {/* Matière */}
                 <div className="space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
                     Matière
                   </p>
                   <div className="flex flex-col gap-1">
@@ -418,7 +418,7 @@ export default function ExamHub() {
 
                 {/* Année */}
                 <div className="space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
                     Année
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -435,7 +435,7 @@ export default function ExamHub() {
                         active={filterYear === y}
                         onClick={() => setFilterYear(y)}
                         compact
-                        activeClass="bg-slate-900 text-white border-slate-900 shadow-sm"
+                        activeClass="bg-gradient-to-r from-indigo-500 to-cyan-500 text-white border-transparent shadow-lg shadow-indigo-500/30 shadow-sm"
                       >
                         {y}
                       </FilterChip>
@@ -445,7 +445,7 @@ export default function ExamHub() {
 
                 {/* Session */}
                 <div className="space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
                     Session
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -492,12 +492,12 @@ export default function ExamHub() {
             {/* Result count bar */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-slate-400" />
-                <p className="text-sm text-slate-500">
-                  <span className="font-bold text-slate-900">{filteredExams.length}</span>{' '}
+                <Sparkles className="w-4 h-4 text-white/40" />
+                <p className="text-sm text-white/55">
+                  <span className="font-bold text-white">{filteredExams.length}</span>{' '}
                   examen{filteredExams.length !== 1 ? 's' : ''}
                   {activeFiltersCount > 0 && (
-                    <span className="text-slate-400"> · filtrés</span>
+                    <span className="text-white/40"> · filtrés</span>
                   )}
                 </p>
               </div>
@@ -505,12 +505,12 @@ export default function ExamHub() {
 
             {/* Exam cards */}
             {filteredExams.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 mx-auto mb-3 flex items-center justify-center">
-                  <FileText className="w-8 h-8 text-slate-400" />
+              <div className="glass rounded-2xl p-10 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-white/5 mx-auto mb-3 flex items-center justify-center">
+                  <FileText className="w-8 h-8 text-white/40" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-700 mb-1">Aucun examen trouvé</h3>
-                <p className="text-sm text-slate-500 mb-3">Ajustez vos filtres.</p>
+                <h3 className="text-lg font-bold text-white/85 mb-1">Aucun examen trouvé</h3>
+                <p className="text-sm text-white/55 mb-3">Ajustez vos filtres.</p>
                 {activeFiltersCount > 0 && (
                   <button
                     onClick={() => {
@@ -518,7 +518,7 @@ export default function ExamHub() {
                       setFilterYear('all');
                       setFilterSession('all');
                     }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all"
                   >
                     <X className="w-3.5 h-3.5" />
                     Réinitialiser
@@ -530,10 +530,10 @@ export default function ExamHub() {
                 {groupedByYear.map(([year, items]) => (
                   <section key={year}>
                     <div className="flex items-center gap-2 mb-2.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <h2 className="text-sm font-bold text-slate-900 tracking-tight">{year}</h2>
-                      <div className="flex-1 h-px bg-slate-200" />
-                      <span className="text-[10px] font-semibold text-slate-400">
+                      <Calendar className="w-3.5 h-3.5 text-white/40" />
+                      <h2 className="text-sm font-bold text-white tracking-tight">{year}</h2>
+                      <div className="flex-1 h-px bg-white/10" />
+                      <span className="text-[10px] font-semibold text-white/40">
                         {items.length} exam.
                       </span>
                     </div>
@@ -610,8 +610,8 @@ function FilterChip({
   const radius = sidebar ? 'rounded-lg' : 'rounded-full';
   const base = `inline-flex items-center ${sizing} ${radius} font-semibold border transition-all`;
   const inactive =
-    'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50';
-  const activeDefault = 'bg-slate-900 text-white border-slate-900';
+    'glass text-white/70 hover:bg-white/[.06]';
+  const activeDefault = 'bg-gradient-to-r from-indigo-500 to-cyan-500 text-white border-transparent shadow-lg shadow-indigo-500/30';
   return (
     <button
       onClick={onClick}
@@ -624,7 +624,7 @@ function FilterChip({
       {typeof count === 'number' && (
         <span
           className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-            active ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'
+            active ? 'bg-white/25 text-white' : 'bg-white/5 text-white/55'
           }`}
         >
           {count}
@@ -637,23 +637,23 @@ function FilterChip({
 function ModeInfoBar() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+    <div className="rounded-2xl border border-white/10 glass overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[.06] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-semibold">
             <Play className="w-3 h-3" /> Entraînement
           </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-200 border border-rose-400/30 text-xs font-semibold">
             <Clock className="w-3 h-3" /> Examen Réel
           </span>
         </div>
-        <span className="hidden sm:block text-sm text-slate-500 truncate">
+        <span className="hidden sm:block text-sm text-white/55 truncate">
           Deux modes disponibles — cliquez sur un examen pour choisir
         </span>
-        <div className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+        <div className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-white/55">
           <Info className="w-3.5 h-3.5" />
           {open ? 'Masquer' : 'Détails'}
           <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -661,29 +661,29 @@ function ModeInfoBar() {
       </button>
 
       {open && (
-        <div className="grid grid-cols-1 md:grid-cols-2 border-t border-slate-200">
-          <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-b md:border-b-0 md:border-r border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 border-t border-white/10">
+          <div className="p-4 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-b md:border-b-0 md:border-r border-white/10">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center">
                 <Play className="w-4 h-4" />
               </div>
-              <p className="font-bold text-slate-900">Mode Entraînement</p>
+              <p className="font-bold text-white">Mode Entraînement</p>
             </div>
-            <ul className="text-sm text-slate-600 space-y-1 pl-1">
+            <ul className="text-sm text-white/70 space-y-1 pl-1">
               <li>• Questions affichées une par une</li>
               <li>• Correction instantanée par l'IA</li>
               <li>• Explication des erreurs</li>
               <li>• Pas de limite de temps</li>
             </ul>
           </div>
-          <div className="p-4 bg-gradient-to-br from-rose-50 to-red-50">
+          <div className="p-4 bg-gradient-to-br from-rose-500/10 to-red-500/10">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-600 text-white flex items-center justify-center">
                 <Clock className="w-4 h-4" />
               </div>
-              <p className="font-bold text-slate-900">Mode Examen Réel</p>
+              <p className="font-bold text-white">Mode Examen Réel</p>
             </div>
-            <ul className="text-sm text-slate-600 space-y-1 pl-1">
+            <ul className="text-sm text-white/70 space-y-1 pl-1">
               <li>• Toutes les questions visibles</li>
               <li>• Chronomètre avec durée officielle</li>
               <li>• Aucune correction pendant l'examen</li>
@@ -711,7 +711,7 @@ function ExamCard({
     <button
       onClick={onOpen}
       title={`${cfg.label} — ${exam.year} ${session}`}
-      className={`group relative text-left rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 ${cfg.ring}`}
+      className={`group relative text-left rounded-2xl overflow-hidden glass shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 ${cfg.ring}`}
     >
       {/* VIBRANT colored header */}
       <div className={`relative bg-gradient-to-br ${cfg.gradient} overflow-hidden`}>
@@ -761,8 +761,8 @@ function ExamCard({
       </div>
 
       {/* Body — ultra compact */}
-      <div className="p-2.5 bg-white">
-        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-2">
+      <div className="p-2.5 glass">
+        <div className="flex items-center justify-between text-[10px] text-white/55 mb-2">
           <span className="inline-flex items-center gap-0.5" title={`${exam.duration_minutes} min`}>
             <Clock className="w-2.5 h-2.5" />
             {exam.duration_minutes}m
@@ -803,11 +803,11 @@ function ModeModal({
   const session = normalizeSession(exam.session);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md p-0 sm:p-4 animate-in fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
+        className="glass-strong w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -839,30 +839,30 @@ function ModeModal({
 
         {/* Body */}
         <div className="p-5 space-y-3">
-          <p className="text-sm text-slate-600 font-medium">Choisissez votre mode :</p>
+          <p className="text-sm text-white/70 font-medium">Choisissez votre mode :</p>
           <button
             onClick={() => onStart('practice')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border-2 border-blue-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
+            className="w-full flex items-center gap-4 p-4 glass rounded-2xl border-2 border-blue-400/30 hover:border-blue-400/60 hover:bg-blue-500/10 transition-all group text-left"
           >
             <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center">
               <GraduationCap className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-slate-900">Mode Entraînement</p>
-              <p className="text-xs text-slate-500">Feedback instantané + corrections IA</p>
+              <p className="font-bold text-white">Mode Entraînement</p>
+              <p className="text-xs text-white/55">Feedback instantané + corrections IA</p>
             </div>
             <span className="text-blue-500 text-lg transition-transform group-hover:translate-x-0.5">→</span>
           </button>
           <button
             onClick={() => onStart('real')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border-2 border-rose-200 hover:border-rose-500 hover:bg-rose-50 transition-all group text-left"
+            className="w-full flex items-center gap-4 p-4 glass rounded-2xl border-2 border-rose-400/30 hover:border-rose-400/60 hover:bg-rose-500/10 transition-all group text-left"
           >
             <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 text-white flex items-center justify-center">
               <Clock className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-slate-900">Mode Examen Réel</p>
-              <p className="text-xs text-slate-500">
+              <p className="font-bold text-white">Mode Examen Réel</p>
+              <p className="text-xs text-white/55">
                 {exam.duration_minutes} min — conditions du BAC
               </p>
             </div>
@@ -891,12 +891,12 @@ function MyExamStatsPanel({
 }) {
   if (loading && !stats) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 animate-pulse">
+      <div className="rounded-2xl border border-white/10 glass p-4 animate-pulse">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-slate-100" />
+          <div className="w-8 h-8 rounded-lg bg-white/5" />
           <div className="flex-1 space-y-1.5">
-            <div className="h-3 w-1/4 bg-slate-100 rounded" />
-            <div className="h-2 w-1/3 bg-slate-100 rounded" />
+            <div className="h-3 w-1/4 bg-white/5 rounded" />
+            <div className="h-2 w-1/3 bg-white/5 rounded" />
           </div>
         </div>
       </div>
@@ -911,16 +911,16 @@ function MyExamStatsPanel({
 
   if (!hasActivity) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-indigo-50 via-white to-blue-50 p-4">
+      <section className="glass rounded-2xl p-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-sm shrink-0">
             <Trophy className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-slate-900">
+            <p className="text-sm font-bold text-white">
               Passe ton premier examen pour voir tes stats ici 💪
             </p>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-white/55 mt-0.5">
               Tes progrès apparaîtront ici et tu pourras les partager avec tes amis.
             </p>
           </div>
@@ -945,7 +945,7 @@ function MyExamStatsPanel({
   })();
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 text-white shadow-md overflow-hidden">
+    <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 text-white shadow-md overflow-hidden">
       <div className="p-4">
         {/* Top bar: title + KPIs inline + share */}
         <div className="flex items-center gap-3 mb-3">
@@ -1250,12 +1250,12 @@ function ExamShareModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4"
+        className="glass-strong rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4"
       >
         {/* Header */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 px-6 py-5 text-white">
@@ -1291,9 +1291,9 @@ function ExamShareModal({
               scoreEmoji={scoreEmoji}
             />
           </a>
-          <p className="text-[10px] text-center text-slate-400 mt-2">
+          <p className="text-[10px] text-center text-white/40 mt-2">
             🖼 Aperçu — l'image partagée redirige vers{' '}
-            <span className="font-semibold text-indigo-600">moalim.online</span>
+            <span className="font-semibold text-indigo-300">moalim.online</span>
           </p>
         </div>
 
@@ -1320,7 +1320,7 @@ function ExamShareModal({
             <button
               onClick={handleDownload}
               disabled={generating}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:border-indigo-400 hover:text-indigo-600 transition-colors disabled:opacity-60"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 glass rounded-xl text-xs font-semibold text-white/85 hover:border-indigo-400 hover:text-indigo-200 transition-colors disabled:opacity-60"
             >
               {downloaded ? (
                 <>
@@ -1333,7 +1333,7 @@ function ExamShareModal({
             </button>
             <button
               onClick={copyText}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 glass rounded-xl text-xs font-semibold text-white/85 hover:border-indigo-400 hover:text-indigo-200 transition-colors"
             >
               {copied ? (
                 <>
@@ -1350,7 +1350,7 @@ function ExamShareModal({
           </div>
 
           {fileShareUnsupported && (
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
+            <p className="text-[11px] text-amber-700 bg-amber-500/15 border border-amber-400/30 rounded-lg px-3 py-2 flex items-center gap-2">
               <Check className="w-3.5 h-3.5 flex-shrink-0" />
               Image téléchargée ! Ton navigateur ne supporte pas le partage
               de fichier — joins-la manuellement à ton post.
@@ -1360,10 +1360,10 @@ function ExamShareModal({
 
         {/* Social networks — copy text + download image + open network */}
         <div className="px-6 py-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          <p className="text-xs font-semibold text-white/55 uppercase tracking-wider mb-2">
             Ou directement sur un réseau
           </p>
-          <p className="text-[10px] text-slate-400 mb-3">
+          <p className="text-[10px] text-white/40 mb-3">
             Le texte est copié et l'image téléchargée — joins-la à ton post.
           </p>
           <div className="grid grid-cols-5 gap-2">

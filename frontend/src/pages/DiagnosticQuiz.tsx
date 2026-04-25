@@ -21,14 +21,14 @@ const AssociationQuestion = ({ q, answer, onChange }: { q: Question; answer: Rec
     <div className="space-y-3">
       {pairs.map((pair, idx) => (
         <div key={idx} className="flex items-center gap-3">
-          <div className="flex-1 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <span className="text-sm text-slate-800"><LatexRenderer content={pair.left} /></span>
+          <div className="flex-1 p-3 glass rounded-lg">
+            <span className="text-sm text-white"><LatexRenderer content={pair.left} /></span>
           </div>
-          <span className="text-slate-400">→</span>
+          <span className="text-white/40">→</span>
           <select
             value={answer[pair.left] || ''}
             onChange={(e) => handleSelect(pair.left, e.target.value)}
-            className="flex-1 p-3 bg-white rounded-lg border-2 border-slate-200 focus:border-blue-500 focus:outline-none text-sm"
+            className="flex-1 p-3 glass rounded-lg border-2 border-white/10 focus:border-indigo-400/60 focus:outline-none text-sm text-white"
           >
             <option value="">Choisir...</option>
             {pairs.map((p, i) => (
@@ -253,10 +253,10 @@ export default function DiagnosticQuiz() {
   // ── Render helpers ──
   const difficultyBadge = (d: string) => {
     switch (d?.toLowerCase()) {
-      case 'facile': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'moyen': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'difficile': return 'bg-rose-100 text-rose-700 border-rose-200';
-      default: return 'bg-slate-100 text-slate-600 border-slate-200';
+      case 'facile': return 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30';
+      case 'moyen': return 'bg-amber-500/15 text-amber-200 border-amber-400/30';
+      case 'difficile': return 'bg-rose-500/15 text-rose-200 border-rose-400/30';
+      default: return 'bg-white/5 text-white/70 border-white/10';
     }
   };
 
@@ -267,12 +267,12 @@ export default function DiagnosticQuiz() {
         <div className="max-w-3xl mx-auto w-full">
           <button
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-8 transition-colors"
+            className="flex items-center gap-2 text-white/70 hover:text-white mb-8 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" /> Retour au Dashboard
           </button>
 
-          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-10 overflow-hidden relative">
+          <div className="glass-strong rounded-3xl shadow-xl p-10 overflow-hidden relative">
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-gradient-to-tr from-purple-400/20 to-pink-400/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -280,44 +280,44 @@ export default function DiagnosticQuiz() {
               <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl mb-6 shadow-lg shadow-blue-500/30">
                 <Brain className="w-10 h-10 text-white" />
               </div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Diagnostic Initial</h1>
-              <p className="text-slate-600 mt-3 text-lg leading-relaxed">
-                Évalue ton niveau dans les <span className="font-semibold text-slate-900">{subjects.length} matières</span> avec
-                des questions issues des examens nationaux <span className="font-semibold text-indigo-600">BAC 2020-2025</span>.
+              <h1 className="text-4xl font-black text-white tracking-tight">Diagnostic Initial</h1>
+              <p className="text-white/70 mt-3 text-lg leading-relaxed">
+                Évalue ton niveau dans les <span className="font-semibold text-white">{subjects.length} matières</span> avec
+                des questions issues des examens nationaux <span className="font-semibold text-indigo-300">BAC 2020-2025</span>.
               </p>
 
               <div className="grid sm:grid-cols-3 gap-4 mt-8">
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                <div className="flex items-start gap-3 p-4 rounded-2xl glass">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-200 flex items-center justify-center flex-shrink-0">
                     <FileText className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-bold text-slate-900 text-sm">10 questions</div>
-                    <div className="text-xs text-slate-500">par matière</div>
+                    <div className="font-bold text-white text-sm">10 questions</div>
+                    <div className="text-xs text-white/55">par matière</div>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                <div className="flex items-start gap-3 p-4 rounded-2xl glass">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-200 flex items-center justify-center flex-shrink-0">
                     <CheckCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-bold text-slate-900 text-sm">QCM · V/F · Assoc.</div>
-                    <div className="text-xs text-slate-500">types variés</div>
+                    <div className="font-bold text-white text-sm">QCM · V/F · Assoc.</div>
+                    <div className="text-xs text-white/55">types variés</div>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                <div className="flex items-start gap-3 p-4 rounded-2xl glass">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-200 flex items-center justify-center flex-shrink-0">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-bold text-slate-900 text-sm">Plan IA</div>
-                    <div className="text-xs text-slate-500">personnalisé</div>
+                    <div className="font-bold text-white text-sm">Plan IA</div>
+                    <div className="text-xs text-white/55">personnalisé</div>
                   </div>
                 </div>
               </div>
 
               {error && (
-                <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>
+                <div className="mt-6 p-4 bg-red-500/15 border border-red-400/30 rounded-xl text-red-200 text-sm">{error}</div>
               )}
 
               <button
@@ -329,7 +329,7 @@ export default function DiagnosticQuiz() {
                 Commencer le diagnostic complet
                 <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </button>
-              <p className="text-xs text-slate-500 text-center mt-3">
+              <p className="text-xs text-white/55 text-center mt-3">
                 Les {subjects.length} matières sont générées en parallèle pour démarrer plus vite.
               </p>
             </div>
@@ -345,23 +345,23 @@ export default function DiagnosticQuiz() {
     const pct = Math.round((preloadDone / total) * 100);
     return (
       <div className="min-h-screen bg-[#070718] text-white flex items-center justify-center p-6 relative overflow-hidden">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-10 text-center">
+        <div className="max-w-md w-full glass-strong rounded-3xl shadow-xl p-10 text-center">
           <div className="relative inline-block mb-6">
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
               <Loader2 className="w-10 h-10 text-white animate-spin" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Préparation en cours…</h2>
-          <p className="text-slate-600 text-sm mb-6">
+          <h2 className="text-2xl font-bold text-white mb-2">Préparation en cours…</h2>
+          <p className="text-white/70 text-sm mb-6">
             Dès que la 1re matière est prête, tu commences. Les autres se génèrent en arrière-plan.
           </p>
-          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-3">
+          <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden mb-3">
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500"
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="text-sm font-semibold text-slate-700">
+          <div className="text-sm font-semibold text-white/85">
             {preloadDone} / {total} matières prêtes
           </div>
           <div className="mt-6 grid grid-cols-2 gap-2">
@@ -371,7 +371,7 @@ export default function DiagnosticQuiz() {
                 <div
                   key={s.id}
                   className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-all ${
-                    done ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-400'
+                    done ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/5 text-white/40'
                   }`}
                 >
                   {done ? <Check className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
@@ -444,10 +444,10 @@ export default function DiagnosticQuiz() {
                       isCurrent
                         ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
                         : isCompleted
-                        ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                        ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
                         : isLocked
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
-                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                        ? 'bg-white/5 text-white/40 cursor-not-allowed opacity-60'
+                        : 'glass text-white/85 hover:bg-white/[.06]'
                     }`}
                   >
                     <span className="text-sm">{s.icon}</span>
@@ -462,10 +462,10 @@ export default function DiagnosticQuiz() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <div>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-white/55">
                     Question {currentQuestionIndex + 1}/{TOTAL_QUESTIONS} · {answeredCount} répondues
                     {preloadDone < subjects.length && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-indigo-600">
+                      <span className="ml-2 inline-flex items-center gap-1 text-indigo-300">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         {preloadDone}/{subjects.length}
                       </span>
@@ -489,8 +489,8 @@ export default function DiagnosticQuiz() {
                           : isAnswered
                           ? 'bg-emerald-500 text-white shadow-sm'
                           : !isAvailable
-                          ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          ? 'bg-white/5 text-white/30 cursor-not-allowed'
+                          : 'bg-white/5 text-white/55 hover:bg-white/10'
                       }`}
                     >
                       {i + 1}
@@ -499,7 +499,7 @@ export default function DiagnosticQuiz() {
                 })}
               </div>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500"
                 style={{ width: `${progress}%` }}
@@ -510,23 +510,23 @@ export default function DiagnosticQuiz() {
 
         <div className="max-w-3xl mx-auto px-4 py-4">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">{error}</div>
+            <div className="mb-4 p-3 bg-red-500/15 border border-red-400/30 rounded-lg text-red-200 text-xs">{error}</div>
           )}
 
           {/* Single question card */}
-          <div className={`bg-white rounded-2xl shadow-lg border-2 transition-all ${
-            isCurrentAnswered ? 'border-emerald-200' : 'border-slate-200'
+          <div className={`glass-strong rounded-2xl shadow-lg border-2 transition-all ${
+            isCurrentAnswered ? 'border-emerald-400/30' : 'border-white/10'
           }`}>
             {/* Question header */}
-            <div className="flex items-start justify-between gap-3 p-4 pb-3 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-3 p-4 pb-3 border-b border-white/5">
               <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black flex-shrink-0 ${
-                  isCurrentAnswered ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-100 text-slate-600'
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 ${
+                  isCurrentAnswered ? 'bg-emerald-500 text-white shadow-md' : 'bg-white/5 text-white/70'
                 }`}>
                   {currentQuestionIndex + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-bold text-slate-900 leading-snug">
+                  <h3 className="text-sm font-bold text-white leading-snug">
                     <LatexRenderer content={currentQ.question} />
                   </h3>
                 </div>
@@ -535,7 +535,7 @@ export default function DiagnosticQuiz() {
                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${difficultyBadge(currentQ.difficulty)}`}>
                   {currentQ.difficulty}
                 </span>
-                <span className="text-[9px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
+                <span className="text-[9px] font-semibold text-white/55 glass border border-white/10 px-2 py-0.5 rounded">
                   {currentQ.type === 'vrai_faux' ? 'V/F' : currentQ.type === 'association' ? 'Assoc' : 'QCM'}
                 </span>
               </div>
@@ -551,8 +551,8 @@ export default function DiagnosticQuiz() {
                   ].map(({ val, label, Icon, color }) => {
                     const selected = currentAns === val;
                     const base = color === 'emerald'
-                      ? (selected ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-md' : 'border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50')
-                      : (selected ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-md' : 'border-slate-200 hover:border-rose-400 hover:bg-rose-50/50');
+                      ? (selected ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200 shadow-md' : 'border-white/10 text-white/70 hover:border-emerald-400/40 hover:bg-emerald-500/10')
+                      : (selected ? 'border-rose-400/60 bg-rose-500/15 text-rose-200 shadow-md' : 'border-white/10 text-white/70 hover:border-rose-400/40 hover:bg-rose-500/10');
                     return (
                       <button
                         key={val}
@@ -582,16 +582,16 @@ export default function DiagnosticQuiz() {
                         onClick={() => setAnswerAt(currentQuestionIndex, letter)}
                         className={`w-full text-left p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
                           isSelected
-                            ? 'border-blue-500 bg-blue-50 shadow-sm'
-                            : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'
+                            ? 'border-blue-400/30 bg-blue-500/15 shadow-sm'
+                            : 'border-white/10 hover:border-blue-400 hover:bg-white/[.06]'
                         }`}
                       >
                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 transition-colors ${
-                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                          isSelected ? 'bg-blue-600 text-white' : 'bg-white/5 text-white/70'
                         }`}>
                           {letter}
                         </span>
-                        <span className="text-slate-800 text-sm leading-snug"><LatexRenderer content={option} /></span>
+                        <span className="text-white text-sm leading-snug"><LatexRenderer content={option} /></span>
                       </button>
                     );
                   })}
@@ -599,8 +599,8 @@ export default function DiagnosticQuiz() {
                     onClick={() => setAnswerAt(currentQuestionIndex, 'X')}
                     className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center gap-2 text-xs ${
                       currentAns === 'X'
-                        ? 'border-slate-500 bg-slate-100 text-slate-700'
-                        : 'border-dashed border-slate-200 hover:border-slate-300 text-slate-500'
+                        ? 'border-slate-500 bg-white/5 text-white/85'
+                        : 'border-dashed border-white/10 hover:border-white/15 text-white/55'
                     }`}
                   >
                     <HelpCircle className="w-3.5 h-3.5" />
@@ -612,18 +612,18 @@ export default function DiagnosticQuiz() {
           </div>
 
           {/* Navigation bar */}
-          <div className="mt-4 bg-white rounded-xl shadow-lg border border-slate-200 p-3 flex items-center justify-between">
+          <div className="mt-4 glass-strong rounded-xl shadow-lg p-3 flex items-center justify-between">
             <button
               onClick={handlePrev}
               disabled={currentQuestionIndex === 0}
-              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all text-sm"
+              className="px-4 py-2 bg-white/5 text-white/85 rounded-lg font-semibold hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all text-sm"
             >
               <ArrowLeft className="w-4 h-4" /> Précédent
             </button>
 
             <div className="text-center">
-              <div className="text-[10px] text-slate-500">Progression</div>
-              <div className="font-bold text-slate-900 text-sm">
+              <div className="text-[10px] text-white/55">Progression</div>
+              <div className="font-bold text-white text-sm">
                 {answeredCount}/{TOTAL_QUESTIONS}
               </div>
             </div>
@@ -667,12 +667,12 @@ export default function DiagnosticQuiz() {
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl mb-4 shadow-lg shadow-emerald-500/30">
               <BarChart3 className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-4xl font-black text-slate-900">Résultats du Diagnostic</h1>
-            <p className="text-slate-600 mt-2 text-lg">Voici ton niveau dans chaque matière</p>
+            <h1 className="text-4xl font-black text-white">Résultats du Diagnostic</h1>
+            <p className="text-white/70 mt-2 text-lg">Voici ton niveau dans chaque matière</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">{error}</div>
+            <div className="mb-6 p-4 bg-red-500/15 border border-red-400/30 rounded-xl text-red-200">{error}</div>
           )}
 
           <div className="space-y-4 mb-8">
@@ -681,18 +681,18 @@ export default function DiagnosticQuiz() {
               const tone = score >= 70 ? 'emerald' : score >= 50 ? 'amber' : 'rose';
               const label = score >= 70 ? 'Bon niveau' : score >= 50 ? 'À renforcer' : 'Prioritaire';
               const barColor = tone === 'emerald' ? 'bg-emerald-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-rose-500';
-              const textColor = tone === 'emerald' ? 'text-emerald-600' : tone === 'amber' ? 'text-amber-600' : 'text-rose-600';
-              const badgeColor = tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : tone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+              const textColor = tone === 'emerald' ? 'text-emerald-300' : tone === 'amber' ? 'text-amber-300' : 'text-rose-300';
+              const badgeColor = tone === 'emerald' ? 'bg-emerald-500/15 text-emerald-200' : tone === 'amber' ? 'bg-amber-500/15 text-amber-200' : 'bg-rose-500/15 text-rose-200';
               return (
-                <div key={subjectName} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div key={subjectName} className="glass rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-bold text-slate-900">{subjectName}</h3>
+                    <h3 className="text-lg font-bold text-white">{subjectName}</h3>
                     <div className="flex items-center gap-2">
                       <span className={`text-2xl font-black ${textColor}`}>{Math.round(score)}%</span>
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${badgeColor}`}>{label}</span>
                     </div>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
                     <div className={`${barColor} h-3 rounded-full transition-all duration-1000`} style={{ width: `${score}%` }} />
                   </div>
                 </div>
@@ -708,7 +708,7 @@ export default function DiagnosticQuiz() {
               <Sparkles className="w-6 h-6" />
               Générer mon Programme Personnalisé
             </button>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-white/55">
               L'IA va créer un programme adapté à ton niveau pour chaque matière
             </p>
 
@@ -720,7 +720,7 @@ export default function DiagnosticQuiz() {
                 setSubjectQuestions({});
                 setAnswers({});
               }}
-              className="px-6 py-3 bg-white text-slate-700 border-2 border-slate-200 rounded-xl font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center gap-2 mx-auto"
+              className="px-6 py-3 glass text-white/85 rounded-xl font-semibold hover:bg-white/[.06] transition-all flex items-center gap-2 mx-auto"
             >
               <ArrowLeft className="w-5 h-5" />
               Refaire le diagnostic
@@ -734,19 +734,22 @@ export default function DiagnosticQuiz() {
   // ══ PHASE: GENERATING PLAN ══
   if (phase === 'generating') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-6" />
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Génération de ton programme...</h2>
-          <p className="text-slate-600">L'IA analyse tes résultats et prépare un plan optimal</p>
+      <div className="min-h-screen bg-[#070718] text-white flex items-center justify-center relative overflow-hidden">
+        <div className="pointer-events-none fixed inset-0 z-0">
+          <div className="absolute top-1/3 left-1/3 w-[500px] h-[500px] rounded-full bg-indigo-600/15 blur-[140px] anim-pulse-glow" />
+        </div>
+        <div className="text-center relative z-10">
+          <Loader2 className="w-16 h-16 text-indigo-300 animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-bold text-white mb-2">Génération de ton programme...</h2>
+          <p className="text-white/70">L'IA analyse tes résultats et prépare un plan optimal</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+    <div className="min-h-screen flex items-center justify-center bg-[#070718]">
+      <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
     </div>
   );
 }

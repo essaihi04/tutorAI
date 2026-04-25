@@ -157,11 +157,11 @@ function groupByParts(questions: QuestionData[], partsMeta?: PartMeta[]): PartGr
 }
 
 const TYPE_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  qcm: { label: 'QCM', bg: 'bg-violet-100', text: 'text-violet-700' },
-  vrai_faux: { label: 'V / F', bg: 'bg-amber-100', text: 'text-amber-700' },
-  open: { label: 'Rédaction', bg: 'bg-sky-100', text: 'text-sky-700' },
-  schema: { label: 'Schéma', bg: 'bg-rose-100', text: 'text-rose-700' },
-  association: { label: 'Association', bg: 'bg-teal-100', text: 'text-teal-700' },
+  qcm: { label: 'QCM', bg: 'bg-violet-500/15', text: 'text-violet-200' },
+  vrai_faux: { label: 'V / F', bg: 'bg-amber-500/15', text: 'text-amber-200' },
+  open: { label: 'Rédaction', bg: 'bg-red-500', text: 'text-white' },
+  schema: { label: 'Schéma', bg: 'bg-rose-500/15', text: 'text-rose-200' },
+  association: { label: 'Association', bg: 'bg-yellow-500/15', text: 'text-yellow-200' },
 };
 
 function parseFeedbackSections(feedback: string): ParsedFeedbackSection[] {
@@ -194,7 +194,7 @@ function getSectionContent(sections: ParsedFeedbackSection[], key: string): stri
   return sections.find((s) => s.title.toLowerCase() === key.toLowerCase())?.content || '';
 }
 
-function renderBulletList(content: string, dotColor: string, textColor: string = 'text-slate-700') {
+function renderBulletList(content: string, dotColor: string, textColor: string = 'text-white/85') {
   const lines = content.split('\n').filter((line) => line.trim() !== '');
   if (lines.length === 0) return null;
 
@@ -269,28 +269,28 @@ function ModelAnswerDisplay({ content }: { content: string }) {
     <div className="space-y-3 mt-2">
       {/* Part 1: Concept explanation */}
       {concept && (
-        <div className="bg-emerald-50/60 border border-emerald-200/50 rounded-xl px-3.5 py-3">
+        <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-xl px-3.5 py-3">
           <div className="flex items-center gap-1.5 mb-2">
             <span className="text-xs">🎓</span>
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Explication du concept</span>
+            <span className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider">Explication du concept</span>
           </div>
-          <LatexRenderer className="text-[13px] text-slate-700 leading-[1.7]">{concept}</LatexRenderer>
+          <LatexRenderer className="text-[13px] text-white/85 leading-[1.7]">{concept}</LatexRenderer>
         </div>
       )}
 
       {/* Part 2: Model answer */}
       {answer && (
         <div className="relative pl-3.5 border-l-[3px] border-violet-400/50">
-          <p className="text-[11px] font-bold text-violet-700 uppercase tracking-wider mb-1">Réponse attendue</p>
-          <LatexRenderer className="text-[13px] text-slate-700 leading-[1.7]">{answer}</LatexRenderer>
+          <p className="text-[11px] font-bold text-violet-200 uppercase tracking-wider mb-1">Réponse attendue</p>
+          <LatexRenderer className="text-[13px] text-white/85 leading-[1.7]">{answer}</LatexRenderer>
         </div>
       )}
 
       {/* If parsing failed, show raw content */}
       {!concept && !answer && (
         <div className="relative pl-3.5 border-l-[3px] border-violet-400/50">
-          <p className="text-[11px] font-bold text-violet-700 uppercase tracking-wider mb-1">Réponse modèle</p>
-          <LatexRenderer className="text-[13px] text-slate-700 leading-[1.7]">{content}</LatexRenderer>
+          <p className="text-[11px] font-bold text-violet-200 uppercase tracking-wider mb-1">Réponse modèle</p>
+          <LatexRenderer className="text-[13px] text-white/85 leading-[1.7]">{content}</LatexRenderer>
         </div>
       )}
     </div>
@@ -332,10 +332,10 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
     : 'unknown';
 
   const tierConfig = {
-    excellent: { color: 'from-emerald-500 to-teal-500', ring: 'text-emerald-500', bg: 'from-emerald-50 to-teal-50', border: 'border-emerald-200', label: 'Excellent !', emoji: '�', msg: 'Tu maîtrises ce point — continue !' },
-    partial:   { color: 'from-amber-500 to-orange-500', ring: 'text-amber-500',   bg: 'from-amber-50 to-orange-50', border: 'border-amber-200',   label: 'Bien joué',    emoji: '💪', msg: 'Presque là — quelques détails à peaufiner' },
-    weak:      { color: 'from-rose-500 to-pink-500',    ring: 'text-rose-500',    bg: 'from-rose-50 to-pink-50',    border: 'border-rose-200',    label: 'On s\'accroche', emoji: '�', msg: 'Reprends le cours puis retente — tu vas y arriver !' },
-    unknown:   { color: 'from-slate-500 to-slate-600',  ring: 'text-slate-500',   bg: 'from-slate-50 to-white',     border: 'border-slate-200',   label: '',             emoji: '📋', msg: '' },
+    excellent: { color: 'from-emerald-500 to-teal-500', ring: 'text-emerald-500', bg: 'from-emerald-500/10 to-teal-50', border: 'border-emerald-400/30', label: 'Excellent !', emoji: '🏆', msg: 'Tu maîtrises ce point — continue !' },
+    partial:   { color: 'from-amber-500 to-orange-500', ring: 'text-amber-500',   bg: 'from-amber-500/10 to-orange-500/15', border: 'border-amber-400/30',   label: 'Bien joué',    emoji: '💪', msg: 'Presque là — quelques détails à peaufiner' },
+    weak:      { color: 'from-rose-500 to-pink-500',    ring: 'text-rose-500',    bg: 'from-rose-500/10 to-pink-50',    border: 'border-white/10',    label: 'On s\'accroche', emoji: '🤔', msg: 'Reprends le cours puis retente — tu vas y arriver !' },
+    unknown:   { color: 'from-slate-500 text-white',  ring: 'text-white/55',   bg: 'from-slate-500/10 to-white',     border: 'border-white/10',   label: '',             emoji: '📋', msg: '' },
   };
   const tc = tierConfig[tier];
 
@@ -389,15 +389,15 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
               </svg>
               {/* Center number */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-base font-black text-slate-800 tabular-nums">{Math.round(displayPercent)}%</span>
+                <span className="text-base font-black text-white tabular-nums">{Math.round(displayPercent)}%</span>
               </div>
             </div>
 
             {/* Score + tier label + message */}
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-1.5 mb-0.5">
-                <span className="text-2xl font-black text-slate-800 tabular-nums">{displayScore}</span>
-                <span className="text-sm font-bold text-slate-500">/{note.max}</span>
+                <span className="text-2xl font-black text-white tabular-nums">{displayScore}</span>
+                <span className="text-sm font-bold text-white/55">/{note.max}</span>
                 {tc.label && (
                   <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r ${tc.color} text-white shadow-sm`}>
                     {tc.emoji} {tc.label}
@@ -405,7 +405,7 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
                 )}
               </div>
               {tc.msg && (
-                <p className="text-[11.5px] text-slate-600 leading-snug">{tc.msg}</p>
+                <p className="text-[11.5px] text-white/70 leading-snug">{tc.msg}</p>
               )}
             </div>
           </div>
@@ -414,11 +414,11 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
 
       {/* ── Analyse — single card combining feedback ── */}
       {hasAnalysis && (
-        <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden shadow-sm">
+        <div className="glass rounded-2xl overflow-hidden">
           {/* Appreciation as header */}
           {appreciation && (
-            <div className="px-4 py-3 border-b border-slate-100/80 bg-gradient-to-r from-slate-50/80 to-blue-50/30">
-              <LatexRenderer className="text-[13px] text-slate-700 leading-relaxed">{appreciation}</LatexRenderer>
+            <div className="px-4 py-3 border-b border-white/5 bg-gradient-to-r from-slate-500/10 to-blue-500/10">
+              <LatexRenderer className="text-[13px] text-white/85 leading-relaxed">{appreciation}</LatexRenderer>
             </div>
           )}
 
@@ -428,9 +428,9 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
               <div>
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span className="text-xs">✅</span>
-                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Acquis</span>
+                  <span className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider">Acquis</span>
                 </div>
-                {renderBulletList(pointsReussis, 'bg-emerald-500', 'text-slate-600')}
+                {renderBulletList(pointsReussis, 'bg-emerald-500', 'text-white/70')}
               </div>
             )}
 
@@ -439,9 +439,9 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
               <div>
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span className="text-xs">📝</span>
-                  <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">À compléter</span>
+                  <span className="text-[11px] font-bold text-amber-200 uppercase tracking-wider">À compléter</span>
                 </div>
-                {renderBulletList(ameliorer, 'bg-amber-500', 'text-slate-600')}
+                {renderBulletList(ameliorer, 'bg-amber-500', 'text-white/70')}
               </div>
             )}
           </div>
@@ -450,34 +450,34 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
 
       {/* ── Réponse modèle — expandable with concept explanation ── */}
       {hasModelAnswer && (
-        <div className="rounded-2xl border border-violet-200/60 bg-violet-50/40 overflow-hidden shadow-sm">
+        <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 overflow-hidden shadow-sm">
           <button
             onClick={() => setShowModel((v) => !v)}
-            className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-violet-50/60 transition-colors"
+            className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-violet-500/15 transition-colors"
           >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm">
               <span className="text-white text-[11px]">📖</span>
             </div>
             <div className="flex-1 text-left min-w-0">
-              <p className="text-[13px] font-bold text-violet-800">
+              <p className="text-[13px] font-bold text-violet-100">
                 {showModel ? 'Réponse modèle & méthode' : 'Voir la réponse modèle'}
               </p>
             </div>
             {showModel
-              ? <ChevronUp className="w-4 h-4 text-violet-400 flex-shrink-0" />
-              : <ChevronDown className="w-4 h-4 text-violet-400 flex-shrink-0" />
+              ? <ChevronUp className="w-4 h-4 text-violet-300 flex-shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-violet-300 flex-shrink-0" />
             }
           </button>
 
           {showModel && (
-            <div className="px-4 pb-3.5 space-y-3 border-t border-violet-100/60">
+            <div className="px-4 pb-3.5 space-y-3 border-t border-white/10">
               {/* Conseil méthode */}
               {conseil && (
-                <div className="flex items-start gap-2 bg-blue-50/60 border border-blue-200/40 rounded-xl px-3 py-2.5 mt-3">
+                <div className="flex items-start gap-2 bg-blue-500 border border-blue-400/30 rounded-xl px-3 py-2.5 mt-3">
                   <span className="text-sm mt-0.5 flex-shrink-0">💡</span>
                   <div>
-                    <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-0.5">Conseil</p>
-                    <LatexRenderer className="text-[13px] text-blue-800 leading-relaxed">{conseil}</LatexRenderer>
+                    <p className="text-[11px] font-bold text-blue-200 uppercase tracking-wider mb-0.5">Conseil</p>
+                    <LatexRenderer className="text-[13px] text-blue-100 leading-relaxed">{conseil}</LatexRenderer>
                   </div>
                 </div>
               )}
@@ -500,9 +500,9 @@ function FeedbackCard({ feedback }: { feedback: string; accentText: string; acce
             && k !== 'réponse attendue en mieux' && k !== 'réponse modèle';
         })
         .map((section, idx) => (
-          <div key={`extra-${idx}`} className="rounded-xl border border-slate-200 bg-white p-4">
-            <h4 className="text-[13px] font-bold text-slate-700 mb-2">{section.title}</h4>
-            <p className="text-[13px] text-slate-600 leading-relaxed whitespace-pre-line">{section.content}</p>
+          <div key={`extra-${idx}`} className="glass rounded-xl p-4">
+            <h4 className="text-[13px] font-bold text-white/85 mb-2">{section.title}</h4>
+            <p className="text-[13px] text-white/70 leading-relaxed whitespace-pre-line">{section.content}</p>
           </div>
         ))
       }
@@ -680,7 +680,7 @@ export default function ExamPractice() {
   if (loading || !exam) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#070718] text-white gap-4">
-        <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
+        <Loader2 className="w-12 h-12 text-indigo-300 animate-spin" />
         <p className="text-sm text-white/60 animate-pulse">Chargement de l'examen…</p>
       </div>
     );
@@ -721,8 +721,8 @@ export default function ExamPractice() {
   /* ---------- Color helpers ---------- */
   const c = currentPartData?.color || 'blue';
   const accentMap: Record<string, { bg: string; bgLight: string; border: string; text: string; gradient: string }> = {
-    blue: { bg: 'bg-blue-600', bgLight: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', gradient: 'from-blue-600 to-indigo-600' },
-    emerald: { bg: 'bg-emerald-600', bgLight: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', gradient: 'from-emerald-600 to-teal-600' },
+    blue: { bg: 'bg-blue-600', bgLight: 'bg-blue-500/15', border: 'border-blue-400/30', text: 'text-blue-200', gradient: 'from-blue-600 to-indigo-600' },
+    emerald: { bg: 'bg-emerald-600', bgLight: 'bg-emerald-500/15', border: 'border-emerald-400/30', text: 'text-emerald-200', gradient: 'from-emerald-600 to-teal-600' },
   };
   const accent = accentMap[c] || accentMap.blue;
 
@@ -734,14 +734,14 @@ export default function ExamPractice() {
 
       {/* Resume toast */}
       {resumeToast && (
-        <div className="fixed top-4 right-4 z-50 max-w-sm bg-white border border-blue-200 shadow-xl rounded-2xl overflow-hidden animate-in slide-in-from-top-4">
+        <div className="fixed top-4 right-4 z-50 max-w-sm glass-strong border border-blue-400/30 shadow-xl rounded-2xl overflow-hidden animate-in slide-in-from-top-4">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 flex items-center gap-2">
             <Save className="w-4 h-4 text-white" />
             <span className="text-xs font-bold text-white">Progression restaurée</span>
             <button onClick={() => setResumeToast(null)} className="ml-auto text-white/80 hover:text-white text-lg leading-none">×</button>
           </div>
           <div className="p-3">
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-white/70 leading-relaxed">
               <b>{resumeToast.answered}</b> réponse{resumeToast.answered > 1 ? 's' : ''} retrouvée{resumeToast.answered > 1 ? 's' : ''} —
               sauvegardé {timeAgo(resumeToast.savedAt)}.
             </p>
@@ -753,7 +753,7 @@ export default function ExamPractice() {
                 setCurrentQ(0);
                 setResumeToast(null);
               }}
-              className="mt-2 text-[11px] font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+              className="mt-2 text-[11px] font-semibold text-rose-300 hover:text-rose-200 flex items-center gap-1"
             >
               <RotateCcw className="w-3 h-3" /> Tout réinitialiser
             </button>
@@ -762,23 +762,23 @@ export default function ExamPractice() {
       )}
 
       {/* ===================== COMPACT HEADER ===================== */}
-      <header className="bg-white border-b border-slate-200/60 flex-shrink-0 z-30">
+      <header className="backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5 flex-shrink-0 z-30">
         <div className="max-w-[1600px] mx-auto px-3 lg:px-5">
           {/* Single row: back + title + question dots + nav + results */}
           <div className="flex items-center gap-2 py-2">
             {/* Back */}
-            <button onClick={() => navigate('/exam')} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors flex-shrink-0">
+            <button onClick={() => navigate('/exam')} className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 transition-colors flex-shrink-0">
               <ArrowLeft className="w-4 h-4" />
             </button>
 
             {/* Title */}
             <div className="min-w-0 flex-shrink-0">
-              <h1 className="text-sm font-bold text-slate-800 truncate">
+              <h1 className="text-sm font-bold text-white truncate">
                 {exam.subject} — {(exam.session || '').toLowerCase() === 'rattrapage' ? 'Rattrapage' : 'Normale'} {exam.year}
               </h1>
               {!isExtractedExam && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400">{evaluatedCount}/{exam.questions.length}</span>
+                  <span className="text-[10px] text-white/40">{evaluatedCount}/{exam.questions.length}</span>
                   <div className="w-16 bg-slate-100 rounded-full h-1">
                     <div className={`h-1 rounded-full bg-gradient-to-r ${accent.gradient} transition-all`} style={{ width: `${exam.questions.length > 0 ? Math.round((evaluatedCount / exam.questions.length) * 100) : 0}%` }} />
                   </div>
@@ -787,7 +787,7 @@ export default function ExamPractice() {
             </div>
 
             {/* Separator */}
-            {!isExtractedExam && <div className="w-px h-7 bg-slate-200 mx-1 hidden md:block" />}
+            {!isExtractedExam && <div className="w-px h-7 bg-white/10 mx-1 hidden md:block" />}
 
             {/* Question dots - scrollable */}
             <div className={`flex-1 min-w-0 hidden md:flex items-center gap-1 overflow-x-auto py-1 scrollbar-none ${isExtractedExam ? 'invisible' : ''}`}>
@@ -805,8 +805,8 @@ export default function ExamPractice() {
                         : feedbacks[qIdx]
                         ? 'bg-emerald-500 text-white'
                         : answers[qIdx]?.trim()
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        ? 'bg-amber-500/15 text-amber-200'
+                        : 'bg-white/5 text-white/55 hover:bg-white/10'
                     }`}
                   >
                     {qIdx + 1}
@@ -817,10 +817,10 @@ export default function ExamPractice() {
 
             {/* Navigation arrows */}
             <div className="flex items-center gap-1 flex-shrink-0">
-              <button onClick={goPrev} disabled={currentQ === 0} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-all">
+              <button onClick={goPrev} disabled={currentQ === 0} className="p-1.5 rounded-lg border border-white/10 text-white/55 hover:bg-white/[.06] disabled:opacity-30 transition-colors flex-shrink-0">
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[11px] font-bold text-slate-500 min-w-[40px] text-center">{currentQ + 1}/{exam.questions.length}</span>
+              <span className="text-[11px] font-bold text-white/55 min-w-[40px] text-center">{currentQ + 1}/{exam.questions.length}</span>
               <button onClick={goNext} disabled={currentQ >= exam.questions.length - 1} className={`p-1.5 rounded-lg text-white transition-all disabled:opacity-30 bg-gradient-to-r ${accent.gradient}`}>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
@@ -829,7 +829,7 @@ export default function ExamPractice() {
             {/* Autosave indicator */}
             {lastSavedAt && (
               <div
-                className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold flex-shrink-0"
+                className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-[10px] font-semibold flex-shrink-0"
                 title={`Sauvegarde : ${timeAgo(lastSavedAt)}`}
               >
                 <Save className="w-3 h-3" />
@@ -851,20 +851,18 @@ export default function ExamPractice() {
       {/* ===================== 2-COLUMN BODY ===================== */}
       <div className="flex-1 min-h-0 flex">
         {/* --- LEFT PANEL: Question + Documents --- */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-slate-200/60">
+        <div className="flex-1 min-w-0 overflow-y-auto border-r border-white/10">
           <div className="max-w-2xl mx-auto px-3 lg:px-5 py-3 space-y-2">
             {/* Type badge + exercise name */}
             <div className="flex items-center gap-2 flex-wrap">
               {question.exercise && (
-                <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                <span className="text-[11px] font-semibold text-white/55 bg-white/5 px-2 py-0.5 rounded-md">
                   {question.exercise}
                 </span>
               )}
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.text}`}>
-                {badge.label}
-              </span>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.text}`}>{badge.label}</span>
               {question.part && question.part !== 'Examen' && (
-                <span className="text-[10px] text-slate-400 ml-auto">
+                <span className="text-[10px] text-white/40 ml-auto">
                   {isExtractedExam ? question.part : currentPartData?.shortName}
                 </span>
               )}
@@ -876,7 +874,7 @@ export default function ExamPractice() {
         </div>
 
         {/* --- RIGHT PANEL: Answer + Feedback --- */}
-        <div className="w-[48%] lg:w-[52%] flex-shrink-0 overflow-y-auto bg-white hidden md:block">
+        <div className="w-[48%] lg:w-[52%] flex-shrink-0 overflow-y-auto bg-[#070718]/40 hidden md:block">
           <div className="px-3 lg:px-5 py-3 space-y-3 max-w-2xl">
             {/* Answer input */}
             <AnswerInput
@@ -928,7 +926,7 @@ export default function ExamPractice() {
             {/* Type badge */}
             <div className="flex items-center gap-2">
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.text}`}>{badge.label}</span>
-              {question.exercise && <span className="text-[11px] text-slate-500">{question.exercise}</span>}
+              {question.exercise && <span className="text-[11px] text-white/55">{question.exercise}</span>}
             </div>
 
             {/* Question */}
@@ -972,13 +970,13 @@ export default function ExamPractice() {
             </QuestionRenderer>
 
             {/* Mobile nav */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-200/60">
-              <button onClick={goPrev} disabled={currentQ === 0} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-xs font-medium disabled:opacity-30">
+            <div className="flex items-center justify-between pt-3 border-t border-white/10">
+              <button onClick={goPrev} disabled={currentQ === 0} className="flex items-center gap-1.5 px-3 py-2 glass rounded-lg text-white/70 text-xs font-medium disabled:opacity-30">
                 <ArrowLeft className="w-3.5 h-3.5" /> Préc
               </button>
               <div className="flex gap-1 flex-wrap justify-center max-w-[180px]">
                 {currentPartData?.allIndices.map((qIdx) => (
-                  <button key={qIdx} onClick={() => setCurrentQ(qIdx)} className={`w-6 h-6 rounded-md text-[9px] font-bold ${qIdx === currentQ ? `${accent.bg} text-white` : feedbacks[qIdx] ? 'bg-emerald-500 text-white' : answers[qIdx]?.trim() ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <button key={qIdx} onClick={() => setCurrentQ(qIdx)} className={`w-6 h-6 rounded-md text-[9px] font-bold ${qIdx === currentQ ? `${accent.bg} text-white` : feedbacks[qIdx] ? 'bg-emerald-500 text-white' : answers[qIdx]?.trim() ? 'bg-amber-500/15 text-amber-200' : 'bg-white/10 text-white/55'}`}>
                     {qIdx + 1}
                   </button>
                 ))}
@@ -1080,14 +1078,14 @@ function ExamPracticeResults({
       {/* Header */}
       <header className="relative z-20 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5">
         <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-3">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-500">
+          <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-white/10 text-white/55">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-slate-800 truncate">
+            <h1 className="text-xl font-bold text-white truncate">
               Résultats — {exam.subject} {exam.year}
             </h1>
-            <p className="text-sm text-slate-500 truncate">
+            <p className="text-sm text-white/55 truncate">
               {firstName} · Mode Entraînement · Session {sessionLabel}
             </p>
           </div>
@@ -1106,7 +1104,7 @@ function ExamPracticeResults({
 
         {/* ── Main score card ── */}
         {hasAnyEvaluation ? (
-          <div className={`rounded-3xl border-2 ${mentionReliable ? mention.border : 'border-indigo-200'} ${mentionReliable ? mention.bg : 'bg-indigo-50/40'} overflow-hidden shadow-sm`}>
+          <div className={`rounded-3xl border-2 ${mentionReliable ? mention.border : 'border-indigo-400/30'} ${mentionReliable ? mention.bg : 'bg-indigo-500/10'} overflow-hidden shadow-sm`}>
             <div className="p-6 md:p-8">
               <div className="flex flex-col md:flex-row items-center gap-6">
                 {/* Score circle — shows raw earned points, not misleading /20 projection */}
@@ -1127,30 +1125,30 @@ function ExamPracticeResults({
                           Mention {mention.label}
                         </span>
                       </div>
-                      <p className="text-sm text-slate-600 leading-relaxed mb-3">
+                      <p className="text-sm text-white/70 leading-relaxed mb-3">
                         {firstName}, {mention.encouragement.charAt(0).toLowerCase() + mention.encouragement.slice(1)}
                       </p>
                     </>
                   ) : (
                     <>
                       <div className="inline-flex items-center gap-2 mb-2">
-                        <Sparkles className="w-5 h-5 text-indigo-600" />
-                        <span className="text-lg font-black text-indigo-700">
+                        <Sparkles className="w-5 h-5 text-indigo-300" />
+                        <span className="text-lg font-black text-indigo-200">
                           Belle progression, {firstName} !
                         </span>
                       </div>
-                      <p className="text-sm text-slate-600 leading-relaxed mb-3">
+                      <p className="text-sm text-white/70 leading-relaxed mb-3">
                         {progressPrompt}
                       </p>
                     </>
                   )}
-                  <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap justify-center md:justify-start">
+                  <div className="flex items-center gap-2 text-xs text-white/55 flex-wrap justify-center md:justify-start">
                     <Trophy className="w-3.5 h-3.5" />
                     <span>
                       Score : <b>{earned.toFixed(2)} / {evaluatedMax.toFixed(0)}</b> pts
                       {' '}({accuracyPct.toFixed(0)} % de réussite)
                     </span>
-                    <span className="text-slate-300">·</span>
+                    <span className="text-white/30">·</span>
                     <span>{evaluatedCount}/{totalQuestions} questions</span>
                   </div>
                 </div>
@@ -1158,14 +1156,14 @@ function ExamPracticeResults({
 
               {/* BAC context OR continue CTA */}
               {mentionReliable ? (
-                <div className="mt-5 pt-5 border-t border-slate-200/60 flex items-start gap-2.5">
+                <div className="mt-5 pt-5 border-t border-white/10 flex items-start gap-2.5">
                   <Target className={`w-4 h-4 ${mention.text} mt-0.5 flex-shrink-0`} />
-                  <p className="text-[13px] text-slate-700 leading-relaxed">
+                  <p className="text-[13px] text-white/85 leading-relaxed">
                     <span className="font-semibold">Contexte BAC :</span> {bacMsg}
                   </p>
                 </div>
               ) : questionsRemaining > 0 && onContinue && (
-                <div className="mt-5 pt-5 border-t border-indigo-200/60">
+                <div className="mt-5 pt-5 border-t border-indigo-400/30">
                   <button
                     onClick={onContinue}
                     className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all"
@@ -1174,7 +1172,7 @@ function ExamPracticeResults({
                     Continuer les {questionsRemaining} question{questionsRemaining > 1 ? 's' : ''} restante{questionsRemaining > 1 ? 's' : ''}
                     <ArrowRight className="w-4 h-4" />
                   </button>
-                  <p className="text-[11px] text-center text-slate-500 mt-2">
+                  <p className="text-[11px] text-center text-white/55 mt-2">
                     Ta mention officielle s'affichera une fois au moins la moitié de l'examen évaluée.
                   </p>
                 </div>
@@ -1182,10 +1180,10 @@ function ExamPracticeResults({
             </div>
           </div>
         ) : (
-          <div className="rounded-3xl border-2 border-slate-200 bg-white p-6 md:p-8 text-center">
+          <div className="glass-strong rounded-3xl p-6 md:p-8 text-center">
             <Sparkles className="w-10 h-10 text-amber-500 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-slate-800 mb-1">Allez {firstName}, c'est parti !</h2>
-            <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
+            <h2 className="text-lg font-bold text-white mb-1">Allez {firstName}, c'est parti !</h2>
+            <p className="text-sm text-white/55 max-w-md mx-auto mb-4">
               Tu n'as encore évalué aucune réponse. Réponds aux questions puis clique sur "Vérifier ma réponse" pour obtenir une note et une correction détaillée.
             </p>
             {onContinue && (
@@ -1228,31 +1226,31 @@ function ExamPracticeResults({
 
         {/* ── Stats grid ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 text-center">
-            <p className="text-2xl font-black text-blue-600">{evaluatedCount}<span className="text-sm font-bold text-slate-400">/{totalQuestions}</span></p>
-            <p className="text-[11px] text-slate-500 mt-1 font-medium">Questions évaluées</p>
+          <div className="glass rounded-2xl p-4 text-center">
+            <p className="text-2xl font-black text-blue-300">{evaluatedCount}<span className="text-sm font-bold text-white/40">/{totalQuestions}</span></p>
+            <p className="text-[11px] text-white/55 mt-1 font-medium">Questions évaluées</p>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 text-center">
-            <p className="text-2xl font-black text-slate-700">{completionPercent}%</p>
-            <p className="text-[11px] text-slate-500 mt-1 font-medium">Complétion</p>
+          <div className="glass rounded-2xl p-4 text-center">
+            <p className="text-2xl font-black text-white/85">{completionPercent}%</p>
+            <p className="text-[11px] text-white/55 mt-1 font-medium">Complétion</p>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 text-center">
-            <p className="text-2xl font-black text-amber-600">{answeredButNotEvaluated}</p>
-            <p className="text-[11px] text-slate-500 mt-1 font-medium">À vérifier</p>
+          <div className="glass rounded-2xl p-4 text-center">
+            <p className="text-2xl font-black text-amber-300">{answeredButNotEvaluated}</p>
+            <p className="text-[11px] text-white/55 mt-1 font-medium">À vérifier</p>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 text-center">
-            <p className={`text-2xl font-black ${hasAnyEvaluation ? mention.text : 'text-slate-400'}`}>
+          <div className="glass rounded-2xl p-4 text-center">
+            <p className={`text-2xl font-black ${hasAnyEvaluation ? mention.text : 'text-white/40'}`}>
               {hasAnyEvaluation ? mention.short : '—'}
             </p>
-            <p className="text-[11px] text-slate-500 mt-1 font-medium">Mention</p>
+            <p className="text-[11px] text-white/55 mt-1 font-medium">Mention</p>
           </div>
         </div>
 
         {/* ── Per-part breakdown ── */}
         {hasAnyEvaluation && parts.length > 1 && (
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-blue-600" />
+          <div className="glass rounded-2xl p-5">
+            <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-blue-300" />
               Progression par partie
             </h2>
             <div className="space-y-4">
@@ -1274,7 +1272,7 @@ function ExamPracticeResults({
                 return (
                   <div key={pi}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-[13px] font-semibold text-slate-700 flex items-center gap-1.5">
+                      <p className="text-[13px] font-semibold text-white/85 flex items-center gap-1.5">
                         {part.icon === 'book'
                           ? <BookOpen className="w-3.5 h-3.5 text-blue-500" />
                           : <FlaskConical className="w-3.5 h-3.5 text-emerald-500" />
@@ -1282,13 +1280,13 @@ function ExamPracticeResults({
                         {part.name}
                       </p>
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-400">{partEvaluated}/{part.allIndices.length} q.</span>
+                        <span className="text-white/40">{partEvaluated}/{part.allIndices.length} q.</span>
                         {partEvaluatedMax > 0 ? (
                           <span className={`font-bold ${partMention.text}`}>
                             {partEarned.toFixed(1)}/{partEvaluatedMax} pts
                           </span>
                         ) : (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-white/30">—</span>
                         )}
                       </div>
                     </div>
@@ -1315,16 +1313,16 @@ function ExamPracticeResults({
             <div key={pi} className="space-y-2">
               <div className="flex items-center gap-2 mb-2 px-1">
                 {isKnowledge
-                  ? <BookOpen className="w-4 h-4 text-blue-600" />
-                  : <FlaskConical className="w-4 h-4 text-emerald-600" />
+                  ? <BookOpen className="w-4 h-4 text-blue-300" />
+                  : <FlaskConical className="w-4 h-4 text-emerald-300" />
                 }
-                <h2 className="text-sm font-bold text-slate-700">{part.name}</h2>
+                <h2 className="text-sm font-bold text-white/85">{part.name}</h2>
               </div>
 
               {part.exercises.map((ex, ei) => (
                 <div key={ei}>
                   {part.exercises.length > 1 && (
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5 px-1">{ex.name}</p>
+                    <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-1.5 px-1">{ex.name}</p>
                   )}
                   {ex.indices.map((qIdx) => {
                     const q = exam.questions[qIdx];
@@ -1336,35 +1334,35 @@ function ExamPracticeResults({
                     const qTier = qScoreOn20 != null ? getMention(qScoreOn20) : null;
 
                     return (
-                      <div key={qIdx} className="bg-white rounded-xl border border-slate-200/80 p-4 mb-2">
+                      <div key={qIdx} className="glass rounded-xl p-4 mb-2">
                         <div className="flex items-center justify-between mb-2 gap-3">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs font-black text-slate-700 bg-slate-100 px-2 py-1 rounded-lg">Q{qIdx + 1}</span>
+                            <span className="text-xs font-black text-white/85 bg-white/5 px-2 py-1 rounded-lg">Q{qIdx + 1}</span>
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>{badge.label}</span>
-                            <span className="text-[10px] text-slate-400">{q.points} pt{q.points > 1 ? 's' : ''}</span>
+                            <span className="text-[10px] text-white/40">{q.points} pt{q.points > 1 ? 's' : ''}</span>
                           </div>
                           {fb && qTier && qScore != null ? (
                             <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${qTier.bg} ${qTier.text} flex items-center gap-1`}>
                               {qTier.emoji} {qScore.toFixed(1)}/{q.points}
                             </span>
                           ) : ans?.trim() ? (
-                            <span className="text-[10px] text-amber-600 flex items-center gap-1">
+                            <span className="text-[10px] text-amber-300 flex items-center gap-1">
                               <Lightbulb className="w-3 h-3" /> Non évaluée
                             </span>
                           ) : (
-                            <span className="text-[10px] text-slate-400">—</span>
+                            <span className="text-[10px] text-white/40">—</span>
                           )}
                         </div>
-                        <LatexRenderer as="p" className="text-sm text-slate-600 line-clamp-2 mb-2">{q.content}</LatexRenderer>
+                        <LatexRenderer as="p" className="text-sm text-white/70 line-clamp-2 mb-2">{q.content}</LatexRenderer>
                         {ans && (
-                          <div className="bg-slate-50 rounded-lg p-2.5 text-[12.5px] text-slate-700 mb-2 border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ta réponse</span>
+                          <div className="bg-white/[.03] rounded-lg p-2.5 text-[12.5px] text-white/85 mb-2 border border-white/5">
+                            <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Ta réponse</span>
                             <p className="mt-1 whitespace-pre-line line-clamp-3">{ans}</p>
                           </div>
                         )}
                         {fb && (
-                          <div className={`rounded-lg p-2.5 text-[12.5px] text-slate-700 ${isKnowledge ? 'bg-blue-50' : 'bg-emerald-50'}`}>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider ${isKnowledge ? 'text-blue-600' : 'text-emerald-600'}`}>Correction</span>
+                          <div className={`rounded-lg p-2.5 text-[12.5px] text-white/85 ${isKnowledge ? 'bg-blue-500/15' : 'bg-emerald-500/15'}`}>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${isKnowledge ? 'text-blue-300' : 'text-emerald-300'}`}>Correction</span>
                             <p className="mt-1 whitespace-pre-line">{fb.feedback.length > 300 ? fb.feedback.substring(0, 300) + '…' : fb.feedback}</p>
                           </div>
                         )}
@@ -1381,14 +1379,14 @@ function ExamPracticeResults({
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <button
             onClick={onBack}
-            className="flex-1 px-6 py-3 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all flex items-center justify-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" /> Retour aux examens
           </button>
           {onRetry && (
             <button
               onClick={onRetry}
-              className="flex-1 px-6 py-3 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+              className="flex-1 px-6 py-3 glass text-white/85 rounded-xl font-semibold hover:bg-white/[.06] transition-colors flex items-center justify-center gap-2"
             >
               <RotateCcw className="w-4 h-4" /> Refaire cet examen
             </button>
@@ -1452,11 +1450,7 @@ function ExamResultsShareModal(props: ShareModalProps) {
       : `📝 ${evaluatedCount}/${totalQuestions} questions évaluées\n`) +
     `\n👉 Rejoins-moi sur ${MOALIM_URL}`;
 
-  const shareTextShort =
-    `🎓 ${firstName} : ${exam.subject} ${exam.year} — ${earned.toFixed(1)}/${evaluatedMax.toFixed(0)} pts ${scoreEmoji} — ${MOALIM_URL}`;
-
   const encodedText = encodeURIComponent(shareText);
-  const encodedShort = encodeURIComponent(shareTextShort);
   const encodedUrl = encodeURIComponent(MOALIM_URL);
 
   const generatePng = async (): Promise<Blob | null> => {
@@ -1482,7 +1476,7 @@ function ExamResultsShareModal(props: ShareModalProps) {
       const nav: any = navigator;
       const shareData: any = {
         title: 'معلم — Mes résultats',
-        text: shareTextShort,
+        text: shareText,
         url: MOALIM_URL,
         files: [file],
       };
@@ -1538,13 +1532,13 @@ function ExamResultsShareModal(props: ShareModalProps) {
     },
     {
       name: 'X',
-      color: 'bg-black hover:bg-gray-800',
-      url: `https://twitter.com/intent/tweet?text=${encodedShort}&url=${encodedUrl}`,
+      color: 'bg-black hover:bg-zinc-800',
+      url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
     },
     {
       name: 'Facebook',
       color: 'bg-[#1877F2] hover:bg-[#0f63d1]',
-      url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedShort}`,
+      url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`,
     },
   ];
 
@@ -1565,7 +1559,7 @@ function ExamResultsShareModal(props: ShareModalProps) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4"
+        className="glass-strong rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4"
       >
         {/* Header */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 px-6 py-5 text-white">
@@ -1609,9 +1603,9 @@ function ExamResultsShareModal(props: ShareModalProps) {
               scoreEmoji={scoreEmoji}
             />
           </a>
-          <p className="text-[10px] text-center text-slate-400 mt-2">
+          <p className="text-[10px] text-center text-white/40 mt-2">
             🖼 Aperçu — l'image partagée redirige vers{' '}
-            <span className="font-semibold text-indigo-600">moalim.online</span>
+            <span className="font-semibold text-indigo-300">moalim.online</span>
           </p>
         </div>
 
@@ -1632,27 +1626,27 @@ function ExamResultsShareModal(props: ShareModalProps) {
             <button
               onClick={handleDownload}
               disabled={generating}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:border-indigo-400 hover:text-indigo-600 transition-colors disabled:opacity-60"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 glass rounded-xl text-xs font-semibold text-white/85 hover:border-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-60"
             >
               {downloaded ? (
-                <><Check className="w-3.5 h-3.5 text-emerald-600" /><span className="text-emerald-600">Téléchargée</span></>
+                <><Check className="w-3.5 h-3.5 text-emerald-300" /><span className="text-emerald-300">Téléchargée</span></>
               ) : (
                 <>📥 Télécharger l'image</>
               )}
             </button>
             <button
               onClick={copyText}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 glass rounded-xl text-xs font-semibold text-white/85 hover:border-indigo-400 hover:text-indigo-300 transition-colors"
             >
               {copied ? (
-                <><Check className="w-3.5 h-3.5 text-emerald-600" /><span className="text-emerald-600">Texte copié</span></>
+                <><Check className="w-3.5 h-3.5 text-emerald-300" /><span className="text-emerald-300">Texte copié</span></>
               ) : (
                 <><Copy className="w-3.5 h-3.5" /> Copier le texte</>
               )}
             </button>
           </div>
           {fileShareUnsupported && (
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="text-[11px] text-amber-200 bg-amber-500/15 border border-amber-400/30 rounded-lg px-3 py-2">
               Image téléchargée ! Ton navigateur ne supporte pas le partage de fichier — joins-la manuellement à ton post.
             </p>
           )}
@@ -1660,7 +1654,7 @@ function ExamResultsShareModal(props: ShareModalProps) {
 
         {/* Social networks */}
         <div className="px-6 py-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          <p className="text-xs font-semibold text-white/55 uppercase tracking-wider mb-2">
             Ou directement sur un réseau
           </p>
           <div className="grid grid-cols-3 gap-2">
