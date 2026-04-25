@@ -10,7 +10,8 @@ set -euo pipefail
 
 DOMAIN="moalim.online"
 EMAIL="contact@moalim.online"          # used by certbot — change if needed
-APP_DIR="/var/www/moalim"
+APP_DIR="/root/moalim"                  # source code (git, venv, node_modules)
+WEB_DIR="/var/www/moalim"               # static frontend served by Nginx
 REPO_URL="https://github.com/essaihi04/tutorAI.git"
 BRANCH="main"
 PY_BIN="python3.12"
@@ -49,37 +50,49 @@ log "Activation de Redis"
 systemctl enable --now redis-server
 
 # ── 5. Code source ──────────────────────────────────────────────────
-log "Récupération du code source"
+log "Récupération du code source dans $APP_DIR"
 mkdir -p "$APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
     cd "$APP_DIR" && git fetch --all && git reset --hard "origin/$BRANCH"
 else
     git clone -b "$BRANCH" "$REPO_URL" "$APP_DIR"
 fi
-chown -R www-data:www-data "$APP_DIR"
+mkdir -p "$WEB_DIR"
+chown -R www-data:www-data "$WEB_DIR"
 
 # ── 6. Backend Python venv + deps ───────────────────────────────────
-log "Installation du backend Python"
+log "Installation du backend Python dans $APP_DIR/backend"
 cd "$APP_DIR/backend"
-sudo -u www-data $PY_BIN -m venv .venv
-sudo -u www-data .venv/bin/pip install --upgrade pip wheel setuptools
-sudo -u www-data .venv/bin/pip install -r requirements.txt
-sudo -u www-data .venv/bin/pip install gunicorn
+if [ ! -d .venv ]; then
+    $PY_BIN -m venv .venv
+fi
+.venv/bin/pip install --upgrade pip wheel setuptools
+.venv/bin/pip install -r requirements.txt
 
 # ── 7. Backend .env ─────────────────────────────────────────────────
 if [ ! -f "$APP_DIR/backend/.env" ]; then
-    log "Copie du fichier .env (à compléter manuellement si besoin)"
-    cp "$APP_DIR/deploy/backend.env" "$APP_DIR/backend/.env"
-    chown www-data:www-data "$APP_DIR/backend/.env"
+    log "Aucun .env trouvé, copie du template (à compléter !)"
+    if [ -f "$APP_DIR/deploy/backend.env" ]; then
+        cp "$APP_DIR/deploy/backend.env" "$APP_DIR/backend/.env"
+    fi
+fi
+if [ -f "$APP_DIR/backend/.env" ]; then
     chmod 600 "$APP_DIR/backend/.env"
 fi
 
 # ── 8. Frontend build ───────────────────────────────────────────────
 log "Build du frontend Vite"
 cd "$APP_DIR/frontend"
-sudo -u www-data npm ci
-sudo -u www-data npm run build
-chown -R www-data:www-data "$APP_DIR/frontend/dist"
+npm ci
+npm run build
+
+log "Copie du build vers $WEB_DIR"
+rm -rf "$WEB_DIR/assets"
+cp "$APP_DIR/frontend/dist/index.html" "$WEB_DIR/index.html"
+cp -r "$APP_DIR/frontend/dist/assets" "$WEB_DIR/assets"
+# Copy any other public files (favicon, robots.txt, etc.)
+find "$APP_DIR/frontend/dist" -maxdepth 1 -type f ! -name 'index.html' -exec cp {} "$WEB_DIR/" \;
+chown -R www-data:www-data "$WEB_DIR"
 
 # ── 9. systemd service ──────────────────────────────────────────────
 log "Installation du service systemd"
