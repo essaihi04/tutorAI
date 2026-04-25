@@ -1,0 +1,33 @@
+[Unit]
+Description=Moalim FastAPI backend (uvicorn)
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/moalim/backend
+EnvironmentFile=/var/www/moalim/backend/.env
+ExecStart=/var/www/moalim/backend/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --proxy-headers \
+    --forwarded-allow-ips="*" \
+    --no-access-log
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=moalim-backend
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/www/moalim
+
+[Install]
+WantedBy=multi-user.target

@@ -31,7 +31,7 @@ const TTSTest: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/tts/test', {
+      const response = await fetch('/api/v1/tts/test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
