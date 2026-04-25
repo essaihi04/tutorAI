@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getStudyPlan, getTodaySchedule, getAllSessions, regeneratePlan, completeSession as apiCompleteSession, getExamCountdown, getProgress } from '../services/api';
 import { useCoachingStore } from '../stores/coachingStore';
 import { ArrowLeft, Clock, CheckCircle, Play, Timer, BookOpen, TrendingUp, Loader2, GraduationCap, RefreshCw, Target, FileText, ChevronLeft, ChevronRight, X as XIcon, CalendarDays } from 'lucide-react';
+import MobileBottomNav from '../components/MobileBottomNav';
 
 // ════════════════════════════════════════════════════════════════
 // Calendar helpers
@@ -617,7 +618,7 @@ export default function StudyPlan() {
       </header>
 
       {/* ── Main content: single page, no scroll ── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 flex flex-col lg:flex-row gap-3 min-h-0">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 pb-20 lg:pb-3 flex flex-col lg:flex-row gap-3 min-h-0">
         {/* Left column: Calendar */}
         <div className="lg:w-80 xl:w-96 shrink-0 flex flex-col gap-3">
           <CalendarView
@@ -834,6 +835,7 @@ export default function StudyPlan() {
           </div>
         </div>
       )}
+      <MobileBottomNav active="coaching" />
     </div>
   );
 }

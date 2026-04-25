@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { listExams, listExtractedExams, getMyExamStats, getExamHistory } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import MobileBottomNav from '../components/MobileBottomNav';
 import {
   ArrowLeft, Clock, Award, Play, FileText, GraduationCap, Loader2,
   ChevronDown, Info, X, Sparkles, Calendar, Trophy,
@@ -290,7 +291,7 @@ export default function ExamHub() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-5 space-y-4">
+      <main className="max-w-7xl mx-auto px-4 py-5 pb-24 lg:pb-5 space-y-4">
         {/* Compact personal stats bar */}
         <MyExamStatsPanel
           stats={myStats}
@@ -577,6 +578,7 @@ export default function ExamHub() {
           onClose={() => setShareOpen(false)}
         />
       )}
+      <MobileBottomNav active="exam" />
     </div>
   );
 }

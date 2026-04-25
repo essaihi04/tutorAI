@@ -10,6 +10,7 @@ import {
   ChevronRight, Target, ChevronLeft, CheckCircle, X as XIcon,
 } from 'lucide-react';
 import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
+import MobileBottomNav from '../components/MobileBottomNav';
 
 /* ──────────────────────────────────────────────────────────────
    DASHBOARD MOALIM — structure inspirée de la landing
@@ -203,7 +204,7 @@ export default function Dashboard() {
         <Sidebar firstName={firstName} timeGreeting={timeGreeting} onLogout={logout} />
 
         {/* ═══ MAIN ═══ */}
-        <main className="flex-1 min-w-0 p-4 sm:p-5 lg:p-6 space-y-4 sm:space-y-5">
+        <main className="flex-1 min-w-0 p-4 sm:p-5 lg:p-6 space-y-4 sm:space-y-5 pb-24 lg:pb-6">
           {/* Welcome banner */}
           <WelcomeBanner
             firstName={firstName}
@@ -391,6 +392,7 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+      <MobileBottomNav active="dashboard" />
     </MoalimShell>
   );
 }
