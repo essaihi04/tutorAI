@@ -27,7 +27,18 @@ const SUBJECT_COLOR: Record<string, { bar: string; dot: string; label: string }>
   Chimie:         { bar: 'from-rose-400 to-rose-300',       dot: 'bg-rose-400',    label: 'Chimie' },
   'Mathématiques':{ bar: 'from-amber-400 to-amber-300',     dot: 'bg-amber-400',   label: 'Math' },
   Mathematiques:  { bar: 'from-amber-400 to-amber-300',     dot: 'bg-amber-400',   label: 'Math' },
+  Math:           { bar: 'from-amber-400 to-amber-300',     dot: 'bg-amber-400',   label: 'Math' },
   SVT:            { bar: 'from-emerald-400 to-emerald-300', dot: 'bg-emerald-400', label: 'SVT' },
+};
+
+const normalizeSubjectName = (value: unknown) => {
+  const raw = String(value || '').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('svt') || lower.includes('vie') || lower.includes('terre')) return 'SVT';
+  if (lower.includes('math')) return 'Mathématiques';
+  if (lower.includes('chim')) return 'Chimie';
+  if (lower.includes('phys') || lower.includes('pc') || lower.includes('2bac')) return 'Physique';
+  return raw || 'Inconnu';
 };
 
 const PRIORITY_META: Record<string, { label: string; text: string }> = {
@@ -123,7 +134,37 @@ export default function Dashboard() {
 
   // by_subject pour le bar chart
   const subjectStats: Array<{ subject: string; questions: number; avg: number; exams: number }> =
-    useMemo(() => (examStats?.by_subject as any[] || []).slice(0, 4), [examStats]);
+    useMemo(() => {
+      const rows = (examStats?.by_subject as any[]) || [];
+      const grouped = new Map<string, { subject: string; questions: number; scoreSum: number; weight: number; exams: number }>();
+
+      rows.forEach((row) => {
+        const subject = normalizeSubjectName(row?.subject);
+        const questions = Number(row?.questions || 0);
+        const avg = Number(row?.avg_score_pct ?? row?.avg ?? 0);
+        const exams = Number(row?.exams || 0);
+        const safeAvg = Number.isFinite(avg) ? avg : 0;
+        const weight = Math.max(questions, exams, 1);
+        const current = grouped.get(subject) || { subject, questions: 0, scoreSum: 0, weight: 0, exams: 0 };
+
+        current.questions += Number.isFinite(questions) ? questions : 0;
+        current.scoreSum += safeAvg * weight;
+        current.weight += weight;
+        current.exams += Number.isFinite(exams) ? exams : 0;
+        grouped.set(subject, current);
+      });
+
+      return Array.from(grouped.values())
+        .map((row) => ({
+          subject: row.subject,
+          questions: row.questions,
+          avg: row.weight > 0 ? row.scoreSum / row.weight : 0,
+          exams: row.exams,
+        }))
+        .filter((row) => row.questions > 0 || row.exams > 0)
+        .sort((a, b) => b.questions - a.questions)
+        .slice(0, 4);
+    }, [examStats]);
 
   const maxQuestions = Math.max(1, ...subjectStats.map((s) => s.questions));
 
@@ -195,17 +236,19 @@ export default function Dashboard() {
                   <div className="flex items-end gap-3 sm:gap-4 h-36 px-1">
                     {subjectStats.map((s) => {
                       const color = SUBJECT_COLOR[s.subject] || { bar: 'from-white/40 to-white/30', dot: 'bg-white/40', label: s.subject };
-                      const heightPct = Math.max(8, (s.questions / maxQuestions) * 100);
+                      const avgLabel = Number.isFinite(s.avg) ? Math.round(s.avg) : 0;
+                      const questionCount = Number.isFinite(s.questions) ? s.questions : 0;
+                      const heightPct = Math.max(8, (questionCount / maxQuestions) * 100);
                       return (
                         <div key={s.subject} className="flex-1 flex flex-col items-center gap-1.5 group">
-                          <div className="text-[11px] font-bold text-white tabular-nums">{Math.round(s.avg)}%</div>
+                          <div className="text-[11px] font-bold text-white tabular-nums">{avgLabel}%</div>
                           <div className="w-full flex flex-col justify-end h-full">
                             <div
                               className={`w-full rounded-t-md bg-gradient-to-t ${color.bar} group-hover:brightness-110 transition-all relative`}
                               style={{ height: `${heightPct}%` }}
                             >
                               <div className="absolute inset-x-0 top-1.5 text-center text-[9px] font-bold text-black/60">
-                                {s.questions}
+                                {questionCount}
                               </div>
                             </div>
                           </div>

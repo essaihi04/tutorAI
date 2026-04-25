@@ -1524,9 +1524,12 @@ class ExamService:
                 temperature=0.2,
                 max_tokens=650 if image_analysis else 450,
             )
+            points_max = float(question.get("points", 0) or 0)
+            score = self._extract_score_from_feedback(response, points_max)
             result = {
                 "question_index": question_index,
-                "points_max": question.get("points", 0),
+                "points_max": points_max,
+                "score": score,
                 "feedback": response,
                 "correction": correction.get("content", "") or "",
             }
@@ -1584,6 +1587,7 @@ class ExamService:
         return {
             "question_index": question_index,
             "points_max": points_max,
+            "score": float(awarded_points),
             "feedback": feedback,
             "correction": correction.get("content", "") or "",
         }
@@ -1694,6 +1698,7 @@ class ExamService:
             "question_index": question_index,
             "points_max": points_max,
             "points_awarded": awarded,
+            "score": float(awarded),
             "feedback": feedback,
             "correction": corr_text,
         }
@@ -1974,6 +1979,52 @@ X/{question.get('points', '?')}
             print(f"[EXAM] save_progress failed: {e}")
             return {"error": str(e)}
 
+    async def record_practice_score(
+        self,
+        student_id: str,
+        attempt_id: str,
+        question_index: int,
+        score: float,
+        points_max: float,
+    ) -> dict:
+        """Persist a per-question score on an in-progress attempt (practice mode).
+
+        Updates the ``scores`` JSON column with ``{question_index: score}`` and
+        recomputes ``total_score`` from the sum of recorded scores. ``max_score``
+        is left untouched (it stores the exam's total points). This lets the
+        dashboard show partial avg even before the student finalises the exam.
+        """
+        try:
+            row = (
+                self.supabase.table("exam_attempts")
+                .select("scores")
+                .eq("id", attempt_id)
+                .eq("student_id", student_id)
+                .limit(1)
+                .execute()
+            )
+            if not row.data:
+                return {"error": "attempt not found"}
+            current_scores = row.data[0].get("scores") or {}
+            if not isinstance(current_scores, dict):
+                current_scores = {}
+            current_scores[str(question_index)] = {
+                "s": float(score or 0),
+                "m": float(points_max or 0),
+            }
+            new_total = sum(
+                float(v.get("s") or 0) if isinstance(v, dict) else float(v or 0)
+                for v in current_scores.values()
+            )
+            self.supabase.table("exam_attempts").update({
+                "scores": current_scores,
+                "total_score": round(new_total, 2),
+            }).eq("id", attempt_id).eq("student_id", student_id).execute()
+            return {"ok": True}
+        except Exception as e:
+            print(f"[EXAM] record_practice_score failed: {e}")
+            return {"error": str(e)}
+
     async def submit_exam(
         self,
         student_id: str,
@@ -2159,7 +2210,7 @@ X/{question.get('points', '?')}
                                       questions, attempts, avg_score_pct
         """
         result = self.supabase.table("exam_attempts").select(
-            "exam_subject, exam_year, exam_session, mode, answers, "
+            "exam_subject, exam_year, exam_session, mode, answers, scores, "
             "total_score, max_score, duration_seconds, completed_at"
         ).eq("student_id", student_id).execute()
 
@@ -2198,7 +2249,33 @@ X/{question.get('points', '?')}
             ts = float(a.get("total_score") or 0)
             ms = float(a.get("max_score") or 0) or 20
 
-            # Only completed attempts contribute to avg/best score stats
+            # For in-progress attempts, derive partial score / max from the
+            # scores dict so that practice mode evaluations contribute to the
+            # dashboard avg even before the exam is submitted.
+            partial_score = 0.0
+            partial_max = 0.0
+            scores_dict = a.get("scores") or {}
+            if isinstance(scores_dict, dict):
+                for v in scores_dict.values():
+                    if isinstance(v, dict):
+                        partial_score += float(v.get("s") or 0)
+                        partial_max += float(v.get("m") or 0)
+                    else:
+                        # legacy format: numeric score, no max recorded → skip
+                        try:
+                            partial_score += float(v or 0)
+                        except (TypeError, ValueError):
+                            pass
+
+            bucket = per_subject.setdefault(subj, {
+                "attempts": 0,
+                "in_progress": 0,
+                "questions": 0,
+                "score_sum": 0.0,
+                "max_sum": 0.0,
+                "unique_exams": set(),
+            })
+
             if is_done:
                 total_score_sum += ts
                 total_max_sum += ms
@@ -2209,15 +2286,6 @@ X/{question.get('points', '?')}
                 exam_key = (subj, a.get("exam_year"), a.get("exam_session"))
                 unique_exams.add(exam_key)
 
-            bucket = per_subject.setdefault(subj, {
-                "attempts": 0,
-                "in_progress": 0,
-                "questions": 0,
-                "score_sum": 0.0,
-                "max_sum": 0.0,
-                "unique_exams": set(),
-            })
-            if is_done:
                 bucket["attempts"] += 1
                 bucket["score_sum"] += ts
                 bucket["max_sum"] += ms
@@ -2226,6 +2294,13 @@ X/{question.get('points', '?')}
                 )
             else:
                 bucket["in_progress"] += 1
+                # Partial contribution from in-progress attempts (practice mode)
+                if partial_max > 0:
+                    total_score_sum += partial_score
+                    total_max_sum += partial_max
+                    bucket["score_sum"] += partial_score
+                    bucket["max_sum"] += partial_max
+
             bucket["questions"] += q_count
 
         by_subject = sorted(

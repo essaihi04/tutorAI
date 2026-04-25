@@ -17,6 +17,7 @@ class EvaluateAnswerRequest(BaseModel):
     question_index: int
     student_answer: str
     student_image: Optional[str] = None  # base64 image data (photo or drawing)
+    attempt_id: Optional[str] = None  # in-progress attempt to persist score on
 
 
 class ExtractTextRequest(BaseModel):
@@ -111,8 +112,14 @@ async def get_asset(exam_id: str, filename: str):
 @router.post("/evaluate")
 async def evaluate_answer(
     data: EvaluateAnswerRequest,
+    student: dict = Depends(get_current_student),
 ):
-    """Evaluate a single answer using LLM (practice mode). No auth needed."""
+    """Evaluate a single answer using LLM (practice mode).
+
+    When ``attempt_id`` is provided, the per-question score is persisted on the
+    in-progress attempt so the dashboard reflects practice progress without
+    requiring a final submission.
+    """
     result = await exam_service.evaluate_answer(
         exam_id=data.exam_id,
         question_index=data.question_index,
@@ -121,6 +128,16 @@ async def evaluate_answer(
     )
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
+
+    if data.attempt_id and "score" in result:
+        await exam_service.record_practice_score(
+            student_id=student["id"],
+            attempt_id=data.attempt_id,
+            question_index=data.question_index,
+            score=float(result.get("score") or 0),
+            points_max=float(result.get("points_max") or 0),
+        )
+
     return result
 
 

@@ -171,8 +171,20 @@ export const getExamDetail = (examId: string) =>
   api.get(`/exam/detail/${examId}`);
 export const getExamQuestion = (examId: string, questionIndex: number) =>
   api.get(`/exam/question/${examId}/${questionIndex}`);
-export const evaluateExamAnswer = (examId: string, questionIndex: number, studentAnswer: string, studentImage?: string | null) =>
-  api.post('/exam/evaluate', { exam_id: examId, question_index: questionIndex, student_answer: studentAnswer, ...(studentImage ? { student_image: studentImage } : {}) });
+export const evaluateExamAnswer = (
+  examId: string,
+  questionIndex: number,
+  studentAnswer: string,
+  studentImage?: string | null,
+  attemptId?: string | null,
+) =>
+  api.post('/exam/evaluate', {
+    exam_id: examId,
+    question_index: questionIndex,
+    student_answer: studentAnswer,
+    ...(studentImage ? { student_image: studentImage } : {}),
+    ...(attemptId ? { attempt_id: attemptId } : {}),
+  });
 export const extractTextFromImage = (imageBase64: string, questionContent?: string, subject?: string) =>
   api.post('/exam/extract-text', { image_base64: imageBase64, question_content: questionContent || '', subject: subject || '' });
 export const submitExam = (

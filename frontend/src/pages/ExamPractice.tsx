@@ -627,7 +627,7 @@ export default function ExamPractice() {
     if (!answer?.trim() && !image) return;
     setSubmitting(true);
     try {
-      const res = await evaluateExamAnswer(examId, currentQ, answer || '', image);
+      const res = await evaluateExamAnswer(examId, currentQ, answer || '', image, attemptIdRef.current);
       setFeedbacks((prev) => ({ ...prev, [currentQ]: res.data }));
       // Sync progress after evaluation
       if (attemptIdRef.current) {
