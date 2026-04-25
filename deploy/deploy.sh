@@ -168,15 +168,11 @@ else
     warn "Backend ne répond pas encore — peut prendre quelques secondes au premier démarrage"
 fi
 
-# ── 9. Nginx (config dédiée, ne touche aux autres sites) ───────────
-log "Installation du fichier Nginx isolé : $NGINX_CONF"
-cp "$APP_DIR/deploy/nginx.conf" "$NGINX_CONF"
-nginx -t
+# ── 9. SSL Let's Encrypt + Nginx (ordre important) ────────────────
+mkdir -p /var/www/certbot
 
-# ── 10. Certificat SSL Let's Encrypt ───────────────────────────────
 if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
-    log "Émission du certificat SSL pour $DOMAIN"
-    # Phase 1 : config HTTP only pour valider l'ACME challenge
+    log "Phase 1 — config Nginx HTTP only pour ACME challenge"
     cat > "$NGINX_CONF" <<EOF
 server {
     listen 80;
@@ -187,17 +183,27 @@ server {
     location / { return 200 'Moalim deployment in progress'; add_header Content-Type text/plain; }
 }
 EOF
-    mkdir -p /var/www/certbot
     nginx -t && systemctl reload nginx
 
+    log "Phase 2 — émission du certificat SSL"
     certbot certonly --webroot -w /var/www/certbot \
         -d "$DOMAIN" -d "www.$DOMAIN" \
         --email "$EMAIL" --agree-tos --non-interactive --no-eff-email
 
-    # Phase 2 : remettre la config HTTPS finale
-    cp "$APP_DIR/deploy/nginx.conf" "$NGINX_CONF"
+    # Make sure SSL options file exists (certbot creates it on cert issuance)
+    if [ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]; then
+        warn "options-ssl-nginx.conf manquant — téléchargement du fichier officiel"
+        curl -fsSL https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/src/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf \
+            -o /etc/letsencrypt/options-ssl-nginx.conf
+    fi
+    if [ ! -f /etc/letsencrypt/ssl-dhparams.pem ]; then
+        warn "ssl-dhparams.pem manquant — génération (peut prendre 1-2 min)"
+        openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048
+    fi
 fi
 
+log "Phase 3 — installation de la config Nginx HTTPS finale"
+cp "$APP_DIR/deploy/nginx.conf" "$NGINX_CONF"
 nginx -t && systemctl reload nginx
 
 # Auto-renew (timer systemd)
