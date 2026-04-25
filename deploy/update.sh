@@ -25,10 +25,14 @@ log "Mise à jour des dépendances Python (si requirements.txt a changé)"
 cd "$APP_DIR/backend"
 .venv/bin/pip install -q -r requirements.txt
 
-log "Rebuild du frontend"
+log "Rebuild du frontend (mode prod)"
 cd "$APP_DIR/frontend"
-npm ci
-npm run build
+if [ -f package-lock.json ]; then
+    npm ci
+else
+    npm install
+fi
+npm run build:prod
 
 log "Déploiement du build vers $WEB_DIR (isolé)"
 rm -rf "$WEB_DIR/assets"

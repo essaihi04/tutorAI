@@ -1195,6 +1195,14 @@ export default function AdminDashboard() {
   );
 }
 
+interface PromoCodeRecord {
+  id: string;
+  code: string;
+  label?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+}
+
 function PromoCodesTab() {
   const [items, setItems] = useState<PromoCodeRecord[]>([]);
   const [form, setForm] = useState({ code: '', label: '' });

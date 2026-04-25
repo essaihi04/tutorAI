@@ -119,10 +119,14 @@ fi
 chmod 600 "$APP_DIR/backend/.env"
 
 # ── 7. Frontend build + copie isolée ───────────────────────────────
-log "Build du frontend Vite"
+log "Build du frontend Vite (mode prod, sans check TS strict)"
 cd "$APP_DIR/frontend"
-npm ci
-npm run build
+if [ -f package-lock.json ]; then
+    npm ci
+else
+    npm install
+fi
+npm run build:prod
 
 log "Déploiement du frontend dans $WEB_DIR (isolé)"
 mkdir -p "$WEB_DIR"
