@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import {
   Sparkles, Brain, Zap, Trophy, ArrowRight, Check, Star,
-  GraduationCap, Mic, MessageCircle, ChevronDown,
+  GraduationCap, MessageCircle, ChevronDown,
   Shield, Clock, Target, BookOpen, FlaskConical, Calculator,
-  PenLine, BarChart3, Award, Users, Globe, Play, Quote,
+  PenLine, BarChart3, Award, Users, Globe, Play, Quote, Atom,
 } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────────────────
@@ -158,8 +158,8 @@ function HeroSection() {
           </h1>
 
           <p className="text-lg text-white/65 leading-relaxed max-w-xl mb-8">
-            Coaching personnalisé, exercices d'examen corrigés en temps réel, et explications au tableau interactif —
-            le tout adapté au programme officiel <b className="text-white">2ème BAC Sciences</b> (PC · SVT · Math).
+            Coaching personnalisé, <b className="text-white">60 examens réels du BAC</b> corrigés instantanément, et explications au tableau interactif —
+            le tout 100% aligné sur le cadre de référence officiel <b className="text-white">2ème BAC PC BIOF</b>.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 mb-8">
@@ -238,46 +238,45 @@ function Hero3DVisual() {
       </div>
 
       {/* Card haut-gauche : matière */}
-      <div className="absolute top-6 left-6 glass rounded-2xl p-4 anim-float-slow w-44 shadow-xl">
+      <div className="absolute top-6 left-6 glass rounded-2xl p-4 anim-float-slow w-48 shadow-xl">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-            <FlaskConical className="w-4 h-4 text-emerald-400" />
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+            <Atom className="w-4 h-4 text-indigo-300" />
           </div>
           <div>
-            <div className="text-xs font-semibold text-white">SVT</div>
-            <div className="text-[10px] text-white/40">2ème BAC</div>
+            <div className="text-xs font-semibold text-white">Physique — Ondes</div>
+            <div className="text-[10px] text-white/40">2ème BAC PC BIOF</div>
           </div>
         </div>
         <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full w-[78%]" />
+          <div className="h-full bg-gradient-to-r from-indigo-400 to-cyan-400 rounded-full w-[78%]" />
         </div>
-        <div className="text-[10px] text-emerald-300 mt-1.5 font-bold">78% maîtrisé</div>
+        <div className="text-[10px] text-indigo-200 mt-1.5 font-bold">78% maîtrisé</div>
       </div>
 
       {/* Card haut-droite : exam */}
-      <div className="absolute top-10 right-4 glass rounded-2xl p-4 anim-float w-40 shadow-xl" style={{ animationDelay: '1s' }}>
+      <div className="absolute top-10 right-4 glass rounded-2xl p-4 anim-float w-44 shadow-xl" style={{ animationDelay: '1s' }}>
         <div className="flex items-center gap-2 mb-2">
           <Trophy className="w-4 h-4 text-amber-400" />
-          <div className="text-xs font-semibold">Examen blanc</div>
+          <div className="text-xs font-semibold">Examen réel BAC 2024</div>
         </div>
         <div className="text-2xl font-black gradient-text leading-none">17.5<span className="text-sm text-white/40">/20</span></div>
-        <div className="text-[10px] text-white/50 mt-1">Mention Très Bien</div>
+        <div className="text-[10px] text-white/50 mt-1">Corrigé en 0.8 s</div>
       </div>
 
-      {/* Card bas-gauche : voix */}
-      <div className="absolute bottom-12 left-10 glass rounded-2xl p-3.5 anim-float-slow w-44 shadow-xl" style={{ animationDelay: '2s' }}>
+      {/* Card bas-gauche : feedback examen */}
+      <div className="absolute bottom-12 left-10 glass rounded-2xl p-3.5 anim-float-slow w-48 shadow-xl" style={{ animationDelay: '2s' }}>
         <div className="flex items-center gap-2 mb-2">
-          <div className="relative w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center">
-            <Mic className="w-4 h-4 text-rose-400" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+            <Target className="w-4 h-4 text-emerald-400" />
           </div>
-          <span className="text-xs font-semibold">Coaching vocal</span>
+          <span className="text-xs font-semibold">Feedback IA</span>
         </div>
-        <div className="flex items-end gap-0.5 h-5">
-          {[3,7,4,9,6,8,5,7,4,6,8,5,3,7].map((h, i) => (
-            <div key={i} className="flex-1 bg-gradient-to-t from-rose-400 to-pink-400 rounded-full"
-              style={{ height: `${h * 10}%`, animation: `pulse-glow ${1 + i * 0.1}s ease-in-out infinite` }} />
-          ))}
+        <div className="text-[10px] text-white/70 leading-tight mb-1.5">
+          "Très bien sur la cinétique. Revois les piles (ch.10)."
+        </div>
+        <div className="flex items-center gap-1 text-[9px] text-emerald-300">
+          <Check className="w-2.5 h-2.5" /> Orientation personnalisée
         </div>
       </div>
 
@@ -361,10 +360,10 @@ function FeaturesSection() {
             color="from-amber-500 to-rose-600"
             shadow="shadow-amber-500/30"
             icon={Trophy}
-            tag="Mode Examen"
-            title="Examens blancs corrigés instantanément"
-            desc="Anciens sujets BAC + corrections détaillées + ta mention projetée /20 selon le barème officiel."
-            features={['Anciens sujets nationaux', 'Note + commentaires par question', 'Sauvegarde automatique']}
+            tag="Mode Examen Réel"
+            title="60 examens réels du BAC corrigés en direct"
+            desc="Tous les sujets nationaux récents (sessions normale + rattrapage). Correction et explication instantanée à chaque question, plus une orientation personnalisée pour cibler tes points faibles."
+            features={['60 sujets BAC officiels', 'Correction + explication instantanée', 'Feedback + orientation chapitre par chapitre']}
           />
         </div>
       </div>
@@ -451,7 +450,7 @@ function DashboardMock() {
           { icon: BarChart3, label: 'Tableau de bord', active: true },
           { icon: Brain, label: 'Coaching IA' },
           { icon: MessageCircle, label: 'Mode libre' },
-          { icon: Trophy, label: 'Examens blancs' },
+          { icon: Trophy, label: 'Examens réels' },
           { icon: BookOpen, label: 'Mes cours' },
           { icon: Award, label: 'Progression' },
         ].map((it, i) => (
@@ -577,9 +576,9 @@ function DashboardMock() {
           </div>
           <div className="space-y-2">
             {[
-              { mode: 'Coaching', subj: 'Génétique des populations', time: 'Il y a 2h', score: '92%', color: 'indigo' },
-              { mode: 'Examen', subj: 'PC — Sujet 2024 normale', time: 'Hier', score: '17/20', color: 'amber' },
-              { mode: 'Libre', subj: 'Comprendre les dérivées', time: 'Il y a 2 j', score: '—', color: 'cyan' },
+              { mode: 'Coaching', subj: 'Dipole RC — charge et décharge', time: 'Il y a 2h', score: '92%', color: 'indigo' },
+              { mode: 'Examen', subj: 'PC — Sujet BAC 2024 (normale)', time: 'Hier', score: '17/20', color: 'amber' },
+              { mode: 'Libre', subj: 'Cinétique : facteurs et catalyse', time: 'Il y a 2 j', score: '—', color: 'cyan' },
             ].map((s, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[.03] hover:bg-white/[.06] transition-colors">
                 <div className={`w-9 h-9 rounded-xl bg-${s.color}-500/15 flex items-center justify-center text-${s.color}-300 text-[10px] font-bold`}>
@@ -674,34 +673,34 @@ function StatsSection() {
 function TestimonialsSection() {
   const items = [
     {
-      name: 'Yasmine B.', school: 'Lycée Lalla Aïcha — Casablanca', subject: '2ème BAC PC',
-      score: '17.8/20', avatar: 'from-pink-400 to-rose-500',
-      quote: "J'avais peur de la PC mais le coaching IA explique vraiment au tableau. En 2 mois j'ai gagné 3 points de moyenne, ma prof n'en revenait pas !",
+      name: 'Yasmine B.', school: 'Lycée Lalla Aïcha — Casablanca', subject: '2BAC PC BIOF',
+      score: 'Physique 17.8/20', avatar: 'from-pink-400 to-rose-500',
+      quote: "J'avais peur des dipôles RLC mais le coaching IA explique au tableau étape par étape. En 2 mois j'ai gagné 3 points en physique.",
     },
     {
-      name: 'Mehdi A.', school: 'Lycée Mohammed VI — Rabat', subject: '2ème BAC SVT',
-      score: '18.2/20', avatar: 'from-blue-400 to-indigo-500',
-      quote: 'Le mode examen blanc est dingue. Tu fais le sujet, tu reçois ta note avec les commentaires comme un vrai correcteur. Ça m\'a sauvé la vie pour le BAC.',
+      name: 'Mehdi A.', school: 'Lycée Mohammed VI — Rabat', subject: '2BAC PC BIOF',
+      score: 'Chimie 18.2/20', avatar: 'from-blue-400 to-indigo-500',
+      quote: "Les 60 examens réels avec correction instantanée, c'est dingue. Tu finis ta copie, tu reçois ta note + les commentaires question par question. Ça m'a sauvé pour le BAC.",
     },
     {
-      name: 'Salma K.', school: 'Lycée Al Khansaa — Fès', subject: '2ème BAC Math',
-      score: '16.5/20', avatar: 'from-amber-400 to-orange-500',
-      quote: "Je peux poser n'importe quelle question, même en darija, et l'IA répond avec des schémas. C'est comme avoir un prof particulier disponible h24.",
+      name: 'Salma K.', school: 'Lycée Al Khansaa — Fès', subject: '2BAC PC BIOF',
+      score: 'Maths 16.5/20', avatar: 'from-amber-400 to-orange-500',
+      quote: "Je peux poser n'importe quelle question, même en darija, et l'IA répond avec des schémas. C'est comme avoir un prof particulier disponible 24h/24.",
     },
     {
-      name: 'Anas E.', school: 'Lycée Ibn Sina — Marrakech', subject: '2ème BAC PC',
-      score: '15.9/20', avatar: 'from-emerald-400 to-teal-500',
-      quote: "Avant je révisais sans savoir où j'en étais. Avec le tableau de bord je vois mes points faibles, je m'entraîne dessus, ça me booste vraiment.",
+      name: 'Anas E.', school: 'Lycée Ibn Sina — Marrakech', subject: '2BAC PC BIOF',
+      score: 'Moyenne 15.9/20', avatar: 'from-emerald-400 to-teal-500',
+      quote: "L'orientation après chaque examen me dit exactement quel chapitre revoir. J'ai arrêté de réviser dans le vide, je cible mes points faibles.",
     },
     {
-      name: 'Nada R.', school: 'Lycée Al Farabi — Tanger', subject: '2ème BAC SVT',
-      score: '17.1/20', avatar: 'from-fuchsia-400 to-purple-500',
-      quote: "Les explications sont claires, les schémas dessinés en direct. Même les notions de génétique compliquées deviennent simples.",
+      name: 'Nada R.', school: 'Lycée Al Farabi — Tanger', subject: '2BAC PC BIOF',
+      score: 'Physique 17.1/20', avatar: 'from-fuchsia-400 to-purple-500',
+      quote: "Les explications sur les ondes lumineuses sont claires, avec des schémas dessinés en direct sur le tableau. Même la diffraction devient évidente.",
     },
     {
-      name: 'Hamza T.', school: 'Lycée Hassan II — Agadir', subject: '2ème BAC Math',
-      score: '18.5/20', avatar: 'from-cyan-400 to-blue-500',
-      quote: "L'IA m'a fait travailler les démos étape par étape. Quand je bloque, elle reformule et donne des indices, jamais la réponse directe. Pédagogiquement c'est parfait.",
+      name: 'Hamza T.', school: 'Lycée Hassan II — Agadir', subject: '2BAC PC BIOF',
+      score: 'Maths 18.5/20', avatar: 'from-cyan-400 to-blue-500',
+      quote: "L'IA me fait travailler les démos étape par étape. Quand je bloque, elle reformule et donne des indices, jamais la réponse directe. Pédagogiquement c'est parfait.",
     },
   ];
 
@@ -754,39 +753,87 @@ function TestimonialsSection() {
    ════════════════════════════════════════════════════════════ */
 function SubjectsSection() {
   const subjects = [
-    { name: 'Sciences Physiques', short: 'PC', icon: FlaskConical, color: 'from-indigo-500 to-blue-600', topics: ['Mécanique', 'Électricité', 'Chimie organique', 'Ondes'] },
-    { name: 'SVT', short: 'SVT', icon: Brain, color: 'from-emerald-500 to-teal-600', topics: ['Génétique', 'Immunologie', 'Géologie', 'Activité interne'] },
-    { name: 'Mathématiques', short: 'Math', icon: Calculator, color: 'from-amber-500 to-orange-600', topics: ['Limites & continuité', 'Dérivation', 'Probabilités', 'Suites'] },
+    {
+      name: 'Physique', icon: Atom,
+      color: 'from-indigo-500 to-blue-600',
+      count: 15,
+      topics: [
+        'Ondes mécaniques progressives',
+        'Ondes lumineuses (diffraction, interférences)',
+        'Dipôles RC, RL et circuit RLC',
+        'Modulation d’amplitude',
+        'Lois de Newton & chute libre',
+        'Mouvements plans · satellites · rotation',
+        'Oscillateurs mécaniques',
+        'Atome et mécanique de Newton',
+      ],
+    },
+    {
+      name: 'Chimie', icon: FlaskConical,
+      color: 'from-rose-500 to-pink-600',
+      count: 14,
+      topics: [
+        'Transformations lentes / rapides',
+        'Vitesse de réaction · catalyse',
+        'Décroissance radioactive',
+        'Noyaux, masse et énergie',
+        'Transformations dans les 2 sens · équilibre',
+        'Réactions acide-base · pH · pKa',
+        'Dosage acido-basique',
+        'Piles · électrolyse · estérification',
+      ],
+    },
+    {
+      name: 'Mathématiques', icon: Calculator,
+      color: 'from-amber-500 to-orange-600',
+      count: 10,
+      topics: [
+        'Limites · continuité · dérivation',
+        'Fonctions logarithme & exponentielle',
+        'Calcul intégral',
+        'Équations différentielles',
+        'Suites numériques · récurrence',
+        'Nombres complexes',
+        'Probabilités',
+        'Géométrie dans l’espace',
+      ],
+    },
   ];
   return (
     <section className="relative z-10 py-20 sm:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <SectionHeader
-          eyebrow="Programme officiel"
-          title={<>Tout le <span className="gradient-text">programme 2ème BAC Sciences</span></>}
-          subtitle="Conforme au référentiel du Ministère de l'Éducation Nationale 2024-2026."
+          eyebrow="Cadre de référence officiel"
+          title={<>Tout le programme <span className="gradient-text">2ème BAC PC BIOF</span></>}
+          subtitle="Chapitres et leçons issus directement du référentiel du Ministère de l’Éducation Nationale (BIOF). Aucune matière hors-programme."
         />
         <div className="grid md:grid-cols-3 gap-5 mt-12">
           {subjects.map((s, i) => (
             <div key={i} className="tilt-card glass rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center shadow-lg`}>
-                  <s.icon className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <div className="text-base font-bold">{s.name}</div>
-                  <div className="text-[11px] text-white/40">2ème BAC Sciences</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {s.topics.map((t, j) => (
-                  <div key={j} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 text-[11px] text-white/70">
-                    <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                    {t}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center shadow-lg`}>
+                    <s.icon className="w-6 h-6 text-white" />
                   </div>
-                ))}
+                  <div>
+                    <div className="text-base font-bold">{s.name}</div>
+                    <div className="text-[11px] text-white/40">2ème BAC PC BIOF</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-black gradient-text leading-none">{s.count}</div>
+                  <div className="text-[10px] text-white/40 mt-0.5">chapitres</div>
+                </div>
               </div>
-              <div className="text-[11px] text-white/40 mt-3">+ tous les autres chapitres officiels</div>
+              <ul className="space-y-1.5">
+                {s.topics.map((t, j) => (
+                  <li key={j} className="flex items-start gap-1.5 text-[12px] text-white/70 leading-tight">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="text-[11px] text-white/40 mt-4 pt-3 border-t border-white/5">+ tous les chapitres restants du référentiel</div>
             </div>
           ))}
         </div>
@@ -800,8 +847,9 @@ function SubjectsSection() {
    ════════════════════════════════════════════════════════════ */
 function FAQSection() {
   const faqs = [
-    { q: "Est-ce vraiment gratuit pour commencer ?", a: "Oui. Tu peux créer un compte, faire des sessions de coaching et passer un examen blanc sans aucune carte bancaire. Une fois que tu vois la valeur, tu peux passer au plan complet." },
-    { q: "Le programme couvre-t-il bien le BAC marocain ?", a: "Oui. Tout le contenu est aligné avec le référentiel officiel du Ministère de l'Éducation Nationale pour la 2ème année du Baccalauréat Sciences (PC · SVT · Math) — sessions normale et rattrapage." },
+    { q: "Est-ce vraiment gratuit pour commencer ?", a: "Oui. Tu peux créer un compte, faire des sessions de coaching et passer un examen réel sans aucune carte bancaire. Une fois que tu vois la valeur, tu peux passer au plan complet." },
+    { q: "Quelle filière est couverte ?", a: "Pour le moment, Moalim couvre exclusivement la 2ème année du Baccalauréat Sciences PC BIOF (Sciences Physiques et Chimiques, programme international francophone). Les chapitres de Physique, Chimie et Mathématiques sont issus directement du cadre de référence officiel du Ministère de l'Éducation Nationale." },
+    { q: "Combien d'examens BAC sont disponibles ?", a: "60 sujets réels du BAC national — sessions normale + rattrapage des dernières années. Chaque copie est corrigée et expliquée instantanément par l'IA, avec un feedback question par question et une orientation chapitre par chapitre." },
     { q: "L'IA parle-t-elle en arabe ou en darija ?", a: "Oui, tu choisis : Français, Arabe classique, ou Darija marocaine. Tu peux mélanger les langues pendant la session et l'IA s'adapte." },
     { q: "Puis-je l'utiliser sur mon téléphone ?", a: "Oui. Moalim fonctionne sur ordinateur, tablette et téléphone — sans rien à installer. Une simple connexion internet suffit." },
     { q: "Combien de temps pour voir des résultats ?", a: "En moyenne, nos élèves gagnent +2,3 points de moyenne en 6 semaines à raison de 3 sessions par semaine. Tout dépend de ton point de départ." },
