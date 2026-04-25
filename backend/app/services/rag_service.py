@@ -92,97 +92,25 @@ class RAGService:
             self.embedding_dim = self.model.get_sentence_embedding_dimension()
             print(f"[RAG] Model loaded. Embedding dim: {self.embedding_dim}")
     
+    # ─── Legacy Gemini OCR removed ─────────────────────────────────
+    # Gemini Vision was previously used to OCR scanned PDF pages during
+    # RAG indexing. This produced rate-limit storms in production and
+    # blocked the event loop. Since the cache (data/rag_cache/*.json)
+    # contains all the chunks needed for the official BAC programs, we
+    # no longer call any external OCR provider here. If a subject's
+    # cache is stale, this returns "" and indexing logs a warning.
+    # If full OCR is needed again, wire `app.services.ocr_service`
+    # (Mistral OCR) here.
+    _OCR_DISABLED_LOGGED = False
+
     def _ocr_page_with_gemini(self, page_image_bytes: bytes, page_num: int, pdf_name: str, max_retries: int = 3) -> str:
-        """Use Gemini Flash Vision to OCR a page image with retry logic"""
-        if RAG_DISABLED:
-            return ""
-        import time
-        
-        image_base64 = base64.b64encode(page_image_bytes).decode('utf-8')
-        
-        prompt = """Extrais TOUT le texte visible de cette image de document officiel marocain.
+        """OCR is disabled — Gemini removed. Returns empty string.
 
-INSTRUCTIONS:
-1. Extrais chaque mot, chaque phrase, chaque tableau, chaque formule
-2. Garde la structure: titres, sous-titres, paragraphes, listes
-3. Pour les tableaux: utilise | pour séparer les colonnes
-4. Pour les formules mathématiques: utilise la notation LaTeX si possible
-5. Ne saute AUCUN texte, même petit ou en marge
-6. Réponds UNIQUEMENT avec le texte extrait, sans commentaires ni explications
-
-Si la page est vide ou ne contient que des images sans texte, réponds: [PAGE VIDE]"""
-
-        api_key = settings.gemini_api_key
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-
-        for attempt in range(max_retries):
-            try:
-                response = httpx.post(
-                    url,
-                    headers={"Content-Type": "application/json"},
-                    json={
-                        "contents": [{
-                            "parts": [
-                                {
-                                    "inline_data": {
-                                        "mime_type": "image/png",
-                                        "data": image_base64
-                                    }
-                                },
-                                {"text": prompt}
-                            ]
-                        }],
-                        "generationConfig": {
-                            "temperature": 0.1,
-                            "maxOutputTokens": 8192
-                        }
-                    },
-                    timeout=120.0
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    text = ""
-                    try:
-                        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    except (KeyError, IndexError):
-                        pass
-                    
-                    if text == "[PAGE VIDE]":
-                        return ""
-                    
-                    if text and len(text) > 10:
-                        return text
-                    
-                    if attempt < max_retries - 1:
-                        print(f"[RAG] Empty OCR response for {pdf_name} p.{page_num}, retrying ({attempt + 1}/{max_retries})...")
-                        time.sleep(2)
-                        continue
-                    return text
-                    
-                elif response.status_code == 429:
-                    if attempt < max_retries - 1:
-                        wait_time = (attempt + 1) * 10
-                        print(f"[RAG] Gemini rate limit for {pdf_name} p.{page_num}, waiting {wait_time}s...")
-                        time.sleep(wait_time)
-                        continue
-                    print(f"[RAG] Gemini OCR rate limited for {pdf_name} p.{page_num}")
-                    return ""
-                    
-                else:
-                    print(f"[RAG] Gemini OCR error for {pdf_name} p.{page_num}: {response.status_code} - {response.text[:200]}")
-                    if attempt < max_retries - 1:
-                        time.sleep(2)
-                        continue
-                    return ""
-                    
-            except Exception as e:
-                print(f"[RAG] OCR exception for {pdf_name} p.{page_num}: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(3)
-                    continue
-                return ""
-        
+        RAG indexing relies exclusively on the pre-built cache files.
+        """
+        if not self._OCR_DISABLED_LOGGED:
+            print("[RAG] OCR disabled (Gemini removed). Indexing relies on existing cache only.")
+            type(self)._OCR_DISABLED_LOGGED = True
         return ""
 
     def extract_pdf_content(self, pdf_path: Path, use_ocr: bool = True, force_ocr: bool = False) -> list[dict]:

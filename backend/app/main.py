@@ -42,12 +42,16 @@ async def _warmup_tts_background():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # RAG disabled until all data is added
-    # To re-enable: uncomment the 3 lines below
-    # print("[Startup] Launching RAG initialization in background...")
-    # rag_thread = threading.Thread(target=_init_rag_background, daemon=True)
-    # rag_thread.start()
-    print("[Startup] RAG disabled — waiting for data to be added.")
+    # RAG initialized once at startup in a background thread (uses cached
+    # chunks + FAISS index from data/rag_cache). No OCR is triggered when
+    # the cache is hot — startup stays fast and the server is responsive
+    # immediately while RAG warms up off-thread.
+    if getattr(settings, 'rag_disabled', 0) != 0:
+        print("[Startup] RAG explicitly disabled via RAG_DISABLED env var.")
+    else:
+        print("[Startup] Launching RAG initialization in background...")
+        rag_thread = threading.Thread(target=_init_rag_background, daemon=True)
+        rag_thread.start()
 
     # TTS warmup intentionally DISABLED at startup.
     # - Gemini 2.5 preview TTS has a tight free-tier quota (~10 RPM) that
