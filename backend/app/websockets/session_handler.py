@@ -113,6 +113,10 @@ class SessionHandler:
         self.simulation_history: list[dict] = []  # Track all simulation actions
         self.recent_resource_modes: list[str] = []
         self.simulation_orchestration: dict = {}
+        # Currently-open exam panel view (kept in sync by frontend).
+        # Used to inject accurate exam metadata into the LLM system prompt
+        # so the model never hallucinates the wrong year/session/exercise/question.
+        self.current_exam_view: dict | None = None
 
     def _sanitize_history_content(self, content: str) -> str:
         """Remove heavy command payloads before re-sending history to the LLM."""
@@ -709,6 +713,23 @@ class SessionHandler:
             )
         elif msg_type == "exam_answer":
             await self._handle_exam_answer(message)
+        elif msg_type == "set_exam_panel_view":
+            # Frontend tells us which exam/exercise/question is currently visible
+            # in the exam panel. We store it so any subsequent free-form message
+            # (voice, "Aide au tableau", etc.) is grounded in the real metadata
+            # and the LLM cannot hallucinate the year/session/exercise.
+            view = message.get("view") or {}
+            if isinstance(view, dict) and view:
+                self.current_exam_view = view
+                _safe_log(
+                    f"[Exam View] Updated: {view.get('subject','?')} {view.get('year','?')} "
+                    f"{view.get('session','?')} | {view.get('exercise_name','?')} | "
+                    f"Q{view.get('question_number','?')}/{view.get('question_total','?')}"
+                )
+        elif msg_type == "clear_exam_panel_view":
+            if self.current_exam_view is not None:
+                _safe_log("[Exam View] Cleared (panel closed)")
+            self.current_exam_view = None
         elif msg_type == "simulation_manifest":
             await self._handle_simulation_manifest(message)
         elif msg_type == "simulation_update":
@@ -1125,6 +1146,61 @@ class SessionHandler:
                 adaptation_hints=prof_ctx.get("adaptation_hints", "") if prof_ctx else "",
             )
         
+        # ── INJECT CURRENT EXAM PANEL VIEW (anti-hallucination) ──
+        # When the exam panel is open on the frontend, we attach the exact
+        # exam/exercise/question the student is looking at. This prevents the
+        # LLM from inventing a different year/session/exercise (e.g. saying
+        # "Rattrapage 2025" while the UI shows "Rattrapage 2023").
+        if self.current_exam_view:
+            v = self.current_exam_view
+            subject = str(v.get("subject", "") or "").strip()
+            year = str(v.get("year", "") or "").strip()
+            session = str(v.get("session", "") or "").strip()
+            exam_title = str(v.get("exam_title", "") or "").strip()
+            exercise_name = str(v.get("exercise_name", "") or "").strip()
+            ex_idx = v.get("exercise_index")
+            ex_total = v.get("exercise_total")
+            q_num = v.get("question_number")
+            q_total = v.get("question_total")
+            q_content = str(v.get("question_content", "") or "").strip()
+            q_correction = str(v.get("question_correction", "") or "").strip()
+            q_points = v.get("question_points")
+
+            session_label = session.capitalize() if session else ""
+            header_bits = [b for b in [subject, session_label, year] if b]
+            header = " — ".join(header_bits) if header_bits else (exam_title or "Examen")
+
+            ex_ref = exercise_name or (f"Exercice {ex_idx + 1}" if isinstance(ex_idx, int) else "")
+            if isinstance(ex_idx, int) and isinstance(ex_total, int) and ex_total > 1:
+                ex_ref = f"{ex_ref} ({ex_idx + 1}/{ex_total})"
+
+            q_ref = ""
+            if q_num is not None:
+                q_ref = f"Question {q_num}" + (f"/{q_total}" if q_total else "")
+                if q_points is not None:
+                    q_ref += f" ({q_points} pt)"
+
+            exam_view_block = f"""
+[CONTEXTE — EXAMEN ACTUELLEMENT AFFICHÉ À L'ÉTUDIANT]
+⚠️ L'étudiant a CE PANNEAU D'EXAMEN ouvert en ce moment. Tu DOIS te baser EXCLUSIVEMENT sur ces informations. NE JAMAIS inventer une autre année, session, exercice ou question.
+
+📚 Examen : {header}
+📖 {ex_ref}
+❓ {q_ref}
+
+ÉNONCÉ EXACT DE LA QUESTION AFFICHÉE :
+{q_content if q_content else '(non disponible)'}
+"""
+            if q_correction:
+                exam_view_block += f"\nCORRECTION OFFICIELLE DE CETTE QUESTION :\n{q_correction}\n"
+            exam_view_block += """
+RÈGLES STRICTES :
+- Si l'étudiant parle de "cette question", "la question N°X", "l'exercice", "l'examen", il parle TOUJOURS de CE qui est affiché ci-dessus.
+- Tu cites l'année et la session EXACTES indiquées ci-dessus. JAMAIS d'autres.
+- Tu ne mentionnes JAMAIS un examen/année différent à moins que l'étudiant ne te le demande explicitement.
+"""
+            system_prompt = (system_prompt or "") + "\n\n" + exam_view_block
+
         # Add exam correction instruction when student submits answer in exam panel
         if exam_context:
             question_ref = ""

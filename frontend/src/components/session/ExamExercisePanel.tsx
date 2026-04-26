@@ -103,9 +103,46 @@ export default function ExamExercisePanel({ exercises, query: _query, onClose, o
   }, [exerciseSignature, resetExamPanelIfChanged]);
 
   const ex = exercises[currentExIdx];
-  if (!ex) return null;
+  const question = ex?.questions[currentQIdx];
 
-  const question = ex.questions[currentQIdx];
+  // Keep the backend in sync with the exam/exercise/question currently
+  // displayed, so any free-form chat or voice message (e.g. "Aide au tableau")
+  // is grounded in the real metadata. Without this, the LLM hallucinates
+  // a different year/session (e.g. says "2025 Rattrapage" while UI shows
+  // "Rattrapage 2023").
+  useEffect(() => {
+    if (!ex || !question) return;
+    wsService.sendJson({
+      type: 'set_exam_panel_view',
+      view: {
+        exam_id: ex.exam_id,
+        subject: ex.subject,
+        year: ex.year,
+        session: ex.session,
+        exam_title: ex.exam_label,
+        exercise_index: currentExIdx,
+        exercise_total: exercises.length,
+        exercise_name: ex.exercise_name || '',
+        part_name: ex.part_name || '',
+        topic: ex.topic || '',
+        question_number: currentQIdx + 1,
+        question_total: ex.questions.length,
+        question_content: (question.content || '').substring(0, 1500),
+        question_correction: (question.correction || '').substring(0, 1500),
+        question_points: question.points || 0,
+        question_type: question.type || 'open',
+      },
+    });
+  }, [ex, question, currentExIdx, currentQIdx, exercises.length]);
+
+  // Clear the server-side view when the panel unmounts (closed by user).
+  useEffect(() => {
+    return () => {
+      wsService.sendJson({ type: 'clear_exam_panel_view' });
+    };
+  }, []);
+
+  if (!ex) return null;
   if (!question) return null;
 
   const qKey = `${currentExIdx}-${currentQIdx}`;
