@@ -1441,14 +1441,23 @@ function ExamResultsShareModal(props: ShareModalProps) {
     ? `Mention ${mention.label} ${mention.emoji}`
     : `Entraînement en cours — ${evaluatedCount}/${totalQuestions} questions évaluées ${scoreEmoji}`;
 
+  // WITH url — used for clipboard / WhatsApp / Facebook quote
   const shareText =
-    `🎓 ${firstName} s'entraîne sur le BAC avec معلم (Moalim) ! ${scoreEmoji}\n` +
+    `🎓 ${firstName} s'entraîne sur le BAC avec Moalim ! ${scoreEmoji}\n` +
     `📘 ${exam.subject} ${exam.year} · Session ${sessionLabel}\n` +
     `✅ Score : ${earned.toFixed(2)}/${evaluatedMax.toFixed(0)} pts (${accuracyPct.toFixed(0)}% de réussite)\n` +
     (mentionReliable
       ? `🏅 Mention ${mention.label} ${mention.emoji}\n`
       : `📝 ${evaluatedCount}/${totalQuestions} questions évaluées\n`) +
     `\n👉 Rejoins-moi sur ${MOALIM_URL}`;
+  // WITHOUT url — used for Web Share API (the OS appends url separately)
+  const shareTextNoUrl =
+    `🎓 ${firstName} s'entraîne sur le BAC avec Moalim ! ${scoreEmoji}\n` +
+    `📘 ${exam.subject} ${exam.year} · Session ${sessionLabel}\n` +
+    `✅ Score : ${earned.toFixed(2)}/${evaluatedMax.toFixed(0)} pts (${accuracyPct.toFixed(0)}% de réussite)\n` +
+    (mentionReliable
+      ? `🏅 Mention ${mention.label} ${mention.emoji}`
+      : `📝 ${evaluatedCount}/${totalQuestions} questions évaluées`);
 
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(MOALIM_URL);
@@ -1475,8 +1484,8 @@ function ExamResultsShareModal(props: ShareModalProps) {
       const file = new File([blob], fileName, { type: 'image/png' });
       const nav: any = navigator;
       const shareData: any = {
-        title: 'معلم — Mes résultats',
-        text: shareText,
+        title: 'Moalim — Mes résultats',
+        text: shareTextNoUrl,
         url: MOALIM_URL,
         files: [file],
       };
@@ -1730,7 +1739,7 @@ const ShareableExamCard = forwardRef<
             fontSize: 18, fontWeight: 900,
           }}>م</div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.2 }}>معلم · Moalim</div>
+            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.2 }}>Moalim</div>
             <div style={{ fontSize: 10, color: '#94a3b8' }}>Plateforme BAC Maroc</div>
           </div>
         </div>

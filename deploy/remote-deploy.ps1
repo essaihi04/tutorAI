@@ -42,7 +42,7 @@ if (-not (Test-Path $envFile)) {
 # ── Update mode (faster, after first deploy) ─────────────────
 if ($UpdateOnly) {
     Step "Mode mise à jour (git pull + rebuild)"
-    ssh "$User@$ServerIp" "bash /var/www/moalim/deploy/update.sh"
+    ssh "$User@$ServerIp" "bash /root/moalim/deploy/update.sh"
     Write-Host ""
     Write-Host "✅ Mise à jour terminée. https://moalim.online" -ForegroundColor Green
     exit 0

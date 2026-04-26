@@ -1041,14 +1041,21 @@ function RealExamShareModal({
   const [copied, setCopied] = useState(false);
   const [fileShareUnsupported, setFileShareUnsupported] = useState(false);
 
+  // Text WITH the URL inline — used for clipboard / WhatsApp / Facebook quote
   const shareText =
-    `🎓 ${firstName} a réussi un examen BAC avec معلم (Moalim) ! ${mention.emoji}\n` +
+    `🎓 ${firstName} a réussi un examen BAC avec Moalim ! ${mention.emoji}\n` +
     `📘 ${exam.subject} ${exam.year} · Session ${sessionLabel}\n` +
     `✅ Note : ${scoreOn20.toFixed(2)}/20 · ${percent}% de réussite\n` +
     `🏅 Mention ${mention.label}\n\n` +
     `👉 Découvre la plateforme : ${MOALIM_URL}`;
+  // Same text WITHOUT the URL — used for Web Share API + Twitter (which append url separately)
+  const shareTextNoUrl =
+    `🎓 ${firstName} a réussi un examen BAC avec Moalim ! ${mention.emoji}\n` +
+    `📘 ${exam.subject} ${exam.year} · Session ${sessionLabel}\n` +
+    `✅ Note : ${scoreOn20.toFixed(2)}/20 · ${percent}% de réussite\n` +
+    `🏅 Mention ${mention.label}`;
   const shareTextShort =
-    `🎓 ${firstName} : ${exam.subject} ${exam.year} — ${scoreOn20.toFixed(2)}/20 ${mention.emoji} — ${MOALIM_URL}`;
+    `🎓 ${firstName} : ${exam.subject} ${exam.year} — ${scoreOn20.toFixed(2)}/20 ${mention.emoji}`;
 
   const encodedText = encodeURIComponent(shareText);
   const encodedShort = encodeURIComponent(shareTextShort);
@@ -1093,8 +1100,8 @@ function RealExamShareModal({
       const file = new File([blob], fileName, { type: 'image/png' });
       const nav: any = navigator;
       const shareData: any = {
-        title: 'معلم — Ma réussite BAC',
-        text: shareTextShort,
+        title: 'Moalim — Ma réussite BAC',
+        text: shareTextNoUrl,
         url: MOALIM_URL,
         files: [file],
       };
@@ -1272,7 +1279,7 @@ const RealExamShareCard = forwardRef<
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 38, height: 38, borderRadius: 12, background: 'linear-gradient(135deg, #6366f1, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 900 }}>م</div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: 0.2 }}>معلم · Moalim</div>
+              <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: 0.2 }}>Moalim</div>
               <div style={{ fontSize: 10, color: '#94a3b8' }}>Tuteur IA pour le BAC Maroc</div>
             </div>
           </div>
