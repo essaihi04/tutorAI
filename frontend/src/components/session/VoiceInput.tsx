@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { wsService } from '../../services/websocket';
+import { speechService } from '../../services/speechService';
+import { useSessionStore } from '../../stores/sessionStore';
 
 interface VoiceInputProps {
   onTextSend: (text: string) => void;
@@ -45,6 +47,11 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const textFieldRef = useRef<HTMLInputElement>(null);
+
+  // Browser-native STT (Web Speech API) — primary path on Chrome/Edge/Safari/iOS
+  const language = useSessionStore((s) => s.language);
+  const browserSttActiveRef = useRef(false);
+  const browserSttDidFinalRef = useRef(false);
 
   // Live volume meter (0..100). Lets the user see their mic actually works.
   const [volume, setVolume] = useState(0);
@@ -124,10 +131,72 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [injectKey]);
 
+  // ── Browser-native STT path (Web Speech API) ────────────────────
+  // Used as primary path on Chrome/Edge/Safari/iOS. Sends transcribed text
+  // directly through `onTextSend` (same pipeline as the text input — the
+  // backend then runs the LLM and TTS as usual). No audio upload required.
+  const startBrowserSTT = (): boolean => {
+    if (!speechService.isRecognitionSupported()) return false;
+    if (!wsService.isConnected) {
+      setMicError('Pas de connexion au serveur. Recharge la page.');
+      return true; // we handled the click; just couldn't start
+    }
+
+    setMicError(null);
+    browserSttActiveRef.current = true;
+    browserSttDidFinalRef.current = false;
+    setIsRecording(true);
+    setMicHint("Je t'écoute… parle maintenant");
+
+    speechService.listen({
+      lang: language,
+      continuous: false,
+      interimResults: true,
+      onResult: (text, isFinal) => {
+        const trimmed = (text || '').trim();
+        if (isFinal) {
+          browserSttDidFinalRef.current = true;
+          if (trimmed) onTextSend(trimmed);
+        } else if (trimmed) {
+          setMicHint(`📝 ${trimmed}`);
+        }
+      },
+      onEnd: () => {
+        browserSttActiveRef.current = false;
+        setIsRecording(false);
+        if (!browserSttDidFinalRef.current) {
+          setMicHint('Aucune voix détectée. Parle plus fort ou vérifie ton micro.');
+          setTimeout(() => setMicHint('Clique pour parler'), 3000);
+        } else {
+          setMicHint('Clique pour parler');
+        }
+      },
+      onError: (error) => {
+        browserSttActiveRef.current = false;
+        setIsRecording(false);
+        if (error === 'no-speech') {
+          setMicHint('Aucune voix détectée. Parle plus fort ou rapproche-toi du micro.');
+          setTimeout(() => setMicHint('Clique pour parler'), 3000);
+        } else if (error === 'not-allowed') {
+          setMicError("Accès micro refusé. Autorise-le dans les paramètres du navigateur.");
+        } else if (error === 'network') {
+          setMicError("Erreur réseau pendant la reconnaissance vocale. Réessaie.");
+        } else if (error !== 'aborted') {
+          setMicError(`Erreur reconnaissance vocale: ${error}`);
+        }
+      },
+    }).catch(() => { /* errors already handled via onError */ });
+
+    return true;
+  };
+
   const startRecording = async () => {
     setMicError(null);
 
-    // Safety net: MediaRecorder is available on Chrome/Edge/Firefox/Safari 14+
+    // 1) Try browser-native STT (instant, no upload, supports fr-FR + ar-MA)
+    if (startBrowserSTT()) return;
+
+    // 2) Fallback: MediaRecorder → backend STT (Firefox, older browsers)
     if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setMicError('Micro non supporté par ce navigateur. Utilise Chrome ou Edge.');
       return;
@@ -258,6 +327,14 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
   };
 
   const stopRecording = () => {
+    // Browser-native STT path: ask SpeechRecognition to finalize
+    if (browserSttActiveRef.current) {
+      try { speechService.stopListening(); } catch { /* noop */ }
+      browserSttActiveRef.current = false;
+      setIsRecording(false);
+      return;
+    }
+    // MediaRecorder fallback path
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== 'inactive') {
       try { rec.stop(); } catch (err) { console.warn('[Voice] stop() failed:', err); }
