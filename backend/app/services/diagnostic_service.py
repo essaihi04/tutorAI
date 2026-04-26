@@ -316,13 +316,16 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
             )
 
         # ── Build weighted question plan: how many questions per chapter ──
-        # Try to extract weights from RAG context (patterns like "27%" or "coefficient: 3")
-        chapter_weights = self._extract_chapter_weights(rag_context, chapters_info)
+        # Uses cadre-de-référence domain weights → distributed across chapters.
+        chapter_weights = self._extract_chapter_weights(subject_name, chapters_info)
+        print(f"[Diagnostic] {subject_name} chapter weights: {chapter_weights or '(fallback equal distribution)'}")
 
         # Distribute num_questions across chapters proportionally to weights
         question_plan = self._build_question_plan(
             chapters_info, chapter_weights, num_questions
         )
+        plan_summary = [(ch.get('number'), ch.get('title', '')[:40]) for ch in question_plan]
+        print(f"[Diagnostic] {subject_name} question plan ({num_questions} Q): {plan_summary}")
 
         # Create session
         session_id = str(uuid.uuid4())
@@ -345,28 +348,103 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
 
         return session_id
 
-    def _extract_chapter_weights(self, rag_context: str, chapters_info: list) -> dict:
-        """Extract weight per chapter from RAG context. Fallback to equal weights."""
-        import re
+    def _extract_chapter_weights(self, subject_name: str, chapters_info: list) -> dict:
+        """Map cadre-de-référence DOMAIN weights → per-chapter weights.
+
+        Uses the structured ``rag.get_exam_weights_data()`` dump (already parsed
+        from the official 'cadres de référence' PDFs) and matches each chapter
+        title against a domain keyword set. Domain weight is then divided
+        equally across the chapters that map to it.
+
+        Returns ``{chapter_number: relative_weight_int}`` or ``{}`` if nothing
+        could be extracted — in which case ``_build_question_plan`` falls back
+        to an equal distribution.
+        """
+        try:
+            rag = get_rag_service()
+            weights_data = rag.get_exam_weights_data() or {}
+        except Exception as e:
+            print(f"[Diagnostic] get_exam_weights_data failed: {e}")
+            return {}
+
+        if not weights_data:
+            return {}
+
+        # Pick the right subject bucket(s).
+        sl = (subject_name or "").lower()
+        candidates: list[dict] = []
+        if 'physique-chimie' in sl or sl in ('pc', 'physique chimie'):
+            candidates += [weights_data.get('Physique') or {}, weights_data.get('Chimie') or {}]
+        elif 'physique' in sl:
+            candidates.append(weights_data.get('Physique') or {})
+        elif 'chimie' in sl:
+            candidates.append(weights_data.get('Chimie') or {})
+        elif 'svt' in sl or 'biologie' in sl or 'vie' in sl:
+            candidates.append(weights_data.get('SVT') or {})
+        elif 'math' in sl:
+            candidates.append(weights_data.get('Mathématiques') or {})
+
+        # Flatten domain → raw-weight string across candidates.
+        domain_weights: dict[str, float] = {}
+        for bucket in candidates:
+            for dname, raw in (bucket.get('domains') or {}).items():
+                m = re.search(r'(\d+(?:[\.,]\d+)?)', str(raw))
+                if m:
+                    try:
+                        domain_weights[dname] = float(m.group(1).replace(',', '.'))
+                    except ValueError:
+                        continue
+
+        if not domain_weights:
+            return {}
+
+        # Stop-words we don't want to count in fuzzy keyword matching.
+        _STOP = {"de", "la", "le", "les", "du", "des", "et", "à", "au", "aux",
+                 "un", "une", "d", "l", "en", "dans", "sur"}
+
+        def _kw(s: str) -> list[str]:
+            return [w for w in re.findall(r"[\wÀ-ÿ]+", (s or "").lower())
+                    if len(w) > 3 and w not in _STOP]
+
+        # First pass: find best domain per chapter.
+        chapter_to_domain: dict[int, str] = {}
+        for ch in chapters_info:
+            ch_title = ch.get('title', '')
+            ch_num = ch.get('number')
+            if ch_num is None:
+                continue
+            title_kw = _kw(ch_title)
+            best_domain: str | None = None
+            best_score = 0
+            for dname in domain_weights:
+                d_kw = _kw(dname)
+                if not d_kw:
+                    continue
+                score = sum(1 for w in d_kw if w in title_kw)
+                if score > best_score:
+                    best_score, best_domain = score, dname
+            if best_domain:
+                chapter_to_domain[ch_num] = best_domain
+
+        if not chapter_to_domain:
+            return {}
+
+        # Second pass: divide each domain's weight across the chapters that mapped to it.
+        domain_chapter_count: dict[str, int] = {}
+        for d in chapter_to_domain.values():
+            domain_chapter_count[d] = domain_chapter_count.get(d, 0) + 1
+
         weights: dict = {}
-        if rag_context:
-            # Match patterns like "Chapitre X ... 27%" or "chapter X: 25%"
-            for ch in chapters_info:
-                title = ch.get('title', '').lower()
-                num = ch.get('number', 0)
-                # Search for the chapter's weight in the context
-                patterns = [
-                    rf"chapitre\s*{num}[^%]{{0,200}}?(\d{{1,2}})\s*%",
-                    rf"{re.escape(title[:30])}[^%]{{0,200}}?(\d{{1,2}})\s*%",
-                ]
-                for p in patterns:
-                    m = re.search(p, rag_context.lower())
-                    if m:
-                        try:
-                            weights[num] = int(m.group(1))
-                            break
-                        except ValueError:
-                            pass
+        for ch_num, dname in chapter_to_domain.items():
+            per_chapter = domain_weights[dname] / max(1, domain_chapter_count[dname])
+            weights[ch_num] = max(1, int(round(per_chapter)))
+
+        # Unmapped chapters get at least weight=1 so they're not excluded.
+        for ch in chapters_info:
+            n = ch.get('number')
+            if n is not None and n not in weights:
+                weights[n] = 1
+
         return weights
 
     def _build_question_plan(
@@ -460,6 +538,13 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
                           6: 'association', 7: 'qcm', 8: 'vrai_faux', 9: 'qcm'}
         target_type = _type_rotation.get(idx % 10, 'qcm')
 
+        # ── Rotate BAC years so the 10 questions don't all come from 2025 ──
+        # Cycle through 2025 → 2020 → 2024 → 2021 → 2023 → 2022 → … to ensure
+        # at least 4-5 distinct years are represented in one diagnostic.
+        _year_rotation = ["2025", "2020", "2024", "2021", "2023", "2022",
+                          "2025", "2021", "2024", "2023"]
+        preferred_year = _year_rotation[idx % len(_year_rotation)]
+
         # ── Get target chapter from plan ──
         plan = session.get('question_plan', [])
         plan_cursor = session.get('plan_cursor', 0)
@@ -502,6 +587,7 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
                 years=["2020", "2021", "2022", "2023", "2024", "2025"],
                 exclude_topics=generated_topics + session['tested_topics'],
                 exclude_question_texts=(session['previous_q_heads'] + generated_heads)[:20],
+                preferred_year=preferred_year,
             )
         except Exception as e:
             print(f"[Diagnostic] Could not fetch exam inspiration: {e}")

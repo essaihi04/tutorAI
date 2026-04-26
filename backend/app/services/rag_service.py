@@ -1524,6 +1524,7 @@ Thèmes abordés:
         years: Optional[list[str]] = None,
         exclude_topics: Optional[list[str]] = None,
         exclude_question_texts: Optional[list[str]] = None,
+        preferred_year: Optional[str] = None,
     ) -> list[dict]:
         """Return up to `n` real BAC exam questions to inspire diagnostic generation.
 
@@ -1531,7 +1532,9 @@ Thèmes abordés:
           1. Filter doc_type=='exam' AND type=='exam_question' for the subject.
           2. Drop questions whose topic matches exclude_topics (case-insensitive).
           3. Drop questions whose text fuzzy-matches exclude_question_texts.
-          4. Prefer recent years (sort desc), then diversify topics (round-robin).
+          4. If ``preferred_year`` is set, bring matching-year items to the front
+             (for year diversification across successive generations); otherwise
+             prefer recent years (sort desc). Then diversify topics (round-robin).
 
         Each returned item contains: {src_id, text, topic, year, session, question_index}.
         """
@@ -1567,14 +1570,17 @@ Thèmes abordés:
                 continue
             candidates.append(doc)
 
-        # Sort by year desc (recent first), then by question_index asc
+        # Sort: preferred year first (if set), then year desc, then question_index.
+        pref = str(preferred_year) if preferred_year else None
+
         def _sort_key(d: dict):
-            yr = d.get("exam_year") or "0"
+            yr_raw = str(d.get("exam_year") or "0")
             try:
-                yr_num = int(str(yr))
+                yr_num = int(yr_raw)
             except ValueError:
                 yr_num = 0
-            return (-yr_num, d.get("question_index", 0))
+            pref_bucket = 0 if (pref and yr_raw == pref) else 1
+            return (pref_bucket, -yr_num, d.get("question_index", 0))
 
         candidates.sort(key=_sort_key)
 
