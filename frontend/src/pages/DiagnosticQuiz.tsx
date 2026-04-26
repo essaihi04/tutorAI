@@ -9,10 +9,90 @@ import {
   BookOpen, ShieldCheck, Heart, Coffee, Lightbulb
 } from 'lucide-react';
 
+// ── Custom dropdown that supports LaTeX rendering inside options ──
+// (Native <select><option> cannot render JSX, so we build our own.)
+const LatexDropdown = ({
+  value,
+  options,
+  onChange,
+  placeholder = 'Choisir…',
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative flex-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full p-3 rounded-lg border-2 transition-all flex items-center justify-between gap-2 text-sm ${
+          value
+            ? 'border-blue-400/40 bg-blue-500/10 text-white'
+            : 'border-white/10 bg-white/[.04] text-white/55 hover:border-white/20 hover:bg-white/[.06]'
+        }`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="flex-1 text-left truncate">
+          {value ? <LatexRenderer content={value} /> : <span className="italic">{placeholder}</span>}
+        </span>
+        <ArrowRight className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : 'rotate-90 opacity-50'}`} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 right-0 mt-1 z-30 rounded-lg border border-white/10 bg-[#0e1024] shadow-2xl shadow-black/40 max-h-64 overflow-y-auto anim-card-in"
+        >
+          {options.map((opt, i) => {
+            const isSelected = opt === value;
+            return (
+              <button
+                key={i}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => { onChange(opt); setOpen(false); }}
+                className={`w-full text-left p-3 text-sm border-b border-white/5 last:border-b-0 transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? 'bg-blue-600/30 text-white'
+                    : 'text-white/85 hover:bg-white/[.06]'
+                }`}
+              >
+                {isSelected && <Check className="w-3.5 h-3.5 text-blue-300 flex-shrink-0" />}
+                <span className="flex-1 min-w-0"><LatexRenderer content={opt} /></span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Association question component
 const AssociationQuestion = ({ q, answer, onChange }: { q: Question; answer: Record<string, string>; onChange: (m: Record<string, string>) => void }) => {
   if (!q.pairs) return null;
   const pairs = q.pairs as Array<{ left: string; right: string }>;
+  const allRights = pairs.map((p) => p.right);
 
   const handleSelect = (left: string, right: string) => {
     onChange({ ...answer, [left]: right });
@@ -22,20 +102,15 @@ const AssociationQuestion = ({ q, answer, onChange }: { q: Question; answer: Rec
     <div className="space-y-3">
       {pairs.map((pair, idx) => (
         <div key={idx} className="flex items-center gap-3">
-          <div className="flex-1 p-3 glass rounded-lg">
+          <div className="flex-1 p-3 rounded-lg bg-white/[.04] border border-white/10">
             <span className="text-sm text-white"><LatexRenderer content={pair.left} /></span>
           </div>
-          <span className="text-white/40">→</span>
-          <select
+          <span className="text-white/40 text-lg">→</span>
+          <LatexDropdown
             value={answer[pair.left] || ''}
-            onChange={(e) => handleSelect(pair.left, e.target.value)}
-            className="flex-1 p-3 glass rounded-lg border-2 border-white/10 focus:border-indigo-400/60 focus:outline-none text-sm text-white"
-          >
-            <option value="">Choisir...</option>
-            {pairs.map((p, i) => (
-              <option key={i} value={p.right}>{p.right}</option>
-            ))}
-          </select>
+            options={allRights}
+            onChange={(v) => handleSelect(pair.left, v)}
+          />
         </div>
       ))}
     </div>
