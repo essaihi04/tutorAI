@@ -5,7 +5,8 @@ import { getSubjects, startDiagnosticSession, nextDiagnosticQuestion, submitDiag
 import LatexRenderer from '../components/LatexRenderer';
 import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, Brain, BarChart3, Sparkles,
-  FileText, CheckCheck, HelpCircle, Check, X as XIcon
+  FileText, CheckCheck, HelpCircle, Check, X as XIcon,
+  BookOpen, ShieldCheck, Heart, Coffee, Lightbulb
 } from 'lucide-react';
 
 // Association question component
@@ -60,6 +61,7 @@ interface Question {
   pairs?: AssocPair[];
   bac_year?: string;
   domain?: string;
+  grounded_in?: string;
 }
 
 type Phase = 'intro' | 'preloading' | 'quiz' | 'submitting' | 'results' | 'generating';
@@ -272,49 +274,82 @@ export default function DiagnosticQuiz() {
             <ArrowLeft className="w-4 h-4" /> Retour au Dashboard
           </button>
 
-          <div className="glass-strong rounded-3xl shadow-xl p-10 overflow-hidden relative">
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-gradient-to-tr from-purple-400/20 to-pink-400/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="glass-strong rounded-3xl shadow-xl p-8 sm:p-10 overflow-hidden relative">
+            <div className="absolute -top-24 -right-24 w-72 h-72 bg-gradient-to-br from-blue-400/25 to-indigo-500/25 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-gradient-to-tr from-purple-400/20 to-pink-400/20 rounded-full blur-3xl pointer-events-none" />
 
             <div className="relative">
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl mb-6 shadow-lg shadow-blue-500/30">
-                <Brain className="w-10 h-10 text-white" />
+              {/* Hero icon + welcome chip */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl shadow-lg shadow-blue-500/30">
+                  <Brain className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 text-xs font-semibold">
+                  <Heart className="w-3.5 h-3.5" />
+                  Pas de stress, c'est sans pénalité
+                </span>
               </div>
-              <h1 className="text-4xl font-black text-white tracking-tight">Diagnostic Initial</h1>
-              <p className="text-white/70 mt-3 text-lg leading-relaxed">
-                Évalue ton niveau dans les <span className="font-semibold text-white">{subjects.length} matières</span> avec
-                des questions issues des examens nationaux <span className="font-semibold text-indigo-300">BAC 2020-2025</span>.
+
+              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+                On apprend à <span className="bg-gradient-to-r from-blue-300 to-indigo-300 bg-clip-text text-transparent">te connaître</span> !
+              </h1>
+              <p className="text-white/75 mt-3 text-base sm:text-lg leading-relaxed">
+                Avant de te proposer un programme sur-mesure, on va découvrir <span className="font-semibold text-white">tes points forts</span> et tes axes de progrès dans
+                {' '}<span className="font-semibold text-indigo-200">tes {subjects.length} matières</span>.
               </p>
 
-              <div className="grid sm:grid-cols-3 gap-4 mt-8">
-                <div className="flex items-start gap-3 p-4 rounded-2xl glass">
-                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-200 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5" />
+              {/* Reassurance row */}
+              <div className="grid sm:grid-cols-2 gap-3 mt-6">
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[.04] border border-white/10">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-200 flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="w-4 h-4" />
                   </div>
-                  <div>
-                    <div className="font-bold text-white text-sm">10 questions</div>
-                    <div className="text-xs text-white/55">par matière</div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 rounded-2xl glass">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-200 flex items-center justify-center flex-shrink-0">
-                    <CheckCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-sm">QCM · V/F · Assoc.</div>
-                    <div className="text-xs text-white/55">types variés</div>
+                  <div className="text-xs sm:text-sm">
+                    <div className="font-bold text-white">Questions BAC 2020-2025</div>
+                    <div className="text-white/60">issues du programme officiel marocain</div>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-4 rounded-2xl glass">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-200 flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-5 h-5" />
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[.04] border border-white/10">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-200 flex items-center justify-center flex-shrink-0">
+                    <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <div>
-                    <div className="font-bold text-white text-sm">Plan IA</div>
-                    <div className="text-xs text-white/55">personnalisé</div>
+                  <div className="text-xs sm:text-sm">
+                    <div className="font-bold text-white">Tu peux dire « je ne sais pas »</div>
+                    <div className="text-white/60">sans aucune pénalité</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[.04] border border-white/10">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-200 flex items-center justify-center flex-shrink-0">
+                    <Coffee className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs sm:text-sm">
+                    <div className="font-bold text-white">~3 minutes par matière</div>
+                    <div className="text-white/60">{subjects.length * 10} questions au total · pause autorisée</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[.04] border border-white/10">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-200 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs sm:text-sm">
+                    <div className="font-bold text-white">Plan personnalisé à la fin</div>
+                    <div className="text-white/60">l'IA construit ta feuille de route</div>
                   </div>
                 </div>
               </div>
+
+              {/* Subjects preview */}
+              {subjects.length > 0 && (
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-white/55">Matières :</span>
+                  {subjects.map((s) => (
+                    <span key={s.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[.06] border border-white/10 text-xs font-semibold text-white/85">
+                      <span>{s.icon}</span>
+                      <span>{s.name_fr}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {error && (
                 <div className="mt-6 p-4 bg-red-500/15 border border-red-400/30 rounded-xl text-red-200 text-sm">{error}</div>
@@ -323,14 +358,15 @@ export default function DiagnosticQuiz() {
               <button
                 onClick={startFullDiagnostic}
                 disabled={!subjects.length}
-                className="mt-10 w-full group relative px-8 py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 hover:shadow-2xl hover:shadow-indigo-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                className="mt-8 w-full group relative px-8 py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 hover:shadow-2xl hover:shadow-indigo-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               >
                 <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-                Commencer le diagnostic complet
+                C'est parti — je commence
                 <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </button>
-              <p className="text-xs text-white/55 text-center mt-3">
-                Les {subjects.length} matières sont générées en parallèle pour démarrer plus vite.
+              <p className="text-xs text-white/55 text-center mt-3 flex items-center justify-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5" />
+                Les {subjects.length} matières se préparent en parallèle pour démarrer en quelques secondes.
               </p>
             </div>
           </div>
@@ -513,36 +549,57 @@ export default function DiagnosticQuiz() {
             <div className="mb-4 p-3 bg-red-500/15 border border-red-400/30 rounded-lg text-red-200 text-xs">{error}</div>
           )}
 
-          {/* Single question card */}
-          <div className={`glass-strong rounded-2xl shadow-lg border-2 transition-all ${
-            isCurrentAnswered ? 'border-emerald-400/30' : 'border-white/10'
-          }`}>
+          {/* Single question card — animates on each new question */}
+          <div
+            key={`q-${currentSubject?.id}-${currentQuestionIndex}`}
+            className={`relative glass-strong rounded-2xl shadow-xl border-2 transition-colors anim-card-in ${
+              isCurrentAnswered ? 'border-emerald-400/30' : 'border-white/10'
+            }`}
+          >
+            {/* Subtle ambient glow */}
+            <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full" />
+
             {/* Question header */}
-            <div className="flex items-start justify-between gap-3 p-4 pb-3 border-b border-white/5">
+            <div className="relative flex items-start justify-between gap-3 p-5 pb-3 border-b border-white/5">
               <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 ${
-                  isCurrentAnswered ? 'bg-emerald-500 text-white shadow-md' : 'bg-white/5 text-white/70'
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0 transition-all ${
+                  isCurrentAnswered
+                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                    : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
                 }`}>
                   {currentQuestionIndex + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-bold text-white leading-snug">
+                  {/* Provenance + meta badges row */}
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    {currentSubject && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[.06] border border-white/10 text-[10px] font-semibold text-white/80">
+                        <span>{currentSubject.icon}</span>
+                        <span>{currentSubject.name_fr}</span>
+                      </span>
+                    )}
+                    {currentQ.bac_year && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-bold text-indigo-200">
+                        <BookOpen className="w-3 h-3" />
+                        Inspiré du BAC {currentQ.bac_year}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wide ${difficultyBadge(currentQ.difficulty)}`}>
+                      {currentQ.difficulty}
+                    </span>
+                    <span className="text-[10px] font-semibold text-white/65 bg-white/[.04] border border-white/10 px-2 py-0.5 rounded-full">
+                      {currentQ.type === 'vrai_faux' ? 'Vrai / Faux' : currentQ.type === 'association' ? 'Association' : 'QCM'}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-semibold text-white leading-relaxed">
                     <LatexRenderer content={currentQ.question} />
                   </h3>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${difficultyBadge(currentQ.difficulty)}`}>
-                  {currentQ.difficulty}
-                </span>
-                <span className="text-[9px] font-semibold text-white/55 glass border border-white/10 px-2 py-0.5 rounded">
-                  {currentQ.type === 'vrai_faux' ? 'V/F' : currentQ.type === 'association' ? 'Assoc' : 'QCM'}
-                </span>
-              </div>
             </div>
 
             {/* Body */}
-            <div className="p-4">
+            <div className="relative p-5">
               {currentQ.type === 'vrai_faux' ? (
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -551,15 +608,15 @@ export default function DiagnosticQuiz() {
                   ].map(({ val, label, Icon, color }) => {
                     const selected = currentAns === val;
                     const base = color === 'emerald'
-                      ? (selected ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200 shadow-md' : 'border-white/10 text-white/70 hover:border-emerald-400/40 hover:bg-emerald-500/10')
-                      : (selected ? 'border-rose-400/60 bg-rose-500/15 text-rose-200 shadow-md' : 'border-white/10 text-white/70 hover:border-rose-400/40 hover:bg-rose-500/10');
+                      ? (selected ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200 shadow-md scale-[1.02]' : 'border-white/10 text-white/80 hover:border-emerald-400/40 hover:bg-emerald-500/10')
+                      : (selected ? 'border-rose-400/60 bg-rose-500/15 text-rose-200 shadow-md scale-[1.02]' : 'border-white/10 text-white/80 hover:border-rose-400/40 hover:bg-rose-500/10');
                     return (
                       <button
                         key={val}
                         onClick={() => setAnswerAt(currentQuestionIndex, val)}
-                        className={`p-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 font-bold text-base ${base}`}
+                        className={`p-5 rounded-2xl border-2 transition-all flex items-center justify-center gap-2.5 font-bold text-lg active:scale-[0.98] ${base}`}
                       >
-                        <Icon className="w-5 h-5" />
+                        <Icon className="w-6 h-6" />
                         {label}
                       </button>
                     );
@@ -572,7 +629,7 @@ export default function DiagnosticQuiz() {
                   onChange={(m) => setAnswerAt(currentQuestionIndex, m)}
                 />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {currentQ.options.map((option, index) => {
                     const letter = String.fromCharCode(65 + index);
                     const isSelected = currentAns === letter;
@@ -580,35 +637,46 @@ export default function DiagnosticQuiz() {
                       <button
                         key={index}
                         onClick={() => setAnswerAt(currentQuestionIndex, letter)}
-                        className={`w-full text-left p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                        className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all flex items-center gap-3 active:scale-[0.99] ${
                           isSelected
-                            ? 'border-blue-400/30 bg-blue-500/15 shadow-sm'
-                            : 'border-white/10 hover:border-blue-400 hover:bg-white/[.06]'
+                            ? 'border-blue-400/60 bg-blue-500/15 shadow-md shadow-blue-500/20'
+                            : 'border-white/10 hover:border-blue-400/50 hover:bg-white/[.06]'
                         }`}
                       >
-                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 transition-colors ${
-                          isSelected ? 'bg-blue-600 text-white' : 'bg-white/5 text-white/70'
+                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0 transition-all ${
+                          isSelected ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-white/5 text-white/70'
                         }`}>
                           {letter}
                         </span>
-                        <span className="text-white text-sm leading-snug"><LatexRenderer content={option} /></span>
+                        <span className="text-white text-sm sm:text-base leading-relaxed flex-1">
+                          <LatexRenderer content={option} />
+                        </span>
+                        {isSelected && <Check className="w-4 h-4 text-blue-300 flex-shrink-0" />}
                       </button>
                     );
                   })}
                   <button
                     onClick={() => setAnswerAt(currentQuestionIndex, 'X')}
-                    className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center gap-2 text-xs ${
+                    className={`w-full text-left p-3 rounded-xl border-2 transition-all flex items-center gap-2 text-xs sm:text-sm ${
                       currentAns === 'X'
                         ? 'border-slate-500 bg-white/5 text-white/85'
-                        : 'border-dashed border-white/10 hover:border-white/15 text-white/55'
+                        : 'border-dashed border-white/15 hover:border-white/25 text-white/60 hover:text-white/80 hover:bg-white/[.03]'
                     }`}
                   >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    <span className="italic">Je ne sais pas</span>
+                    <HelpCircle className="w-4 h-4" />
+                    <span className="italic">Je ne sais pas — ce n'est pas grave</span>
                   </button>
                 </div>
               )}
             </div>
+
+            {/* Subtle encouragement footer */}
+            {!isCurrentAnswered && (
+              <div className="px-5 pb-4 pt-1 text-[11px] text-white/45 italic flex items-center gap-1.5">
+                <Lightbulb className="w-3 h-3" />
+                Prends ton temps. C'est juste pour t'aider à progresser.
+              </div>
+            )}
           </div>
 
           {/* Navigation bar */}

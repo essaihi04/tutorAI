@@ -133,6 +133,58 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
             print(f"[Diagnostic] RAG context error for {subject_name}: {e}")
             return ""
 
+    def _get_chapter_course_excerpts(
+        self,
+        subject_name: str,
+        chapter_title: str,
+        n: int = 3,
+    ) -> list[dict]:
+        """Pull up to ``n`` COURSE chunks (lessons, not exams) for the target
+        chapter, used to ground question generation in the indexed course PDFs.
+
+        Returns a list of ``{text, source, page}`` dicts (text already truncated).
+        """
+        if not chapter_title:
+            return []
+        try:
+            rag = get_rag_service()
+            # Over-fetch then filter — search() doesn't filter by subject server-side.
+            hits = rag.search(chapter_title, top_k=20)
+            subj_lower = (subject_name or "").lower()
+            picked: list[dict] = []
+            seen_sources: set[str] = set()
+            for h in hits:
+                # Drop exam questions and the cadre de référence — keep only lessons/courses.
+                if h.get("doc_type") in ("exam", "cadre_reference"):
+                    continue
+                # Subject filter: tolerant match (Physique-Chimie ≈ Physique ≈ Chimie).
+                doc_subj = (h.get("subject") or "").lower()
+                if subj_lower and doc_subj:
+                    if subj_lower not in doc_subj and doc_subj not in subj_lower:
+                        # Allow Physique-Chimie source for Physique or Chimie subject.
+                        if not (("physique" in doc_subj and "chimie" in doc_subj)
+                                and (subj_lower in ("physique", "chimie"))):
+                            continue
+                # Avoid stacking 3 chunks from the same source page.
+                key = f"{h.get('source', '')}::{h.get('page', '')}"
+                if key in seen_sources:
+                    continue
+                seen_sources.add(key)
+                text = (h.get("text") or "").strip()
+                if len(text) < 60:  # too short to be useful
+                    continue
+                picked.append({
+                    "text": text[:500],  # truncate to keep prompt budget
+                    "source": h.get("source", ""),
+                    "page": h.get("page", ""),
+                })
+                if len(picked) >= n:
+                    break
+            return picked
+        except Exception as e:
+            print(f"[Diagnostic] Course excerpt error for {subject_name}/{chapter_title}: {e}")
+            return []
+
     def _get_tested_concepts(
         self,
         student_id: str,
@@ -426,17 +478,38 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
             print(f"[Diagnostic] Could not fetch exam inspiration: {e}")
             exam_inspiration = []
 
-        # Build inspiration section
+        # Build inspiration section — these are REAL BAC questions the LLM must
+        # transform/adapt rather than invent from scratch.
         inspiration_section = ""
+        primary_bac_year = ""
         if exam_inspiration:
-            inspiration_section = "\n\nEXEMPLES DE QUESTIONS RÉELLES BAC 2020-2025:\n"
+            primary_bac_year = str(exam_inspiration[0].get("year") or "")
+            inspiration_section = "\n\n📚 SOURCES BAC RÉELLES (transforme l'une de ces questions en QCM/V-F) :\n"
             for i, ex in enumerate(exam_inspiration, 1):
-                head = (ex.get("text") or "")[:260].replace("\n", " ")
+                head = (ex.get("text") or "")[:280].replace("\n", " ")
                 inspiration_section += (
-                    f"\n[Exemple {i} — BAC {ex.get('year')}"
+                    f"\n[Source {i} — BAC {ex.get('year')} {ex.get('session') or 'normale'}"
                     + (f", topic: {ex['topic']}" if ex.get('topic') else "")
                     + f"]\n{head}...\n"
                 )
+
+        # ── Pull COURSE excerpts for the target chapter (lessons indexed in RAG) ──
+        course_section = ""
+        if target_chapter and target_chapter.get('title'):
+            course_excerpts = self._get_chapter_course_excerpts(
+                session['subject_name'],
+                target_chapter.get('title', ''),
+                n=3,
+            )
+            if course_excerpts:
+                course_section = "\n\n📖 EXTRAITS DU COURS OFFICIEL INDEXÉ (utilise EXACTEMENT ce vocabulaire et ces définitions) :\n"
+                for i, ex in enumerate(course_excerpts, 1):
+                    src = ex.get("source", "")
+                    page = ex.get("page", "")
+                    head = ex["text"].replace("\n", " ")
+                    course_section += (
+                        f"\n[Cours {i} — {src}{f', p.{page}' if page else ''}]\n{head}\n"
+                    )
 
         # Build rag section
         rag_section = ""
@@ -446,22 +519,29 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
 CADRE DE RÉFÉRENCE OFFICIEL DU BAC MAROCAIN POUR {session['subject_name'].upper()}:
 {session['rag_context']}"""
 
-        # Generate 1 question
+        # Generate 1 question — strictly grounded in BAC sources + course excerpts
         prompt = f"""Tu es un expert du BAC marocain 2ème année Sciences Physiques BIOF.
 
-Génère 1 question QCM de diagnostic ORIGINALE pour la matière {session['subject_name']}.
+🎯 TÂCHE : Génère 1 question de diagnostic STRICTEMENT FIDÈLE au cours marocain et inspirée des questions BAC réelles ci-dessous.
 
-PROGRAMME OFFICIEL:{session['chapters_context']}{rag_section}{target_chapter_section}{inspiration_section}
+PROGRAMME OFFICIEL:{session['chapters_context']}{rag_section}{target_chapter_section}{course_section}{inspiration_section}
 
-RÈGLES (STRICT):
+⚠️ RÈGLES DE GROUNDAGE (NON NÉGOCIABLES) :
+- Tu DOIS t'appuyer sur les [Source N — BAC ...] et [Cours N — ...] ci-dessus.
+- INTERDIT d'inventer un concept, une formule, une définition ou une grandeur qui ne figure NI dans le cours indexé NI dans le programme officiel.
+- INTERDIT de poser une question hors-programme (ex. notion de prépa, niveau supérieur).
+- Les valeurs numériques, unités, symboles doivent être ceux du cours officiel marocain.
+
+RÈGLES PÉDAGOGIQUES :
 1. Question basée sur un concept DIFFÉRENT des questions déjà générées dans cette session
 2. Type: QCM avec 4 options (A, B, C, D) ou vrai/faux
 3. Teste la COMPRÉHENSION, pas la mémorisation pure
 4. Niveau: facile ou moyen (difficile seulement si nécessaire)
-5. La question DOIT porter sur le CHAPITRE CIBLE indiqué ci-dessus (si précisé){variation_instruction}
+5. La question DOIT porter sur le CHAPITRE CIBLE indiqué ci-dessus (si précisé)
+6. Distracteurs (mauvaises options) = erreurs FRÉQUENTES d'élèves marocains, pas absurdes{variation_instruction}
 {self._MATH_FORMAT_INSTRUCTION}
 
-FORMAT JSON STRICT (1 seule question):
+FORMAT JSON STRICT (1 seule question, pas de texte hors JSON):
 {{
   "question": "énoncé clair et précis",
   "type": "qcm",
@@ -469,8 +549,12 @@ FORMAT JSON STRICT (1 seule question):
   "correct_answer": "A",
   "topic": "nom_concept_précis",
   "chapter_number": {target_chapter.get('number', 1) if target_chapter else 1},
-  "difficulty": "facile"
-}}"""
+  "difficulty": "facile",
+  "bac_year": "{primary_bac_year or '2024'}",
+  "grounded_in": "course"
+}}
+
+Le champ "bac_year" DOIT être l'année de la [Source] BAC dont tu t'es inspiré (ou l'année la plus récente d'un concept testé fréquemment)."""
 
         response = await llm_service.chat(
             messages=[{"role": "user", "content": prompt}],
