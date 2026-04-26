@@ -1494,8 +1494,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           ) : showExercise && currentExercise ? (
             <>
-              {/* Small floating avatar pip */}
-              <div className="absolute top-2 right-2 z-20 transition-all duration-500">
+              {/* Small floating avatar pip — pointer-events-none so its unscaled 220×220 box doesn't block clicks below */}
+              <div className="absolute top-2 right-2 z-20 transition-all duration-500 pointer-events-none">
                 <div className="scale-[0.4] origin-top-right">
                   <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
                 </div>
@@ -1595,8 +1595,9 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           ) : showWhiteboard && (whiteboardData || whiteboardSchemaId || boardContent) ? (
             <>
-              {/* Small floating avatar pip — bottom-right so it doesn't block toolbar buttons (Print/PDF) */}
-              <div className="absolute bottom-3 right-3 z-20 transition-all duration-500">
+              {/* Small floating avatar pip — pointer-events-none: its unscaled 220×220 box would otherwise cover
+                  the QuickActions / VoiceInput / send-text button on phones, intercepting all taps. */}
+              <div className="absolute bottom-3 right-3 z-20 transition-all duration-500 pointer-events-none">
                 <div className="scale-[0.35] origin-bottom-right">
                   <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
                 </div>
@@ -1642,8 +1643,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           ) : showMedia && currentMedia ? (
             <>
-              {/* Small floating avatar pip */}
-              <div className="absolute top-2 right-2 z-20 transition-all duration-500">
+              {/* Small floating avatar pip — pointer-events-none so its unscaled 220×220 box doesn't block clicks below */}
+              <div className="absolute top-2 right-2 z-20 transition-all duration-500 pointer-events-none">
                 <div className="scale-[0.4] origin-top-right">
                   <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
                 </div>
