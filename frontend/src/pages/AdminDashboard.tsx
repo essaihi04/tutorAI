@@ -92,15 +92,15 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
   icon: any; label: string; value: string | number; sub?: string; color: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500 font-medium">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] sm:text-sm text-gray-500 font-medium truncate">{label}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-0.5 sm:mt-1 truncate">{value}</p>
+          {sub && <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 truncate">{sub}</p>}
         </div>
-        <div className={`p-3 rounded-xl ${color}`}>
-          <Icon className="w-5 h-5 text-white" />
+        <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0 ${color}`}>
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
         </div>
       </div>
     </div>
@@ -231,7 +231,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom complet</label>
               <div className="relative">
@@ -576,57 +576,61 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-600 rounded-xl">
-                <Shield className="w-5 h-5 text-white" />
+        <div className="max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="p-1.5 sm:p-2 bg-red-600 rounded-lg sm:rounded-xl flex-shrink-0">
+                <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">Admin Dashboard</h1>
-                <p className="text-xs text-gray-500 font-brand">معلم</p>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-gray-900 truncate">Admin Dashboard</h1>
+                <p className="text-[10px] sm:text-xs text-gray-500 font-brand">معلم</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Online indicator */}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full">
+            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+              {/* Online indicator (icon only on mobile) */}
+              <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-green-50 rounded-full">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-sm font-medium text-green-700">{onlineInfo.online_count} en ligne</span>
+                <span className="text-xs sm:text-sm font-medium text-green-700">
+                  {onlineInfo.online_count}<span className="hidden sm:inline"> en ligne</span>
+                </span>
               </div>
               {/* Auto refresh */}
               <button onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`p-2 rounded-lg transition-colors ${autoRefresh ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${autoRefresh ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
                 title={autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}>
                 <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} style={autoRefresh ? { animationDuration: '3s' } : {}} />
               </button>
               {/* Manual refresh */}
               <button onClick={() => { loadData(); loadUsageData(); }}
-                className={`p-2 hover:bg-gray-100 rounded-lg ${dataLoading ? 'animate-pulse' : ''}`} title="Rafraîchir">
+                className={`p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg ${dataLoading ? 'animate-pulse' : ''}`} title="Rafraîchir">
                 <RefreshCw className={`w-4 h-4 ${dataLoading ? 'animate-spin' : ''}`} />
               </button>
               {/* Exam Extractor link */}
               <a href="/admin/exam-extractor"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg">
-                <FileUp className="w-4 h-4" /> Extraire PDF
+                title="Extraire PDF"
+                className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm text-purple-600 hover:bg-purple-50 rounded-lg">
+                <FileUp className="w-4 h-4" /> <span className="hidden md:inline">Extraire PDF</span>
               </a>
               <button onClick={handleLogout}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
-                <LogOut className="w-4 h-4" /> Déconnexion
+                title="Déconnexion"
+                className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg">
+                <LogOut className="w-4 h-4" /> <span className="hidden md:inline">Déconnexion</span>
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Tabs */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border mb-6">
+      <div className="max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+        {/* Tabs — horizontally scrollable on mobile, equal-width from sm+ */}
+        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border mb-4 sm:mb-6 overflow-x-auto">
           {tabs.map(t => (
             <button key={t.key} onClick={() => { setActiveTab(t.key); if (t.key === 'usage' || t.key === 'requests') loadUsageData(); }}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`sm:flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap ${
                 activeTab === t.key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}>
-              <t.icon className="w-4 h-4" /> {t.label}
+              <t.icon className="w-4 h-4 flex-shrink-0" /> <span>{t.label}</span>
             </button>
           ))}
         </div>
