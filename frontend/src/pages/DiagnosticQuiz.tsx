@@ -5,7 +5,7 @@ import { getSubjects, startDiagnosticSession, nextDiagnosticQuestion, submitDiag
 import LatexRenderer from '../components/LatexRenderer';
 import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, Brain, BarChart3, Sparkles,
-  FileText, CheckCheck, HelpCircle, Check, X as XIcon,
+  HelpCircle, Check, X as XIcon,
   BookOpen, ShieldCheck, Heart, Coffee, Lightbulb
 } from 'lucide-react';
 
@@ -560,12 +560,12 @@ export default function DiagnosticQuiz() {
     };
 
     return (
-      <div className="min-h-screen bg-[#070718] text-white relative overflow-hidden">
-        {/* Sticky header */}
-        <div className="sticky top-0 z-10 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5">
-          <div className="max-w-4xl mx-auto px-4 py-2">
+      <div className="h-[100dvh] bg-[#070718] text-white relative overflow-hidden flex flex-col">
+        {/* ── Sticky header (compact) ── */}
+        <div className="flex-shrink-0 backdrop-blur-2xl bg-[#070718]/70 border-b border-white/5">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-1.5 sm:py-2">
             {/* Subject navigation row */}
-            <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1">
+            <div className="flex items-center gap-1.5 mb-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
               {subjects.map((s, si) => {
                 const isCurrent = si === currentSubjectIndex;
                 const isCompleted = subjectScores[s.name_fr] !== undefined;
@@ -578,10 +578,9 @@ export default function DiagnosticQuiz() {
                       if (!isLocked && (subjectQuestions[s.id]?.length || 0) > 0) {
                         setCurrentSubjectIndex(si);
                         setCurrentQuestionIndex(0);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
                       }
                     }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ${
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold transition-all flex-shrink-0 ${
                       isCurrent
                         ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
                         : isCompleted
@@ -592,28 +591,26 @@ export default function DiagnosticQuiz() {
                     }`}
                   >
                     <span className="text-sm">{subjectIcon(s.icon)}</span>
-                    <span>{s.name_fr}</span>
+                    <span className="hidden sm:inline">{s.name_fr}</span>
+                    <span className="sm:hidden">{s.name_fr.slice(0, 4)}</span>
                     {isCompleted && <CheckCircle className="w-3 h-3" />}
                   </button>
                 );
               })}
             </div>
 
-            {/* Current subject info + question navigation */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div>
-                  <p className="text-[10px] text-white/55">
-                    Question {currentQuestionIndex + 1}/{TOTAL_QUESTIONS} · {answeredCount} répondues
-                    {preloadDone < subjects.length && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-indigo-300">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        {preloadDone}/{subjects.length}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
+            {/* Question counter + dots */}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] sm:text-[11px] text-white/55 flex-shrink-0">
+                Question <span className="text-white font-semibold">{currentQuestionIndex + 1}</span>/{TOTAL_QUESTIONS}
+                <span className="hidden sm:inline"> · {answeredCount} répondues</span>
+                {preloadDone < subjects.length && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-indigo-300">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {preloadDone}/{subjects.length}
+                  </span>
+                )}
+              </p>
               <div className="hidden sm:flex items-center gap-1">
                 {Array.from({ length: TOTAL_QUESTIONS }).map((_, i) => {
                   const a = currentAnswers[String(i)];
@@ -624,7 +621,7 @@ export default function DiagnosticQuiz() {
                       key={i}
                       disabled={!isAvailable}
                       onClick={() => isAvailable && goToQuestion(i)}
-                      className={`w-7 h-7 rounded text-[10px] font-bold transition-all ${
+                      className={`w-6 h-6 rounded text-[10px] font-bold transition-all ${
                         i === currentQuestionIndex
                           ? 'bg-blue-600 text-white shadow-md scale-110'
                           : isAnswered
@@ -640,7 +637,7 @@ export default function DiagnosticQuiz() {
                 })}
               </div>
             </div>
-            <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+            <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden mt-1">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500"
                 style={{ width: `${progress}%` }}
@@ -649,154 +646,151 @@ export default function DiagnosticQuiz() {
           </div>
         </div>
 
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          {error && (
-            <div className="mb-4 p-3 bg-red-500/15 border border-red-400/30 rounded-lg text-red-200 text-xs">{error}</div>
-          )}
-
-          {/* Single question card — animates on each new question */}
-          <div
-            key={`q-${currentSubject?.id}-${currentQuestionIndex}`}
-            className={`relative glass-strong rounded-2xl shadow-xl border-2 transition-colors anim-card-in ${
-              isCurrentAnswered ? 'border-emerald-400/30' : 'border-white/10'
-            }`}
-          >
-            {/* Subtle ambient glow */}
-            <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full" />
-
-            {/* Question header */}
-            <div className="relative flex items-start justify-between gap-3 p-5 pb-3 border-b border-white/5">
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0 transition-all ${
-                  isCurrentAnswered
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                    : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
-                }`}>
-                  {currentQuestionIndex + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {/* Provenance + meta badges row */}
-                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                    {currentSubject && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[.06] border border-white/10 text-[10px] font-semibold text-white/80">
-                        <span>{subjectIcon(currentSubject.icon)}</span>
-                        <span>{currentSubject.name_fr}</span>
-                      </span>
-                    )}
-                    {currentQ.bac_year && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[10px] font-bold text-indigo-200">
-                        <BookOpen className="w-3 h-3" />
-                        Inspiré du BAC {currentQ.bac_year}
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wide ${difficultyBadge(currentQ.difficulty)}`}>
-                      {currentQ.difficulty}
-                    </span>
-                    <span className="text-[10px] font-semibold text-white/65 bg-white/[.04] border border-white/10 px-2 py-0.5 rounded-full">
-                      {currentQ.type === 'vrai_faux' ? 'Vrai / Faux' : currentQ.type === 'association' ? 'Association' : 'QCM'}
-                    </span>
-                  </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-                    <LatexRenderer content={currentQ.question} />
-                  </h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="relative p-5">
-              {currentQ.type === 'vrai_faux' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { val: 'vrai', label: 'Vrai', Icon: Check, color: 'emerald' },
-                    { val: 'faux', label: 'Faux', Icon: XIcon, color: 'rose' },
-                  ].map(({ val, label, Icon, color }) => {
-                    const selected = currentAns === val;
-                    const base = color === 'emerald'
-                      ? (selected ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200 shadow-md scale-[1.02]' : 'border-white/10 text-white/80 hover:border-emerald-400/40 hover:bg-emerald-500/10')
-                      : (selected ? 'border-rose-400/60 bg-rose-500/15 text-rose-200 shadow-md scale-[1.02]' : 'border-white/10 text-white/80 hover:border-rose-400/40 hover:bg-rose-500/10');
-                    return (
-                      <button
-                        key={val}
-                        onClick={() => setAnswerAt(currentQuestionIndex, val)}
-                        className={`p-5 rounded-2xl border-2 transition-all flex items-center justify-center gap-2.5 font-bold text-lg active:scale-[0.98] ${base}`}
-                      >
-                        <Icon className="w-6 h-6" />
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : currentQ.type === 'association' && currentQ.pairs ? (
-                <AssociationQuestion
-                  q={currentQ}
-                  answer={(currentAns as Record<string, string>) || {}}
-                  onChange={(m) => setAnswerAt(currentQuestionIndex, m)}
-                />
-              ) : (
-                <div className="space-y-2.5">
-                  {currentQ.options.map((option, index) => {
-                    const letter = String.fromCharCode(65 + index);
-                    const isSelected = currentAns === letter;
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => setAnswerAt(currentQuestionIndex, letter)}
-                        className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all flex items-center gap-3 active:scale-[0.99] ${
-                          isSelected
-                            ? 'border-blue-400/60 bg-blue-500/15 shadow-md shadow-blue-500/20'
-                            : 'border-white/10 hover:border-blue-400/50 hover:bg-white/[.06]'
-                        }`}
-                      >
-                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0 transition-all ${
-                          isSelected ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-white/5 text-white/70'
-                        }`}>
-                          {letter}
-                        </span>
-                        <span className="text-white text-sm sm:text-base leading-relaxed flex-1">
-                          <LatexRenderer content={option} />
-                        </span>
-                        {isSelected && <Check className="w-4 h-4 text-blue-300 flex-shrink-0" />}
-                      </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => setAnswerAt(currentQuestionIndex, 'X')}
-                    className={`w-full text-left p-3 rounded-xl border-2 transition-all flex items-center gap-2 text-xs sm:text-sm ${
-                      currentAns === 'X'
-                        ? 'border-slate-500 bg-white/5 text-white/85'
-                        : 'border-dashed border-white/15 hover:border-white/25 text-white/60 hover:text-white/80 hover:bg-white/[.03]'
-                    }`}
-                  >
-                    <HelpCircle className="w-4 h-4" />
-                    <span className="italic">Je ne sais pas — ce n'est pas grave</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Subtle encouragement footer */}
-            {!isCurrentAnswered && (
-              <div className="px-5 pb-4 pt-1 text-[11px] text-white/45 italic flex items-center gap-1.5">
-                <Lightbulb className="w-3 h-3" />
-                Prends ton temps. C'est juste pour t'aider à progresser.
-              </div>
+        {/* ── Middle: question card fills available height ── */}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 py-2 sm:py-3">
+          <div className="max-w-3xl w-full mx-auto flex-1 min-h-0 flex flex-col">
+            {error && (
+              <div className="mb-2 p-2.5 bg-red-500/15 border border-red-400/30 rounded-lg text-red-200 text-xs flex-shrink-0">{error}</div>
             )}
-          </div>
 
-          {/* Navigation bar */}
-          <div className="mt-4 glass-strong rounded-xl shadow-lg p-3 flex items-center justify-between">
+            {/* Single question card — animates on each new question */}
+            <div
+              key={`q-${currentSubject?.id}-${currentQuestionIndex}`}
+              className={`relative glass-strong rounded-2xl shadow-xl border-2 transition-colors anim-card-in flex-1 min-h-0 flex flex-col overflow-hidden ${
+                isCurrentAnswered ? 'border-emerald-400/30' : 'border-white/10'
+              }`}
+            >
+              {/* Subtle ambient glow */}
+              <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full" />
+
+              {/* Question header (sticky inside card) */}
+              <div className="relative flex items-start justify-between gap-2 px-3 sm:px-4 pt-3 pb-2 border-b border-white/5 flex-shrink-0">
+                <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0 transition-all ${
+                    isCurrentAnswered
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                      : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
+                  }`}>
+                    {currentQuestionIndex + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {/* Provenance + meta badges row */}
+                    <div className="flex flex-wrap items-center gap-1 mb-1.5">
+                      {currentSubject && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/[.06] border border-white/10 text-[9px] sm:text-[10px] font-semibold text-white/80">
+                          <span>{subjectIcon(currentSubject.icon)}</span>
+                          <span className="hidden sm:inline">{currentSubject.name_fr}</span>
+                        </span>
+                      )}
+                      {currentQ.bac_year && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-[9px] sm:text-[10px] font-bold text-indigo-200">
+                          <BookOpen className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                          BAC {currentQ.bac_year}
+                        </span>
+                      )}
+                      <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wide ${difficultyBadge(currentQ.difficulty)}`}>
+                        {currentQ.difficulty}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] font-semibold text-white/65 bg-white/[.04] border border-white/10 px-1.5 py-0.5 rounded-full">
+                        {currentQ.type === 'vrai_faux' ? 'V/F' : currentQ.type === 'association' ? 'Assoc' : 'QCM'}
+                      </span>
+                    </div>
+                    <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-white leading-snug sm:leading-relaxed">
+                      <LatexRenderer content={currentQ.question} />
+                    </h3>
+                  </div>
+                </div>
+              </div>
+
+              {/* Body — scrolls only if it overflows */}
+              <div className="relative px-3 sm:px-4 py-3 flex-1 min-h-0 overflow-y-auto">
+                {currentQ.type === 'vrai_faux' ? (
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                    {[
+                      { val: 'vrai', label: 'Vrai', Icon: Check, color: 'emerald' },
+                      { val: 'faux', label: 'Faux', Icon: XIcon, color: 'rose' },
+                    ].map(({ val, label, Icon, color }) => {
+                      const selected = currentAns === val;
+                      const base = color === 'emerald'
+                        ? (selected ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200 shadow-md scale-[1.02]' : 'border-white/10 text-white/80 hover:border-emerald-400/40 hover:bg-emerald-500/10')
+                        : (selected ? 'border-rose-400/60 bg-rose-500/15 text-rose-200 shadow-md scale-[1.02]' : 'border-white/10 text-white/80 hover:border-rose-400/40 hover:bg-rose-500/10');
+                      return (
+                        <button
+                          key={val}
+                          onClick={() => setAnswerAt(currentQuestionIndex, val)}
+                          className={`p-4 sm:p-5 rounded-2xl border-2 transition-all flex items-center justify-center gap-2 font-bold text-base sm:text-lg active:scale-[0.98] ${base}`}
+                        >
+                          <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : currentQ.type === 'association' && currentQ.pairs ? (
+                  <AssociationQuestion
+                    q={currentQ}
+                    answer={(currentAns as Record<string, string>) || {}}
+                    onChange={(m) => setAnswerAt(currentQuestionIndex, m)}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {currentQ.options.map((option, index) => {
+                      const letter = String.fromCharCode(65 + index);
+                      const isSelected = currentAns === letter;
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => setAnswerAt(currentQuestionIndex, letter)}
+                          className={`w-full text-left p-2.5 sm:p-3.5 rounded-xl border-2 transition-all flex items-center gap-2.5 active:scale-[0.99] ${
+                            isSelected
+                              ? 'border-blue-400/60 bg-blue-500/15 shadow-md shadow-blue-500/20'
+                              : 'border-white/10 hover:border-blue-400/50 hover:bg-white/[.06]'
+                          }`}
+                        >
+                          <span className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-xs sm:text-sm font-black flex-shrink-0 transition-all ${
+                            isSelected ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-white/5 text-white/70'
+                          }`}>
+                            {letter}
+                          </span>
+                          <span className="text-white text-sm sm:text-base leading-snug sm:leading-relaxed flex-1">
+                            <LatexRenderer content={option} />
+                          </span>
+                          {isSelected && <Check className="w-4 h-4 text-blue-300 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => setAnswerAt(currentQuestionIndex, 'X')}
+                      className={`w-full text-left p-2 rounded-xl border-2 transition-all flex items-center gap-2 text-[11px] sm:text-xs ${
+                        currentAns === 'X'
+                          ? 'border-slate-500 bg-white/5 text-white/85'
+                          : 'border-dashed border-white/15 hover:border-white/25 text-white/55 hover:text-white/80 hover:bg-white/[.03]'
+                      }`}
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span className="italic">Je ne sais pas — ce n'est pas grave</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Bottom navigation (fixed footer) ── */}
+        <div className="flex-shrink-0 backdrop-blur-2xl bg-[#070718]/80 border-t border-white/5">
+          <div className="max-w-3xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2">
             <button
               onClick={handlePrev}
               disabled={currentQuestionIndex === 0}
-              className="px-4 py-2 bg-white/5 text-white/85 rounded-lg font-semibold hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all text-sm"
+              className="px-3 sm:px-4 py-2 bg-white/5 text-white/85 rounded-lg font-semibold hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all text-xs sm:text-sm"
             >
-              <ArrowLeft className="w-4 h-4" /> Précédent
+              <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Précédent</span>
             </button>
 
             <div className="text-center">
-              <div className="text-[10px] text-white/55">Progression</div>
-              <div className="font-bold text-white text-sm">
+              <div className="text-[9px] sm:text-[10px] text-white/55 leading-none">Progression</div>
+              <div className="font-bold text-white text-xs sm:text-sm leading-tight">
                 {answeredCount}/{TOTAL_QUESTIONS}
               </div>
             </div>
@@ -809,20 +803,20 @@ export default function DiagnosticQuiz() {
                 (isLastQuestion && !allAnswered) ||
                 (!isLastQuestion && currentQuestionIndex + 1 >= currentQuestions.length)
               }
-              className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/30 hover:shadow-xl disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all text-sm"
+              className="px-3 sm:px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/30 hover:shadow-xl disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all text-xs sm:text-sm"
             >
               {submitting ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Évaluer…</>
+                <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Évaluer…</span></>
               ) : !isLastQuestion ? (
                 currentQuestionIndex + 1 >= currentQuestions.length ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Chargement…</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Chargement…</span></>
                 ) : (
-                  <>Suivant <ArrowRight className="w-4 h-4" /></>
+                  <><span>Suivant</span> <ArrowRight className="w-4 h-4" /></>
                 )
               ) : currentSubjectIndex < subjects.length - 1 ? (
-                <>Matière suivante <ArrowRight className="w-4 h-4" /></>
+                <><span className="hidden sm:inline">Matière suivante</span><span className="sm:hidden">Suite</span> <ArrowRight className="w-4 h-4" /></>
               ) : (
-                <>Terminer <CheckCircle className="w-4 h-4" /></>
+                <><span>Terminer</span> <CheckCircle className="w-4 h-4" /></>
               )}
             </button>
           </div>
