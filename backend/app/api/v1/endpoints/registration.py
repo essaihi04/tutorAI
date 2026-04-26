@@ -149,31 +149,57 @@ async def activate_registration_request(
     prenom = (reg.get("prenom") or "").strip()
     nom = (reg.get("nom") or "").strip()
     full_name = f"{prenom} {nom}".strip() or "Étudiant"
+    digits = "".join(c for c in (reg.get("phone") or "") if c.isdigit())
 
-    # 2. Build email + username
-    email = (reg.get("email") or "").strip()
-    if not email:
-        # Generate a placeholder email from phone
-        digits = "".join(c for c in (reg.get("phone") or "") if c.isdigit())
-        email = f"{digits}@mou3allim.local"
+    # 2. Build canonical "prenom.nom" base (ascii lowercase, no spaces/accents/symbols)
+    def _slug(s: str) -> str:
+        s = s.lower().strip()
+        for fr, to in [
+            ("é","e"),("è","e"),("ê","e"),("ë","e"),
+            ("à","a"),("â","a"),("ä","a"),
+            ("ô","o"),("ö","o"),
+            ("î","i"),("ï","i"),
+            ("û","u"),("ü","u"),("ù","u"),
+            ("ç","c"),("ñ","n"),
+            ("œ","oe"),("æ","ae"),
+        ]:
+            s = s.replace(fr, to)
+        # keep only [a-z0-9-]
+        return "".join(ch for ch in s if ch.isalnum() or ch == "-")
 
-    username = (payload.username or "").strip()
-    if not username:
-        # Auto-generate: prenom.nom (lowered, ascii-ish)
-        base = f"{prenom}.{nom}".lower().replace(" ", "")
-        # Remove accents roughly
-        for fr, to in [("é","e"),("è","e"),("ê","e"),("à","a"),("â","a"),("ô","o"),("î","i"),("û","u"),("ç","c")]:
-            base = base.replace(fr, to)
-        username = base or f"user{digits[-4:]}"
+    slug_prenom = _slug(prenom)
+    slug_nom = _slug(nom)
+    base = f"{slug_prenom}.{slug_nom}".strip(".") or f"user{digits[-4:] or uuid.uuid4().hex[:4]}"
 
-    # 3. Check duplicates
-    dup_email = sb.table("students").select("id").eq("email", email).execute()
-    if dup_email.data:
-        raise HTTPException(400, f"L'email {email} est déjà utilisé par un autre compte")
-    dup_user = sb.table("students").select("id").eq("username", username).execute()
-    if dup_user.data:
-        # Append random suffix
-        username = f"{username}{uuid.uuid4().hex[:4]}"
+    username = (payload.username or "").strip() or base
+
+    # Canonical login email: nom.prenom@moalim.online (no longer phone-based)
+    email = f"{base}@moalim.online"
+
+    # 3. Resolve duplicates with numeric suffixes (1, 2, 3…)
+    def _email_taken(e: str) -> bool:
+        return bool(sb.table("students").select("id").eq("email", e).execute().data)
+
+    def _username_taken(u: str) -> bool:
+        return bool(sb.table("students").select("id").eq("username", u).execute().data)
+
+    if _email_taken(email):
+        for i in range(2, 100):
+            cand = f"{base}{i}@moalim.online"
+            if not _email_taken(cand):
+                email = cand
+                break
+        else:
+            email = f"{base}.{uuid.uuid4().hex[:4]}@moalim.online"
+
+    if _username_taken(username):
+        for i in range(2, 100):
+            cand = f"{base}{i}"
+            if not _username_taken(cand):
+                username = cand
+                break
+        else:
+            username = f"{base}{uuid.uuid4().hex[:4]}"
 
     # 4. Create Supabase Auth user
     try:
