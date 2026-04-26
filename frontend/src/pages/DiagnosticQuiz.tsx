@@ -88,27 +88,58 @@ const LatexDropdown = ({
   );
 };
 
+// ── Deterministic shuffle (Fisher-Yates with a string seed) ──
+// We seed by question text so the *same* question always yields the *same*
+// shuffled options between renders (no flicker on re-render), but two
+// different questions get different orders.
+const _seededShuffle = <T,>(arr: T[], seed: string): T[] => {
+  const out = arr.slice();
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  // Mulberry32-style PRNG seeded from h
+  let s = (h >>> 0) || 1;
+  const rand = () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+};
+
 // Association question component
 const AssociationQuestion = ({ q, answer, onChange }: { q: Question; answer: Record<string, string>; onChange: (m: Record<string, string>) => void }) => {
+  // Shuffle the right column so it isn't trivially aligned with the left column.
+  // Memoised on the question identity so the order is stable per question.
+  const shuffledRights = useMemo(() => {
+    if (!q.pairs) return [];
+    const rights = q.pairs.map((p) => p.right);
+    return _seededShuffle(rights, q.question || rights.join('|'));
+  }, [q]);
+
   if (!q.pairs) return null;
   const pairs = q.pairs as Array<{ left: string; right: string }>;
-  const allRights = pairs.map((p) => p.right);
 
   const handleSelect = (left: string, right: string) => {
     onChange({ ...answer, [left]: right });
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 sm:space-y-2.5">
       {pairs.map((pair, idx) => (
-        <div key={idx} className="flex items-center gap-3">
-          <div className="flex-1 p-3 rounded-lg bg-white/[.04] border border-white/10">
-            <span className="text-sm text-white"><LatexRenderer content={pair.left} /></span>
+        <div key={idx} className="flex items-center gap-2 sm:gap-3">
+          <div className="flex-1 min-w-0 p-2.5 sm:p-3 rounded-lg bg-white/[.04] border border-white/10">
+            <span className="text-xs sm:text-sm text-white"><LatexRenderer content={pair.left} /></span>
           </div>
-          <span className="text-white/40 text-lg">→</span>
+          <span className="text-white/40 text-base sm:text-lg flex-shrink-0">→</span>
           <LatexDropdown
             value={answer[pair.left] || ''}
-            options={allRights}
+            options={shuffledRights}
             onChange={(v) => handleSelect(pair.left, v)}
           />
         </div>
@@ -733,7 +764,7 @@ export default function DiagnosticQuiz() {
                     onChange={(m) => setAnswerAt(currentQuestionIndex, m)}
                   />
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {currentQ.options.map((option, index) => {
                       const letter = String.fromCharCode(65 + index);
                       const isSelected = currentAns === letter;
@@ -741,33 +772,33 @@ export default function DiagnosticQuiz() {
                         <button
                           key={index}
                           onClick={() => setAnswerAt(currentQuestionIndex, letter)}
-                          className={`w-full text-left p-2.5 sm:p-3.5 rounded-xl border-2 transition-all flex items-center gap-2.5 active:scale-[0.99] ${
+                          className={`w-full text-left px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 active:scale-[0.99] ${
                             isSelected
                               ? 'border-blue-400/60 bg-blue-500/15 shadow-md shadow-blue-500/20'
                               : 'border-white/10 hover:border-blue-400/50 hover:bg-white/[.06]'
                           }`}
                         >
-                          <span className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-xs sm:text-sm font-black flex-shrink-0 transition-all ${
-                            isSelected ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-white/5 text-white/70'
+                          <span className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-[11px] sm:text-xs font-black flex-shrink-0 transition-all ${
+                            isSelected ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm' : 'bg-white/5 text-white/70'
                           }`}>
                             {letter}
                           </span>
-                          <span className="text-white text-sm sm:text-base leading-snug sm:leading-relaxed flex-1">
+                          <span className="text-white text-xs sm:text-sm leading-snug flex-1">
                             <LatexRenderer content={option} />
                           </span>
-                          {isSelected && <Check className="w-4 h-4 text-blue-300 flex-shrink-0" />}
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-300 flex-shrink-0" />}
                         </button>
                       );
                     })}
                     <button
                       onClick={() => setAnswerAt(currentQuestionIndex, 'X')}
-                      className={`w-full text-left p-2 rounded-xl border-2 transition-all flex items-center gap-2 text-[11px] sm:text-xs ${
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg border-2 transition-all flex items-center gap-2 text-[10px] sm:text-[11px] ${
                         currentAns === 'X'
                           ? 'border-slate-500 bg-white/5 text-white/85'
                           : 'border-dashed border-white/15 hover:border-white/25 text-white/55 hover:text-white/80 hover:bg-white/[.03]'
                       }`}
                     >
-                      <HelpCircle className="w-3.5 h-3.5" />
+                      <HelpCircle className="w-3 h-3" />
                       <span className="italic">Je ne sais pas — ce n'est pas grave</span>
                     </button>
                   </div>

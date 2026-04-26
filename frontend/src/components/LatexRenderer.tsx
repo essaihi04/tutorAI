@@ -11,10 +11,12 @@ const LatexRenderer: React.FC<LatexRendererProps> = ({ content, display = false 
   if (!content) return null;
 
   // Split content into LaTeX and plain text parts
-  // LaTeX patterns: $...$ or \(...\) for inline, $$...$$ or \[...\] for display
+  // Supported delimiters: $...$ (inline), $$...$$ (display), \(...\) (inline), \[...\] (display)
+  // NOTE: in a JS regex, the literal \( is written \\\( (escape \\ for backslash, escape \( for the paren),
+  // and the literal \[ is written \\\[ (the [ must be escaped to avoid opening a character class).
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
-  const regex = /(\$\$[\s\S]*?\$\$|\\[[\s\S]*?\\]|\$[\s\S]*?\$|\\([\s\S]*?\\))/g;
+  const regex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[\s\S]*?\$|\\\([\s\S]*?\\\))/g;
   let match;
 
   while ((match = regex.exec(content)) !== null) {
@@ -25,7 +27,17 @@ const LatexRenderer: React.FC<LatexRendererProps> = ({ content, display = false 
 
     const latex = match[0];
     const isDisplay = latex.startsWith('$$') || latex.startsWith('\\[');
-    const innerLatex = latex.replace(/^\$\$|\\\[/g, '').replace(/\$\$$|\\\]$/g, '').replace(/^\$|\\\(/g, '').replace(/\$$|\\\)$/g, '');
+    // Strip the delimiters (in any of the 4 supported forms) — order matters: longest first.
+    let innerLatex = latex;
+    if (innerLatex.startsWith('$$') && innerLatex.endsWith('$$')) {
+      innerLatex = innerLatex.slice(2, -2);
+    } else if (innerLatex.startsWith('\\[') && innerLatex.endsWith('\\]')) {
+      innerLatex = innerLatex.slice(2, -2);
+    } else if (innerLatex.startsWith('\\(') && innerLatex.endsWith('\\)')) {
+      innerLatex = innerLatex.slice(2, -2);
+    } else if (innerLatex.startsWith('$') && innerLatex.endsWith('$')) {
+      innerLatex = innerLatex.slice(1, -1);
+    }
 
     try {
       const html = katex.renderToString(innerLatex, {
