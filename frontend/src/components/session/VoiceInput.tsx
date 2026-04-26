@@ -291,24 +291,25 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
 
   return (
     <div className="shrink-0 border-t border-white/5 bg-[#0c0c1d]/90 backdrop-blur-xl">
-      <div className="max-w-3xl mx-auto px-4 py-4">
+      <div className="max-w-3xl mx-auto px-4 py-2.5 sm:py-4">
 
         {/* Mic error */}
         {micError && (
-          <div className="mb-3 text-center text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">
+          <div className="mb-2 sm:mb-3 text-center text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">
             {micError}
           </div>
         )}
 
-        {micHint && !micError && (
-          <div className="mb-3 text-center text-xs text-cyan-300/70 bg-cyan-500/5 rounded-lg px-3 py-2 border border-cyan-500/10">
+        {/* Hint banner: skip the default 'Clique pour parler' (already shown next to mic) to save vertical space on small screens */}
+        {micHint && !micError && micHint !== 'Clique pour parler' && (
+          <div className="mb-2 sm:mb-3 text-center text-xs text-cyan-300/70 bg-cyan-500/5 rounded-lg px-3 py-2 border border-cyan-500/10">
             {micHint}
           </div>
         )}
 
         {/* Text input area (collapsible) */}
         {inputMode === 'text' ? (
-          <form onSubmit={handleTextSubmit} className="flex gap-2 mb-3">
+          <form onSubmit={handleTextSubmit} className="flex gap-2 mb-2 sm:mb-3">
             <input
               ref={textFieldRef}
               type="text"

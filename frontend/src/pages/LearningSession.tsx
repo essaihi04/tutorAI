@@ -1724,6 +1724,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 theme="dark"
                 title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
                 collapsible
+                defaultCollapsed={showWhiteboard || showExercise || showMedia || showExamPanel}
               />
               <VoiceInput
                 onTextSend={handleSendText}

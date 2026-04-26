@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Zap, ChevronDown, ChevronUp } from 'lucide-react';
 
 /**
@@ -26,6 +26,8 @@ interface QuickActionsProps {
   title?: string;
   /** Permet de plier/déplier la barre (utile sur mobile) */
   collapsible?: boolean;
+  /** État replié initial — synchronisé via prop (utile pour auto-replier quand un panneau s'ouvre) */
+  defaultCollapsed?: boolean;
 }
 
 export default function QuickActions({
@@ -36,8 +38,14 @@ export default function QuickActions({
   theme = 'light',
   title = 'Raccourcis',
   collapsible = false,
+  defaultCollapsed = false,
 }: QuickActionsProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  // Resync when parent updates defaultCollapsed (e.g. board/exam panel opens on mobile)
+  useEffect(() => {
+    setCollapsed(defaultCollapsed);
+  }, [defaultCollapsed]);
 
   if (!actions || actions.length === 0) return null;
 
