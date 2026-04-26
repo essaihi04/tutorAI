@@ -43,10 +43,10 @@ export function getMention(scoreOn20: number): MentionInfo {
       emoji: '🏆',
       short: 'TB',
       gradient: 'from-emerald-500 to-teal-600',
-      bg: 'bg-emerald-50',
-      border: 'border-emerald-200',
-      text: 'text-emerald-700',
-      ring: 'ring-emerald-400',
+      bg: 'bg-emerald-500/10',
+      border: 'border-emerald-400/30',
+      text: 'text-emerald-300',
+      ring: 'ring-emerald-400/40',
       encouragement:
         'Excellent niveau ! Tu maîtrises le programme. Continue à t\'entraîner sur les sujets difficiles pour viser encore plus haut.',
     };
@@ -58,10 +58,10 @@ export function getMention(scoreOn20: number): MentionInfo {
       emoji: '⭐',
       short: 'B',
       gradient: 'from-blue-500 to-indigo-600',
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-      text: 'text-blue-700',
-      ring: 'ring-blue-400',
+      bg: 'bg-blue-500/10',
+      border: 'border-blue-400/30',
+      text: 'text-blue-300',
+      ring: 'ring-blue-400/40',
       encouragement:
         'Très bon travail ! Tu es sur la bonne voie. Identifie les points à consolider pour viser la mention Très Bien.',
     };
@@ -73,10 +73,10 @@ export function getMention(scoreOn20: number): MentionInfo {
       emoji: '👍',
       short: 'AB',
       gradient: 'from-sky-500 to-blue-500',
-      bg: 'bg-sky-50',
-      border: 'border-sky-200',
-      text: 'text-sky-700',
-      ring: 'ring-sky-400',
+      bg: 'bg-sky-500/10',
+      border: 'border-sky-400/30',
+      text: 'text-sky-300',
+      ring: 'ring-sky-400/40',
       encouragement:
         'Bon résultat. Tu as les bases solides. Travaille les questions de raisonnement et les schémas pour monter en mention.',
     };
@@ -88,10 +88,10 @@ export function getMention(scoreOn20: number): MentionInfo {
       emoji: '✅',
       short: 'P',
       gradient: 'from-amber-500 to-orange-500',
-      bg: 'bg-amber-50',
-      border: 'border-amber-200',
-      text: 'text-amber-700',
-      ring: 'ring-amber-400',
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-400/30',
+      text: 'text-amber-300',
+      ring: 'ring-amber-400/40',
       encouragement:
         'Tu as la moyenne ! Concentre-toi sur les parties où tu as perdu des points et refais les exercices similaires.',
     };
@@ -102,10 +102,10 @@ export function getMention(scoreOn20: number): MentionInfo {
     emoji: '📚',
     short: 'R',
     gradient: 'from-rose-500 to-red-600',
-    bg: 'bg-rose-50',
-    border: 'border-rose-200',
-    text: 'text-rose-700',
-    ring: 'ring-rose-400',
+    bg: 'bg-rose-500/10',
+    border: 'border-rose-400/30',
+    text: 'text-rose-300',
+    ring: 'ring-rose-400/40',
     encouragement:
       'Pas de panique. Reprends les cours un par un, puis refais cet examen en mode Entraînement pour comprendre chaque erreur.',
   };

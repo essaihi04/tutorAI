@@ -2301,6 +2301,20 @@ X/{question.get('points', '?')}
                     bucket["score_sum"] += partial_score
                     bucket["max_sum"] += partial_max
 
+            # Treat any attempt with at least one answered question as a
+            # "taken" exam (real submitted OR practice with progress). This
+            # prevents the Dashboard from showing "Pas encore de score" when
+            # the student already practiced an exam and produced a score —
+            # which previously contradicted a positive avg_score_pct. The
+            # `unique_exams` set de-duplicates by (subject, year, session),
+            # so re-attempting the same exam later won't double-count.
+            if q_count > 0 or partial_max > 0:
+                exam_key = (subj, a.get("exam_year"), a.get("exam_session"))
+                unique_exams.add(exam_key)
+                bucket["unique_exams"].add(
+                    (a.get("exam_year"), a.get("exam_session"))
+                )
+
             bucket["questions"] += q_count
 
         by_subject = sorted(
