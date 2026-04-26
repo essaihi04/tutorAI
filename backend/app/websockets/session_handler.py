@@ -184,10 +184,19 @@ class SessionHandler:
         return "français" if self.language == "fr" else "arabe"
 
     def _detect_subject_from_text(self, text: str) -> Optional[str]:
-        """Detect subject from a text string using comprehensive keyword matching."""
+        """Detect subject from a text string using **scored** keyword matching.
+
+        Instead of a waterfall (first-match wins), we count how many keywords
+        from each subject appear in the text. Multi-word phrases are weighted
+        by their word count so that specific compound terms like
+        "matière organique" (SVT, 2 words → +2) beat the single word
+        "organique" (Chimie, 1 word → +1). The subject with the highest
+        cumulative score wins; ties are broken by list order (rare).
+        """
         if not text:
             return None
         t = text.lower()
+
         math_kw = [
             "math", "maths", "mathématique", "mathématiques", "limite", "limites",
             "continuité", "continuite", "dérivation", "derivation", "dérivée", "derivee",
@@ -201,41 +210,45 @@ class SessionHandler:
             "géométrie", "geometrie", "dénombrement", "denombrement", "combinatoire",
             "trigonométrie", "trigonometrie", "polynôme", "polynome",
         ]
-        if any(kw in t for kw in math_kw):
-            return "Mathématiques"
         phys_kw = [
             "physique", "phys", "mécanique", "mecanique", "onde", "ondes", "newton", "rc", "rlc",
             "électricité", "electricite", "dipôle", "dipole", "condensateur", "inductance",
             "bobine", "résistance", "resistance", "circuit", "oscillateur", "pendule",
-            "vitesse", "accélération", "acceleration", "force", "énergie", "energie",
-            "travail", "puissance", "thermodynamique", "chaleur", "température",
-            "électrique", "electrique", "électromagnétique", "electromagnetique",
-            "magnétique", "magnetique", "champ", "lorentz", "ampère", "ampere", "faraday",
-            "lenz", "induction", "optique", "interférence", "diffraction", "lentille",
-            "miroir", "quantique", "photons", "photoélectrique", "radioactivité",
-            "radioactivite", "noyau", "fission", "fusion",
+            "vitesse", "accélération", "acceleration", "force", "énergie cinétique",
+            "energie cinetique", "travail", "puissance", "thermodynamique", "chaleur",
+            "température", "électrique", "electrique", "électromagnétique",
+            "electromagnetique", "magnétique", "magnetique", "champ", "lorentz",
+            "ampère", "ampere", "faraday", "lenz", "induction", "optique",
+            "interférence", "diffraction", "lentille", "miroir", "quantique", "photons",
+            "photoélectrique", "radioactivité", "radioactivite", "noyau atomique",
+            "fission", "fusion nucléaire", "fusion nucleaire",
         ]
-        if any(kw in t for kw in phys_kw):
-            return "Physique"
         chem_kw = [
             "chimie", "chim", "acide", "base", "ph", "titrage", "réaction", "reaction",
-            "cinétique", "cinetique", "esterification", "molécule", "moleculaire", "atome",
-            "atomique", "liaison", "covalente", "ionique", "métallique", "orbitale",
-            "électron", "electron", "proton", "neutron", "concentration", "molarité",
-            "solution", "oxydoréduction", "oxydo", "redox", "potentiel", "pile",
-            "électrolyse", "electrolyse", "électrode", "electrode", "anode", "cathode",
-            "catalyse", "catalyseur", "ordre", "équilibre", "equilibre", "constant",
-            "avancement", "ester", "saponification", "alcool", "aldéhyde", "aldehyde",
-            "cétone", "cetone", "acide carboxylique", "amine", "amide", "carbone",
-            "organique", "isomérie", "isomerie", "stéréochimie", "stereochimie",
-            "chiralité", "chiralite",
+            "cinétique chimique", "cinetique chimique", "esterification", "molécule",
+            "moleculaire", "atome", "atomique", "liaison", "covalente", "ionique",
+            "métallique", "orbitale", "électron", "electron", "proton", "neutron",
+            "concentration", "molarité", "solution", "oxydoréduction", "oxydo", "redox",
+            "potentiel", "pile", "électrolyse", "electrolyse", "électrode", "electrode",
+            "anode", "cathode", "catalyse", "catalyseur", "ordre", "équilibre chimique",
+            "equilibre chimique", "avancement", "ester", "saponification", "alcool",
+            "aldéhyde", "aldehyde", "cétone", "cetone", "acide carboxylique", "amine",
+            "amide", "chimie organique", "isomérie", "isomerie", "stéréochimie",
+            "stereochimie", "chiralité", "chiralite",
         ]
-        if any(kw in t for kw in chem_kw):
-            return "Chimie"
         svt_kw = [
-            "svt", "biologie", "vie", "terre", "géologie", "geologie", "écosystème",
-            "ecosysteme",
+            "svt", "biologie", "vie", "terre", "géologie", "geologie",
+            # ── Compound disambiguation phrases (high weight) ──
+            "matière organique", "matiere organique", "matières organiques",
+            "matieres organiques", "consommation de la matière",
+            "consommation de la matiere", "consommation de matière",
+            "consommation de matiere", "utilisation de la matière",
+            "utilisation de matiere", "respiration cellulaire",
+            "bilan énergétique", "bilan energetique",
+            "chaîne respiratoire", "chaine respiratoire",
+            "cycle de krebs", "noyau cellulaire",
             # ── Écologie / environnement (programme SVT 2BAC) ──
+            "écosystème", "ecosysteme",
             "déchet", "déchets", "dechet", "dechets", "pollution", "polluant", "polluants",
             "polluante", "polluantes", "environnement", "environnemental", "environnementale",
             "écologie", "ecologie", "écologique", "ecologique",
@@ -248,34 +261,51 @@ class SessionHandler:
             "eau usée", "eau usées", "eau usee", "eau usees",
             "lixiviat", "compost", "compostage", "incinération", "incineration",
             "tri sélectif", "tri selectif", "valorisation",
-            # ── Reste du programme SVT classique ──
-            "cellule", "cellulaire", "membrane", "cytoplasme", "noyau",
+            # ── Biologie cellulaire / métabolisme ──
+            "cellule", "cellulaire", "membrane", "cytoplasme",
             "mitochondrie", "chloroplaste", "ribosome", "adn", "arn", "nucléotide",
             "nucleotide", "génétique", "genetique", "chromosome", "gène", "gene",
             "allèle", "allele", "mutation", "réplication", "replication", "transcription",
             "traduction", "protéine", "proteine", "enzyme", "métabolisme", "metabolisme",
-            "glycolyse", "respiration", "cellulaire", "fermentation", "krebs", "cycle",
-            "transport", "chaîne", "chaine", "respiratoire", "atp", "mitose", "méiose",
-            "meiose", "division", "cellulaire", "interphase", "prophase", "métaphase",
+            "glycolyse", "respiration", "fermentation", "krebs",
+            "respiratoire", "atp", "mitose", "méiose",
+            "meiose", "interphase", "prophase", "métaphase",
             "metaphase", "anaphase", "télophase", "telophase", "cytocinèse", "cytocinese",
+            "photosynthèse", "photosynthese", "autotrophe", "hétérotrophe", "heterotrophe",
+            # ── Immunologie ──
             "plasmide", "clonage", "bacterie", "bactérie", "virus", "vaccin", "immunité",
             "immunite", "anticorps", "antigène", "antigene", "lymphocyte", "macrophage",
-            "phagocytose", "inflammation", "système", "immunitaire", "population",
-            "communauté", "communaute", "habitat", "niche", "trophique", "chaine",
-            "alimentaire", "réseau", "reseau", "producteur", "consommateur", "décomposeur",
-            "decomposeur", "biomasse", "pyramide", "énergie", "energie", "cycle",
-            "biogéochimique", "biogeochimique", "azote", "carbone", "succession",
-            "écologique", "ecologique", "biodiversité", "biodiversite", "endémisme",
-            "endemisme", "évolution", "evolution", "darwin", "selection", "sélection",
-            "naturelle", "spéciation", "speciation", "adaptation", "tectonique", "plaque",
-            "subduction", "dorsale", "faille", "séisme", "seisme", "volcan", "magma",
-            "lave", "roche", "sédimentaire", "sedimentaire", "métamorphique", "metamorphique",
-            "magmatique", "ère", "ere", "primaire", "secondaire", "tertiaire", "quaternaire",
-            "fossile", "datation", "radioactive", "stratigraphie",
+            "phagocytose", "inflammation", "immunitaire",
+            # ── Écologie / chaînes alimentaires ──
+            "population", "communauté", "communaute", "habitat", "niche", "trophique",
+            "alimentaire", "producteur", "consommateur", "décomposeur",
+            "decomposeur", "biomasse", "pyramide",
+            "biogéochimique", "biogeochimique", "succession",
+            "biodiversité", "biodiversite", "endémisme",
+            "endemisme", "évolution", "evolution", "darwin", "sélection naturelle",
+            "selection naturelle", "spéciation", "speciation", "adaptation",
+            # ── Géologie ──
+            "tectonique", "plaque", "subduction", "dorsale", "faille",
+            "séisme", "seisme", "volcan", "magma", "lave", "roche",
+            "sédimentaire", "sedimentaire", "métamorphique", "metamorphique",
+            "magmatique", "fossile", "datation", "stratigraphie",
         ]
-        if any(kw in t for kw in svt_kw):
-            return "SVT"
-        return None
+
+        # ── Score each subject: count matches, weighted by word count ──
+        _subjects = {
+            "Mathématiques": math_kw,
+            "Physique": phys_kw,
+            "Chimie": chem_kw,
+            "SVT": svt_kw,
+        }
+        best_subject: Optional[str] = None
+        best_score = 0
+        for subj, kw_list in _subjects.items():
+            score = sum(len(kw.split()) for kw in kw_list if kw in t)
+            if score > best_score:
+                best_score = score
+                best_subject = subj
+        return best_subject
 
     def _infer_subject_from_context(self, fallback: Optional[str] = "SVT") -> Optional[str]:
         ctx = self.session_context or {}
