@@ -183,13 +183,20 @@ class ExplainRequest(BaseModel):
     exam_id: str
     question_index: int
     mode: str = "before"  # "before" (hints) or "after" (full explanation)
+    # Optional fields used in "after" mode to decorticate the student's actual response
+    student_answer: Optional[str] = None
+    student_score: Optional[float] = None
+    student_points_max: Optional[float] = None
+    evaluator_feedback: Optional[str] = None
 
 
 @router.post("/explain")
 async def explain_question(data: ExplainRequest):
     """Generate an explanation for a question.
-    mode='before': methodology hints without giving the answer.
-    mode='after': full explanation with answer demonstration and course content.
+
+    ``mode='before'`` — Socratic guidance, never reveal the answer.
+    ``mode='after'``  — Diagnostic correction of the student's specific answer
+                        (decorticate, cite phrases, link to course).
     """
     question = exam_service.get_question(data.exam_id, data.question_index)
     if not question:
@@ -213,43 +220,82 @@ async def explain_question(data: ExplainRequest):
         context_block += f"\nÉnoncé parent : {parent}"
 
     if data.mode == "before":
-        prompt = f"""Tu es un professeur marocain de {subject} au BAC. L'élève te demande de l'AIDER à comprendre cette question AVANT de répondre.
+        prompt = f"""Tu es un professeur marocain de {subject} au BAC. L'élève demande de l'AIDE AVANT de répondre.
+Ton rôle : guide socratique qui oriente SANS jamais donner la réponse.
 
 Question ({q_type}, {q_points} pts) : {q_content}{context_block}
 
-CONSIGNES STRICTES :
-- NE DONNE JAMAIS la réponse ni aucun élément de réponse.
-- Explique ce qui est DEMANDÉ dans la question (reformule).
-- Donne la MÉTHODE ou l'APPROCHE à suivre (étapes).
-- Rappelle les NOTIONS DU COURS utiles (définitions, principes) sans appliquer à la question.
-- Si c'est un QCM, explique comment raisonner par élimination.
-- Si c'est une association, explique la logique de mise en relation.
+INTERDICTION ABSOLUE :
+- Ne révèle JAMAIS la réponse, ni partiellement, ni en exemple, ni en reformulation déguisée.
+- Pour QCM / Vrai-Faux / Association : ne désigne AUCUNE option comme correcte.
 
-Réponds en format structuré avec des sections markdown :
+Réponds avec ces sections markdown (sois CONCIS, 6-10 phrases au total) :
+
 ## Ce qui est demandé
-## Méthode à suivre
-## Rappel de cours"""
+Reformule en mots simples : « On te demande de… »
 
-    else:  # after
-        prompt = f"""Tu es un professeur marocain de {subject} au BAC. L'élève a déjà répondu et veut comprendre EN PROFONDEUR.
+## Verbe-clé de la consigne
+Identifie le verbe-action (décrire / justifier / comparer / démontrer / déduire / interpréter…) et dis en UNE phrase ce que ce verbe impose comme rédaction.
+
+## Notions du cours à mobiliser
+Liste 2 à 4 notions / définitions / lois / mécanismes nécessaires — SANS les appliquer à la question.
+
+## Plan à remplir
+Donne un canevas en étapes numérotées avec ce qu'il faut FAIRE à chaque étape (pas le contenu).
+{("- QCM → comment éliminer les distracteurs."  if q_type == "qcm" else "")}
+{("- Vrai/Faux → comment chercher un contre-exemple ou une exception." if q_type == "vrai_faux" else "")}
+{("- Association → quel critère discriminant utiliser." if q_type == "association" else "")}
+
+## Question pour démarrer
+Termine par UNE question ouverte qui force l'élève à observer / se rappeler — pas à deviner la réponse."""
+
+    else:  # after — diagnostic + corrective
+        student_answer = (data.student_answer or "").strip()
+        score_line = ""
+        if data.student_score is not None and data.student_points_max:
+            score_line = f"\nNote obtenue : {data.student_score}/{data.student_points_max}"
+        student_block = (
+            f"\nRÉPONSE DE L'ÉLÈVE (à analyser et citer textuellement) :\n«{student_answer}»"
+            if student_answer
+            else "\nL'élève n'a pas écrit de texte (peut-être uniquement un schéma)."
+        )
+        eval_block = (
+            f"\nRetour de l'évaluateur automatique (référence interne, ne pas le citer mot pour mot) :\n{data.evaluator_feedback}"
+            if (data.evaluator_feedback or "").strip()
+            else ""
+        )
+
+        prompt = f"""Tu es un professeur marocain de {subject} au BAC qui CORRIGE UNE COPIE.
+Tu ne fais PAS un cours générique : tu décortiques la réponse SPÉCIFIQUE de cet élève.
 
 Question ({q_type}, {q_points} pts) : {q_content}{context_block}
+{student_block}{score_line}
 
-Correction officielle : {corr_text}
+Correction officielle (référence) :
+{corr_text}{eval_block}
 
-CONSIGNES :
-- Explique la RÉPONSE CORRECTE en détail avec démonstration.
-- Montre le RAISONNEMENT étape par étape.
-- Rappelle le COURS associé (définitions, mécanismes, schémas conceptuels).
-- Donne des ASTUCES pour des questions similaires au BAC.
-- Mets en évidence les ERREURS FRÉQUENTES des élèves.
+Réponds avec ces sections markdown (sois PRÉCIS et CONCIS, 8-12 phrases au total) :
 
-Réponds en format structuré avec des sections markdown :
-## Réponse détaillée
-## Raisonnement étape par étape
-## Cours associé
-## Astuces BAC
-## Erreurs fréquentes"""
+## ✅ Ce qui fonctionne
+Cite TEXTUELLEMENT entre guillemets « … » une ou deux phrases JUSTES de l'élève et explique pourquoi c'est bon. Si rien n'est juste, dis-le avec tact.
+
+## ⚠️ Ce qui manque ou est imprécis
+Pour CHAQUE élément attendu dans la correction officielle :
+- dis si l'élève l'a écrit (cite ses mots) ou pas
+- explique pourquoi c'est important pour la note BAC
+Si une phrase de l'élève est FAUSSE, cite-la entre guillemets et corrige-la avec l'explication.
+
+## 📝 Comment rédiger pour avoir tous les points
+Donne UNE version modèle courte et structurée, telle qu'un correcteur BAC l'attend (reformulée — pas un copier-coller).
+
+## 📚 Concept du cours à retenir
+Relie les erreurs à un mécanisme / définition / loi précis (pas de vague).
+
+## ⚡ Piège typique
+UN piège que beaucoup d'élèves font sur ce genre de question.
+
+## 🎯 Action suivante
+UNE phrase : que doit-il refaire / réviser maintenant ?"""
 
     try:
         response = await llm_service.chat(

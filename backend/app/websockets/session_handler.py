@@ -1597,6 +1597,12 @@ RÈGLES STRICTES:
                 q_exercise_ctx = explain_data.get("exerciseContext", "")
                 q_correction = explain_data.get("correction", "")
                 has_answer = explain_data.get("hasAnswer", False)
+                # Student artefacts (only present when hasAnswer=True)
+                student_answer = (explain_data.get("studentAnswer") or "").strip()
+                student_score = explain_data.get("studentScore")
+                student_points_max = explain_data.get("studentPointsMax")
+                evaluator_feedback = (explain_data.get("evaluatorFeedback") or "").strip()
+                student_has_image = bool(explain_data.get("studentHasImage"))
 
                 context_parts = [f"Question ({q_type}, {q_points} pts) : {q_content}"]
                 if q_parent:
@@ -1606,36 +1612,96 @@ RÈGLES STRICTES:
                 q_block = "\n".join(context_parts)
 
                 if has_answer:
-                    opening_user_msg = f"""L'élève a répondu à cette question d'examen et veut comprendre en profondeur.
+                    # ── MODE "APRÈS" — Diagnostique + correctif ──
+                    # The AI MUST decorticate the student's specific answer:
+                    # cite their phrases, point out missing elements, link to course.
+                    score_line = ""
+                    if student_score is not None and student_points_max:
+                        score_line = f"Note obtenue par l'évaluateur automatique : {student_score}/{student_points_max}\n"
+
+                    student_block = (
+                        f"RÉPONSE DE L'ÉLÈVE (à analyser, citer textuellement) :\n«{student_answer}»\n"
+                        if student_answer
+                        else "L'élève n'a pas écrit de texte (peut-être uniquement un schéma/dessin).\n"
+                    )
+                    if student_has_image and not student_answer:
+                        student_block += "Il a soumis une image (schéma ou photo de copie manuscrite).\n"
+
+                    eval_block = ""
+                    if evaluator_feedback:
+                        eval_block = f"\nRetour de l'évaluateur automatique (référence interne, NE PAS le citer mot pour mot) :\n{evaluator_feedback}\n"
+
+                    opening_user_msg = f"""L'élève a répondu à une question d'examen et veut comprendre EN PROFONDEUR ses points forts et ses erreurs.
 
 {q_block}
 
-Correction officielle : {q_correction}
+{student_block}{score_line}
+Correction officielle : {q_correction}{eval_block}
 
-CONSIGNES IMPORTANTES — STRUCTURE DE TA RÉPONSE :
-1. Commence par saluer l'élève et présenter la question (texte HORS des balises)
-2. Explique la RÉPONSE en détail avec le RAISONNEMENT étape par étape (texte HORS des balises)
-3. Rappelle le COURS associé (définitions, mécanismes, formules) (texte HORS des balises)
-4. Donne des ASTUCES BAC et mentionne les ERREURS FRÉQUENTES (texte HORS des balises)
-5. APRÈS ton explication textuelle, ajoute un tableau récapitulatif avec <board> pour résumer visuellement
-6. L'élève peut poser des questions de suivi
+TU ES UN PROFESSEUR EXPÉRIMENTÉ qui corrige une copie. Ne fais PAS un cours générique — décortique la réponse spécifique de cet élève.
 
-IMPORTANT : Sois CONCIS (max 6-8 phrases de texte). Écris d'abord ton explication en texte libre, puis mets le tableau/schéma dans <board>...</board> à la fin. Ne mets PAS tout dans <board>."""
+STRUCTURE OBLIGATOIRE (texte HORS des balises) :
+
+1. **Salutation brève** — adresse-toi à l'élève comme un prof bienveillant.
+
+2. **Ce qui fonctionne** ✅ — cite TEXTUELLEMENT entre guillemets une ou deux phrases JUSTES de l'élève et explique pourquoi c'est bon. Si rien n'est juste, dis-le honnêtement mais avec tact.
+
+3. **Ce qui manque ou ce qui est imprécis** ⚠️❌ — pour chaque élément ATTENDU dans la correction officielle :
+   - dis si l'élève l'a écrit (cite ses mots) ou pas
+   - explique pourquoi c'est important pour la note BAC
+   - si l'élève a écrit quelque chose de FAUX, cite la phrase et corrige-la AVEC son explication
+
+4. **Comment rédiger pour avoir tous les points** — donne UNE version modèle courte, structurée, telle qu'un correcteur BAC l'attend. Pas un copier-coller de la correction : reformule en utilisant le vocabulaire du cours.
+
+5. **Concept du cours à retenir** — relie les erreurs à un mécanisme/définition/loi précis. Pas de vague.
+
+6. **Piège typique** — mentionne UN piège que beaucoup d'élèves font sur ce genre de question.
+
+7. **Action suivante concrète** — UNE phrase : que doit-il refaire / réviser maintenant ?
+
+8. **APRÈS** ton texte, mets dans `<board>...</board>` un tableau / schéma comparatif "Ta réponse vs Réponse modèle" OU les éléments-clés à retenir.
+
+RÈGLES :
+- Sois CONCIS : 8 à 12 phrases max au total dans le texte (hors board).
+- Tu CITES toujours l'élève entre guillemets « … » avant de critiquer ou féliciter.
+- Tu n'utilises PAS de jargon vague (« il faut bien », « c'est important ») — sois précis et technique.
+- L'élève peut ensuite poser des questions de suivi."""
                 else:
-                    opening_user_msg = f"""L'élève a besoin d'aide pour comprendre cette question d'examen AVANT de répondre.
+                    # ── MODE "AVANT" — Socratique strict ──
+                    # The AI must guide WITHOUT revealing the answer.
+                    opening_user_msg = f"""L'élève demande de l'aide AVANT de répondre. Ton rôle : un professeur socratique qui guide SANS jamais donner la réponse.
 
 {q_block}
 
-CONSIGNES STRICTES — STRUCTURE DE TA RÉPONSE :
-1. Commence par saluer l'élève et reformuler ce qui est DEMANDÉ (texte HORS des balises)
-2. NE DONNE JAMAIS la réponse ni aucun élément de réponse
-3. Donne la MÉTHODE et l'APPROCHE à suivre en étapes (texte HORS des balises)
-4. Rappelle les NOTIONS DU COURS utiles — définitions, principes (texte HORS des balises)
-5. Si c'est un QCM, explique comment raisonner par élimination
-6. APRÈS ton explication textuelle, ajoute un tableau récapitulatif avec <board> pour résumer les étapes/notions
-7. L'élève peut poser des questions pour mieux comprendre
+INTERDICTION ABSOLUE :
+- Ne révèle JAMAIS la réponse, ni partiellement, ni en exemple, ni en reformulation.
+- Ne dis pas « la réponse est… », ni « il faut répondre que… », ni « la bonne option est… ».
+- Pour un QCM/Vrai-Faux/Association : ne désigne aucune lettre/option comme correcte.
 
-IMPORTANT : Sois CONCIS (max 6-8 phrases de texte). Écris d'abord ton explication en texte libre, puis mets le tableau/schéma dans <board>...</board> à la fin. Ne mets PAS tout dans <board>."""
+STRUCTURE OBLIGATOIRE (texte HORS des balises) :
+
+1. **Reformulation** — « En clair, on te demande de… » dans des mots simples.
+
+2. **Le verbe-clé** — identifie le verbe-action de la consigne (décrire / justifier / comparer / démontrer / déduire / interpréter…) et explique en UNE phrase ce que ce verbe impose comme type de rédaction.
+
+3. **Notions du cours à mobiliser** — liste 2 à 4 notions/définitions/lois/mécanismes nécessaires (sans les appliquer à la question).
+
+4. **Plan vide à remplir** — propose un canevas en étapes numérotées (« Étape 1 : … / Étape 2 : … ») avec ce qu'il faut FAIRE à chaque étape, pas le contenu.
+
+5. **Heuristique selon le type de question** :
+   - QCM → comment éliminer les distracteurs (chercher le mot piège, comparer 2 options proches…)
+   - Vrai/Faux → chercher un contre-exemple ou une exception
+   - Association → identifier le critère discriminant qui distingue les éléments
+   - Question ouverte → structure attendue (intro courte → développement → conclusion / déduction)
+
+6. **Question socratique de relance** — termine par UNE question ouverte qui aide l'élève à démarrer (« Avant de te lancer, qu'est-ce que tu observes en premier dans le document ? » ou similaire adapté).
+
+7. **APRÈS** ton texte, mets dans `<board>...</board>` un schéma de la MÉTHODE (étapes visuelles, mind-map des notions à mobiliser, ou tableau « ce que je sais / ce que je dois trouver »).
+
+RÈGLES :
+- Sois CONCIS : 6 à 10 phrases max au total dans le texte (hors board).
+- Sois ENCOURAGEANT mais EXIGEANT — l'élève doit faire l'effort de chercher.
+- Si l'élève insiste pour avoir la réponse, refuse poliment et propose un nouvel indice."""
 
             messages = [{"role": "user", "content": opening_user_msg}]
             

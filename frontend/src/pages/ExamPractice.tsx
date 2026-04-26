@@ -645,7 +645,8 @@ export default function ExamPractice() {
   const handleExplain = () => {
     if (!exam || !examId) return;
     const q = exam.questions[currentQ];
-    const hasAnswer = feedbacks[currentQ] != null;
+    const fb = feedbacks[currentQ];
+    const hasAnswer = fb != null;
     const correction = q.correction;
     const corrText = typeof correction === 'object' && correction ? (correction.content || '') : '';
 
@@ -654,7 +655,11 @@ export default function ExamPractice() {
       currentQ, answers, feedbacks, imageData,
     }));
 
-    // Save explain context for LearningSession
+    // Save explain context for LearningSession.
+    // CRITICAL for "after" mode: include the student's actual answer + evaluator
+    // feedback so the AI can decorticate the student's specific response
+    // (cite their phrases, point out missing elements) instead of just re-stating
+    // the official correction generically.
     sessionStorage.setItem('explain_context', JSON.stringify({
       questionContent: q.content,
       questionType: q.type || 'open',
@@ -663,6 +668,12 @@ export default function ExamPractice() {
       exerciseContext: q.exercise_context || '',
       correction: corrText,
       hasAnswer,
+      // Student's response artefacts (only meaningful when hasAnswer=true)
+      studentAnswer: hasAnswer ? (answers[currentQ] || '') : '',
+      studentHasImage: hasAnswer ? !!imageData[currentQ] : false,
+      studentScore: fb && typeof fb.score === 'number' ? fb.score : null,
+      studentPointsMax: fb && typeof fb.points_max === 'number' ? fb.points_max : (q.points || null),
+      evaluatorFeedback: fb && typeof fb.feedback === 'string' ? fb.feedback : '',
       subject: exam.subject,
       examTitle: `${exam.subject} ${exam.year} ${exam.session}`,
     }));
