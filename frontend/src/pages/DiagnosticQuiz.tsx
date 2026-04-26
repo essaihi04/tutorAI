@@ -49,6 +49,36 @@ interface Subject {
   icon: string;
 }
 
+// Map lucide/text icon names stored in DB to a friendly emoji.
+// If the value is already an emoji we return it as-is.
+const SUBJECT_EMOJI: Record<string, string> = {
+  calculator: '🧮',
+  math: '🧮',
+  mathematiques: '🧮',
+  physics: '⚛️',
+  physique: '⚛️',
+  atom: '⚛️',
+  flask: '🧪',
+  chimie: '🧪',
+  beaker: '🧪',
+  dna: '🧬',
+  svt: '🧬',
+  leaf: '🌿',
+  microscope: '🔬',
+  book: '📘',
+  history: '📜',
+  globe: '🌍',
+  language: '🗣️',
+};
+
+const subjectIcon = (raw: string | undefined): string => {
+  if (!raw) return '📘';
+  const v = raw.trim();
+  // If first char is non-letter (likely already an emoji or symbol), keep it.
+  if (v && !/^[a-zA-Z]/.test(v)) return v;
+  return SUBJECT_EMOJI[v.toLowerCase()] || '📘';
+};
+
 interface AssocPair { left: string; right: string }
 
 interface Question {
@@ -344,7 +374,7 @@ export default function DiagnosticQuiz() {
                   <span className="text-xs text-white/55">Matières :</span>
                   {subjects.map((s) => (
                     <span key={s.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[.06] border border-white/10 text-xs font-semibold text-white/85">
-                      <span>{s.icon}</span>
+                      <span>{subjectIcon(s.icon)}</span>
                       <span>{s.name_fr}</span>
                     </span>
                   ))}
@@ -486,7 +516,7 @@ export default function DiagnosticQuiz() {
                         : 'glass text-white/85 hover:bg-white/[.06]'
                     }`}
                   >
-                    <span className="text-sm">{s.icon}</span>
+                    <span className="text-sm">{subjectIcon(s.icon)}</span>
                     <span>{s.name_fr}</span>
                     {isCompleted && <CheckCircle className="w-3 h-3" />}
                   </button>
@@ -574,7 +604,7 @@ export default function DiagnosticQuiz() {
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     {currentSubject && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[.06] border border-white/10 text-[10px] font-semibold text-white/80">
-                        <span>{currentSubject.icon}</span>
+                        <span>{subjectIcon(currentSubject.icon)}</span>
                         <span>{currentSubject.name_fr}</span>
                       </span>
                     )}

@@ -123,6 +123,26 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
         # Clean up multiple spaces
         cleaned = ' '.join(cleaned.split())
         return cleaned
+
+    # Markdown table separator row pattern: '|---|---|' (with optional spaces / colons).
+    _MD_TABLE_SEP_RE = re.compile(r'\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|')
+
+    def _strip_markdown_table(self, text: str) -> str:
+        """Remove Markdown-table noise that the LLM sometimes copies verbatim
+        from a BAC source. Keeps the rest of the sentence readable.
+
+        Strategy:
+          1) Drop the separator line ``|---|---|---|`` entirely.
+          2) Replace any remaining pipe-cell run by a single space.
+          3) Collapse runs of whitespace.
+        """
+        if not text or '|' not in text:
+            return text
+        cleaned = self._MD_TABLE_SEP_RE.sub(' ', text)
+        # Replace pipe-cell sequences (e.g. " | a | b | c | ") with a space.
+        cleaned = re.sub(r'(\s*\|\s*[^|\n]{1,40})+\s*\|', ' ', cleaned)
+        cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+        return cleaned
     
     def _get_subject_rag_context(self, subject_name: str) -> str:
         """Get RAG context from cadres de référence for a specific subject."""
@@ -431,6 +451,15 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
         if session['questions_generated'] >= session['num_questions']:
             return None
 
+        # ── Rotate question types so each diagnostic has variety ──
+        # Pattern over 10 questions: ~5 QCM · ~3 V/F · ~2 association
+        # 0,3,5,7,9 -> qcm  | 1,4,8 -> vrai_faux  | 2,6 -> association
+        idx = session['questions_generated']
+        _type_rotation = {0: 'qcm', 1: 'vrai_faux', 2: 'association',
+                          3: 'qcm', 4: 'vrai_faux', 5: 'qcm',
+                          6: 'association', 7: 'qcm', 8: 'vrai_faux', 9: 'qcm'}
+        target_type = _type_rotation.get(idx % 10, 'qcm')
+
         # ── Get target chapter from plan ──
         plan = session.get('question_plan', [])
         plan_cursor = session.get('plan_cursor', 0)
@@ -519,7 +548,73 @@ Le texte narratif (non mathématique) reste en français normal, hors $...$.
 CADRE DE RÉFÉRENCE OFFICIEL DU BAC MAROCAIN POUR {session['subject_name'].upper()}:
 {session['rag_context']}"""
 
-        # Generate 1 question — strictly grounded in BAC sources + course excerpts
+        # ── Build per-type JSON schema + tailored instructions ──
+        chapter_num_value = target_chapter.get('number', 1) if target_chapter else 1
+        if target_type == 'vrai_faux':
+            type_instruction = (
+                "TYPE IMPOSÉ : VRAI / FAUX\n"
+                "→ Une affirmation claire, courte (≤ 25 mots), précise, ni piège ni double négation.\n"
+                "→ correct_answer = \"vrai\" OU \"faux\" (en minuscules, en français)."
+            )
+            json_schema = (
+                '{\n'
+                '  "question": "affirmation à juger vraie ou fausse",\n'
+                '  "type": "vrai_faux",\n'
+                '  "correct_answer": "vrai",\n'
+                f'  "topic": "nom_concept_précis",\n'
+                f'  "chapter_number": {chapter_num_value},\n'
+                '  "difficulty": "facile",\n'
+                f'  "bac_year": "{primary_bac_year or "2024"}",\n'
+                '  "grounded_in": "course"\n'
+                '}'
+            )
+        elif target_type == 'association':
+            type_instruction = (
+                "TYPE IMPOSÉ : ASSOCIATION\n"
+                "→ 4 paires (left ↔ right) à relier : concept ↔ définition, ou cause ↔ effet, ou formule ↔ grandeur, ou symbole ↔ unité.\n"
+                "→ Les 4 termes 'left' courts (≤ 6 mots), les 4 'right' courts (≤ 10 mots).\n"
+                "→ Pas d'option \"je ne sais pas\" ; correct_answer = \"pairs\" (sentinelle, le frontend vérifie les paires)."
+            )
+            json_schema = (
+                '{\n'
+                '  "question": "Associe chaque élément de gauche à sa correspondance.",\n'
+                '  "type": "association",\n'
+                '  "pairs": [\n'
+                '    {"left": "...", "right": "..."},\n'
+                '    {"left": "...", "right": "..."},\n'
+                '    {"left": "...", "right": "..."},\n'
+                '    {"left": "...", "right": "..."}\n'
+                '  ],\n'
+                '  "correct_answer": "pairs",\n'
+                f'  "topic": "nom_concept_précis",\n'
+                f'  "chapter_number": {chapter_num_value},\n'
+                '  "difficulty": "facile",\n'
+                f'  "bac_year": "{primary_bac_year or "2024"}",\n'
+                '  "grounded_in": "course"\n'
+                '}'
+            )
+        else:  # qcm
+            type_instruction = (
+                "TYPE IMPOSÉ : QCM (4 options)\n"
+                "→ 4 propositions UNE seule correcte (A, B, C ou D). correct_answer = \"A\" / \"B\" / \"C\" / \"D\".\n"
+                "→ Distracteurs = erreurs typiques d'élèves marocains, jamais absurdes.\n"
+                "→ Chaque option ≤ 18 mots, sur UNE ligne."
+            )
+            json_schema = (
+                '{\n'
+                '  "question": "énoncé clair et précis",\n'
+                '  "type": "qcm",\n'
+                '  "options": ["...", "...", "...", "..."],\n'
+                '  "correct_answer": "A",\n'
+                f'  "topic": "nom_concept_précis",\n'
+                f'  "chapter_number": {chapter_num_value},\n'
+                '  "difficulty": "facile",\n'
+                f'  "bac_year": "{primary_bac_year or "2024"}",\n'
+                '  "grounded_in": "course"\n'
+                '}'
+            )
+
+        # Generate 1 question — strictly grounded + concise + no markdown tables
         prompt = f"""Tu es un expert du BAC marocain 2ème année Sciences Physiques BIOF.
 
 🎯 TÂCHE : Génère 1 question de diagnostic STRICTEMENT FIDÈLE au cours marocain et inspirée des questions BAC réelles ci-dessous.
@@ -532,27 +627,24 @@ PROGRAMME OFFICIEL:{session['chapters_context']}{rag_section}{target_chapter_sec
 - INTERDIT de poser une question hors-programme (ex. notion de prépa, niveau supérieur).
 - Les valeurs numériques, unités, symboles doivent être ceux du cours officiel marocain.
 
+⚠️ RÈGLES DE FORMAT (NON NÉGOCIABLES) :
+- INTERDIT d'écrire un tableau Markdown (`| col | col |`, `|---|---|`, etc.) dans l'énoncé. Si la [Source] BAC contient un tableau, RÉSUME-le en 1 phrase ou choisis 1 seule paire de valeurs représentative.
+- INTERDIT les listes de plus de 3 valeurs numériques dans l'énoncé.
+- L'énoncé COMPLET doit tenir en ≤ 60 mots (≤ 320 caractères) — concis comme un QCM de classe, pas un exercice d'examen.
+- Si une donnée numérique est nécessaire, donne-la directement dans la phrase ; ne demande JAMAIS de lire un tableau.
+- Une seule idée par question : ne combine pas plusieurs concepts.
+
+{type_instruction}
+
 RÈGLES PÉDAGOGIQUES :
 1. Question basée sur un concept DIFFÉRENT des questions déjà générées dans cette session
-2. Type: QCM avec 4 options (A, B, C, D) ou vrai/faux
-3. Teste la COMPRÉHENSION, pas la mémorisation pure
-4. Niveau: facile ou moyen (difficile seulement si nécessaire)
-5. La question DOIT porter sur le CHAPITRE CIBLE indiqué ci-dessus (si précisé)
-6. Distracteurs (mauvaises options) = erreurs FRÉQUENTES d'élèves marocains, pas absurdes{variation_instruction}
+2. Teste la COMPRÉHENSION, pas la mémorisation pure
+3. Niveau: facile ou moyen (difficile seulement si nécessaire)
+4. La question DOIT porter sur le CHAPITRE CIBLE indiqué ci-dessus (si précisé){variation_instruction}
 {self._MATH_FORMAT_INSTRUCTION}
 
-FORMAT JSON STRICT (1 seule question, pas de texte hors JSON):
-{{
-  "question": "énoncé clair et précis",
-  "type": "qcm",
-  "options": ["...", "...", "...", "..."],
-  "correct_answer": "A",
-  "topic": "nom_concept_précis",
-  "chapter_number": {target_chapter.get('number', 1) if target_chapter else 1},
-  "difficulty": "facile",
-  "bac_year": "{primary_bac_year or '2024'}",
-  "grounded_in": "course"
-}}
+FORMAT JSON STRICT (1 seule question, pas de texte hors JSON, pas de code-fence) :
+{json_schema}
 
 Le champ "bac_year" DOIT être l'année de la [Source] BAC dont tu t'es inspiré (ou l'année la plus récente d'un concept testé fréquemment)."""
 
@@ -560,7 +652,8 @@ Le champ "bac_year" DOIT être l'année de la [Source] BAC dont tu t'es inspiré
             messages=[{"role": "user", "content": prompt}],
             system_prompt="Tu es un générateur de questions d'évaluation BAC. Réponds UNIQUEMENT avec du JSON valide (un seul objet), sans texte avant/après.",
             temperature=0.7,
-            max_tokens=500,
+            # Association needs more tokens (4 pairs + structure); QCM/VF stay short.
+            max_tokens=800 if target_type == 'association' else 500,
         )
 
         # Parse JSON response
@@ -578,7 +671,12 @@ Le champ "bac_year" DOIT être l'année de la [Source] BAC dont tu t'es inspiré
             if 'question' not in question or 'topic' not in question:
                 raise ValueError("Invalid question structure")
 
-            question['question'] = self._clean_question_text(question.get('question', ''))
+            # Strip any leftover Markdown table from the question text — last
+            # safety net if the LLM ignored the format rule. Replace pipe rows
+            # by a single space so the rest of the sentence remains readable.
+            question['question'] = self._strip_markdown_table(
+                self._clean_question_text(question.get('question', ''))
+            )
             if 'options' in question and isinstance(question['options'], list):
                 question['options'] = [self._clean_question_text(opt) for opt in question['options']]
 
@@ -612,6 +710,29 @@ Le champ "bac_year" DOIT être l'année de la [Source] BAC dont tu t'es inspiré
                 question['type'] = 'vrai_faux'
                 question['correct_answer'] = 'vrai' if ans in ('vrai', 'true') else 'faux'
                 question['options'] = ['Vrai', 'Faux']
+            elif q_type == 'association':
+                # Validate pairs structure
+                pairs = question.get('pairs', [])
+                if not isinstance(pairs, list) or len(pairs) < 2:
+                    print(f"[Diagnostic] REJECT association without valid pairs: {question.get('question', '')[:100]}")
+                    return None
+                # Clean each pair text
+                cleaned_pairs = []
+                for p in pairs:
+                    if not isinstance(p, dict):
+                        continue
+                    left = self._clean_question_text(str(p.get('left', '')))
+                    right = self._clean_question_text(str(p.get('right', '')))
+                    if left and right:
+                        cleaned_pairs.append({'left': left, 'right': right})
+                if len(cleaned_pairs) < 2:
+                    print(f"[Diagnostic] REJECT association with invalid pair contents")
+                    return None
+                question['type'] = 'association'
+                question['pairs'] = cleaned_pairs
+                question['correct_answer'] = 'pairs'
+                # Frontend's <select> uses options for the dropdown choices
+                question['options'] = [p['right'] for p in cleaned_pairs]
             else:
                 question['type'] = 'qcm'
 
