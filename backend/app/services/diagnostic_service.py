@@ -34,6 +34,26 @@ def _safe_json_loads(raw: str) -> dict | list:
 
 
 class DiagnosticService:
+    # Shared instruction injected into every question-generation prompt so
+    # all math/physics/chem formulas are emitted as LaTeX (rendered by
+    # <LatexRenderer> on the frontend) instead of ASCII placeholders.
+    _MATH_FORMAT_INSTRUCTION = r"""
+
+⚠️ FORMATAGE MATHÉMATIQUE OBLIGATOIRE (Physique / Chimie / Maths) :
+Écris TOUTES les formules, grandeurs, équations et unités en LaTeX entre $...$ (inline) ou $$...$$ (bloc).
+Exemples CORRECTS :
+  - Dérivée : $\frac{du_C}{dt}$   (pas "du_C/dt")
+  - Fraction : $\frac{1}{RC}$     (pas "(1/RC)" ou "1/RC")
+  - Indice / exposant : $u_C$, $x^2$, $e^{-t/\tau}$, $\mathrm{H}_2\mathrm{O}$
+  - Vecteurs : $\vec{F}$, $\vec{v}$
+  - Unités : $\Omega$, $\mu\mathrm{F}$, $\mathrm{m \cdot s^{-1}}$, $^{\circ}\mathrm{C}$
+  - Équation différentielle : $\frac{du_C}{dt} + \frac{1}{RC}\, u_C = 0$
+  - Loi / relation : $U = R \cdot I$, $E = \frac{1}{2} C u^2$, $pH = -\log[\mathrm{H_3O^+}]$
+  - Racine, intégrale, somme : $\sqrt{2}$, $\int_0^T f(t)\,dt$, $\sum_{i=1}^n x_i$
+Les **options A/B/C/D** DOIVENT aussi utiliser ce formatage LaTeX (pas de "du_C/dt", toujours $\frac{du_C}{dt}$).
+Le texte narratif (non mathématique) reste en français normal, hors $...$.
+"""
+
     def __init__(self):
         self.supabase = get_supabase_admin()
         # Store ongoing diagnostic sessions for question-by-question generation
@@ -439,6 +459,7 @@ RÈGLES (STRICT):
 3. Teste la COMPRÉHENSION, pas la mémorisation pure
 4. Niveau: facile ou moyen (difficile seulement si nécessaire)
 5. La question DOIT porter sur le CHAPITRE CIBLE indiqué ci-dessus (si précisé){variation_instruction}
+{self._MATH_FORMAT_INSTRUCTION}
 
 FORMAT JSON STRICT (1 seule question):
 {{
@@ -751,6 +772,7 @@ RÈGLES (STRICT):
 7. Pour association: 4 paires à relier (concept ↔ définition, cause ↔ effet, formule ↔ grandeur)
 8. RESTE FIDÈLE au style BAC marocain (pas français)
 9. ⚠️ CHAQUE question DOIT porter sur la matière {subject_name} UNIQUEMENT et sur l'un des chapitres {valid_chapter_numbers}. Questions hors programme ou hors matière = REJETÉES.{variation_instruction}
+{self._MATH_FORMAT_INSTRUCTION}
 
 FORMAT JSON STRICT (pas de texte hors JSON):
 [
