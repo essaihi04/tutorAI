@@ -139,20 +139,51 @@ function renderMixedContent(text: string): string {
   }).join('');
 }
 
-/** Render display-mode LaTeX ($$...$$) */
+/** Render display-mode LaTeX ($$...$$).
+ *
+ * Defensive routing: when the LLM emits a line of type='math' that actually
+ * contains French descriptive text mixed with a formula
+ * (e.g. "Terme général : $u_n = u_0 + (n-1) r$"), passing the whole string
+ * to KaTeX makes it bail out and re-render the text in red (its native
+ * "throwOnError:false" failure styling). To avoid that, we detect mixed
+ * content (accents, $...$ delimiters, or several spaced words) and route
+ * it through renderMixedContent, which handles plain text + inline math
+ * correctly.
+ */
 function renderDisplayMath(latex: string): string {
   if (!latex || typeof latex !== 'string') return '';
-  
-  // Strip $$ wrappers if present
+
   let clean = latex.trim();
+
+  // Detect "this is not a pure LaTeX expression":
+  //   - has French accented letters, OR
+  //   - contains inline-math delimiters $...$ or \(...\), OR
+  //   - has many spaced words AND no LaTeX backslash command at all.
+  const hasAccents = /[àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ]/.test(clean);
+  // Inline $…$ that isn't the wrapping $$…$$ of a pure formula.
+  const inner = clean.replace(/^\$\$|\$\$$/g, '');
+  const hasInlineDelims = /\$[^$\n]+\$/.test(inner) || /\\\([^\n]+?\\\)/.test(inner);
+  const wordCount = clean.split(/\s+/).filter(Boolean).length;
+  const hasBackslashCmd = /\\[a-zA-Z]+/.test(clean);
+  const looksLikeProse = wordCount > 4 && !hasBackslashCmd;
+
+  if (hasAccents || hasInlineDelims || looksLikeProse) {
+    // Render as a display-styled mixed-content block instead of a single formula.
+    return `<div class="my-1">${renderMixedContent(clean)}</div>`;
+  }
+
+  // Strip $$ or single $ wrappers if present (defensive).
   if (clean.startsWith('$$') && clean.endsWith('$$')) {
     clean = clean.slice(2, -2).trim();
+  } else if (clean.startsWith('$') && clean.endsWith('$') && clean.length > 2) {
+    clean = clean.slice(1, -1).trim();
   }
+
   try {
     return katex.renderToString(clean, { throwOnError: false, displayMode: true, strict: 'ignore' });
   } catch (e) {
     console.error('[MathBoard] KaTeX display render error:', e);
-    return `<pre style="color:#f87171">${clean}</pre>`;
+    return `<pre style="color:#f87171">${escapeHtml(clean)}</pre>`;
   }
 }
 
