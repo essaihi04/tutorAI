@@ -2550,7 +2550,19 @@ RÈGLES :
                 self._remember_mode("whiteboard")
 
             if ui_actions_handled:
-                return
+                # ── ALWAYS run exam exercise detection even when UI actions
+                # were handled.  The AI often emits BOTH a <ui> block (for
+                # whiteboard/media) AND an <exam_exercise> tag.  Without
+                # this, the early `return` would skip exam detection and
+                # leave a stale Chemistry panel visible when the student
+                # asked for SVT / Maths / etc.
+                exam_ex_match_early = re.search(
+                    r'<exam_exercise>(.*?)</exam_exercise>', ai_response, re.DOTALL
+                )
+                if exam_ex_match_early or (force_exam_panel and not exam_context):
+                    _safe_log("[AI Commands] UI actions handled but exam detection still pending — continuing to exam block")
+                else:
+                    return
 
         # Support both <draw> and [draw] formats
         draw_data_match = re.search(r'<draw>\s*(\[.*?\])\s*</draw>', ai_response, re.DOTALL)
@@ -2787,7 +2799,8 @@ RÈGLES :
                     })
                     exam_exercises_sent = True
                 else:
-                    _safe_log(f"[AI Commands] No exam exercises found for '{exam_query}'")
+                    _safe_log(f"[AI Commands] No exam exercises found for '{exam_query}' — hiding stale panel")
+                    await self.websocket.send_json({"type": "hide_exam_panel"})
             except Exception as e:
                 _safe_log(f"[AI Commands] Error searching exam bank: {e}")
 
@@ -2918,7 +2931,8 @@ RÈGLES :
                     })
                     exam_exercises_sent = True
                 else:
-                    _safe_log(f"[AI Commands] Force exam panel fallback: no exam exercises found for '{search_query}' (all retries exhausted)")
+                    _safe_log(f"[AI Commands] Force exam panel fallback: no exam exercises found for '{search_query}' (all retries exhausted) — hiding stale panel")
+                    await self.websocket.send_json({"type": "hide_exam_panel"})
             except Exception as e:
                 _safe_log(f"[AI Commands] Force exam panel fallback error: {e}")
 
