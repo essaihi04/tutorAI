@@ -9,6 +9,28 @@ from app.services.llm_service import llm_service
 from app.services.rag_service import get_rag_service
 import uuid
 import json
+import re
+
+
+# Match a backslash NOT followed by a valid JSON escape character.
+# Valid JSON escapes: \" \\ \/ \b \f \n \r \t \uXXXX
+_INVALID_ESCAPE_RE = re.compile(r'\\(?!["\\/bfnrtu])')
+
+
+def _safe_json_loads(raw: str) -> dict | list:
+    """Parse JSON, tolerant to LaTeX-style stray backslashes (\\frac, \\pi, …)
+    that the LLM occasionally emits inside string values.
+    Tries strict parse first; on InvalidEscape error, escapes lone backslashes
+    and retries once.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        if "Invalid \\escape" not in str(e) and "Invalid escape" not in str(e):
+            raise
+        # Escape any backslash that isn't part of a valid JSON escape sequence
+        fixed = _INVALID_ESCAPE_RE.sub(r'\\\\', raw)
+        return json.loads(fixed)
 
 
 class DiagnosticService:
@@ -445,7 +467,7 @@ FORMAT JSON STRICT (1 seule question):
                     cleaned = cleaned[4:]
             cleaned = cleaned.strip()
 
-            question = json.loads(cleaned)
+            question = _safe_json_loads(cleaned)
 
             # Validate and clean
             if 'question' not in question or 'topic' not in question:
@@ -795,7 +817,7 @@ Génère {num_questions} questions maintenant:"""
                     cleaned = cleaned[4:]
             cleaned = cleaned.strip()
             
-            questions = json.loads(cleaned)
+            questions = _safe_json_loads(cleaned)
             
             # Validate structure
             if not isinstance(questions, list):
@@ -1065,7 +1087,7 @@ Génère exactement {num_questions} questions maintenant:"""
                     cleaned = cleaned[4:]
             cleaned = cleaned.strip()
             
-            questions = json.loads(cleaned)
+            questions = _safe_json_loads(cleaned)
             return questions[:num_questions]
             
         except (json.JSONDecodeError, ValueError) as e:
