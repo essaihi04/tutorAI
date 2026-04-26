@@ -2692,13 +2692,28 @@ RÈGLES :
                 from app.services.exam_bank_service import exam_bank
                 search_query = student_text or self.session_context.get("lesson_title", "") or self.session_context.get("chapter_title", "")
                 subject_hint = self.session_context.get("subject", None)
+                # subject_from_user is True when we have a strong signal about
+                # which subject was requested (explicit session subject, AI
+                # announcement keyword, or detection on the AI text). When
+                # True, we MUST NOT drop the subject filter as a fallback —
+                # otherwise an SVT request silently loads a Physique exercise.
+                subject_from_user = False
                 if subject_hint and subject_hint.lower() in {"général", "general", "mode libre"}:
                     subject_hint = None
+                elif subject_hint:
+                    subject_from_user = True
                 # ── Detect subject from student query text (libre/explain mode) ──
                 if not subject_hint:
                     subject_hint = self._detect_subject_from_text(search_query)
                     if subject_hint:
+                        subject_from_user = True
                         _safe_log(f"[SubjectDetect] force_fallback query='{search_query[:60]}' -> {subject_hint}")
+                # ── Try the AI's announcement text too — it often says 'en SVT' / 'en Physique' ──
+                if not subject_hint and ai_response:
+                    subject_hint = self._detect_subject_from_text(ai_response[-600:])
+                    if subject_hint:
+                        subject_from_user = True
+                        _safe_log(f"[SubjectDetect] force_fallback ai_response -> {subject_hint}")
                 if not subject_hint and self.session_mode in ("libre", "explain"):
                     subject_hint = self._infer_subject_from_context(None)
                     _safe_log(f"[SubjectDetect] force_fallback fallback infer -> {subject_hint}")
@@ -2748,9 +2763,14 @@ RÈGLES :
                             subject=subject_hint,
                             count=2,
                         )
-                # Last resort: drop the subject filter entirely
-                if not exercises and not single_qs:
-                    _safe_log(f"[AI Commands] Force exam fallback: exhausted subject='{subject_hint}', dropping subject filter as last resort")
+                # Last resort: drop the subject filter entirely — but ONLY
+                # when we DON'T know which subject was requested. If the user
+                # (or the AI's announcement) explicitly asked for a specific
+                # subject, NEVER load a different-subject exercise as fallback;
+                # better to open no exercise than load a Physique RC/RL one
+                # when the student asked for SVT/glycolyse.
+                if not exercises and not single_qs and not subject_from_user:
+                    _safe_log(f"[AI Commands] Force exam fallback: exhausted subject='{subject_hint}', dropping subject filter as last resort (subject_from_user=False)")
                     exercises = exam_bank.search_full_exercises(
                         query=search_query,
                         subject=None,
@@ -2764,6 +2784,8 @@ RÈGLES :
                             subject=None,
                             count=2,
                         )
+                elif not exercises and not single_qs and subject_from_user:
+                    _safe_log(f"[AI Commands] Force exam fallback: 0 exercises for subject='{subject_hint}' but subject_from_user=True — NOT cross-loading another subject. Panel will not open.")
                 if not exercises and single_qs:
                         # Wrap single questions to match exam_exercise payload shape
                         # (group into a pseudo-exercise with one question each)
