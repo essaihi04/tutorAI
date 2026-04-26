@@ -234,7 +234,22 @@ class SessionHandler:
             return "Chimie"
         svt_kw = [
             "svt", "biologie", "vie", "terre", "géologie", "geologie", "écosystème",
-            "ecosysteme", "cellule", "cellulaire", "membrane", "cytoplasme", "noyau",
+            "ecosysteme",
+            # ── Écologie / environnement (programme SVT 2BAC) ──
+            "déchet", "déchets", "dechet", "dechets", "pollution", "polluant", "polluants",
+            "polluante", "polluantes", "environnement", "environnemental", "environnementale",
+            "écologie", "ecologie", "écologique", "ecologique",
+            "biodégradable", "biodegradable", "recyclage", "recycler",
+            "atmosphère", "atmosphere", "climat", "climatique",
+            "réchauffement", "rechauffement", "effet de serre", "ozone",
+            "ressource naturelle", "ressources naturelles",
+            "gestion des déchets", "gestion des dechets", "gestion des ressources",
+            "développement durable", "developpement durable",
+            "eau usée", "eau usées", "eau usee", "eau usees",
+            "lixiviat", "compost", "compostage", "incinération", "incineration",
+            "tri sélectif", "tri selectif", "valorisation",
+            # ── Reste du programme SVT classique ──
+            "cellule", "cellulaire", "membrane", "cytoplasme", "noyau",
             "mitochondrie", "chloroplaste", "ribosome", "adn", "arn", "nucléotide",
             "nucleotide", "génétique", "genetique", "chromosome", "gène", "gene",
             "allèle", "allele", "mutation", "réplication", "replication", "transcription",
@@ -294,7 +309,15 @@ class SessionHandler:
                 "chimie", "acide", "base", "ph", "titrage", "réaction", "reaction", "cinétique", "cinetique", "esterification"
             ],
             "SVT": [
-                "svt", "cellule", "mitochondrie", "adn", "arn", "génétique", "genetique", "glycolyse", "mitose", "méiose", "meiose", "traduction", "transcription"
+                "svt", "cellule", "mitochondrie", "adn", "arn", "génétique", "genetique",
+                "glycolyse", "mitose", "méiose", "meiose", "traduction", "transcription",
+                # Écologie / environnement (chapitre BAC 2BAC SVT)
+                "déchet", "déchets", "dechet", "pollution", "polluant", "environnement",
+                "écologie", "ecologie", "biodégradable", "biodegradable", "recyclage",
+                "atmosphère", "atmosphere", "climat", "ozone", "effet de serre",
+                "développement durable", "developpement durable", "ressources naturelles",
+                "compost", "compostage", "tri sélectif", "valorisation", "lixiviat",
+                "écosystème", "ecosysteme", "biodiversité", "biodiversite",
             ],
         }
 
@@ -2595,6 +2618,10 @@ RÈGLES :
         exam_exercises_sent = False
         if exam_ex_match:
             exam_query = exam_ex_match.group(1).strip()
+            # Capture the AI's announcement text right before the tag — this often
+            # contains the explicit subject name (e.g. "exercice BAC en SVT sur la
+            # gestion des déchets") even when the tag content is just a topic.
+            exam_pre_text = ai_response[:exam_ex_match.start()][-400:]
             _safe_log(f"[AI Commands] Exam exercise request detected: '{exam_query}'")
             try:
                 from app.services.exam_bank_service import exam_bank
@@ -2611,6 +2638,13 @@ RÈGLES :
                     if subject_hint:
                         subject_from_user = True
                         _safe_log(f"[SubjectDetect] exam_query='{exam_query[:60]}' -> {subject_hint}")
+                # ── If the tag content was too vague, fall back to the announcement
+                # text immediately before the tag (the AI often says "en SVT…" there).
+                if not subject_hint and self.session_mode in ("libre", "explain"):
+                    subject_hint = self._detect_subject_from_text(exam_pre_text)
+                    if subject_hint:
+                        subject_from_user = True
+                        _safe_log(f"[SubjectDetect] from_pre_text -> {subject_hint} (preview='{exam_pre_text[-120:]!r}')")
                 if not subject_hint and self.session_mode in ("libre", "explain"):
                     subject_hint = self._infer_subject_from_context(None)
                     _safe_log(f"[SubjectDetect] fallback infer_from_context -> {subject_hint}")
