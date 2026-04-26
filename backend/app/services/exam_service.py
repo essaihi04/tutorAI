@@ -1489,15 +1489,24 @@ class ExamService:
         if not question:
             return {"error": "Question not found"}
 
-        correction = question.get("correction")
-        if not correction:
-            return {"error": "No correction available for this question"}
-
         question_type = question.get("type", "open")
+        correction = question.get("correction") or {}
+
+        # Closed-form questions are graded deterministically from
+        # ``correct_answer`` / ``correct_pairs`` and do NOT require a
+        # ``correction`` field. Many BAC datasets only ship those keys for
+        # QCM / vrai-faux / association — fail fast for OPEN questions only.
         if question_type in ["qcm", "vrai_faux"] and not student_image:
+            if question.get("correct_answer") in (None, ""):
+                return {"error": "No correct answer available for this question"}
             return self._evaluate_closed_question(question, correction, student_answer, question_index)
         if question_type == "association" and not student_image:
+            if not (question.get("correct_pairs") or correction.get("correct_pairs")):
+                return {"error": "No correct pairs available for this question"}
             return self._evaluate_association(question, correction, student_answer, question_index)
+
+        if not correction:
+            return {"error": "No correction available for this question"}
 
         # --- Image analysis with Gemini Vision ---
         image_analysis = None
@@ -1634,6 +1643,7 @@ class ExamService:
             return {
                 "question_index": question_index,
                 "points_max": points_max,
+                "score": 0.0,
                 "feedback": f"## Note\n0/{points_max}\n\nImpossible d'évaluer automatiquement (pas de corrigé d'association disponible).",
                 "correction": correction.get("content", "") or "",
             }
