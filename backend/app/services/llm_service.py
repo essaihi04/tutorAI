@@ -1072,20 +1072,37 @@ class LLMService:
             "communication hormonale / régulation glycémie (programme 2BAC SVT track)",
             "reproduction humaine / sexuelle (programme 2BAC SVT track)",
             "évolution / sélection naturelle (programme 2BAC SVT track)",
+            "écosystèmes / chaîne alimentaire / flux d'énergie (programme 2BAC SVT track)",
+            "phylogénie / classification des êtres vivants (programme 2BAC SVT track)",
         ],
         "Physique": [
-            "relativité restreinte (programme 2BAC SM, PAS PC)",
-            "physique quantique avancée (hors programme PC)",
-            "thermodynamique avancée (hors programme PC)",
+            "relativité restreinte / dilatation du temps (programme 2BAC SM, PAS PC)",
+            "physique quantique avancée — fonction d'onde, équation de Schrödinger (hors PC)",
+            "thermodynamique — 1er/2ème principe, entropie, machines thermiques (hors PC)",
+            "magnétostatique avancée — théorème d'Ampère, flux magnétique (hors PC)",
+            "optique géométrique — lentilles, miroirs, formation d'images (hors PC, vu en 1ère)",
+            "électromagnétisme — équations de Maxwell (hors programme)",
+            "mécanique des fluides / hydrodynamique (hors programme)",
         ],
         "Chimie": [
-            "chimie organique avancée (synthèse multi-étapes) (hors programme)",
-            "spectroscopie RMN/IR (hors programme PC)",
+            "chimie organique de synthèse — alcanes, alcènes, alcools, aldéhydes, cétones (hors PC, sauf esters)",
+            "spectroscopie RMN / IR / UV-visible (hors programme PC)",
+            "thermochimie — enthalpie de réaction, loi de Hess (hors PC)",
+            "cristallographie / mailles cristallines (hors PC)",
+            "cinétique enzymatique (Michaelis-Menten) (hors PC)",
+            "complexes de coordination (hors programme)",
+            "diagrammes E-pH / Pourbaix (hors PC)",
         ],
         "Mathematiques": [
-            "espaces vectoriels abstraits / algèbre linéaire (programme 2BAC SM)",
-            "structures algébriques (groupes, anneaux) (programme 2BAC SM)",
-            "équations différentielles non linéaires (hors programme)",
+            "espaces vectoriels abstraits / bases / dimension (programme 2BAC SM, PAS PC)",
+            "applications linéaires / matrices / déterminants (programme 2BAC SM)",
+            "structures algébriques — groupes, anneaux, corps (programme 2BAC SM)",
+            "arithmétique modulaire / congruences / RSA (programme 2BAC SM)",
+            "équations différentielles d'ordre 2 ou non linéaires (hors PC ; PC voit seulement y' = ay + b en physique)",
+            "courbes paramétrées / coordonnées polaires (hors PC, programme SM)",
+            "séries numériques / convergence (hors programme)",
+            "géométrie affine / barycentres avancés (hors PC)",
+            "isométries du plan complexe au-delà de translation/rotation/homothétie (hors PC)",
         ],
     }
 
@@ -1153,13 +1170,36 @@ class LLMService:
                 "qui EST au programme PC."
             )
 
-        # Specific reminder for SVT (most common confusion source)
+        # Subject-specific structural reminders (most common confusion sources)
         if key == "SVT":
             lines.append("")
             lines.append(
                 "📌 Rappel SVT 2BAC PC : 4 DOMAINES, chacun ≈ 25% (l'examen "
                 "répartit librement les 20 points). Le programme PC est PLUS "
-                "RÉDUIT que le programme SVT track. NE confonds JAMAIS les deux."
+                "RÉDUIT que le programme SVT track. NE confonds JAMAIS les deux. "
+                "Coefficient SVT = 5. Durée = 3h."
+            )
+        elif key in ("Physique", "Chimie", "Physique-Chimie"):
+            lines.append("")
+            lines.append(
+                "📌 Rappel Physique-Chimie 2BAC PC : ÉPREUVE COMMUNE notée /20. "
+                "PHYSIQUE pèse 67% (Mécanique 27% + Électricité 21% + Ondes 11% + "
+                "Nucléaire 8%) et CHIMIE pèse 33% (les 4 sous-domaines additionnés). "
+                "Coefficient PC = 7. Durée = 4h. NE confonds PAS avec le programme "
+                "Sciences Mathématiques (SM) qui contient en plus relativité, "
+                "thermodynamique, etc."
+            )
+        elif key in ("Mathematiques", "Mathématiques"):
+            lines.append("")
+            lines.append(
+                "📌 Rappel Mathématiques 2BAC Sciences Expérimentales (PC/SVT) : "
+                "3 DOMAINES PRINCIPAUX — Analyse 55% (Suites + Continuité/Dérivation "
+                "+ Calcul intégral), Algèbre-Géométrie dans l'espace 15% (Produit "
+                "scalaire/vectoriel V3), Algèbre-Géométrie suite 30% (Nombres "
+                "complexes + Probabilités). Coefficient Maths = 7 (PC) ou 9 (SVT). "
+                "Durée = 3h. NE confonds JAMAIS avec le programme Sciences "
+                "Mathématiques (SM) qui contient algèbre linéaire, structures "
+                "algébriques, arithmétique modulaire, etc. — TOUS HORS PROGRAMME ICI."
             )
 
         lines.append("")
