@@ -14,15 +14,26 @@ from typing import Optional
 _log = logging.getLogger(__name__)
 
 
+def _strip_accents(s: Optional[str]) -> str:
+    """NFD decomposition + drop combining marks (accents)."""
+    if not s:
+        return ""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
+
+
 def _normalize_subject(name: Optional[str]) -> Optional[str]:
     """Strip accents and lowercase for robust subject comparison."""
     if not name:
         return None
-    # NFD decomposition then remove combining characters (accents)
-    return "".join(
-        c for c in unicodedata.normalize("NFD", name)
-        if unicodedata.category(c) != "Mn"
-    ).lower()
+    return _strip_accents(name).lower()
+
+
+def _norm_kw(kw: str) -> str:
+    """Lowercase + accent-stripped form of a keyword for matching."""
+    return _strip_accents(kw).lower() if kw else ""
 
 
 def _subject_matches(stored: Optional[str], wanted: Optional[str]) -> bool:
@@ -297,20 +308,43 @@ class ExamBankService:
         q_type = q.get("type", parent_q.get("type", "open") if parent_q else "open")
         points = q.get("points", 0)
 
-        # Get correction text
+        # Get correction text. The schema can be:
+        #   {"content": "..."}                         → open / step-by-step
+        #   {"correct_answer": "vrai" | "a"}           → vrai/faux / QCM single
+        #   {"correct_answers": ["1-c", "2-a", ...]}   → association
+        # vrai/faux & QCM questions are perfectly valid exercises with a known
+        # answer — index them too.
         correction = q.get("correction", {})
+        correction_text = ""
         if isinstance(correction, dict):
-            correction_text = correction.get("content", "")
+            correction_text = (
+                correction.get("content")
+                or correction.get("correct_answer")
+                or correction.get("answer")
+                or ""
+            )
+            if not correction_text:
+                ca = correction.get("correct_answers")
+                if isinstance(ca, list):
+                    correction_text = ", ".join(str(x) for x in ca)
+                elif isinstance(ca, dict):
+                    correction_text = ", ".join(f"{k}: {v}" for k, v in ca.items())
         elif isinstance(correction, str):
             correction_text = correction
-        else:
-            correction_text = ""
 
-        # If no correction on sub-question, use parent's
+        # Fallback: top-level correct_answer field on the question itself
+        if not correction_text and q.get("correct_answer"):
+            correction_text = str(q.get("correct_answer"))
+
+        # If still no correction, inherit from parent question
         if not correction_text and parent_q:
             parent_corr = parent_q.get("correction", {})
             if isinstance(parent_corr, dict):
-                correction_text = parent_corr.get("content", "")
+                correction_text = (
+                    parent_corr.get("content")
+                    or parent_corr.get("correct_answer")
+                    or ""
+                )
 
         # Build keyword string for search (include subject for keyword matching)
         full_text = " ".join(filter(None, [
@@ -342,6 +376,11 @@ class ExamBankService:
                     "description": schema.get("description", ""),
                 })
         
+        kws = self._extract_keywords(full_text)
+        # Pre-compute accent-stripped variants so query keywords match no
+        # matter whether they have accents (genetique → génétique).
+        kws_norm = {_norm_kw(k) for k in kws if k}
+        full_text_norm = _strip_accents(full_text).lower()
         self._questions.append({
             "exam_id": exam_id,
             "exam_path": exam_path,
@@ -361,8 +400,10 @@ class ExamBankService:
             "choices": q.get("choices"),
             "correct_answer": q.get("correct_answer"),
             "documents": documents,
-            "keywords": self._extract_keywords(full_text),
+            "keywords": kws,
+            "keywords_norm": kws_norm,
             "_full_text": full_text.lower(),
+            "_full_text_norm": full_text_norm,
         })
 
     # ------------------------------------------------------------------ #
@@ -409,8 +450,13 @@ class ExamBankService:
             if not q.get("correction"):
                 continue
 
-            # Score: count keyword matches
-            score = self._score_match(query_kw, q["keywords"], q.get("topic", ""), q.get("content", ""), q.get("_full_text", ""))
+            # Score: count keyword matches (accent-insensitive)
+            score = self._score_match(
+                query_kw, q["keywords"], q.get("topic", ""),
+                q.get("content", ""), q.get("_full_text", ""),
+                doc_kw_norm=q.get("keywords_norm"),
+                full_text_norm=q.get("_full_text_norm", ""),
+            )
             if score > 0:
                 scored.append((score, q))
 
@@ -424,24 +470,31 @@ class ExamBankService:
             _log.info("[ExamSearch] No keyword matches, trying fallback...")
 
         # Fallback: if no keyword matches but subject filter is set,
-        # try relaxed substring matching on full text before falling back to random
+        # try relaxed substring matching on full text before falling back to random.
+        # Accent-insensitive so "genetique" finds "génétique".
         if not scored and subject:
             topical_kw = query_kw - {
                 "exercice", "examen", "bac", "national", "svt", "donne",
                 "donner", "donné", "type", "sujet", "question",
                 "interface", "ouvre", "ouvrir", "montre", "montrer",
             }
-            if topical_kw:
-                # Try substring matching on full text
+            topical_norm = {_norm_kw(k) for k in topical_kw if k}
+            if topical_norm:
                 for q in self._questions:
                     if not _question_matches_subject(q, subject):
                         continue
                     if not q.get("correction"):
                         continue
-                    ft = q.get("_full_text", "")
-                    hits = sum(1 for kw in topical_kw if kw in ft)
+                    ft_norm = q.get("_full_text_norm") or _strip_accents(q.get("_full_text", "")).lower()
+                    hits = sum(1 for kw in topical_norm if kw in ft_norm)
+                    # 5-char prefix fuzzy fallback
+                    if hits == 0:
+                        hits = sum(
+                            1 for kw in topical_norm
+                            if len(kw) >= 6 and kw[:5] in ft_norm
+                        ) * 0.5
                     if hits > 0:
-                        scored.append((hits / len(topical_kw), q))
+                        scored.append((hits / len(topical_norm), q))
                 scored.sort(key=lambda x: (x[0], x[1]["year"]), reverse=True)
             if not scored:
                 # Truly generic: return recent exercises with corrections
@@ -581,7 +634,9 @@ class ExamBankService:
                 s = self._score_match(
                     query_kw, q["keywords"],
                     q.get("topic", ""), q.get("content", ""),
-                    q.get("_full_text", "")
+                    q.get("_full_text", ""),
+                    doc_kw_norm=q.get("keywords_norm"),
+                    full_text_norm=q.get("_full_text_norm", "")
                 )
                 q_scores.append(s)
 
@@ -655,22 +710,31 @@ class ExamBankService:
                 _log.info(f"[ExamSearchFull] Lesson filter dropped {dropped} off-topic exercises (kept {len(filtered_scores)})")
             exercise_scores = filtered_scores
 
-        # ── Step 3: Fallback — substring matching on full text ──
+        # ── Step 3: Fallback — substring matching on full text (accent-insensitive + fuzzy stem) ──
         if not exercise_scores:
             topical_kw = self._get_topical_keywords(query_kw)
-            if topical_kw:
-                _log.info(f"[ExamSearchFull] No scored matches, trying substring fallback with {topical_kw}")
+            topical_norm = {_norm_kw(k) for k in topical_kw if k}
+            if topical_norm:
+                _log.info(f"[ExamSearchFull] No scored matches, trying substring/fuzzy fallback with {sorted(topical_norm)}")
                 for ex_key, questions in exercises_map.items():
                     hits = 0
+                    fuzzy = 0
                     total = 0
                     for q in questions:
-                        ft = q.get("_full_text", "")
+                        ft_norm = q.get("_full_text_norm") or _strip_accents(q.get("_full_text", "")).lower()
                         total += 1
-                        h = sum(1 for kw in topical_kw if kw in ft)
+                        h = sum(1 for kw in topical_norm if kw in ft_norm)
                         if h > 0:
                             hits += h
-                    if hits > 0:
-                        exercise_scores.append((hits / (len(topical_kw) * total), ex_key, questions))
+                        else:
+                            # 5-char prefix fuzzy stem (génétique → génét)
+                            fuzzy += sum(
+                                1 for kw in topical_norm
+                                if len(kw) >= 6 and kw[:5] in ft_norm
+                            )
+                    weighted = hits + fuzzy * 0.5
+                    if weighted > 0:
+                        exercise_scores.append((weighted / (len(topical_norm) * max(total, 1)), ex_key, questions))
                 exercise_scores.sort(key=lambda x: x[0], reverse=True)
 
         # ── Step 4: Last resort fallback for generic requests ──
@@ -725,7 +789,9 @@ class ExamBankService:
                 q_score = self._score_match(
                     query_kw, cand["keywords"],
                     cand.get("topic", ""), cand.get("content", ""),
-                    cand.get("_full_text", "")
+                    cand.get("_full_text", ""),
+                    doc_kw_norm=cand.get("keywords_norm"),
+                    full_text_norm=cand.get("_full_text_norm", "")
                 )
                 scored_questions.append((q_score, cand))
             # Keep questions with score > 0; if none, keep all (fallback)
@@ -1671,8 +1737,16 @@ class ExamBankService:
                 best_topic = topic_name
         return best_topic if best_count >= 2 else ""
 
-    def _score_match(self, query_kw: set, doc_kw: set, topic: str, content: str, full_text: str = "") -> float:
-        """Score how well a question matches the query keywords."""
+    def _score_match(self, query_kw: set, doc_kw: set, topic: str, content: str,
+                     full_text: str = "", doc_kw_norm: Optional[set] = None,
+                     full_text_norm: str = "") -> float:
+        """Score how well a question matches the query keywords.
+
+        Matching is **accent-insensitive**: query keywords are compared against
+        the question's accent-stripped keyword set and full text. A small
+        fuzzy-stem match (first 5 chars) catches common French inflections
+        (génétique↔génétiques, croisement↔croisements, allèle↔allèles).
+        """
         if not query_kw or not doc_kw:
             return 0
 
@@ -1680,32 +1754,50 @@ class ExamBankService:
         if not topical_kw:
             topical_kw = query_kw
 
-        # Exact keyword overlap
-        overlap = topical_kw & doc_kw
+        # Accent-stripped query keywords
+        topical_norm = {_norm_kw(k) for k in topical_kw if k}
+        if doc_kw_norm is None:
+            doc_kw_norm = {_norm_kw(k) for k in doc_kw if k}
 
-        # Substring matching on full text for partial word matches
-        search_text = full_text or content.lower()
+        # 1) Exact accent-insensitive overlap
+        overlap = topical_norm & doc_kw_norm
+
+        # 2) Substring matching on accent-stripped full text
+        search_text = full_text_norm or _strip_accents(full_text or content).lower()
         substring_hits = 0
-        for kw in topical_kw:
+        for kw in topical_norm:
             if len(kw) >= 4 and kw in search_text and kw not in overlap:
                 substring_hits += 1
 
-        total_hits = len(overlap) + substring_hits
+        # 3) Fuzzy stem match: 5-char prefix overlap (e.g. "génét" matches
+        #    génétique / génétiques / génétiquement). This catches plurals,
+        #    feminine forms, derivatives without an explicit alias list.
+        fuzzy_hits = 0
+        already = overlap | {kw for kw in topical_norm if kw in search_text}
+        for kw in topical_norm - already:
+            if len(kw) >= 6:
+                stem = kw[:5]
+                if any(dk.startswith(stem) for dk in doc_kw_norm if len(dk) >= 5):
+                    fuzzy_hits += 1
+                elif stem in search_text:
+                    fuzzy_hits += 1
+
+        total_hits = len(overlap) + substring_hits + fuzzy_hits * 0.5
         if total_hits == 0:
             return 0
 
-        score = total_hits / len(topical_kw)
+        score = total_hits / max(len(topical_norm), 1)
 
         # Strong bonus for topic match (most important signal)
         if topic:
-            topic_lower = topic.lower()
-            topic_matches = sum(1 for kw in topical_kw if kw in topic_lower)
+            topic_norm = _strip_accents(topic).lower()
+            topic_matches = sum(1 for kw in topical_norm if kw in topic_norm)
             score += topic_matches * 0.8
 
         # Bonus for content containing query words as substrings
-        content_lower = content.lower()
-        for kw in topical_kw:
-            if kw in content_lower:
+        content_norm = _strip_accents(content).lower()
+        for kw in topical_norm:
+            if kw in content_norm:
                 score += 0.2
 
         return score
