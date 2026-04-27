@@ -235,6 +235,8 @@ export const updateAdminUser = (userId: string, data: Record<string, any>) =>
   adminApi.put(`/users/${userId}`, data);
 export const deleteAdminUser = (userId: string) =>
   adminApi.delete(`/users/${userId}`);
+export const bulkUserAction = (userIds: string[], action: 'delete' | 'activate' | 'deactivate') =>
+  adminApi.post('/users/bulk-action', { user_ids: userIds, action });
 export const resetUserPassword = (userId: string, newPassword: string) =>
   adminApi.post(`/users/${userId}/reset-password`, { new_password: newPassword });
 export const getOnlineUsers = () => adminApi.get('/online');

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   adminLogin, getAdminDashboard, getAdminUsers, createAdminUser,
-  updateAdminUser, deleteAdminUser, resetUserPassword, getOnlineUsers,
+  updateAdminUser, deleteAdminUser, bulkUserAction, resetUserPassword, getOnlineUsers,
   getUsageSummary, getUsageByUser, getRecentRequests,
   listRegistrationRequests, updateRegistrationRequest, deleteRegistrationRequest,
   activateRegistration, listPromoCodes, createPromoCode, updatePromoCode, deletePromoCode
@@ -398,6 +398,8 @@ export default function AdminDashboard() {
   });
   const [promoType, setPromoType] = useState<'all' | 'permanent' | 'test' | 'expired'>('all');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!localStorage.getItem('admin_token')) return;
@@ -475,6 +477,42 @@ export default function AdminDashboard() {
       loadData();
     } catch (err) {
       console.error('Failed to delete user:', err);
+    }
+  };
+
+  const toggleSelectUser = (id: string) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUserIds.size === filteredUsers.length) {
+      setSelectedUserIds(new Set());
+    } else {
+      setSelectedUserIds(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const handleBulkAction = async (action: 'delete' | 'activate' | 'deactivate') => {
+    const ids = Array.from(selectedUserIds);
+    const labels: Record<string, string> = {
+      delete: `Supprimer ${ids.length} compte(s) ?`,
+      activate: `Activer ${ids.length} compte(s) ?`,
+      deactivate: `Désactiver ${ids.length} compte(s) ?`,
+    };
+    if (!confirm(labels[action])) return;
+    setBulkLoading(true);
+    try {
+      await bulkUserAction(ids, action);
+      setSelectedUserIds(new Set());
+      loadData();
+    } catch (err) {
+      console.error('Bulk action failed:', err);
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -831,7 +869,7 @@ export default function AdminDashboard() {
                 <option value="online">En ligne</option>
               </select>
               {(filterPromoCode || filterAccountType !== 'all' || filterStatus !== 'all' || searchQuery) && (
-                <button onClick={() => { setFilterPromoCode(''); setFilterAccountType('all'); setFilterStatus('all'); setSearchQuery(''); }}
+                <button onClick={() => { setFilterPromoCode(''); setFilterAccountType('all'); setFilterStatus('all'); setSearchQuery(''); setSelectedUserIds(new Set()); }}
                   className="flex items-center gap-1 px-3 py-2.5 text-sm text-gray-600 border rounded-xl hover:bg-gray-50">
                   <X className="w-4 h-4" /> Réinitialiser
                 </button>
@@ -842,11 +880,43 @@ export default function AdminDashboard() {
               </button>
             </div>
 
+            {/* ── Bulk action bar ── */}
+            {selectedUserIds.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl animate-in fade-in">
+                <span className="text-sm font-semibold text-indigo-800">
+                  {selectedUserIds.size} sélectionné{selectedUserIds.size > 1 ? 's' : ''}
+                </span>
+                <div className="flex-1" />
+                <button onClick={() => handleBulkAction('activate')} disabled={bulkLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
+                  <Check className="w-3.5 h-3.5" /> Activer
+                </button>
+                <button onClick={() => handleBulkAction('deactivate')} disabled={bulkLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors">
+                  <X className="w-3.5 h-3.5" /> Désactiver
+                </button>
+                <button onClick={() => handleBulkAction('delete')} disabled={bulkLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                </button>
+                <button onClick={() => setSelectedUserIds(new Set())}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors">
+                  Désélectionner
+                </button>
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50 border-b">
+                      <th className="w-10 px-3 py-3">
+                        <input type="checkbox"
+                          checked={filteredUsers.length > 0 && selectedUserIds.size === filteredUsers.length}
+                          onChange={toggleSelectAll}
+                          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                      </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Utilisateur</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Email</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Code promo</th>
@@ -860,7 +930,13 @@ export default function AdminDashboard() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredUsers.map(u => (
-                      <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${selectedUserIds.has(u.id) ? 'bg-indigo-50/50' : ''}`}>
+                        <td className="w-10 px-3 py-3">
+                          <input type="checkbox"
+                            checked={selectedUserIds.has(u.id)}
+                            onChange={() => toggleSelectUser(u.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                        </td>
                         <td className="px-4 py-3">
                           <div>
                             <p className="font-medium text-gray-900 text-sm">{u.full_name}</p>

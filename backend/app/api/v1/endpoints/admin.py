@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import get_settings
 from app.services.admin_service import admin_service
-from app.schemas.admin import AdminLogin, CreateUser, UpdateUser, ResetPassword, CreatePromoCode, UpdatePromoCode
+from app.schemas.admin import AdminLogin, CreateUser, UpdateUser, ResetPassword, CreatePromoCode, UpdatePromoCode, BulkUserAction
 from jose import jwt
 from datetime import datetime, timedelta
 import logging
@@ -123,6 +123,34 @@ async def delete_user(user_id: str, admin: bool = Depends(_verify_admin_token)):
         return {"message": "User deactivated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/bulk-action")
+async def bulk_user_action(data: BulkUserAction, admin: bool = Depends(_verify_admin_token)):
+    """Perform a bulk action on multiple users.
+    
+    Actions: delete (soft), activate, deactivate
+    """
+    if not data.user_ids:
+        raise HTTPException(status_code=400, detail="Aucun utilisateur sélectionné")
+    if data.action not in ("delete", "activate", "deactivate"):
+        raise HTTPException(status_code=400, detail=f"Action inconnue: {data.action}")
+
+    results = {"success": 0, "failed": 0, "errors": []}
+    for uid in data.user_ids:
+        try:
+            if data.action == "delete":
+                await admin_service.delete_user(uid)
+            elif data.action == "activate":
+                await admin_service.update_user(uid, {"is_active": True})
+            elif data.action == "deactivate":
+                await admin_service.update_user(uid, {"is_active": False})
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append({"user_id": uid, "error": str(e)})
+
+    return results
 
 
 @router.post("/users/{user_id}/reset-password")

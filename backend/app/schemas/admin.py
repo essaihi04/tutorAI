@@ -38,3 +38,8 @@ class CreatePromoCode(BaseModel):
 class UpdatePromoCode(BaseModel):
     label: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+class BulkUserAction(BaseModel):
+    user_ids: list[str]
+    action: str  # "delete" | "activate" | "deactivate"
