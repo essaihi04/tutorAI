@@ -872,52 +872,67 @@ class ExamBankService:
         return topical if topical else query_kw
 
     def _extract_referenced_docs(self, content: str, all_docs: list, q_type: str = "") -> list:
-        """Extract only the documents referenced in the question content."""
+        """Return the documents that should be shown ALONGSIDE this question.
+
+        Policy (matches real BAC paper UX where ALL documents stay visible
+        throughout the whole exercise):
+          • No documents indexed → return [].
+          • Schema-type question → return all_docs (the schema itself).
+          • Empty content → return all_docs (safe default).
+          • Specific reference (« document 2 », « doc 3 ») → return ONLY the
+            matching docs. This is the only case where we narrow the set,
+            because the question explicitly points at a subset.
+          • Generic reference (« le document », « ci-contre », « ci-dessous »,
+            « la figure », « le schéma ») → return all_docs.
+          • No reference at all (« Calcule X », « Justifie ta réponse »…) →
+            return all_docs. Earlier this returned [], which caused all the
+            docs to "accumulate" on the final synthesis question while
+            intermediate questions had nothing to look at — students were
+            stranded without the figures they needed.
+        """
         if not all_docs:
             return []
-        
-        # For schema questions, always return all docs (the schema itself)
+
         if q_type == "schema":
             return all_docs
-        
+
         if not content:
-            return all_docs or []
+            return list(all_docs)
 
         content_lower = content.lower()
-        
-        # Check for generic document references like "le document ci-contre", "le schéma", etc.
-        generic_refs = ["document ci-contre", "schéma ci-contre", "figure ci-contre", 
-                        "le document", "le schéma", "la figure", "ci-dessous", "ci-contre"]
-        for ref in generic_refs:
-            if ref in content_lower:
-                return all_docs  # Return all docs if generic reference found
-        
-        referenced_numbers = set()
 
+        # ── 1. Specific numeric reference → narrow to the matching subset ──
+        referenced_numbers: set[int] = set()
         doc_patterns = [
             r'documents?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
             r'docs?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
+            r'figures?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
+            r'sch[ée]mas?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
         ]
         for pattern in doc_patterns:
-            matches = re.finditer(pattern, content_lower)
-            for match in matches:
+            for match in re.finditer(pattern, content_lower):
                 for group in match.groups():
                     if group:
                         referenced_numbers.add(int(group))
 
-        if not referenced_numbers:
-            return []
+        if referenced_numbers:
+            specific = []
+            for doc in all_docs:
+                doc_id = doc.get("id", "")
+                m = re.search(r'(\d+)', doc_id)
+                if m and int(m.group(1)) in referenced_numbers:
+                    specific.append(doc)
+            # If a specific reference was made but we couldn't match any doc
+            # (e.g. mismatched numbering), fall through to "show all" rather
+            # than displaying nothing.
+            if specific:
+                return specific
 
-        referenced_docs = []
-        for doc in all_docs:
-            doc_id = doc.get("id", "")
-            doc_num_match = re.search(r'(\d+)', doc_id)
-            if doc_num_match:
-                doc_num = int(doc_num_match.group(1))
-                if doc_num in referenced_numbers:
-                    referenced_docs.append(doc)
-
-        return referenced_docs if referenced_docs else []
+        # ── 2. Generic reference OR no reference → show ALL docs ──
+        # Both cases are treated identically: a BAC exercise always exposes
+        # the full document set to the student. We do NOT hide documents
+        # just because the question prose doesn't mention them.
+        return list(all_docs)
 
     def get_full_exercise_for_question(
         self,
