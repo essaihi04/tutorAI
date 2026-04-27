@@ -296,20 +296,48 @@ class SessionHandler:
         ]
 
         # ── Score each subject: count matches, weighted by word count ──
+        # CRITICAL: use word-boundary matching, NOT plain substring, otherwise
+        # short keywords like "rc" (RC circuit) would falsely match inside
+        # "exe**rc**ice", "ph" inside "ph**ph**enomenon", etc., giving every
+        # query containing "exercice" a phantom Physique point that beats
+        # SVT (1 vs 1, ties broken by iteration order favouring Physique).
+        # Accent-stripped comparison so "génétique" matches "genetique".
+        import unicodedata as _ud
+        def _strip(s: str) -> str:
+            return "".join(c for c in _ud.normalize("NFD", s) if _ud.category(c) != "Mn")
+        t_norm = _strip(t)
+
+        def _kw_matches(kw: str, haystack: str) -> bool:
+            kw_norm = _strip(kw.lower())
+            # Multi-word phrases: substring match is safe because spaces act as
+            # natural boundaries.
+            if " " in kw_norm or "-" in kw_norm:
+                return kw_norm in haystack
+            # Single token: require word boundaries.
+            return re.search(rf"(?<![a-zA-Z0-9]){re.escape(kw_norm)}(?![a-zA-Z0-9])", haystack) is not None
+
         _subjects = {
             "Mathématiques": math_kw,
             "Physique": phys_kw,
             "Chimie": chem_kw,
             "SVT": svt_kw,
         }
-        best_subject: Optional[str] = None
-        best_score = 0
+        scores: dict[str, int] = {}
         for subj, kw_list in _subjects.items():
-            score = sum(len(kw.split()) for kw in kw_list if kw in t)
-            if score > best_score:
-                best_score = score
-                best_subject = subj
-        return best_subject
+            scores[subj] = sum(
+                len(kw.split()) for kw in kw_list if _kw_matches(kw, t_norm)
+            )
+        best_score = max(scores.values()) if scores else 0
+        if best_score <= 0:
+            return None
+        # On ties, prefer SVT > Chimie > Mathématiques > Physique because the
+        # Physique list contains very common words ("force", "champ", "circuit",
+        # "résistance") that easily appear in SVT/Chimie texts.
+        priority = ["SVT", "Chimie", "Mathématiques", "Physique"]
+        for subj in priority:
+            if scores.get(subj, 0) == best_score:
+                return subj
+        return None
 
     def _infer_subject_from_context(self, fallback: Optional[str] = "SVT") -> Optional[str]:
         ctx = self.session_context or {}
@@ -331,39 +359,13 @@ class SessionHandler:
         text = " ".join(text_parts)
         _safe_log(f"[SubjectDetect] infer_from_context: text_len={len(text)} text='{text[:200]}'")
 
-        subject_keywords = {
-            "Mathématiques": [
-                "math", "maths", "mathématique", "mathématiques", "limite", "dérivée", "derivee",
-                "fonction", "suite", "intégrale", "integrale", "logarithme", "exponentielle", "probabilité", "probabilite"
-            ],
-            "Physique": [
-                "physique", "mécanique", "mecanique", "onde", "ondes", "newton", "rc", "rlc", "électricité", "electricite"
-            ],
-            "Chimie": [
-                "chimie", "acide", "base", "ph", "titrage", "réaction", "reaction", "cinétique", "cinetique", "esterification"
-            ],
-            "SVT": [
-                "svt", "cellule", "mitochondrie", "adn", "arn", "génétique", "genetique",
-                "glycolyse", "mitose", "méiose", "meiose", "traduction", "transcription",
-                # Écologie / environnement (chapitre BAC 2BAC SVT)
-                "déchet", "déchets", "dechet", "pollution", "polluant", "environnement",
-                "écologie", "ecologie", "biodégradable", "biodegradable", "recyclage",
-                "atmosphère", "atmosphere", "climat", "ozone", "effet de serre",
-                "développement durable", "developpement durable", "ressources naturelles",
-                "compost", "compostage", "tri sélectif", "valorisation", "lixiviat",
-                "écosystème", "ecosysteme", "biodiversité", "biodiversite",
-            ],
-        }
+        # Delegate to the canonical word-boundary + accent-insensitive detector
+        # so we avoid the "rc" inside "exercice" / "ph" inside "phenomene"
+        # phantom-match pitfall.
+        detected = self._detect_subject_from_text(text)
+        best_subject = detected or fallback
 
-        best_subject = fallback
-        best_score = 0
-        for subject, keywords in subject_keywords.items():
-            score = sum(1 for kw in keywords if kw in text)
-            if score > best_score:
-                best_subject = subject
-                best_score = score
-
-        _safe_log(f"[SubjectDetect] infer_from_context result: best_subject={best_subject} best_score={best_score}")
+        _safe_log(f"[SubjectDetect] infer_from_context result: best_subject={best_subject}")
         return best_subject
 
     def _try_fix_ui_json(self, s: str):
