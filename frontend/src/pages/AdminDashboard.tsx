@@ -456,6 +456,13 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, [isLoggedIn, autoRefresh, activeTab, loadData, loadUsageData]);
 
+  // Listen to global 401 events from any admin API call
+  useEffect(() => {
+    const onUnauthorized = () => setIsLoggedIn(false);
+    window.addEventListener('admin:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('admin:unauthorized', onUnauthorized);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
     setIsLoggedIn(false);
@@ -475,8 +482,13 @@ export default function AdminDashboard() {
     try {
       await deleteAdminUser(userId);
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete user:', err);
+      if (err?.response?.status === 401) {
+        alert('Session expirée. Veuillez vous reconnecter.');
+      } else {
+        alert('Échec de la suppression: ' + (err?.response?.data?.detail || err?.message || 'erreur inconnue'));
+      }
     }
   };
 
@@ -509,8 +521,13 @@ export default function AdminDashboard() {
       await bulkUserAction(ids, action);
       setSelectedUserIds(new Set());
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Bulk action failed:', err);
+      if (err?.response?.status === 401) {
+        alert('Session expirée. Veuillez vous reconnecter.');
+      } else {
+        alert('Échec de l\'action groupée: ' + (err?.response?.data?.detail || err?.message || 'erreur inconnue'));
+      }
     } finally {
       setBulkLoading(false);
     }

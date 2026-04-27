@@ -225,6 +225,19 @@ adminApi.interceptors.request.use((config) => {
   return config;
 });
 
+// On 401, clear the admin token and notify the app to redirect to login
+adminApi.interceptors.response.use(
+  (res) => res,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('admin_token');
+      // Notify the AdminDashboard component to switch back to login screen
+      window.dispatchEvent(new Event('admin:unauthorized'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const adminLogin = (password: string) =>
   api.post('/admin/login', { password });
 export const getAdminDashboard = () => adminApi.get('/dashboard');
