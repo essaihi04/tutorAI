@@ -1047,6 +1047,130 @@ class LLMService:
             return "SVT"
         return "SVT"  # Default
 
+    # ──────────────────────────────────────────────────────────────────────
+    #  OFFICIAL PROGRAM — anti-hallucination, deterministic injection.
+    #
+    #  This block is injected on EVERY libre turn for the detected subject so
+    #  the LLM CANNOT invent fake percentages or off-program topics
+    #  (e.g. "Photosynthèse = 25%" in SVT 2BAC PC, where photosynthèse is NOT
+    #  in the program). Sourced from topic_atlas_service.OFFICIAL_WEIGHTS,
+    #  which is the codebase's single source of truth aligned on the
+    #  cadres de référence officiels.
+    # ──────────────────────────────────────────────────────────────────────
+
+    # Off-program topics: list of subjects students often confuse with the
+    # 2BAC PC track (these belong to OTHER tracks like 2BAC SVT, 2BAC SM,
+    # or earlier years). The LLM must REFUSE to teach them as part of
+    # the current program.
+    _OFF_PROGRAM_TOPICS: dict[str, list[str]] = {
+        "SVT": [
+            "photosynthèse (programme 2BAC SVT track, PAS 2BAC PC)",
+            "génétique humaine — hérédité des maladies (programme 2BAC SVT track)",
+            "génie génétique / OGM / clonage (programme 2BAC SVT track)",
+            "immunologie / système immunitaire (programme 2BAC SVT track)",
+            "communication nerveuse (neurone, synapse, réflexe) (programme 2BAC SVT track)",
+            "communication hormonale / régulation glycémie (programme 2BAC SVT track)",
+            "reproduction humaine / sexuelle (programme 2BAC SVT track)",
+            "évolution / sélection naturelle (programme 2BAC SVT track)",
+        ],
+        "Physique": [
+            "relativité restreinte (programme 2BAC SM, PAS PC)",
+            "physique quantique avancée (hors programme PC)",
+            "thermodynamique avancée (hors programme PC)",
+        ],
+        "Chimie": [
+            "chimie organique avancée (synthèse multi-étapes) (hors programme)",
+            "spectroscopie RMN/IR (hors programme PC)",
+        ],
+        "Mathematiques": [
+            "espaces vectoriels abstraits / algèbre linéaire (programme 2BAC SM)",
+            "structures algébriques (groupes, anneaux) (programme 2BAC SM)",
+            "équations différentielles non linéaires (hors programme)",
+        ],
+    }
+
+    def _build_official_program_block(self, subject: Optional[str]) -> str:
+        """Return a deterministic 'Programme officiel' block for the given subject.
+
+        Always built from local source-of-truth data (OFFICIAL_WEIGHTS). Does
+        NOT depend on RAG retrieval — so a vague query like "donne-moi un
+        cours sur SVT" still gets the correct program structure.
+        """
+        if not subject:
+            return ""
+        try:
+            from app.services.topic_atlas_service import OFFICIAL_WEIGHTS
+        except Exception:
+            return ""
+
+        # Normalize subject key
+        key = subject
+        if key not in OFFICIAL_WEIGHTS:
+            # Try aliases
+            for k in OFFICIAL_WEIGHTS:
+                if k.lower() == subject.lower() or k.replace("é", "e").lower() == subject.replace("é", "e").lower():
+                    key = k
+                    break
+        weights = OFFICIAL_WEIGHTS.get(key)
+        if not weights:
+            return ""
+
+        # Display name
+        display = {
+            "SVT": "SVT (Sciences de la Vie et de la Terre)",
+            "Physique": "Physique",
+            "Chimie": "Chimie",
+            "Mathematiques": "Mathématiques",
+            "Mathématiques": "Mathématiques",
+            "Physique-Chimie": "Physique-Chimie",
+        }.get(key, key)
+
+        lines = [f"[PROGRAMME OFFICIEL — {display.upper()} — 2BAC SCIENCES PHYSIQUES BIOF (Maroc)]"]
+        lines.append(
+            "⚠️ SOURCE DE VÉRITÉ. Tu DOIS te limiter STRICTEMENT à ces domaines "
+            "et utiliser EXACTEMENT ces poids. NE JAMAIS inventer d'autres "
+            "pourcentages, d'autres domaines, ou d'autres chapitres."
+        )
+        lines.append("")
+        lines.append("Domaines / sous-domaines (poids officiels à l'examen national) :")
+        for domain, pct in weights.items():
+            lines.append(f"  • {domain} — {pct:g}%")
+
+        # Off-program list
+        off_topics = self._OFF_PROGRAM_TOPICS.get(key) or self._OFF_PROGRAM_TOPICS.get(
+            key.replace("é", "e")
+        )
+        if off_topics:
+            lines.append("")
+            lines.append(f"❌ HORS-PROGRAMME pour {display} 2BAC PC — NE PAS enseigner comme si c'était au programme :")
+            for t in off_topics:
+                lines.append(f"  • {t}")
+            lines.append(
+                "→ Si l'étudiant demande un cours/programme/chapitre sur l'un de "
+                "ces sujets, tu DOIS répondre clairement : « Ce sujet n'est PAS "
+                "au programme du 2BAC Sciences Physiques (PC). Il fait partie "
+                "d'un autre programme. » avant de lui proposer un sujet équivalent "
+                "qui EST au programme PC."
+            )
+
+        # Specific reminder for SVT (most common confusion source)
+        if key == "SVT":
+            lines.append("")
+            lines.append(
+                "📌 Rappel SVT 2BAC PC : 4 DOMAINES, chacun ≈ 25% (l'examen "
+                "répartit librement les 20 points). Le programme PC est PLUS "
+                "RÉDUIT que le programme SVT track. NE confonds JAMAIS les deux."
+            )
+
+        lines.append("")
+        lines.append(
+            "Quand l'étudiant demande « le programme », « un cours complet », "
+            "« les chapitres » de cette matière, tu cites EXACTEMENT les "
+            "domaines ci-dessus, AVEC leurs poids officiels, sans rien ajouter "
+            "ni retirer."
+        )
+        return "\n".join(lines)
+
     def build_libre_prompt(
         self,
         language: str = "français",
@@ -1078,11 +1202,23 @@ class LLMService:
         # Get RAG context from official curriculum if there's a query
         rag_section = ""
         cadre_priority_notes = ""
-        
+        official_program_block = ""
+
+        # Subject detection — also runs on empty query so we ALWAYS inject
+        # the deterministic program block (defaults to SVT in that case).
+        detected_subject = self._detect_subject_from_query(user_query or "")
+
+        # Deterministic program block — anti-hallucination, sourced from
+        # OFFICIAL_WEIGHTS (single source of truth). Always injected so the
+        # LLM cannot invent percentages or off-program topics, even when RAG
+        # retrieval returns nothing relevant for vague queries.
+        try:
+            official_program_block = self._build_official_program_block(detected_subject)
+        except Exception as e:
+            print(f"[LLM] Libre official program block error: {e}")
+            official_program_block = ""
+
         if user_query:
-            # Detect subject from query for cadre de référence
-            detected_subject = self._detect_subject_from_query(user_query)
-            
             # Get cadre de référence priority notes
             try:
                 from app.services.cadre_reference_service import cadre_service
@@ -1137,6 +1273,13 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
         # Prepend coefficients block to RAG (always visible)
         if coefficients_block:
             rag_section = coefficients_block + ("\n\n" + rag_section if rag_section else "")
+
+        # Prepend the deterministic official program block so it appears at
+        # the very top of the RAG section — guaranteed to be in the model's
+        # context window even when other sources are large. This is what
+        # prevents hallucinated percentages / off-program topics.
+        if official_program_block:
+            rag_section = official_program_block + ("\n\n" + rag_section if rag_section else "")
 
         return LIBRE_MODE_PROMPT.format(
             language=language,
@@ -1400,6 +1543,17 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
 RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'autres pays."""
         else:
             rag_section = "Aucun contenu officiel spécifique disponible pour cette requête."
+
+        # Deterministic official program block (anti-hallucination).
+        # Always prepended in coaching mode too, so the LLM never invents
+        # off-program topics (e.g. photosynthèse / génétique humaine in
+        # SVT 2BAC PC) even if the student asks meta questions.
+        try:
+            program_block = self._build_official_program_block(subject)
+            if program_block:
+                rag_section = program_block + "\n\n" + rag_section
+        except Exception as e:
+            print(f"[LLM] Coaching official program block error: {e}")
         
         # ── Historical atlas: BAC 2026 topic priorities for this subject ──
         try:

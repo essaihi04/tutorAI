@@ -142,28 +142,34 @@ export default function ExamExercisePanel({ exercises, query: _query, onClose, o
     };
   }, []);
 
+  // ⚠️ ALL hooks MUST be called before any conditional return below.
+  // Adapt our ExamQuestion → QuestionData expected by QuestionRenderer.
+  const adaptedQuestion = useMemo(() => {
+    if (!ex || !question) return null;
+    return {
+      index: currentQIdx,
+      content: question.content || '',
+      points: question.points || 0,
+      type: (question.type as any) || 'open',
+      exercise: ex.exercise_name || '',
+      exercise_context: currentQIdx === 0 ? (ex.exercise_context || '') : '', // only show context on first question
+      documents: (question.documents || []).map((d, i) => ({
+        id: d.id || `doc_${i}`,
+        type: d.type || 'figure',
+        title: d.title || `Document ${i + 1}`,
+        src: d.src,
+        description: d.description,
+      })),
+      correction: question.correction ? { content: question.correction } : null,
+    };
+  }, [ex, question, currentQIdx]);
+
+  // Conditional returns AFTER all hooks (Rules of Hooks).
   if (!ex) return null;
   if (!question) return null;
+  if (!adaptedQuestion) return null;
 
   const qKey = `${currentExIdx}-${currentQIdx}`;
-
-  // Adapt our ExamQuestion → QuestionData expected by QuestionRenderer
-  const adaptedQuestion = useMemo(() => ({
-    index: currentQIdx,
-    content: question.content || '',
-    points: question.points || 0,
-    type: (question.type as any) || 'open',
-    exercise: ex.exercise_name || '',
-    exercise_context: currentQIdx === 0 ? (ex.exercise_context || '') : '', // only show context on first question
-    documents: (question.documents || []).map((d, i) => ({
-      id: d.id || `doc_${i}`,
-      type: d.type || 'figure',
-      title: d.title || `Document ${i + 1}`,
-      src: d.src,
-      description: d.description,
-    })),
-    correction: question.correction ? { content: question.correction } : null,
-  }), [ex, question, currentQIdx]);
 
   const handleSubmit = async () => {
     const answer = answers[qKey];
