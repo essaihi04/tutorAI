@@ -230,11 +230,13 @@ async def delete_promo_code(promo_id: str, admin: bool = Depends(_verify_admin_t
 
 @router.get("/online")
 async def get_online_users(admin: bool = Depends(_verify_admin_token)):
-    """Get currently online users."""
+    """Get currently online users with IP and connection time."""
+    from app.websockets.connection_manager import manager as ws_manager
+
     online_ids = admin_service.get_online_users()
     online_count = admin_service.get_online_count()
 
-    # Enrich with user info
+    # Enrich with user info + connection metadata (IP, connected_at)
     users_info = []
     if online_ids:
         for uid in online_ids:
@@ -242,12 +244,14 @@ async def get_online_users(admin: bool = Depends(_verify_admin_token)):
                 result = admin_service.supabase.table("students") \
                     .select("id, username, email, full_name") \
                     .eq("id", uid).execute()
-                if result.data:
-                    users_info.append(result.data[0])
-                else:
-                    users_info.append({"id": uid, "username": "unknown"})
+                entry = result.data[0] if result.data else {"id": uid, "username": "unknown"}
             except Exception:
-                users_info.append({"id": uid, "username": "unknown"})
+                entry = {"id": uid, "username": "unknown"}
+
+            conn = ws_manager.connection_info.get(uid, {})
+            entry["ip"] = conn.get("ip", "unknown")
+            entry["connected_at"] = conn.get("connected_at")
+            users_info.append(entry)
 
     return {"online_count": online_count, "online_users": users_info}
 

@@ -721,13 +721,21 @@ export default function AdminDashboard() {
                 {onlineInfo.online_users.length === 0 ? (
                   <p className="text-gray-400 text-sm py-4 text-center">Aucun utilisateur connecté</p>
                 ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
                     {onlineInfo.online_users.map((u, i) => (
                       <div key={i} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        <div>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900">{u.full_name || u.username}</p>
-                          <p className="text-xs text-gray-500">{u.email}</p>
+                          <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xs font-mono text-gray-600">{u.ip || '-'}</p>
+                          {u.connected_at && (
+                            <p className="text-[10px] text-gray-400">
+                              {new Date(u.connected_at + 'Z').toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -990,11 +998,15 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {u.is_online ? (
-                            <div className="inline-flex items-center gap-1">
-                              <Wifi className="w-4 h-4 text-green-500" />
-                            </div>
-                          ) : (
+                          {u.is_online ? (() => {
+                            const info = onlineInfo.online_users.find((o: any) => o.id === u.id);
+                            return (
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                <Wifi className="w-4 h-4 text-green-500" />
+                                {info?.ip && <span className="text-[10px] font-mono text-gray-500 leading-none">{info.ip}</span>}
+                              </div>
+                            );
+                          })() : (
                             <WifiOff className="w-4 h-4 text-gray-300 mx-auto" />
                           )}
                         </td>
