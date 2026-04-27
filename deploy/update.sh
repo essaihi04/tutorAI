@@ -43,6 +43,9 @@ find "$APP_DIR/frontend/dist" -maxdepth 1 -type f ! -name 'index.html' \
 chown -R nginx:nginx "$WEB_DIR"
 chcon -R -t httpd_sys_content_t "$WEB_DIR" 2>/dev/null || true
 
+log "Mise à jour de la config Nginx (si changée)"
+cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/conf.d/moalim.conf
+
 log "Redémarrage du service backend"
 systemctl restart "$SERVICE_NAME"
 sleep 2
