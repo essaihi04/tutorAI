@@ -2908,19 +2908,46 @@ RÈGLES :
                 elif not exercises and not single_qs and subject_from_user:
                     _safe_log(f"[AI Commands] Force exam fallback: 0 exercises for subject='{subject_hint}' but subject_from_user=True — NOT cross-loading another subject. Panel will not open.")
                 if not exercises and single_qs:
-                        # Wrap single questions to match exam_exercise payload shape
-                        # (group into a pseudo-exercise with one question each)
-                        exercises = [{
-                            "exam_id": q.get("exam_id", ""),
-                            "exam_label": q.get("exam_label", ""),
-                            "subject": q.get("subject", ""),
-                            "year": q.get("year"),
-                            "session": q.get("session", ""),
-                            "exercise_name": q.get("exercise_name") or q.get("part_name") or "Question BAC",
-                            "exercise_context": q.get("exercise_context", ""),
-                            "part_name": q.get("part_name", ""),
-                            "questions": [q],
-                        } for q in single_qs]
+                        # ⚠️ Expand each matched question to its FULL parent
+                        # exercise so the student gets Q1..Qn (not only the
+                        # specific question whose text matched the query).
+                        # A BAC exercise is a coherent whole — earlier
+                        # questions introduce the document/variables needed
+                        # to answer later ones. Without this expansion, the
+                        # student is dropped mid-exercise.
+                        seen_ex_keys: set = set()
+                        expanded: list = []
+                        for q in single_qs:
+                            ex_key = (
+                                q.get("exam_id", ""),
+                                q.get("exercise_name") or "",
+                                q.get("part_name") or "",
+                            )
+                            if ex_key in seen_ex_keys:
+                                continue
+                            seen_ex_keys.add(ex_key)
+                            full_ex = exam_bank.get_full_exercise_for_question(
+                                exam_id=ex_key[0],
+                                exercise_name=ex_key[1],
+                                part_name=ex_key[2],
+                            )
+                            if full_ex:
+                                expanded.append(full_ex)
+                            else:
+                                # Fallback: wrap the single question if we cannot
+                                # find siblings (e.g. legacy / standalone question).
+                                expanded.append({
+                                    "exam_id": q.get("exam_id", ""),
+                                    "exam_label": q.get("exam_label", ""),
+                                    "subject": q.get("subject", ""),
+                                    "year": q.get("year"),
+                                    "session": q.get("session", ""),
+                                    "exercise_name": q.get("exercise_name") or q.get("part_name") or "Question BAC",
+                                    "exercise_context": q.get("exercise_context", ""),
+                                    "part_name": q.get("part_name", ""),
+                                    "questions": [q],
+                                })
+                        exercises = expanded
 
                 if exercises:
                     _safe_log(f"[AI Commands] Force exam panel fallback: found {len(exercises)} exercises")
@@ -3166,13 +3193,51 @@ RÈGLES :
                             subject_hint = self._infer_subject_from_context(None)
                             _safe_log(f"[SubjectDetect] OUVRIR_EXERCICE fallback infer -> {subject_hint}")
                     query = student_text if student_text else (ctx.get("lesson_title", "") or ctx.get("chapter_title", ""))
-                    exercises = exam_bank.search_exercises(query=query, subject=subject_hint, count=2)
-                    if not exercises and subject_hint:
-                        if self.session_mode in ("libre", "explain") and subject_from_user:
-                            _safe_log(f"[AI Commands] OUVRIR_EXERCICE: no results for subject='{subject_hint}' (user explicitly asked). NOT retrying without filter.")
-                        else:
+                    # Prefer full-exercise search so the student gets Q1..Qn,
+                    # not only the question whose text matched the query.
+                    exercises = exam_bank.search_full_exercises(
+                        query=query, subject=subject_hint, count=1,
+                    )
+                    if not exercises:
+                        single_qs = exam_bank.search_exercises(query=query, subject=subject_hint, count=2)
+                        if not single_qs and subject_hint and not (self.session_mode in ("libre", "explain") and subject_from_user):
                             _safe_log(f"[AI Commands] OUVRIR_EXERCICE: no results with subject='{subject_hint}', retrying without subject filter")
-                            exercises = exam_bank.search_exercises(query=query, subject=None, count=2)
+                            single_qs = exam_bank.search_exercises(query=query, subject=None, count=2)
+                        elif not single_qs and subject_from_user:
+                            _safe_log(f"[AI Commands] OUVRIR_EXERCICE: no results for subject='{subject_hint}' (user explicitly asked). NOT retrying without filter.")
+                        # Expand each matched question to its FULL parent exercise
+                        if single_qs:
+                            seen_ex_keys: set = set()
+                            expanded: list = []
+                            for q in single_qs:
+                                ex_key = (
+                                    q.get("exam_id", ""),
+                                    q.get("exercise_name") or "",
+                                    q.get("part_name") or "",
+                                )
+                                if ex_key in seen_ex_keys:
+                                    continue
+                                seen_ex_keys.add(ex_key)
+                                full_ex = exam_bank.get_full_exercise_for_question(
+                                    exam_id=ex_key[0],
+                                    exercise_name=ex_key[1],
+                                    part_name=ex_key[2],
+                                )
+                                if full_ex:
+                                    expanded.append(full_ex)
+                                else:
+                                    expanded.append({
+                                        "exam_id": q.get("exam_id", ""),
+                                        "exam_label": q.get("exam_label", ""),
+                                        "subject": q.get("subject", ""),
+                                        "year": q.get("year"),
+                                        "session": q.get("session", ""),
+                                        "exercise_name": q.get("exercise_name") or q.get("part_name") or "Question BAC",
+                                        "exercise_context": q.get("exercise_context", ""),
+                                        "part_name": q.get("part_name", ""),
+                                        "questions": [q],
+                                    })
+                            exercises = expanded
                     if exercises:
                         _safe_log(f"[AI Commands] OUVRIR_EXERCICE: found {len(exercises)} exam exercises")
                         await self.websocket.send_json({"type": "hide_whiteboard"})

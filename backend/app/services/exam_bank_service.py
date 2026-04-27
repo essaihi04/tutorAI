@@ -781,24 +781,20 @@ class ExamBankService:
         exercise_results = []
         for score, ex_key, questions in exercise_scores[:count]:
             rep_q = questions[0]
-            # Filter: keep only questions that match the query keywords (or all if none match)
-            # This ensures the panel shows only questions relevant to the LLM's topic,
-            # not every question of the full exercise.
-            scored_questions = []
-            for cand in questions:
-                q_score = self._score_match(
-                    query_kw, cand["keywords"],
-                    cand.get("topic", ""), cand.get("content", ""),
-                    cand.get("_full_text", ""),
-                    doc_kw_norm=cand.get("keywords_norm"),
-                    full_text_norm=cand.get("_full_text_norm", "")
-                )
-                scored_questions.append((q_score, cand))
-            # Keep questions with score > 0; if none, keep all (fallback)
-            relevant = [c for s, c in scored_questions if s > 0]
-            if not relevant:
-                relevant = [c for _, c in scored_questions]
-            _log.info(f"[ExamSearchFull] Exercise '{rep_q.get('exercise_name','')}' — filtered {len(relevant)}/{len(questions)} relevant questions")
+            # ⚠️ DO NOT filter individual questions out of an exercise.
+            # A BAC exercise is a coherent whole: Q1 introduces the document,
+            # Q2 defines the variables, Q3 builds on them, etc. Removing
+            # earlier questions because their text alone doesn't match the
+            # query keywords leaves the student stranded mid-exercise without
+            # the setup needed to answer. We always keep ALL the questions
+            # of the chosen exercise, ordered by question_index. The
+            # exercise-level selection (Step 2) already ensured this is the
+            # most relevant exercise as a whole.
+            relevant = list(questions)
+            _log.info(
+                f"[ExamSearchFull] Exercise '{rep_q.get('exercise_name','')}' "
+                f"— keeping ALL {len(relevant)} questions to preserve exercise integrity"
+            )
 
             exercise_questions = []
             for cand in relevant:
@@ -922,6 +918,66 @@ class ExamBankService:
                     referenced_docs.append(doc)
 
         return referenced_docs if referenced_docs else []
+
+    def get_full_exercise_for_question(
+        self,
+        exam_id: str,
+        exercise_name: str,
+        part_name: str = "",
+    ) -> Optional[dict]:
+        """Return the FULL exercise (all sibling questions, in order) that
+        contains the given (exam_id, exercise_name, part_name) triplet.
+
+        Used when a search returned a single matching question — we still
+        want to display the WHOLE exercise to preserve the document /
+        introduction / setup that earlier questions establish.
+        """
+        self._ensure_loaded()
+        if not self._questions:
+            return None
+
+        siblings = [
+            q for q in self._questions
+            if q.get("exam_id") == exam_id
+            and (q.get("exercise_name") or "") == (exercise_name or "")
+            and (q.get("part_name") or "") == (part_name or "")
+        ]
+        if not siblings:
+            return None
+
+        siblings.sort(key=lambda q: q.get("question_index", 0))
+        rep = siblings[0]
+        exercise_questions = []
+        for cand in siblings:
+            all_docs = cand.get("documents", [])
+            filtered_docs = self._extract_referenced_docs(
+                cand.get("content", ""), all_docs, cand.get("type", "")
+            )
+            exercise_questions.append({
+                "question_index": cand["question_index"],
+                "content": cand["content"],
+                "type": cand["type"],
+                "points": cand["points"],
+                "correction": cand["correction"],
+                "choices": cand.get("choices"),
+                "correct_answer": cand.get("correct_answer"),
+                "documents": filtered_docs,
+            })
+        return {
+            "exam_id": rep["exam_id"],
+            "exam_path": rep.get("exam_path", ""),
+            "exam_label": rep["exam_label"],
+            "subject": rep["subject"],
+            "year": rep["year"],
+            "session": rep["session"],
+            "part_name": rep.get("part_name", ""),
+            "exercise_name": rep.get("exercise_name", ""),
+            "exercise_context": rep.get("exercise_context", ""),
+            "topic": rep.get("topic", ""),
+            "all_documents": rep.get("documents", []),
+            "questions": exercise_questions,
+            "total_points": sum(eq["points"] for eq in exercise_questions),
+        }
 
     def get_topics(self, subject: Optional[str] = None) -> list[str]:
         """Get all unique topics from indexed exams."""
