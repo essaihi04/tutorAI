@@ -902,18 +902,24 @@ class ExamBankService:
         content_lower = content.lower()
 
         # ── 1. Specific numeric reference → narrow to the matching subset ──
+        # Strategy: find every "<doc-keyword> [n°] <num>" anchor, then ALSO
+        # collect any extra numbers that immediately follow via "et" or
+        # comma so that lists like "documents 1, 2 et 3" or "doc 1 et 2"
+        # are fully captured. We use re.finditer with a single anchor regex
+        # plus a lookahead pass for the trailing list.
         referenced_numbers: set[int] = set()
-        doc_patterns = [
-            r'documents?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
-            r'docs?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
-            r'figures?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
-            r'sch[ée]mas?\s+(\d+)(?:\s+et\s+(\d+))?(?:\s+et\s+(\d+))?',
-        ]
-        for pattern in doc_patterns:
-            for match in re.finditer(pattern, content_lower):
-                for group in match.groups():
-                    if group:
-                        referenced_numbers.add(int(group))
+        anchor_re = re.compile(
+            r'(?:documents?|docs?|figures?|sch[ée]mas?|tableaux?|tableau|annexes?|courbes?|graphiques?)'
+            r'\s*(?:n\s*[°ºo]\s*)?'   # optional "n°" / "n o" / "no"
+            r'[\s.:\-]*'              # optional separators (space, dot, colon, dash)
+            r'(\d+)'                  # ← the number we want
+            r'(?P<tail>(?:\s*(?:,|et|and|&)\s*\d+)*)',  # optional list tail
+        )
+        for match in anchor_re.finditer(content_lower):
+            referenced_numbers.add(int(match.group(1)))
+            tail = match.group('tail') or ""
+            for n in re.findall(r'\d+', tail):
+                referenced_numbers.add(int(n))
 
         if referenced_numbers:
             specific = []
