@@ -144,7 +144,7 @@ async def bulk_user_action(data: BulkUserAction, admin: bool = Depends(_verify_a
             elif data.action == "activate":
                 await admin_service.update_user(uid, {"is_active": True})
             elif data.action == "deactivate":
-                await admin_service.update_user(uid, {"is_active": False})
+                await admin_service.deactivate_user(uid)
             results["success"] += 1
         except Exception as e:
             results["failed"] += 1

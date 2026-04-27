@@ -478,7 +478,10 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Désactiver cet utilisateur?')) return;
+    const user = users.find(u => u.id === userId);
+    const name = user?.full_name || user?.username || userId;
+    if (!confirm(`⚠️ SUPPRESSION DÉFINITIVE\n\nVoulez-vous vraiment supprimer "${name}" ?\n\nCela effacera son compte, son profil, et toutes ses données. Cette action est IRRÉVERSIBLE.`)) return;
+    if (!confirm(`Confirmer la suppression définitive de "${name}" ?`)) return;
     try {
       await deleteAdminUser(userId);
       loadData();
@@ -511,11 +514,12 @@ export default function AdminDashboard() {
   const handleBulkAction = async (action: 'delete' | 'activate' | 'deactivate') => {
     const ids = Array.from(selectedUserIds);
     const labels: Record<string, string> = {
-      delete: `Supprimer ${ids.length} compte(s) ?`,
+      delete: `⚠️ SUPPRESSION DÉFINITIVE\n\nSupprimer ${ids.length} compte(s) et toutes leurs données ?\nCette action est IRRÉVERSIBLE.`,
       activate: `Activer ${ids.length} compte(s) ?`,
       deactivate: `Désactiver ${ids.length} compte(s) ?`,
     };
     if (!confirm(labels[action])) return;
+    if (action === 'delete' && !confirm(`Confirmer la suppression définitive de ${ids.length} compte(s) ?`)) return;
     setBulkLoading(true);
     try {
       await bulkUserAction(ids, action);
@@ -1037,7 +1041,7 @@ export default function AdminDashboard() {
                               <Key className="w-4 h-4" />
                             </button>
                             <button onClick={() => handleDeleteUser(u.id)}
-                              className="p-2 hover:bg-red-50 rounded-lg text-red-600" title="Désactiver">
+                              className="p-2 hover:bg-red-50 rounded-lg text-red-600" title="Supprimer définitivement">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>

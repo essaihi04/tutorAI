@@ -113,7 +113,52 @@ class AdminService:
         return result.data[0]
 
     async def delete_user(self, user_id: str) -> bool:
-        """Delete a user (soft delete - set is_active=False)."""
+        """Hard-delete a user: removes from auth, students, profiles, and all related tables.
+
+        This is irreversible. Best-effort cleanup of related tables (ignores missing
+        tables / rows). The auth.users record is removed last via Supabase Admin API.
+        """
+        related_tables = [
+            "student_profiles",
+            "session_progress",
+            "learning_sessions",
+            "exam_sessions",
+            "token_usage",
+            "diagnostic_results",
+            "study_plans",
+            "student_proficiency",
+        ]
+        for table in related_tables:
+            try:
+                self.supabase.table(table).delete().eq("student_id", user_id).execute()
+            except Exception as e:
+                logger.warning(f"Cleanup of {table} for {user_id} skipped: {e}")
+
+        # Unlink registration_requests so the record is preserved but no longer ties to a deleted user
+        try:
+            self.supabase.table("registration_requests") \
+                .update({"created_user_id": None}) \
+                .eq("created_user_id", user_id).execute()
+        except Exception as e:
+            logger.warning(f"Could not unlink registration_requests for {user_id}: {e}")
+
+        # Delete the student record
+        try:
+            self.supabase.table("students").delete().eq("id", user_id).execute()
+        except Exception as e:
+            logger.error(f"Failed to delete student row {user_id}: {e}")
+            raise
+
+        # Finally remove from Supabase auth (best-effort: user may already be gone)
+        try:
+            self.supabase.auth.admin.delete_user(user_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete auth user {user_id}: {e}")
+
+        return True
+
+    async def deactivate_user(self, user_id: str) -> bool:
+        """Soft delete: set is_active=False (kept for backward compat / bulk action)."""
         self.supabase.table("students").update({"is_active": False}).eq("id", user_id).execute()
         return True
 
