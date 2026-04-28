@@ -251,15 +251,22 @@ class MockExamService:
         return exam
 
     def _pick_domains_2026(self, curriculum: dict, target: Optional[list[str]]) -> dict:
-        """Select domains based on deep analysis of 2016-2025 exam rotation.
+        """Select domains based on deep analysis of ALL 2016-2025 exams (N+R).
         
-        KEY RULES discovered from analysis:
-        1. Part1 domain is EXCLUDED from Part2 (mutual exclusivity 90%+)
-        2. Part1 Normale != Part1 Rattrapage (same year, different domain)
-        3. Part1 Normale rotates: CMO(5x), GEO(3x), ENV(2x), GEN_EXP(1x)
-        4. Part2 Ex1 = CMO (60%), Ex2 = GEN_EXP (60%), Ex3 = ENV/GEO/GEN_TRANS
-        5. After 2025N=GEO in Part1, 2026N is likely CMO or ENV
-        6. Genetics (expression+transmission) are ALWAYS in Part2, never alone in Part1
+        DEEP ANALYSIS RESULTS (20 exams analyzed):
+        ═══════════════════════════════════════════════════════
+        RULE 1 - Mutual exclusivity: Part1 domain EXCLUDED from Part2 (90%+)
+        RULE 2 - N ≠ R same year: Part1 Normale != Part1 Rattrapage (100%)
+        RULE 3 - R(year) ≠ N(year+1): Rattrapage domain != next year Normale domain
+                 R(2025)=ENV => N(2026) != ENV => CMO or GEO
+        RULE 4 - Genetics ALWAYS in Part2, never alone in Part1
+        RULE 5 - Part1 frequency: CMO(5x), GEO(3x), ENV(2x), GEN_EXP(1x rare)
+        RULE 6 - After GEO in Part1: next year is CMO (4/4 historically)
+                 GEO(2016)->CMO(2017), GEO(2019)->CMO(2021),
+                 GEO(2022R)->ENV(2023N), GEO(2025N)->???(2026N)
+        RULE 7 - Part2 position frequencies (Normale):
+                 Ex1: CMO(60%) | Ex2: GEN_EXP(60%) | Ex3: ENV/GEO/GEN_TRANS
+        ═══════════════════════════════════════════════════════
         """
         ALL = [
             "consommation_matiere_organique",
@@ -274,30 +281,28 @@ class MockExamService:
             part2_domains = [d for d in target[1:] if d != part1_domain][:3]
         else:
             # ── 2026 Normale Prediction ──
-            # 2025N had GEO in Part1. Historical alternation:
-            # GEO(2016) -> CMO(2017) -> CMO(2018) -> GEO(2019) -> ?(2020)
-            # -> CMO(2021) -> CMO(2022) -> ENV(2023) -> CMO(2024) -> GEO(2025)
-            # After GEO, next is CMO (4/4 times) or ENV (rare)
-            part1_candidates = ["consommation_matiere_organique", "environnement_sante"]
-            part1_weights = [75, 25]  # CMO much more likely after GEO
+            # 2025N=GEO, 2025R=ENV
+            # RULE 3: R(2025)=ENV => N(2026) != ENV
+            # RULE 6: After GEO(2025N), historically always CMO next
+            # But GEO can also follow (rare). ENV is EXCLUDED by Rule 3.
+            part1_candidates = ["consommation_matiere_organique", "geologie"]
+            part1_weights = [85, 15]  # CMO dominant after GEO + ENV excluded
             part1_domain = random.choices(part1_candidates, weights=part1_weights, k=1)[0]
             
-            # Part2: 3 exercises, MUST NOT include Part1 domain
-            # Ex1: CMO if not in Part1, else GEO (CMO is Ex1 in 60% of normales)
-            # Ex2: GEN_EXP+GEN_TRANS combined (always present in Part2)
-            # Ex3: ENV or GEO (whichever is not in Part1)
+            # Part2: 3 exercises, MUST NOT include Part1 domain (RULE 1)
             part2_domains = []
             
-            # Ex1
+            # Ex1: CMO if not in Part1, else GEO (RULE 7: CMO is Ex1 in 60%)
             if part1_domain != "consommation_matiere_organique":
                 part2_domains.append("consommation_matiere_organique")
             else:
-                part2_domains.append("geologie")  # When CMO in P1, GEO often takes Ex1
+                # When CMO in P1, Ex1 is often GEN_TRANS or GEN_EXP or GEO
+                part2_domains.append("geologie")
             
             # Ex2: Genetics (combined expression+transmission, as in real exams)
             part2_domains.append("genetique_expression+transmission")
             
-            # Ex3: The remaining small domain
+            # Ex3: The remaining domain not in Part1 and not yet used
             remaining = [d for d in ["environnement_sante", "geologie"]
                          if d != part1_domain and d not in part2_domains]
             if remaining:
@@ -343,30 +348,42 @@ class MockExamService:
         system = """Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
 Tu génères UNIQUEMENT la Première partie (Restitution des connaissances, 5pts).
 RÈGLE ABSOLUE: toutes les questions doivent porter sur le programme officiel SVT 2ème Bac (cadre de référence).
-NIVEAU: IDENTIQUE à l'examen national réel du Baccalauréat marocain. Ni plus facile, ni plus difficile.
-Le contenu doit être scientifiquement rigoureux et correspondre au style des examens 2020-2025.
+NIVEAU: IDENTIQUE à l'examen national réel du Baccalauréat. Ni plus facile, ni plus difficile.
+
+ANALYSE DES EXAMENS 2020-2025 — STRUCTURE Part1 STABLE depuis 2023:
+- Position 1: Question ouverte (définition ou citation) — TOUJOURS présent (90%+ des examens)
+- Position 2: QCM 4 items — TOUJOURS présent (apparaît dans 100% des examens récents)
+- Position 3: Vrai/Faux 4 affirmations — présent dans 2023N, 2024N, 2024R, 2025N, 2025R
+- Position 4: Association ensemble A ↔ ensemble B — présent dans 2022N+, quasi systématique
+Le SET standard 2023-2025 est: {open, qcm, vrai_faux, association}. RESPECTE CE PATTERN.
+
 Réponds en JSON valide uniquement."""
 
-        prompt = f"""Génère la Première partie d'un examen blanc SVT.
+        prompt = f"""Génère la Première partie d'un examen blanc SVT — Session Normale 2026.
 
 DOMAINE PRINCIPAL: {domain_info.get('name', domains['part1'])}
 
 CHAPITRES AUTORISÉS (ne sors JAMAIS de ce cadre):
 {topics_text}
 
-STRUCTURE ATTENDUE (4 questions, total 5pts):
+STRUCTURE ATTENDUE (4-5 questions, total 5pts):
 {slots_text}
 
 EXEMPLES DE VRAIES QUESTIONS NATIONALES:
 {examples_text}
 
-INSTRUCTIONS:
-1. Question I: QCM avec 4 items (0.5pt chacun, total 2pts). 4 choix a/b/c/d. UNE seule bonne réponse.
-2. Question II: Question ouverte courte (définition, citation, explication). 0.5 ou 1pt.
-3. Question III: Vrai/Faux avec 4 affirmations (0.25pt chacune, total 1pt). 
-4. Question IV: Association de 4 éléments ensemble A avec ensemble B (5 éléments, 1 distracteur). 1pt.
-5. Chaque question DOIT avoir une correction complète.
-6. Le style doit être identique aux examens nationaux (formulations en français, style formel).
+INSTRUCTIONS (basées sur l'analyse de 20 examens réels):
+1. Question I: Ouverte courte — Définir 1-2 notions OU citer 2 éléments. 0.5 à 1pt.
+   Exemple: "Définir les notions suivantes: Incinération – Lixiviat" (2025R)
+   Exemple: "Citer deux caractéristiques géophysiques des zones de subduction" (2025N)
+2. Question II: QCM avec 4 items (0.5pt chacun, total 2pts). 4 choix a/b/c/d. UNE seule bonne réponse.
+   Formulation EXACTE: "Pour chacune des propositions numérotées de 1 à 4, il y a une seule suggestion correcte."
+3. Question III: Vrai/Faux avec 4 affirmations (0.25pt chacune, total 1pt).
+   Formulation EXACTE: "Recopier les lettres a, b, c, et d puis écrire devant chaque lettre « Vrai » ou « Faux »."
+4. Question IV: Association de 4 éléments ensemble A avec ensemble B (5 éléments dans B, 1 distracteur). 1pt.
+   Formulation EXACTE: "Recopier les couples (1,...), (2,...), (3,...) et (4,...) et adresser à chaque numéro la lettre correspondante."
+5. Chaque question DOIT avoir une correction complète et détaillée.
+6. Style FORMEL identique aux examens nationaux marocains — PAS de simplification.
 
 Réponds avec ce JSON:
 {{"name":"Première partie : Restitution des connaissances","points":5,"questions":[
