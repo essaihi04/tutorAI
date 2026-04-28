@@ -13,6 +13,58 @@ from typing import Optional
 from app.supabase_client import get_supabase_admin
 
 EXAMS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "exams"
+MOCK_EXAMS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "mock_exams"
+
+
+def _find_mock_exam_dir(exam_id: str) -> Path | None:
+    """Locate <subject>/<exam_id>/ directory under mock_exams/.
+
+    Mock exam IDs start with ``mock_`` (e.g. ``mock_svt_..._cascade``).
+    The subject sub-directory is unknown a priori, so we scan all of them.
+    Returns ``None`` if not found.
+    """
+    if not exam_id or not exam_id.startswith("mock_"):
+        return None
+    if not MOCK_EXAMS_DIR.exists():
+        return None
+    for subj_dir in MOCK_EXAMS_DIR.iterdir():
+        if not subj_dir.is_dir():
+            continue
+        candidate = subj_dir / exam_id
+        if (candidate / "exam.json").exists():
+            return candidate
+    return None
+
+
+def _load_mock_exam_meta(exam_id: str) -> dict | None:
+    """Build an exam meta dict from a mock exam's ``exam.json``.
+
+    Mirrors the shape of national exam metadata so downstream callers
+    (``_structure_exam``, ``start_attempt``…) work transparently.
+    """
+    exam_dir = _find_mock_exam_dir(exam_id)
+    if exam_dir is None:
+        return None
+    try:
+        with open(exam_dir / "exam.json", "r", encoding="utf-8-sig") as f:
+            raw = json.load(f)
+    except Exception:
+        return None
+    return {
+        "id": raw.get("id") or exam_id,
+        "subject": raw.get("subject") or "",
+        "subject_full": raw.get("subject_full") or raw.get("title") or "",
+        "year": raw.get("year") or 0,
+        "session": raw.get("session") or "Blanc",
+        "exam_title": raw.get("title") or "",
+        "duration_minutes": raw.get("duration_minutes") or 180,
+        "coefficient": raw.get("coefficient") or 5,
+        "total_points": raw.get("total_points") or 20,
+        # Path is RELATIVE to MOCK_EXAMS_DIR (not EXAMS_DIR) — callers that need
+        # to load the JSON or assets must use ``_find_mock_exam_dir`` instead.
+        "path": str(exam_dir.relative_to(MOCK_EXAMS_DIR.parent.parent)),
+        "is_mock": True,
+    }
 
 
 class ExamService:
@@ -72,10 +124,19 @@ class ExamService:
         }
 
     def get_exam_meta(self, exam_id: str) -> dict | None:
-        """Return metadata for a single exam by id."""
+        """Return metadata for a single exam by id.
+
+        Order of resolution:
+        1. National exam catalog (data/exams/index.json)
+        2. Mock exam (data/mock_exams/<subject>/<id>/exam.json) if id starts with ``mock_``
+        3. Extracted/imported exam (DB)
+        """
         for e in self._load_index():
             if e["id"] == exam_id:
                 return e
+        mock_meta = _load_mock_exam_meta(exam_id)
+        if mock_meta is not None:
+            return mock_meta
         return self.get_extracted_exam_meta(exam_id)
 
     # ================================================================== #
@@ -651,6 +712,11 @@ class ExamService:
     # ------------------------------------------------------------------ #
 
     def _load_exam_json(self, exam_id: str) -> dict | None:
+        # Mock exams live under data/mock_exams/<subject>/<id>/exam.json
+        mock_dir = _find_mock_exam_dir(exam_id)
+        if mock_dir is not None:
+            with open(mock_dir / "exam.json", "r", encoding="utf-8-sig") as f:
+                return json.load(f)
         meta = self.get_exam_meta(exam_id)
         if not meta:
             return None
@@ -1464,6 +1530,11 @@ class ExamService:
     # ------------------------------------------------------------------ #
 
     def get_assets_dir(self, exam_id: str) -> Path | None:
+        # Mock exams: assets under data/mock_exams/<subject>/<id>/assets
+        mock_dir = _find_mock_exam_dir(exam_id)
+        if mock_dir is not None:
+            assets_dir = mock_dir / "assets"
+            return assets_dir if assets_dir.exists() else None
         meta = self.get_exam_meta(exam_id)
         if not meta:
             return None

@@ -5,7 +5,7 @@ import { listPublishedMockExams } from '../services/api';
 import MobileBottomNav from '../components/MobileBottomNav';
 import {
   ArrowLeft, Clock, Award, Play, FileText, Loader2,
-  Sparkles, GraduationCap, Target,
+  Sparkles, GraduationCap, Target, X,
 } from 'lucide-react';
 
 interface MockExamMeta {
@@ -31,6 +31,7 @@ export default function MockExamHub() {
   const [exams, setExams] = useState<MockExamMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState('SVT');
+  const [selectedExam, setSelectedExam] = useState<MockExamMeta | null>(null);
 
   useEffect(() => {
     loadExams();
@@ -133,7 +134,7 @@ export default function MockExamHub() {
                 <div
                   key={exam.id}
                   className="group relative p-5 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-violet-500/30 hover:bg-white/[0.05] transition-all duration-300 cursor-pointer"
-                  onClick={() => navigate(`/mock-exam/${exam.subject}/${exam.id}`)}
+                  onClick={() => setSelectedExam(exam)}
                 >
                   {/* Top row */}
                   <div className="flex items-start justify-between mb-3">
@@ -180,7 +181,94 @@ export default function MockExamHub() {
         )}
       </div>
 
+      {/* Mode picker modal — same UX as ExamHub */}
+      {selectedExam && (
+        <MockModeModal
+          exam={selectedExam}
+          onClose={() => setSelectedExam(null)}
+          onStart={(mode) => {
+            const ex = selectedExam;
+            setSelectedExam(null);
+            navigate(mode === 'practice' ? `/exam/practice/${ex.id}` : `/exam/real/${ex.id}`);
+          }}
+        />
+      )}
+
       <MobileBottomNav active="exam" />
+    </div>
+  );
+}
+
+/* ─── Mode picker modal (Entraînement / Examen Réel) ─── */
+function MockModeModal({
+  exam,
+  onClose,
+  onStart,
+}: {
+  exam: MockExamMeta;
+  onClose: () => void;
+  onStart: (mode: 'practice' | 'real') => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl bg-[#0e0e22] border border-white/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="relative bg-gradient-to-br from-violet-600 to-purple-700 p-5 text-white">
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+            aria-label="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest">
+            Examen Blanc — généré par IA
+          </p>
+          <h3 className="text-lg font-bold mt-0.5 leading-tight">{exam.title}</h3>
+          <div className="flex items-center gap-3 mt-3 text-xs text-white/85">
+            <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> 3h</span>
+            <span className="inline-flex items-center gap-1"><Award className="w-3 h-3" /> /20 pts</span>
+            <span className="inline-flex items-center gap-1"><GraduationCap className="w-3 h-3" /> Coef. 5</span>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-white/70 font-medium">Choisissez votre mode :</p>
+          <button
+            onClick={() => onStart('practice')}
+            className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-blue-400/30 hover:border-blue-400/60 hover:bg-blue-500/10 transition-all group text-left"
+          >
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white">Mode Entraînement</p>
+              <p className="text-xs text-white/55">Feedback instantané + corrections IA</p>
+            </div>
+            <span className="text-blue-300 text-lg transition-transform group-hover:translate-x-0.5">→</span>
+          </button>
+          <button
+            onClick={() => onStart('real')}
+            className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-rose-400/30 hover:border-rose-400/60 hover:bg-rose-500/10 transition-all group text-left"
+          >
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 text-white flex items-center justify-center">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white">Mode Examen Réel</p>
+              <p className="text-xs text-white/55">3h chrono — conditions du BAC</p>
+            </div>
+            <span className="text-rose-300 text-lg transition-transform group-hover:translate-x-0.5">→</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
