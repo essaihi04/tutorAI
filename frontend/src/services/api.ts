@@ -311,7 +311,7 @@ mockExamAdminApi.interceptors.request.use((config) => {
   return config;
 });
 
-export const generateMockExam = (data: { subject?: string; difficulty?: string; target_domains?: string[] }) =>
+export const generateMockExam = (data: { subject?: string; target_domains?: string[] }) =>
   mockExamAdminApi.post('/generate', data);
 
 export const listMockExams = (subject?: string) =>

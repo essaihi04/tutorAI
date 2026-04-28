@@ -24,7 +24,6 @@ def _get_admin_dep():
 
 class GenerateMockExamRequest(BaseModel):
     subject: str = "SVT"
-    difficulty: str = "moyen"  # facile, moyen, difficile
     target_domains: Optional[list[str]] = None
 
 
@@ -43,7 +42,6 @@ async def generate_mock_exam(
     try:
         exam = await mock_exam_service.generate_mock_exam(
             subject=req.subject,
-            difficulty=req.difficulty,
             target_domains=req.target_domains,
         )
         return {

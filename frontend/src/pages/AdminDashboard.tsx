@@ -1901,17 +1901,10 @@ interface MockExamRecord {
   id: string;
   title: string;
   subject: string;
-  difficulty: string;
   status: string;
   generated_at: string;
   domains_covered: { part1?: string; part2?: string[] };
 }
-
-const DIFFICULTY_OPTIONS = [
-  { value: 'facile', label: 'Facile', color: 'text-green-600 bg-green-50 border-green-200' },
-  { value: 'moyen', label: 'Moyen', color: 'text-amber-600 bg-amber-50 border-amber-200' },
-  { value: 'difficile', label: 'Difficile', color: 'text-red-600 bg-red-50 border-red-200' },
-];
 
 const DOMAIN_LABELS: Record<string, string> = {
   consommation_matiere_organique: 'Métabolisme',
@@ -1927,7 +1920,6 @@ function MockExamsTab() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [genSubject, setGenSubject] = useState('SVT');
-  const [genDifficulty, setGenDifficulty] = useState('moyen');
   const [genError, setGenError] = useState('');
   const [genSuccess, setGenSuccess] = useState('');
   const [expandedPrompts, setExpandedPrompts] = useState<string | null>(null);
@@ -1949,7 +1941,7 @@ function MockExamsTab() {
     setGenError('');
     setGenSuccess('');
     try {
-      const res = await generateMockExam({ subject: genSubject, difficulty: genDifficulty });
+      const res = await generateMockExam({ subject: genSubject });
       setGenSuccess(`Examen "${res.data.exam_id}" généré avec ${res.data.image_prompts_count} prompts d'images.`);
       load();
     } catch (err: any) {
@@ -1979,11 +1971,6 @@ function MockExamsTab() {
     } catch { setImagePrompts([]); setExpandedPrompts(exam.id); }
   };
 
-  const diffBadge = (d: string) => {
-    const cfg = DIFFICULTY_OPTIONS.find(o => o.value === d) || DIFFICULTY_OPTIONS[1];
-    return <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${cfg.color}`}>{cfg.label}</span>;
-  };
-
   const statusBadge = (s: string) => {
     if (s === 'published') return <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200">Publié</span>;
     if (s === 'archived') return <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">Archivé</span>;
@@ -2003,13 +1990,6 @@ function MockExamsTab() {
             <select value={genSubject} onChange={e => setGenSubject(e.target.value)}
               className="px-3 py-2 border rounded-lg text-sm focus:border-indigo-500 outline-none">
               <option value="SVT">SVT</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Difficulté</label>
-            <select value={genDifficulty} onChange={e => setGenDifficulty(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm focus:border-indigo-500 outline-none">
-              {DIFFICULTY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <button onClick={handleGenerate} disabled={generating}
@@ -2049,22 +2029,24 @@ function MockExamsTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-medium text-sm text-gray-900 truncate">{exam.title}</span>
-                  {diffBadge(exam.difficulty)}
                   {statusBadge(exam.status)}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span>ID: {exam.id}</span>
                   <span>{exam.generated_at ? new Date(exam.generated_at).toLocaleString('fr-FR') : '—'}</span>
                 </div>
-                {exam.domains_covered?.part2 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {exam.domains_covered.part2.map((d, i) => (
-                      <span key={i} className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500">
-                        {DOMAIN_LABELS[d] || d}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {exam.domains_covered?.part1 && (
+                    <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-medium">
+                      P1: {DOMAIN_LABELS[exam.domains_covered.part1] || exam.domains_covered.part1}
+                    </span>
+                  )}
+                  {exam.domains_covered?.part2?.map((d, i) => (
+                    <span key={i} className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500">
+                      {DOMAIN_LABELS[d] || d}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Actions */}

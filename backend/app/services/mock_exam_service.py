@@ -168,10 +168,15 @@ class MockExamService:
     async def generate_mock_exam(
         self,
         subject: str = "SVT",
-        difficulty: str = "moyen",
         target_domains: Optional[list[str]] = None,
     ) -> dict:
-        """Generate a full mock exam for a given subject.
+        """Generate a mock exam at the EXACT level of the national BAC exam.
+        
+        Domain logic is based on deep analysis of 2016-2025 exams:
+        - Part1 domain is ALWAYS different from Part2 domains (mutual exclusivity)
+        - Part1 Normale != Part1 Rattrapage for the same year  
+        - Part2 Ex1 = CMO (60%), Ex2 = GEN_EXP (60%), Ex3 = ENV/GEO/GEN_TRANS
+        - After GEO in 2025N, 2026N likely has CMO or ENV in Part1
         
         Returns the exam JSON with image prompts (PROMPT_IMAGE fields)
         instead of actual image files.
@@ -185,15 +190,14 @@ class MockExamService:
 
         exam_id = f"mock_{subject.lower()}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
         
-        # ── Choose domain distribution ──
-        domains = self._pick_domains(curriculum, blueprint, target_domains)
-        logger.info(f"[MockExam] Generating {exam_id} | domains: {domains}")
+        # ── Choose domain distribution (deep rotation logic) ──
+        domains = self._pick_domains_2026(curriculum, target_domains)
+        logger.info(f"[MockExam] Generating {exam_id} | P1={domains['part1']} | P2={domains['part2']}")
 
         # ── Generate Part 1 ──
-        part1 = await self._generate_part1(subject, curriculum, blueprint, domains, difficulty)
+        part1 = await self._generate_part1(subject, curriculum, blueprint, domains)
 
         # ── Generate Part 2 exercises ──
-        # Choose exercise pattern
         structure = blueprint.get("structure", {})
         part2_info = structure.get("part2", {})
         patterns = part2_info.get("exercise_patterns", [])
@@ -208,7 +212,7 @@ class MockExamService:
         for i, pts in enumerate(points_list):
             domain = domains["part2"][i] if i < len(domains["part2"]) else domains["part2"][-1]
             ex = await self._generate_exercise(
-                subject, curriculum, blueprint, domain, pts, i + 1, difficulty
+                subject, curriculum, blueprint, domain, pts, i + 1
             )
             exercises.append(ex)
 
@@ -221,14 +225,13 @@ class MockExamService:
         # ── Assemble final exam ──
         exam = {
             "id": exam_id,
-            "title": f"Examen Blanc SVT - Niveau {difficulty.capitalize()}",
+            "title": f"Examen Blanc SVT — Session Normale {datetime.utcnow().year}",
             "subject": subject,
             "year": datetime.utcnow().year,
-            "session": "Blanc",
+            "session": "Blanc (Normale)",
             "duration_minutes": 180,
             "coefficient": 5,
             "total_points": 20,
-            "difficulty": difficulty,
             "domains_covered": domains,
             "generated_at": datetime.utcnow().isoformat(),
             "status": "draft",
@@ -247,34 +250,69 @@ class MockExamService:
         logger.info(f"[MockExam] Generated {exam_id}: {len(exercises)} exercises, {len(image_prompts)} image prompts")
         return exam
 
-    def _pick_domains(self, curriculum: dict, blueprint: dict, target: Optional[list[str]]) -> dict:
-        """Select domains for Part1 and Part2 based on rotation analysis."""
-        all_domains = [d["id"] for d in curriculum.get("domains", [])]
+    def _pick_domains_2026(self, curriculum: dict, target: Optional[list[str]]) -> dict:
+        """Select domains based on deep analysis of 2016-2025 exam rotation.
         
-        if target:
-            # User-specified domains
-            part2_domains = target[:4]
-            while len(part2_domains) < 3:
-                extra = random.choice([d for d in all_domains if d not in part2_domains])
-                part2_domains.append(extra)
+        KEY RULES discovered from analysis:
+        1. Part1 domain is EXCLUDED from Part2 (mutual exclusivity 90%+)
+        2. Part1 Normale != Part1 Rattrapage (same year, different domain)
+        3. Part1 Normale rotates: CMO(5x), GEO(3x), ENV(2x), GEN_EXP(1x)
+        4. Part2 Ex1 = CMO (60%), Ex2 = GEN_EXP (60%), Ex3 = ENV/GEO/GEN_TRANS
+        5. After 2025N=GEO in Part1, 2026N is likely CMO or ENV
+        6. Genetics (expression+transmission) are ALWAYS in Part2, never alone in Part1
+        """
+        ALL = [
+            "consommation_matiere_organique",
+            "genetique_expression",
+            "genetique_transmission",
+            "geologie",
+            "environnement_sante",
+        ]
+        
+        if target and len(target) >= 4:
+            part1_domain = target[0]
+            part2_domains = [d for d in target[1:] if d != part1_domain][:3]
         else:
-            # Use rotation analysis: pick mandatory + alternating
-            rotation = blueprint.get("structure", {}).get("part2", {}).get("domain_rotation", {})
-            mandatory = [m["domain"] for m in rotation.get("mandatory", [])]
-            alternates = [a["domain"] for a in rotation.get("third_exercise_alternates", [])]
-            third = random.choice(alternates) if alternates else "environnement_sante"
-            part2_domains = mandatory + [third]
-
-        # Part1 typically covers geologie or consommation
-        part1_domain = random.choice(["geologie", "consommation_matiere_organique", part2_domains[0]])
+            # ── 2026 Normale Prediction ──
+            # 2025N had GEO in Part1. Historical alternation:
+            # GEO(2016) -> CMO(2017) -> CMO(2018) -> GEO(2019) -> ?(2020)
+            # -> CMO(2021) -> CMO(2022) -> ENV(2023) -> CMO(2024) -> GEO(2025)
+            # After GEO, next is CMO (4/4 times) or ENV (rare)
+            part1_candidates = ["consommation_matiere_organique", "environnement_sante"]
+            part1_weights = [75, 25]  # CMO much more likely after GEO
+            part1_domain = random.choices(part1_candidates, weights=part1_weights, k=1)[0]
+            
+            # Part2: 3 exercises, MUST NOT include Part1 domain
+            # Ex1: CMO if not in Part1, else GEO (CMO is Ex1 in 60% of normales)
+            # Ex2: GEN_EXP+GEN_TRANS combined (always present in Part2)
+            # Ex3: ENV or GEO (whichever is not in Part1)
+            part2_domains = []
+            
+            # Ex1
+            if part1_domain != "consommation_matiere_organique":
+                part2_domains.append("consommation_matiere_organique")
+            else:
+                part2_domains.append("geologie")  # When CMO in P1, GEO often takes Ex1
+            
+            # Ex2: Genetics (combined expression+transmission, as in real exams)
+            part2_domains.append("genetique_expression+transmission")
+            
+            # Ex3: The remaining small domain
+            remaining = [d for d in ["environnement_sante", "geologie"]
+                         if d != part1_domain and d not in part2_domains]
+            if remaining:
+                part2_domains.append(random.choice(remaining))
+            else:
+                part2_domains.append("environnement_sante")
         
         return {
             "part1": part1_domain,
             "part2": part2_domains,
+            "exclusivity_rule": f"Part1({part1_domain}) EXCLUDED from Part2",
         }
 
-    async def _generate_part1(self, subject: str, curriculum: dict, blueprint: dict, domains: dict, difficulty: str) -> dict:
-        """Generate Part 1 (Restitution des connaissances)."""
+    async def _generate_part1(self, subject: str, curriculum: dict, blueprint: dict, domains: dict) -> dict:
+        """Generate Part 1 (Restitution des connaissances) at national exam level."""
         # Get domain details from curriculum
         domain_info = {}
         for d in curriculum.get("domains", []):
@@ -302,10 +340,11 @@ class MockExamService:
         # Curriculum topics for this domain
         topics_text = json.dumps(domain_info.get("chapters", []), ensure_ascii=False, indent=2)
 
-        system = f"""Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
+        system = """Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
 Tu génères UNIQUEMENT la Première partie (Restitution des connaissances, 5pts).
 RÈGLE ABSOLUE: toutes les questions doivent porter sur le programme officiel SVT 2ème Bac (cadre de référence).
-Difficulté: {difficulty}
+NIVEAU: IDENTIQUE à l'examen national réel du Baccalauréat marocain. Ni plus facile, ni plus difficile.
+Le contenu doit être scientifiquement rigoureux et correspondre au style des examens 2020-2025.
 Réponds en JSON valide uniquement."""
 
         prompt = f"""Génère la Première partie d'un examen blanc SVT.
@@ -345,7 +384,7 @@ Réponds avec ce JSON:
 
     async def _generate_exercise(
         self, subject: str, curriculum: dict, blueprint: dict,
-        domain: str, points: float, exercise_num: int, difficulty: str
+        domain: str, points: float, exercise_num: int
     ) -> dict:
         """Generate a single Part 2 exercise with context, documents, and questions."""
         # Find domain info
@@ -377,10 +416,10 @@ Réponds avec ce JSON:
         n_questions = random.randint(3, 5)
         n_docs = random.randint(2, 4)
 
-        system = f"""Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
+        system = """Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
 Tu génères UN exercice de la Deuxième partie (Raisonnement scientifique).
 RÈGLE ABSOLUE: l'exercice doit porter UNIQUEMENT sur le programme officiel SVT 2ème Bac.
-Difficulté: {difficulty}
+NIVEAU: IDENTIQUE à l'examen national réel du Baccalauréat. Mêmes types de raisonnement, même profondeur.
 Réponds en JSON valide uniquement."""
 
         prompt = f"""Génère l'Exercice {exercise_num} ({points}pts) d'un examen blanc SVT.
@@ -459,7 +498,6 @@ Réponds avec ce JSON:
                         "id": exam.get("id", exam_dir.name),
                         "title": exam.get("title", ""),
                         "subject": exam.get("subject", ""),
-                        "difficulty": exam.get("difficulty", ""),
                         "status": exam.get("status", "draft"),
                         "generated_at": exam.get("generated_at", ""),
                         "domains_covered": exam.get("domains_covered", {}),

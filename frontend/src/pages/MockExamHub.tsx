@@ -12,17 +12,10 @@ interface MockExamMeta {
   id: string;
   title: string;
   subject: string;
-  difficulty: string;
   status: string;
   generated_at: string;
   domains_covered: { part1?: string; part2?: string[] };
 }
-
-const DIFFICULTY_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  facile:    { label: 'Facile',    color: 'text-green-300',  bg: 'bg-green-500/15' },
-  moyen:     { label: 'Moyen',    color: 'text-amber-300',  bg: 'bg-amber-500/15' },
-  difficile: { label: 'Difficile', color: 'text-red-300',   bg: 'bg-red-500/15' },
-};
 
 const DOMAIN_LABELS: Record<string, string> = {
   consommation_matiere_organique: 'Consommation de la matière organique',
@@ -137,8 +130,8 @@ export default function MockExamHub() {
         {!loading && exams.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2">
             {exams.map(exam => {
-              const diff = DIFFICULTY_CFG[exam.difficulty] || DIFFICULTY_CFG.moyen;
               const domains = exam.domains_covered?.part2 || [];
+              const p1Label = DOMAIN_LABELS[exam.domains_covered?.part1 || ''] || 'SVT';
               return (
                 <div
                   key={exam.id}
@@ -158,8 +151,8 @@ export default function MockExamHub() {
                         </p>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${diff.bg} ${diff.color}`}>
-                      {diff.label}
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/15 text-violet-300">
+                      P1: {p1Label}
                     </span>
                   </div>
 
