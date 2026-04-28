@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff, X, Check,
   Clock, Zap, BarChart3, TrendingUp, Server, AlertCircle,
   UserPlus, Lock, Mail, User, FileUp,
-  MessageCircle, MapPin, Phone, Inbox, Sparkles
+  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload
 } from 'lucide-react';
 import {
   adminLogin, getAdminDashboard, getAdminUsers, createAdminUser,
@@ -13,7 +13,8 @@ import {
   getUsageSummary, getUsageByUser, getRecentRequests,
   listRegistrationRequests, updateRegistrationRequest, deleteRegistrationRequest,
   activateRegistration, listPromoCodes, createPromoCode, updatePromoCode, deletePromoCode,
-  generateMockExam, listMockExams, updateMockExamStatus, getMockExamImagePrompts
+  generateMockExam, listMockExams, updateMockExamStatus, getMockExamImagePrompts,
+  uploadMockExamImage, listMockExamImages
 } from '../services/api';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -1924,6 +1925,9 @@ function MockExamsTab() {
   const [genSuccess, setGenSuccess] = useState('');
   const [expandedPrompts, setExpandedPrompts] = useState<string | null>(null);
   const [imagePrompts, setImagePrompts] = useState<any[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1965,10 +1969,43 @@ function MockExamsTab() {
   const showPrompts = async (exam: MockExamRecord) => {
     if (expandedPrompts === exam.id) { setExpandedPrompts(null); return; }
     try {
-      const res = await getMockExamImagePrompts(exam.subject, exam.id);
-      setImagePrompts(res.data || []);
+      const [promptsRes, imagesRes] = await Promise.all([
+        getMockExamImagePrompts(exam.subject, exam.id),
+        listMockExamImages(exam.subject, exam.id),
+      ]);
+      setImagePrompts(promptsRes.data || []);
+      const imgMap: Record<string, string> = {};
+      for (const img of (imagesRes.data || [])) {
+        imgMap[img.doc_id] = img.url;
+      }
+      setUploadedImages(imgMap);
       setExpandedPrompts(exam.id);
-    } catch { setImagePrompts([]); setExpandedPrompts(exam.id); }
+    } catch { setImagePrompts([]); setUploadedImages({}); setExpandedPrompts(exam.id); }
+  };
+
+  const handleImageUpload = async (exam: MockExamRecord, docId: string, file: File) => {
+    setUploading(docId);
+    try {
+      const res = await uploadMockExamImage(exam.subject, exam.id, docId, file);
+      setUploadedImages(prev => ({ ...prev, [docId]: res.data.url }));
+    } catch (err: any) {
+      alert('Erreur upload: ' + (err?.response?.data?.detail || err?.message || 'inconnu'));
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const handlePaste = (exam: MockExamRecord, docId: string) => (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) handleImageUpload(exam, docId, file);
+        return;
+      }
+    }
   };
 
   const statusBadge = (s: string) => {
@@ -2066,26 +2103,95 @@ function MockExamsTab() {
               </div>
             </div>
 
-            {/* Expanded image prompts */}
+            {/* Expanded image prompts with upload */}
             {expandedPrompts === exam.id && (
               <div className="px-4 pb-4">
                 {imagePrompts.length === 0 ? (
                   <p className="text-xs text-gray-400 py-2">Aucun prompt d'image trouvé.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {imagePrompts.map((p, i) => (
-                      <div key={i} className="p-3 bg-gray-50 rounded-xl border text-xs">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-gray-700">{p.title}</span>
-                          <span className="text-gray-400">({p.exercise})</span>
-                          <span className="ml-auto px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px]">{p.type}</span>
+                      <div key={i} className="rounded-xl border bg-gray-50 overflow-hidden">
+                        {/* Header */}
+                        <div className="px-4 py-2.5 border-b bg-white flex items-center gap-2">
+                          <Image className="w-4 h-4 text-purple-500" />
+                          <span className="font-semibold text-sm text-gray-700">{p.title}</span>
+                          <span className="text-xs text-gray-400">({p.exercise})</span>
+                          <span className="ml-auto px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-medium">{p.type}</span>
+                          {uploadedImages[p.doc_id] && (
+                            <span className="px-1.5 py-0.5 bg-green-50 text-green-600 rounded text-[10px] font-medium">✓ Image</span>
+                          )}
                         </div>
-                        <p className="text-gray-500 mb-2">{p.description}</p>
-                        <div className="p-2 bg-white rounded-lg border border-dashed border-purple-200">
-                          <div className="text-[10px] text-purple-500 font-medium mb-1">PROMPT IMAGE :</div>
-                          <p className="text-gray-700 whitespace-pre-wrap">{p.prompt}</p>
+
+                        {/* Two-column: Prompt | Image */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x">
+                          {/* Left: Prompt */}
+                          <div className="p-4">
+                            <p className="text-xs text-gray-500 mb-2">{p.description}</p>
+                            <div className="p-3 bg-white rounded-lg border border-dashed border-purple-200">
+                              <div className="text-[10px] text-purple-500 font-medium mb-1.5">PROMPT IMAGE :</div>
+                              <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{p.prompt}</p>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-2">→ {p.target_file}</p>
+                          </div>
+
+                          {/* Right: Upload / Preview */}
+                          <div className="p-4 flex flex-col items-center justify-center min-h-[200px]"
+                            onPaste={handlePaste(exam, p.doc_id)}
+                            tabIndex={0}
+                          >
+                            {uploadedImages[p.doc_id] ? (
+                              <div className="w-full space-y-2">
+                                <img
+                                  src={uploadedImages[p.doc_id]}
+                                  alt={p.title}
+                                  className="w-full max-h-[250px] object-contain rounded-lg border bg-white cursor-pointer hover:shadow-md transition"
+                                  onClick={() => setPreviewUrl(uploadedImages[p.doc_id])}
+                                />
+                                <div className="flex items-center gap-2 justify-center">
+                                  <button
+                                    onClick={() => setPreviewUrl(uploadedImages[p.doc_id])}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" /> Visualiser
+                                  </button>
+                                  <label className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 transition cursor-pointer flex items-center gap-1">
+                                    <RefreshCw className="w-3.5 h-3.5" /> Remplacer
+                                    <input type="file" accept="image/*" className="hidden"
+                                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(exam, p.doc_id, f); }}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : (
+                              <label
+                                className={`w-full h-full min-h-[180px] flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed cursor-pointer transition ${
+                                  uploading === p.doc_id
+                                    ? 'border-purple-300 bg-purple-50'
+                                    : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50/50'
+                                }`}
+                              >
+                                {uploading === p.doc_id ? (
+                                  <>
+                                    <RefreshCw className="w-6 h-6 text-purple-400 animate-spin" />
+                                    <span className="text-xs text-purple-500 font-medium">Upload en cours…</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-8 h-8 text-gray-300" />
+                                    <div className="text-center">
+                                      <p className="text-xs font-medium text-gray-500">Glisser, coller ou cliquer</p>
+                                      <p className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WebP • Ctrl+V pour coller</p>
+                                    </div>
+                                  </>
+                                )}
+                                <input type="file" accept="image/*" className="hidden"
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(exam, p.doc_id, f); }}
+                                />
+                              </label>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-gray-400 mt-1">→ {p.target_file}</p>
                       </div>
                     ))}
                   </div>
@@ -2095,6 +2201,28 @@ function MockExamsTab() {
           </div>
         ))}
       </div>
+
+      {/* Fullscreen Image Preview Modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div className="relative max-w-5xl max-h-[90vh] w-full" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewUrl(null)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-100 transition z-10"
+            >
+              <X className="w-4 h-4 text-gray-600" />
+            </button>
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="w-full h-auto max-h-[85vh] object-contain rounded-xl bg-white shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

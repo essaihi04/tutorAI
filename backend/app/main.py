@@ -91,6 +91,11 @@ _exams_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "e
 if os.path.isdir(_exams_dir):
     app.mount("/static/exams", StaticFiles(directory=_exams_dir), name="exam_assets")
 
+# Serve mock exam assets (uploaded images)
+_mock_exams_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "mock_exams")
+os.makedirs(_mock_exams_dir, exist_ok=True)
+app.mount("/static/mock-exams", StaticFiles(directory=_mock_exams_dir), name="mock_exam_assets")
+
 
 @app.get("/health")
 async def health_check():

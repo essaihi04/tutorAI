@@ -326,6 +326,18 @@ export const getMockExamImagePrompts = (subject: string, examId: string) =>
 export const updateMockExamStatus = (subject: string, examId: string, status: string) =>
   mockExamAdminApi.patch(`/${subject}/${examId}/status`, { status });
 
+export const uploadMockExamImage = (subject: string, examId: string, docId: string, file: File) => {
+  const formData = new FormData();
+  formData.append('doc_id', docId);
+  formData.append('file', file);
+  return mockExamAdminApi.post(`/${subject}/${examId}/upload-image`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const listMockExamImages = (subject: string, examId: string) =>
+  mockExamAdminApi.get(`/${subject}/${examId}/images`);
+
 export const listPublishedMockExams = (subject?: string) =>
   api.get('/mock-exam/published', { params: subject ? { subject } : {} });
 

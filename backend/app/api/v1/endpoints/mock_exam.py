@@ -2,12 +2,15 @@
 Mock Exam API Endpoints — Generate, list, and manage AI-generated exam blancs.
 """
 import logging
+import shutil
 from typing import Optional
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.services.mock_exam_service import mock_exam_service
+from app.services.mock_exam_service import mock_exam_service, MOCK_EXAMS_DIR
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mock-exam", tags=["mock-exam"])
@@ -110,3 +113,83 @@ async def list_published_exams(subject: Optional[str] = None):
     """List published mock exams (accessible by students)."""
     all_exams = mock_exam_service.list_mock_exams(subject)
     return [e for e in all_exams if e.get("status") == "published"]
+
+
+@router.post("/{subject}/{exam_id}/upload-image")
+async def upload_image(
+    subject: str,
+    exam_id: str,
+    doc_id: str = Form(...),
+    file: UploadFile = File(...),
+    admin: bool = Depends(_get_admin_dep()),
+):
+    """Upload an image for a specific document in a mock exam. Admin-only."""
+    # Validate exam exists
+    exam = mock_exam_service.get_mock_exam(subject, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Mock exam not found")
+    
+    # Validate file type
+    allowed = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/svg+xml"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail=f"Type non supporté: {file.content_type}")
+    
+    # Determine extension
+    ext_map = {"image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg",
+               "image/webp": ".webp", "image/gif": ".gif", "image/svg+xml": ".svg"}
+    ext = ext_map.get(file.content_type, ".png")
+    
+    # Save to assets dir
+    assets_dir = MOCK_EXAMS_DIR / subject.lower() / exam_id / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{doc_id}{ext}"
+    filepath = assets_dir / filename
+    
+    with open(filepath, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    # Update the exam.json to set the src for this doc_id
+    src_path = f"assets/{filename}"
+    _update_doc_src(exam, doc_id, src_path)
+    from app.services.mock_exam_service import _save_json
+    exam_path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "exam.json"
+    _save_json(exam_path, exam)
+    
+    # Return the public URL for serving
+    public_url = f"/static/mock-exams/{subject.lower()}/{exam_id}/assets/{filename}"
+    logger.info(f"[MockExam] Uploaded image for {doc_id}: {public_url}")
+    
+    return {"ok": True, "doc_id": doc_id, "filename": filename, "url": public_url}
+
+
+@router.get("/{subject}/{exam_id}/images")
+async def list_uploaded_images(
+    subject: str,
+    exam_id: str,
+    admin: bool = Depends(_get_admin_dep()),
+):
+    """List all uploaded images for a mock exam. Admin-only."""
+    assets_dir = MOCK_EXAMS_DIR / subject.lower() / exam_id / "assets"
+    if not assets_dir.exists():
+        return []
+    
+    images = []
+    for f in sorted(assets_dir.iterdir()):
+        if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+            doc_id = f.stem  # filename without extension = doc_id
+            images.append({
+                "doc_id": doc_id,
+                "filename": f.name,
+                "url": f"/static/mock-exams/{subject.lower()}/{exam_id}/assets/{f.name}",
+            })
+    return images
+
+
+def _update_doc_src(exam: dict, doc_id: str, src: str):
+    """Update the src field of a document in the exam JSON."""
+    for part in exam.get("parts", []):
+        for ex in part.get("exercises", []):
+            for doc in ex.get("documents", []):
+                if doc.get("id") == doc_id:
+                    doc["src"] = src
+                    return
