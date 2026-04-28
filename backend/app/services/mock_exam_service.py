@@ -406,6 +406,114 @@ Réponds avec ce JSON:
 
         return await _call_deepseek(system, prompt, "Part1", max_tokens=4096)
 
+    # ── Sub-topic rotation data from analysis of 20 real exams ──
+    SUBTOPIC_GUIDANCE = {
+        "consommation_matiere_organique": {
+            "description": """ANALYSE 20 EXAMENS — SOUS-TOPICS CMO:
+Les exercices CMO combinent TOUJOURS plusieurs de ces sous-topics:
+- muscle_effort (15x): contraction musculaire, fibre musculaire, effort physique
+- bilan_energetique (13x): ATP, rendement, bilan chiffré
+- glycolyse (12x): glucose→pyruvate, cytoplasme
+- krebs (12x): cycle de Krebs, matrice mitochondriale
+- chaine_respiratoire (11x): NADH, FADH2, ATP synthase, phosphorylation oxydative
+- mitochondrie (10x): ultrastructure, rôle des compartiments
+- fermentation (8x): anaérobie, éthanol, lactique — alterne avec respiration
+- levure (7x): modèle expérimental fréquent
+- consommation_O2 (6x): respiromètre, mesure du dioxygène
+
+PATTERN TYPIQUE: Expérience sur levures/muscles → mesure O2/CO2 → comparer aérobie/anaérobie → schéma bilan""",
+            "scenario_types": [
+                "Expérience avec des levures dans différentes conditions (aérobie/anaérobie)",
+                "Mesure de la consommation d'O2 par des cellules musculaires à l'effort",
+                "Comparaison fermentation vs respiration avec données numériques",
+                "Étude de l'ultrastructure mitochondriale et ses fonctions",
+            ],
+        },
+        "genetique_expression+transmission": {
+            "description": """ANALYSE 20 EXAMENS — SOUS-TOPICS GÉNÉTIQUE:
+
+EXPRESSION (toujours dans 1ère partie de l'exercice):
+- relation_gene_proteine (13x): séquence nucléotides→acides aminés
+- mutation (12x): substitution, délétion, impact sur protéine
+- electrophorese (9x): comparer protéines normale/mutée
+- maladie_genetique (8x): drépanocytose(3x), myopathie, mucoviscidose, phénylcétonurie
+- transcription (7x): ADN→ARNm
+- traduction (7x): ARNm→protéine, code génétique
+- code_genetique (7x): tableau des codons
+
+TRANSMISSION (toujours dans 2ème partie de l'exercice):
+- dihybridisme (10x): DOMINANT — deux gènes, deux caractères
+- dominance_complete (10x): rapport 3:1 ou 9:3:3:1
+- genes_lies (8x): même chromosome, crossing-over, parentaux/recombinés
+- echiquier (6x): croisement test, prédiction
+- genes_independants (5x): chromosomes différents, brassage inter
+- sex_linked (3x): lié au chromosome X
+- codominance (2x): rare
+- dominance_incomplete (2x): phénotype intermédiaire
+
+ROTATION GÈNES LIÉS vs INDÉPENDANTS:
+2016N: liés+indép | 2018N: liés | 2019N: indép | 2020N: liés+indép
+2020R: codominance | 2021R: liés | 2023N: indép+codominance | 2025R: liés
+→ ALTERNANCE: liés et indépendants alternent quasi régulièrement.
+→ 2025R avait gènes liés → 2026N devrait avoir gènes INDÉPENDANTS ou codominance.""",
+            "scenario_types": [
+                "Cas clinique: maladie génétique → électrophorèse → séquence → croisements familiaux",
+                "Étude d'une anomalie héréditaire → relation gène-protéine → arbre généalogique",
+                "Mutation et impact phénotypique → code génétique → transmission dihybride",
+            ],
+        },
+        "geologie": {
+            "description": """ANALYSE 20 EXAMENS — SOUS-TOPICS GÉOLOGIE:
+- subduction (9x): fosse, plan de Benioff, volcanisme explosif
+- faille (9x): faille inverse, compression
+- carte_coupe (8x): carte géologique, coupe, affleurement
+- metamorphisme_subduction (8x): schiste bleu, éclogite, HP-BT, glaucophane
+- collision (8x): Himalaya, Alpes, chevauchement, nappe de charriage
+- tectonique_plaques (7x): convergence, divergence
+- magmatisme (6x): granite, anatexie, fusion partielle, pluton
+- metamorphisme_contact (5x): auréole, cornéenne, thermique
+- obduction (4x): ophiolite, Oman, Beni Bousera
+- metamorphisme_collision (4x): foliation, schistosité, régional
+- ouverture_oceanique (3x): rift, dorsale, accrétion
+
+ROTATION DES THÈMES PRINCIPAUX:
+2016R: subduction+collision | 2017N: collision+magmatisme | 2018N: collision+obduction
+2018R: obduction | 2019R: collision+métam | 2020R: subduction+magmatisme
+2022N: subduction+magmatisme | 2023N: magmatisme+collision | 2023R: subduction+collision
+2025R: métam_contact+magmatisme+collision
+
+LIEUX GÉOGRAPHIQUES UTILISÉS (jamais le même!):
+Himalaya, Andes, Vosges, Oman, Alpes, Rif, Atlas, Anti-Atlas, Hoggar
+→ 2026N: utiliser un NOUVEAU lieu (ex: Appalaches, Oural, chaîne alpine italienne...)""",
+            "scenario_types": [
+                "Carte géologique d'une région → roches métamorphiques → diagramme P-T → reconstituer l'histoire",
+                "Données sismiques zone de subduction → magmatisme associé → conditions fusion",
+                "Indices tectoniques d'une chaîne de collision → nappes de charriage → chronologie",
+                "Étude d'un complexe ophiolitique → obduction → reconstitution paléogéographique",
+            ],
+        },
+        "environnement_sante": {
+            "description": """ANALYSE 20 EXAMENS — SOUS-TOPICS ENVIRONNEMENT:
+- dechets (8x): TOUJOURS PRÉSENT — ordures ménagères, gestion, tri
+- impact_sante (5x): toxicité, maladies, risques
+- lixiviat (4x): décharge, percolation, contamination
+- biogaz_compostage (3x): méthanisation, matière organique
+- pollution_eau (2x): nappe phréatique, nitrates, eutrophisation
+- pollution_sol (2x): engrais, érosion
+- pollution_air (1x): CO2, ozone, gaz à effet de serre
+- energies_renouvelables (1x): rare
+
+PATTERN TYPIQUE: Problème de pollution → données → solutions → argumenter
+→ Les déchets ménagers dominent largement (8/8 examens)
+→ 2026N: combiner déchets + pollution eau OU pollution air (sous-représenté)""",
+            "scenario_types": [
+                "Étude de l'impact d'une décharge sur la nappe phréatique → analyses → solutions",
+                "Comparaison techniques de gestion des déchets → incinération vs compostage vs enfouissement",
+                "Pollution de l'air par les gaz à effet de serre → données → solutions durables",
+            ],
+        },
+    }
+
     async def _generate_exercise(
         self, subject: str, curriculum: dict, blueprint: dict,
         domain: str, points: float, exercise_num: int
@@ -417,6 +525,12 @@ Réponds avec ce JSON:
             if d["id"] == domain or domain.startswith(d["id"]):
                 domain_info = d
                 break
+
+        # Get sub-topic guidance for this domain
+        guidance = self.SUBTOPIC_GUIDANCE.get(domain, {})
+        subtopic_analysis = guidance.get("description", "")
+        scenario_types = guidance.get("scenario_types", [])
+        scenario_hint = random.choice(scenario_types) if scenario_types else ""
 
         # Sample 2-3 real exercises from this domain as few-shot
         examples = _sample_exercises(subject, domain, 3)
@@ -440,13 +554,16 @@ Réponds avec ce JSON:
         n_questions = random.randint(3, 5)
         n_docs = random.randint(2, 4)
 
-        system = """Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
+        system = f"""Tu es un expert en création d'examens nationaux SVT du Baccalauréat marocain.
 Tu génères UN exercice de la Deuxième partie (Raisonnement scientifique).
 RÈGLE ABSOLUE: l'exercice doit porter UNIQUEMENT sur le programme officiel SVT 2ème Bac.
 NIVEAU: IDENTIQUE à l'examen national réel du Baccalauréat. Mêmes types de raisonnement, même profondeur.
+
+{subtopic_analysis}
+
 Réponds en JSON valide uniquement."""
 
-        prompt = f"""Génère l'Exercice {exercise_num} ({points}pts) d'un examen blanc SVT.
+        prompt = f"""Génère l'Exercice {exercise_num} ({points}pts) d'un examen blanc SVT — Session Normale 2026.
 
 DOMAINE: {domain_info.get('name', domain)}
 
@@ -456,22 +573,26 @@ CHAPITRES AUTORISÉS (ne sors JAMAIS de ce cadre):
 TYPES DE DOCUMENTS TYPIQUES POUR CE DOMAINE:
 {typical_docs}
 
+SCÉNARIO SUGGÉRÉ (adapte librement, invente un contexte ORIGINAL):
+{scenario_hint}
+
 EXEMPLES DE VRAIS EXERCICES NATIONAUX:
 {examples_text}
 
 INSTRUCTIONS:
-1. Écris un CONTEXTE scientifique réaliste (200-500 caractères) introduisant un phénomène biologique/géologique.
+1. Écris un CONTEXTE scientifique ORIGINAL (200-500 caractères) — NE COPIE PAS les exemples.
+   Invente un nouveau scénario, un nouvel organisme/lieu/cas clinique.
 2. Crée {n_docs} documents. Pour CHAQUE document, donne:
    - id: "doc_e{exercise_num}_N"
    - type: "figure", "schema", "tableau", "graphique"
    - title: "Document N"
-   - description: description détaillée du contenu visuel
-   - PROMPT_IMAGE: un prompt DÉTAILLÉ pour générer cette image (style scientifique BAC marocain: axes, légendes, valeurs numériques, couleurs sobres)
+   - description: description TRÈS détaillée du contenu visuel (axes, valeurs, légendes, couleurs)
+   - PROMPT_IMAGE: prompt détaillé pour générer l'image (style BAC marocain: sobre, scientifique)
 3. Crée {n_questions} questions progressives (du simple au complexe), total = {points}pts.
 4. Chaque question référence ses documents via "documents": ["doc_e{exercise_num}_N"].
-5. Chaque question a une correction complète et structurée.
-6. Les questions utilisent les verbes: décrire, comparer, expliquer, déduire, montrer, proposer une hypothèse...
-7. Style IDENTIQUE aux examens nationaux marocains.
+5. Chaque question a une correction COMPLÈTE et STRUCTURÉE.
+6. Questions progressives: décrire → comparer → expliquer → déduire → proposer une hypothèse
+7. Style IDENTIQUE aux examens nationaux marocains (formulations formelles en français).
 
 Réponds avec ce JSON:
 {{"name":"Exercice {exercise_num}","points":{points},"context":"...","documents":[
