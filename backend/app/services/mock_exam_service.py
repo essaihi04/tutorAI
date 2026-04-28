@@ -1454,19 +1454,31 @@ Réponds avec ce JSON:
     # ═══════════════════════════════════════════════════════════════════
 
     # 12 probability profiles for Physique-Chimie.
-    # Rules from analysis:
-    # - Chimie ALWAYS Ex1, ALWAYS 7pts (100%)
-    # - Electricité ALWAYS present (100%), 3.5-5.5pts
-    # - Mécanique ALWAYS last, 2.5-5.5pts
-    # - 4-exercise format 70%, 5-exercise format 30%
-    # - Chimie = (Pile|Electrolyse) + (Dosage|Estérification|Cinétique)
-    # - Electricité = (RC|RL) + (RLC|LC|Modulation AM)
-    # - Mécanique = (Chute|Projectile|Satellite) + (Oscillateur|Pendule)
+    # Deep analysis of 20 exams (2016-2025 N+R):
+    #
+    # STRUCTURE: 4ex=70% (14/20), 5ex=30% (6/20). Trend: alternates 4/5 every 2yrs.
+    # CHIMIE:  ALWAYS Ex1, ALWAYS 7pts (20/20). 2 parties. 10-15Q. 0-3 docs.
+    # ELEC:    ALWAYS present (20/20). Combos: RC+RL+RLC(35%), RL+RLC(10%), RL+LC+modAM(10%).
+    # MECA:    ALWAYS last exercise (20/20). 2.5-6pts. 0-3 docs.
+    # ONDES+NUC: Combined in 4ex, separated in 5ex. 3/20 combined, 6/20 separated, rest partial.
+    #
+    # CHIMIE COMBOS:  DOSAGE+ELEC(20%), DOSAGE+PILE(20%), rest varied (14 unique combos)
+    # ELEC COMBOS:    RC+RL+RLC(35%), RL+LC+modAM(10%), RL+RLC(10%), RL+modAM+demod(5%)...
+    # MECA COMBOS:    oscillateur(45%), plan_incline(30%), chute_visqueuse(20%), projectile(15%)
+    #
+    # QUESTION TYPES: 98% open, 1.5% vrai_faux, 0.7% qcm
+    # POINTS/Q:       0.5pts(62%), 0.75pts(20%), 0.25pts(14%), 1.0pts(4%)
+    #
+    # 2026N PREDICTIONS (rotation):
+    #   CHIMIE:  PILE or ELECTROLYSE (2025N=CIN+DOS+EST, 2025R=DOS+EST → need PILE/ELEC)
+    #   ELEC:    RC+RL+RLC or RL+RLC (2025N=RC+demod, 2025R=RL+LC+mod → need RLC)
+    #   MECA:    chute_visqueuse or projectile (2025N=satellite, 2025R=skieur+torsion)
+    #   STRUCT:  4ex likely (2025=4ex, but 2024=5ex → alternation pattern)
     PHYSIQUE_EXAM_PROFILES = [
-        # ── 4 exercises format (70%) ──
+        # ── 4 exercises format (high probability for 2026N) ──
         {
-            "id": "PC_A1", "weight": 12,
-            "label": "4ex: CHIM(pile+dosage) + ONDES+NUC(méca+désint) + ELEC(RC+RLC) + MECA(chute_visq+oscill)",
+            "id": "PC_A1", "weight": 14,
+            "label": "4ex: CHIM(pile+dosage) + ONDES+NUC(méca+désint) + ELEC(RC+RL+RLC) + MECA(chute_visq+oscill)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1476,11 +1488,11 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "pile_dosage",
             "ondes_sub": "ondes_mecaniques", "nuc_sub": "desintegration",
-            "elec_variant": "RC_RLC",
+            "elec_variant": "RC_RL_RLC",
             "meca_variant": "chute_visqueuse_oscillateur",
         },
         {
-            "id": "PC_A2", "weight": 11,
+            "id": "PC_A2", "weight": 12,
             "label": "4ex: CHIM(electrolyse+ester) + ONDES+NUC(diffr+désint) + ELEC(RL+modAM) + MECA(proj+pendule_torsion)",
             "structure": "4ex",
             "exercises": [
@@ -1496,7 +1508,7 @@ Réponds avec ce JSON:
         },
         {
             "id": "PC_A3", "weight": 10,
-            "label": "4ex: CHIM(pile+ester) + ONDES(ultrasons) + ELEC(RC+demod) + MECA(satellite+oscill)",
+            "label": "4ex: CHIM(pile+ester) + ONDES+NUC(ultrasons+désint) + ELEC(RC+RL+RLC) + MECA(satellite+oscill)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1506,12 +1518,12 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "pile_esterification",
             "ondes_sub": "ultrasons", "nuc_sub": "desintegration",
-            "elec_variant": "RC_demodulation",
+            "elec_variant": "RC_RL_RLC",
             "meca_variant": "satellite_oscillateur",
         },
         {
-            "id": "PC_A4", "weight": 9,
-            "label": "4ex: CHIM(electrolyse+dosage) + NUC(désint) + ELEC(RL+RLC) + MECA(plan_incl+oscill)",
+            "id": "PC_A4", "weight": 10,
+            "label": "4ex: CHIM(electrolyse+dosage) + NUC(désint+fusion) + ELEC(RL+RLC) + MECA(plan_incl+oscill)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1526,7 +1538,7 @@ Réponds avec ce JSON:
         },
         {
             "id": "PC_A5", "weight": 8,
-            "label": "4ex: CHIM(cinetique+dosage) + ONDES+NUC(sonore+désint) + ELEC(RC+LC+mod) + MECA(chute_libre+oscill)",
+            "label": "4ex: CHIM(cinetique+dosage) + ONDES+NUC(sonore+désint) + ELEC(RC+LC+modAM) + MECA(chute_libre+oscill)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1541,7 +1553,7 @@ Réponds avec ce JSON:
         },
         {
             "id": "PC_A6", "weight": 7,
-            "label": "4ex: CHIM(pile+dosage) + ONDES+NUC(lumineuse+fusion) + ELEC(RL+modAM) + MECA(champ_mag+pendule_simple)",
+            "label": "4ex: CHIM(pile+dosage) + ONDES+NUC(lumineuse+fusion) + ELEC(RL+LC+modAM) + MECA(champ_mag+pendule_simple)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1551,13 +1563,13 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "pile_dosage",
             "ondes_sub": "ondes_lumineuses", "nuc_sub": "fusion_fission",
-            "elec_variant": "RL_modulation",
+            "elec_variant": "RL_LC_modulation",
             "meca_variant": "champ_magnetique_pendule",
         },
         # ── 5 exercises format (30%) ──
         {
             "id": "PC_B1", "weight": 9,
-            "label": "5ex: CHIM(pile+dosage) + ONDES(méca) + NUC(désint) + ELEC(RC+RLC) + MECA(chute_visq)",
+            "label": "5ex: CHIM(pile+dosage) + ONDES(méca) + NUC(désint) + ELEC(RC+RL+RLC) + MECA(chute_visq)",
             "structure": "5ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1568,12 +1580,12 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "pile_dosage",
             "ondes_sub": "ondes_mecaniques", "nuc_sub": "desintegration",
-            "elec_variant": "RL_modulation",
+            "elec_variant": "RC_RL_RLC",
             "meca_variant": "chute_visqueuse",
         },
         {
             "id": "PC_B2", "weight": 8,
-            "label": "5ex: CHIM(electrolyse+dosage) + ONDES(diffr) + NUC(désint) + ELEC(RC+demod) + MECA(proj+pendule)",
+            "label": "5ex: CHIM(electrolyse+dosage) + ONDES(diffr) + NUC(désint) + ELEC(RL+RLC) + MECA(proj+pendule)",
             "structure": "5ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1584,12 +1596,12 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "electrolyse_dosage",
             "ondes_sub": "diffraction", "nuc_sub": "desintegration",
-            "elec_variant": "RC_demodulation",
+            "elec_variant": "RL_RLC",
             "meca_variant": "projectile_pendule_torsion",
         },
         {
             "id": "PC_B3", "weight": 7,
-            "label": "5ex: CHIM(cinetique+ester) + ONDES(lumineuse) + NUC(désint) + ELEC(RL+RLC) + MECA(satellite+oscill)",
+            "label": "5ex: CHIM(cinetique+ester) + ONDES(lumineuse) + NUC(désint) + ELEC(RC+RL+RLC) + MECA(plan_incl)",
             "structure": "5ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1600,13 +1612,13 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "cinetique_esterification",
             "ondes_sub": "ondes_lumineuses", "nuc_sub": "desintegration",
-            "elec_variant": "RL_RLC",
-            "meca_variant": "satellite_oscillateur",
+            "elec_variant": "RC_RL_RLC",
+            "meca_variant": "plan_incline_oscillateur",
         },
         # ── Variantes supplémentaires ──
         {
             "id": "PC_C1", "weight": 7,
-            "label": "4ex: CHIM(cinetique+ester) + ONDES+NUC(méca+datation) + ELEC(RC+RLC) + MECA(chute_visq+satellite)",
+            "label": "4ex: CHIM(cinetique+ester) + ONDES+NUC(méca+datation) + ELEC(RC+RL+RLC) + MECA(chute_visq+satellite)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1616,12 +1628,12 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "cinetique_esterification",
             "ondes_sub": "ondes_mecaniques", "nuc_sub": "datation",
-            "elec_variant": "RC_RLC",
+            "elec_variant": "RC_RL_RLC",
             "meca_variant": "chute_visqueuse_satellite",
         },
         {
             "id": "PC_C2", "weight": 6,
-            "label": "5ex: CHIM(pile+ester) + ONDES(sonore) + NUC(désint) + ELEC(RC+LC+mod) + MECA(plan_incl+oscill)",
+            "label": "5ex: CHIM(pile+ester) + ONDES(sonore) + NUC(désint) + ELEC(RC+LC+modAM) + MECA(parachutiste)",
             "structure": "5ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1633,11 +1645,11 @@ Réponds avec ce JSON:
             "chimie_variant": "pile_esterification",
             "ondes_sub": "ondes_sonores", "nuc_sub": "desintegration",
             "elec_variant": "RC_LC_modulation",
-            "meca_variant": "plan_incline_oscillateur",
+            "meca_variant": "chute_libre_parachutiste",
         },
         {
             "id": "PC_C3", "weight": 6,
-            "label": "4ex: CHIM(electrolyse+dosage+cinetique) + ONDES(diffr) + ELEC(RL+modAM) + MECA(chute+pendule_simple)",
+            "label": "4ex: CHIM(electrolyse+dosage+cinetique) + ONDES+NUC(diffr) + ELEC(RC+modAM+demod) + MECA(chute+pendule_simple)",
             "structure": "4ex",
             "exercises": [
                 {"domain": "chimie", "points": 7},
@@ -1647,7 +1659,7 @@ Réponds avec ce JSON:
             ],
             "chimie_variant": "electrolyse_dosage_cinetique",
             "ondes_sub": "diffraction", "nuc_sub": None,
-            "elec_variant": "RL_modulation",
+            "elec_variant": "RC_modulation_demodulation",
             "meca_variant": "chute_libre_pendule_simple",
         },
     ]
@@ -1655,79 +1667,182 @@ Réponds avec ce JSON:
     # ── Physique-Chimie sub-topic guidance for AI prompts ──
     PHYSIQUE_SUBTOPIC_GUIDANCE = {
         "chimie": {
-            "description": """ANALYSE 20 EXERCICES DE CHIMIE (2016-2025):
-L'exercice de Chimie est TOUJOURS en position 1, TOUJOURS 7pts, TOUJOURS 2 parties.
+            "description": """ANALYSE APPROFONDIE 20 EXERCICES DE CHIMIE (2016-2025):
+L'exercice de Chimie est TOUJOURS en position 1, TOUJOURS 7pts, TOUJOURS 2 parties indépendantes.
 
-COMBINAISONS DE SOUS-TOPICS (parties):
-- pH/pKa (100%): TOUJOURS présent — couples acide/base, Ka, zone de prédominance
-- Dosage (70%): dosage pH-métrique, volume d'équivalence, C_A = C_B×V_BE/V_A
-- Acide carboxylique (65%): propanoïque, éthanoïque, lactique, butanoïque
-- Estérification/hydrolyse (45%): réaction lente+limitée, constante K, rendement
-- Cinétique (45%): vitesse v(t), t₁/₂, facteurs cinétiques, suivi temporal
-- Électrolyse (40%): lois de Faraday, m = MIt/(nF), cathode/anode
-- Pile (35%): f.é.m., équation-bilan, quantité d'électricité
+14 COMBINAISONS UNIQUES OBSERVÉES:
+- DOSAGE+ELECTROLYSE: 4x (20%) — ex: 2016N, 2022N, 2022R, 2023R
+- DOSAGE+PILE: 4x (20%) — ex: 2019R, 2020N, 2021R, 2024R
+- CINETIQUE+DOSAGE: 1x — 2024N (tendance récente)
+- CINETIQUE+DOSAGE+ESTERIFICATION: 1x — 2025N
+- PILE: 1x — 2020R (pile seule!)
+- CINETIQUE: 1x — 2023N
+→ TENDANCE 2024-2025: cinétique apparaît 3x dans les 4 derniers examens!
+→ 2026N PRÉDICTION: PILE ou ELECTROLYSE + DOSAGE (retour classique après tendance cinétique)
 
-STRUCTURE TYPE: Partie I (pile OU électrolyse) + Partie II (dosage OU estérification OU cinétique)
-DONNÉES: Toujours fournir M, pKa, Ke=10⁻¹⁴, concentrations, volumes.""",
+DISTRIBUTION POINTS/QUESTION CHIMIE:
+0.5pts: 155x (63%), 0.75pts: 64x (26%), 0.25pts: 17x (7%), 1.0pts: 9x (4%)
+→ La plupart des questions = 0.5pts. Questions à 1pt = début de partie ou calcul complexe.
+
+TYPES DE QUESTIONS CHIMIE (par fréquence d'action):
+- "Déterminer..." (50x) — la plus fréquente
+- "Écrire l'équation..." (44x) — équations de réaction
+- "Calculer..." (39x) — applications numériques
+- "Montrer que..." / "Vérifier que..." (17x) — démonstrations guidées
+- "Donner..." / "Préciser..." (10x) — réponses courtes
+- "Dresser le tableau d'avancement..." (4x)
+- "Définir..." (2x)
+
+STRUCTURE TYPE: 10-15 questions (moy. 12.3Q), 0-3 docs (moy. 1.3 docs)
+DOCUMENTS CHIMIE: 0docs=10%, 1doc=50%, 2docs=30%, 3docs=10%
+DONNÉES OBLIGATOIRES: M, pKa, Ke=10⁻¹⁴, concentrations, volumes, constante de Faraday.
+
+──── MOLÉCULES & RÉACTIFS — ROTATION (analyse ultra-profonde) ────
+ACIDES CARBOXYLIQUES UTILISÉS (ne PAS répéter les récents):
+  - acide éthanoïque CH₃COOH: 6x (dont 2025R) → ÉVITER 2026N
+  - acide méthanoïque HCOOH: 4x (dont 2023N) → possible
+  - acide propanoïque C₂H₅COOH: 2x (2022N) → possible
+  - acide butanoïque C₃H₇COOH: 1x (2017N) → BON CANDIDAT 2026N
+  - acide lactique: 1x (2018N) → BON CANDIDAT
+  - acide benzoïque C₆H₅COOH: 1x (2019N) → possible
+  - acide ascorbique (vit C): 1x (2024N) → contexte original
+  → 2026N PRÉDICTION: acide butanoïque, lactique ou benzoïque
+
+BASES UTILISÉES:
+  - soude NaOH: 7x (par défaut pour dosages)
+  - ammoniac NH₃: 6x (base faible classique)
+  - méthylamine CH₃NH₂: 2x (2022R, 2023R)
+  - éthylamine C₂H₅NH₂: 2x (2022R, 2023R)
+  → TENDANCE: amines fréquentes en rattrapage 2022+
+
+MÉTAUX (pile/électrolyse): Fe(6x), Zn(5x), Cu(4x), Ag(3x), Pb(2x), Ni(2x), Al(2x)
+ALCOOLS (estérification): éthanol(7x dominant), méthanol(3x)
+
+──── VALEURS NUMÉRIQUES TYPIQUES ────
+- pH: 2.4 à 11.6 (moy 4.58, acides faibles dominent)
+- Concentrations: 10⁻² à 10⁻¹ mol/L pour S_A, S_B
+- Volumes: V_A = 10-20 mL, V_B = 5-25 mL
+- Courant électrolyse: I = 0.5-5 A
+- Temps de demi-réaction: t₁/₂ entre 5 et 60 min
+
+──── VERBES D'ATTAQUE Q1 (chimie) ────
+TOP: "Écrire l'équation..." (6x), "Calculer..." (2x), "Parmi... choisir..." (2x)
+→ Q1.1 commence souvent par "Écrire l'équation de la réaction de dosage."
+
+──── PROFONDEUR NUMÉROTATION ────
+Chimie utilise majoritairement 2 niveaux (1.1, 1.2, 2.1, 2.2): 152/246 questions
+Niveau 1 (1, 2, 3): 81/246 — pour ex simples
+Niveau 3 (1.1.1): 13/246 — pour sous-questions complexes
+→ STRUCTURER: Partie 1 (Q1.1, Q1.2, ...) + Partie 2 (Q2.1, Q2.2, ...)
+
+──── PHRASES D'INTRODUCTION ────
+"Cet exercice porte sur..." (13x) ou "On se propose de..." (13x) sont les TOP
+
+──── BARÈME CHIMIE (analyse niveau 3) ────
+ÉQUILIBRE PARFAIT entre parties: Partie 1 ≈ Partie 2 (ratio 1.01)
+- 2 parties: viser ~3.5pts chacune
+- 3 parties: 2.5+2.5+2pts (cas fréquent quand combo triple)
+- Partie 3 présente dans 17/20 examens
+
+POSITION QUESTIONS HAUTE VALEUR (≥0.75pts):
+- 39% en fin (Q75-100%) — questions de synthèse
+- 25% en milieu-fin (Q50-75%)
+- 19% en milieu-début (Q25-50%)
+- 17% en début (Q1-25%)
+→ Mettre les questions difficiles surtout en FIN de partie
+
+QUESTIONS HAUTE VALEUR — VERBES TYPIQUES:
+"Déterminer..." (38x), "Trouver..." (16x), "Calculer..." (14x), "Montrer..." (9x)
+→ JAMAIS de définition à 0.75+pts. Toujours calcul ou démonstration.
+
+QUESTIONS COURTES (≤0.25pts) — RÉPARTITION UNIFORME
+Définitions, choix QCM, écriture simple → réparties partout
+
+──── RÈGLES ROTATION SPÉCIFIQUES PC (différentes de SVT!) ────
+- Chevauchement N vs R même année: 80% chimie, 70% élec, 40% méca
+  → MÉCA est le domaine qui change le PLUS entre N et R
+  → Chimie/Élec se RÉPÈTENT partiellement (DOSAGE, OSCIL, combos RC/RL/RLC)
+- R(y) → N(y+1): RÉPÉTITIONS FRÉQUENTES (DOSAGE 4x, OSCIL souvent)
+  → La règle SVT 'R≠N+1' NE S'APPLIQUE PAS en PC
+- Pour différencier 2026N: VARIER LA MÉCA en priorité, plus que la chimie""",
         },
         "ondes": {
             "description": """ANALYSE 16 EXERCICES D'ONDES (2016-2025):
-- Ondes mécaniques (50%): propagation surface eau, célérité, retard, longueur d'onde
+- Ondes mécaniques (50%): propagation surface eau, célérité v=d/Δt, retard τ, longueur d'onde λ
 - Diffraction (35%): fente, sin(θ)=λ/a, largeur tache centrale L=2λD/a
 - Ondes sonores (30%): célérité son, niveau sonore L=10log(I/I₀)
-- Ondes lumineuses (30%): diffraction lumière, indice de réfraction
-- Ultrasons (10%): échographie, mesure distances
+- Ondes lumineuses (30%): diffraction lumière, indice de réfraction n=c/v
+- Ultrasons (10%): échographie, mesure distances d=vt/2
 
-STRUCTURE TYPE: 4-7 questions, 2-3.5pts, souvent avec 1 doc (schéma/figure).""",
+POINTS/QUESTION: 0.5pts dominant, puis 0.75pts
+DOCUMENTS: 0docs=20%, 1doc=40%, 2docs=40%
+STRUCTURE TYPE: 2-8 questions, 2-3.5pts, souvent 1-2 schémas (dispositif expérimental, figure diffraction).""",
         },
         "nucleaire": {
             "description": """ANALYSE 15 EXERCICES NUCLÉAIRES (2016-2025):
 - Désintégration (90%): α, β⁻, β⁺, lois de conservation A et Z
-- Demi-vie (80%): t₁/₂ = ln2/λ, détermination graphique
 - Activité (75%): A(t) = λN(t) = A₀e^{-λt}
-- Fusion/fission (10%): rare, surtout 2016N
+- Demi-vie (80%): t₁/₂ = ln2/λ, détermination graphique
+- Fusion/fission (10%): rare (2016N, 2023N)
+- Datation (5%): carbone-14 (2022R uniquement)
 
-ÉLÉMENTS UTILISÉS (jamais le même!):
-Na-24, Pu-241, Co-60, Po-210, U-234, Pu-238, P-32, I-131, Ir-192, Cd-107, tritium
-→ 2026N: utiliser un NOUVEL élément (ex: Ra-226, Cs-137, Sr-90, Am-241)
+ÉLÉMENTS DÉJÀ UTILISÉS (NE PAS RÉUTILISER):
+Na-24(2016R), Pu-241(2018R), Co-60(2017R), Po-210(2020N), U-234(2020R),
+Pu-238(2021N), P-32(2021R), I-131(2022N), Ir-192(2024N), Cd-107(2025N)
+→ 2026N: NOUVEL élément obligatoire: Ra-226, Cs-137, Sr-90, Am-241, Bi-214, Th-232
 
-STRUCTURE TYPE: 3-7 questions, 2-2.5pts, écrire l'équation + calculer λ/t₁/₂/A.""",
+DOCS: 60% sans document, 40% avec 1 doc (diagramme, courbe N(t) ou A(t))
+POINTS/QUESTION: 0.5pts (moy.), parfois 1.0pts pour calcul d'énergie
+STRUCTURE TYPE: 2-7 questions, 2-2.5pts.""",
         },
         "electricite": {
-            "description": """ANALYSE 20 EXERCICES D'ÉLECTRICITÉ (2016-2025):
-- Dipôle RC (55%): charge/décharge condensateur, τ=RC, u_C(t)=E(1-e^{-t/τ})
-- Condensateur (55%): énergie E=½Cu², capacité
-- Circuit RLC (35%): oscillations amorties, pseudo-période, équation diff
-- Dipôle RL (30%): échelon de tension, τ=L/R, i(t)=(E/R)(1-e^{-t/τ})
-- Modulation AM (30%): signal porteur, modulant, taux m, f_p >> f_m
-- Circuit LC (15%): oscillations libres, T₀=2π√(LC)
-- Démodulation (5%): détection enveloppe, filtre passe-bas
+            "description": """ANALYSE APPROFONDIE 20 EXERCICES D'ÉLECTRICITÉ (2016-2025):
 
-COMBINAISONS TYPIQUES:
-- RC + RLC (30%): charge condensateur puis oscillations RLC
-- RL + modulation AM (30%): échelon RL puis étude modulation
-- RC + démodulation (15%): condensateur puis détection d'enveloppe
-- RL + RLC (15%): étude RL puis RLC série
+COMBINAISONS EXACTES (classées par fréquence):
+1. RC+RL+RLC: 7x (35%) — LA PLUS FRÉQUENTE! Ex: 2016N, 2017R, 2019N, 2020N, 2020R, 2022N, 2024R
+2. RL+RLC: 2x (10%) — 2018N, 2021R
+3. RL+LC+modAM: 2x (10%) — 2023N, 2025R
+4. RL+modAM+demod: 1x — 2016R
+5. RL+modAM: 1x — 2017N
+6. RL+LC+modAM+demod: 1x — 2018R
+7. RL+RLC+modAM: 1x — 2019R
+8. RC+LC+modAM: 1x — 2021N
+9. RL+RLC+LC: 1x — 2022R
+10. RC+RL+RLC+modAM: 1x — 2023R
+11. RC+RL: 1x — 2024N
+12. RC+modAM+demod: 1x — 2025N
 
-STRUCTURE TYPE: 7-12 questions, 3.5-5.5pts, 2-6 docs (courbes, schémas circuits).""",
+→ 2026N PRÉDICTION: RC+RL+RLC (retour au combo #1) ou RL+RLC (2025N avait RC, rotation vers RL)
+
+DOCUMENTS ELECTRICITÉ: 2-6 docs (schémas circuits, courbes u_C(t), i(t), oscillogrammes)
+POINTS: 3.5-5.5pts, moy. 4.7pts
+QUESTIONS: 7-12, moy. 10.1 questions par exercice.""",
         },
         "mecanique": {
-            "description": """ANALYSE 20 EXERCICES DE MÉCANIQUE (2016-2025):
-- Mouvement (85%): équations horaires, 2ème loi de Newton
-- Oscillateur mécanique (55%): pendule simple/torsion/élastique, T₀
-- Chute libre/visqueuse (40%): vitesse limite, régime permanent
-- Plan incliné (30%): avec/sans frottements
-- Pendule (30%): simple, torsion, élastique
-- Satellite (10%): vitesse orbitale, 3ème loi Kepler
-- Champ magnétique (15%): force de Lorentz, mouvement circulaire
+            "description": """ANALYSE APPROFONDIE 20 EXERCICES DE MÉCANIQUE (2016-2025):
 
-COMBINAISONS TYPIQUES:
-- Chute visqueuse + oscillateur (25%)
-- Projectile + pendule torsion (20%)
-- Satellite + oscillateur (15%)
-- Plan incliné + oscillateur (15%)
+SOUS-TOPICS ISOLÉS (fréquence comme exercice principal):
+- oscillateur seul: 9x (45%) — pendule simple/torsion/élastique, T₀
+- plan_incline seul: 6x (30%) — avec/sans frottements, 2ème loi Newton
+- chute_visqueuse: 4x (20%) — vitesse limite, f=kv
+- projectile: 3x (15%) — mouvement parabolique, portée
 
-STRUCTURE TYPE: 6-10 questions, 2.5-5.5pts, TOUJOURS dernier exercice.""",
+COMBINAISONS OBSERVÉES:
+- plan_incline+oscillateur: 2x (2022R, 2025R)
+- chute_visqueuse+chute_libre+oscillateur: 1x (2018N)
+- chute_libre+projectile+pendule_torsion: 1x (2019R)
+- pendule_simple+champ_magnetique: 1x (2016N)
+- chute_visqueuse+satellite: 1x (2022N)
+- oscillateur+satellite: 1x (2025N)
+- chute_libre+projectile+pendule_simple: 1x (2023N)
+
+ROTATION RÉCENTE:
+2024N=chute_visqueuse+plan_incline | 2024R=chute_libre+plan_incline
+2025N=satellite+oscillateur | 2025R=skieur+pendule_torsion
+→ 2026N PRÉDICTION: chute_visqueuse+oscillateur ou projectile+pendule (retour aux classiques)
+
+DOCUMENTS MÉCANIQUE: 0docs=15%, 1doc=15%, 2docs=50%, 3docs=15%
+STRUCTURE TYPE: 5-10 questions, 2.5-6pts, TOUJOURS dernier exercice.""",
         },
     }
 
@@ -1892,13 +2007,15 @@ STRUCTURE TYPE: 6-10 questions, 2.5-5.5pts, TOUJOURS dernier exercice.""",
             }
             variant_hint = nuc_map.get(nuc_sub, "")
         elif domain == "electricite":
-            ev = domains.get("elec_variant", "RC_RLC")
+            ev = domains.get("elec_variant", "RC_RL_RLC")
             elec_map = {
-                "RC_RLC": "STRUCTURE: Partie I — Dipôle RC (charge/décharge, τ=RC). Partie II — Circuit RLC série (oscillations, pseudo-période).",
-                "RL_modulation": "STRUCTURE: Partie I — Dipôle RL (échelon de tension, τ=L/R). Partie II — Modulation d'amplitude (signal modulé, taux m).",
-                "RC_demodulation": "STRUCTURE: Partie I — Dipôle RC. Partie II — Démodulation AM (détection enveloppe, filtre passe-bas).",
-                "RL_RLC": "STRUCTURE: Partie I — Dipôle RL. Partie II — Circuit RLC série (oscillations libres, amortissement).",
-                "RC_LC_modulation": "STRUCTURE: Partie I — Dipôle RC. Partie II — Circuit LC (T₀=2π√LC). Partie III — Modulation d'amplitude.",
+                "RC_RL_RLC": "STRUCTURE (combo #1, 35%): Partie I — Dipôle RC (charge/décharge, τ=RC, énergie E=½Cu²). Partie II — Dipôle RL (échelon, τ=L/R). Partie III — Circuit RLC série (oscillations amorties, pseudo-période, équation diff).",
+                "RL_modulation": "STRUCTURE (combo #3): Partie I — Dipôle RL (échelon de tension, τ=L/R, i(t)). Partie II — Modulation d'amplitude (signal modulé u(t), taux m≤1, spectre).",
+                "RC_demodulation": "STRUCTURE: Partie I — Dipôle RC (charge/décharge). Partie II — Démodulation AM (détection d'enveloppe, filtre passe-bas RC).",
+                "RL_RLC": "STRUCTURE (combo #2, 10%): Partie I — Dipôle RL (échelon, τ=L/R). Partie II — Circuit RLC série (oscillations libres amorties, pseudo-période).",
+                "RC_LC_modulation": "STRUCTURE: Partie I — Dipôle RC (charge, τ=RC). Partie II — Circuit LC (oscillations libres, T₀=2π√LC). Partie III — Modulation d'amplitude.",
+                "RL_LC_modulation": "STRUCTURE (combo #3, 10%): Partie I — Dipôle RL (échelon, τ=L/R). Partie II — Circuit LC (T₀=2π√LC). Partie III — Modulation d'amplitude (taux m).",
+                "RC_modulation_demodulation": "STRUCTURE: Partie I — Dipôle RC (charge/décharge). Partie II — Modulation AM. Partie III — Démodulation (détection enveloppe + filtre passe-bas).",
             }
             variant_hint = elec_map.get(ev, "")
         elif domain == "mecanique":
@@ -1913,6 +2030,7 @@ STRUCTURE TYPE: 6-10 questions, 2.5-5.5pts, TOUJOURS dernier exercice.""",
                 "chute_visqueuse": "Chute dans un liquide visqueux — vitesse limite, équation différentielle, régime transitoire/permanent.",
                 "chute_visqueuse_satellite": "STRUCTURE: Partie I — Chute VISQUEUSE. Partie II — Mouvement d'un SATELLITE.",
                 "chute_libre_pendule_simple": "STRUCTURE: Partie I — Chute LIBRE. Partie II — Pendule SIMPLE (T₀=2π√(l/g)).",
+                "chute_libre_parachutiste": "STRUCTURE: Partie I — Chute LIBRE puis avec frottements (parachutiste: v_lim, régimes). Exercice court (2.5pts, 5-7Q).",
             }
             variant_hint = meca_map.get(mv, "")
 
