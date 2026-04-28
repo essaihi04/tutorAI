@@ -144,7 +144,18 @@ async def upload_image(
     assets_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{doc_id}{ext}"
     filepath = assets_dir / filename
-    
+
+    # Remove any existing image for this doc_id (incl. different extension)
+    # so a PNG → JPG replacement doesn't leave orphan files that confuse the
+    # listing endpoint.
+    for old in assets_dir.glob(f"{doc_id}.*"):
+        if old.is_file() and old.name != filename:
+            try:
+                old.unlink()
+                logger.info(f"[MockExam] Removed stale image {old.name} before replace")
+            except Exception as e:
+                logger.warning(f"[MockExam] Could not remove stale {old.name}: {e}")
+
     with open(filepath, "wb") as f:
         shutil.copyfileobj(file.file, f)
     
@@ -160,6 +171,43 @@ async def upload_image(
     logger.info(f"[MockExam] Uploaded image for {doc_id}: {public_url}")
     
     return {"ok": True, "doc_id": doc_id, "filename": filename, "url": public_url}
+
+
+@router.delete("/{subject}/{exam_id}/image/{doc_id}")
+async def delete_image(
+    subject: str,
+    exam_id: str,
+    doc_id: str,
+    admin: bool = Depends(_get_admin_dep()),
+):
+    """Delete an uploaded image for a specific document. Admin-only.
+
+    Removes all files matching ``{doc_id}.*`` in the assets directory and
+    clears the ``src`` field in ``exam.json`` for that doc_id.
+    """
+    exam = mock_exam_service.get_mock_exam(subject, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Mock exam not found")
+
+    assets_dir = MOCK_EXAMS_DIR / subject.lower() / exam_id / "assets"
+    removed: list[str] = []
+    if assets_dir.exists():
+        for f in assets_dir.glob(f"{doc_id}.*"):
+            if f.is_file():
+                try:
+                    f.unlink()
+                    removed.append(f.name)
+                except Exception as e:
+                    logger.warning(f"[MockExam] Could not delete {f.name}: {e}")
+
+    # Clear the src field in exam.json for this doc_id
+    _update_doc_src(exam, doc_id, "")
+    from app.services.mock_exam_service import _save_json
+    exam_path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "exam.json"
+    _save_json(exam_path, exam)
+
+    logger.info(f"[MockExam] Deleted image(s) for {doc_id}: {removed}")
+    return {"ok": True, "doc_id": doc_id, "removed": removed}
 
 
 @router.get("/{subject}/{exam_id}/images")
@@ -186,10 +234,21 @@ async def list_uploaded_images(
 
 
 def _update_doc_src(exam: dict, doc_id: str, src: str):
-    """Update the src field of a document in the exam JSON."""
+    """Update the src field of a document in the exam JSON.
+
+    Scans documents at part level AND inside exercises, since SVT Part 1
+    stores documents directly on the part while PC/Math nest them under
+    exercises.
+    """
     for part in exam.get("parts", []):
-        for ex in part.get("exercises", []):
-            for doc in ex.get("documents", []):
+        # Documents at part level (e.g. SVT Part 1)
+        for doc in part.get("documents", []) or []:
+            if doc.get("id") == doc_id:
+                doc["src"] = src
+                return
+        # Documents inside exercises (e.g. SVT Part 2, PC, Math)
+        for ex in part.get("exercises", []) or []:
+            for doc in ex.get("documents", []) or []:
                 if doc.get("id") == doc_id:
                     doc["src"] = src
                     return

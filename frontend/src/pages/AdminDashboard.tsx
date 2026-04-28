@@ -14,7 +14,7 @@ import {
   listRegistrationRequests, updateRegistrationRequest, deleteRegistrationRequest,
   activateRegistration, listPromoCodes, createPromoCode, updatePromoCode, deletePromoCode,
   generateMockExam, listMockExams, updateMockExamStatus, getMockExamImagePrompts,
-  uploadMockExamImage, listMockExamImages
+  uploadMockExamImage, listMockExamImages, deleteMockExamImage
 } from '../services/api';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -2007,9 +2007,29 @@ function MockExamsTab() {
     setUploading(docId);
     try {
       const res = await uploadMockExamImage(exam.subject, exam.id, docId, file);
-      setUploadedImages(prev => ({ ...prev, [docId]: res.data.url }));
+      // Add a cache-busting timestamp so the browser refetches the new file
+      // even when the filename is unchanged (same extension replace).
+      const bustedUrl = `${res.data.url}?t=${Date.now()}`;
+      setUploadedImages(prev => ({ ...prev, [docId]: bustedUrl }));
     } catch (err: any) {
       alert('Erreur upload: ' + (err?.response?.data?.detail || err?.message || 'inconnu'));
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const handleImageDelete = async (exam: MockExamRecord, docId: string) => {
+    if (!window.confirm('Supprimer cette image ? Cette action est irréversible.')) return;
+    setUploading(docId);
+    try {
+      await deleteMockExamImage(exam.subject, exam.id, docId);
+      setUploadedImages(prev => {
+        const next = { ...prev };
+        delete next[docId];
+        return next;
+      });
+    } catch (err: any) {
+      alert('Erreur suppression: ' + (err?.response?.data?.detail || err?.message || 'inconnu'));
     } finally {
       setUploading(null);
     }
@@ -2234,6 +2254,14 @@ function MockExamsTab() {
                                       onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(exam, p.doc_id, f); }}
                                     />
                                   </label>
+                                  <button
+                                    onClick={() => handleImageDelete(exam, p.doc_id)}
+                                    disabled={uploading === p.doc_id}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition flex items-center gap-1"
+                                    title="Supprimer cette image"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                                  </button>
                                 </div>
                               </div>
                             ) : (

@@ -338,6 +338,9 @@ export const uploadMockExamImage = (subject: string, examId: string, docId: stri
 export const listMockExamImages = (subject: string, examId: string) =>
   mockExamAdminApi.get(`/${subject}/${examId}/images`);
 
+export const deleteMockExamImage = (subject: string, examId: string, docId: string) =>
+  mockExamAdminApi.delete(`/${subject}/${examId}/image/${docId}`);
+
 export const listPublishedMockExams = (subject?: string) =>
   api.get('/mock-exam/published', { params: subject ? { subject } : {} });
 
