@@ -19,6 +19,8 @@ const StudyPlan = lazy(() => import('./pages/StudyPlan'));
 const ExamHub = lazy(() => import('./pages/ExamHub'));
 const ExamPractice = lazy(() => import('./pages/ExamPractice'));
 const ExamReal = lazy(() => import('./pages/ExamReal'));
+const MockExamHub = lazy(() => import('./pages/MockExamHub'));
+const MockExamTake = lazy(() => import('./pages/MockExamTake'));
 
 function PageLoader() {
   return (
@@ -125,6 +127,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <AdminResources />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mock-exam"
+            element={
+              <ProtectedRoute>
+                <MockExamHub />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mock-exam/:subject/:examId"
+            element={
+              <ProtectedRoute>
+                <MockExamTake />
               </ProtectedRoute>
             }
           />

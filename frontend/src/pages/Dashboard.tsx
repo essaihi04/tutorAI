@@ -6,7 +6,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import {
   GraduationCap, MessageCircle, Calendar, Play, LogOut, Trophy,
-  Award, BarChart3, ArrowRight, Clock, PenLine, Flame,
+  Award, BarChart3, ArrowRight, Clock, PenLine, Flame, Sparkles,
   ChevronRight, Target, ChevronLeft, CheckCircle, X as XIcon,
 } from 'lucide-react';
 import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
@@ -460,6 +460,7 @@ function Sidebar({ firstName, timeGreeting, onLogout }: {
     { icon: GraduationCap,label: 'Coaching IA',     path: '/coaching/plan', active: false },
     { icon: MessageCircle,label: 'Mode libre',      path: '/libre',         active: false },
     { icon: Trophy,       label: 'Examens réels',   path: '/exam',          active: false },
+    { icon: Sparkles,     label: 'Examens blancs',  path: '/mock-exam',     active: false },
   ];
 
   return (

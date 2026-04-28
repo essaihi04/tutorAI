@@ -5,14 +5,15 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff, X, Check,
   Clock, Zap, BarChart3, TrendingUp, Server, AlertCircle,
   UserPlus, Lock, Mail, User, FileUp,
-  MessageCircle, MapPin, Phone, Inbox
+  MessageCircle, MapPin, Phone, Inbox, Sparkles
 } from 'lucide-react';
 import {
   adminLogin, getAdminDashboard, getAdminUsers, createAdminUser,
   updateAdminUser, deleteAdminUser, bulkUserAction, resetUserPassword, getOnlineUsers,
   getUsageSummary, getUsageByUser, getRecentRequests,
   listRegistrationRequests, updateRegistrationRequest, deleteRegistrationRequest,
-  activateRegistration, listPromoCodes, createPromoCode, updatePromoCode, deletePromoCode
+  activateRegistration, listPromoCodes, createPromoCode, updatePromoCode, deletePromoCode,
+  generateMockExam, listMockExams, updateMockExamStatus, getMockExamImagePrompts
 } from '../services/api';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -348,7 +349,7 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams';
 
 interface RegistrationRequest {
   id: string;
@@ -629,6 +630,7 @@ export default function AdminDashboard() {
     { key: 'inscriptions', label: 'Inscriptions', icon: Inbox },
     { key: 'usage', label: 'Consommation', icon: DollarSign },
     { key: 'requests', label: 'Requêtes récentes', icon: Activity },
+    { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
   ];
 
   return (
@@ -1299,6 +1301,9 @@ export default function AdminDashboard() {
 
         {/* ──── INSCRIPTIONS TAB ──── */}
         {activeTab === 'inscriptions' && <RegistrationRequestsTab />}
+
+        {/* ──── MOCK EXAMS TAB ──── */}
+        {activeTab === 'mockExams' && <MockExamsTab />}
       </div>
 
       {/* Modals */}
@@ -1886,6 +1891,228 @@ function AdminNotesEditor({ initial, onSave }: { initial: string; onSave: (v: st
           Enregistrer
         </button>
       )}
+    </div>
+  );
+}
+
+// ─── Mock Exams Tab ──────────────────────────────────────────────
+
+interface MockExamRecord {
+  id: string;
+  title: string;
+  subject: string;
+  difficulty: string;
+  status: string;
+  generated_at: string;
+  domains_covered: { part1?: string; part2?: string[] };
+}
+
+const DIFFICULTY_OPTIONS = [
+  { value: 'facile', label: 'Facile', color: 'text-green-600 bg-green-50 border-green-200' },
+  { value: 'moyen', label: 'Moyen', color: 'text-amber-600 bg-amber-50 border-amber-200' },
+  { value: 'difficile', label: 'Difficile', color: 'text-red-600 bg-red-50 border-red-200' },
+];
+
+const DOMAIN_LABELS: Record<string, string> = {
+  consommation_matiere_organique: 'Métabolisme',
+  genetique_expression: 'Génétique (expression)',
+  'genetique_expression+transmission': 'Génétique (expr. + transm.)',
+  genetique_transmission: 'Génétique (transmission)',
+  geologie: 'Géologie',
+  environnement_sante: 'Environnement',
+};
+
+function MockExamsTab() {
+  const [exams, setExams] = useState<MockExamRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [genSubject, setGenSubject] = useState('SVT');
+  const [genDifficulty, setGenDifficulty] = useState('moyen');
+  const [genError, setGenError] = useState('');
+  const [genSuccess, setGenSuccess] = useState('');
+  const [expandedPrompts, setExpandedPrompts] = useState<string | null>(null);
+  const [imagePrompts, setImagePrompts] = useState<any[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listMockExams();
+      setExams(res.data || []);
+    } catch { setExams([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenError('');
+    setGenSuccess('');
+    try {
+      const res = await generateMockExam({ subject: genSubject, difficulty: genDifficulty });
+      setGenSuccess(`Examen "${res.data.exam_id}" généré avec ${res.data.image_prompts_count} prompts d'images.`);
+      load();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setGenError(typeof detail === 'string' ? detail : err?.message || 'Erreur de génération');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const toggleStatus = async (exam: MockExamRecord) => {
+    const next = exam.status === 'published' ? 'draft' : 'published';
+    try {
+      await updateMockExamStatus(exam.subject, exam.id, next);
+      load();
+    } catch (err: any) {
+      alert('Erreur: ' + (err?.message || 'inconnu'));
+    }
+  };
+
+  const showPrompts = async (exam: MockExamRecord) => {
+    if (expandedPrompts === exam.id) { setExpandedPrompts(null); return; }
+    try {
+      const res = await getMockExamImagePrompts(exam.subject, exam.id);
+      setImagePrompts(res.data || []);
+      setExpandedPrompts(exam.id);
+    } catch { setImagePrompts([]); setExpandedPrompts(exam.id); }
+  };
+
+  const diffBadge = (d: string) => {
+    const cfg = DIFFICULTY_OPTIONS.find(o => o.value === d) || DIFFICULTY_OPTIONS[1];
+    return <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${cfg.color}`}>{cfg.label}</span>;
+  };
+
+  const statusBadge = (s: string) => {
+    if (s === 'published') return <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200">Publié</span>;
+    if (s === 'archived') return <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">Archivé</span>;
+    return <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">Brouillon</span>;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Generator Card */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-4">
+          <Sparkles className="w-5 h-5 text-purple-600" /> Générer un examen blanc
+        </h3>
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Matière</label>
+            <select value={genSubject} onChange={e => setGenSubject(e.target.value)}
+              className="px-3 py-2 border rounded-lg text-sm focus:border-indigo-500 outline-none">
+              <option value="SVT">SVT</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Difficulté</label>
+            <select value={genDifficulty} onChange={e => setGenDifficulty(e.target.value)}
+              className="px-3 py-2 border rounded-lg text-sm focus:border-indigo-500 outline-none">
+              {DIFFICULTY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <button onClick={handleGenerate} disabled={generating}
+            className="px-5 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
+            {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {generating ? 'Génération en cours…' : 'Générer'}
+          </button>
+        </div>
+        {genError && <p className="mt-3 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{genError}</p>}
+        {genSuccess && <p className="mt-3 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">{genSuccess}</p>}
+        {generating && (
+          <p className="mt-3 text-sm text-gray-500 animate-pulse">
+            ⏳ Génération IA en cours (30-90 secondes)… ne fermez pas cette page.
+          </p>
+        )}
+      </div>
+
+      {/* Exams List */}
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        <div className="p-6 border-b flex items-center justify-between">
+          <h3 className="font-bold text-gray-900">Examens blancs générés</h3>
+          <button onClick={load} className="p-2 hover:bg-gray-100 rounded-lg transition" title="Rafraîchir">
+            <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {exams.length === 0 && !loading && (
+          <div className="text-center py-12 text-gray-400">
+            Aucun examen blanc généré pour l'instant.
+          </div>
+        )}
+
+        {exams.map(exam => (
+          <div key={exam.id} className="border-b last:border-b-0">
+            <div className="p-4 flex items-center gap-4 hover:bg-gray-50">
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium text-sm text-gray-900 truncate">{exam.title}</span>
+                  {diffBadge(exam.difficulty)}
+                  {statusBadge(exam.status)}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-400">
+                  <span>ID: {exam.id}</span>
+                  <span>{exam.generated_at ? new Date(exam.generated_at).toLocaleString('fr-FR') : '—'}</span>
+                </div>
+                {exam.domains_covered?.part2 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {exam.domains_covered.part2.map((d, i) => (
+                      <span key={i} className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500">
+                        {DOMAIN_LABELS[d] || d}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => showPrompts(exam)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition">
+                  {expandedPrompts === exam.id ? 'Masquer prompts' : 'Prompts images'}
+                </button>
+                <button onClick={() => toggleStatus(exam)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${
+                    exam.status === 'published'
+                      ? 'bg-yellow-50 text-yellow-700 border border-yellow-200 hover:bg-yellow-100'
+                      : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                  }`}>
+                  {exam.status === 'published' ? 'Dépublier' : 'Publier'}
+                </button>
+              </div>
+            </div>
+
+            {/* Expanded image prompts */}
+            {expandedPrompts === exam.id && (
+              <div className="px-4 pb-4">
+                {imagePrompts.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-2">Aucun prompt d'image trouvé.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {imagePrompts.map((p, i) => (
+                      <div key={i} className="p-3 bg-gray-50 rounded-xl border text-xs">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-gray-700">{p.title}</span>
+                          <span className="text-gray-400">({p.exercise})</span>
+                          <span className="ml-auto px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px]">{p.type}</span>
+                        </div>
+                        <p className="text-gray-500 mb-2">{p.description}</p>
+                        <div className="p-2 bg-white rounded-lg border border-dashed border-purple-200">
+                          <div className="text-[10px] text-purple-500 font-medium mb-1">PROMPT IMAGE :</div>
+                          <p className="text-gray-700 whitespace-pre-wrap">{p.prompt}</p>
+                        </div>
+                        <p className="text-gray-400 mt-1">→ {p.target_file}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -298,4 +298,35 @@ export const activateRegistration = (
   data: { password: string; account_type: 'test' | 'permanent'; username?: string; promo_code?: string }
 ) => adminApi.post(`/registration-requests/${id}/activate`, data);
 
+// ─── Mock Exam (Examens Blancs) ───────────────────────────────────────
+const mockExamAdminApi = axios.create({
+  baseURL: '/api/v1/mock-exam',
+  headers: { 'Content-Type': 'application/json' },
+});
+mockExamAdminApi.interceptors.request.use((config) => {
+  const adminToken = localStorage.getItem('admin_token');
+  if (adminToken) {
+    config.headers.Authorization = `Bearer ${adminToken}`;
+  }
+  return config;
+});
+
+export const generateMockExam = (data: { subject?: string; difficulty?: string; target_domains?: string[] }) =>
+  mockExamAdminApi.post('/generate', data);
+
+export const listMockExams = (subject?: string) =>
+  mockExamAdminApi.get('/list', { params: subject ? { subject } : {} });
+
+export const getMockExam = (subject: string, examId: string) =>
+  api.get(`/mock-exam/${subject}/${examId}`);
+
+export const getMockExamImagePrompts = (subject: string, examId: string) =>
+  mockExamAdminApi.get(`/${subject}/${examId}/image-prompts`);
+
+export const updateMockExamStatus = (subject: string, examId: string, status: string) =>
+  mockExamAdminApi.patch(`/${subject}/${examId}/status`, { status });
+
+export const listPublishedMockExams = (subject?: string) =>
+  api.get('/mock-exam/published', { params: subject ? { subject } : {} });
+
 export default api;
