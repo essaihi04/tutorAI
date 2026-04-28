@@ -36,6 +36,40 @@ def _find_mock_exam_dir(exam_id: str) -> Path | None:
     return None
 
 
+def _autofill_doc_src_from_assets(exam: dict, assets_dir: Path) -> None:
+    """Walk every document dict and, if its ``src`` is empty but a file
+    matching ``{doc_id}.*`` exists in ``assets_dir``, set ``src`` to that
+    relative path so the frontend serves the image.
+
+    This recovers transparently from situations where the on-disk image was
+    uploaded but the JSON ``src`` got cleared (or vice-versa).
+    """
+    if not assets_dir.exists():
+        return
+    files_by_stem: dict[str, str] = {}
+    for f in assets_dir.iterdir():
+        if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+            files_by_stem.setdefault(f.stem, f.name)
+
+    def walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if k == "documents" and isinstance(v, list):
+                    for d in v:
+                        if not isinstance(d, dict):
+                            continue
+                        doc_id = d.get("id")
+                        if doc_id and not d.get("src") and doc_id in files_by_stem:
+                            d["src"] = f"assets/{files_by_stem[doc_id]}"
+                else:
+                    walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(exam)
+
+
 def _load_mock_exam_meta(exam_id: str) -> dict | None:
     """Build an exam meta dict from a mock exam's ``exam.json``.
 
@@ -726,7 +760,9 @@ class ExamService:
         mock_dir = _find_mock_exam_dir(exam_id)
         if mock_dir is not None:
             with open(mock_dir / "exam.json", "r", encoding="utf-8-sig") as f:
-                return json.load(f)
+                raw = json.load(f)
+            _autofill_doc_src_from_assets(raw, mock_dir / "assets")
+            return raw
         meta = self.get_exam_meta(exam_id)
         if not meta:
             return None

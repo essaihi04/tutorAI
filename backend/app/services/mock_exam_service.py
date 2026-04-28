@@ -2168,11 +2168,22 @@ Réponds avec ce JSON:
         return sorted(exams, key=lambda x: x.get("generated_at", ""), reverse=True)
 
     def get_mock_exam(self, subject: str, exam_id: str) -> Optional[dict]:
-        """Load a specific mock exam."""
-        path = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id / "exam.json"
-        if path.exists():
-            return _load_json(path)
-        return None
+        """Load a specific mock exam.
+
+        Auto-detects uploaded images: if a doc has empty ``src`` but a file
+        matching ``{doc_id}.*`` exists in ``assets/``, the ``src`` is filled
+        in on-the-fly so the frontend / printable HTML can render it.
+        """
+        exam_dir = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id
+        path = exam_dir / "exam.json"
+        if not path.exists():
+            return None
+        exam = _load_json(path)
+        # Lazy import to avoid a circular dependency (exam_service imports
+        # mock_exam_service indirectly via the API layer).
+        from app.services.exam_service import _autofill_doc_src_from_assets
+        _autofill_doc_src_from_assets(exam, exam_dir / "assets")
+        return exam
 
     def get_image_prompts(self, subject: str, exam_id: str) -> list[dict]:
         """Load image prompts for a mock exam."""
