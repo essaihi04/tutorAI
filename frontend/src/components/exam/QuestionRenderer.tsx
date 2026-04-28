@@ -169,6 +169,7 @@ export default function QuestionRenderer({ question, examId, showCorrection = fa
                       src={doc.src}
                       alt={doc.title}
                       loading="lazy"
+                      onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
                       className="w-full max-h-[180px] object-contain rounded-lg border border-slate-100 group-hover:shadow-md transition-shadow"
                     />
                   </button>
