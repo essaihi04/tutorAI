@@ -90,7 +90,7 @@ export default function MockExamHub() {
 
         {/* Subject Tabs */}
         <div className="flex gap-2 mb-6">
-          {['SVT', 'mathematiques'].map(s => (
+          {['SVT', 'mathematiques', 'physique'].map(s => (
             <button
               key={s}
               onClick={() => setSelectedSubject(s)}
@@ -100,7 +100,7 @@ export default function MockExamHub() {
                   : 'bg-white/5 text-white/50 hover:bg-white/10'
               }`}
             >
-              {s === 'SVT' ? '🧬 SVT' : s === 'mathematiques' ? '📐 Mathématiques' : s}
+              {s === 'SVT' ? '🧬 SVT' : s === 'mathematiques' ? '📐 Mathématiques' : s === 'physique' ? '⚛️ Physique-Chimie' : s}
             </button>
           ))}
         </div>

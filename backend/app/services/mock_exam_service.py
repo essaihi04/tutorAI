@@ -123,6 +123,12 @@ def _exercise_matches_domain(ex: dict, domain: str) -> bool:
         "probabilites": ["probabilit", "urne", "boule", "variable aléatoire", "espérance", "indépendan"],
         "suites_numeriques": ["suite", "récurrence", "convergent", "arithmétique", "géométrique"],
         "analyse_probleme": ["fonction", "dérivée", "intégr", "limite", "asymptote", "variation", "primitive"],
+        # Physique-Chimie domains
+        "chimie": ["dosage", "électrolyse", "pile", "acide", "base", "estérification", "hydrolyse", "pka", "ph"],
+        "ondes": ["onde", "diffraction", "célérité", "longueur d'onde", "ultrason", "sonore"],
+        "nucleaire": ["désintégration", "radioactiv", "demi-vie", "nucléaire", "noyau", "activité"],
+        "electricite": ["condensateur", "dipôle", "rlc", "bobine", "modulation", "démodulation", "échelon"],
+        "mecanique": ["chute", "mouvement", "pendule", "oscillateur", "satellite", "vitesse limite", "projectile"],
     }
     kws = domain_keywords.get(domain, [])
     return sum(1 for k in kws if k in text) >= 2
@@ -169,6 +175,8 @@ class MockExamService:
         s = subject.lower().strip()
         if s in ("math", "mathematiques", "mathématiques"):
             return "mathematiques"
+        if s in ("physique", "physique-chimie", "physique chimie", "pc"):
+            return "physique"
         return s
 
     def _ensure_loaded(self, subject: str):
@@ -193,9 +201,11 @@ class MockExamService:
         Returns the exam JSON with image prompts (PROMPT_IMAGE fields)
         instead of actual image files.
         """
-        # Route to Math-specific generator
+        # Route to subject-specific generators
         if subject.lower() in ("math", "mathematiques", "mathématiques"):
             return await self.generate_math_mock_exam(target_domains)
+        if subject.lower() in ("physique", "physique-chimie", "physique chimie", "pc"):
+            return await self.generate_physique_mock_exam(target_domains)
 
         self._ensure_loaded(subject)
         curriculum = self._curriculum.get(subject.lower(), {})
@@ -1438,6 +1448,559 @@ Réponds avec ce JSON:
   {{"number":"1.a","type":"open","points":0.5,"content":"Calculer $\\displaystyle\\lim_{{x\\to ...}} f(x)$...","correction":{{"content":"..."}}}}
 ]}}"""
             return await _call_deepseek(system, prompt, "Math_Probleme", max_tokens=8192)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # PHYSIQUE-CHIMIE EXAM GENERATION — Based on 20 exams (2016-2025)
+    # ═══════════════════════════════════════════════════════════════════
+
+    # 12 probability profiles for Physique-Chimie.
+    # Rules from analysis:
+    # - Chimie ALWAYS Ex1, ALWAYS 7pts (100%)
+    # - Electricité ALWAYS present (100%), 3.5-5.5pts
+    # - Mécanique ALWAYS last, 2.5-5.5pts
+    # - 4-exercise format 70%, 5-exercise format 30%
+    # - Chimie = (Pile|Electrolyse) + (Dosage|Estérification|Cinétique)
+    # - Electricité = (RC|RL) + (RLC|LC|Modulation AM)
+    # - Mécanique = (Chute|Projectile|Satellite) + (Oscillateur|Pendule)
+    PHYSIQUE_EXAM_PROFILES = [
+        # ── 4 exercises format (70%) ──
+        {
+            "id": "PC_A1", "weight": 12,
+            "label": "4ex: CHIM(pile+dosage) + ONDES+NUC(méca+désint) + ELEC(RC+RLC) + MECA(chute_visq+oscill)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 3},
+                {"domain": "electricite", "points": 4.5},
+                {"domain": "mecanique", "points": 5.5},
+            ],
+            "chimie_variant": "pile_dosage",
+            "ondes_sub": "ondes_mecaniques", "nuc_sub": "desintegration",
+            "elec_variant": "RC_RLC",
+            "meca_variant": "chute_visqueuse_oscillateur",
+        },
+        {
+            "id": "PC_A2", "weight": 11,
+            "label": "4ex: CHIM(electrolyse+ester) + ONDES+NUC(diffr+désint) + ELEC(RL+modAM) + MECA(proj+pendule_torsion)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 3.5},
+                {"domain": "electricite", "points": 5},
+                {"domain": "mecanique", "points": 4.5},
+            ],
+            "chimie_variant": "electrolyse_esterification",
+            "ondes_sub": "diffraction", "nuc_sub": "desintegration",
+            "elec_variant": "RL_modulation",
+            "meca_variant": "projectile_pendule_torsion",
+        },
+        {
+            "id": "PC_A3", "weight": 10,
+            "label": "4ex: CHIM(pile+ester) + ONDES(ultrasons) + ELEC(RC+demod) + MECA(satellite+oscill)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 2.5},
+                {"domain": "electricite", "points": 5},
+                {"domain": "mecanique", "points": 5.5},
+            ],
+            "chimie_variant": "pile_esterification",
+            "ondes_sub": "ultrasons", "nuc_sub": "desintegration",
+            "elec_variant": "RC_demodulation",
+            "meca_variant": "satellite_oscillateur",
+        },
+        {
+            "id": "PC_A4", "weight": 9,
+            "label": "4ex: CHIM(electrolyse+dosage) + NUC(désint) + ELEC(RL+RLC) + MECA(plan_incl+oscill)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 2.5},
+                {"domain": "electricite", "points": 5},
+                {"domain": "mecanique", "points": 5.5},
+            ],
+            "chimie_variant": "electrolyse_dosage",
+            "ondes_sub": None, "nuc_sub": "desintegration",
+            "elec_variant": "RL_RLC",
+            "meca_variant": "plan_incline_oscillateur",
+        },
+        {
+            "id": "PC_A5", "weight": 8,
+            "label": "4ex: CHIM(cinetique+dosage) + ONDES+NUC(sonore+désint) + ELEC(RC+LC+mod) + MECA(chute_libre+oscill)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 3.5},
+                {"domain": "electricite", "points": 4.5},
+                {"domain": "mecanique", "points": 5},
+            ],
+            "chimie_variant": "cinetique_dosage",
+            "ondes_sub": "ondes_sonores", "nuc_sub": "desintegration",
+            "elec_variant": "RC_LC_modulation",
+            "meca_variant": "chute_libre_oscillateur",
+        },
+        {
+            "id": "PC_A6", "weight": 7,
+            "label": "4ex: CHIM(pile+dosage) + ONDES+NUC(lumineuse+fusion) + ELEC(RL+modAM) + MECA(champ_mag+pendule_simple)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 3},
+                {"domain": "electricite", "points": 4.5},
+                {"domain": "mecanique", "points": 5.5},
+            ],
+            "chimie_variant": "pile_dosage",
+            "ondes_sub": "ondes_lumineuses", "nuc_sub": "fusion_fission",
+            "elec_variant": "RL_modulation",
+            "meca_variant": "champ_magnetique_pendule",
+        },
+        # ── 5 exercises format (30%) ──
+        {
+            "id": "PC_B1", "weight": 9,
+            "label": "5ex: CHIM(pile+dosage) + ONDES(méca) + NUC(désint) + ELEC(RC+RLC) + MECA(chute_visq)",
+            "structure": "5ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes", "points": 3},
+                {"domain": "nucleaire", "points": 2.5},
+                {"domain": "electricite", "points": 5},
+                {"domain": "mecanique", "points": 2.5},
+            ],
+            "chimie_variant": "pile_dosage",
+            "ondes_sub": "ondes_mecaniques", "nuc_sub": "desintegration",
+            "elec_variant": "RL_modulation",
+            "meca_variant": "chute_visqueuse",
+        },
+        {
+            "id": "PC_B2", "weight": 8,
+            "label": "5ex: CHIM(electrolyse+dosage) + ONDES(diffr) + NUC(désint) + ELEC(RC+demod) + MECA(proj+pendule)",
+            "structure": "5ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes", "points": 2.5},
+                {"domain": "nucleaire", "points": 2},
+                {"domain": "electricite", "points": 3.5},
+                {"domain": "mecanique", "points": 5},
+            ],
+            "chimie_variant": "electrolyse_dosage",
+            "ondes_sub": "diffraction", "nuc_sub": "desintegration",
+            "elec_variant": "RC_demodulation",
+            "meca_variant": "projectile_pendule_torsion",
+        },
+        {
+            "id": "PC_B3", "weight": 7,
+            "label": "5ex: CHIM(cinetique+ester) + ONDES(lumineuse) + NUC(désint) + ELEC(RL+RLC) + MECA(satellite+oscill)",
+            "structure": "5ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes", "points": 2.5},
+                {"domain": "nucleaire", "points": 2},
+                {"domain": "electricite", "points": 4.75},
+                {"domain": "mecanique", "points": 3.75},
+            ],
+            "chimie_variant": "cinetique_esterification",
+            "ondes_sub": "ondes_lumineuses", "nuc_sub": "desintegration",
+            "elec_variant": "RL_RLC",
+            "meca_variant": "satellite_oscillateur",
+        },
+        # ── Variantes supplémentaires ──
+        {
+            "id": "PC_C1", "weight": 7,
+            "label": "4ex: CHIM(cinetique+ester) + ONDES+NUC(méca+datation) + ELEC(RC+RLC) + MECA(chute_visq+satellite)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 3.5},
+                {"domain": "electricite", "points": 4.5},
+                {"domain": "mecanique", "points": 5},
+            ],
+            "chimie_variant": "cinetique_esterification",
+            "ondes_sub": "ondes_mecaniques", "nuc_sub": "datation",
+            "elec_variant": "RC_RLC",
+            "meca_variant": "chute_visqueuse_satellite",
+        },
+        {
+            "id": "PC_C2", "weight": 6,
+            "label": "5ex: CHIM(pile+ester) + ONDES(sonore) + NUC(désint) + ELEC(RC+LC+mod) + MECA(plan_incl+oscill)",
+            "structure": "5ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes", "points": 2.75},
+                {"domain": "nucleaire", "points": 2.5},
+                {"domain": "electricite", "points": 5.25},
+                {"domain": "mecanique", "points": 2.5},
+            ],
+            "chimie_variant": "pile_esterification",
+            "ondes_sub": "ondes_sonores", "nuc_sub": "desintegration",
+            "elec_variant": "RC_LC_modulation",
+            "meca_variant": "plan_incline_oscillateur",
+        },
+        {
+            "id": "PC_C3", "weight": 6,
+            "label": "4ex: CHIM(electrolyse+dosage+cinetique) + ONDES(diffr) + ELEC(RL+modAM) + MECA(chute+pendule_simple)",
+            "structure": "4ex",
+            "exercises": [
+                {"domain": "chimie", "points": 7},
+                {"domain": "ondes_nucleaire", "points": 3},
+                {"domain": "electricite", "points": 5},
+                {"domain": "mecanique", "points": 5},
+            ],
+            "chimie_variant": "electrolyse_dosage_cinetique",
+            "ondes_sub": "diffraction", "nuc_sub": None,
+            "elec_variant": "RL_modulation",
+            "meca_variant": "chute_libre_pendule_simple",
+        },
+    ]
+
+    # ── Physique-Chimie sub-topic guidance for AI prompts ──
+    PHYSIQUE_SUBTOPIC_GUIDANCE = {
+        "chimie": {
+            "description": """ANALYSE 20 EXERCICES DE CHIMIE (2016-2025):
+L'exercice de Chimie est TOUJOURS en position 1, TOUJOURS 7pts, TOUJOURS 2 parties.
+
+COMBINAISONS DE SOUS-TOPICS (parties):
+- pH/pKa (100%): TOUJOURS présent — couples acide/base, Ka, zone de prédominance
+- Dosage (70%): dosage pH-métrique, volume d'équivalence, C_A = C_B×V_BE/V_A
+- Acide carboxylique (65%): propanoïque, éthanoïque, lactique, butanoïque
+- Estérification/hydrolyse (45%): réaction lente+limitée, constante K, rendement
+- Cinétique (45%): vitesse v(t), t₁/₂, facteurs cinétiques, suivi temporal
+- Électrolyse (40%): lois de Faraday, m = MIt/(nF), cathode/anode
+- Pile (35%): f.é.m., équation-bilan, quantité d'électricité
+
+STRUCTURE TYPE: Partie I (pile OU électrolyse) + Partie II (dosage OU estérification OU cinétique)
+DONNÉES: Toujours fournir M, pKa, Ke=10⁻¹⁴, concentrations, volumes.""",
+        },
+        "ondes": {
+            "description": """ANALYSE 16 EXERCICES D'ONDES (2016-2025):
+- Ondes mécaniques (50%): propagation surface eau, célérité, retard, longueur d'onde
+- Diffraction (35%): fente, sin(θ)=λ/a, largeur tache centrale L=2λD/a
+- Ondes sonores (30%): célérité son, niveau sonore L=10log(I/I₀)
+- Ondes lumineuses (30%): diffraction lumière, indice de réfraction
+- Ultrasons (10%): échographie, mesure distances
+
+STRUCTURE TYPE: 4-7 questions, 2-3.5pts, souvent avec 1 doc (schéma/figure).""",
+        },
+        "nucleaire": {
+            "description": """ANALYSE 15 EXERCICES NUCLÉAIRES (2016-2025):
+- Désintégration (90%): α, β⁻, β⁺, lois de conservation A et Z
+- Demi-vie (80%): t₁/₂ = ln2/λ, détermination graphique
+- Activité (75%): A(t) = λN(t) = A₀e^{-λt}
+- Fusion/fission (10%): rare, surtout 2016N
+
+ÉLÉMENTS UTILISÉS (jamais le même!):
+Na-24, Pu-241, Co-60, Po-210, U-234, Pu-238, P-32, I-131, Ir-192, Cd-107, tritium
+→ 2026N: utiliser un NOUVEL élément (ex: Ra-226, Cs-137, Sr-90, Am-241)
+
+STRUCTURE TYPE: 3-7 questions, 2-2.5pts, écrire l'équation + calculer λ/t₁/₂/A.""",
+        },
+        "electricite": {
+            "description": """ANALYSE 20 EXERCICES D'ÉLECTRICITÉ (2016-2025):
+- Dipôle RC (55%): charge/décharge condensateur, τ=RC, u_C(t)=E(1-e^{-t/τ})
+- Condensateur (55%): énergie E=½Cu², capacité
+- Circuit RLC (35%): oscillations amorties, pseudo-période, équation diff
+- Dipôle RL (30%): échelon de tension, τ=L/R, i(t)=(E/R)(1-e^{-t/τ})
+- Modulation AM (30%): signal porteur, modulant, taux m, f_p >> f_m
+- Circuit LC (15%): oscillations libres, T₀=2π√(LC)
+- Démodulation (5%): détection enveloppe, filtre passe-bas
+
+COMBINAISONS TYPIQUES:
+- RC + RLC (30%): charge condensateur puis oscillations RLC
+- RL + modulation AM (30%): échelon RL puis étude modulation
+- RC + démodulation (15%): condensateur puis détection d'enveloppe
+- RL + RLC (15%): étude RL puis RLC série
+
+STRUCTURE TYPE: 7-12 questions, 3.5-5.5pts, 2-6 docs (courbes, schémas circuits).""",
+        },
+        "mecanique": {
+            "description": """ANALYSE 20 EXERCICES DE MÉCANIQUE (2016-2025):
+- Mouvement (85%): équations horaires, 2ème loi de Newton
+- Oscillateur mécanique (55%): pendule simple/torsion/élastique, T₀
+- Chute libre/visqueuse (40%): vitesse limite, régime permanent
+- Plan incliné (30%): avec/sans frottements
+- Pendule (30%): simple, torsion, élastique
+- Satellite (10%): vitesse orbitale, 3ème loi Kepler
+- Champ magnétique (15%): force de Lorentz, mouvement circulaire
+
+COMBINAISONS TYPIQUES:
+- Chute visqueuse + oscillateur (25%)
+- Projectile + pendule torsion (20%)
+- Satellite + oscillateur (15%)
+- Plan incliné + oscillateur (15%)
+
+STRUCTURE TYPE: 6-10 questions, 2.5-5.5pts, TOUJOURS dernier exercice.""",
+        },
+    }
+
+    def _pick_domains_physique(self, curriculum: dict, target: Optional[list[str]]) -> dict:
+        """Select Physique-Chimie domains using probability profiles."""
+        if target:
+            return {
+                "exercises": [{"domain": d, "points": 5} for d in target],
+                "profile_id": "custom",
+                "profile_label": "Custom domains",
+            }
+
+        used = self._get_used_profile_ids("physique")
+        available = [p for p in self.PHYSIQUE_EXAM_PROFILES if p["id"] not in used]
+        
+        if not available:
+            logger.info("[MockExam:PC] All profiles used — resetting pool")
+            available = list(self.PHYSIQUE_EXAM_PROFILES)
+        
+        weights = [p["weight"] for p in available]
+        profile = random.choices(available, weights=weights, k=1)[0]
+        
+        logger.info(f"[MockExam:PC] Picked profile {profile['id']}: {profile['label']}")
+        
+        return {
+            "exercises": profile["exercises"],
+            "chimie_variant": profile.get("chimie_variant", "pile_dosage"),
+            "ondes_sub": profile.get("ondes_sub"),
+            "nuc_sub": profile.get("nuc_sub", "desintegration"),
+            "elec_variant": profile.get("elec_variant", "RC_RLC"),
+            "meca_variant": profile.get("meca_variant", "chute_visqueuse_oscillateur"),
+            "structure": profile.get("structure", "4ex"),
+            "profile_id": profile["id"],
+            "profile_label": profile["label"],
+        }
+
+    async def generate_physique_mock_exam(
+        self,
+        target_domains: Optional[list[str]] = None,
+    ) -> dict:
+        """Generate a Physique-Chimie mock exam."""
+        subject = "Physique-Chimie"
+        subj_key = "physique"
+        self._ensure_loaded(subj_key)
+        curriculum = self._curriculum.get(subj_key, {})
+        
+        if not curriculum:
+            raise ValueError(f"No curriculum found for {subject}")
+
+        exam_id = f"mock_pc_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        
+        domains = self._pick_domains_physique(curriculum, target_domains)
+        logger.info(f"[MockExam:PC] Generating {exam_id} | profile={domains.get('profile_id')}")
+
+        exercises = []
+        for i, ex_info in enumerate(domains["exercises"]):
+            ex = await self._generate_physique_exercise(
+                curriculum, ex_info["domain"], ex_info["points"], i + 1, domains
+            )
+            exercises.append(ex)
+
+        exam = {
+            "id": exam_id,
+            "title": f"Examen Blanc Physique-Chimie — Session Normale {datetime.utcnow().year}",
+            "subject": subject,
+            "year": datetime.utcnow().year,
+            "session": "Blanc (Normale)",
+            "duration_minutes": 180,
+            "coefficient": 7,
+            "total_points": 20,
+            "domains_covered": domains,
+            "generated_at": datetime.utcnow().isoformat(),
+            "status": "draft",
+            "general_note": "L'usage de la calculatrice scientifique non programmable est autorisé. Les expressions littérales doivent être établies avant les applications numériques.",
+            "parts": [{
+                "name": "Examen",
+                "exercises": exercises,
+            }],
+        }
+
+        exam_dir = MOCK_EXAMS_DIR / subj_key / exam_id
+        _save_json(exam_dir / "exam.json", exam)
+        (exam_dir / "assets").mkdir(exist_ok=True)
+
+        image_prompts = self._extract_image_prompts(exam)
+        _save_json(exam_dir / "image_prompts.json", image_prompts)
+
+        logger.info(f"[MockExam:PC] Generated {exam_id}: {len(exercises)} exercises")
+        return exam
+
+    async def _generate_physique_exercise(
+        self, curriculum: dict, domain: str, points: float,
+        exercise_num: int, domains: dict
+    ) -> dict:
+        """Generate a single Physique-Chimie exercise."""
+        # Handle combined ondes_nucleaire domain
+        actual_domain = domain
+        if domain == "ondes_nucleaire":
+            actual_domain = "ondes"  # Will combine in variant hint
+
+        domain_info = {}
+        for d in curriculum.get("domains", []):
+            if d["id"] == actual_domain or d["id"] == domain:
+                domain_info = d
+                break
+
+        guidance = self.PHYSIQUE_SUBTOPIC_GUIDANCE.get(actual_domain, {})
+        subtopic_desc = guidance.get("description", "")
+
+        # Build variant hints
+        variant_hint = ""
+        if domain == "chimie":
+            cv = domains.get("chimie_variant", "pile_dosage")
+            variant_map = {
+                "pile_dosage": "STRUCTURE: Partie I — Étude d'une PILE électrochimique (f.é.m., équation-bilan, Q=nF). Partie II — DOSAGE acido-basique (courbe pH, V_éq, C_A).",
+                "electrolyse_dosage": "STRUCTURE: Partie I — ÉLECTROLYSE (lois de Faraday, masse déposée). Partie II — DOSAGE acido-basique (pH-métrie, conductimétrie).",
+                "pile_esterification": "STRUCTURE: Partie I — Étude d'une PILE. Partie II — ESTÉRIFICATION (réaction lente+limitée, constante K, rendement).",
+                "electrolyse_esterification": "STRUCTURE: Partie I — ÉLECTROLYSE. Partie II — ESTÉRIFICATION et/ou HYDROLYSE basique.",
+                "cinetique_dosage": "STRUCTURE: Partie I — CINÉTIQUE chimique (suivi temporel, v(t), t₁/₂). Partie II — DOSAGE acido-basique.",
+                "cinetique_esterification": "STRUCTURE: Partie I — CINÉTIQUE (vitesse, facteurs cinétiques). Partie II — ESTÉRIFICATION (K, rendement).",
+                "electrolyse_dosage_cinetique": "STRUCTURE: Partie I — ÉLECTROLYSE. Partie II — DOSAGE + suivi CINÉTIQUE.",
+            }
+            variant_hint = variant_map.get(cv, "")
+            variant_hint += "\nIMPORTANT: L'exercice fait TOUJOURS 7pts avec 10-15 questions. Fournir TOUTES les données numériques (M, pKa, Ke, C, V)."
+        elif domain == "ondes_nucleaire":
+            ondes_sub = domains.get("ondes_sub")
+            nuc_sub = domains.get("nuc_sub")
+            parts = []
+            if ondes_sub:
+                sub_map = {
+                    "ondes_mecaniques": "ONDES MÉCANIQUES: propagation surface eau, célérité v=d/Δt, longueur d'onde λ=vT",
+                    "diffraction": "DIFFRACTION de la lumière: fente, sin(θ)=λ/a, largeur tache L=2λD/a",
+                    "ultrasons": "ULTRASONS: échographie, mesure distance d=vt/2, célérité",
+                    "ondes_sonores": "ONDES SONORES: célérité son, niveau sonore L=10log(I/I₀)",
+                    "ondes_lumineuses": "ONDES LUMINEUSES: diffraction, indice réfraction n=c/v, Snell-Descartes",
+                }
+                parts.append(sub_map.get(ondes_sub, "Ondes"))
+            if nuc_sub:
+                nuc_map = {
+                    "desintegration": "DÉSINTÉGRATION radioactive: écrire l'équation, λ, t₁/₂, A(t). Utiliser un NOUVEL élément (Ra-226, Cs-137, Sr-90, Am-241).",
+                    "fusion_fission": "ÉNERGIE NUCLÉAIRE: fusion ou fission, défaut de masse, E=Δm×c², courbe d'Aston",
+                    "datation": "DATATION radioactive: carbone-14 ou autre, t=-ln(N/N₀)/λ",
+                }
+                parts.append(nuc_map.get(nuc_sub, "Nucléaire"))
+            variant_hint = "CONTENU COMBINÉ:\n" + "\n".join(f"- {p}" for p in parts)
+        elif domain == "ondes":
+            ondes_sub = domains.get("ondes_sub", "ondes_mecaniques")
+            sub_map = {
+                "ondes_mecaniques": "FOCUS: Ondes mécaniques progressives. Célérité, retard, longueur d'onde, diffraction.",
+                "diffraction": "FOCUS: Diffraction de la lumière. Fente, sin(θ)=λ/a, tache centrale.",
+                "ultrasons": "FOCUS: Ultrasons. Échographie, mesure de distances.",
+                "ondes_sonores": "FOCUS: Ondes sonores. Célérité, niveau d'intensité sonore.",
+                "ondes_lumineuses": "FOCUS: Ondes lumineuses. Diffraction, indice de réfraction.",
+            }
+            variant_hint = sub_map.get(ondes_sub, "")
+        elif domain == "nucleaire":
+            nuc_sub = domains.get("nuc_sub", "desintegration")
+            nuc_map = {
+                "desintegration": "FOCUS: Désintégration radioactive. Écrire l'équation, calculer λ, t₁/₂, A(t). Utiliser un NOUVEL élément.",
+                "fusion_fission": "FOCUS: Énergie nucléaire. Fusion ou fission, défaut de masse, E=Δm×c².",
+                "datation": "FOCUS: Datation radioactive. Utiliser carbone-14 ou autre isotope.",
+            }
+            variant_hint = nuc_map.get(nuc_sub, "")
+        elif domain == "electricite":
+            ev = domains.get("elec_variant", "RC_RLC")
+            elec_map = {
+                "RC_RLC": "STRUCTURE: Partie I — Dipôle RC (charge/décharge, τ=RC). Partie II — Circuit RLC série (oscillations, pseudo-période).",
+                "RL_modulation": "STRUCTURE: Partie I — Dipôle RL (échelon de tension, τ=L/R). Partie II — Modulation d'amplitude (signal modulé, taux m).",
+                "RC_demodulation": "STRUCTURE: Partie I — Dipôle RC. Partie II — Démodulation AM (détection enveloppe, filtre passe-bas).",
+                "RL_RLC": "STRUCTURE: Partie I — Dipôle RL. Partie II — Circuit RLC série (oscillations libres, amortissement).",
+                "RC_LC_modulation": "STRUCTURE: Partie I — Dipôle RC. Partie II — Circuit LC (T₀=2π√LC). Partie III — Modulation d'amplitude.",
+            }
+            variant_hint = elec_map.get(ev, "")
+        elif domain == "mecanique":
+            mv = domains.get("meca_variant", "chute_visqueuse_oscillateur")
+            meca_map = {
+                "chute_visqueuse_oscillateur": "STRUCTURE: Partie I — Chute dans un liquide VISQUEUX (v_lim, régime permanent). Partie II — Oscillateur mécanique (T₀, énergie).",
+                "projectile_pendule_torsion": "STRUCTURE: Partie I — Mouvement PARABOLIQUE (projectile, portée, flèche). Partie II — Pendule de TORSION (T₀=2π√(J/C)).",
+                "satellite_oscillateur": "STRUCTURE: Partie I — Mouvement d'un SATELLITE (v orbitale, T, Kepler). Partie II — Oscillateur mécanique.",
+                "plan_incline_oscillateur": "STRUCTURE: Partie I — Mouvement sur PLAN INCLINÉ (avec frottements). Partie II — Oscillateur mécanique (pendule élastique).",
+                "chute_libre_oscillateur": "STRUCTURE: Partie I — Chute LIBRE (a=g, v=gt). Partie II — Oscillateur mécanique.",
+                "champ_magnetique_pendule": "STRUCTURE: Partie I — Mouvement dans un champ MAGNÉTIQUE (force de Lorentz, r=mv/qB). Partie II — Pendule simple.",
+                "chute_visqueuse": "Chute dans un liquide visqueux — vitesse limite, équation différentielle, régime transitoire/permanent.",
+                "chute_visqueuse_satellite": "STRUCTURE: Partie I — Chute VISQUEUSE. Partie II — Mouvement d'un SATELLITE.",
+                "chute_libre_pendule_simple": "STRUCTURE: Partie I — Chute LIBRE. Partie II — Pendule SIMPLE (T₀=2π√(l/g)).",
+            }
+            variant_hint = meca_map.get(mv, "")
+
+        # Get domain info for combined ondes_nucleaire
+        if domain == "ondes_nucleaire":
+            # Merge ondes + nucleaire chapters
+            nuc_info = {}
+            for d in curriculum.get("domains", []):
+                if d["id"] == "nucleaire":
+                    nuc_info = d
+                    break
+            chapters = domain_info.get("chapters", []) + nuc_info.get("chapters", [])
+            patterns = domain_info.get("typical_question_patterns", []) + nuc_info.get("typical_question_patterns", [])
+            nuc_guidance = self.PHYSIQUE_SUBTOPIC_GUIDANCE.get("nucleaire", {}).get("description", "")
+            subtopic_desc = subtopic_desc + "\n\n" + nuc_guidance
+        else:
+            chapters = domain_info.get("chapters", [])
+            patterns = domain_info.get("typical_question_patterns", [])
+
+        # Sample real exercises
+        sample_domain = "ondes" if domain == "ondes_nucleaire" else domain
+        examples = _sample_exercises("physique", sample_domain, 3)
+        if domain == "ondes_nucleaire":
+            examples += _sample_exercises("physique", "nucleaire", 2)
+        examples_text = ""
+        for ex in examples:
+            e = ex["exercise"]
+            examples_text += f"\n--- Exemple ({ex['exam']}) ---\n"
+            examples_text += f"Nom: {e.get('name', '')}\n"
+            examples_text += f"Points: {e.get('points', 0)}\n"
+            examples_text += f"Contexte: {(e.get('context') or '')[:300]}\n"
+            for q in e.get("questions", [])[:4]:
+                examples_text += f"  Q{q.get('number','?')} ({q.get('points',0)}pts): {q.get('content','')[:200]}\n"
+
+        topics_text = json.dumps(chapters, ensure_ascii=False, indent=2)
+        patterns_text = json.dumps(patterns, ensure_ascii=False, indent=2)
+
+        n_docs = random.randint(1, 4) if domain != "chimie" else random.randint(1, 2)
+        n_questions = random.randint(8, 13) if domain == "chimie" else random.randint(4, 10)
+
+        system = f"""Tu es un expert en création d'examens nationaux de Physique-Chimie du Baccalauréat marocain (2ème Bac Sciences Physiques).
+Tu génères UN exercice conforme au format exact de l'examen national.
+RÈGLE ABSOLUE: l'exercice doit porter UNIQUEMENT sur le programme officiel.
+NIVEAU: IDENTIQUE à l'examen national réel — mêmes types de raisonnement, même profondeur.
+NOTATION: LaTeX pour TOUTES les formules: $v = \\frac{{d}}{{\\Delta t}}$, $\\tau = RC$, etc.
+UNITÉS: TOUJOURS inclure les unités (SI) dans les données ET les réponses.
+EXPRESSIONS LITTÉRALES: Établir AVANT les applications numériques.
+
+{subtopic_desc}
+
+Réponds en JSON valide uniquement."""
+
+        domain_label = domain_info.get('name', domain)
+        if domain == "ondes_nucleaire":
+            domain_label = "Ondes et Transformations nucléaires"
+
+        prompt = f"""Génère l'Exercice {exercise_num} ({points}pts) d'un examen blanc Physique-Chimie — Session Normale 2026.
+
+DOMAINE: {domain_label}
+
+PROGRAMME AUTORISÉ:
+{topics_text}
+
+TYPES DE QUESTIONS TYPIQUES:
+{patterns_text}
+
+{('VARIANTE SPÉCIFIQUE:' + chr(10) + variant_hint) if variant_hint else ''}
+
+EXEMPLES DE VRAIS EXERCICES NATIONAUX:
+{examples_text}
+
+INSTRUCTIONS:
+1. Génère un exercice COMPLET avec {n_questions} questions progressives, total = {points}pts.
+2. Fournir un CONTEXTE scientifique (données numériques, constantes, conditions expérimentales).
+3. Inclure {n_docs} documents (schéma circuit, courbe, figure expérimentale) si pertinent.
+4. Chaque question: numéro, points (0.25 à 1.5pts), contenu en LaTeX, correction COMPLÈTE.
+5. Les corrections incluent TOUJOURS l'expression littérale PUIS l'application numérique.
+6. Style IDENTIQUE aux examens nationaux marocains.
+7. Pour les documents, fournir un PROMPT_IMAGE décrivant le contenu visuel.
+
+Réponds avec ce JSON:
+{{"name":"Exercice {exercise_num} — {domain_label}","points":{points},"context":"Les deux parties sont indépendantes...\\n\\n**Données :**\\n- ...","documents":[
+  {{"id":"doc_e{exercise_num}_1","type":"schema","title":"Document 1","description":"...","PROMPT_IMAGE":"...","src":"assets/doc{exercise_num}_1.png"}}
+],"questions":[
+  {{"number":"1.1","type":"open","points":0.5,"content":"Écrire l'équation...","documents":["doc_e{exercise_num}_1"],"correction":{{"content":"..."}}}}
+]}}"""
+
+        return await _call_deepseek(system, prompt, f"PC_Ex{exercise_num}", max_tokens=6144)
 
     def _extract_image_prompts(self, exam: dict) -> list[dict]:
         """Extract all PROMPT_IMAGE fields from the exam for the admin."""

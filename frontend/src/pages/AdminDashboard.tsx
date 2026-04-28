@@ -1927,6 +1927,13 @@ const DOMAIN_LABELS: Record<string, string> = {
   probabilites: 'Probabilités',
   suites_numeriques: 'Suites',
   analyse_probleme: 'Analyse',
+  // Physique-Chimie
+  chimie: 'Chimie',
+  ondes: 'Ondes',
+  ondes_nucleaire: 'Ondes+Nucl.',
+  nucleaire: 'Nucléaire',
+  electricite: 'Électricité',
+  mecanique: 'Mécanique',
 };
 
 function MockExamsTab() {
@@ -2038,10 +2045,10 @@ function MockExamsTab() {
           {(() => {
             const subjectExams = exams.filter(e => {
               const s = (e.subject || '').toLowerCase();
-              return genSubject === 'SVT' ? s === 'svt' : (s === 'mathématiques' || s === 'mathematiques');
+              return genSubject === 'SVT' ? s === 'svt' : genSubject === 'mathematiques' ? (s === 'mathématiques' || s === 'mathematiques') : (s === 'physique-chimie' || s === 'physique');
             });
             const usedProfiles = new Set(subjectExams.map(e => e.domains_covered?.profile_id).filter(Boolean));
-            const totalProfiles = genSubject === 'SVT' ? 10 : 12;
+            const totalProfiles = genSubject === 'SVT' ? 10 : genSubject === 'mathematiques' ? 12 : 12;
             const remaining = totalProfiles - usedProfiles.size;
             return (
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
@@ -2056,7 +2063,7 @@ function MockExamsTab() {
         </div>
         <p className="text-xs text-gray-400 mb-4">
           Chaque examen utilise un profil unique (combinaison domaines + sous-topics différente).
-          {genSubject === 'SVT' ? '10 profils SVT' : '12 profils Math'} couvrent toutes les probabilités réalistes pour 2026N.
+          {genSubject === 'SVT' ? '10 profils SVT' : genSubject === 'mathematiques' ? '12 profils Math' : '12 profils PC'} couvrent toutes les probabilités réalistes pour 2026N.
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
@@ -2065,6 +2072,7 @@ function MockExamsTab() {
               className="px-3 py-2 border rounded-lg text-sm focus:border-indigo-500 outline-none">
               <option value="SVT">SVT</option>
               <option value="mathematiques">Mathématiques</option>
+              <option value="physique">Physique-Chimie</option>
             </select>
           </div>
           <button onClick={handleGenerate} disabled={generating}
