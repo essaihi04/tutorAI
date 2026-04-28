@@ -6,11 +6,12 @@ import shutil
 from typing import Optional
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
 
 from app.services.mock_exam_service import mock_exam_service, MOCK_EXAMS_DIR
+from app.services.mock_exam_printable import render_printable_html
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mock-exam", tags=["mock-exam"])
@@ -77,6 +78,26 @@ async def get_mock_exam(subject: str, exam_id: str):
     if not exam:
         raise HTTPException(status_code=404, detail="Mock exam not found")
     return exam
+
+
+@router.get("/{subject}/{exam_id}/printable", response_class=HTMLResponse)
+async def get_printable(
+    subject: str,
+    exam_id: str,
+    type: str = Query("sujet", pattern="^(sujet|corrige)$"),
+):
+    """Render a mock exam as a print-ready HTML page (BAC paper layout).
+
+    The user opens it in a new tab and uses the browser's print dialog
+    (Ctrl+P → "Save as PDF") to obtain a PDF identical to the rendered
+    layout, with embedded images and KaTeX-rendered math.
+    """
+    exam = mock_exam_service.get_mock_exam(subject, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Mock exam not found")
+    subj_norm = mock_exam_service._normalize_subject(subject)
+    html_str = render_printable_html(exam, subj_norm, variant=type)
+    return HTMLResponse(content=html_str)
 
 
 @router.get("/{subject}/{exam_id}/image-prompts")
