@@ -262,20 +262,16 @@ class MockExamService:
         RULE 4 - Genetics ALWAYS in Part2, never alone in Part1
         RULE 5 - Part1 frequency: CMO(5x), GEO(3x), ENV(2x), GEN_EXP(1x rare)
         RULE 6 - After GEO in Part1: next year is CMO (4/4 historically)
-                 GEO(2016)->CMO(2017), GEO(2019)->CMO(2021),
-                 GEO(2022R)->ENV(2023N), GEO(2025N)->???(2026N)
-        RULE 7 - Part2 position frequencies (Normale):
-                 Ex1: CMO(60%) | Ex2: GEN_EXP(60%) | Ex3: ENV/GEO/GEN_TRANS
+        RULE 7 - GEO is NEVER in Ex1 (0/20 exams). GEO is always LAST (Ex3/Ex4/Ex5)
+        RULE 8 - Part2 exercise ORDER (strict):
+                 Ex1: CMO (75%) — ALWAYS if CMO not in Part1
+                 Ex2: GEN_EXP or GEN_EXP+TRANS (85%)
+                 Ex3: ENV or GEO (when 3 ex) — GEO always last
+                 Ex4: GEO (57%) or ENV (43%) — when 4 exercises
+        RULE 9 - Standard 3-exercise order: CMO → GEN → ENV/GEO
+                 Standard 4-exercise order: CMO → GEN_EXP → GEN_TRANS → GEO
         ═══════════════════════════════════════════════════════
         """
-        ALL = [
-            "consommation_matiere_organique",
-            "genetique_expression",
-            "genetique_transmission",
-            "geologie",
-            "environnement_sante",
-        ]
-        
         if target and len(target) >= 4:
             part1_domain = target[0]
             part2_domains = [d for d in target[1:] if d != part1_domain][:3]
@@ -284,29 +280,40 @@ class MockExamService:
             # 2025N=GEO, 2025R=ENV
             # RULE 3: R(2025)=ENV => N(2026) != ENV
             # RULE 6: After GEO(2025N), historically always CMO next
-            # But GEO can also follow (rare). ENV is EXCLUDED by Rule 3.
             part1_candidates = ["consommation_matiere_organique", "geologie"]
             part1_weights = [85, 15]  # CMO dominant after GEO + ENV excluded
             part1_domain = random.choices(part1_candidates, weights=part1_weights, k=1)[0]
             
-            # Part2: 3 exercises, MUST NOT include Part1 domain (RULE 1)
+            # ── Part2 ORDER (RULE 7-9) ──
+            # STRICT: CMO first (if not in P1), then GEN, then GEO/ENV LAST
+            # GEO is NEVER Ex1 (0/20 exams!)
             part2_domains = []
             
-            # Ex1: CMO if not in Part1, else GEO (RULE 7: CMO is Ex1 in 60%)
+            # Ex1: CMO (75% of all exams) — if CMO is in P1, use GEN_EXP+TRANS
             if part1_domain != "consommation_matiere_organique":
                 part2_domains.append("consommation_matiere_organique")
             else:
-                # When CMO in P1, Ex1 is often GEN_TRANS or GEN_EXP or GEO
-                part2_domains.append("geologie")
+                # When CMO in P1: Ex1 is GEN_EXP+TRANS (15%) or GEN_EXP (10%)
+                # NEVER GEO in Ex1!
+                part2_domains.append("genetique_expression+transmission")
             
-            # Ex2: Genetics (combined expression+transmission, as in real exams)
-            part2_domains.append("genetique_expression+transmission")
+            # Ex2: Genetics (if not already in Ex1)
+            if "genetique_expression+transmission" not in part2_domains:
+                part2_domains.append("genetique_expression+transmission")
+            else:
+                # GEN already in Ex1, so Ex2 = ENV (when CMO in P1)
+                part2_domains.append("environnement_sante")
             
-            # Ex3: The remaining domain not in Part1 and not yet used
+            # Ex3: LAST position = GEO or ENV (whichever not used)
+            # RULE 7: GEO is always in the LAST exercise position
             remaining = [d for d in ["environnement_sante", "geologie"]
                          if d != part1_domain and d not in part2_domains]
             if remaining:
-                part2_domains.append(random.choice(remaining))
+                # Prefer GEO last (57% in last position)
+                if "geologie" in remaining:
+                    part2_domains.append("geologie")
+                else:
+                    part2_domains.append(remaining[0])
             else:
                 part2_domains.append("environnement_sante")
         
