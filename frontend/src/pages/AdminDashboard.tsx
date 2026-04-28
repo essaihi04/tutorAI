@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff, X, Check,
   Clock, Zap, BarChart3, TrendingUp, Server, AlertCircle,
   UserPlus, Lock, Mail, User, FileUp,
-  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload
+  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload, ExternalLink
 } from 'lucide-react';
 import {
   adminLogin, getAdminDashboard, getAdminUsers, createAdminUser,
@@ -1904,7 +1904,15 @@ interface MockExamRecord {
   subject: string;
   status: string;
   generated_at: string;
-  domains_covered: { part1?: string; part2?: string[] };
+  domains_covered: {
+    part1?: string;
+    part2?: string[];
+    profile_id?: string;
+    profile_label?: string;
+    gen_variant?: string;
+    geo_variant?: string;
+    env_variant?: string;
+  };
 }
 
 const DOMAIN_LABELS: Record<string, string> = {
@@ -2018,9 +2026,29 @@ function MockExamsTab() {
     <div className="space-y-6">
       {/* Generator Card */}
       <div className="bg-white rounded-2xl shadow-sm border p-6">
-        <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-4">
-          <Sparkles className="w-5 h-5 text-purple-600" /> Générer un examen blanc
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-600" /> Générer un examen blanc
+          </h3>
+          {(() => {
+            const usedProfiles = new Set(exams.map(e => e.domains_covered?.profile_id).filter(Boolean));
+            const totalProfiles = 10;
+            const remaining = totalProfiles - usedProfiles.size;
+            return (
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                remaining > 5 ? 'bg-green-50 text-green-700' :
+                remaining > 2 ? 'bg-amber-50 text-amber-700' :
+                'bg-red-50 text-red-700'
+              }`}>
+                {remaining > 0 ? `${remaining}/10 profils restants` : 'Tous les profils utilisés — recyclage'}
+              </span>
+            );
+          })()}
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Chaque examen utilise un profil unique (combinaison Part1 + sous-topics différente).
+          10 profils couvrent toutes les probabilités réalistes pour 2026N.
+        </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Matière</label>
@@ -2073,6 +2101,11 @@ function MockExamsTab() {
                   <span>{exam.generated_at ? new Date(exam.generated_at).toLocaleString('fr-FR') : '—'}</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1.5">
+                  {exam.domains_covered?.profile_id && (
+                    <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold mr-1">
+                      #{exam.domains_covered.profile_id}
+                    </span>
+                  )}
                   {exam.domains_covered?.part1 && (
                     <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-medium">
                       P1: {DOMAIN_LABELS[exam.domains_covered.part1] || exam.domains_covered.part1}
@@ -2084,10 +2117,20 @@ function MockExamsTab() {
                     </span>
                   ))}
                 </div>
+                {exam.domains_covered?.profile_label && (
+                  <p className="text-[10px] text-gray-400 mt-1 truncate" title={exam.domains_covered.profile_label}>
+                    📋 {exam.domains_covered.profile_label}
+                  </p>
+                )}
               </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => window.open(`/mock-exam/${exam.subject}/${exam.id}`, '_blank')}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1"
+                  title="Voir comme un élève">
+                  <ExternalLink className="w-3 h-3" /> Prévisualiser
+                </button>
                 <button onClick={() => showPrompts(exam)}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition">
                   {expandedPrompts === exam.id ? 'Masquer prompts' : 'Prompts images'}

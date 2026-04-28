@@ -212,7 +212,7 @@ class MockExamService:
         for i, pts in enumerate(points_list):
             domain = domains["part2"][i] if i < len(domains["part2"]) else domains["part2"][-1]
             ex = await self._generate_exercise(
-                subject, curriculum, blueprint, domain, pts, i + 1
+                subject, curriculum, blueprint, domain, pts, i + 1, domains
             )
             exercises.append(ex)
 
@@ -250,77 +250,175 @@ class MockExamService:
         logger.info(f"[MockExam] Generated {exam_id}: {len(exercises)} exercises, {len(image_prompts)} image prompts")
         return exam
 
+    # ── All plausible 2026 Normale exam profiles ──
+    # Each profile is a unique combination of domain layout + sub-topic variants.
+    # Respects ALL 9 rules from analysis of 20 real exams (2016-2025 N+R).
+    # GEO NEVER in Ex1. CMO in Ex1 when not in Part1. GEN always in Part2.
+    EXAM_PROFILES = [
+        # ── P1=CMO (85% likely) ──  Order: GEN → ENV → GEO
+        {
+            "id": "A1", "weight": 18,
+            "label": "CMO/P1 — Gènes indépendants — Déchets+eau — Subduction+magmatisme",
+            "part1": "consommation_matiere_organique",
+            "part2": ["genetique_expression+transmission", "environnement_sante", "geologie"],
+            "gen_variant": "genes_independants",
+            "geo_variant": "subduction_magmatisme",
+            "env_variant": "dechets_pollution_eau",
+            "cmo_p1_focus": "glycolyse_krebs_chaine_resp",
+        },
+        {
+            "id": "A2", "weight": 14,
+            "label": "CMO/P1 — Gènes indépendants — Déchets+air — Collision+métamorphisme",
+            "part1": "consommation_matiere_organique",
+            "part2": ["genetique_expression+transmission", "environnement_sante", "geologie"],
+            "gen_variant": "genes_independants",
+            "geo_variant": "collision_metamorphisme",
+            "env_variant": "dechets_pollution_air",
+            "cmo_p1_focus": "muscle_effort_fermentation",
+        },
+        {
+            "id": "A3", "weight": 12,
+            "label": "CMO/P1 — Codominance — Déchets+sol — Obduction+ophiolite",
+            "part1": "consommation_matiere_organique",
+            "part2": ["genetique_expression+transmission", "environnement_sante", "geologie"],
+            "gen_variant": "codominance_dihybridisme",
+            "geo_variant": "obduction_ophiolite",
+            "env_variant": "dechets_pollution_sol",
+            "cmo_p1_focus": "glycolyse_krebs_chaine_resp",
+        },
+        {
+            "id": "A4", "weight": 10,
+            "label": "CMO/P1 — Gènes liés — Déchets+biogaz — Collision+magmatisme",
+            "part1": "consommation_matiere_organique",
+            "part2": ["genetique_expression+transmission", "environnement_sante", "geologie"],
+            "gen_variant": "genes_lies_crossing_over",
+            "geo_variant": "collision_magmatisme_granite",
+            "env_variant": "dechets_biogaz_compostage",
+            "cmo_p1_focus": "muscle_effort_fermentation",
+        },
+        {
+            "id": "A5", "weight": 8,
+            "label": "CMO/P1 — Lié au sexe — Déchets+énergie — Subduction+collision",
+            "part1": "consommation_matiere_organique",
+            "part2": ["genetique_expression+transmission", "environnement_sante", "geologie"],
+            "gen_variant": "sex_linked_transmission",
+            "geo_variant": "subduction_collision",
+            "env_variant": "dechets_energies_renouvelables",
+            "cmo_p1_focus": "levure_aerobie_anaerobie",
+        },
+        {
+            "id": "A6", "weight": 8,
+            "label": "CMO/P1 — Dominance incomplète — Déchets+lixiviat — Métamorphisme contact",
+            "part1": "consommation_matiere_organique",
+            "part2": ["genetique_expression+transmission", "environnement_sante", "geologie"],
+            "gen_variant": "dominance_incomplete",
+            "geo_variant": "metamorphisme_contact_aureole",
+            "env_variant": "dechets_lixiviat_decharge",
+            "cmo_p1_focus": "glycolyse_krebs_chaine_resp",
+        },
+        # ── P1=GEO (15% likely) ──  Order: CMO → GEN → ENV
+        {
+            "id": "B1", "weight": 8,
+            "label": "GEO/P1 — CMO levure — Gènes indépendants — Déchets+eau",
+            "part1": "geologie",
+            "part2": ["consommation_matiere_organique", "genetique_expression+transmission", "environnement_sante"],
+            "gen_variant": "genes_independants",
+            "geo_variant": None,
+            "env_variant": "dechets_pollution_eau",
+            "cmo_p2_focus": "levure_aerobie_anaerobie",
+        },
+        {
+            "id": "B2", "weight": 7,
+            "label": "GEO/P1 — CMO muscle — Gènes liés — Déchets+air",
+            "part1": "geologie",
+            "part2": ["consommation_matiere_organique", "genetique_expression+transmission", "environnement_sante"],
+            "gen_variant": "genes_lies_crossing_over",
+            "geo_variant": None,
+            "env_variant": "dechets_pollution_air",
+            "cmo_p2_focus": "muscle_effort_respiration",
+        },
+        {
+            "id": "B3", "weight": 5,
+            "label": "GEO/P1 — CMO mitochondrie — Codominance — Déchets+biogaz",
+            "part1": "geologie",
+            "part2": ["consommation_matiere_organique", "genetique_expression+transmission", "environnement_sante"],
+            "gen_variant": "codominance_dihybridisme",
+            "geo_variant": None,
+            "env_variant": "dechets_biogaz_compostage",
+            "cmo_p2_focus": "mitochondrie_bilan_energetique",
+        },
+        {
+            "id": "B4", "weight": 5,
+            "label": "GEO/P1 — CMO fermentation — Lié au sexe — Déchets+lixiviat",
+            "part1": "geologie",
+            "part2": ["consommation_matiere_organique", "genetique_expression+transmission", "environnement_sante"],
+            "gen_variant": "sex_linked_transmission",
+            "geo_variant": None,
+            "env_variant": "dechets_lixiviat_decharge",
+            "cmo_p2_focus": "fermentation_comparaison",
+        },
+    ]
+
+    def _get_used_profile_ids(self, subject: str) -> set[str]:
+        """Return profile IDs already used in generated mock exams."""
+        used = set()
+        subj_dir = MOCK_EXAMS_DIR / subject.lower()
+        if not subj_dir.exists():
+            return used
+        for exam_dir in subj_dir.iterdir():
+            ep = exam_dir / "exam.json"
+            if ep.exists():
+                try:
+                    e = _load_json(ep)
+                    pid = e.get("domains_covered", {}).get("profile_id")
+                    if pid:
+                        used.add(pid)
+                except Exception:
+                    pass
+        return used
+
     def _pick_domains_2026(self, curriculum: dict, target: Optional[list[str]]) -> dict:
-        """Select domains based on deep analysis of ALL 2016-2025 exams (N+R).
+        """Select domains using probability profiles.
         
-        DEEP ANALYSIS RESULTS (20 exams analyzed):
-        ═══════════════════════════════════════════════════════
-        RULE 1 - Mutual exclusivity: Part1 domain EXCLUDED from Part2 (90%+)
-        RULE 2 - N ≠ R same year: Part1 Normale != Part1 Rattrapage (100%)
-        RULE 3 - R(year) ≠ N(year+1): Rattrapage domain != next year Normale domain
-                 R(2025)=ENV => N(2026) != ENV => CMO or GEO
-        RULE 4 - Genetics ALWAYS in Part2, never alone in Part1
-        RULE 5 - Part1 frequency: CMO(5x), GEO(3x), ENV(2x), GEN_EXP(1x rare)
-        RULE 6 - After GEO in Part1: next year is CMO (4/4 historically)
-        RULE 7 - GEO is NEVER in Ex1 (0/20 exams). GEO is always LAST (Ex3/Ex4/Ex5)
-        RULE 8 - Part2 exercise ORDER (strict):
-                 Ex1: CMO (75%) — ALWAYS if CMO not in Part1
-                 Ex2: GEN_EXP or GEN_EXP+TRANS (85%)
-                 Ex3: ENV or GEO (when 3 ex) — GEO always last
-                 Ex4: GEO (57%) or ENV (43%) — when 4 exercises
-        RULE 9 - Standard 3-exercise order: CMO → GEN → ENV/GEO
-                 Standard 4-exercise order: CMO → GEN_EXP → GEN_TRANS → GEO
-        ═══════════════════════════════════════════════════════
+        Each generation picks a DIFFERENT profile from already-generated exams,
+        maximizing coverage of all plausible 2026 Normale scenarios.
+        All 9 rules from deep analysis (20 exams) are respected.
         """
         if target and len(target) >= 4:
             part1_domain = target[0]
             part2_domains = [d for d in target[1:] if d != part1_domain][:3]
-        else:
-            # ── 2026 Normale Prediction ──
-            # 2025N=GEO, 2025R=ENV
-            # RULE 3: R(2025)=ENV => N(2026) != ENV
-            # RULE 6: After GEO(2025N), historically always CMO next
-            part1_candidates = ["consommation_matiere_organique", "geologie"]
-            part1_weights = [85, 15]  # CMO dominant after GEO + ENV excluded
-            part1_domain = random.choices(part1_candidates, weights=part1_weights, k=1)[0]
-            
-            # ── Part2 ORDER (RULE 7-9) ──
-            # STRICT: CMO first (if not in P1), then GEN, then GEO/ENV LAST
-            # GEO is NEVER Ex1 (0/20 exams!)
-            part2_domains = []
-            
-            # Ex1: CMO (75% of all exams) — if CMO is in P1, use GEN_EXP+TRANS
-            if part1_domain != "consommation_matiere_organique":
-                part2_domains.append("consommation_matiere_organique")
-            else:
-                # When CMO in P1: Ex1 is GEN_EXP+TRANS (15%) or GEN_EXP (10%)
-                # NEVER GEO in Ex1!
-                part2_domains.append("genetique_expression+transmission")
-            
-            # Ex2: Genetics (if not already in Ex1)
-            if "genetique_expression+transmission" not in part2_domains:
-                part2_domains.append("genetique_expression+transmission")
-            else:
-                # GEN already in Ex1, so Ex2 = ENV (when CMO in P1)
-                part2_domains.append("environnement_sante")
-            
-            # Ex3: LAST position = GEO or ENV (whichever not used)
-            # RULE 7: GEO is always in the LAST exercise position
-            remaining = [d for d in ["environnement_sante", "geologie"]
-                         if d != part1_domain and d not in part2_domains]
-            if remaining:
-                # Prefer GEO last (57% in last position)
-                if "geologie" in remaining:
-                    part2_domains.append("geologie")
-                else:
-                    part2_domains.append(remaining[0])
-            else:
-                part2_domains.append("environnement_sante")
+            return {
+                "part1": part1_domain,
+                "part2": part2_domains,
+                "profile_id": "custom",
+                "exclusivity_rule": f"Part1({part1_domain}) EXCLUDED from Part2",
+            }
+
+        # Get already-used profiles
+        used = self._get_used_profile_ids("svt")
+        available = [p for p in self.EXAM_PROFILES if p["id"] not in used]
+        
+        # If all used, reset (allow reuse but shuffle)
+        if not available:
+            logger.info("[MockExam] All profiles used — resetting pool")
+            available = list(self.EXAM_PROFILES)
+        
+        # Weighted random pick from available profiles
+        weights = [p["weight"] for p in available]
+        profile = random.choices(available, weights=weights, k=1)[0]
+        
+        logger.info(f"[MockExam] Picked profile {profile['id']}: {profile['label']}")
         
         return {
-            "part1": part1_domain,
-            "part2": part2_domains,
-            "exclusivity_rule": f"Part1({part1_domain}) EXCLUDED from Part2",
+            "part1": profile["part1"],
+            "part2": profile["part2"],
+            "profile_id": profile["id"],
+            "profile_label": profile["label"],
+            "gen_variant": profile.get("gen_variant"),
+            "geo_variant": profile.get("geo_variant"),
+            "env_variant": profile.get("env_variant"),
+            "cmo_focus": profile.get("cmo_p1_focus") or profile.get("cmo_p2_focus"),
+            "exclusivity_rule": f"Part1({profile['part1']}) EXCLUDED from Part2",
         }
 
     async def _generate_part1(self, subject: str, curriculum: dict, blueprint: dict, domains: dict) -> dict:
@@ -516,7 +614,8 @@ PATTERN TYPIQUE: Problème de pollution → données → solutions → argumente
 
     async def _generate_exercise(
         self, subject: str, curriculum: dict, blueprint: dict,
-        domain: str, points: float, exercise_num: int
+        domain: str, points: float, exercise_num: int,
+        domains: Optional[dict] = None
     ) -> dict:
         """Generate a single Part 2 exercise with context, documents, and questions."""
         # Find domain info
@@ -531,6 +630,53 @@ PATTERN TYPIQUE: Problème de pollution → données → solutions → argumente
         subtopic_analysis = guidance.get("description", "")
         scenario_types = guidance.get("scenario_types", [])
         scenario_hint = random.choice(scenario_types) if scenario_types else ""
+
+        # ── Variant-specific instructions from profile ──
+        variant_hint = ""
+        if domains:
+            if "genetique" in domain:
+                gv = domains.get("gen_variant", "")
+                variant_map = {
+                    "genes_independants": "OBLIGATOIRE: Utilise des GÈNES INDÉPENDANTS (sur chromosomes différents). Dihybridisme avec brassage interchromosomique. Rapport 9:3:3:1 en F2.",
+                    "genes_lies_crossing_over": "OBLIGATOIRE: Utilise des GÈNES LIÉS (sur le même chromosome). Montre le crossing-over avec des recombinés. Rapport différent de 9:3:3:1.",
+                    "codominance_dihybridisme": "OBLIGATOIRE: Utilise la CODOMINANCE (les deux allèles s'expriment simultanément). Phénotype intermédiaire ou co-expression.",
+                    "dominance_incomplete": "OBLIGATOIRE: Utilise la DOMINANCE INCOMPLÈTE. L'hétérozygote a un phénotype intermédiaire entre les deux homozygotes.",
+                    "sex_linked_transmission": "OBLIGATOIRE: Utilise un caractère LIÉ AU SEXE (chromosome X). Transmission différente chez mâles et femelles.",
+                }
+                variant_hint = variant_map.get(gv, "")
+            elif "geologie" in domain:
+                gv = domains.get("geo_variant", "")
+                variant_map = {
+                    "subduction_magmatisme": "FOCUS: Zone de SUBDUCTION et magmatisme associé. Fosse, plan de Benioff, volcanisme explosif, fusion partielle.",
+                    "collision_metamorphisme": "FOCUS: Chaîne de COLLISION et métamorphisme régional. Nappe de charriage, foliation, HP-BT.",
+                    "obduction_ophiolite": "FOCUS: OBDUCTION et complexe ophiolitique. Séquence ophiolitique, Beni Bousera/Oman.",
+                    "collision_magmatisme_granite": "FOCUS: COLLISION et magmatisme granitique. Anatexie, fusion partielle de la croûte, granite d'anatexie.",
+                    "subduction_collision": "FOCUS: Comparaison SUBDUCTION vs COLLISION. Différences de magmatisme, métamorphisme, structures.",
+                    "metamorphisme_contact_aureole": "FOCUS: MÉTAMORPHISME DE CONTACT. Auréole métamorphique, cornéennes, intrusion granitique.",
+                }
+                variant_hint = variant_map.get(gv, "") if gv else ""
+            elif "environnement" in domain:
+                ev = domains.get("env_variant", "")
+                variant_map = {
+                    "dechets_pollution_eau": "FOCUS: Gestion des DÉCHETS + pollution de l'EAU. Nappe phréatique, nitrates, eutrophisation, STEP.",
+                    "dechets_pollution_air": "FOCUS: Gestion des DÉCHETS + pollution de l'AIR. CO₂, gaz à effet de serre, ozone, réchauffement.",
+                    "dechets_pollution_sol": "FOCUS: Gestion des DÉCHETS + pollution du SOL. Engrais, pesticides, érosion, fertilité.",
+                    "dechets_biogaz_compostage": "FOCUS: Gestion des DÉCHETS + BIOGAZ/COMPOSTAGE. Méthanisation, valorisation matière organique.",
+                    "dechets_energies_renouvelables": "FOCUS: Gestion des DÉCHETS + ÉNERGIES RENOUVELABLES. Solaire, éolien, biomasse comme alternatives.",
+                    "dechets_lixiviat_decharge": "FOCUS: Gestion des DÉCHETS + LIXIVIAT. Décharge, percolation, contamination des eaux souterraines.",
+                }
+                variant_hint = variant_map.get(ev, "")
+            elif "consommation" in domain:
+                cf = domains.get("cmo_focus", "")
+                variant_map = {
+                    "glycolyse_krebs_chaine_resp": "FOCUS: Glycolyse → Krebs → Chaîne respiratoire. Bilan énergétique complet, rôle de chaque étape.",
+                    "muscle_effort_fermentation": "FOCUS: Muscle à l'EFFORT. Comparaison respiration vs fermentation lactique, dette d'O₂.",
+                    "levure_aerobie_anaerobie": "FOCUS: Expérience avec LEVURES. Comparer milieu aérobie vs anaérobie, mesure O₂/CO₂/éthanol.",
+                    "muscle_effort_respiration": "FOCUS: Cellule musculaire à l'effort. Consommation O₂, production CO₂, rôle mitochondrie.",
+                    "mitochondrie_bilan_energetique": "FOCUS: MITOCHONDRIE ultrastructure et bilan. Crêtes, matrice, ATP synthase, bilan 36/38 ATP.",
+                    "fermentation_comparaison": "FOCUS: FERMENTATION alcoolique vs lactique. Levures vs muscle, bilan comparé, rendement.",
+                }
+                variant_hint = variant_map.get(cf, "")
 
         # Sample 2-3 real exercises from this domain as few-shot
         examples = _sample_exercises(subject, domain, 3)
@@ -575,6 +721,8 @@ TYPES DE DOCUMENTS TYPIQUES POUR CE DOMAINE:
 
 SCÉNARIO SUGGÉRÉ (adapte librement, invente un contexte ORIGINAL):
 {scenario_hint}
+
+{('VARIANTE SPÉCIFIQUE POUR CET EXAMEN:' + chr(10) + variant_hint) if variant_hint else ''}
 
 EXEMPLES DE VRAIS EXERCICES NATIONAUX:
 {examples_text}
