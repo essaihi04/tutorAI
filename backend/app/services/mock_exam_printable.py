@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 
 # --------------------------------------------------------------------------- #
@@ -37,27 +38,41 @@ def _md_inline(text: str) -> str:
     return s
 
 
-def _doc_url(subject_norm: str, exam_id: str, src: str) -> str:
-    """Resolve an image ``src`` (``assets/foo.png``) to a public URL."""
+def _doc_url(subject_norm: str, exam_id: str, src: str, assets_dir: Optional[Path] = None) -> str:
+    """Resolve an image ``src`` (``assets/foo.png``) to a public URL.
+
+    If ``assets_dir`` is provided we append a ``?t=<mtime>`` cache-buster so
+    that re-uploading the same filename invalidates the browser cache and
+    the printable PDF picks up the latest image.
+    """
     if not src:
         return ""
-    if src.startswith(("http://", "https://", "/")):
+    if src.startswith(("http://", "https://")):
         return src
-    return f"/static/mock-exams/{subject_norm}/{exam_id}/{src}"
+    base = src if src.startswith("/") else f"/static/mock-exams/{subject_norm}/{exam_id}/{src}"
+    if assets_dir is not None:
+        try:
+            rel = src[len("assets/"):] if src.startswith("assets/") else src
+            f = assets_dir / rel
+            if f.exists():
+                base = f"{base}?t={int(f.stat().st_mtime)}"
+        except Exception:
+            pass
+    return base
 
 
 # --------------------------------------------------------------------------- #
 #  Block renderers
 # --------------------------------------------------------------------------- #
 
-def _render_documents(docs: list[dict], subject_norm: str, exam_id: str) -> str:
+def _render_documents(docs: list[dict], subject_norm: str, exam_id: str, assets_dir: Optional[Path] = None) -> str:
     if not docs:
         return ""
     out = ['<div class="documents">']
     for d in docs:
         title = d.get("title") or "Document"
         desc = d.get("description") or ""
-        src = _doc_url(subject_norm, exam_id, d.get("src") or "")
+        src = _doc_url(subject_norm, exam_id, d.get("src") or "", assets_dir)
         out.append('<figure class="doc">')
         out.append(f'<figcaption class="doc-title">{html.escape(title)}</figcaption>')
         if src:
@@ -99,42 +114,53 @@ def _render_correction_block(corr: Any) -> str:
     )
 
 
-def _render_question(q: dict, subject_norm: str, exam_id: str, *, with_correction: bool, depth: int = 0) -> str:
+def _render_question(
+    q: dict,
+    subject_norm: str,
+    exam_id: str,
+    *,
+    mode: str,
+    assets_dir: Optional[Path] = None,
+    depth: int = 0,
+) -> str:
     """Render a single question dict.
 
-    Supports both flat questions (PC/Math style with ``number``, ``content``)
-    and SVT-style group questions with ``sub_questions``/``choices``.
+    ``mode`` can be:
+      * ``sujet`` — question text + documents + choices, no corrections.
+      * ``corrige`` — only the question number and correction body (no
+        documents, no question text, no choices). Sub-questions are still
+        recursed into.
     """
     out = []
     number = q.get("number") or ""
     content = q.get("content") or ""
     pts = q.get("points")
-    qtype = q.get("type") or ""
 
     cls = "q" if depth == 0 else "subq"
     out.append(f'<div class="{cls}">')
     head_bits = []
     if number:
         head_bits.append(f'<span class="q-num">{html.escape(str(number))}.</span>')
-    head_bits.append(f'<span class="q-text">{_md_inline(content)}</span>')
-    if pts is not None and pts != "":
-        head_bits.append(f'<span class="q-points">({_format_points(pts)} pt)</span>')
+    if mode == "sujet":
+        head_bits.append(f'<span class="q-text">{_md_inline(content)}</span>')
+        if pts is not None and pts != "":
+            head_bits.append(f'<span class="q-points">({_format_points(pts)} pt)</span>')
     out.append('<div class="q-line">' + " ".join(head_bits) + "</div>")
 
-    # QCM / Vrai-Faux choices at this level
-    if q.get("choices"):
-        out.append(_render_choices(q["choices"]))
+    if mode == "sujet":
+        # QCM / Vrai-Faux choices
+        if q.get("choices"):
+            out.append(_render_choices(q["choices"]))
+        # Inline documents on the question (rare)
+        inline_docs = q.get("documents")
+        if inline_docs and isinstance(inline_docs[0], dict):
+            out.append(_render_documents(inline_docs, subject_norm, exam_id, assets_dir))
 
-    # Inline documents on the question
-    inline_docs = q.get("documents")
-    if inline_docs and inline_docs and isinstance(inline_docs[0], dict):
-        out.append(_render_documents(inline_docs, subject_norm, exam_id))
-
-    # Sub-questions
+    # Sub-questions are always recursed (both modes)
     for sq in q.get("sub_questions") or []:
-        out.append(_render_question(sq, subject_norm, exam_id, with_correction=with_correction, depth=depth + 1))
+        out.append(_render_question(sq, subject_norm, exam_id, mode=mode, assets_dir=assets_dir, depth=depth + 1))
 
-    if with_correction:
+    if mode == "corrige":
         out.append(_render_correction_block(q.get("correction")))
 
     out.append("</div>")
@@ -151,53 +177,48 @@ def _format_points(pts: Any) -> str:
         return str(pts)
 
 
-def _render_exercise(ex: dict, subject_norm: str, exam_id: str, *, with_correction: bool) -> str:
+def _render_exercise(ex: dict, subject_norm: str, exam_id: str, *, mode: str, assets_dir: Optional[Path] = None) -> str:
     out = ['<section class="exercise">']
     name = ex.get("name") or "Exercice"
     pts = ex.get("points")
     pts_str = f' <span class="ex-points">({_format_points(pts)} points)</span>' if pts is not None else ""
     out.append(f'<h2 class="ex-title">{_md_inline(name)}{pts_str}</h2>')
 
-    # Theme/context
-    if ex.get("theme"):
-        out.append(f'<div class="ex-theme"><em>{_md_inline(ex["theme"])}</em></div>')
-    if ex.get("context"):
-        out.append(f'<div class="ex-context">{_md_inline(ex["context"])}</div>')
+    if mode == "sujet":
+        if ex.get("theme"):
+            out.append(f'<div class="ex-theme"><em>{_md_inline(ex["theme"])}</em></div>')
+        if ex.get("context"):
+            out.append(f'<div class="ex-context">{_md_inline(ex["context"])}</div>')
+        docs = ex.get("documents") or []
+        if docs:
+            out.append(_render_documents(docs, subject_norm, exam_id, assets_dir))
 
-    # Top-level documents
-    docs = ex.get("documents") or []
-    if docs:
-        out.append(_render_documents(docs, subject_norm, exam_id))
-
-    # Questions
     for q in ex.get("questions") or []:
-        out.append(_render_question(q, subject_norm, exam_id, with_correction=with_correction))
+        out.append(_render_question(q, subject_norm, exam_id, mode=mode, assets_dir=assets_dir))
 
     out.append("</section>")
     return "\n".join(out)
 
 
-def _render_part(part: dict, idx: int, subject_norm: str, exam_id: str, *, with_correction: bool) -> str:
+def _render_part(part: dict, idx: int, subject_norm: str, exam_id: str, *, mode: str, assets_dir: Optional[Path] = None) -> str:
     out = ['<section class="part">']
     name = part.get("name") or f"Partie {idx + 1}"
     pts = part.get("points")
     pts_str = f' <span class="part-points">({_format_points(pts)} points)</span>' if pts is not None else ""
     out.append(f'<h1 class="part-title">{_md_inline(name)}{pts_str}</h1>')
 
-    if part.get("theme"):
-        out.append(f'<div class="part-theme"><em>{_md_inline(part["theme"])}</em></div>')
+    if mode == "sujet":
+        if part.get("theme"):
+            out.append(f'<div class="part-theme"><em>{_md_inline(part["theme"])}</em></div>')
+        if part.get("documents"):
+            out.append(_render_documents(part["documents"], subject_norm, exam_id, assets_dir))
 
-    # Part-level documents (SVT Part 1)
-    if part.get("documents"):
-        out.append(_render_documents(part["documents"], subject_norm, exam_id))
-
-    # Either nested exercises (PC/Math) or direct questions (SVT Part 1)
     if part.get("exercises"):
         for ex in part["exercises"]:
-            out.append(_render_exercise(ex, subject_norm, exam_id, with_correction=with_correction))
+            out.append(_render_exercise(ex, subject_norm, exam_id, mode=mode, assets_dir=assets_dir))
     elif part.get("questions"):
         for q in part["questions"]:
-            out.append(_render_question(q, subject_norm, exam_id, with_correction=with_correction))
+            out.append(_render_question(q, subject_norm, exam_id, mode=mode, assets_dir=assets_dir))
 
     out.append("</section>")
     return "\n".join(out)
@@ -225,9 +246,15 @@ def render_printable_html(
     subject_norm: str,
     *,
     variant: str = "sujet",
+    assets_dir: Optional[Path] = None,
 ) -> str:
-    """Build the standalone HTML for a mock exam (sujet or corrige)."""
-    with_correction = variant == "corrige"
+    """Build the standalone HTML for a mock exam (sujet or corrige).
+
+    When ``variant='corrige'`` the rendered page only contains corrections
+    (no documents, no question text), structured under their part/exercise
+    titles for easy navigation.
+    """
+    mode = "corrige" if variant == "corrige" else "sujet"
     exam_id = exam.get("id") or ""
     title = exam.get("title") or "Examen Blanc"
     subject_full = exam.get("subject_full") or _SUBJECT_LABEL.get(subject_norm, "")
@@ -242,7 +269,7 @@ def render_printable_html(
     matiere = _SUBJECT_LABEL.get(subject_norm, "")
 
     parts_html = "\n".join(
-        _render_part(p, i, subject_norm, exam_id, with_correction=with_correction)
+        _render_part(p, i, subject_norm, exam_id, mode=mode, assets_dir=assets_dir)
         for i, p in enumerate(exam.get("parts") or [])
     )
 
@@ -254,7 +281,8 @@ def render_printable_html(
     )
     consigne = note or default_note
 
-    variant_label = "CORRIGÉ" if with_correction else "SUJET"
+    variant_label = "CORRIGÉ" if mode == "corrige" else "SUJET"
+    watermark_text = "moalim.online"
 
     return f"""<!doctype html>
 <html lang=\"fr\">
@@ -290,23 +318,39 @@ def render_printable_html(
     box-shadow: 0 4px 20px rgba(0,0,0,.08);
     position: relative;
   }}
-  /* Watermark for mock exams */
+  /* Watermark — site brand */
   .page::before {{
-    content: "{'CORRIGÉ — EXAMEN BLANC' if with_correction else 'EXAMEN BLANC'}";
+    content: "{watermark_text}";
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     transform: rotate(-30deg);
-    font-size: 80px;
+    font-size: 96px;
     font-weight: 800;
-    color: rgba(180, 30, 30, 0.06);
-    letter-spacing: 8px;
+    color: rgba(40, 80, 160, 0.07);
+    letter-spacing: 6px;
     pointer-events: none;
     z-index: 0;
   }}
   .page > * {{ position: relative; z-index: 1; }}
+
+  /* Site header / footer bands */
+  .site-band {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: #2850a0;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #cdd6e6;
+    padding: 4px 0;
+    margin-bottom: 8px;
+  }}
+  .site-band.bottom {{ border-bottom: 0; border-top: 1px solid #cdd6e6; padding: 4px 0; margin: 14px 0 0; }}
+  .site-band b {{ font-weight: 800; color: #1d3a78; letter-spacing: 0.5px; }}
+  .site-band .tag {{ font-style: italic; color: #6b7a99; }}
 
   /* ── Header ─────────────────────────────────────── */
   .official-header {{
@@ -449,8 +493,13 @@ def render_printable_html(
 <div class=\"toolbar\">
   <button onclick=\"window.print()\">Imprimer / Sauvegarder PDF</button>
 </div>
-<div class=\"page\">
-  <header class=\"official-header\">
+<div class="page">
+  <div class="site-band">
+    <b>moalim.online</b>
+    <span class="tag">Plateforme de soutien BAC — Maroc</span>
+    <b>moalim.online</b>
+  </div>
+  <header class="official-header">
     <div class=\"ar\">
       <p>المملكة المغربية</p>
       <p>وزارة التربية الوطنية والتعليم الأولي والرياضة</p>
@@ -482,8 +531,10 @@ def render_printable_html(
 
   {parts_html}
 
-  <div class=\"footer\">
-    Examen blanc généré — {html.escape(exam_id)} · Tutorat BAC
+  <div class=\"site-band bottom\">
+    <b>moalim.online</b>
+    <span class=\"tag\">{html.escape(exam_id)} — {variant_label}</span>
+    <b>moalim.online</b>
   </div>
 </div>
 </body>
