@@ -1916,12 +1916,17 @@ interface MockExamRecord {
 }
 
 const DOMAIN_LABELS: Record<string, string> = {
-  consommation_matiere_organique: 'Métabolisme',
+  consommation_matiere_organique: 'CMO',
   genetique_expression: 'Génétique (expression)',
   'genetique_expression+transmission': 'Génétique (expr. + transm.)',
   genetique_transmission: 'Génétique (transmission)',
   geologie: 'Géologie',
   environnement_sante: 'Environnement',
+  geometrie_espace: 'Géom. Espace',
+  nombres_complexes: 'Complexes',
+  probabilites: 'Probabilités',
+  suites_numeriques: 'Suites',
+  analyse_probleme: 'Analyse',
 };
 
 function MockExamsTab() {
@@ -2031,8 +2036,12 @@ function MockExamsTab() {
             <Sparkles className="w-5 h-5 text-purple-600" /> Générer un examen blanc
           </h3>
           {(() => {
-            const usedProfiles = new Set(exams.map(e => e.domains_covered?.profile_id).filter(Boolean));
-            const totalProfiles = 10;
+            const subjectExams = exams.filter(e => {
+              const s = (e.subject || '').toLowerCase();
+              return genSubject === 'SVT' ? s === 'svt' : (s === 'mathématiques' || s === 'mathematiques');
+            });
+            const usedProfiles = new Set(subjectExams.map(e => e.domains_covered?.profile_id).filter(Boolean));
+            const totalProfiles = genSubject === 'SVT' ? 10 : 12;
             const remaining = totalProfiles - usedProfiles.size;
             return (
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
@@ -2040,14 +2049,14 @@ function MockExamsTab() {
                 remaining > 2 ? 'bg-amber-50 text-amber-700' :
                 'bg-red-50 text-red-700'
               }`}>
-                {remaining > 0 ? `${remaining}/10 profils restants` : 'Tous les profils utilisés — recyclage'}
+                {remaining > 0 ? `${remaining}/${totalProfiles} profils restants` : 'Tous les profils utilisés — recyclage'}
               </span>
             );
           })()}
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Chaque examen utilise un profil unique (combinaison Part1 + sous-topics différente).
-          10 profils couvrent toutes les probabilités réalistes pour 2026N.
+          Chaque examen utilise un profil unique (combinaison domaines + sous-topics différente).
+          {genSubject === 'SVT' ? '10 profils SVT' : '12 profils Math'} couvrent toutes les probabilités réalistes pour 2026N.
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
@@ -2055,6 +2064,7 @@ function MockExamsTab() {
             <select value={genSubject} onChange={e => setGenSubject(e.target.value)}
               className="px-3 py-2 border rounded-lg text-sm focus:border-indigo-500 outline-none">
               <option value="SVT">SVT</option>
+              <option value="mathematiques">Mathématiques</option>
             </select>
           </div>
           <button onClick={handleGenerate} disabled={generating}
@@ -2106,16 +2116,28 @@ function MockExamsTab() {
                       #{exam.domains_covered.profile_id}
                     </span>
                   )}
+                  {/* SVT layout: part1 + part2[] */}
                   {exam.domains_covered?.part1 && (
                     <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-medium">
                       P1: {DOMAIN_LABELS[exam.domains_covered.part1] || exam.domains_covered.part1}
                     </span>
                   )}
-                  {exam.domains_covered?.part2?.map((d, i) => (
+                  {exam.domains_covered?.part2?.map((d: string, i: number) => (
                     <span key={i} className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500">
                       {DOMAIN_LABELS[d] || d}
                     </span>
                   ))}
+                  {/* Math layout: exercises[] + func_type */}
+                  {exam.domains_covered?.exercises?.map((ex: any, i: number) => (
+                    <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium">
+                      {DOMAIN_LABELS[ex.domain] || ex.domain} ({ex.points}pts)
+                    </span>
+                  ))}
+                  {exam.domains_covered?.func_type && (
+                    <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[10px] font-medium">
+                      PB: {exam.domains_covered.func_type}
+                    </span>
+                  )}
                 </div>
                 {exam.domains_covered?.profile_label && (
                   <p className="text-[10px] text-gray-400 mt-1 truncate" title={exam.domains_covered.profile_label}>

@@ -92,17 +92,17 @@ def _sample_exercises(subject: str, domain: str, count: int = 3) -> list[dict]:
         except Exception:
             continue
         parts = exam.get("parts", [])
-        if len(parts) < 2:
+        if not parts:
             continue
-        for ex in parts[1].get("exercises", []):
-            ctx = (ex.get("context") or "").lower()
-            name = (ex.get("name") or "").lower()
-            # Simple domain matching via keywords
-            if _exercise_matches_domain(ex, domain):
-                candidates.append({
-                    "exam": f"{exam.get('year', '?')} {exam.get('session', '?')}",
-                    "exercise": ex,
-                })
+        # Scan all parts — SVT uses parts[1], Math has exercises in any part
+        for part in parts:
+            for ex in part.get("exercises", []):
+                # Simple domain matching via keywords
+                if _exercise_matches_domain(ex, domain):
+                    candidates.append({
+                        "exam": f"{exam.get('year', '?')} {exam.get('session', '?')}",
+                        "exercise": ex,
+                    })
     random.shuffle(candidates)
     return candidates[:count]
 
@@ -111,11 +111,18 @@ def _exercise_matches_domain(ex: dict, domain: str) -> bool:
     """Check if exercise text matches a domain."""
     text = json.dumps(ex, ensure_ascii=False).lower()
     domain_keywords = {
+        # SVT domains
         "consommation_matiere_organique": ["respiration", "fermentation", "glycolyse", "krebs", "atp", "mitochondri", "muscle", "contraction", "effort", "endurance"],
         "genetique_expression": ["gene", "allele", "mutation", "proteine", "transcri", "traduction", "codon", "arnm", "maladie"],
         "genetique_transmission": ["croisement", "f1", "f2", "dominant", "recessif", "echiquier", "dihybrid"],
         "geologie": ["subduction", "collision", "metamorphi", "magma", "plaque", "faille", "chaine"],
         "environnement_sante": ["pollution", "nitrate", "pesticide", "dechet", "step", "ozone", "co2", "rechauffement"],
+        # Math domains
+        "geometrie_espace": ["sphère", "sphere", "plan", "espace", "produit vectoriel", "cartésien", "paramétrique", "orthogon", "distance"],
+        "nombres_complexes": ["complexe", "affixe", "module", "argument", "rotation", "similitude", "trigonométrique"],
+        "probabilites": ["probabilit", "urne", "boule", "variable aléatoire", "espérance", "indépendan"],
+        "suites_numeriques": ["suite", "récurrence", "convergent", "arithmétique", "géométrique"],
+        "analyse_probleme": ["fonction", "dérivée", "intégr", "limite", "asymptote", "variation", "primitive"],
     }
     kws = domain_keywords.get(domain, [])
     return sum(1 for k in kws if k in text) >= 2
@@ -156,6 +163,14 @@ class MockExamService:
         self._curriculum: dict = {}
         self._blueprint: dict = {}
     
+    @staticmethod
+    def _normalize_subject(subject: str) -> str:
+        """Normalize subject name for filesystem paths."""
+        s = subject.lower().strip()
+        if s in ("math", "mathematiques", "mathématiques"):
+            return "mathematiques"
+        return s
+
     def _ensure_loaded(self, subject: str):
         subj = subject.lower()
         if subj not in self._curriculum:
@@ -172,15 +187,16 @@ class MockExamService:
     ) -> dict:
         """Generate a mock exam at the EXACT level of the national BAC exam.
         
-        Domain logic is based on deep analysis of 2016-2025 exams:
-        - Part1 domain is ALWAYS different from Part2 domains (mutual exclusivity)
-        - Part1 Normale != Part1 Rattrapage for the same year  
-        - Part2 Ex1 = CMO (60%), Ex2 = GEN_EXP (60%), Ex3 = ENV/GEO/GEN_TRANS
-        - After GEO in 2025N, 2026N likely has CMO or ENV in Part1
+        Supports both SVT and Mathématiques subjects.
+        Domain logic is based on deep analysis of 2016-2025 exams.
         
         Returns the exam JSON with image prompts (PROMPT_IMAGE fields)
         instead of actual image files.
         """
+        # Route to Math-specific generator
+        if subject.lower() in ("math", "mathematiques", "mathématiques"):
+            return await self.generate_math_mock_exam(target_domains)
+
         self._ensure_loaded(subject)
         curriculum = self._curriculum.get(subject.lower(), {})
         blueprint = self._blueprint.get(subject.lower(), {})
@@ -752,6 +768,677 @@ Réponds avec ce JSON:
         result = await _call_deepseek(system, prompt, f"Ex{exercise_num}", max_tokens=6144)
         return result
 
+    # ═══════════════════════════════════════════════════════════════════
+    # MATH EXAM GENERATION — Based on 20 exams analysis (2016-2025 N+R)
+    # ═══════════════════════════════════════════════════════════════════
+
+    # 12 probability profiles covering all plausible 2026N Math combos.
+    # Rules from analysis:
+    # - COMPLEXES always present (100%), GEO 80%, PROB 80%, SUITES 55%
+    # - Problème always last, always analysis (étude de fonction)
+    # - LN/EXP alternate N↔R: 2025N=LN → 2026N likely LN or LN+EXP
+    # - Rotation in CPX: 2025N=HOM, 2025R=ROT → 2026N likely ROT or SIM
+    # - GEO always has sphere (100%)
+    # - PROB context always urne/boules (100%)
+    # - 3ex+PB(11pts) = 45%, 4ex+PB(8pts) = 40%, 3ex+multiPB = 15%
+    MATH_EXAM_PROFILES = [
+        # ── Structure A: 3 exercices (9pts) + Problème 11pts ── (45%)
+        {
+            "id": "M_A1", "weight": 14,
+            "label": "3ex(GEO+CPX+PROB) — PB:LN+suite+intégrale — CPX:rotation",
+            "structure": "3ex_11pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "single",
+            "func_type": "LN",
+            "has_suite": True, "has_integrale": True, "has_reciproque": False,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["equation_z2", "forme_trigo", "triangle", "ensemble_pts"],
+            "geo_subtopics": ["sphere", "prod_vectoriel", "eq_cartesienne", "distance"],
+            "prob_subtopics": ["calculer_proba", "var_aleatoire", "loi_proba"],
+        },
+        {
+            "id": "M_A2", "weight": 12,
+            "label": "3ex(GEO+CPX+PROB) — PB:LN+réciproque+aire — CPX:similitude",
+            "structure": "3ex_11pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "single",
+            "func_type": "LN",
+            "has_suite": False, "has_integrale": True, "has_reciproque": True,
+            "cpx_transfo": "similitude", "cpx_subtopics": ["forme_exp", "cercle", "alignement"],
+            "geo_subtopics": ["sphere", "eq_parametrique", "orthogonalite", "plan_tangent"],
+            "prob_subtopics": ["calculer_proba", "independance", "conditionnelle"],
+        },
+        {
+            "id": "M_A3", "weight": 10,
+            "label": "3ex(GEO+CPX+PROB) — PB:EXP+suite+réciproque — CPX:rotation",
+            "structure": "3ex_11pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "single",
+            "func_type": "EXP",
+            "has_suite": True, "has_integrale": True, "has_reciproque": True,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["equation_z2", "module_argument", "image_transfo", "alignement"],
+            "geo_subtopics": ["sphere", "prod_vectoriel", "intersection", "parallelisme"],
+            "prob_subtopics": ["calculer_proba", "var_aleatoire", "esperance"],
+        },
+        # ── Structure B: 4 exercices (12pts) + Problème 8pts ── (40%)
+        {
+            "id": "M_B1", "weight": 12,
+            "label": "4ex(SUITE+GEO+CPX+PROB) — PB:LN+intégrale — CPX:rotation",
+            "structure": "4ex_8pb",
+            "exercises": [
+                {"domain": "suites_numeriques", "points": 3},
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 8,
+            "probleme_type": "single",
+            "func_type": "LN",
+            "has_suite": False, "has_integrale": True, "has_reciproque": True,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["equation_z2", "forme_trigo", "triangle", "nature_figure"],
+            "geo_subtopics": ["sphere", "eq_cartesienne", "distance", "orthogonalite"],
+            "prob_subtopics": ["calculer_proba", "var_aleatoire", "loi_proba"],
+            "suite_subtopics": ["geometrique", "recurrence", "convergence", "monotonie"],
+        },
+        {
+            "id": "M_B2", "weight": 10,
+            "label": "4ex(SUITE+GEO+CPX+PROB) — PB:EXP+aire — CPX:homothetie",
+            "structure": "4ex_8pb",
+            "exercises": [
+                {"domain": "suites_numeriques", "points": 3},
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3.5},
+                {"domain": "probabilites", "points": 2.5},
+            ],
+            "probleme_points": 8,
+            "probleme_type": "single",
+            "func_type": "EXP",
+            "has_suite": False, "has_integrale": True, "has_reciproque": False,
+            "cpx_transfo": "homothetie", "cpx_subtopics": ["module_argument", "cercle", "image_transfo"],
+            "geo_subtopics": ["sphere", "prod_vectoriel", "eq_cartesienne", "section_cercle"],
+            "prob_subtopics": ["calculer_proba", "independance"],
+            "suite_subtopics": ["recurrence", "convergence", "monotonie"],
+        },
+        {
+            "id": "M_B3", "weight": 8,
+            "label": "4ex(SUITE+GEO+CPX+PROB) — PB:LN+POLY+aire — CPX:translation",
+            "structure": "4ex_8pb",
+            "exercises": [
+                {"domain": "suites_numeriques", "points": 3},
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 8,
+            "probleme_type": "single",
+            "func_type": "LN+POLY",
+            "has_suite": False, "has_integrale": True, "has_reciproque": False,
+            "cpx_transfo": "translation", "cpx_subtopics": ["equation_z2", "triangle", "ensemble_pts", "lieu"],
+            "geo_subtopics": ["sphere", "eq_parametrique", "orthogonalite", "plan_tangent"],
+            "prob_subtopics": ["calculer_proba", "conditionnelle", "var_aleatoire"],
+            "suite_subtopics": ["arithmetique", "geometrique", "convergence"],
+        },
+        # ── Structure C: 3 exercices + Problème multi-parties (11pts) ── (15%)
+        {
+            "id": "M_C1", "weight": 8,
+            "label": "3ex(GEO+CPX+PROB) — PB multi: PI(prélim)+PII(LN)+PIII(suite)",
+            "structure": "3ex_multi_pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3.5},
+                {"domain": "probabilites", "points": 2.5},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "multi",
+            "probleme_parts": [
+                {"name": "Partie I — Préliminaires", "points": 2.75, "content": "courbe_donnee+inegalite+aire"},
+                {"name": "Partie II — Étude de fonction", "points": 6.5, "content": "etude_complete+reciproque"},
+                {"name": "Partie III — Suite numérique", "points": 1.75, "content": "u_n+1=f(u_n)+recurrence+convergence"},
+            ],
+            "func_type": "LN",
+            "has_suite": True, "has_integrale": True, "has_reciproque": True,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["equation_z2", "forme_trigo", "alignement", "perpendiculaire"],
+            "geo_subtopics": ["sphere", "prod_scalaire", "prod_vectoriel", "intersection"],
+            "prob_subtopics": ["calculer_proba", "independance", "esperance", "var_aleatoire"],
+        },
+        {
+            "id": "M_C2", "weight": 6,
+            "label": "3ex(GEO+CPX+PROB) — PB multi: PI(prélim)+PII(EXP+LN) — no suite",
+            "structure": "3ex_multi_pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 4},
+                {"domain": "probabilites", "points": 2},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "multi",
+            "probleme_parts": [
+                {"name": "Partie I — Préliminaires", "points": 3, "content": "tracer_courbes+justifier_graphiquement+aire"},
+                {"name": "Partie II — Étude de fonction", "points": 8, "content": "etude_complete+integrale+reciproque"},
+            ],
+            "func_type": "EXP+LN",
+            "has_suite": False, "has_integrale": True, "has_reciproque": True,
+            "cpx_transfo": "homothetie", "cpx_subtopics": ["forme_exp", "cercle", "triangle", "lieu"],
+            "geo_subtopics": ["sphere", "eq_cartesienne", "distance", "orthogonalite"],
+            "prob_subtopics": ["calculer_proba", "loi_proba"],
+        },
+        # ── Variantes supplémentaires pour diversité ──
+        {
+            "id": "M_D1", "weight": 7,
+            "label": "3ex(GEO+CPX+PROB) — PB:EXP+FRAC+intégrale — CPX:rotation+triangle",
+            "structure": "3ex_11pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "single",
+            "func_type": "EXP+FRAC",
+            "has_suite": True, "has_integrale": False, "has_reciproque": False,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["equation_z2", "triangle", "isocele", "nature_figure"],
+            "geo_subtopics": ["sphere", "prod_vectoriel", "eq_cartesienne", "volume"],
+            "prob_subtopics": ["calculer_proba", "var_aleatoire", "esperance", "variance"],
+        },
+        {
+            "id": "M_D2", "weight": 7,
+            "label": "4ex(SUITE+GEO+CPX+PROB) — PB:LN+réciproque+tangente — CPX:rotation",
+            "structure": "4ex_8pb",
+            "exercises": [
+                {"domain": "suites_numeriques", "points": 3},
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3.5},
+                {"domain": "probabilites", "points": 2.5},
+            ],
+            "probleme_points": 8,
+            "probleme_type": "single",
+            "func_type": "LN",
+            "has_suite": False, "has_integrale": True, "has_reciproque": True,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["module_argument", "forme_trigo", "alignement", "ensemble_pts"],
+            "geo_subtopics": ["sphere", "eq_cartesienne", "plan_tangent", "section_cercle"],
+            "prob_subtopics": ["calculer_proba", "conditionnelle"],
+            "suite_subtopics": ["recurrence", "convergence", "monotonie", "nombre_premier"],
+        },
+        {
+            "id": "M_D3", "weight": 6,
+            "label": "4ex(SUITE+GEO+CPX+PROB) — PB:EXP+suite_dans_pb — CPX:similitude",
+            "structure": "4ex_8pb",
+            "exercises": [
+                {"domain": "suites_numeriques", "points": 2.5},
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3.5},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 8,
+            "probleme_type": "single",
+            "func_type": "EXP",
+            "has_suite": True, "has_integrale": True, "has_reciproque": False,
+            "cpx_transfo": "similitude", "cpx_subtopics": ["forme_exp", "triangle", "image_transfo", "cercle"],
+            "geo_subtopics": ["sphere", "prod_vectoriel", "parallelisme", "eq_parametrique"],
+            "prob_subtopics": ["calculer_proba", "independance", "var_aleatoire"],
+            "suite_subtopics": ["geometrique", "convergence", "adjacent"],
+        },
+        {
+            "id": "M_D4", "weight": 5,
+            "label": "3ex(GEO+CPX+PROB) — PB multi: PI(EXP prélim)+PII(EXP+LN)+PIII(suite)",
+            "structure": "3ex_multi_pb",
+            "exercises": [
+                {"domain": "geometrie_espace", "points": 3},
+                {"domain": "nombres_complexes", "points": 3},
+                {"domain": "probabilites", "points": 3},
+            ],
+            "probleme_points": 11,
+            "probleme_type": "multi",
+            "probleme_parts": [
+                {"name": "Partie I — Préliminaires", "points": 2.5, "content": "tracer_courbes+aire_entre_courbes"},
+                {"name": "Partie II — Étude de fonction", "points": 6.75, "content": "etude_complete+integrale"},
+                {"name": "Partie III — Suite numérique", "points": 1.75, "content": "u_n+1=f(u_n)+recurrence+convergence"},
+            ],
+            "func_type": "EXP+LN",
+            "has_suite": True, "has_integrale": True, "has_reciproque": False,
+            "cpx_transfo": "rotation", "cpx_subtopics": ["forme_trigo", "equation_z2", "nature_figure", "image_transfo"],
+            "geo_subtopics": ["sphere", "prod_vectoriel", "distance", "section_cercle"],
+            "prob_subtopics": ["calculer_proba", "var_aleatoire", "loi_proba", "esperance"],
+        },
+    ]
+
+    # ── Math sub-topic guidance for AI prompts ──
+    MATH_SUBTOPIC_GUIDANCE = {
+        "geometrie_espace": {
+            "description": """ANALYSE 16 EXERCICES DE GÉOMÉTRIE DANS L'ESPACE (2016-2025):
+Éléments TOUJOURS présents:
+- Sphère (100%): équation, centre, rayon, intersection plan-sphère
+- Équation cartésienne (81%): montrer qu'un plan a une équation donnée
+- Produit vectoriel (75%): AB∧AC, en déduire aire du triangle
+- Rayon/centre (75%): identifier à partir de l'équation développée
+- Orthogonalité (68%): droite ⊥ plan, plans ⊥
+- Section/Cercle (68%): section de la sphère par un plan
+- Plan tangent (50%): plan tangent à la sphère en un point
+- Distance point-plan (43%): formule d(M,P) = |ax₀+by₀+cz₀+d|/√(a²+b²+c²)
+
+STRUCTURE TYPIQUE D'UN EXERCICE:
+1. Vérifier/montrer l'équation d'un plan ou d'une sphère
+2. Montrer appartenance d'un point à la sphère
+3. Produit vectoriel → aire du triangle ou vecteur normal
+4. Distance point-plan OU intersection plan-sphère
+5. Plan tangent OU orthogonalité/parallélisme""",
+        },
+        "nombres_complexes": {
+            "description": """ANALYSE 20 EXERCICES DE NOMBRES COMPLEXES (2016-2025):
+Questions TOUJOURS présentes:
+- Rotation (80%): identifier la rotation, calculer l'image
+- Affixe (80%): calculer l'affixe d'un point
+- Image par transformation (75%): z' = e^{iθ}(z-a)+a
+- Forme trigonométrique (60%): |z|, arg(z), z = |z|e^{iθ}
+- Triangle/nature (60%): isocèle, rectangle, équilatéral
+- Équation z² (50%): résoudre z²+bz+c=0
+
+ROTATION DES TRANSFORMATIONS:
+2016-2019: Rotation dominante
+2021-2022: Homothétie apparaît
+2023-2024: Rotation dominante
+2025N: Homothétie, 2025R: Rotation
+→ 2026N: ROTATION probable (ou Similitude directe)
+
+STRUCTURE TYPIQUE:
+1. Résoudre z²+bz+c=0 OU écrire z sous forme trigonométrique
+2. Calculer z₂/z₁, en déduire la transformation
+3. Image d'un point par la transformation
+4. Nature d'un triangle OU alignement
+5. Ensemble de points |z-a|=r OU lieu géométrique""",
+        },
+        "probabilites": {
+            "description": """ANALYSE 16 EXERCICES DE PROBABILITÉS (2016-2025):
+- Contexte TOUJOURS = urne + boules de couleurs (100%)
+- Calculer p(A) (68%): probabilité simple
+- Variable aléatoire (56%): loi de X, E(X)
+- Loi de probabilité (50%): tableau de la loi
+- Cardinal/dénombrement (50%): nombre de tirages possibles
+- Indépendance (25%): vérifier si A et B sont indépendants
+- Conditionnelle (25%): p(A|B) = p(A∩B)/p(B)
+- Binomiale (6%): très rare
+
+STRUCTURE TYPIQUE:
+1. Calculer/montrer p(A) = ...
+2. Montrer que p(B) = ... (arbre ou dénombrement)
+3. Indépendance OU probabilité conditionnelle
+4. Variable aléatoire X: loi, E(X), V(X)""",
+        },
+        "suites_numeriques": {
+            "description": """ANALYSE 11 EXERCICES STANDALONE DE SUITES (2016-2025):
+Types de suites:
+- Géométrique + récurrence (dominant: 7/11)
+- Récurrence u_{n+1} = f(u_n) (7/11)
+- Convergence + monotonie (10/11)
+- Arithmétique (3/11, surtout rattrapage)
+- Nombres premiers (3/11, rattrapage)
+
+STRUCTURE TYPIQUE:
+1. Vérifier que u_{n+1} = expression en u_n
+2. Montrer par récurrence que a ≤ u_n ≤ b
+3. Montrer u_{n+1} - u_n = ... → monotonie
+4. En déduire convergence
+5. Calculer la limite""",
+        },
+    }
+
+    def _pick_domains_math(self, curriculum: dict, target: Optional[list[str]]) -> dict:
+        """Select Math domains using probability profiles.
+        
+        Each generation picks a DIFFERENT profile from already-generated Math exams,
+        maximizing coverage of all plausible 2026 Normale scenarios.
+        """
+        if target:
+            return {
+                "exercises": [{"domain": d, "points": 3} for d in target],
+                "probleme_points": 20 - 3 * len(target),
+                "profile_id": "custom",
+                "profile_label": "Custom domains",
+            }
+
+        # Get already-used profiles
+        used = self._get_used_profile_ids("mathematiques")
+        available = [p for p in self.MATH_EXAM_PROFILES if p["id"] not in used]
+        
+        if not available:
+            logger.info("[MockExam:Math] All profiles used — resetting pool")
+            available = list(self.MATH_EXAM_PROFILES)
+        
+        weights = [p["weight"] for p in available]
+        profile = random.choices(available, weights=weights, k=1)[0]
+        
+        logger.info(f"[MockExam:Math] Picked profile {profile['id']}: {profile['label']}")
+        
+        return {
+            "exercises": profile["exercises"],
+            "probleme_points": profile["probleme_points"],
+            "probleme_type": profile.get("probleme_type", "single"),
+            "probleme_parts": profile.get("probleme_parts"),
+            "func_type": profile.get("func_type", "LN"),
+            "has_suite": profile.get("has_suite", False),
+            "has_integrale": profile.get("has_integrale", True),
+            "has_reciproque": profile.get("has_reciproque", False),
+            "cpx_transfo": profile.get("cpx_transfo", "rotation"),
+            "cpx_subtopics": profile.get("cpx_subtopics", []),
+            "geo_subtopics": profile.get("geo_subtopics", []),
+            "prob_subtopics": profile.get("prob_subtopics", []),
+            "suite_subtopics": profile.get("suite_subtopics", []),
+            "profile_id": profile["id"],
+            "profile_label": profile["label"],
+            "structure": profile.get("structure", "3ex_11pb"),
+        }
+
+    async def generate_math_mock_exam(
+        self,
+        target_domains: Optional[list[str]] = None,
+    ) -> dict:
+        """Generate a Math mock exam using deep analysis of 20 real exams."""
+        subject = "Mathématiques"
+        subj_key = "mathematiques"
+        self._ensure_loaded(subj_key)
+        curriculum = self._curriculum.get(subj_key, {})
+        blueprint = self._blueprint.get(subj_key, {})
+        
+        if not curriculum:
+            raise ValueError(f"No curriculum found for {subject}")
+
+        exam_id = f"mock_math_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        
+        # Pick profile
+        domains = self._pick_domains_math(curriculum, target_domains)
+        logger.info(f"[MockExam:Math] Generating {exam_id} | profile={domains.get('profile_id')}")
+
+        # Generate exercises
+        exercises = []
+        for i, ex_info in enumerate(domains["exercises"]):
+            ex = await self._generate_math_exercise(
+                curriculum, ex_info["domain"], ex_info["points"], i + 1, domains
+            )
+            exercises.append(ex)
+
+        # Generate Problème
+        probleme_parts = await self._generate_math_probleme(curriculum, domains)
+
+        # Assemble
+        all_parts = []
+        if exercises:
+            all_parts.append({
+                "name": "Exercices",
+                "exercises": exercises,
+            })
+        # Problème as separate part(s)
+        if isinstance(probleme_parts, list):
+            all_parts.append({
+                "name": "Problème",
+                "exercises": probleme_parts,
+            })
+        else:
+            all_parts.append({
+                "name": "Problème",
+                "exercises": [probleme_parts],
+            })
+
+        total_ex_pts = sum(ex_info["points"] for ex_info in domains["exercises"])
+        exam = {
+            "id": exam_id,
+            "title": f"Examen Blanc Mathématiques — Session Normale {datetime.utcnow().year}",
+            "subject": subject,
+            "year": datetime.utcnow().year,
+            "session": "Blanc (Normale)",
+            "duration_minutes": 180,
+            "coefficient": 7,
+            "total_points": 20,
+            "domains_covered": domains,
+            "generated_at": datetime.utcnow().isoformat(),
+            "status": "draft",
+            "general_note": "L'usage de la calculatrice non programmable est autorisé.",
+            "parts": all_parts,
+        }
+
+        # Save
+        exam_dir = MOCK_EXAMS_DIR / subj_key / exam_id
+        _save_json(exam_dir / "exam.json", exam)
+        (exam_dir / "assets").mkdir(exist_ok=True)
+
+        image_prompts = self._extract_image_prompts(exam)
+        _save_json(exam_dir / "image_prompts.json", image_prompts)
+
+        logger.info(f"[MockExam:Math] Generated {exam_id}: {len(exercises)} exercises + problème")
+        return exam
+
+    async def _generate_math_exercise(
+        self, curriculum: dict, domain: str, points: float,
+        exercise_num: int, domains: dict
+    ) -> dict:
+        """Generate a single Math exercise (GEO, CPX, PROB, or SUITES)."""
+        domain_info = {}
+        for d in curriculum.get("domains", []):
+            if d["id"] == domain:
+                domain_info = d
+                break
+
+        guidance = self.MATH_SUBTOPIC_GUIDANCE.get(domain, {})
+        subtopic_desc = guidance.get("description", "")
+
+        # Build variant hints from profile
+        variant_hint = ""
+        if domain == "nombres_complexes":
+            transfo = domains.get("cpx_transfo", "rotation")
+            subs = domains.get("cpx_subtopics", [])
+            variant_hint = f"""TRANSFORMATION PRINCIPALE: {transfo.upper()}
+Sous-topics à inclure: {', '.join(subs)}
+"""
+            if transfo == "rotation":
+                variant_hint += "Utilise une rotation de centre Ω et d'angle θ. Forme: z' = e^{iθ}(z - ω) + ω."
+            elif transfo == "similitude":
+                variant_hint += "Utilise une similitude directe. Forme: z' = az + b avec |a|≠1."
+            elif transfo == "homothetie":
+                variant_hint += "Utilise une homothétie de centre Ω et rapport k. Forme: z' = k(z - ω) + ω."
+            elif transfo == "translation":
+                variant_hint += "Utilise une translation de vecteur b. Forme: z' = z + b."
+        elif domain == "geometrie_espace":
+            subs = domains.get("geo_subtopics", [])
+            variant_hint = f"Sous-topics à inclure: {', '.join(subs)}\nIMPORTANT: L'exercice DOIT contenir une sphère (100% des examens réels)."
+        elif domain == "probabilites":
+            subs = domains.get("prob_subtopics", [])
+            variant_hint = f"Sous-topics à inclure: {', '.join(subs)}\nIMPORTANT: Le contexte DOIT être une urne avec des boules de couleurs (100% des examens réels)."
+        elif domain == "suites_numeriques":
+            subs = domains.get("suite_subtopics", [])
+            variant_hint = f"Sous-topics à inclure: {', '.join(subs)}"
+
+        # Sample real exercises
+        examples = _sample_exercises("mathematiques", domain, 3)
+        examples_text = ""
+        for ex in examples:
+            e = ex["exercise"]
+            examples_text += f"\n--- Exemple ({ex['exam']}) ---\n"
+            examples_text += f"Nom: {e.get('name', '')}\n"
+            examples_text += f"Points: {e.get('points', 0)}\n"
+            examples_text += f"Contexte: {(e.get('context') or '')[:300]}\n"
+            for q in e.get("questions", [])[:4]:
+                examples_text += f"  Q{q.get('number','?')} ({q.get('points',0)}pts): {q.get('content','')[:200]}\n"
+
+        topics_text = json.dumps(domain_info.get("chapters", []), ensure_ascii=False, indent=2)
+        patterns_text = json.dumps(domain_info.get("typical_question_patterns", []), ensure_ascii=False, indent=2)
+
+        system = f"""Tu es un expert en création d'examens nationaux de Mathématiques du Baccalauréat marocain (2ème Bac Sciences).
+Tu génères UN exercice conforme au format exact de l'examen national.
+RÈGLE ABSOLUE: l'exercice doit porter UNIQUEMENT sur le programme officiel.
+NIVEAU: IDENTIQUE à l'examen national réel — mêmes types de raisonnement, même profondeur.
+NOTATION: Utilise la notation LaTeX pour TOUTES les formules: $f(x)$, $\\lim$, $\\int$, $\\frac{{}}{{}}$, $\\overrightarrow{{AB}}$, etc.
+
+{subtopic_desc}
+
+Réponds en JSON valide uniquement."""
+
+        prompt = f"""Génère l'Exercice {exercise_num} ({points}pts) d'un examen blanc Mathématiques — Session Normale 2026.
+
+DOMAINE: {domain_info.get('name', domain)}
+
+PROGRAMME AUTORISÉ:
+{topics_text}
+
+TYPES DE QUESTIONS TYPIQUES:
+{patterns_text}
+
+{('VARIANTE SPÉCIFIQUE:' + chr(10) + variant_hint) if variant_hint else ''}
+
+EXEMPLES DE VRAIS EXERCICES NATIONAUX:
+{examples_text}
+
+INSTRUCTIONS:
+1. Génère un exercice avec 4-7 questions progressives, total = {points}pts.
+2. Chaque question a un numéro (ex: "1.a", "2", "3.a"), des points, un contenu en LaTeX, et une correction COMPLÈTE.
+3. Les premières questions sont simples (vérifier, calculer), les dernières plus avancées (montrer, déduire).
+4. La correction doit inclure TOUTES les étapes de calcul.
+5. Style IDENTIQUE aux examens nationaux marocains (formulations formelles en français, notation LaTeX).
+6. NE PAS inclure de documents/images — les exercices de maths sont purement textuels.
+
+Réponds avec ce JSON:
+{{"name":"Exercice {exercise_num} — {domain_info.get('name', domain)}","points":{points},"context":"","questions":[
+  {{"number":"1.a","type":"open","points":0.5,"content":"Montrer que ...","correction":{{"content":"..."}}}}
+]}}"""
+
+        return await _call_deepseek(system, prompt, f"Math_Ex{exercise_num}", max_tokens=6144)
+
+    async def _generate_math_probleme(self, curriculum: dict, domains: dict) -> list | dict:
+        """Generate the Math Problème (étude de fonction, intégrales, suites)."""
+        domain_info = {}
+        for d in curriculum.get("domains", []):
+            if d["id"] == "analyse_probleme":
+                domain_info = d
+                break
+
+        func_type = domains.get("func_type", "LN")
+        has_suite = domains.get("has_suite", False)
+        has_integrale = domains.get("has_integrale", True)
+        has_reciproque = domains.get("has_reciproque", False)
+        pb_points = domains.get("probleme_points", 11)
+        pb_type = domains.get("probleme_type", "single")
+        pb_parts_info = domains.get("probleme_parts")
+
+        # Build function type instruction
+        func_hint = ""
+        if func_type == "LN":
+            func_hint = "La fonction DOIT contenir ln (logarithme népérien). Exemples: f(x) = x - (ln x)²/x, f(x) = 2 - 2/x + (1-ln x)², f(x) = x·ln(x) - x."
+        elif func_type == "EXP":
+            func_hint = "La fonction DOIT contenir exp (exponentielle). Exemples: f(x) = x - 1 + 4/(e^x + 2), f(x) = 2 - x·e^{-x+1}, f(x) = (x²-x)e^{-x} + x."
+        elif func_type == "EXP+LN":
+            func_hint = "La fonction DOIT combiner exp ET ln. Exemples: f(x) = x+1-ln(e^x-x), f(x) = e^{-x}·ln(1+e^x)."
+        elif func_type == "LN+POLY":
+            func_hint = "La fonction combine ln ET polynôme. Exemples: f(x) = x⁴(ln x - 1)², f(x) = x + (1-2/x)·ln x."
+        elif func_type == "EXP+FRAC":
+            func_hint = "La fonction combine exp ET fraction. Exemples: f(x) = x - 1 + 4/(e^x + 2), f(x) = x(e^{x/2} - 1)²."
+
+        # Content requirements
+        content_parts = []
+        content_parts.append("LIMITES aux bornes du domaine avec interprétation géométrique (OBLIGATOIRE)")
+        content_parts.append("DÉRIVÉE f'(x) = ... et tableau de variations (OBLIGATOIRE)")
+        if has_integrale:
+            content_parts.append("INTÉGRALE: primitive, IPP (intégration par parties), et/ou calcul d'AIRE entre courbes")
+        if has_reciproque:
+            content_parts.append("FONCTION RÉCIPROQUE: restriction de f, montrer que f⁻¹ existe, calculer (f⁻¹)'")
+        if has_suite:
+            content_parts.append("SUITE u_{n+1}=f(u_n): montrer par récurrence a≤u_n≤b, monotonie, convergence, limite")
+
+        flow_text = json.dumps(domain_info.get("typical_question_flow", []), ensure_ascii=False, indent=2)
+
+        # Sample real problems
+        examples = _sample_exercises("mathematiques", "analyse_probleme", 2)
+        examples_text = ""
+        for ex in examples:
+            e = ex["exercise"]
+            examples_text += f"\n--- Exemple ({ex['exam']}) ---\n"
+            examples_text += f"Nom: {e.get('name', '')}\n"
+            examples_text += f"Points: {e.get('points', 0)}\n"
+            for q in e.get("questions", [])[:5]:
+                examples_text += f"  Q{q.get('number','?')} ({q.get('points',0)}pts): {q.get('content','')[:200]}\n"
+
+        system = f"""Tu es un expert en création d'examens nationaux de Mathématiques du Baccalauréat marocain.
+Tu génères le PROBLÈME (étude de fonction numérique) — la partie la plus importante de l'examen.
+NIVEAU: IDENTIQUE à l'examen national réel. Mêmes types de raisonnement et de calcul.
+NOTATION: LaTeX OBLIGATOIRE pour toutes les formules.
+
+FLOW STANDARD DU PROBLÈME (basé sur 20 examens réels):
+{flow_text}
+
+ANALYSE DES FONCTIONS UTILISÉES:
+- LN pur (40%): f(x) implique ln(x), (ln x)², x·ln(x)
+- EXP pur (35%): f(x) implique e^x, xe^{{-x}}, (ax+b)e^{{cx}}
+- LN+EXP mixte (15%): f(x) combine les deux
+- EXP+FRAC (10%): f(x) combine exp et fraction rationnelle
+
+TRACER vs COURBE DONNÉE:
+- 83% des problèmes demandent de TRACER la courbe
+- 16% DONNENT la courbe et demandent de justifier graphiquement
+- Tendance 2024-2025: Partie I donne la courbe, Partie II demande de tracer
+
+Réponds en JSON valide uniquement."""
+
+        if pb_type == "multi" and pb_parts_info:
+            # Multi-part problem (2024-2025 style)
+            parts_json = []
+            for j, pinfo in enumerate(pb_parts_info):
+                part_prompt = f"""Génère la {pinfo['name']} ({pinfo['points']}pts) du Problème d'un examen blanc Mathématiques 2026.
+
+TYPE DE FONCTION: {func_hint}
+CONTENU DE CETTE PARTIE: {pinfo['content']}
+
+{"EXEMPLES:" + examples_text if j == 0 else ""}
+
+INSTRUCTIONS:
+1. Génère 3-6 questions progressives pour cette partie, total = {pinfo['points']}pts.
+2. Chaque question en LaTeX avec correction COMPLÈTE.
+3. Style identique aux examens nationaux marocains.
+
+Réponds avec ce JSON:
+{{"name":"{pinfo['name']}","points":{pinfo['points']},"context":"","questions":[
+  {{"number":"{j+1}.1","type":"open","points":0.5,"content":"...","correction":{{"content":"..."}}}}
+]}}"""
+                part_result = await _call_deepseek(system, part_prompt, f"Math_PB_P{j+1}", max_tokens=6144)
+                parts_json.append(part_result)
+            return parts_json
+        else:
+            # Single-block problem
+            prompt = f"""Génère le Problème ({pb_points}pts) d'un examen blanc Mathématiques — Session Normale 2026.
+
+TYPE DE FONCTION: {func_hint}
+
+CONTENU OBLIGATOIRE:
+{chr(10).join('- ' + c for c in content_parts)}
+
+EXEMPLES DE VRAIS PROBLÈMES NATIONAUX:
+{examples_text}
+
+INSTRUCTIONS:
+1. Invente une fonction f ORIGINALE du type demandé. NE COPIE PAS les exemples.
+2. Génère 12-18 questions progressives, total = {pb_points}pts.
+3. Questions de 0.25 à 2pts chacune (la plupart 0.5pts).
+4. Flow: limites → asymptote → dérivée → variation → [inflexion] → tracer → [réciproque] → [intégrale+aire] → [suite]
+5. Chaque question a une correction COMPLÈTE avec toutes les étapes.
+6. La dernière question de tracé: "Construire la courbe $(C_f)$ et la droite $(\\delta)$ dans le repère $(O,\\vec{{i}},\\vec{{j}})$."
+7. Notation LaTeX OBLIGATOIRE.
+
+Réponds avec ce JSON:
+{{"name":"Problème — Étude d'une fonction numérique","points":{pb_points},"context":"Soit $f$ la fonction numérique définie sur ... par $f(x) = ...$. On désigne par $(C_f)$ sa courbe représentative dans un repère orthonormé $(O,\\vec{{i}},\\vec{{j}})$.","questions":[
+  {{"number":"1.a","type":"open","points":0.5,"content":"Calculer $\\displaystyle\\lim_{{x\\to ...}} f(x)$...","correction":{{"content":"..."}}}}
+]}}"""
+            return await _call_deepseek(system, prompt, "Math_Probleme", max_tokens=8192)
+
     def _extract_image_prompts(self, exam: dict) -> list[dict]:
         """Extract all PROMPT_IMAGE fields from the exam for the admin."""
         prompts = []
@@ -775,7 +1462,7 @@ Réponds avec ce JSON:
     def list_mock_exams(self, subject: Optional[str] = None) -> list[dict]:
         """List all generated mock exams."""
         exams = []
-        search_dir = MOCK_EXAMS_DIR / subject.lower() if subject else MOCK_EXAMS_DIR
+        search_dir = MOCK_EXAMS_DIR / self._normalize_subject(subject) if subject else MOCK_EXAMS_DIR
         if not search_dir.exists():
             return []
         for subj_dir in (search_dir.iterdir() if not subject else [search_dir]):
@@ -801,21 +1488,21 @@ Réponds avec ce JSON:
 
     def get_mock_exam(self, subject: str, exam_id: str) -> Optional[dict]:
         """Load a specific mock exam."""
-        path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "exam.json"
+        path = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id / "exam.json"
         if path.exists():
             return _load_json(path)
         return None
 
     def get_image_prompts(self, subject: str, exam_id: str) -> list[dict]:
         """Load image prompts for a mock exam."""
-        path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "image_prompts.json"
+        path = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id / "image_prompts.json"
         if path.exists():
             return _load_json(path)
         return []
 
     def update_mock_exam_status(self, subject: str, exam_id: str, status: str) -> bool:
         """Update the status of a mock exam (draft → published)."""
-        path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "exam.json"
+        path = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id / "exam.json"
         if not path.exists():
             return False
         exam = _load_json(path)
