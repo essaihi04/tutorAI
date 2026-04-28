@@ -50,12 +50,22 @@ def _load_mock_exam_meta(exam_id: str) -> dict | None:
             raw = json.load(f)
     except Exception:
         return None
+    # The DB ``exam_attempts.exam_session`` column has a CHECK constraint
+    # restricted to ('normale', 'rattrapage'). Mock exams may carry a
+    # display label like "Blanc (Normale)" — extract the canonical token so
+    # start_attempt/submit_exam inserts don't violate the constraint.
+    raw_session = (raw.get("session") or "").lower()
+    if "rattrapage" in raw_session:
+        canonical_session = "rattrapage"
+    else:
+        canonical_session = "normale"
     return {
         "id": raw.get("id") or exam_id,
         "subject": raw.get("subject") or "",
         "subject_full": raw.get("subject_full") or raw.get("title") or "",
         "year": raw.get("year") or 0,
-        "session": raw.get("session") or "Blanc",
+        "session": canonical_session,
+        "session_label": raw.get("session") or "Blanc",
         "exam_title": raw.get("title") or "",
         "duration_minutes": raw.get("duration_minutes") or 180,
         "coefficient": raw.get("coefficient") or 5,

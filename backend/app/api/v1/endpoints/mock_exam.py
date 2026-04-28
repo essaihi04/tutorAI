@@ -139,8 +139,11 @@ async def upload_image(
                "image/webp": ".webp", "image/gif": ".gif", "image/svg+xml": ".svg"}
     ext = ext_map.get(file.content_type, ".png")
     
-    # Save to assets dir
-    assets_dir = MOCK_EXAMS_DIR / subject.lower() / exam_id / "assets"
+    # Save to assets dir (use the same normalization as the service so the
+    # upload lands in the SAME directory the loader/serving code reads from —
+    # e.g. "Physique-Chimie" → "physique", not "physique-chimie").
+    subj_norm = mock_exam_service._normalize_subject(subject)
+    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{doc_id}{ext}"
     filepath = assets_dir / filename
@@ -163,11 +166,11 @@ async def upload_image(
     src_path = f"assets/{filename}"
     _update_doc_src(exam, doc_id, src_path)
     from app.services.mock_exam_service import _save_json
-    exam_path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "exam.json"
+    exam_path = MOCK_EXAMS_DIR / subj_norm / exam_id / "exam.json"
     _save_json(exam_path, exam)
     
     # Return the public URL for serving
-    public_url = f"/static/mock-exams/{subject.lower()}/{exam_id}/assets/{filename}"
+    public_url = f"/static/mock-exams/{subj_norm}/{exam_id}/assets/{filename}"
     logger.info(f"[MockExam] Uploaded image for {doc_id}: {public_url}")
     
     return {"ok": True, "doc_id": doc_id, "filename": filename, "url": public_url}
@@ -189,7 +192,8 @@ async def delete_image(
     if not exam:
         raise HTTPException(status_code=404, detail="Mock exam not found")
 
-    assets_dir = MOCK_EXAMS_DIR / subject.lower() / exam_id / "assets"
+    subj_norm = mock_exam_service._normalize_subject(subject)
+    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
     removed: list[str] = []
     if assets_dir.exists():
         for f in assets_dir.glob(f"{doc_id}.*"):
@@ -203,7 +207,7 @@ async def delete_image(
     # Clear the src field in exam.json for this doc_id
     _update_doc_src(exam, doc_id, "")
     from app.services.mock_exam_service import _save_json
-    exam_path = MOCK_EXAMS_DIR / subject.lower() / exam_id / "exam.json"
+    exam_path = MOCK_EXAMS_DIR / subj_norm / exam_id / "exam.json"
     _save_json(exam_path, exam)
 
     logger.info(f"[MockExam] Deleted image(s) for {doc_id}: {removed}")
@@ -217,7 +221,8 @@ async def list_uploaded_images(
     admin: bool = Depends(_get_admin_dep()),
 ):
     """List all uploaded images for a mock exam. Admin-only."""
-    assets_dir = MOCK_EXAMS_DIR / subject.lower() / exam_id / "assets"
+    subj_norm = mock_exam_service._normalize_subject(subject)
+    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
     if not assets_dir.exists():
         return []
     
@@ -228,7 +233,7 @@ async def list_uploaded_images(
             images.append({
                 "doc_id": doc_id,
                 "filename": f.name,
-                "url": f"/static/mock-exams/{subject.lower()}/{exam_id}/assets/{f.name}",
+                "url": f"/static/mock-exams/{subj_norm}/{exam_id}/assets/{f.name}",
             })
     return images
 
