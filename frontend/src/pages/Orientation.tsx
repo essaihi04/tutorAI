@@ -394,7 +394,7 @@ export default function Orientation() {
 
               <div className="text-center pt-2">
                 <Link
-                  to="/signup"
+                  to="/inscription"
                   className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-semibold transition"
                 >
                   Créer un compte gratuit <ArrowRight className="w-4 h-4" />
