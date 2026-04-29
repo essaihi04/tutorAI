@@ -135,6 +135,7 @@ export default function Landing() {
       <StatsSection />
       <TestimonialsSection />
       <SubjectsSection />
+      <ConcoursPrepSoonSection />
       <FAQSection />
       <FinalCTASection />
       <Footer />
@@ -859,6 +860,172 @@ function SubjectsSection() {
               <div className="text-[11px] text-white/40 mt-4 pt-3 border-t border-white/5">+ tous les chapitres restants du référentiel</div>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONCOURS PREP — BIENTÔT (Phase 2, marketing teaser)
+   ════════════════════════════════════════════════════════════ */
+function ConcoursPrepSoonSection() {
+  const concours = [
+    { name: 'ENSA', desc: 'Écoles Nationales des Sciences Appliquées', color: 'from-blue-500 to-indigo-600', icon: '⚙️', places: '2 800 places' },
+    { name: 'ENSAM', desc: "Arts et Métiers — Ingénierie d'excellence", color: 'from-violet-500 to-purple-600', icon: '🔧', places: '450 places' },
+    { name: 'ENCG · TAFEM', desc: 'Écoles Nationales de Commerce', color: 'from-emerald-500 to-teal-600', icon: '📊', places: '2 200 places' },
+    { name: 'Médecine · FMP', desc: 'Concours des Facultés de Médecine', color: 'from-rose-500 to-pink-600', icon: '⚕️', places: '3 400 places' },
+    { name: 'Architecture', desc: 'ENA Rabat / Tétouan / Marrakech', color: 'from-amber-500 to-orange-600', icon: '🏛️', places: '180 places' },
+    { name: 'CPGE', desc: 'Classes Préparatoires aux Grandes Écoles', color: 'from-cyan-500 to-sky-600', icon: '🎯', places: '3 200 places' },
+  ];
+
+  const features = [
+    { icon: BookOpen,  title: 'Annales officielles',     desc: '15 ans de sujets par concours, corrigés & commentés par l\'IA.' },
+    { icon: Target,    title: 'QCM adaptatifs',          desc: "L'IA détecte tes lacunes et cible les questions-clés de chaque concours." },
+    { icon: Clock,     title: 'Simulations chronométrées', desc: 'Entraînement en conditions réelles, format exact du jour J.' },
+    { icon: Brain,     title: 'Coaching stratégique',     desc: 'Plan de préparation personnalisé selon ton Bac et ton concours cible.' },
+  ];
+
+  return (
+    <section className="relative z-10 py-20 sm:py-28">
+      {/* Background glow */}
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[500px] bg-gradient-to-r from-amber-500/10 via-pink-500/10 to-indigo-500/10 blur-3xl pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 relative">
+        {/* Header */}
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-pink-500/20 border border-amber-300/30 mb-5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+            </span>
+            <span className="text-xs uppercase tracking-widest font-bold text-amber-200">Phase 2 · Bientôt</span>
+            <span className="text-[10px] bg-amber-400 text-black px-1.5 py-0.5 rounded font-black">2026</span>
+          </div>
+
+          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight mb-5">
+            On ne s'arrête pas au <span className="gradient-text">BAC</span>.
+            <br />
+            <span className="text-white/90 text-3xl sm:text-4xl lg:text-5xl">La prépa concours arrive.</span>
+          </h2>
+
+          <p className="text-lg text-white/65 leading-relaxed max-w-2xl mx-auto">
+            <b className="text-white">Décrocher la mention ne suffit plus.</b> Il faut préparer les concours des grandes écoles marocaines pour
+            sécuriser sa place. Moalim étend son IA à la <span className="text-amber-200 font-semibold">préparation post-BAC complète</span> —
+            de l'oral de TAFEM aux épreuves de maths de l'ENSA.
+          </p>
+        </div>
+
+        {/* Concours grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-12">
+          {concours.map((c) => (
+            <div
+              key={c.name}
+              className="group relative p-4 sm:p-5 rounded-2xl glass border border-white/5 hover:border-white/15 transition-all hover:-translate-y-1"
+            >
+              {/* Glow on hover */}
+              <div className={`absolute -inset-px rounded-2xl bg-gradient-to-br ${c.color} opacity-0 group-hover:opacity-20 transition-opacity pointer-events-none blur-sm`} />
+
+              <div className="relative">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center text-xl sm:text-2xl mb-3 shadow-lg`}>
+                  {c.icon}
+                </div>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h3 className="font-black text-white text-sm sm:text-base leading-tight">{c.name}</h3>
+                  <span className="text-[9px] sm:text-[10px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">
+                    {c.places}
+                  </span>
+                </div>
+                <p className="text-xs text-white/55 leading-snug">{c.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Features bento */}
+        <div className="rounded-3xl glass p-6 sm:p-10 border border-white/10 relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-amber-500/15 blur-3xl" />
+          <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-pink-500/15 blur-3xl" />
+
+          <div className="relative grid lg:grid-cols-[1fr_1.3fr] gap-8 lg:gap-12 items-center">
+            {/* LEFT — Pitch */}
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-[11px] font-bold text-indigo-200 uppercase tracking-widest mb-4">
+                <Trophy className="w-3 h-3" />
+                Avantage stratégique
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-4">
+                Une seule plateforme, du lycée à <span className="gradient-text">la grande école</span>.
+              </h3>
+              <p className="text-sm sm:text-base text-white/65 leading-relaxed mb-6">
+                Pendant que tes camarades cherchent un nouveau prof particulier pour chaque concours,
+                <b className="text-white"> toi, tu restes sur Moalim.</b> L'IA connaît déjà ton profil,
+                tes lacunes, tes forces — elle ajuste la préparation concours en continuité avec ton parcours BAC.
+              </p>
+
+              {/* Benefits */}
+              <ul className="space-y-2.5 mb-6">
+                {[
+                  'Continuité pédagogique : 0 effort de re-paramétrage',
+                  '1 abonnement au lieu de 5 profs particuliers',
+                  'Données des 15 dernières années par concours',
+                  'IA qui apprend de toi, pas l\'inverse',
+                ].map((b) => (
+                  <li key={b} className="flex items-start gap-2 text-sm text-white/75">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* CTA */}
+              <Link
+                to="/inscription"
+                className="group inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-pink-500 to-indigo-500 text-white font-bold text-sm shadow-xl shadow-pink-500/30 hover:shadow-pink-500/50 hover:scale-[1.02] transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                Accès prioritaire gratuit
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <p className="text-[11px] text-white/40 mt-2">
+                Inscris-toi maintenant → accès <b className="text-amber-200">gratuit à vie</b> aux modules concours dès leur lancement.
+              </p>
+            </div>
+
+            {/* RIGHT — Features grid */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {features.map((f) => (
+                <div
+                  key={f.title}
+                  className="p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-indigo-400/30 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center mb-3">
+                    <f.icon className="w-4 h-4 text-indigo-300" />
+                  </div>
+                  <h4 className="font-bold text-white text-sm mb-1">{f.title}</h4>
+                  <p className="text-xs text-white/50 leading-snug">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Roadmap ribbon */}
+        <div className="mt-8 flex items-center justify-center gap-4 sm:gap-8 text-xs text-white/40 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+            <span><b className="text-white/80">Aujourd'hui</b> · BAC complet</span>
+          </div>
+          <span className="text-white/20">→</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+            <span><b className="text-amber-200">Phase 2</b> · Concours grandes écoles</span>
+          </div>
+          <span className="text-white/20">→</span>
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-white/30" />
+            <span><b className="text-white/60">Après</b> · Prépa études supérieures</span>
+          </div>
         </div>
       </div>
     </section>
