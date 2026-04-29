@@ -2181,15 +2181,15 @@ function MockExamsTab() {
                   title="Voir comme un élève">
                   <ExternalLink className="w-3 h-3" /> Prévisualiser
                 </button>
-                <button onClick={() => window.open(`/api/v1/mock-exam/${encodeURIComponent(exam.subject)}/${exam.id}/printable?type=sujet`, '_blank')}
+                <button onClick={() => window.open(`/api/v1/mock-exam/${encodeURIComponent(exam.subject)}/${exam.id}/printable?type=sujet&autoprint=1`, '_blank')}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition flex items-center gap-1"
-                  title="Ouvrir la version imprimable du sujet (Ctrl+P pour PDF)">
-                  📄 PDF Sujet
+                  title="Télécharger le sujet en PDF (impression automatique)">
+                  📄 Télécharger Sujet
                 </button>
-                <button onClick={() => window.open(`/api/v1/mock-exam/${encodeURIComponent(exam.subject)}/${exam.id}/printable?type=corrige`, '_blank')}
+                <button onClick={() => window.open(`/api/v1/mock-exam/${encodeURIComponent(exam.subject)}/${exam.id}/printable?type=corrige&autoprint=1`, '_blank')}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition flex items-center gap-1"
-                  title="Ouvrir la version imprimable du corrigé (Ctrl+P pour PDF)">
-                  📄 PDF Corrigé
+                  title="Télécharger le corrigé en PDF (impression automatique)">
+                  📄 Télécharger Corrigé
                 </button>
                 <button onClick={() => showPrompts(exam)}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition">

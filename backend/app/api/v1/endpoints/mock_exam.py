@@ -85,6 +85,7 @@ async def get_printable(
     subject: str,
     exam_id: str,
     type: str = Query("sujet", pattern="^(sujet|corrige)$"),
+    autoprint: int = Query(0),
 ):
     """Render a mock exam as a print-ready HTML page (BAC paper layout).
 
@@ -97,7 +98,7 @@ async def get_printable(
         raise HTTPException(status_code=404, detail="Mock exam not found")
     subj_norm = mock_exam_service._normalize_subject(subject)
     assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
-    html_str = render_printable_html(exam, subj_norm, variant=type, assets_dir=assets_dir)
+    html_str = render_printable_html(exam, subj_norm, variant=type, assets_dir=assets_dir, autoprint=bool(autoprint))
     return HTMLResponse(content=html_str)
 
 

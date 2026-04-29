@@ -240,6 +240,30 @@ _SUBJECT_LABEL = {
     "mathematiques": "Mathématiques",
 }
 
+# Subject-specific BAC instructions (matches the wording on the real papers)
+_CONSIGNE_BY_SUBJECT = {
+    "svt": (
+        "L'usage de la calculatrice scientifique non programmable est autorisé. "
+        "Le candidat doit traiter les deux parties du sujet. "
+        "L'épreuve comporte deux parties indépendantes : la première partie est une restitution "
+        "des connaissances (5 points), la deuxième partie est un raisonnement scientifique "
+        "appliqué à la résolution d'un problème scientifique (15 points). "
+        "Les schémas et les courbes doivent être clairs, précis et légendés."
+    ),
+    "physique": (
+        "L'usage de la calculatrice scientifique non programmable est autorisé. "
+        "Le candidat peut traiter les exercices dans l'ordre de son choix. "
+        "Les expressions littérales doivent être établies avant toute application numérique. "
+        "Le sujet comporte un exercice de chimie et trois exercices de physique indépendants."
+    ),
+    "mathematiques": (
+        "L'usage de la calculatrice non programmable est autorisé. "
+        "Le candidat peut traiter les exercices dans l'ordre de son choix. "
+        "Le sujet comporte cinq exercices indépendants. "
+        "Toute réponse doit être justifiée par un raisonnement clair et rigoureux."
+    ),
+}
+
 
 def render_printable_html(
     exam: dict,
@@ -247,6 +271,7 @@ def render_printable_html(
     *,
     variant: str = "sujet",
     assets_dir: Optional[Path] = None,
+    autoprint: bool = False,
 ) -> str:
     """Build the standalone HTML for a mock exam (sujet or corrige).
 
@@ -273,13 +298,12 @@ def render_printable_html(
         for i, p in enumerate(exam.get("parts") or [])
     )
 
-    # Standard BAC instructions block (used when exam.note is empty)
-    default_note = (
+    # Subject-specific BAC instructions (overridable per exam.json via 'note')
+    consigne = note or _CONSIGNE_BY_SUBJECT.get(
+        subject_norm,
         "L'usage de la calculatrice scientifique non programmable est autorisé. "
-        "Le candidat peut traiter les exercices dans l'ordre de son choix. "
-        "Les expressions littérales doivent être établies avant toute application numérique."
+        "Le candidat peut traiter les exercices dans l'ordre de son choix.",
     )
-    consigne = note or default_note
 
     variant_label = "CORRIGÉ" if mode == "corrige" else "SUJET"
     watermark_text = "moalim.online"
@@ -336,21 +360,19 @@ def render_printable_html(
   }}
   .page > * {{ position: relative; z-index: 1; }}
 
-  /* Site header / footer bands */
+  /* Site header / footer bands — brand only */
   .site-band {{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 10.5px;
-    color: #2850a0;
-    letter-spacing: 1px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #1d3a78;
+    letter-spacing: 2px;
     border-bottom: 1px solid #cdd6e6;
     padding: 4px 0;
     margin-bottom: 8px;
+    text-transform: lowercase;
   }}
   .site-band.bottom {{ border-bottom: 0; border-top: 1px solid #cdd6e6; padding: 4px 0; margin: 14px 0 0; }}
-  .site-band b {{ font-weight: 800; color: #1d3a78; letter-spacing: 0.5px; }}
-  .site-band .tag {{ font-style: italic; color: #6b7a99; }}
 
   /* ── Header ─────────────────────────────────────── */
   .official-header {{
@@ -494,11 +516,7 @@ def render_printable_html(
   <button onclick=\"window.print()\">Imprimer / Sauvegarder PDF</button>
 </div>
 <div class="page">
-  <div class="site-band">
-    <b>moalim.online</b>
-    <span class="tag">Plateforme de soutien BAC — Maroc</span>
-    <b>moalim.online</b>
-  </div>
+  <div class="site-band">moalim.online</div>
   <header class="official-header">
     <div class=\"ar\">
       <p>المملكة المغربية</p>
@@ -531,11 +549,8 @@ def render_printable_html(
 
   {parts_html}
 
-  <div class=\"site-band bottom\">
-    <b>moalim.online</b>
-    <span class=\"tag\">{html.escape(exam_id)} — {variant_label}</span>
-    <b>moalim.online</b>
-  </div>
+  <div class="site-band bottom">moalim.online</div>
 </div>
+{('<script>window.addEventListener("load",function(){{setTimeout(function(){{window.print();}},800);}});</script>' if autoprint else '')}
 </body>
 </html>"""
