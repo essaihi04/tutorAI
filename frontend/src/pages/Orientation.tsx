@@ -34,7 +34,9 @@ interface Concours {
 interface Catalog { year: number; concours: Concours[]; note?: string; last_updated?: string; }
 
 interface SimulateResult {
-  moyenne_bac_projetee: number;
+  note_admission: number;
+  moyenne_bac_projetee?: number | null;
+  formula_explanation: string;
   results: {
     concours_id: string;
     concours_name: string;
@@ -50,6 +52,7 @@ interface SimulateResult {
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   ingenieur_post_bac: { label: 'Ingénieur', color: 'from-blue-500 to-indigo-600' },
   commerce_post_bac: { label: 'Commerce', color: 'from-emerald-500 to-teal-600' },
+  medecine: { label: 'Médecine', color: 'from-rose-500 to-red-600' },
   architecture: { label: 'Architecture', color: 'from-amber-500 to-orange-600' },
   voie_acces_grande_ecole: { label: 'CPGE', color: 'from-purple-500 to-fuchsia-600' },
 };
@@ -207,12 +210,11 @@ function ConcoursCard({ c }: { c: Concours }) {
 }
 
 function ChanceCalculator() {
-  const [mode, setMode] = useState<'detail' | 'quick'>('detail');
-  const [cc1, setCc1] = useState('');
-  const [cc2, setCc2] = useState('');
   const [regional, setRegional] = useState('');
   const [national, setNational] = useState('');
-  const [moyenneDirect, setMoyenneDirect] = useState('');
+  const [showCpgeFields, setShowCpgeFields] = useState(false);
+  const [cc1, setCc1] = useState('');
+  const [cc2, setCc2] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimulateResult | null>(null);
   const [error, setError] = useState('');
@@ -220,14 +222,14 @@ function ChanceCalculator() {
   const submit = async () => {
     setError(''); setResult(null); setLoading(true);
     try {
-      const payload: any = mode === 'quick'
-        ? { moyenne_bac: parseFloat(moyenneDirect) }
-        : {
-            cc1: cc1 ? parseFloat(cc1) : undefined,
-            cc2: cc2 ? parseFloat(cc2) : undefined,
-            regional: parseFloat(regional),
-            national_estimated: parseFloat(national),
-          };
+      const payload: any = {
+        regional: parseFloat(regional),
+        national_estimated: parseFloat(national),
+      };
+      if (showCpgeFields) {
+        if (cc1) payload.cc1 = parseFloat(cc1);
+        if (cc2) payload.cc2 = parseFloat(cc2);
+      }
       const { data } = await simulateConcours(payload);
       setResult(data);
     } catch (e: any) {
@@ -243,68 +245,74 @@ function ChanceCalculator() {
         </div>
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Calculateur de chances</h2>
-          <p className="text-sm text-gray-600">Estime ta moyenne projetée du bac et découvre tes concours accessibles.</p>
+          <p className="text-sm text-gray-600">Calcule ta note de présélection et découvre tes concours accessibles.</p>
         </div>
       </div>
 
-      {/* Mode toggle */}
-      <div className="flex gap-2 mt-4 mb-5 p-1 bg-white rounded-xl border border-gray-200 w-fit">
-        <button
-          onClick={() => setMode('detail')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-            mode === 'detail' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-50'
-          }`}
-        >Calcul détaillé</button>
-        <button
-          onClick={() => setMode('quick')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-            mode === 'quick' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-50'
-          }`}
-        >Calcul rapide</button>
-      </div>
-
-      {mode === 'quick' ? (
-        <div className="bg-white rounded-2xl p-5 border border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Moyenne estimée du Bac (sur 20)</label>
-          <input type="number" min={0} max={20} step={0.01}
-            value={moyenneDirect} onChange={e => setMoyenneDirect(e.target.value)}
-            placeholder="Ex : 14.5"
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg font-semibold"
-          />
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl p-5 border border-gray-200">
-          <div className="flex items-start gap-2 mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-900">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <strong>Formule officielle :</strong> Moyenne du Bac = 25% Contrôle continu + 25% Examen Régional + 50% Examen National.
-              Tu n'as pas encore passé ton national ? Estime-le avec ton prof ou utilise tes notes des examens blancs.
+      {/* Formula explanation */}
+      <div className="mt-4 mb-5 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
+        <div className="flex items-start gap-2">
+          <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <div className="font-bold text-amber-900 mb-1">Formule officielle 2025-2026</div>
+            <div className="text-amber-900/90">
+              <b>Note d'admission concours = 0,75 × Examen National + 0,25 × Examen Régional</b><br />
+              <span className="text-xs italic">⚠️ Le contrôle continu n'est <b>PAS</b> pris en compte pour les concours communs (ENSA, ENSAM, ENCG, FMP, ENA).</span>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Examen Régional <span className="text-red-500">*</span>
+              <span className="text-gray-400 text-xs ml-1">(1ère bac, déjà passé)</span>
+            </label>
+            <input type="number" min={0} max={20} step={0.01} value={regional} onChange={e => setRegional(e.target.value)}
+              placeholder="Ex : 14.50"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg font-semibold" />
+            <div className="text-[11px] text-gray-500 mt-1">Compte pour 25 % de ta note de présélection</div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Note projetée Examen National <span className="text-red-500">*</span>
+            </label>
+            <input type="number" min={0} max={20} step={0.01} value={national} onChange={e => setNational(e.target.value)}
+              placeholder="Ex : 13.00"
+              className="w-full px-4 py-3 border border-indigo-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg font-semibold bg-indigo-50/30" />
+            <div className="text-[11px] text-indigo-700 font-medium mt-1">⭐ Compte pour 75 % — c'est le plus important !</div>
+          </div>
+        </div>
+
+        {/* Optional CPGE fields */}
+        <button
+          type="button"
+          onClick={() => setShowCpgeFields(!showCpgeFields)}
+          className="mt-4 text-xs text-purple-700 hover:text-purple-900 font-medium underline"
+        >
+          {showCpgeFields ? '− Masquer' : '+ Ajouter mes notes de Contrôle Continu'} (utile pour CPGE / moyenne du Bac)
+        </button>
+
+        {showCpgeFields && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 p-3 bg-purple-50 rounded-lg">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Moyenne CC <span className="text-gray-400">1ère bac</span></label>
+              <label className="block text-xs font-medium text-purple-900 mb-1">CC 1ère bac</label>
               <input type="number" min={0} max={20} step={0.01} value={cc1} onChange={e => setCc1(e.target.value)}
-                placeholder="Ex : 15.20" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                placeholder="Ex : 15.20" className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Moyenne CC <span className="text-gray-400">2ème bac (en cours)</span></label>
+              <label className="block text-xs font-medium text-purple-900 mb-1">CC 2ème bac (en cours)</label>
               <input type="number" min={0} max={20} step={0.01} value={cc2} onChange={e => setCc2(e.target.value)}
-                placeholder="Ex : 14.80" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                placeholder="Ex : 14.80" className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Examen Régional <span className="text-red-500">*</span><span className="text-gray-400 text-xs"> (1ère bac, déjà passé)</span></label>
-              <input type="number" min={0} max={20} step={0.01} value={regional} onChange={e => setRegional(e.target.value)}
-                placeholder="Ex : 13.50" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Note projetée Examen National <span className="text-red-500">*</span></label>
-              <input type="number" min={0} max={20} step={0.01} value={national} onChange={e => setNational(e.target.value)}
-                placeholder="Ex : 14.00" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            <div className="col-span-full text-[11px] text-purple-700">
+              💡 Le CC sert uniquement à calculer ta moyenne officielle du Bac (25% CC + 25% Régional + 50% National). Il n'influence pas la note de présélection des concours.
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {error && (
         <div className="mt-3 flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -321,13 +329,19 @@ function ChanceCalculator() {
         <div className="mt-6 space-y-4">
           {/* Score banner */}
           <div className="bg-white rounded-2xl border border-indigo-200 p-5">
-            <div className="text-sm text-gray-600 mb-1">Ta moyenne projetée du bac</div>
+            <div className="text-xs uppercase tracking-wider text-indigo-600 font-bold mb-1">Note d'admission concours (75% N + 25% R)</div>
             <div className="flex items-end gap-2">
               <div className="text-5xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                {result.moyenne_bac_projetee.toFixed(2)}
+                {result.note_admission.toFixed(2)}
               </div>
               <div className="text-2xl text-gray-400 mb-1">/20</div>
             </div>
+            {result.moyenne_bac_projetee != null && (
+              <div className="text-xs text-gray-500 mt-2 border-t border-gray-100 pt-2">
+                <b>Moyenne officielle du Bac (avec CC) :</b> <span className="font-semibold text-gray-800">{result.moyenne_bac_projetee.toFixed(2)}/20</span>
+                <span className="text-[10px] text-gray-400 ml-2">— affichée sur ton diplôme, mais pas utilisée pour les concours.</span>
+              </div>
+            )}
             <div className="grid grid-cols-4 gap-2 mt-4 text-center">
               <div className="bg-emerald-50 rounded-lg p-2"><div className="text-2xl font-bold text-emerald-700">{result.summary.by_chance.forte || 0}</div><div className="text-xs text-emerald-600">forte</div></div>
               <div className="bg-amber-50 rounded-lg p-2"><div className="text-2xl font-bold text-amber-700">{result.summary.by_chance.moyenne || 0}</div><div className="text-xs text-amber-600">moyenne</div></div>
@@ -422,6 +436,7 @@ export default function Orientation() {
             {[
               { key: 'all', label: 'Tous' },
               { key: 'ingenieur_post_bac', label: 'Ingénieur' },
+              { key: 'medecine', label: 'Médecine' },
               { key: 'commerce_post_bac', label: 'Commerce' },
               { key: 'architecture', label: 'Architecture' },
               { key: 'voie_acces_grande_ecole', label: 'CPGE' },

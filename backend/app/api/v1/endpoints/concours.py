@@ -30,19 +30,30 @@ def _get_admin_dep():
 # ─── Models ────────────────────────────────────────────────────────────
 
 class SimulateRequest(BaseModel):
-    """Either pass a precomputed ``moyenne_bac`` OR the four components."""
+    """Inputs for the concours preselection simulator.
+
+    Primary fields (used for **all** concours communs — formule 75/25):
+      * ``regional``           — note de l'Examen Régional (1ère bac, déjà passé)
+      * ``national_estimated`` — note projetée à l'Examen National
+
+    Optional fields (used **only** for CPGE / Bac officiel):
+      * ``cc1``, ``cc2`` — moyennes du contrôle continu (1ère + 2ème bac)
+      * ``moyenne_bac``  — passe directement la moyenne du Bac si déjà connue
+    """
     moyenne_bac: Optional[float] = Field(default=None, ge=0, le=20)
-    cc1: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne contrôle continu 1ère bac")
-    cc2: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne contrôle continu 2ème bac (en cours)")
+    cc1: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne contrôle continu 1ère bac (CPGE seulement)")
+    cc2: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne contrôle continu 2ème bac (CPGE seulement)")
     regional: Optional[float] = Field(default=None, ge=0, le=20, description="Note de l'examen régional (1ère bac)")
     national_estimated: Optional[float] = Field(default=None, ge=0, le=20, description="Note projetée à l'examen national")
 
 
 class SimulateResponse(BaseModel):
-    moyenne_bac_projetee: float
+    note_admission: float = Field(description="Note de présélection concours (75% National + 25% Régional)")
+    moyenne_bac_projetee: Optional[float] = Field(default=None, description="Moyenne officielle du Bac (CC inclus) si CC fourni")
     components: dict
     results: list[dict]
     summary: dict
+    formula_explanation: str
 
 
 # ─── Endpoints ─────────────────────────────────────────────────────────
@@ -62,32 +73,43 @@ async def simulate(req: SimulateRequest):
     2. **Detailed** — pass ``cc1, cc2, regional, national_estimated`` and we apply
        the official Moroccan formula (CC 25 % + Régional 25 % + National 50 %).
     """
-    if req.moyenne_bac is not None:
-        moyenne = round(req.moyenne_bac, 2)
-        components = {"moyenne_bac": moyenne, "method": "direct"}
-    else:
-        moyenne = concours_service.compute_projected_average(
-            cc1=req.cc1, cc2=req.cc2,
-            regional=req.regional, national_estimated=req.national_estimated,
-        )
-        if moyenne is None:
+    # 1. Note d'admission concours = 75% National + 25% Régional (formule officielle 2025-2026)
+    note_admission = concours_service.compute_admission_score(
+        regional=req.regional, national_estimated=req.national_estimated,
+    )
+    if note_admission is None:
+        # Fallback: if user only passed moyenne_bac, use it as admission proxy
+        if req.moyenne_bac is not None:
+            note_admission = round(req.moyenne_bac, 2)
+        else:
             raise HTTPException(
                 status_code=400,
-                detail="Fournir soit moyenne_bac, soit (cc1 ou cc2) + regional + national_estimated.",
+                detail="Fournir au minimum 'regional' + 'national_estimated', ou 'moyenne_bac'.",
             )
-        components = {
-            "cc1": req.cc1, "cc2": req.cc2,
-            "regional": req.regional, "national_estimated": req.national_estimated,
-            "method": "formule_officielle",
-        }
 
-    results = concours_service.simulate(moyenne)
+    # 2. Moyenne officielle du Bac (CC + Régional + National) — utile pour CPGE
+    moyenne_bac = concours_service.compute_projected_bac_average(
+        cc1=req.cc1, cc2=req.cc2,
+        regional=req.regional, national_estimated=req.national_estimated,
+    )
+
+    components = {
+        "regional": req.regional,
+        "national_estimated": req.national_estimated,
+        "cc1": req.cc1,
+        "cc2": req.cc2,
+        "moyenne_bac_directe": req.moyenne_bac,
+    }
+
+    # Use the admission score for chance simulation (concours communs use this)
+    results = concours_service.simulate(note_admission)
     by_level = {"forte": 0, "moyenne": 0, "faible": 0, "tres_faible": 0}
     for r in results:
         by_level[r["chance"]["level"]] += 1
 
     return SimulateResponse(
-        moyenne_bac_projetee=moyenne,
+        note_admission=note_admission,
+        moyenne_bac_projetee=moyenne_bac,
         components=components,
         results=results,
         summary={
@@ -95,6 +117,12 @@ async def simulate(req: SimulateRequest):
             "by_chance": by_level,
             "top_3": results[:3],
         },
+        formula_explanation=(
+            "Note de présélection des concours communs (ENSA, ENSAM, ENCG, FMP, ENA) = "
+            "0.75 × Examen National + 0.25 × Examen Régional. "
+            "Le contrôle continu n'est PAS pris en compte dans cette formule. "
+            "Pour les CPGE, la sélection se fait sur dossier (notes des 2 ans + avis du conseil de classe)."
+        ),
     )
 
 
