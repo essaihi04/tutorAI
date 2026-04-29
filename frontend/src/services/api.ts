@@ -344,4 +344,14 @@ export const deleteMockExamImage = (subject: string, examId: string, docId: stri
 export const listPublishedMockExams = (subject?: string) =>
   api.get('/mock-exam/published', { params: subject ? { subject } : {} });
 
+// ─── Concours (Orientation Post-BAC) ──────────────────────────────────
+export const getConcoursCatalog = () => api.get('/concours/catalog');
+
+export type SimulateInput =
+  | { moyenne_bac: number }
+  | { cc1?: number; cc2?: number; regional: number; national_estimated: number };
+
+export const simulateConcours = (data: SimulateInput) =>
+  api.post('/concours/simulate', data);
+
 export default api;

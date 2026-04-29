@@ -21,6 +21,7 @@ const ExamPractice = lazy(() => import('./pages/ExamPractice'));
 const ExamReal = lazy(() => import('./pages/ExamReal'));
 const MockExamHub = lazy(() => import('./pages/MockExamHub'));
 const MockExamTake = lazy(() => import('./pages/MockExamTake'));
+const Orientation = lazy(() => import('./pages/Orientation'));
 
 function PageLoader() {
   return (
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
+          <Route path="/orientation" element={<Orientation />} />
 
           {/* Lazy-loaded protected routes */}
           <Route

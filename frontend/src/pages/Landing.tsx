@@ -106,6 +106,10 @@ export default function Landing() {
               </Link>
             ) : (
               <>
+                <Link to="/orientation" className="hidden md:inline-flex items-center gap-1 px-3 py-2 text-sm text-amber-200 hover:text-amber-100 transition font-medium">
+                  Orientation Post-BAC
+                  <span className="text-[9px] bg-amber-400 text-black px-1.5 py-0.5 rounded font-bold">NEW</span>
+                </Link>
                 <Link to="/login" className="hidden sm:inline-block px-4 py-2 text-sm text-white/70 hover:text-white transition">
                   Connexion
                 </Link>
@@ -174,6 +178,21 @@ function HeroSection() {
               Voir la démo
             </a>
           </div>
+
+          {/* Orientation Post-BAC teaser */}
+          <Link to="/orientation" className="group inline-flex items-center gap-3 px-5 py-3 mb-8 rounded-2xl bg-gradient-to-r from-amber-500/20 to-pink-500/20 border border-amber-300/30 hover:border-amber-300/60 transition-all backdrop-blur">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-pink-500 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-amber-100">Nouveau — Orientation Post-BAC</span>
+                <span className="text-[9px] bg-amber-400 text-black px-1.5 py-0.5 rounded font-bold">GRATUIT</span>
+              </div>
+              <div className="text-xs text-white/70">Calcule tes chances aux concours ENSA, ENSAM, ENCG, ENA →</div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-amber-200 group-hover:translate-x-1 transition-transform" />
+          </Link>
 
           {/* Trust line */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-white/50">
