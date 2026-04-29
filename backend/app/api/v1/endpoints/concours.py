@@ -2,8 +2,8 @@
 Concours API endpoints — catalog, simulator, admin updates.
 
 Public endpoints (no auth):
-- GET  /concours/catalog       — list of post-BAC concours communs
-- POST /concours/simulate      — compute projected BAC average + ranked chances
+- GET  /concours/catalog       — catalog of post-BAC concours communs
+- POST /concours/simulate      — compute admission score + eligibility per concours
 
 Admin endpoints (admin token):
 - PUT  /concours/catalog       — replace the catalog (annual updates)
@@ -20,8 +20,6 @@ from app.services import concours_service
 router = APIRouter(prefix="/concours", tags=["concours"])
 
 
-# ─── Auth helper (reuse admin token check) ────────────────────────────
-
 def _get_admin_dep():
     from app.api.v1.endpoints.admin import _verify_admin_token
     return _verify_admin_token
@@ -29,27 +27,27 @@ def _get_admin_dep():
 
 # ─── Models ────────────────────────────────────────────────────────────
 
+BAC_TYPES = {"sm", "se_pc", "se_svt", "se_agro", "tech", "pro", "eco", "lettres"}
+
+
 class SimulateRequest(BaseModel):
-    """Inputs for the concours preselection simulator.
+    """Inputs for the concours preselection simulator (2025-2026 formula).
 
-    Primary fields (used for **all** concours communs — formule 75/25):
-      * ``regional``           — note de l'Examen Régional (1ère bac, déjà passé)
-      * ``national_estimated`` — note projetée à l'Examen National
-
-    Optional fields (used **only** for CPGE / Bac officiel):
-      * ``cc1``, ``cc2`` — moyennes du contrôle continu (1ère + 2ème bac)
-      * ``moyenne_bac``  — passe directement la moyenne du Bac si déjà connue
+    The minimum inputs are ``bac_type``, ``regional`` and ``national_estimated``.
+    Contrôle continu (``cc1``/``cc2``) is optional and only used to compute the
+    official BAC diploma moyenne for display (not for concours preselection).
     """
-    moyenne_bac: Optional[float] = Field(default=None, ge=0, le=20)
-    cc1: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne contrôle continu 1ère bac (CPGE seulement)")
-    cc2: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne contrôle continu 2ème bac (CPGE seulement)")
-    regional: Optional[float] = Field(default=None, ge=0, le=20, description="Note de l'examen régional (1ère bac)")
-    national_estimated: Optional[float] = Field(default=None, ge=0, le=20, description="Note projetée à l'examen national")
+    bac_type: str = Field(description="Filière de bac : sm | se_pc | se_svt | se_agro | tech | pro | eco | lettres")
+    regional: float = Field(ge=0, le=20, description="Note de l'examen régional (1ère bac, déjà passé)")
+    national_estimated: float = Field(ge=0, le=20, description="Note projetée à l'examen national")
+    cc1: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne CC 1ère bac (optionnel, pour info)")
+    cc2: Optional[float] = Field(default=None, ge=0, le=20, description="Moyenne CC 2ème bac (optionnel, pour info)")
 
 
 class SimulateResponse(BaseModel):
-    note_admission: float = Field(description="Note de présélection concours (75% National + 25% Régional)")
-    moyenne_bac_projetee: Optional[float] = Field(default=None, description="Moyenne officielle du Bac (CC inclus) si CC fourni")
+    note_admission: float
+    moyenne_bac_projetee: Optional[float] = None
+    bac_type: str
     components: dict
     results: list[dict]
     summary: dict
@@ -60,68 +58,65 @@ class SimulateResponse(BaseModel):
 
 @router.get("/catalog")
 async def get_catalog():
-    """Return the full concours catalog (public, used by /orientation page)."""
+    """Return the full concours catalog (public, used by /orientation)."""
     return concours_service.load_catalog()
 
 
 @router.post("/simulate", response_model=SimulateResponse)
 async def simulate(req: SimulateRequest):
-    """Compute the projected BAC average and rank all schools by chance.
+    """Compute the preselection score and eligibility for each concours.
 
-    Two usage modes:
-    1. **Quick** — pass ``moyenne_bac`` directly (the student already has an estimate).
-    2. **Detailed** — pass ``cc1, cc2, regional, national_estimated`` and we apply
-       the official Moroccan formula (CC 25 % + Régional 25 % + National 50 %).
+    - Formula: **Note d'admission = 0.75 × National + 0.25 × Régional**
+    - Compares this note to the official 2025-2026 seuil per bac type for
+      each concours in the catalog.
+    - Returns a per-concours status (présélectionné / limite / échec).
     """
-    # 1. Note d'admission concours = 75% National + 25% Régional (formule officielle 2025-2026)
+    bac_type = req.bac_type.lower().strip()
+    if bac_type not in BAC_TYPES:
+        raise HTTPException(status_code=400, detail=f"bac_type invalide. Valeurs possibles : {sorted(BAC_TYPES)}")
+
     note_admission = concours_service.compute_admission_score(
         regional=req.regional, national_estimated=req.national_estimated,
     )
     if note_admission is None:
-        # Fallback: if user only passed moyenne_bac, use it as admission proxy
-        if req.moyenne_bac is not None:
-            note_admission = round(req.moyenne_bac, 2)
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Fournir au minimum 'regional' + 'national_estimated', ou 'moyenne_bac'.",
-            )
+        raise HTTPException(status_code=400, detail="regional et national_estimated sont requis.")
 
-    # 2. Moyenne officielle du Bac (CC + Régional + National) — utile pour CPGE
     moyenne_bac = concours_service.compute_projected_bac_average(
         cc1=req.cc1, cc2=req.cc2,
         regional=req.regional, national_estimated=req.national_estimated,
     )
 
-    components = {
-        "regional": req.regional,
-        "national_estimated": req.national_estimated,
-        "cc1": req.cc1,
-        "cc2": req.cc2,
-        "moyenne_bac_directe": req.moyenne_bac,
-    }
+    results = concours_service.simulate_by_bac(note_admission, bac_type)
 
-    # Use the admission score for chance simulation (concours communs use this)
-    results = concours_service.simulate(note_admission)
-    by_level = {"forte": 0, "moyenne": 0, "faible": 0, "tres_faible": 0}
+    # Summary counters
+    by_level: dict[str, int] = {}
     for r in results:
-        by_level[r["chance"]["level"]] += 1
+        lvl = r["status"]["level"]
+        by_level[lvl] = by_level.get(lvl, 0) + 1
+    admis = [r for r in results if r["status"]["level"] in ("admis_large", "admis", "limite")]
 
     return SimulateResponse(
         note_admission=note_admission,
         moyenne_bac_projetee=moyenne_bac,
-        components=components,
+        bac_type=bac_type,
+        components={
+            "regional": req.regional,
+            "national_estimated": req.national_estimated,
+            "cc1": req.cc1,
+            "cc2": req.cc2,
+        },
         results=results,
         summary={
-            "total_schools": len(results),
-            "by_chance": by_level,
-            "top_3": results[:3],
+            "total_concours": len(results),
+            "preselected_count": len(admis),
+            "by_level": by_level,
+            "preselected_concours_ids": [r["concours_id"] for r in admis],
         },
         formula_explanation=(
-            "Note de présélection des concours communs (ENSA, ENSAM, ENCG, FMP, ENA) = "
-            "0.75 × Examen National + 0.25 × Examen Régional. "
-            "Le contrôle continu n'est PAS pris en compte dans cette formule. "
-            "Pour les CPGE, la sélection se fait sur dossier (notes des 2 ans + avis du conseil de classe)."
+            "Note de présélection = 0.75 × Examen National + 0.25 × Examen Régional. "
+            "Le contrôle continu n'est PAS pris en compte pour les concours communs 2025-2026. "
+            "Les seuils sont nationaux et identiques pour toutes les écoles d'un même concours "
+            "(ex: toutes les ENSA ont le même seuil par filière de Bac)."
         ),
     )
 
@@ -131,7 +126,7 @@ async def update_catalog(
     body: dict,
     admin: bool = Depends(_get_admin_dep()),
 ):
-    """Replace the catalog. Admin-only — used to update yearly thresholds."""
+    """Replace the catalog (admin-only, yearly threshold updates)."""
     if "concours" not in body or not isinstance(body["concours"], list):
         raise HTTPException(status_code=400, detail="Invalid catalog: missing 'concours' list")
     concours_service.save_catalog(body)

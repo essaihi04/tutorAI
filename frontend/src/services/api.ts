@@ -347,11 +347,14 @@ export const listPublishedMockExams = (subject?: string) =>
 // ─── Concours (Orientation Post-BAC) ──────────────────────────────────
 export const getConcoursCatalog = () => api.get('/concours/catalog');
 
-export type SimulateInput =
-  | { moyenne_bac: number }
-  | { cc1?: number; cc2?: number; regional: number; national_estimated: number };
+export type SimulateInput = {
+  bac_type: 'sm' | 'se_pc' | 'se_svt' | 'se_agro' | 'tech' | 'pro' | 'eco' | 'lettres';
+  regional: number;
+  national_estimated: number;
+  cc1?: number;
+  cc2?: number;
+};
 
-export const simulateConcours = (data: SimulateInput) =>
-  api.post('/concours/simulate', data);
+export const simulateConcours = (data: SimulateInput) => api.post('/concours/simulate', data);
 
 export default api;
