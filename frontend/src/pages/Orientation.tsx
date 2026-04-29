@@ -138,6 +138,7 @@ export default function Orientation() {
   // Quiz state: answers[questionId] = chosenIndex
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [showQuiz, setShowQuiz] = useState<boolean>(false);
+  const [quizRevealed, setQuizRevealed] = useState<boolean>(false);
 
   useEffect(() => {
     getConcoursCatalog()
@@ -169,6 +170,7 @@ export default function Orientation() {
   }, [catalog, userTags]);
 
   const topMatches = quizComplete ? concoursScored.slice(0, 3) : [];
+  const answeredCount = Object.keys(quizAnswers).length;
 
   const submit = async () => {
     setSimError('');
@@ -451,7 +453,22 @@ export default function Orientation() {
                 </div>
               ))}
 
-              {quizComplete && topMatches.length > 0 && (
+              {/* Reveal button */}
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={!quizComplete}
+                  onClick={() => setQuizRevealed(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 text-white font-semibold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" /> Voir ma filière idéale
+                </button>
+                {!quizComplete && (
+                  <div className="text-xs text-gray-500">{answeredCount} / {QUIZ.length} questions répondues — termine pour découvrir ta filière.</div>
+                )}
+              </div>
+
+              {quizRevealed && quizComplete && topMatches.length > 0 && (
                 <div className="bg-white rounded-2xl border-2 border-pink-300 p-5 mt-2">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="w-5 h-5 text-pink-600" />
@@ -581,6 +598,49 @@ export default function Orientation() {
           </ul>
         </div>
 
+        {/* Step-by-step registration guide */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+              <div className="text-[10px] uppercase tracking-widest opacity-80">Procédure</div>
+              <div className="font-bold">Inscription sur cursussup.gov.ma</div>
+              <div className="text-xs opacity-90 mt-1">ENSA · ENSAM · ENCG · Médecine · Architecture</div>
+            </div>
+            <ol className="p-5 space-y-2.5 text-sm text-gray-800 list-decimal list-inside">
+              <li>Crée ton compte sur <b>cursussup.gov.ma</b> avec ton <b>CNE</b> (code Massar) et ton <b>CIN</b>.</li>
+              <li>Remplis ton dossier : informations personnelles, filière du Bac, notes du régional.</li>
+              <li>Téléverse les pièces : photo, CIN, relevé de notes 1<sup>ère</sup> bac, attestation de scolarité.</li>
+              <li>Choisis tes <b>concours</b> et classe tes <b>vœux</b> par ordre de préférence (écoles + villes).</li>
+              <li>Paye les frais en ligne (≈ 250–300 DH par concours).</li>
+              <li>Valide et <b>imprime ton récépissé</b> (à garder précieusement).</li>
+              <li>Surveille les <b>listes de présélection</b> mi-juillet sur ton espace cursussup.</li>
+              <li>Si présélectionné : présente-toi à la <b>convocation écrite</b> avec CIN + récépissé.</li>
+            </ol>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+              <div className="text-[10px] uppercase tracking-widest opacity-80">Procédure</div>
+              <div className="font-bold">Inscription sur cpge.ac.ma</div>
+              <div className="text-xs opacity-90 mt-1">Classes Préparatoires — gratuit</div>
+            </div>
+            <ol className="p-5 space-y-2.5 text-sm text-gray-800 list-decimal list-inside">
+              <li>Dès la <b>publication des résultats du Bac</b>, va sur <b>cpge.ac.ma</b>.</li>
+              <li>Crée ton compte avec <b>CNE</b> et <b>CIN</b> (inscription gratuite).</li>
+              <li>Saisis tes notes du Bac et tes notes de 1<sup>ère</sup> et 2<sup>ème</sup> année.</li>
+              <li>Classe <b>6 lycées</b> par ordre de préférence (selon ta filière : MPSI, PCSI, BCPST, ECT…).</li>
+              <li>Téléverse <b>relevés de notes</b>, <b>attestations</b> et <b>avis du conseil de classe</b>.</li>
+              <li>Utilise le <b>simulateur officiel</b> : cpge.ac.ma/cand/simulation.aspx pour estimer tes chances.</li>
+              <li>Affectation officielle fin juillet — début août.</li>
+            </ol>
+          </div>
+        </div>
+
+        {/* Helpful tip */}
+        <div className="mt-4 text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <b className="text-amber-800">Astuce :</b> Inscris-toi sur <b>plusieurs concours</b> pour multiplier tes chances (cursussup + CPGE en parallèle, c'est très courant). Prépare un dossier numérique avec toutes tes pièces scannées à l'avance.
+        </div>
+
       {/* Calendar 2025 */}
         {catalog?.calendar_2025 && (
           <div className="mt-12 bg-white border border-gray-200 rounded-2xl overflow-hidden">
@@ -605,11 +665,6 @@ export default function Orientation() {
           </div>
         )}
 
-        <div className="mt-10 text-center">
-          <p className="text-xs text-gray-500 max-w-3xl mx-auto">
-            Données agrégées et vérifiées à partir de sources publiques (Tawjihnet, 9rayti, Dreamjob, Farmaroc). Les seuils réels peuvent légèrement varier selon le volume de candidats.
-          </p>
-        </div>
       </div>
     </div>
   );
