@@ -1,13 +1,14 @@
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, GraduationCap, MessageCircle, Trophy } from 'lucide-react';
+import { BarChart3, GraduationCap, MessageCircle, Trophy, Sparkles } from 'lucide-react';
 
-export type MobileNavKey = 'dashboard' | 'coaching' | 'libre' | 'exam';
+export type MobileNavKey = 'dashboard' | 'coaching' | 'libre' | 'exam' | 'mock';
 
 const ITEMS: Array<{ key: MobileNavKey; icon: any; label: string; path: string }> = [
   { key: 'dashboard', icon: BarChart3,     label: 'Accueil',   path: '/dashboard' },
   { key: 'coaching',  icon: GraduationCap, label: 'Coaching',  path: '/coaching/plan' },
   { key: 'libre',     icon: MessageCircle, label: 'Libre',     path: '/libre' },
   { key: 'exam',      icon: Trophy,        label: 'Examens',   path: '/exam' },
+  { key: 'mock',      icon: Sparkles,      label: 'Blancs',    path: '/mock-exam' },
 ];
 
 /**

@@ -90,18 +90,18 @@ export default function MockExamHub() {
         </div>
 
         {/* Subject Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6 -mx-1 px-1 overflow-x-auto sm:overflow-visible">
           {['SVT', 'mathematiques', 'physique'].map(s => (
             <button
               key={s}
               onClick={() => setSelectedSubject(s)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+              className={`flex-shrink-0 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition whitespace-nowrap ${
                 selectedSubject === s
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20'
                   : 'bg-white/5 text-white/50 hover:bg-white/10'
               }`}
             >
-              {s === 'SVT' ? '🧬 SVT' : s === 'mathematiques' ? '📐 Mathématiques' : s === 'physique' ? '⚛️ Physique-Chimie' : s}
+              {s === 'SVT' ? '🧬 SVT' : s === 'mathematiques' ? '📐 Maths' : s === 'physique' ? '⚛️ Physique' : s}
             </button>
           ))}
         </div>
@@ -194,7 +194,7 @@ export default function MockExamHub() {
         />
       )}
 
-      <MobileBottomNav active="exam" />
+      <MobileBottomNav active="mock" />
     </div>
   );
 }
