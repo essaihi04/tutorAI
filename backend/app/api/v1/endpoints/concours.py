@@ -21,10 +21,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.config import get_settings
 from app.services import concours_service
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter(prefix="/concours", tags=["concours"])
 
