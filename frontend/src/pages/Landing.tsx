@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import ConcoursCalendarPopup from '../components/ConcoursCalendarPopup';
+import MoalimChatbot from '../components/MoalimChatbot';
 import {
   Sparkles, Brain, Zap, Trophy, ArrowRight, Check, Star,
   GraduationCap, MessageCircle, ChevronDown,
@@ -32,6 +33,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#070718] text-white overflow-hidden relative">
       <ConcoursCalendarPopup />
+      <MoalimChatbot />
       {/* Animations CSS injectées une fois */}
       <style>{`
         @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }

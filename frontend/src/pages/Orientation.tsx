@@ -5,6 +5,7 @@ import {
   Briefcase, TrendingUp, Sparkles, Plane, Compass,
 } from 'lucide-react';
 import { getConcoursCatalog, simulateConcours, type SimulateInput } from '../services/api';
+import MoalimChatbot from '../components/MoalimChatbot';
 
 type Catalog = any;
 
@@ -195,6 +196,7 @@ export default function Orientation() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <MoalimChatbot />
       {/* Hero */}
       <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-fuchsia-900 text-white">
         <div className="max-w-6xl mx-auto px-4 py-12 md:py-16">
