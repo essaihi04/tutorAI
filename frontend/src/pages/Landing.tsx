@@ -313,6 +313,38 @@ function Hero3DVisual() {
         <div className="text-2xl font-black text-yellow-400 mt-1">12 jours</div>
         <div className="text-[10px] text-white/50">consécutifs 🔥</div>
       </div>
+
+      {/* Card flottante : Concours (Phase 2 — Bientôt) */}
+      <div
+        className="absolute top-1/2 -translate-y-1/2 right-2 sm:right-3 glass rounded-2xl p-3.5 anim-float-slow w-44 shadow-2xl border border-amber-300/20"
+        style={{ animationDelay: '0.8s' }}
+      >
+        {/* Glow accent */}
+        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-amber-400/20 via-pink-500/15 to-indigo-500/20 blur-md pointer-events-none -z-10" />
+
+        {/* Header avec badge */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-400 text-black animate-pulse">
+            Bientôt
+          </span>
+        </div>
+
+        {/* Titre */}
+        <div className="text-xs font-bold text-white leading-tight">Les concours</div>
+        <div className="text-[10px] text-amber-200/90 font-medium mb-2">grandes écoles</div>
+
+        {/* Mini chips concours */}
+        <div className="flex flex-wrap gap-1">
+          {['ENSA', 'ENCG', 'Médecine', 'CPGE'].map((c) => (
+            <span key={c} className="text-[8px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/70 font-semibold">
+              {c}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
