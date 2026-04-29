@@ -550,10 +550,17 @@ export default function Orientation() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm gap-2">
                     <div className="text-gray-500">Écoles : <b>{(c.schools || []).length}</b></div>
-                    <a href={c.registration?.site || '#'} target="_blank" rel="noreferrer" className="text-indigo-700 hover:text-indigo-900 font-medium">
-                      S'inscrire <ExternalLink className="inline w-3 h-3" />
+                    <a
+                      href={c.registration?.site || '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900 font-medium"
+                      title={c.registration?.site}
+                    >
+                      S'inscrire sur {(c.registration?.site || '').replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                      <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 </div>
@@ -562,7 +569,19 @@ export default function Orientation() {
           </div>
         )}
 
-        {/* Calendar 2025 */}
+        {/* Info: registration platforms */}
+        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-900">
+          <div className="font-semibold mb-1 flex items-center gap-2">
+            <ExternalLink className="w-4 h-4" /> Où s'inscrire ?
+          </div>
+          <ul className="list-disc pl-5 space-y-0.5 text-blue-800">
+            <li><b>cursussup.gov.ma</b> — plateforme officielle centralisée pour <b>ENSA, ENSAM, ENCG, Médecine, Architecture</b>. Une seule inscription, plusieurs vœux.</li>
+            <li><b>cpge.ac.ma</b> — plateforme séparée et gratuite pour les <b>Classes Préparatoires (CPGE)</b>.</li>
+            <li>Les <b>académies militaires</b> (Air, Marine), <b>IAV Hassan II</b> (véto/agro) et <b>écoles privées</b> ont leurs propres sites — à consulter directement.</li>
+          </ul>
+        </div>
+
+      {/* Calendar 2025 */}
         {catalog?.calendar_2025 && (
           <div className="mt-12 bg-white border border-gray-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 bg-gray-50 border-b flex items-center gap-2">
