@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Send, X, Sparkles, Loader2, Bot } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 /**
  * Moalim — Orientation Chatbot
@@ -213,15 +215,21 @@ export default function MoalimChatbot() {
                   </div>
                 )}
                 <div
-                  className={`max-w-[85%] text-sm px-3.5 py-2.5 rounded-2xl whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[85%] text-sm px-3.5 py-2.5 rounded-2xl leading-relaxed ${
                     m.role === 'user'
-                      ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-tr-sm'
+                      ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-tr-sm whitespace-pre-wrap'
                       : 'bg-white text-gray-800 border border-gray-200 rounded-tl-sm shadow-sm'
                   }`}
                 >
-                  {m.content || (streaming && i === messages.length - 1 ? (
+                  {m.role === 'user' ? (
+                    m.content
+                  ) : m.content ? (
+                    <MarkdownBubble content={m.content} />
+                  ) : streaming && i === messages.length - 1 ? (
                     <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                  ) : '')}
+                  ) : (
+                    ''
+                  )}
                 </div>
               </div>
             ))}
@@ -256,6 +264,98 @@ export default function MoalimChatbot() {
         </div>
       )}
     </>
+  );
+}
+
+/* ─── Markdown bubble with rich rendering ─────────────────────── */
+function MarkdownBubble({ content }: { content: string }) {
+  return (
+    <div className="markdown-bubble">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ children }) => (
+            <h3 className="text-base font-bold text-gray-900 mt-2 mb-1.5 flex items-center gap-1.5">
+              <span className="inline-block w-1 h-4 bg-indigo-600 rounded-sm" />
+              {children}
+            </h3>
+          ),
+          h2: ({ children }) => (
+            <h4 className="text-sm font-bold text-gray-900 mt-2.5 mb-1 flex items-center gap-1.5">
+              <span className="inline-block w-1 h-3.5 bg-indigo-500 rounded-sm" />
+              {children}
+            </h4>
+          ),
+          h3: ({ children }) => (
+            <h5 className="text-sm font-semibold text-indigo-700 mt-2 mb-1">{children}</h5>
+          ),
+          p: ({ children }) => <p className="my-1.5 leading-relaxed">{children}</p>,
+          strong: ({ children }) => (
+            <strong className="font-semibold text-gray-900">{children}</strong>
+          ),
+          em: ({ children }) => <em className="italic text-gray-700">{children}</em>,
+          ul: ({ children }) => <ul className="my-1.5 ml-1 space-y-1">{children}</ul>,
+          ol: ({ children }) => <ol className="my-1.5 ml-1 space-y-1 list-decimal list-inside">{children}</ol>,
+          li: ({ children }) => (
+            <li className="flex items-start gap-1.5">
+              <span className="text-indigo-500 mt-1.5 flex-shrink-0">▸</span>
+              <span className="flex-1 min-w-0">{children}</span>
+            </li>
+          ),
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-600 hover:text-indigo-800 underline break-words"
+            >
+              {children}
+            </a>
+          ),
+          code: ({ children, className }) => {
+            const isBlock = className?.includes('language-');
+            if (isBlock) {
+              return (
+                <pre className="my-2 bg-gray-900 text-gray-100 rounded-lg p-2.5 text-xs overflow-x-auto">
+                  <code>{children}</code>
+                </pre>
+              );
+            }
+            return (
+              <code className="px-1 py-0.5 bg-indigo-50 text-indigo-800 rounded text-[0.85em] font-mono">
+                {children}
+              </code>
+            );
+          },
+          blockquote: ({ children }) => (
+            <blockquote className="my-2 pl-3 border-l-4 border-indigo-300 bg-indigo-50/50 py-1.5 pr-2 rounded-r text-gray-700 italic">
+              {children}
+            </blockquote>
+          ),
+          table: ({ children }) => (
+            <div className="my-2.5 overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-2.5 py-1.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 flex items-center gap-1.5 border-b border-gray-200">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18M15 3v18" /></svg>
+                Tableau
+              </div>
+              <table className="w-full text-xs border-collapse">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
+          tbody: ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
+          tr: ({ children }) => <tr className="hover:bg-indigo-50/40">{children}</tr>,
+          th: ({ children }) => (
+            <th className="px-2.5 py-1.5 text-left font-bold text-gray-700 border-b-2 border-indigo-200">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => <td className="px-2.5 py-1.5 align-top text-gray-700">{children}</td>,
+          hr: () => <hr className="my-3 border-gray-200" />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
 
