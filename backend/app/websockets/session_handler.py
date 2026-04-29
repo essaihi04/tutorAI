@@ -586,6 +586,79 @@ class SessionHandler:
 
         return last_response
 
+    def _build_explain_scenario_block(self) -> str:
+        """Build a high-priority block injected at the TOP of the system prompt
+        for explain mode (mode entraînement after BAC exam). Persists the
+        official correction + student answer + evaluator feedback across ALL
+        follow-up turns so the LLM never drifts from the official correction
+        when the student asks "et pourquoi cette étape ?", "donne un autre
+        exemple", etc.
+        """
+        ctx = self.session_context
+        scenario_raw = ctx.get("scenario", "") or ""
+        if not scenario_raw:
+            return ""
+        try:
+            data = json.loads(scenario_raw) if isinstance(scenario_raw, str) else dict(scenario_raw)
+        except Exception:
+            return ""
+
+        q_content = (data.get("questionContent") or "").strip()
+        q_type = (data.get("questionType") or "open").strip()
+        q_points = data.get("points") or 0
+        q_correction = (data.get("correction") or "").strip()
+        student_answer = (data.get("studentAnswer") or "").strip()
+        student_score = data.get("studentScore")
+        student_points_max = data.get("studentPointsMax")
+        evaluator_feedback = (data.get("evaluatorFeedback") or "").strip()
+        has_answer = bool(data.get("hasAnswer"))
+        subject = (data.get("subject") or "").strip()
+        exam_title = (data.get("examTitle") or "").strip()
+
+        if not q_content and not q_correction:
+            return ""
+
+        # Cap heavy fields so the system prompt stays small enough.
+        def _trim(s: str, n: int) -> str:
+            s = s.strip()
+            return s if len(s) <= n else s[:n].rstrip() + " […]"
+
+        lines = [
+            "[CONTEXTE EXAMEN — MODE ENTRAÎNEMENT / EXPLICATION DE CORRECTION]",
+            "⚠️ L'étudiant travaille sur UNE question d'examen BAC précise. "
+            "Tu DOIS baser TOUTE ta correction et tes explications sur la "
+            "CORRECTION OFFICIELLE ci-dessous, et non sur tes connaissances "
+            "générales. NE T'ÉLOIGNE JAMAIS de cette question.",
+        ]
+        if exam_title:
+            lines.append(f"📚 Examen : {exam_title}" + (f" ({subject})" if subject else ""))
+        lines.append(f"❓ Question ({q_type}, {q_points} pt) :")
+        lines.append(_trim(q_content, 1200))
+        lines.append("")
+        lines.append("✅ CORRECTION OFFICIELLE (source de vérité — tu te bases sur ce contenu) :")
+        lines.append(_trim(q_correction, 1500) if q_correction else "(non fournie)")
+
+        if has_answer:
+            lines.append("")
+            if student_answer:
+                lines.append("📝 RÉPONSE DE L'ÉLÈVE (à citer textuellement entre guillemets) :")
+                lines.append(f"« {_trim(student_answer, 800)} »")
+            else:
+                lines.append("📝 L'élève n'a pas écrit de texte (peut-être un schéma uniquement).")
+            if student_score is not None and student_points_max:
+                lines.append(f"🔢 Note évaluateur automatique : {student_score}/{student_points_max}")
+            if evaluator_feedback:
+                lines.append("🧮 Feedback évaluateur (référence interne, NE PAS citer mot-à-mot) :")
+                lines.append(_trim(evaluator_feedback, 800))
+
+        lines.append("")
+        lines.append("RÈGLES STRICTES POUR CETTE SESSION :")
+        lines.append("- Reste TOUJOURS sur cette question — ne change pas de sujet sauf demande explicite.")
+        lines.append("- Quand l'élève demande « pourquoi », « explique cette étape », « un autre exemple », tu réponds en t'appuyant DIRECTEMENT sur la correction officielle ci-dessus.")
+        lines.append("- Tu cites la réponse de l'élève entre guillemets avant de la critiquer ou féliciter.")
+        lines.append("- Tu n'inventes JAMAIS d'éléments absents de la correction officielle ; si la correction est silencieuse sur un détail, dis-le.")
+        return "\n".join(lines)
+
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
         ctx = self.session_context
         if self.session_mode in ("libre", "explain"):
@@ -597,12 +670,24 @@ class SessionHandler:
                     if isinstance(msg, dict) and msg.get("role") == "user" and isinstance(msg.get("content"), str)
                 ).strip()
             # Libre mode: use the multi-subject libre prompt (covers Math, Physics, Chemistry, SVT)
-            return llm_service.build_libre_prompt(
+            base_prompt = llm_service.build_libre_prompt(
                 language=self._prompt_language(),
                 student_name=ctx.get("student_name", "l'étudiant"),
                 proficiency=prof_ctx["proficiency"] if prof_ctx else ctx.get("proficiency", "intermédiaire"),
                 user_query=user_query,
             )
+
+            # ── EXPLAIN MODE: persist exam-question scenario (official correction
+            #    + student answer + evaluator feedback) in the SYSTEM prompt for
+            #    EVERY turn, not just the opening. Without this, follow-up
+            #    questions (the most common case) lose the correction context
+            #    and the LLM falls back to its general/university-level knowledge
+            #    instead of grounding feedback on the official correction.
+            if self.session_mode == "explain":
+                scenario_block = self._build_explain_scenario_block()
+                if scenario_block:
+                    base_prompt = scenario_block + "\n\n" + base_prompt
+            return base_prompt
         return llm_service.build_system_prompt(
             subject=ctx.get("subject", "Physique"),
             language=self._prompt_language(),

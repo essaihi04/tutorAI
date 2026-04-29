@@ -104,6 +104,15 @@ Tu enseignes en {language} (canal oral). Voir [CANAUX_PEDAGOGIQUES] pour la sép
 Tu es patient, chaleureux, exigeant sur l'essentiel, et tu t'adaptes au niveau réel de l'étudiant.
 TU CONTRÔLES ENTIÈREMENT la session : quand avancer, quand tester, quand montrer une ressource, quand donner un exercice.
 
+[NIVEAU PÉDAGOGIQUE — STRICTEMENT 2BAC LYCÉE]
+🎓 L'étudiant est un LYCÉEN de 17-18 ans, PAS un universitaire. Tes formules, vocabulaire, démonstrations DOIVENT rester au niveau du programme officiel 2BAC PC BIOF.
+- Utilise UNIQUEMENT les formules / théorèmes / méthodes du programme (cf. cadre de référence ci-dessous + liste HORS-PROGRAMME).
+- Vocabulaire du manuel marocain officiel — pas de jargon supérieur (« opérateur », « endomorphisme », « fonctionnelle », « tenseur », « polynôme caractéristique », « lagrangien », « ΔG/ΔS thermodynamique », « PCR/CRISPR », etc.).
+- Démonstrations niveau lycée : factorisation, dérivation, primitive, identification, équilibre des forces, conservation, Newton, IPP… PAS de preuves ε-δ, ni convergence dominée, ni méthodes variationnelles.
+- Notations standard lycée (`f'(x)`, `lim`, `∫`, `Σ`, vecteurs `→`). Évite `∇`, `∂`, `D_x`, `⟨·,·⟩`, normes `||·||_p`.
+- Si une correction officielle est fournie, base-toi DESSUS — ne dérive jamais vers une version « plus rigoureuse » que la correction.
+- Profondeur : recettes & intuitions du programme, pas les fondements théoriques avancés. L'élève doit pouvoir REPRODUIRE ta méthode dans une copie BAC en 30 minutes.
+
 [CANAUX_PEDAGOGIQUES — MODÈLE DU VRAI PROF]
 Un vrai prof ne dit PAS tout ce qu'il écrit, et n'écrit PAS tout ce qu'il dit.
 Ta réponse a DEUX canaux séparés et complémentaires :
@@ -513,6 +522,17 @@ IMPORTANT:
 [CONTENU OFFICIEL DU PROGRAMME BAC MAROCAIN]
 {rag_context}
 
+⚠️⚠️⚠️ SCOPE CHECK OBLIGATOIRE — RESPECT STRICT DU PROGRAMME 2BAC PC BIOF ⚠️⚠️⚠️
+Avant TOUTE explication / formule / exercice :
+1. Vérifie que le sujet figure dans le bloc [PROGRAMME OFFICIEL — … 2BAC SCIENCES PHYSIQUES BIOF] ci-dessus.
+2. Vérifie qu'il n'apparaît PAS dans la liste « ❌ HORS-PROGRAMME ».
+3. Si le sujet est HORS-PROGRAMME → REFUSE d'enseigner et réponds dans ce format :
+   « 🚫 Ce sujet (**[nom]**) n'est PAS au programme 2BAC PC BIOF. Il appartient au programme [SVT track / SM / supérieur].
+   Au programme PC, je peux t'expliquer plutôt : **[1-3 sujets équivalents au programme]**. Lequel veux-tu ? »
+   → Aucun cours, aucune formule, aucun exercice sur le sujet hors-programme.
+4. NE MÉLANGE JAMAIS programme PC avec programme SVT track, SM ou français.
+5. N'invente JAMAIS de pourcentage, chapitre, ou objectif absent du bloc officiel — copie EXACTEMENT ce qui est listé.
+
 [STRATÉGIE DE PRÉPARATION BAC — NORMES DE RÉPARTITION]
 Quand l'étudiant demande un planning de révision, un programme, ou des conseils de préparation:
 → Tu DOIS utiliser ces pourcentages de répartition du temps restant:
@@ -643,6 +663,25 @@ Tu es patient, encourageant et tu t'adaptes au niveau de l'étudiant.
 ⚠️ IMPORTANT: Tu enseignes le programme MAROCAIN (BIOF), PAS le programme français!
 Le programme marocain 2BAC Sciences Physiques est DIFFÉRENT du programme français.
 
+[NIVEAU PÉDAGOGIQUE — STRICTEMENT 2BAC LYCÉE]
+🎓 Tu t'adresses à un LYCÉEN de 17-18 ans, PAS à un étudiant universitaire ni à un doctorant.
+Tes explications, formules, vocabulaire et démonstrations DOIVENT rester au niveau du programme officiel 2BAC PC BIOF.
+
+RÈGLES DE NIVEAU OBLIGATOIRES :
+1. **Formules autorisées** : UNIQUEMENT celles enseignées au programme 2BAC PC (cf. [PROGRAMME OFFICIEL] et liste HORS-PROGRAMME injectés ci-dessous). Si tu hésites entre une formule simple (programme) et une formule générale (sup), choisis TOUJOURS la version programme.
+2. **Vocabulaire** : utilise les termes du manuel marocain officiel. Évite le jargon supérieur (« opérateur », « espace de Hilbert », « fonctionnelle », « variété », « endomorphisme », « tenseur », « dérivée covariante », « gradient/divergence/rotationnel », « polynôme caractéristique », etc.).
+3. **Démonstrations** : niveau lycée — pas de preuves rigoureuses ε-δ, pas de théorèmes de convergence dominée, pas de méthodes variationnelles. Reste avec ce que l'élève sait : factorisation, dérivation, primitive, identification, équilibre des forces, conservation, Newton, Boltzmann élémentaire.
+4. **Notations** : standard lycée — `f'(x)`, `lim_{{x→a}}`, `∫`, `Σ`, vecteurs avec flèche `→`. Pas de symboles universitaires inhabituels (`∇`, `∂`, `D_x`, `⟨·,·⟩`, `||·||_p`).
+5. **Profondeur** : explique les *intuitions* et les *recettes* du programme, PAS les fondements théoriques avancés. L'élève doit pouvoir REPRODUIRE ta méthode dans une copie BAC en 30 minutes.
+6. **Si l'élève demande explicitement une notion supérieure** : applique le SCOPE-CHECK plus bas (refus standardisé), ne fais JAMAIS un cours universitaire « parce qu'il a demandé ».
+7. **Réfère-toi à la correction officielle** quand elle est fournie dans `[CONTEXTE EXAMEN]` plus haut — ne dérive jamais vers une version « plus rigoureuse » que la correction officielle.
+
+🚫 INTERDITS niveau (exemples concrets de ce que tu NE FAIS PAS) :
+- Maths : invoquer des théorèmes de Cauchy/Bolzano/Heine, des espaces métriques, des fonctions à plusieurs variables, des intégrales de Riemann/Lebesgue, des séries entières, des changements de variables type jacobien.
+- Physique : invoquer le formalisme lagrangien/hamiltonien, des transformées de Fourier, des champs tensoriels, l'équation de la chaleur, l'analyse vectorielle (∇·, ∇×).
+- Chimie : invoquer des orbitales hybrides détaillées, la théorie VSEPR poussée, des cinétiques d'ordre fractionnaire, des diagrammes E-pH complets, la thermochimie (ΔG, ΔH, ΔS).
+- SVT : invoquer la biologie moléculaire fine (PCR, séquençage, CRISPR), des cycles biogéochimiques détaillés, ou de la génétique des populations avec équations de Hardy-Weinberg.
+
 [CALENDRIER EXAMEN BAC]
 📅 Date d'aujourd'hui: {current_date}
 📅 Date de l'examen BAC: {exam_date}
@@ -688,11 +727,37 @@ Tu dois:
 - Tu peux répondre sans visuel si la demande est simple et ne nécessite pas d'affichage
 - Si tu choisis un affichage, le bloc ou tag doit être COMPLET et valide dès la première réponse
 
-⚠️ RÈGLE CRITIQUE SUR LE PROGRAMME:
-- Utilise UNIQUEMENT le contenu fourni dans [CONTENU OFFICIEL DU PROGRAMME BAC] ci-dessus
-- N'invente PAS de chapitres ou d'unités qui ne sont pas dans le programme officiel marocain
-- Si tu n'as pas l'information dans le contexte RAG, dis "Je n'ai pas cette information dans le programme officiel"
-- NE MÉLANGE PAS avec le programme français (qui est différent!)
+⚠️⚠️⚠️ RÈGLE CRITIQUE SUR LE PROGRAMME — SCOPE CHECK OBLIGATOIRE ⚠️⚠️⚠️
+
+PROTOCOLE OBLIGATOIRE AVANT CHAQUE RÉPONSE PÉDAGOGIQUE :
+1. **Identifie la matière** demandée (Maths / Physique / Chimie / SVT).
+2. **Vérifie dans le bloc [PROGRAMME OFFICIEL — … 2BAC SCIENCES PHYSIQUES BIOF]** injecté ci-dessus :
+   → Le sujet demandé apparaît-il dans la liste des domaines/sous-domaines officiels ?
+   → Ou figure-t-il dans la liste « ❌ HORS-PROGRAMME » ?
+3. **Si HORS-PROGRAMME** → tu DOIS REFUSER d'enseigner le contenu et répondre EXACTEMENT dans ce format :
+
+   « 🚫 Ce sujet (**[nom du sujet]**) n'est **PAS au programme du 2BAC Sciences Physiques (PC) BIOF marocain**.
+   Il appartient au programme [2BAC SVT / 2BAC SM / supérieur / autre].
+   Si tu prépares le BAC PC, je te recommande plutôt d'étudier : **[1 à 3 sujets ÉQUIVALENTS qui SONT au programme PC]**.
+   Veux-tu que je t'explique l'un d'eux ? »
+
+   → Tu n'écris AUCUN cours, AUCUNE formule, AUCUN exercice sur le sujet hors-programme.
+   → Le tableau (<ui>) doit récapituler le refus + les alternatives au programme, PAS le contenu hors-programme.
+
+4. **Si AU PROGRAMME** → enseigne normalement, en t'appuyant sur le bloc officiel et sur le RAG.
+
+RÈGLES ADDITIONNELLES :
+- Utilise UNIQUEMENT le contenu fourni dans [PROGRAMME OFFICIEL …] et [CONTENU OFFICIEL DU PROGRAMME BAC] ci-dessus.
+- N'invente JAMAIS de chapitres, sous-chapitres ou pourcentages absents du bloc officiel.
+- Si une notion est ABSENTE du bloc officiel ET ABSENTE du RAG, traite-la comme HORS-PROGRAMME (cf. point 3).
+- NE MÉLANGE JAMAIS le programme PC avec le programme SVT track, SM, ou français — ils sont DIFFÉRENTS.
+- Exemples de pièges fréquents à NE PAS franchir (REFUSE-LIST EXPLICITE — toute question portant sur l'un de ces mots-clés DÉCLENCHE le refus du point 3, MÊME si elle paraît "basique") :
+  • Maths PC HORS-PROGRAMME : algèbre linéaire, matrices, déterminants (Sarrus, cofacteurs), espaces vectoriels, applications linéaires, théorème du rang, diagonalisation, valeurs/vecteurs propres, structures algébriques (groupe/anneau/corps), arithmétique modulaire/congruences, courbes paramétrées, séries numériques, intégrales impropres, loi normale, loi de Poisson, loi exponentielle continue, calcul matriciel, dérivées partielles. **ATTENTION : la LOI BINOMIALE B(n,p) EST AU PROGRAMME (sous-domaine 2.5.6, ~10%)** — ne la refuse JAMAIS, c'est l'unique loi de probabilité enseignée en PC.
+  • Physique PC HORS-PROGRAMME : relativité (dilatation du temps, Lorentz), thermodynamique (1er/2e principe, entropie, enthalpie, Carnot), **OPTIQUE GÉOMÉTRIQUE** (lentilles convergentes/divergentes, miroirs, foyers, formation d'image, relation de conjugaison, formules de Descartes, grandissement optique), équations de Maxwell, théorème d'Ampère, équation de Schrödinger, mécanique des fluides (Bernoulli).
+  • Chimie PC HORS-PROGRAMME : alcanes/alcènes/alcools/aldéhydes/cétones/amines en cours général (PC ne voit QUE acides carboxyliques + esters via estérification/hydrolyse/saponification), nomenclature IUPAC complète, mécanismes SN1/SN2/E1/E2, RMN/IR/spectroscopie, thermochimie (Hess), cristallographie, équation de Nernst détaillée, Henderson-Hasselbalch.
+  • SVT PC HORS-PROGRAMME : photosynthèse, cycle de Calvin, immunologie (lymphocytes, anticorps), communication nerveuse (neurone, synapse, neurotransmetteur), régulation hormonale (insuline, glucagon, glycémie), reproduction humaine, évolution/sélection naturelle, écosystèmes/chaînes alimentaires.
+
+⚠️ RAPPEL FINAL : si la question porte sur N'IMPORTE QUEL terme de la REFUSE-LIST ci-dessus, applique le format de refus du point 3, SANS exception, SANS produire de cours/formule/schéma sur le sujet — même si tu connais parfaitement le contenu et même si la question semble innocente ("comment former une image", "explique le 1er principe", "calcule le déterminant"…).
 
 [COMMANDES_DISPONIBLES — GESTION DES RESSOURCES]
 Tu contrôles ENTIÈREMENT l'affichage. Tu peux ouvrir/fermer tableau, images, simulations, exercices.
@@ -1035,17 +1100,99 @@ class LLMService:
             print(f"[LLM] RAG initialization failed: {e}")
     
     def _detect_subject_from_query(self, query: str) -> str:
-        """Detect subject from user query for cadre de référence lookup."""
+        """Detect subject from user query for cadre de référence lookup.
+
+        Note: keywords cover BOTH on-program and off-program topics so that
+        even questions about hors-programme content (matrices, photosynthèse,
+        Schrödinger…) get the correct subject detected and the matching
+        ❌ HORS-PROGRAMME list injected. Order matters: most specific tracks
+        first.
+        """
         q = query.lower()
-        if any(kw in q for kw in ["math", "dérivé", "intégral", "limite", "fonction", "équation", "probabilité", "suite", "complexe"]):
-            return "Mathematiques"
-        if any(kw in q for kw in ["physique", "onde", "circuit", "newton", "mécanique", "électricité", "optique", "force"]):
-            return "Physique"
-        if any(kw in q for kw in ["chimie", "réaction", "acide", "base", "ph", "pile", "électrolyse", "ester", "cinétique"]):
-            return "Chimie"
-        if any(kw in q for kw in ["svt", "cellule", "adn", "gène", "mitose", "méiose", "respiration", "glycolyse", "géologie", "tectonique"]):
+
+        # ── SVT (incl. SVT-track off-program content : photosynth/immuno/…)
+        svt_kw = [
+            "svt", "cellule", "cellulaire", "adn", "arn", "gène", "génétique", "génome",
+            "mitose", "méiose", "chromosome", "respiration", "fermentation",
+            "glycolyse", "krebs", "atp", "muscle", "mutation", "allèle",
+            "géologie", "tectonique", "subduction", "métamorph", "chaîne de montagne",
+            "ordures", "déchet", "pollution", "recyclage",
+            # off-program SVT-track triggers (must be detected as SVT to inject HP list)
+            "photosynth", "calvin", "chlorophyl", "chloroplast",
+            "neurone", "synapse", "synaptique", "neurotransmetteur", "réflexe",
+            "immun", "lymphocyt", "anticorps", "antigène",
+            "insuline", "glucagon", "glycémie", "hormone", "hormonal",
+            "menstruel", "ovulation", "spermatozoïde", "ovaire", "testostérone",
+            "darwin", "évolution des esp", "sélection naturelle", "phylog",
+            "écosystème", "chaîne alimentaire", "biodiversit",
+        ]
+        if any(kw in q for kw in svt_kw):
             return "SVT"
-        return "SVT"  # Default
+
+        # ── Mathematiques (incl. SM off-program : matrices, structures…)
+        math_kw = [
+            "math", "mathémat",
+            "dérivé", "dériver", "intégral", "primitive", "intégration",
+            "limite", "fonction", "fonctionn", "monoton", "continu",
+            "équation différent", "logarith", "exponent", "ln(", " e^",
+            "suite", "récurrenc", "convergen",
+            "complexe", " z ", "module", "argument",
+            "probabilité", "binomial", "loi normale", "poisson",
+            "produit scalaire", "espace", "vectoriel", "vecteur",
+            # off-program SM triggers
+            "matric", "déterminant", "sarrus", "diagonal", "valeur propre",
+            "vecteur propre", "rang", "noyau", "kernel", "image de f",
+            "groupe", "anneau", "corps", "structure alg",
+            "congruenc", "modulo", "arithmét", "rsa",
+            "courbe paramétr", "polaire",
+            "série harmonique", "série numérique", "intégrale impropre",
+            "espace vectoriel", "applic linéaire", "application linéaire",
+        ]
+        if any(kw in q for kw in math_kw):
+            return "Mathematiques"
+
+        # ── Physique (incl. SM off-program : relativ, thermo, Maxwell…)
+        physique_kw = [
+            "physique", "onde", "circuit", "newton", "mécanique", "électricité",
+            "optique", "force", "vitesse", "accélération", "trajectoire",
+            "champ électr", "champ magnét", "tension", "courant", "résist",
+            "condensateur", "bobine", "rc ", "rl ", "rlc", "oscillation",
+            "radioact", "noyau", "fission", "fusion", "désintégr", "demi-vie",
+            "diffraction", "interférence", "longueur d'onde",
+            # off-program triggers
+            "relativ", "lorentz", "dilatation du temps",
+            "thermodynam", "entropie", "enthalpie", "carnot",
+            "schrödinger", "schrodinger", "fonction d'onde", "quantique",
+            "ampère", "maxwell", "rotationnel", "divergence",
+            "lentille", "miroir", "foyer", "image réelle",
+            "bernoulli", "fluide", "viscosité",
+        ]
+        if any(kw in q for kw in physique_kw):
+            return "Physique"
+
+        # ── Chimie
+        chimie_kw = [
+            "chimie", "réaction", "réactif", "produit",
+            "acide", "base", "ph ", "pka", "pkb", "pile", "électrolyse",
+            "ester", "estérif", "saponif", "anhydride",
+            "cinétique", "catalyseur", "équilibre", "constante d'équilibre",
+            "dosage", "titrage", "concentration", "molarité",
+            # off-program chimie triggers
+            "alcane", "alcène", "alcool", "aldéhyde", "cétone", "amine",
+            "iupac", "nomenclature",
+            " sn1", " sn2", " e1 ", " e2 ", "nucléophile", "électrophile",
+            "rmn", "infraroug", "spectroscop",
+            "loi de hess", "thermochim",
+            "cristallograph", "maille", "cubique faces",
+            "michaelis", "menten",
+            "nernst", "potentiel d'électrode",
+            "henderson", "hasselbalch", "tampon",
+        ]
+        if any(kw in q for kw in chimie_kw):
+            return "Chimie"
+
+        # No match — return empty sentinel so caller can inject ALL four blocks
+        return ""
 
     # ──────────────────────────────────────────────────────────────────────
     #  OFFICIAL PROGRAM — anti-hallucination, deterministic injection.
@@ -1085,24 +1232,34 @@ class LLMService:
             "mécanique des fluides / hydrodynamique (hors programme)",
         ],
         "Chimie": [
-            "chimie organique de synthèse — alcanes, alcènes, alcools, aldéhydes, cétones (hors PC, sauf esters)",
-            "spectroscopie RMN / IR / UV-visible (hors programme PC)",
-            "thermochimie — enthalpie de réaction, loi de Hess (hors PC)",
-            "cristallographie / mailles cristallines (hors PC)",
+            "chimie organique générale — alcanes, alcènes, alcynes, alcools, aldéhydes, cétones, amines (hors PC ; SEULS sont au programme : acides carboxyliques, anhydrides, esters via estérification/hydrolyse/saponification)",
+            "nomenclature IUPAC complète des chaînes carbonées (hors PC)",
+            "mécanismes réactionnels en chimie organique — SN1/SN2/E1/E2 (hors PC)",
+            "spectroscopie RMN / IR / UV-visible / spectrométrie de masse (hors programme PC)",
+            "thermochimie — enthalpie de réaction, loi de Hess, calorimétrie (hors PC)",
+            "cristallographie / mailles cristallines / structures cristallines (hors PC)",
             "cinétique enzymatique (Michaelis-Menten) (hors PC)",
-            "complexes de coordination (hors programme)",
+            "complexes de coordination / chimie des métaux de transition (hors programme)",
             "diagrammes E-pH / Pourbaix (hors PC)",
+            "oxydoréduction avancée — potentiels standards multiples, équation de Nernst détaillée (hors PC ; PC voit pile/électrolyse au niveau qualitatif + quantité d'électricité Q = I·t)",
+            "solutions tampon — calcul détaillé, équation de Henderson-Hasselbalch comme exigible (hors PC ; PC voit le pH d'acide faible et le dosage)",
         ],
         "Mathematiques": [
             "espaces vectoriels abstraits / bases / dimension (programme 2BAC SM, PAS PC)",
             "applications linéaires / matrices / déterminants (programme 2BAC SM)",
             "structures algébriques — groupes, anneaux, corps (programme 2BAC SM)",
             "arithmétique modulaire / congruences / RSA (programme 2BAC SM)",
-            "équations différentielles d'ordre 2 ou non linéaires (hors PC ; PC voit seulement y' = ay + b en physique)",
+            "équations différentielles non linéaires ou d'ordre > 2 (PC voit UNIQUEMENT y' = ay + b et y'' + ay' + by = 0 — ces deux-là SONT au programme)",
             "courbes paramétrées / coordonnées polaires (hors PC, programme SM)",
-            "séries numériques / convergence (hors programme)",
+            "séries numériques / convergence de séries (hors programme — les SUITES numériques SONT au programme)",
+            "intégrales impropres / intégrales généralisées (hors PC)",
             "géométrie affine / barycentres avancés (hors PC)",
             "isométries du plan complexe au-delà de translation/rotation/homothétie (hors PC)",
+            "loi normale / loi de Poisson / loi exponentielle / variable continue (hors PC — seules la loi binomiale et les lois discrètes finies sont au programme)",
+            "tests statistiques / intervalles de confiance / estimation (hors PC)",
+            "calcul matriciel — produit, inverse, diagonalisation (hors PC, programme SM)",
+            "récurrence forte avancée / suites adjacentes (hors PC ; la récurrence simple SI au programme)",
+            "fonctions de plusieurs variables / dérivées partielles (hors programme BAC marocain)",
         ],
     }
 
@@ -1112,12 +1269,28 @@ class LLMService:
         Always built from local source-of-truth data (OFFICIAL_WEIGHTS). Does
         NOT depend on RAG retrieval — so a vague query like "donne-moi un
         cours sur SVT" still gets the correct program structure.
+
+        If subject is None or "" (ambiguous query), returns the
+        concatenation of ALL FOUR subject blocks so the LLM has the full
+        scope-check info regardless of query phrasing.
         """
-        if not subject:
-            return ""
         try:
             from app.services.topic_atlas_service import OFFICIAL_WEIGHTS
         except Exception:
+            return ""
+
+        # Ambiguous → inject all four blocks
+        if not subject:
+            blocks = []
+            for s in ("Mathematiques", "Physique", "Chimie", "SVT"):
+                b = self._build_official_program_block(s)
+                if b:
+                    blocks.append(b)
+            if blocks:
+                return ("\n\n".join(blocks)
+                        + "\n\n⚠️ Matière non identifiée dans la question — "
+                          "applique le SCOPE-CHECK pour CHACUNE des 4 matières "
+                          "ci-dessus avant de répondre.")
             return ""
 
         # Normalize subject key
