@@ -695,6 +695,15 @@ class SessionHandler:
         lines.append("- Tu n'inventes JAMAIS d'éléments absents de la correction officielle ; si la correction est silencieuse sur un détail, dis-le.")
         lines.append("- Le contenu des tableaux <ui>/<board> doit OBLIGATOIREMENT respecter le verrou niveau 2BAC ci-dessus (formules, notations, vocabulaire).")
         lines.append("- Une « version modèle » ou « rédaction parfaite » que tu donnes ne doit JAMAIS être plus avancée que la correction officielle. C'est un copier-coller stylisé du programme, pas une généralisation.")
+        lines.append("")
+        lines.append("✍️ RÈGLE DE RÉDACTION (style copie BAC) — APPLICABLE À TOUTE « réponse modèle / éléments de réponse / version idéale » que tu produis dans cette session :")
+        lines.append("- PHRASES COMPLÈTES avec connecteurs scientifiques, JAMAIS de mots-clés télégraphiques.")
+        lines.append("- Comparaison → commence par « On remarque que… », « On constate que… », « En comparant X et Y, on note que… ».")
+        lines.append("- Déduction → « On en déduit que… », « Par conséquent… », « Il en résulte que… ».")
+        lines.append("- Observation → « D'après le document N°…, on observe que… ».")
+        lines.append("- Justification → « Cela s'explique par le fait que… », « En effet,… », « Car… ».")
+        lines.append("- Dans un TABLEAU comparatif, chaque cellule « Réponse modèle » est UNE PHRASE COMPLÈTE (sujet + verbe + complément). Mots-clés isolés (« mitose », « prophase », « plus rapide ») = INTERDIT.")
+        lines.append("- Chaque ligne du tableau traite UN critère DIFFÉRENT — interdit de répéter le même élément de réponse sur plusieurs lignes.")
         return "\n".join(lines)
 
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
@@ -1931,7 +1940,16 @@ STRUCTURE OBLIGATOIRE (texte HORS des balises) :
    - explique pourquoi c'est important pour la note BAC
    - si l'élève a écrit quelque chose de FAUX, cite la phrase et corrige-la AVEC son explication
 
-4. **Comment rédiger pour avoir tous les points** — donne UNE version modèle courte, structurée, telle qu'un correcteur BAC l'attend. Pas un copier-coller de la correction : reformule en utilisant le vocabulaire du cours.
+4. **Comment rédiger pour avoir tous les points** — donne UNE version modèle ENTIÈREMENT RÉDIGÉE, telle qu'un correcteur BAC l'attend sur la copie d'un élève. Pas un copier-coller de la correction : reformule en utilisant le vocabulaire du cours.
+
+   🚨 EXIGENCE DE RÉDACTION (style copie BAC SVT/PC) — la version modèle DOIT contenir des PHRASES COMPLÈTES avec connecteurs scientifiques, JAMAIS des mots-clés télégraphiques.
+   - Comparaison : commence par « On remarque que… », « On constate que… », « On observe que… », « En comparant X et Y, on note que… ».
+   - Déduction/conclusion : « On en déduit que… », « Ceci permet de conclure que… », « Par conséquent… », « Il en résulte que… ».
+   - Observation/description : « D'après le document N°…, on observe que… », « Le document montre que… ».
+   - Justification : « Cela s'explique par le fait que… », « En effet,… », « Car… ».
+   - Chaque idée = une phrase complète sujet + verbe + complément. PAS de listes de mots-clés type « mitose, prophase, fuseau ».
+   - Si la question demande une COMPARAISON, structure la rédaction en 2 temps : (a) « On remarque que [élément 1] présente … alors que [élément 2] présente … », (b) « On en déduit que … ».
+   - Si la question demande d'EXPLIQUER un mécanisme, rédige un paragraphe enchaîné de 3 à 5 phrases, pas une liste à puces sans verbes.
 
 5. **Concept du cours à retenir** — relie les erreurs à un mécanisme/définition/loi précis. Pas de vague.
 
@@ -1939,10 +1957,18 @@ STRUCTURE OBLIGATOIRE (texte HORS des balises) :
 
 7. **Action suivante concrète** — UNE phrase : que doit-il refaire / réviser maintenant ?
 
-8. **APRÈS** ton texte, mets dans `<board>...</board>` un tableau / schéma comparatif "Ta réponse vs Réponse modèle" OU les éléments-clés à retenir.
+8. **APRÈS** ton texte, mets dans `<board>...</board>` un tableau comparatif "Ta réponse vs Réponse modèle" OU les éléments-clés à retenir.
+
+   🚨 RÈGLE TABLEAU — chaque cellule de la colonne « Réponse modèle » DOIT être une PHRASE COMPLÈTE (pas un mot-clé isolé). Exemples :
+   - ❌ MAUVAIS  : « mitose / prophase / fuseau »
+   - ✅ BON     : « On observe que la cellule entre en prophase : les chromosomes se condensent et le fuseau mitotique se met en place. »
+   - ❌ MAUVAIS  : « plus rapide / plus lent »
+   - ✅ BON     : « On remarque que la réaction A est plus rapide que la réaction B car la concentration en ions H⁺ est plus élevée. »
+   Chaque ligne du tableau doit traiter UN critère DIFFÉRENT — ne JAMAIS répéter le même élément de réponse dans plusieurs lignes.
 
 RÈGLES :
-- Sois CONCIS : 8 à 12 phrases max au total dans le texte (hors board).
+- La RÉDACTION DU MODÈLE (point 4) prime sur la concision : 4 à 7 phrases bien construites pour la version modèle, pas des mots-clés.
+- Le reste du texte (points 1-3, 5-7) reste CONCIS : 8 à 12 phrases max au total.
 - Tu CITES toujours l'élève entre guillemets « … » avant de critiquer ou féliciter.
 - Tu n'utilises PAS de jargon vague (« il faut bien », « c'est important ») — sois précis et technique.
 - L'élève peut ensuite poser des questions de suivi."""
