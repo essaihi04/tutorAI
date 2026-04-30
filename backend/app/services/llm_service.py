@@ -92,6 +92,127 @@ RÈGLES :
 - JAMAIS de commentaire ou de texte entre <suggestions> et </suggestions>, uniquement le tableau JSON.
 """
 
+
+# ──────────────────────────────────────────────────────────────────────
+# GENETICS_BOARD_PROTOCOL
+# Strict rendering rules for SVT genetics questions (monohybridisme,
+# dihybridisme, échiquier de croisement, carte factorielle). Injected
+# in EVERY mode (libre / explain / coaching) when genetics keywords are
+# detected. Reproduces the exact visual conventions of the Moroccan
+# 2BAC SVT BIOF national exam corrections.
+# ──────────────────────────────────────────────────────────────────────
+GENETICS_BOARD_PROTOCOL = r"""[PROTOCOLE_GÉNÉTIQUE — RENDU TABLEAU OBLIGATOIRE — STYLE BAC SVT BIOF]
+Détecté : la question porte sur la génétique mendélienne (croisement,
+génotype, phénotype, gamètes, monohybridisme, dihybridisme, carte
+factorielle, F1/F2, mendel, allèle, brassage). Tu DOIS suivre EXACTEMENT
+le rendu officiel des corrections d'examen national marocain :
+
+═══════════════════════════════════════════════════════════════════════
+1️⃣ INTERPRÉTATION CHROMOSOMIQUE — STRUCTURE OBLIGATOIRE
+═══════════════════════════════════════════════════════════════════════
+Pour CHAQUE croisement (P1×P2, F1×F1, test-cross…) tu produis dans CET
+ORDRE et dans un seul <ui> show_board avec ces lignes :
+  ① Titre : "Interprétation chromosomique du Xᵉᵐᵉ croisement"
+  ② Parents : phénotypes entre crochets [L] x [r]
+  ③ Génotypes : représentation chromosomique en FRACTION LaTeX qui
+     simule les DEUX chromosomes homologues (deux barres horizontales).
+     Format : $\dfrac{L}{L}$  ou  $\dfrac{L\,\;V}{L\,\;V}$ (dihybride).
+  ④ Gamètes : chaque type de gamète sur sa propre ligne, avec son
+     POURCENTAGE en-dessous (50%, 100%, 25%…). Notation LaTeX :
+     $\dfrac{L}{}$ (un seul chromatide → un trait au-dessus,
+     vide en-dessous = un seul allèle dans le gamète).
+     Place chaque gamète dans une "box" pour simuler le cercle.
+  ⑤ Fécondation : OBLIGATOIREMENT via un échiquier (type=table). JAMAIS
+     en texte libre.
+  ⑥ Résultats F1 / F2 : phénotypes entre crochets + fractions + % :
+     [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
+
+EXEMPLE JSON (monohybridisme P1[L] × P2[r], génération F1) :
+<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Interprétation chromosomique du 1er croisement","lines":[
+  {"type":"subtitle","content":"Parents : P1 × P2"},
+  {"type":"math","content":"\\text{Phénotypes : }\\;[L]\\;\\times\\;[r]"},
+  {"type":"math","content":"\\text{Génotypes : }\\;\\dfrac{L}{L}\\;\\times\\;\\dfrac{r}{r}"},
+  {"type":"subtitle","content":"Gamètes (avec %)"},
+  {"type":"math","content":"P1\\to\\dfrac{L}{}\\;(100\\%)\\qquad P2\\to\\dfrac{r}{}\\;(100\\%)"},
+  {"type":"subtitle","content":"Fécondation (échiquier)"},
+  {"type":"table","content":"","headers":["♀ \\\\ ♂","r (100%)"],"rows":[["L (100%)","\\\\dfrac{L}{r}\\\\;[L]"]]},
+  {"type":"box","content":"F1 : 100% [L] hétérozygotes $\\dfrac{L}{r}$","color":"green"}
+]}}]}</ui>
+
+═══════════════════════════════════════════════════════════════════════
+2️⃣ ÉCHIQUIER DE CROISEMENT — TABLE OBLIGATOIRE
+═══════════════════════════════════════════════════════════════════════
+TOUJOURS via {"type":"table"}. Première colonne et première ligne =
+gamètes parentaux. Cellules = génotype en fraction LaTeX + phénotype
+entre crochets. Couleurs implicites par phénotype.
+
+▸ MONOHYBRIDISME F1×F1 (4 cases — 2 gamètes × 2 gamètes) :
+  headers = ["♀ \\ ♂","L (50%)","r (50%)"]
+  rows    = [
+    ["L (50%)","\\dfrac{L}{L}\\;[L]","\\dfrac{L}{r}\\;[L]"],
+    ["r (50%)","\\dfrac{L}{r}\\;[L]","\\dfrac{r}{r}\\;[r]"]
+  ]
+  → résultats : [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
+
+▸ DIHYBRIDISME F1×F1 GÈNES INDÉPENDANTS (16 cases — 4 gamètes × 4) :
+  headers = ["♀ \\ ♂","JL (25%)","Jr (25%)","vL (25%)","vr (25%)"]
+  rows = 4 lignes × 4 colonnes, chaque cellule = génotype dihybride en
+  fraction $\dfrac{ab}{cd}$ + phénotype [X,Y].
+  → résultats attendus :
+    [J,L] : 9/16 = 56,25 %    [J,r] : 3/16 = 18,75 %
+    [v,L] : 3/16 = 18,75 %    [v,r] : 1/16 = 6,25 %.
+
+▸ DIHYBRIDISME GÈNES LIÉS (test-cross) :
+  Si l'énoncé parle de gènes "liés"/"linkage"/"distance"/cM, les 4 types
+  de gamètes ne sont PAS équiprobables : 2 parentaux à pourcentage
+  élevé (chacun ~(100−d)/2 %), 2 recombinés à pourcentage faible
+  (chacun ~d/2 %), où d = distance en cM.
+
+═══════════════════════════════════════════════════════════════════════
+3️⃣ TABLEAU « RÉSULTATS THÉORIQUES vs EXPÉRIMENTAUX »
+═══════════════════════════════════════════════════════════════════════
+Quand l'énoncé fournit des effectifs observés, AJOUTE un second
+show_board avec :
+  headers = ["Phénotypes","Résultats théoriques","Résultats expérimentaux"]
+  rows[i] = ["[X]","75%","\\dfrac{n_i}{N}\\times 100 = X,XX\\%"]
+  Termine par {"type":"box","content":"Les résultats théoriques et
+  expérimentaux sont conformes" ou "non conformes (écart > 5 %)".}
+
+═══════════════════════════════════════════════════════════════════════
+4️⃣ CARTE FACTORIELLE (carte génétique)
+═══════════════════════════════════════════════════════════════════════
+Représente l'axe sous forme d'un trait horizontal avec les gènes en
+position échelonnée et les distances en cM ENTRE chaque gène.
+Format obligatoire :
+<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Carte factorielle — 1er cas","lines":[
+  {"type":"subtitle","content":"Échelle proposée : 1 cM ↔ 1 unité"},
+  {"type":"math","content":"\\underset{\\text{gène 1}}{\\bullet}\\;\\xleftrightarrow{6\\,\\text{cM}}\\;\\underset{\\text{gène 2}}{\\bullet}\\;\\xleftrightarrow{17\\,\\text{cM}}\\;\\underset{\\text{gène 3}}{\\bullet}"},
+  {"type":"note","content":"Distance gène 1 ↔ gène 3 = 6 + 17 = 23 cM (ordre déduit du % de recombinaison)."}
+]}}]}</ui>
+Si plusieurs ordres sont possibles, présente CHAQUE cas dans un sous-
+tableau séparé (1er cas / 2e cas / 3e cas) avec son propre axe.
+
+═══════════════════════════════════════════════════════════════════════
+5️⃣ CONVENTIONS DE NOTATION (à respecter strictement)
+═══════════════════════════════════════════════════════════════════════
+• Phénotype TOUJOURS entre crochets : [L], [r], [J,L], [v,r].
+• Génotype TOUJOURS en fraction LaTeX $\dfrac{...}{...}$ (jamais
+  L/L en ligne, jamais Ll en abrégé pour les BAC SVT BIOF).
+• Allèle dominant en MAJUSCULE, récessif en minuscule (ou les deux en
+  minuscule si l'énoncé le précise).
+• Gamète = un seul allèle au-dessus du trait : $\dfrac{L}{}$.
+• Pourcentage TOUJOURS écrit "X %" avec espace insécable.
+• Si l'élève demande "explique-moi étape par étape comme un élève
+  rédigerait sur sa copie BAC", suis l'ordre 1→2→3→4→5→6 ci-dessus
+  AVEC CALCULS littéraux PUIS valeurs numériques.
+
+⚠️ NE TRAITE JAMAIS les croisements en pseudo-code ASCII (« Ll x ll »).
+⚠️ NE PRODUIS JAMAIS l'échiquier en texte/markdown — TOUJOURS type=table.
+⚠️ NE FUSIONNE JAMAIS génotypes et phénotypes : ils apparaissent dans
+   des lignes distinctes du tableau.
+"""
+
+
 SYSTEM_PROMPT_TEMPLATE = """[ROLE]
 Tu es un PROFESSEUR EXPERT du Baccalauréat marocain (2ème BAC Sciences Physiques BIOF), spécialisé en {subject}.
 Tu as 15 ans d'expérience à préparer des élèves au BAC. Tu connais :
@@ -1384,6 +1505,35 @@ class LLMService:
         )
         return "\n".join(lines)
 
+    # ──────────────────────────────────────────────────────────────
+    #  Genetics-rendering protocol injector
+    # ──────────────────────────────────────────────────────────────
+    _GENETICS_TRIGGERS = (
+        "génétique", "genetique", "génotype", "genotype", "phénotype",
+        "phenotype", "croisement", "allèle", "allele", "monohybrid",
+        "dihybrid", "mendel", "carte factorielle", "carte génétique",
+        "carte genetique", "linkage", "liaison génétique", "liaison genetique",
+        "f1 ", " f1×", " f1x", "f2 ", " f2×", " f2x", "gamète", "gamete",
+        "test-cross", "test cross", "testcross", "brassage interchromos",
+        "chromosomes homologues", "récessif", "dominant", "hétérozygote",
+        "homozygote", "échiquier", "echiquier", "punnett",
+        "transmission héréditaire", "lois de mendel",
+    )
+
+    def _maybe_genetics_protocol(self, *texts: str) -> str:
+        """Return the genetics rendering protocol when any of the provided
+        text snippets (user query, chapter, lesson, objective…) triggers a
+        genetics keyword. Empty string otherwise. Injected in EVERY mode
+        (libre / explain / coaching) so the LLM produces BAC-style boards
+        consistently for monohybridisme, dihybridisme, carte factorielle.
+        """
+        blob = " ".join(t for t in texts if t).lower()
+        if not blob:
+            return ""
+        if any(t in blob for t in self._GENETICS_TRIGGERS):
+            return GENETICS_BOARD_PROTOCOL
+        return ""
+
     def build_libre_prompt(
         self,
         language: str = "français",
@@ -1493,6 +1643,15 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
         # prevents hallucinated percentages / off-program topics.
         if official_program_block:
             rag_section = official_program_block + ("\n\n" + rag_section if rag_section else "")
+
+        # ── Genetics rendering protocol (SVT BIOF) ─────────────────
+        # Injected at the TOP of rag_section when any genetics keyword is
+        # present in the query, so the LLM follows the strict BAC SVT
+        # board layout for croisements / cartes factorielles in every
+        # answer (libre + explain modes share this builder).
+        genetics_block = self._maybe_genetics_protocol(user_query)
+        if genetics_block:
+            rag_section = genetics_block + ("\n\n" + rag_section if rag_section else "")
 
         return LIBRE_MODE_PROMPT.format(
             language=language,
@@ -1796,7 +1955,19 @@ Quand tu expliques un concept, tu DOIS indiquer à l'étudiant:
 4. Le TYPE DE QUESTIONS attendues (QCM, raisonnement, schéma...)
 
 Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments prioritaires du cadre de référence."""
-        
+
+        # ── Genetics rendering protocol (SVT BIOF) ─────────────────
+        # Inject the strict BAC-style genetics board protocol whenever the
+        # current coaching context (subject/chapter/lesson/objective/scenario)
+        # involves genetics. Keeps croisements / échiquiers / cartes
+        # factorielles consistent across libre, explain AND coaching.
+        genetics_block = self._maybe_genetics_protocol(
+            subject if subject and subject.lower() == "svt" else "",
+            chapter_title, lesson_title, objective, scenario_context,
+        )
+        if genetics_block:
+            rag_section = genetics_block + "\n\n" + (rag_section or "")
+
         return SYSTEM_PROMPT_TEMPLATE.format(
             subject=subject,
             language=language,
