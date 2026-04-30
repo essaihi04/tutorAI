@@ -707,6 +707,32 @@ class SessionHandler:
                     for msg in self.conversation_history[-4:]
                     if isinstance(msg, dict) and msg.get("role") == "user" and isinstance(msg.get("content"), str)
                 ).strip()
+
+            # ── Explain mode: enrich user_query with the exam question +
+            #    correction content so keyword-driven prompt blocks (RAG,
+            #    genetics rendering protocol, exam stats…) fire on the
+            #    actual exam topic and not only on what the student typed.
+            #    Without this, a SVT genetics exam question would NOT
+            #    trigger GENETICS_BOARD_PROTOCOL because the student's
+            #    follow-ups ("explique-moi", "pourquoi ?") don't contain
+            #    any genetics keyword.
+            if self.session_mode == "explain":
+                try:
+                    scenario_raw = ctx.get("scenario", "") or ""
+                    if scenario_raw:
+                        sdata = (json.loads(scenario_raw)
+                                 if isinstance(scenario_raw, str)
+                                 else dict(scenario_raw))
+                        scenario_kw = " ".join(filter(None, [
+                            sdata.get("subject", ""),
+                            sdata.get("questionContent", ""),
+                            sdata.get("correction", ""),
+                        ]))[:1500]
+                        if scenario_kw:
+                            user_query = (user_query + " " + scenario_kw).strip()
+                except Exception:
+                    pass
+
             # Libre mode: use the multi-subject libre prompt (covers Math, Physics, Chemistry, SVT)
             base_prompt = llm_service.build_libre_prompt(
                 language=self._prompt_language(),
