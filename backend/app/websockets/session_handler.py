@@ -629,6 +629,42 @@ class SessionHandler:
             "Tu DOIS baser TOUTE ta correction et tes explications sur la "
             "CORRECTION OFFICIELLE ci-dessous, et non sur tes connaissances "
             "générales. NE T'ÉLOIGNE JAMAIS de cette question.",
+            "",
+            "🎓 [VERROU NIVEAU 2BAC PC BIOF — APPLICABLE AU CHAT ET AUX TABLEAUX <ui>/<board>]",
+            "Tu enseignes à un LYCÉEN 17-18 ans qui passe l'examen national marocain. "
+            "TOUTE explication, TOUTE formule, TOUTE notation, TOUTE démonstration "
+            "doit rester strictement dans les limites du programme officiel 2BAC PC BIOF.",
+            "",
+            "✓ AUTORISÉ : méthodes/formules/notations qui apparaissent dans la "
+            "correction officielle ci-dessous OU dans le manuel marocain officiel.",
+            "✗ INTERDIT (jargon supérieur — JAMAIS dans le chat NI dans le tableau) :",
+            "  • Maths : espace vectoriel, endomorphisme, polynôme caractéristique, "
+            "diagonalisation, dérivées partielles, séries entières, transformée "
+            "de Laplace/Fourier, jacobien, Hilbert, opérateur linéaire, ε-δ.",
+            "  • Physique : équation de Schrödinger, lagrangien, hamiltonien, "
+            "Euler-Lagrange, équations de Maxwell, transformations de Lorentz, "
+            "relativité restreinte, ∇·, ∇×, opérateurs vectoriels avancés.",
+            "  • Chimie : équation de Nernst, Henderson-Hasselbalch, énergie libre "
+            "de Gibbs, ΔG/ΔS, mécanismes SN1/SN2/E1/E2, RMN, VSEPR, orbitales "
+            "hybrides, diagramme E-pH, cristallographie.",
+            "  • SVT : photosynthèse, cycle de Calvin, immunologie, cycle menstruel, "
+            "PCR/CRISPR, Hardy-Weinberg, sélection naturelle.",
+            "",
+            "🔒 RÈGLE D'OR — la correction officielle ci-dessous est PLAFOND ET PLANCHER :",
+            "- Tu ne donnes JAMAIS une démonstration plus rigoureuse / générale / "
+            "élégante que la correction officielle. Si la correction utilise une "
+            "méthode lycée, tu utilises CETTE méthode-là, pas une variante sup.",
+            "- Tu ne réécris pas la formule en notation plus avancée (ex : ne "
+            "remplace pas $\\frac{dy}{dx}$ par $\\partial_x y$, ne remplace pas "
+            "$\\vec{F}$ par $F^\\mu$, ne remplace pas $K_a$ par une activité "
+            "thermodynamique).",
+            "- Si la correction est silencieuse sur un détail, tu DIS qu'elle est "
+            "silencieuse — tu ne complètes PAS avec une dérivation universitaire.",
+            "- Si l'élève demande une « méthode plus générale / plus rigoureuse », "
+            "tu refuses poliment : « Pour le BAC tu ne dois maîtriser QUE cette "
+            "méthode du programme. La version plus générale est universitaire et "
+            "te ferait perdre du temps le jour J. »",
+            "",
         ]
         if exam_title:
             lines.append(f"📚 Examen : {exam_title}" + (f" ({subject})" if subject else ""))
@@ -657,6 +693,8 @@ class SessionHandler:
         lines.append("- Quand l'élève demande « pourquoi », « explique cette étape », « un autre exemple », tu réponds en t'appuyant DIRECTEMENT sur la correction officielle ci-dessus.")
         lines.append("- Tu cites la réponse de l'élève entre guillemets avant de la critiquer ou féliciter.")
         lines.append("- Tu n'inventes JAMAIS d'éléments absents de la correction officielle ; si la correction est silencieuse sur un détail, dis-le.")
+        lines.append("- Le contenu des tableaux <ui>/<board> doit OBLIGATOIREMENT respecter le verrou niveau 2BAC ci-dessus (formules, notations, vocabulaire).")
+        lines.append("- Une « version modèle » ou « rédaction parfaite » que tu donnes ne doit JAMAIS être plus avancée que la correction officielle. C'est un copier-coller stylisé du programme, pas une généralisation.")
         return "\n".join(lines)
 
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
