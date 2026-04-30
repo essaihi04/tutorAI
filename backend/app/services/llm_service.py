@@ -183,7 +183,7 @@ EXEMPLE JSON COMPLET — DIHYBRIDE INDÉPENDANT P1[J,L] × P2[v,r] → F1
   {"type":"math","content":"P1\\to\\;\\dfrac{J}{}\\,\\dfrac{L}{}\\;(100\\,\\%)"},
   {"type":"math","content":"P2\\to\\;\\dfrac{v}{}\\,\\dfrac{r}{}\\;(100\\,\\%)"},
   {"type":"subtitle","content":"Fécondation"},
-  {"type":"table","content":"","headers":["♀ \\\\ ♂","\\\\dfrac{v}{}\\\\,\\\\dfrac{r}{}\\\\;(100\\\\,\\\\%)"],"rows":[["\\\\dfrac{J}{}\\\\,\\\\dfrac{L}{}\\\\;(100\\\\,\\\\%)","\\\\dfrac{J}{v}\\\\,\\\\dfrac{L}{r}\\\\;[J,L]"]]},
+  {"type":"table","content":"","headers":["♀ \\\\ ♂","\\dfrac{v}{}\\,\\dfrac{r}{}\\;(100\\,\\%)"],"rows":[["\\dfrac{J}{}\\,\\dfrac{L}{}\\;(100\\,\\%)","\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]"]]},
   {"type":"box","content":"F1 : 100 % [J,L] doubles hétérozygotes","color":"green"}
 ]}}]}</ui>
 
@@ -203,9 +203,42 @@ entre crochets sur la MÊME cellule.
   → [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
 
 ▸ DIHYBRIDISME INDÉPENDANT F1×F1 (16 cases) :
-  headers = ["♀ \\ ♂","\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25 %)","\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25 %)","\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25 %)","\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25 %)"]
-  Chaque cellule = `\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]` (génotype
-  dihybride DEUX fractions juxtaposées + phénotype).
+  ⚠️ EXEMPLE JSON COMPLET — copie cette structure EXACTEMENT, en
+  remplaçant J/v et L/r par les allèles de l'énoncé. CHAQUE cellule
+  contient DEUX `\\dfrac` juxtaposés + le phénotype entre crochets.
+  AUCUNE cellule en ASCII (« J/J », « J//J », « J;J », « JJ ») —
+  uniquement du LaTeX `\\dfrac`.
+<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Échiquier de croisement F1 × F1","lines":[
+  {"type":"table","content":"","headers":[
+    "♀ \\\\ ♂",
+    "\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+    "\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+    "\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+    "\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"
+  ],"rows":[
+    ["\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{J}\\,\\dfrac{L}{L}\\;[J,L]",
+     "\\dfrac{J}{J}\\,\\dfrac{L}{r}\\;[J,L]",
+     "\\dfrac{J}{v}\\,\\dfrac{L}{L}\\;[J,L]",
+     "\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]"],
+    ["\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{J}\\,\\dfrac{L}{r}\\;[J,L]",
+     "\\dfrac{J}{J}\\,\\dfrac{r}{r}\\;[J,r]",
+     "\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]",
+     "\\dfrac{J}{v}\\,\\dfrac{r}{r}\\;[J,r]"],
+    ["\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{v}\\,\\dfrac{L}{L}\\;[J,L]",
+     "\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]",
+     "\\dfrac{v}{v}\\,\\dfrac{L}{L}\\;[v,L]",
+     "\\dfrac{v}{v}\\,\\dfrac{L}{r}\\;[v,L]"],
+    ["\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]",
+     "\\dfrac{J}{v}\\,\\dfrac{r}{r}\\;[J,r]",
+     "\\dfrac{v}{v}\\,\\dfrac{L}{r}\\;[v,L]",
+     "\\dfrac{v}{v}\\,\\dfrac{r}{r}\\;[v,r]"]
+  ]},
+  {"type":"box","content":"Proportions F2 — [J,L] : 9/16 = 56,25 %  |  [J,r] : 3/16 = 18,75 %  |  [v,L] : 3/16 = 18,75 %  |  [v,r] : 1/16 = 6,25 %","color":"orange"}
+]}}]}</ui>
   → [J,L] : 9/16 = 56,25 %    [J,r] : 3/16 = 18,75 %
   → [v,L] : 3/16 = 18,75 %    [v,r] : 1/16 = 6,25 %.
 
