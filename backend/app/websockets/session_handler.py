@@ -704,6 +704,11 @@ class SessionHandler:
         lines.append("- Justification → « Cela s'explique par le fait que… », « En effet,… », « Car… ».")
         lines.append("- Dans un TABLEAU comparatif, chaque cellule « Réponse modèle » est UNE PHRASE COMPLÈTE (sujet + verbe + complément). Mots-clés isolés (« mitose », « prophase », « plus rapide ») = INTERDIT.")
         lines.append("- Chaque ligne du tableau traite UN critère DIFFÉRENT — interdit de répéter le même élément de réponse sur plusieurs lignes.")
+        lines.append("")
+        lines.append("🧬 RÈGLE GÉNÉTIQUE (si la question porte sur un croisement / hérédité) :")
+        lines.append("- L'interprétation chromosomique va OBLIGATOIREMENT dans un bloc <ui> show_board, avec : phénotypes, génotypes en `\\\\dfrac`, gamètes, ÉCHIQUIER de fécondation en `type=table`, résultats. Cf. PROTOCOLE_GÉNÉTIQUE en haut.")
+        lines.append("- INTERDIT dans le texte parlé OU dans les cellules : notations ASCII type `DO//dø`, `D O / d o`, `J/J;L/L`. Uniquement du LaTeX `\\\\dfrac{D}{d}\\\\,\\\\dfrac{O}{o}` (2 backslashes JSON).")
+        lines.append("- La rédaction texte (« On constate que… », « On en déduit que… ») COEXISTE avec l'échiquier <ui> ; elle ne le remplace pas.")
         return "\n".join(lines)
 
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
@@ -1950,6 +1955,12 @@ STRUCTURE OBLIGATOIRE (texte HORS des balises) :
    - Chaque idée = une phrase complète sujet + verbe + complément. PAS de listes de mots-clés type « mitose, prophase, fuseau ».
    - Si la question demande une COMPARAISON, structure la rédaction en 2 temps : (a) « On remarque que [élément 1] présente … alors que [élément 2] présente … », (b) « On en déduit que … ».
    - Si la question demande d'EXPLIQUER un mécanisme, rédige un paragraphe enchaîné de 3 à 5 phrases, pas une liste à puces sans verbes.
+
+   🧬 EXCEPTION GÉNÉTIQUE — si la question concerne un CROISEMENT (monohybridisme, dihybridisme, test-cross, gènes liés, carte factorielle, F1/F2, échiquier de fécondation) :
+   - Ta rédaction texte reste OBLIGATOIRE (« On constate que… », « On en déduit que… »)
+   - MAIS elle DOIT être ACCOMPAGNÉE d'un bloc `<ui>{{"actions":[{{"type":"whiteboard","action":"show_board","payload":{{...}}}}]}}</ui>` contenant l'interprétation chromosomique COMPLÈTE — Parents → Génotypes en `\\\\dfrac` → Gamètes → Échiquier de fécondation en `type=table` → Résultats — conformément au PROTOCOLE_GÉNÉTIQUE injecté en haut de ton contexte.
+   - JAMAIS de notation ASCII inline type `DO//dø`, `dø/`, `D O / d o` — UNIQUEMENT du LaTeX `\\\\dfrac{{D}}{{d}}\\\\,\\\\dfrac{{O}}{{o}}` (échappement JSON `\\\\dfrac`) dans les cellules du tableau.
+   - Le texte parlé décrit ; le tableau VISUALISE. Les deux sont REQUIS.
 
 5. **Concept du cours à retenir** — relie les erreurs à un mécanisme/définition/loi précis. Pas de vague.
 
