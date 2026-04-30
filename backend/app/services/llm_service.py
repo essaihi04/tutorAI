@@ -105,38 +105,73 @@ GENETICS_BOARD_PROTOCOL = r"""[PROTOCOLE_GÉNÉTIQUE — RENDU TABLEAU OBLIGATOI
 Détecté : la question porte sur la génétique mendélienne (croisement,
 génotype, phénotype, gamètes, monohybridisme, dihybridisme, carte
 factorielle, F1/F2, mendel, allèle, brassage). Tu DOIS suivre EXACTEMENT
-le rendu officiel des corrections d'examen national marocain :
+le rendu officiel des corrections d'examen national marocain.
+
+🚨 RÈGLE ZÉRO — INTERDICTION ABSOLUE DU TEXTE INLINE :
+Tout croisement, toute interprétation chromosomique, tout échiquier,
+toute carte factorielle DOIT apparaître dans un bloc
+<ui>{"actions":[{"type":"whiteboard","action":"show_board",...}]}</ui>.
+JAMAIS dans le texte parlé, JAMAIS en markdown inline, JAMAIS comme
+« Parents : [vg ; b] × [vg+ ; b+] // Génotypes : vg b // vg b ».
+Le texte parlé ne contient que les explications pédagogiques ; les
+chromosomes vont DANS LE TABLEAU.
 
 ═══════════════════════════════════════════════════════════════════════
-1️⃣ INTERPRÉTATION CHROMOSOMIQUE — STRUCTURE OBLIGATOIRE
+1️⃣ INTERPRÉTATION CHROMOSOMIQUE — STRUCTURE VISUELLE OBLIGATOIRE
 ═══════════════════════════════════════════════════════════════════════
-Pour CHAQUE croisement (P1×P2, F1×F1, test-cross…) tu produis dans CET
-ORDRE et dans un seul <ui> show_board avec ces lignes :
+Pour CHAQUE croisement (P1×P2, F1×F1, test-cross…) tu produis UN seul
+<ui> show_board avec ces lignes DANS CET ORDRE :
   ① Titre : "Interprétation chromosomique du Xᵉᵐᵉ croisement"
-  ② Parents : phénotypes entre crochets [L] x [r]
-  ③ Génotypes : représentation chromosomique en FRACTION LaTeX qui
-     simule les DEUX chromosomes homologues (deux barres horizontales).
-     Format : $\dfrac{L}{L}$  ou  $\dfrac{L\,\;V}{L\,\;V}$ (dihybride).
-  ④ Gamètes : chaque type de gamète sur sa propre ligne, avec son
-     POURCENTAGE en-dessous (50%, 100%, 25%…). Notation LaTeX :
-     $\dfrac{L}{}$ (un seul chromatide → un trait au-dessus,
-     vide en-dessous = un seul allèle dans le gamète).
-     Place chaque gamète dans une "box" pour simuler le cercle.
-  ⑤ Fécondation : OBLIGATOIREMENT via un échiquier (type=table). JAMAIS
-     en texte libre.
+  ② Parents : phénotypes entre crochets `[L]` × `[r]` (virgule à
+     l'intérieur si dihybride : `[J,L]`, JAMAIS de point-virgule).
+  ③ Génotypes : représentation EN FRACTION LaTeX qui simule les DEUX
+     chromosomes homologues (DEUX barres horizontales, une par chromosome).
+  ④ Gamètes : chaque type de gamète SUR SA PROPRE LIGNE avec son
+     pourcentage en-dessous (jamais en liste séparée par des virgules ou
+     des « + » dans le texte). Place dans un `box` pour simuler le cercle.
+  ⑤ Fécondation : OBLIGATOIREMENT via un échiquier `type=table`. JAMAIS
+     en texte libre, JAMAIS comme « X × Y → Z » dans la phrase.
   ⑥ Résultats F1 / F2 : phénotypes entre crochets + fractions + % :
-     [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
+     `[L] : 3/4 = 75 %`    `[r] : 1/4 = 25 %`.
 
-EXEMPLE JSON (monohybridisme P1[L] × P2[r], génération F1) :
+────────────────────────────────────────────────────────────────────────
+🎯 NOTATION GÉNOTYPIQUE — RÈGLE FONDAMENTALE
+────────────────────────────────────────────────────────────────────────
+▸ MONOHYBRIDE (1 gène, 1 paire de chromosomes homologues) :
+    `\dfrac{L}{L}` (homozygote dominant), `\dfrac{L}{r}` (hétérozygote),
+    `\dfrac{r}{r}` (homozygote récessif).
+
+▸ DIHYBRIDE GÈNES INDÉPENDANTS (gènes sur 2 paires de chromosomes
+  différentes — cas par défaut) :
+    DEUX fractions juxtaposées, séparées par un espace :
+    `\dfrac{J}{J}\;\;\dfrac{L}{L}` (homozygote [J,L])
+    `\dfrac{J}{v}\;\;\dfrac{L}{r}` (double hétérozygote F1)
+    👉 Reproduit visuellement deux PAIRES de chromosomes côte à côte,
+       comme dans la correction officielle BAC.
+
+▸ DIHYBRIDE GÈNES LIÉS (mêmes chromosomes — quand énoncé mentionne
+  « liés », « linkage », « distance », cM, recombinaison) :
+    UNE seule fraction avec les deux allèles sur la même barre :
+    `\dfrac{J\;L}{J\;L}`  ou  `\dfrac{J\;L}{v\;r}` (parental)
+    `\dfrac{J\;r}{v\;L}` (recombiné).
+
+⛔ INTERDIT : `\dfrac{JL}{JL}` (allèles collés sans espace),
+   `vg b // vg b` (notation linéaire), `[vg ; b]` (point-virgule),
+   `Ll` (notation abrégée), `J/J  L/L` (slash sans fraction LaTeX).
+
+────────────────────────────────────────────────────────────────────────
+EXEMPLE JSON COMPLET — DIHYBRIDE INDÉPENDANT P1[J,L] × P2[v,r] → F1
+────────────────────────────────────────────────────────────────────────
 <ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Interprétation chromosomique du 1er croisement","lines":[
   {"type":"subtitle","content":"Parents : P1 × P2"},
-  {"type":"math","content":"\\text{Phénotypes : }\\;[L]\\;\\times\\;[r]"},
-  {"type":"math","content":"\\text{Génotypes : }\\;\\dfrac{L}{L}\\;\\times\\;\\dfrac{r}{r}"},
+  {"type":"math","content":"\\text{Phénotypes : }\\;[J,L]\\;\\times\\;[v,r]"},
+  {"type":"math","content":"\\text{Génotypes : }\\;\\dfrac{J}{J}\\,\\dfrac{L}{L}\\;\\times\\;\\dfrac{v}{v}\\,\\dfrac{r}{r}"},
   {"type":"subtitle","content":"Gamètes (avec %)"},
-  {"type":"math","content":"P1\\to\\dfrac{L}{}\\;(100\\%)\\qquad P2\\to\\dfrac{r}{}\\;(100\\%)"},
-  {"type":"subtitle","content":"Fécondation (échiquier)"},
-  {"type":"table","content":"","headers":["♀ \\\\ ♂","r (100%)"],"rows":[["L (100%)","\\\\dfrac{L}{r}\\\\;[L]"]]},
-  {"type":"box","content":"F1 : 100% [L] hétérozygotes $\\dfrac{L}{r}$","color":"green"}
+  {"type":"math","content":"P1\\to\\;\\dfrac{J}{}\\,\\dfrac{L}{}\\;(100\\,\\%)"},
+  {"type":"math","content":"P2\\to\\;\\dfrac{v}{}\\,\\dfrac{r}{}\\;(100\\,\\%)"},
+  {"type":"subtitle","content":"Fécondation"},
+  {"type":"table","content":"","headers":["♀ \\\\ ♂","\\\\dfrac{v}{}\\\\,\\\\dfrac{r}{}\\\\;(100\\\\,\\\\%)"],"rows":[["\\\\dfrac{J}{}\\\\,\\\\dfrac{L}{}\\\\;(100\\\\,\\\\%)","\\\\dfrac{J}{v}\\\\,\\\\dfrac{L}{r}\\\\;[J,L]"]]},
+  {"type":"box","content":"F1 : 100 % [J,L] doubles hétérozygotes","color":"green"}
 ]}}]}</ui>
 
 ═══════════════════════════════════════════════════════════════════════
@@ -144,72 +179,76 @@ EXEMPLE JSON (monohybridisme P1[L] × P2[r], génération F1) :
 ═══════════════════════════════════════════════════════════════════════
 TOUJOURS via {"type":"table"}. Première colonne et première ligne =
 gamètes parentaux. Cellules = génotype en fraction LaTeX + phénotype
-entre crochets. Couleurs implicites par phénotype.
+entre crochets sur la MÊME cellule.
 
-▸ MONOHYBRIDISME F1×F1 (4 cases — 2 gamètes × 2 gamètes) :
-  headers = ["♀ \\ ♂","L (50%)","r (50%)"]
+▸ MONOHYBRIDISME F1×F1 (4 cases) :
+  headers = ["♀ \\ ♂","L (50 %)","r (50 %)"]
   rows    = [
-    ["L (50%)","\\dfrac{L}{L}\\;[L]","\\dfrac{L}{r}\\;[L]"],
-    ["r (50%)","\\dfrac{L}{r}\\;[L]","\\dfrac{r}{r}\\;[r]"]
+    ["L (50 %)","\\dfrac{L}{L}\\;[L]","\\dfrac{L}{r}\\;[L]"],
+    ["r (50 %)","\\dfrac{L}{r}\\;[L]","\\dfrac{r}{r}\\;[r]"]
   ]
-  → résultats : [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
+  → [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
 
-▸ DIHYBRIDISME F1×F1 GÈNES INDÉPENDANTS (16 cases — 4 gamètes × 4) :
-  headers = ["♀ \\ ♂","JL (25%)","Jr (25%)","vL (25%)","vr (25%)"]
-  rows = 4 lignes × 4 colonnes, chaque cellule = génotype dihybride en
-  fraction $\dfrac{ab}{cd}$ + phénotype [X,Y].
-  → résultats attendus :
-    [J,L] : 9/16 = 56,25 %    [J,r] : 3/16 = 18,75 %
-    [v,L] : 3/16 = 18,75 %    [v,r] : 1/16 = 6,25 %.
+▸ DIHYBRIDISME INDÉPENDANT F1×F1 (16 cases) :
+  headers = ["♀ \\ ♂","\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25 %)","\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25 %)","\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25 %)","\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25 %)"]
+  Chaque cellule = `\\dfrac{J}{v}\\,\\dfrac{L}{r}\\;[J,L]` (génotype
+  dihybride DEUX fractions juxtaposées + phénotype).
+  → [J,L] : 9/16 = 56,25 %    [J,r] : 3/16 = 18,75 %
+  → [v,L] : 3/16 = 18,75 %    [v,r] : 1/16 = 6,25 %.
 
 ▸ DIHYBRIDISME GÈNES LIÉS (test-cross) :
-  Si l'énoncé parle de gènes "liés"/"linkage"/"distance"/cM, les 4 types
-  de gamètes ne sont PAS équiprobables : 2 parentaux à pourcentage
-  élevé (chacun ~(100−d)/2 %), 2 recombinés à pourcentage faible
-  (chacun ~d/2 %), où d = distance en cM.
+  Les 4 gamètes NE sont PAS équiprobables. Si distance recombinaison
+  d (en %), alors :
+    • 2 gamètes parentaux : chacun (100−d)/2 %
+    • 2 gamètes recombinés : chacun d/2 %
+  Notation gamètes : `\\dfrac{J\\;L}{}` (parental), `\\dfrac{J\\;r}{}` (recombiné).
 
 ═══════════════════════════════════════════════════════════════════════
 3️⃣ TABLEAU « RÉSULTATS THÉORIQUES vs EXPÉRIMENTAUX »
 ═══════════════════════════════════════════════════════════════════════
-Quand l'énoncé fournit des effectifs observés, AJOUTE un second
-show_board avec :
+Quand l'énoncé fournit des effectifs observés, AJOUTE un SECOND show_board :
   headers = ["Phénotypes","Résultats théoriques","Résultats expérimentaux"]
-  rows[i] = ["[X]","75%","\\dfrac{n_i}{N}\\times 100 = X,XX\\%"]
+  rows[i] = ["[X]","75 %","\\dfrac{n_i}{N}\\times 100 = X,XX\\,\\%"]
   Termine par {"type":"box","content":"Les résultats théoriques et
-  expérimentaux sont conformes" ou "non conformes (écart > 5 %)".}
+  expérimentaux sont conformes (écart < 5 %)."} ou non conformes.
 
 ═══════════════════════════════════════════════════════════════════════
 4️⃣ CARTE FACTORIELLE (carte génétique)
 ═══════════════════════════════════════════════════════════════════════
-Représente l'axe sous forme d'un trait horizontal avec les gènes en
-position échelonnée et les distances en cM ENTRE chaque gène.
-Format obligatoire :
+Axe horizontal avec gènes échelonnés et distances en cM ENTRE chaque
+gène. Échelle proposée explicitement.
 <ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Carte factorielle — 1er cas","lines":[
   {"type":"subtitle","content":"Échelle proposée : 1 cM ↔ 1 unité"},
   {"type":"math","content":"\\underset{\\text{gène 1}}{\\bullet}\\;\\xleftrightarrow{6\\,\\text{cM}}\\;\\underset{\\text{gène 2}}{\\bullet}\\;\\xleftrightarrow{17\\,\\text{cM}}\\;\\underset{\\text{gène 3}}{\\bullet}"},
-  {"type":"note","content":"Distance gène 1 ↔ gène 3 = 6 + 17 = 23 cM (ordre déduit du % de recombinaison)."}
+  {"type":"note","content":"Distance gène 1 ↔ gène 3 = 6 + 17 = 23 cM."}
 ]}}]}</ui>
-Si plusieurs ordres sont possibles, présente CHAQUE cas dans un sous-
-tableau séparé (1er cas / 2e cas / 3e cas) avec son propre axe.
+Plusieurs ordres possibles → un sous-tableau par cas (1er / 2e / 3e cas).
 
 ═══════════════════════════════════════════════════════════════════════
 5️⃣ CONVENTIONS DE NOTATION (à respecter strictement)
 ═══════════════════════════════════════════════════════════════════════
-• Phénotype TOUJOURS entre crochets : [L], [r], [J,L], [v,r].
-• Génotype TOUJOURS en fraction LaTeX $\dfrac{...}{...}$ (jamais
-  L/L en ligne, jamais Ll en abrégé pour les BAC SVT BIOF).
-• Allèle dominant en MAJUSCULE, récessif en minuscule (ou les deux en
-  minuscule si l'énoncé le précise).
-• Gamète = un seul allèle au-dessus du trait : $\dfrac{L}{}$.
-• Pourcentage TOUJOURS écrit "X %" avec espace insécable.
-• Si l'élève demande "explique-moi étape par étape comme un élève
-  rédigerait sur sa copie BAC", suis l'ordre 1→2→3→4→5→6 ci-dessus
-  AVEC CALCULS littéraux PUIS valeurs numériques.
+✓ Phénotype : crochets, virgules pour le dihybride : `[L]`, `[J,L]`.
+✓ Génotype mono : fraction unique `\dfrac{L}{r}`.
+✓ Génotype dihybride INDÉPENDANT : DEUX fractions juxtaposées
+  `\dfrac{J}{v}\,\dfrac{L}{r}`.
+✓ Génotype dihybride LIÉ : une fraction `\dfrac{J\;L}{v\;r}`.
+✓ Gamète : un allèle au-dessus, vide en dessous : `\dfrac{L}{}`.
+  Dihybride indépendant : `\dfrac{J}{}\,\dfrac{L}{}`.
+✓ Allèle dominant en MAJUSCULE, récessif en minuscule (sauf si
+  l'énoncé fixe une autre convention).
+✓ Pourcentage : « X % » avec espace insécable (`X\,\%` en LaTeX).
+✓ Quand l'élève demande « rédige comme un élève sur sa copie BAC »,
+  produis 1→2→3→4→5→6 dans l'ordre AVEC calculs littéraux PUIS
+  valeurs numériques.
 
-⚠️ NE TRAITE JAMAIS les croisements en pseudo-code ASCII (« Ll x ll »).
-⚠️ NE PRODUIS JAMAIS l'échiquier en texte/markdown — TOUJOURS type=table.
-⚠️ NE FUSIONNE JAMAIS génotypes et phénotypes : ils apparaissent dans
-   des lignes distinctes du tableau.
+⛔ JAMAIS de notation linéaire `vg b // vg b × vg+ b+ // vg+ b+`.
+⛔ JAMAIS de point-virgule à l'intérieur des crochets `[a ; b]` → `[a,b]`.
+⛔ JAMAIS d'allèles collés `\dfrac{JL}{JL}` → `\dfrac{J}{J}\,\dfrac{L}{L}`.
+⛔ JAMAIS d'échiquier en markdown / pipes `|` → toujours `type=table`.
+⛔ JAMAIS de gamètes listés inline « 40,5 % vg+ b+ + 9,5 % vg+ b » →
+   chaque gamète sur sa propre ligne `math` du show_board.
+⛔ JAMAIS génotypes et phénotypes fusionnés sur la même ligne `math`
+   (sauf cellule d'échiquier où ils cohabitent par convention).
 """
 
 
