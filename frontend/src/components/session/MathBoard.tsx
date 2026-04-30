@@ -111,7 +111,22 @@ function renderMixedContent(text: string): string {
   // First convert \(...\) to $...$ and \[...\] to $$...$$ for uniform handling
   cleaned = cleaned.replace(/\\\((.+?)\\\)/g, (_, m) => `$${m}$`);
   cleaned = cleaned.replace(/\\\[(.+?)\\\]/g, (_, m) => `$$${m}$$`);
-  
+
+  // Auto-wrap bare LaTeX commands (no $ delimiters around them).
+  // Critical for genetics boards where the LLM emits cells like
+  //   "\dfrac{L}{L} [L]"  or  "\dfrac{g+}{}\,\dfrac{vg}{vg}\;[g+,vg]"
+  // without any $...$ wrappers. Without this, the backslashes are
+  // HTML-escaped and the user sees raw "\dfrac{L}{L}" as text.
+  if (!/\$/.test(cleaned)) {
+    // List of common LaTeX commands the LLM emits in board cells.
+    const LATEX_CMD_RE = /\\(?:d?frac|tfrac|cfrac|sqrt|text|mathrm|mathbb|mathbf|sum|prod|int|left|right|cdot|times|to|leftarrow|rightarrow|alpha|beta|gamma|delta|sigma|theta|phi|pi|lambda|mu|;|,|:|!|quad|qquad)\b/;
+    if (LATEX_CMD_RE.test(cleaned)) {
+      // Wrap the whole cell as inline LaTeX. Plain text fragments
+      // like "[L]" still render correctly inside KaTeX text mode.
+      cleaned = `$${cleaned}$`;
+    }
+  }
+
   // Split on $$...$$ (display) and $...$ (inline) patterns
   const parts = cleaned.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g);
   return parts.map(part => {
@@ -424,7 +439,7 @@ function AnimatedTable({ line }: { line: BoardLine }) {
                       borderRight: ci < rowArray.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
                       fontSize: '0.95rem',
                     }}
-                    dangerouslySetInnerHTML={{ __html: renderMixedContent(cell) }}
+                    dangerouslySetInnerHTML={{ __html: renderMixedContent(String(cell ?? '')) }}
                   />
                 ))}
               </tr>
