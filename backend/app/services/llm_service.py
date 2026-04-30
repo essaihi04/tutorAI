@@ -116,6 +116,19 @@ JAMAIS dans le texte parlé, JAMAIS en markdown inline, JAMAIS comme
 Le texte parlé ne contient que les explications pédagogiques ; les
 chromosomes vont DANS LE TABLEAU.
 
+🚨 RÈGLE ANTI-BOUCLE — INTERDICTION DE PADDING LATEX :
+N'utilise JAMAIS de séquences répétées de `\;` ou `\quad` ou espaces
+pour « centrer » ou « aligner ». MAXIMUM 3 `\;` consécutifs dans un
+même `content`. Pour aligner les gamètes, utilise des LIGNES `math`
+SÉPARÉES, pas du padding. Si tu commences à répéter `\;\;\;\;...`,
+ARRÊTE-TOI immédiatement et coupe la ligne en plusieurs entrées.
+
+🚨 RÈGLE JSON — ÉCHAPPEMENT DES BACKSLASHES :
+Dans les `headers` et les cellules de `rows`, utilise EXACTEMENT
+`\\dfrac` (deux backslashes en JSON) — JAMAIS `\\\\dfrac` (quatre).
+Le rendu attendu après parsing JSON est `\dfrac{a}{b}`. Si tu
+sur-échappes, le tableau s'affiche mal côté frontend.
+
 ═══════════════════════════════════════════════════════════════════════
 1️⃣ INTERPRÉTATION CHROMOSOMIQUE — STRUCTURE VISUELLE OBLIGATOIRE
 ═══════════════════════════════════════════════════════════════════════
