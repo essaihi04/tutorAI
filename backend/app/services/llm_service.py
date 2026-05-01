@@ -118,10 +118,32 @@ chromosomes vont DANS LE TABLEAU.
 
 🚨 RÈGLE ANTI-BOUCLE — INTERDICTION DE PADDING LATEX :
 N'utilise JAMAIS de séquences répétées de `\;` ou `\quad` ou espaces
-pour « centrer » ou « aligner ». MAXIMUM 3 `\;` consécutifs dans un
-même `content`. Pour aligner les gamètes, utilise des LIGNES `math`
-SÉPARÉES, pas du padding. Si tu commences à répéter `\;\;\;\;...`,
-ARRÊTE-TOI immédiatement et coupe la ligne en plusieurs entrées.
+pour « centrer » ou « aligner ». MAXIMUM 2 `\;` consécutifs dans un
+même `content`. Si tu commences à répéter `\;\;\;\;...`, ARRÊTE-TOI
+immédiatement — c'est une catastrophe qui corrompt tout le bloc <ui>
+et fait que l'élève ne voit RIEN.
+
+🚨 RÈGLE GAMÈTES — INTERDICTION ABSOLUE DES 4 GAMÈTES SUR 1 LIGNE :
+Pour afficher les 4 gamètes d'un dihybride (ou les 2 d'un monohybride),
+tu as DEUX options autorisées et UNE option INTERDITE :
+
+  ✅ OPTION A — UNE LIGNE `math` PAR GAMÈTE :
+     {"type":"math","content":"P\\to\\;\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)"},
+     {"type":"math","content":"P\\to\\;\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"},
+     {"type":"math","content":"P\\to\\;\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)"},
+     {"type":"math","content":"P\\to\\;\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"}
+
+  ✅ OPTION B — UN `table` AVEC 1 ROW DE 4 CELLULES :
+     {"type":"table","headers":["Gamète 1","Gamète 2","Gamète 3","Gamète 4"],
+      "rows":[["\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+               "\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+               "\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+               "\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"]]}
+
+  ⛔ OPTION C — INTERDITE — 4 gamètes alignés avec `\;` sur UNE ligne :
+     {"type":"math","content":"\\dfrac{J}{}\\,\\dfrac{L}{}\\;\\;\\;\\;\\dfrac{J}{}..."}
+     ↑ NE FAIS JAMAIS ÇA. Le LLM rentre en boucle sur `\;` et coupe
+       toute la suite du <ui>, l'élève ne voit aucun tableau.
 
 🚨 RÈGLE JSON — ÉCHAPPEMENT DES BACKSLASHES :
 Dans les `headers` et les cellules de `rows`, utilise EXACTEMENT

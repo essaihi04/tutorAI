@@ -113,9 +113,58 @@ def _escape_bare_backslashes(s: str) -> str:
     return "".join(out)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Anti-padding loop sanitizer
+# ─────────────────────────────────────────────────────────────────────
+# Some LLM turns enter a degenerate generation loop where they emit
+# hundreds of ``\;`` (LaTeX thin spaces) in a single cell to align
+# gametes visually.  This eats the entire ``max_tokens`` budget and the
+# closing ``</ui>`` is never reached → JSON unparseable → board never
+# displayed.  We collapse any run of ≥4 LaTeX padding tokens to 2.
+# Applied BOTH to the raw JSON text (before parsing, in case the run
+# happens inside a string value) AND to the parsed cell strings.
+_RAW_LATEX_SPACE_RUN = re.compile(r"(?:\\\\;){4,}")
+_RAW_LATEX_THIN_RUN = re.compile(r"(?:\\\\,){10,}")
+_RAW_LATEX_QUAD_RUN = re.compile(r"(?:\\\\quad){4,}")
+_PARSED_LATEX_SPACE_RUN = re.compile(r"(?:\\;){4,}")
+_PARSED_LATEX_THIN_RUN = re.compile(r"(?:\\,){10,}")
+_PARSED_LATEX_QUAD_RUN = re.compile(r"(?:\\quad){4,}")
+
+
+def _collapse_latex_padding_raw(s: str) -> str:
+    """Compress runs of ``\\;`` / ``\\,`` / ``\\quad`` inside the raw
+    JSON text (each backslash is doubled because we're pre-parse).
+
+    Example: ``\\;\\;\\;\\;\\;\\;`` (12 raw chars → 6 LaTeX spaces)
+    collapses to ``\\;\\;`` (4 raw chars → 2 LaTeX spaces).
+    """
+    if not s:
+        return s
+    s = _RAW_LATEX_SPACE_RUN.sub(r"\\\\;\\\\;", s)
+    s = _RAW_LATEX_THIN_RUN.sub(r"\\\\,\\\\,", s)
+    s = _RAW_LATEX_QUAD_RUN.sub(r"\\\\quad\\\\quad", s)
+    return s
+
+
+def _collapse_latex_padding_parsed(s: str) -> str:
+    """Same collapse, but on already-parsed strings (single backslash).
+
+    Used as defense-in-depth inside ``_sanitize_genetics_cells``.
+    Note: replacement strings double every backslash because ``re.sub``
+    interprets ``\\X`` in replacements (``\\q`` would raise bad-escape).
+    """
+    if not s:
+        return s
+    s = _PARSED_LATEX_SPACE_RUN.sub(r"\\;\\;", s)
+    s = _PARSED_LATEX_THIN_RUN.sub(r"\\,\\,", s)
+    s = _PARSED_LATEX_QUAD_RUN.sub(r"\\quad\\quad", s)
+    return s
+
+
 def _json_cleanup_variants(s: str):
     """Yield successive cleaned variants of the input to try parsing."""
     base = _strip_md_fence(s)
+    base = _collapse_latex_padding_raw(base)
     yield base
     cleaned = _remove_trailing_commas(_normalize_smart_quotes(base))
     yield cleaned
@@ -218,8 +267,16 @@ def _rewrite_ascii_genetics(text: str) -> str:
     return "".join(out)
 
 
+def _clean_cell(s):
+    """Normalize a single cell: ASCII genetics → LaTeX, then collapse padding."""
+    if not isinstance(s, str):
+        return s
+    return _collapse_latex_padding_parsed(_rewrite_ascii_genetics(s))
+
+
 def _sanitize_genetics_cells(lines):
-    """In-place rewrite ASCII genetics notation inside a board ``lines`` list.
+    """In-place rewrite ASCII genetics notation + collapse LaTeX padding
+    inside a board ``lines`` list.
 
     Covers text content, table headers / rows, and step / box labels.
     """
@@ -229,24 +286,18 @@ def _sanitize_genetics_cells(lines):
         if not isinstance(line, dict):
             continue
         if isinstance(line.get("content"), str):
-            line["content"] = _rewrite_ascii_genetics(line["content"])
+            line["content"] = _clean_cell(line["content"])
         if isinstance(line.get("explanation"), str):
-            line["explanation"] = _rewrite_ascii_genetics(line["explanation"])
+            line["explanation"] = _clean_cell(line["explanation"])
         headers = line.get("headers")
         if isinstance(headers, list):
-            line["headers"] = [
-                _rewrite_ascii_genetics(h) if isinstance(h, str) else h
-                for h in headers
-            ]
+            line["headers"] = [_clean_cell(h) for h in headers]
         rows = line.get("rows")
         if isinstance(rows, list):
             new_rows = []
             for row in rows:
                 if isinstance(row, list):
-                    new_rows.append([
-                        _rewrite_ascii_genetics(c) if isinstance(c, str) else c
-                        for c in row
-                    ])
+                    new_rows.append([_clean_cell(c) for c in row])
                 else:
                     new_rows.append(row)
             line["rows"] = new_rows
@@ -2187,9 +2238,30 @@ RÈGLES :
 - Si l'élève insiste pour avoir la réponse, refuse poliment et propose un nouvel indice."""
 
             messages = [{"role": "user", "content": opening_user_msg}]
-            
+
             # More tokens for resumed sessions; explain mode: concise but rich
             opening_max_tokens = 1200 if (self.is_resumed_session or self.session_mode == "explain") else 800
+
+            # 🧬 Boost for genetics questions: a full dihybride explain
+            # response includes a 4×4 crossing grid (16 cells, each with
+            # a \dfrac + phenotype), plus parents / gametes / phenotype
+            # sections, plus the pedagogical analysis of the student's
+            # answer.  1200 tokens is NOT enough — the <ui> block gets
+            # truncated mid-table and the student sees no board at all.
+            if self.session_mode == "explain":
+                genetics_blob = (opening_user_msg + " " +
+                                 (self.session_context.get("examQuestion") or "") + " " +
+                                 (self.session_context.get("examCorrection") or "")).lower()
+                _GENETICS_HINTS = (
+                    "croisement", "échiquier", "echiquier", "dihybrid",
+                    "monohybrid", "genotype", "génotype", "gamète", "gamete",
+                    "allèle", "allele", "f1 ", "f2 ", "mendel", "brassage",
+                    "dominant", "récessif", "recessif", "hérédité", "heredite",
+                )
+                if any(h in genetics_blob for h in _GENETICS_HINTS):
+                    opening_max_tokens = max(opening_max_tokens, 3500)
+                    _safe_log(f"[Session Init] Genetics question detected — "
+                              f"boosting opening max_tokens to {opening_max_tokens}")
 
             if self.session_mode == "explain":
                 # STREAM explain opening — tokens appear on screen within 1-2 seconds
