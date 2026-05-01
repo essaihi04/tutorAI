@@ -1524,7 +1524,9 @@ class LLMService:
         scope-check info regardless of query phrasing.
         """
         try:
-            from app.services.topic_atlas_service import OFFICIAL_WEIGHTS
+            from app.services.topic_atlas_service import (
+                OFFICIAL_WEIGHTS, SUBJECT_DOMAINS,
+            )
         except Exception:
             return ""
 
@@ -1574,6 +1576,44 @@ class LLMService:
         lines.append("Domaines / sous-domaines (poids officiels à l'examen national) :")
         for domain, pct in weights.items():
             lines.append(f"  • {domain} — {pct:g}%")
+
+        # ── Explicit AT-PROGRAM sub-topic enumeration ──
+        # Critical anti-hallucination: without this, the LLM only sees domain
+        # TITLES like "Domaine 2 — Information génétique" and may wrongly
+        # refuse legitimate sub-topics (e.g. "la mitose n'est pas au programme")
+        # when the student asks for them. We enumerate all sub-topics from
+        # SUBJECT_DOMAINS so the LLM has a definitive at-program list.
+        sub_topics = SUBJECT_DOMAINS.get(key)
+        if sub_topics:
+            lines.append("")
+            lines.append(
+                "✅ SUJETS EXPLICITEMENT AU PROGRAMME (par domaine) — "
+                "tu DOIS reconnaître ces sujets comme étant AU PROGRAMME et "
+                "accepter d'enseigner / fournir des exercices BAC dessus :"
+            )
+            for domain, kw_list in sub_topics.items():
+                # Keep the most pedagogically relevant terms (skip noisy
+                # symbols like "α", "γ", "co₂"). Limit to ~25 per domain so
+                # the prompt doesn't explode.
+                clean = [k for k in kw_list
+                         if len(k) >= 3 and not all(not c.isalpha() for c in k)]
+                # Deduplicate while preserving order
+                seen = set()
+                deduped = []
+                for k in clean:
+                    if k.lower() not in seen:
+                        seen.add(k.lower())
+                        deduped.append(k)
+                sample = deduped[:25]
+                if sample:
+                    lines.append(f"  ▸ {domain} :")
+                    lines.append(f"      {', '.join(sample)}")
+            lines.append(
+                "→ Si l'étudiant demande un cours / exercice / explication sur "
+                "L'UN de ces sujets, tu dois ACCEPTER et le considérer comme "
+                "PARFAITEMENT au programme. NE JAMAIS répondre « ce sujet "
+                "n'est pas au programme » pour un terme listé ci-dessus."
+            )
 
         # Off-program list
         off_topics = self._OFF_PROGRAM_TOPICS.get(key) or self._OFF_PROGRAM_TOPICS.get(
