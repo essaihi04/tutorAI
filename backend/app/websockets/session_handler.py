@@ -1556,9 +1556,43 @@ class SessionHandler:
         except Exception as e:
             _safe_log(f"[Proficiency] Error fetching context: {e}")
 
+        # ── ENRICH user_query WITH OPEN EXAM QUESTION CONTENT ──
+        # When the student clicks "Aide au tableau" / "Explication au tableau"
+        # in the exam panel, the frontend sends a GENERIC text such as
+        # "Explique-moi comment résoudre la question 1 au tableau, donne-moi
+        # la méthode." — with NO topic keyword. As a result, build_libre_prompt
+        # would use that generic text as user_query for:
+        #   • RAG retrieval (subject-agnostic → returns biased content from
+        #     the lesson the student was previously studying, e.g. respiration
+        #     cellulaire, instead of the open exam topic, e.g. genetics);
+        #   • _detect_subject_from_query (no signal → fallback);
+        #   • _maybe_genetics_protocol (no genetics kw → protocol skipped);
+        # ⇒ the AI ends up answering about the previous lesson, not about
+        # the genetics question actually displayed in the exam panel.
+        # We fix this by prepending the open-exam question_content +
+        # question_correction to user_query so every keyword-driven prompt
+        # block (RAG, protocol, subject detection) fires on the REAL topic.
+        rag_query = student_text
+        if exam_context and isinstance(self.current_exam_view, dict):
+            v = self.current_exam_view
+            exam_topic_blob = " ".join(filter(None, [
+                str(v.get("subject", "") or ""),
+                str(v.get("topic", "") or ""),
+                str(v.get("exercise_name", "") or ""),
+                str(v.get("question_content", "") or "")[:600],
+                str(v.get("question_correction", "") or "")[:600],
+            ])).strip()
+            if exam_topic_blob:
+                rag_query = (student_text + " " + exam_topic_blob).strip()
+                _safe_log(
+                    f"[Exam Context] user_query enriched with open exam "
+                    f"question topic ({len(exam_topic_blob)} chars) "
+                    f"to ground RAG/genetics-protocol on the right subject."
+                )
+
         # Build system prompt based on mode, using live proficiency data
         if self.session_mode in ("libre", "explain"):
-            system_prompt = self._build_session_system_prompt(user_query=student_text, prof_ctx=prof_ctx)
+            system_prompt = self._build_session_system_prompt(user_query=rag_query, prof_ctx=prof_ctx)
         else:
             system_prompt = llm_service.build_system_prompt(
                 subject=ctx.get("subject", "Physique"),
@@ -1573,7 +1607,7 @@ class SessionHandler:
                 struggles=prof_ctx["struggles"] if prof_ctx else ctx.get("struggles", "aucune identifiée"),
                 mastered=prof_ctx["mastered"] if prof_ctx else ctx.get("mastered", "aucun"),
                 teaching_mode=ctx.get("teaching_mode", "Socratique"),
-                user_query=student_text,  # Pass user query for RAG context
+                user_query=rag_query,  # Pass user query for RAG context (enriched with open-exam topic if applicable)
                 adaptation_hints=prof_ctx.get("adaptation_hints", "") if prof_ctx else "",
             )
         

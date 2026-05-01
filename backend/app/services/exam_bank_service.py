@@ -587,6 +587,49 @@ class ExamBankService:
             ctx_kw = self._extract_keywords(expanded_ctx)
             lesson_kw = self._get_topical_keywords(ctx_kw) - {"exercice", "examen", "bac"}
         _log.info(f"[ExamSearchFull] lesson_kw={sorted(lesson_kw)[:10]}")
+
+        # ── USER-INTENT OVERRIDE ──
+        # If the student EXPLICITLY named a topic in the query itself
+        # (e.g. "exercice bac sur la pollution" while the current lesson is
+        # "Génétique humaine"), the explicit request MUST take precedence
+        # over the stored lesson_title. Without this, the lesson filter
+        # below would reject every pollution exercise and fall back to
+        # genetics — the exact bug reproduced by scripts/test_pollution_query.py.
+        #
+        # We look at the RAW query topical keywords (no alias expansion so
+        # we don't accidentally match through a shared expansion term). If
+        # they are non-empty AND share no stem-overlap with lesson_kw, the
+        # user is clearly asking for a different theme → drop the lesson
+        # filter for this search. The subject filter (SVT/Physique/…) is
+        # unaffected, so cross-subject leaks are still impossible.
+        if lesson_kw:
+            raw_query_kw = self._extract_keywords(query)
+            user_topical_kw = self._get_topical_keywords(raw_query_kw)
+            if user_topical_kw:
+                # Stem overlap (5-char prefix) to catch inflections
+                # (pollution/polluant, génétique/génétiques, …).
+                def _stem(k: str) -> str:
+                    k_norm = _strip_accents(k).lower()
+                    return k_norm[:5] if len(k_norm) >= 5 else k_norm
+                user_stems = {_stem(k) for k in user_topical_kw}
+                lesson_stems = {_stem(k) for k in lesson_kw}
+                if user_stems and user_stems.isdisjoint(lesson_stems):
+                    _log.info(
+                        f"[ExamSearchFull] USER-INTENT OVERRIDE — query topical "
+                        f"{sorted(user_topical_kw)[:5]} disjoint from lesson "
+                        f"{sorted(lesson_kw)[:5]} → dropping lesson filter AND "
+                        f"rebuilding query_kw without lesson aliases"
+                    )
+                    lesson_kw = set()
+                    # Rebuild scoring keywords from the user query ALONE.
+                    # Otherwise the earlier line
+                    #   expanded_query += _expand_query_aliases(conversation_context)
+                    # has already polluted query_kw with genetics aliases
+                    # (adn, chromosome, méiose…) which would make a genetics
+                    # exercise outscore the pollution one during _score_match,
+                    # even after the lesson filter is dropped.
+                    expanded_query = self._expand_query_aliases(query)
+                    query_kw = self._extract_keywords(expanded_query)
         
         # Detect part filter from query if not explicitly provided
         query_lower = query.lower()
@@ -1767,8 +1810,17 @@ class ExamBankService:
             ],
         }
         expanded_parts = [text]
+        # ⚠️ Word-boundary match (NOT raw substring).
+        # A naive `alias in lowered` check causes silent topic contamination:
+        # e.g. alias "rc" matches inside the word "exeRCice", so every
+        # query containing "exercice" gets polluted by the RC-circuit
+        # aliases (dipôle, condensateur, charge, décharge, capacité, tau…).
+        # This was observed breaking ATP / fermentation / respiration
+        # retrieval — see scripts/test_pollution_query.py ("ATP — direct",
+        # "fermentation", "BUG — ATP + lesson=génétique", etc.). Short
+        # aliases like "rc", "rl", "ph", "base" MUST match as whole words.
         for alias, values in aliases.items():
-            if alias in lowered:
+            if re.search(rf"\b{re.escape(alias)}\b", lowered):
                 expanded_parts.extend(values)
         return " ".join(expanded_parts)
 
