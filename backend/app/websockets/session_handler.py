@@ -59,10 +59,20 @@ def _remove_trailing_commas(s: str) -> str:
 
 
 def _escape_bare_backslashes(s: str) -> str:
-    """
+    r"""
     LLMs often output LaTeX like ``\\vec{AB}`` as ``\vec{AB}`` in JSON,
     which is invalid (``\v`` is not a JSON escape). Double any backslash
     that is NOT already part of a valid JSON escape.
+
+    🚨 Important: in board / UI contexts, LLMs also emit LaTeX commands
+    whose first letter collides with JSON single-char escapes —
+    ``\text``, ``\times``, ``\to`` (\t → TAB), ``\neq``, ``\nabla``
+    (\n → newline), ``\frac``, ``\forall`` (\f → formfeed), ``\binom``,
+    ``\boxed`` (\b → backspace), ``\rangle`` (\r → carriage return).
+    Treating those as valid JSON escapes silently corrupts every
+    formula on the whiteboard (``\text{Phénotypes}`` renders as
+    ``⇥ext{Phénotypes}``).  Heuristic: when ``\X`` is followed by a
+    letter, assume it is a LaTeX command and double the backslash.
     """
     out = []
     i = 0
@@ -71,13 +81,29 @@ def _escape_bare_backslashes(s: str) -> str:
         ch = s[i]
         if ch == "\\" and i + 1 < n:
             nxt = s[i + 1]
-            if nxt in '"\\/bfnrt':
-                out.append(s[i:i + 2])
-                i += 2
-                continue
+            # Unicode escape \uXXXX — always treat as JSON escape.
             if nxt == 'u' and _VALID_JSON_ESC_RE.match(s, i):
                 out.append(s[i:i + 6])
                 i += 6
+                continue
+            # Unambiguous JSON escapes (quote / backslash / solidus).
+            if nxt in '"\\/':
+                out.append(s[i:i + 2])
+                i += 2
+                continue
+            # Ambiguous single-char escapes also used as LaTeX command
+            # starts: \t, \n, \r, \f, \b.  If the following character
+            # is a letter, this is almost certainly a LaTeX command
+            # like \text, \nabla, \frac, \boxed — double the backslash
+            # to survive JSON parsing as a literal ``\X…`` sequence.
+            if nxt in 'tbfnr':
+                after = s[i + 2] if i + 2 < n else ''
+                if after.isalpha():
+                    out.append("\\\\")
+                    i += 1
+                    continue
+                out.append(s[i:i + 2])
+                i += 2
                 continue
             out.append("\\\\")
             i += 1
