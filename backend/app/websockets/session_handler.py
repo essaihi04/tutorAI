@@ -214,9 +214,7 @@ def _to_latex_dihyb_zygote(m: re.Match) -> str:
     top, bot = s.split("//")
     top = top.strip()
     bot = bot.strip()
-    # Two pairs of homologous chromosomes (independent genes) → double bar `//`
-    # separator between the two fractions, per Moroccan BAC convention.
-    return rf"$\dfrac{{{top[0]}}}{{{bot[0]}}}\,//\,\dfrac{{{top[1]}}}{{{bot[1]}}}$"
+    return rf"$\dfrac{{{top[0]}}}{{{bot[0]}}}\,\dfrac{{{top[1]}}}{{{bot[1]}}}$"
 
 
 def _to_latex_monohyb_zygote(m: re.Match) -> str:
@@ -229,9 +227,7 @@ def _to_latex_monohyb_zygote(m: re.Match) -> str:
 
 def _to_latex_dihyb_gamete(m: re.Match) -> str:
     s = m.group(0).rstrip("/").strip()
-    # Dihybride gamete carries one allele from each pair → keep the `//`
-    # separator visible between the two pairs of chromosomes.
-    return rf"$\dfrac{{{s[0]}}}{{}}\,//\,\dfrac{{{s[1]}}}{{}}$"
+    return rf"$\dfrac{{{s[0]}}}{{}}\,\dfrac{{{s[1]}}}{{}}$"
 
 
 def _to_latex_monohyb_gamete(m: re.Match) -> str:
@@ -271,11 +267,67 @@ def _rewrite_ascii_genetics(text: str) -> str:
     return "".join(out)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Diploid genotype promoter — single-bar → double-bar
+# ─────────────────────────────────────────────────────────────────────
+# BAC SVT convention: a genotype represents a PAIR of homologous
+# chromosomes (diploid) and must be drawn with TWO horizontal bars
+# between the alleles, not one. The LaTeX trick is to wrap the
+# denominator in \overline{...}: the fraction bar + the overline render
+# as two parallel lines.
+#
+#   `\dfrac{L}{L}`            (one bar — haploid, WRONG for genotype)
+#   `\dfrac{L}{\overline{L}}` (two bars — diploid, BAC-compliant)
+#
+# Gametes use `\dfrac{X}{}` (empty denominator) and stay haploid → we
+# skip them. We also skip cells whose denominator already contains an
+# `\overline`, `\underline`, or any nested brace so we never double-wrap.
+# Allele content allowed inside the denominator: letters, digits, `+`,
+# `-`, `'`, accented chars, optional `\;` separators (linked dihybride
+# `\dfrac{J\;L}{J\;L}` → `\dfrac{J\;L}{\overline{J\;L}}`).
+_DENOM_ALLELE_CONTENT = r"[A-Za-zøùéÉØ0-9+\-'\s;\\]+"
+_RE_DFRAC_GENOTYPE = re.compile(
+    r"\\dfrac\{([^{}]+)\}\{(" + _DENOM_ALLELE_CONTENT + r")\}"
+)
+
+
+def _promote_diploid_genotype(text: str) -> str:
+    """Rewrite single-bar `\\dfrac{A}{a}` → double-bar `\\dfrac{A}{\\overline{a}}`.
+
+    Skips:
+      • gametes (empty denominator `\\dfrac{A}{}`),
+      • already-promoted cells (denominator contains `\\overline` /
+        `\\underline` — caught by `[^{}]+` rejecting nested braces).
+    """
+    if not text or not isinstance(text, str) or "\\dfrac" not in text:
+        return text or ""
+
+    def _repl(m: re.Match) -> str:
+        num = m.group(1)
+        denom = m.group(2).strip()
+        if not denom:                          # gamete → keep haploid
+            return m.group(0)
+        if "\\overline" in denom or "\\underline" in denom:
+            return m.group(0)
+        # Only promote if denominator looks like a plain allele token
+        # (letters / digits / +/- / `\;` separators). If it contains
+        # any other LaTeX command we leave it alone (safety).
+        if re.fullmatch(r"[A-Za-zøùéÉØ0-9+\-'\s]+(?:\\;[A-Za-zøùéÉØ0-9+\-'\s]+)*", denom) is None:
+            return m.group(0)
+        return r"\dfrac{" + num + r"}{\overline{" + denom + r"}}"
+
+    return _RE_DFRAC_GENOTYPE.sub(_repl, text)
+
+
 def _clean_cell(s):
-    """Normalize a single cell: ASCII genetics → LaTeX, then collapse padding."""
+    """Normalize a single cell: ASCII genetics → LaTeX, collapse padding,
+    promote single-bar genotypes to double-bar (diploid)."""
     if not isinstance(s, str):
         return s
-    return _collapse_latex_padding_parsed(_rewrite_ascii_genetics(s))
+    s = _rewrite_ascii_genetics(s)
+    s = _collapse_latex_padding_parsed(s)
+    s = _promote_diploid_genotype(s)
+    return s
 
 
 def _sanitize_genetics_cells(lines):
@@ -920,7 +972,8 @@ class SessionHandler:
         lines.append("")
         lines.append("🧬 RÈGLE GÉNÉTIQUE (si la question porte sur un croisement / hérédité) :")
         lines.append("- L'interprétation chromosomique va OBLIGATOIREMENT dans un bloc <ui> show_board, avec : phénotypes, génotypes en `\\\\dfrac`, gamètes, ÉCHIQUIER de fécondation en `type=table`, résultats. Cf. PROTOCOLE_GÉNÉTIQUE en haut.")
-        lines.append("- INTERDIT dans le texte parlé OU dans les cellules : notations ASCII type `DO//dø`, `D O / d o`, `J/J;L/L`. Uniquement du LaTeX `\\\\dfrac{D}{d}\\\\,\\\\dfrac{O}{o}` (2 backslashes JSON).")
+        lines.append("- INTERDIT dans le texte parlé OU dans les cellules : notations ASCII type `DO//dø`, `D O / d o`, `J/J;L/L`. Uniquement du LaTeX `\\\\dfrac{D}{\\\\overline{d}}\\\\,\\\\dfrac{O}{\\\\overline{o}}` (2 backslashes JSON).")
+        lines.append("- 🧬 GÉNOTYPE = DIPLOÏDE → DEUX BARRES horizontales obligatoires : `\\\\dfrac{A}{\\\\overline{a}}` (la barre de fraction + l'overline simulent la paire de chromosomes homologues). JAMAIS `\\\\dfrac{A}{a}` (une seule barre = haploïde, FAUX pour un génotype). Les GAMÈTES, eux, restent en UNE seule barre `\\\\dfrac{A}{}` (dénominateur vide, sans overline) car ils sont haploïdes.")
         lines.append("- La rédaction texte (« On constate que… », « On en déduit que… ») COEXISTE avec l'échiquier <ui> ; elle ne le remplace pas.")
         return "\n".join(lines)
 

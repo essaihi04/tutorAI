@@ -128,20 +128,20 @@ Pour afficher les 4 gamètes d'un dihybride (ou les 2 d'un monohybride),
 tu as DEUX options autorisées et UNE option INTERDITE :
 
   ✅ OPTION A — UNE LIGNE `math` PAR GAMÈTE :
-     {"type":"math","content":"P\\to\\;\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)"},
-     {"type":"math","content":"P\\to\\;\\dfrac{J}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)"},
-     {"type":"math","content":"P\\to\\;\\dfrac{v}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)"},
-     {"type":"math","content":"P\\to\\;\\dfrac{v}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)"}
+     {"type":"math","content":"P\\to\\;\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)"},
+     {"type":"math","content":"P\\to\\;\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"},
+     {"type":"math","content":"P\\to\\;\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)"},
+     {"type":"math","content":"P\\to\\;\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"}
 
   ✅ OPTION B — UN `table` AVEC 1 ROW DE 4 CELLULES :
      {"type":"table","headers":["Gamète 1","Gamète 2","Gamète 3","Gamète 4"],
-      "rows":[["\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
-               "\\dfrac{J}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)",
-               "\\dfrac{v}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
-               "\\dfrac{v}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)"]]}
+      "rows":[["\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+               "\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+               "\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+               "\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"]]}
 
   ⛔ OPTION C — INTERDITE — 4 gamètes alignés avec `\;` sur UNE ligne :
-     {"type":"math","content":"\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;\\;\\;\\;\\dfrac{J}{}..."}
+     {"type":"math","content":"\\dfrac{J}{}\\,\\dfrac{L}{}\\;\\;\\;\\;\\dfrac{J}{}..."}
      ↑ NE FAIS JAMAIS ÇA. Le LLM rentre en boucle sur `\;` et coupe
        toute la suite du <ui>, l'élève ne voit aucun tableau.
 
@@ -172,34 +172,45 @@ Pour CHAQUE croisement (P1×P2, F1×F1, test-cross…) tu produis UN seul
 ────────────────────────────────────────────────────────────────────────
 🎯 NOTATION GÉNOTYPIQUE — RÈGLE FONDAMENTALE
 ────────────────────────────────────────────────────────────────────────
+🧬 RÈGLE DIPLOÏDIE — DEUX BARRES HORIZONTALES OBLIGATOIRES :
+Un génotype représente une PAIRE de chromosomes homologues (diploïde).
+Il s'écrit donc avec DEUX traits horizontaux entre les deux allèles
+(un trait par chromosome), JAMAIS avec un seul. La syntaxe LaTeX est :
+    `\dfrac{A}{\overline{a}}`
+     ↑ numérateur = allèle du chromosome paternel
+     ↑ dénominateur = `\overline{...}` autour de l'allèle maternel
+     → la barre de fraction + l'overline donnent les DEUX traits
+       parallèles (=  la paire de chromosomes homologues).
+
+Les GAMÈTES sont haploïdes (1 seul chromosome) → UNE seule barre,
+dénominateur vide : `\dfrac{A}{}`. JAMAIS d'overline pour les gamètes.
+
 ▸ MONOHYBRIDE (1 gène, 1 paire de chromosomes homologues) :
-    `\dfrac{L}{L}` (homozygote dominant), `\dfrac{L}{r}` (hétérozygote),
-    `\dfrac{r}{r}` (homozygote récessif).
+    `\dfrac{L}{\overline{L}}` (homozygote dominant),
+    `\dfrac{L}{\overline{r}}` (hétérozygote),
+    `\dfrac{r}{\overline{r}}` (homozygote récessif).
 
 ▸ DIHYBRIDE GÈNES INDÉPENDANTS (gènes sur 2 paires de chromosomes
   différentes — cas par défaut) :
-    DEUX fractions séparées par la DOUBLE BARRE `//` (convention BAC
-    marocaine — chaque `//` matérialise UNE paire de chromosomes
-    homologues distincte) :
-    `\dfrac{J}{J}\,//\,\dfrac{L}{L}` (homozygote [J,L])
-    `\dfrac{J}{v}\,//\,\dfrac{L}{r}` (double hétérozygote F1)
-    👉 La `//` rappelle visuellement que les deux gènes sont portés
-       par DEUX paires de chromosomes différentes (≠ gènes liés).
-    🚨 EN DIHYBRIDISME, c'est TOUJOURS DEUX traits `//` entre les
-       paires, JAMAIS un seul trait ni une simple juxtaposition.
+    DEUX fractions juxtaposées, séparées par un espace :
+    `\dfrac{J}{\overline{J}}\;\;\dfrac{L}{\overline{L}}` (homozygote [J,L])
+    `\dfrac{J}{\overline{v}}\;\;\dfrac{L}{\overline{r}}` (double hétérozygote F1)
+    👉 Reproduit visuellement deux PAIRES de chromosomes côte à côte,
+       comme dans la correction officielle BAC, chaque paire avec ses
+       DEUX traits horizontaux.
 
 ▸ DIHYBRIDE GÈNES LIÉS (mêmes chromosomes — quand énoncé mentionne
   « liés », « linkage », « distance », cM, recombinaison) :
-    UNE seule fraction (UNE paire homologue) avec les deux allèles
-    sur la même barre — PAS de `//` :
-    `\dfrac{J\;L}{J\;L}`  ou  `\dfrac{J\;L}{v\;r}` (parental)
-    `\dfrac{J\;r}{v\;L}` (recombiné).
+    UNE seule fraction avec les deux allèles sur la même barre :
+    `\dfrac{J\;L}{\overline{J\;L}}`  ou  `\dfrac{J\;L}{\overline{v\;r}}` (parental)
+    `\dfrac{J\;r}{\overline{v\;L}}` (recombiné).
 
-⛔ INTERDIT : `\dfrac{JL}{JL}` (allèles collés sans espace),
-   `vg b // vg b` (notation linéaire ASCII brute), `[vg ; b]`
-   (point-virgule), `Ll` (notation abrégée), `J/J  L/L` (slash sans
-   fraction LaTeX), `\dfrac{J}{J}\,\dfrac{L}{L}` (juxtaposition
-   sans `//` en dihybridisme indépendant).
+⛔ INTERDIT :
+   • `\dfrac{L}{L}` SANS `\overline{}` au dénominateur (un seul trait
+     = représentation HAPLOÏDE, fausse pour un génotype).
+   • `\dfrac{JL}{\overline{JL}}` (allèles collés sans espace),
+   • `vg b // vg b` (notation linéaire), `[vg ; b]` (point-virgule),
+   • `Ll` (notation abrégée), `J/J  L/L` (slash sans fraction LaTeX).
 
 ────────────────────────────────────────────────────────────────────────
 EXEMPLE JSON COMPLET — DIHYBRIDE INDÉPENDANT P1[J,L] × P2[v,r] → F1
@@ -207,12 +218,12 @@ EXEMPLE JSON COMPLET — DIHYBRIDE INDÉPENDANT P1[J,L] × P2[v,r] → F1
 <ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Interprétation chromosomique du 1er croisement","lines":[
   {"type":"subtitle","content":"Parents : P1 × P2"},
   {"type":"math","content":"\\text{Phénotypes : }\\;[J,L]\\;\\times\\;[v,r]"},
-  {"type":"math","content":"\\text{Génotypes : }\\;\\dfrac{J}{J}\\,//\\,\\dfrac{L}{L}\\;\\times\\;\\dfrac{v}{v}\\,//\\,\\dfrac{r}{r}"},
+  {"type":"math","content":"\\text{Génotypes : }\\;\\dfrac{J}{\\overline{J}}\\,\\dfrac{L}{\\overline{L}}\\;\\times\\;\\dfrac{v}{\\overline{v}}\\,\\dfrac{r}{\\overline{r}}"},
   {"type":"subtitle","content":"Gamètes (avec %)"},
-  {"type":"math","content":"P1\\to\\;\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;(100\\,\\%)"},
-  {"type":"math","content":"P2\\to\\;\\dfrac{v}{}\\,//\\,\\dfrac{r}{}\\;(100\\,\\%)"},
+  {"type":"math","content":"P1\\to\\;\\dfrac{J}{}\\,\\dfrac{L}{}\\;(100\\,\\%)"},
+  {"type":"math","content":"P2\\to\\;\\dfrac{v}{}\\,\\dfrac{r}{}\\;(100\\,\\%)"},
   {"type":"subtitle","content":"Fécondation"},
-  {"type":"table","content":"","headers":["♀ \\\\ ♂","\\dfrac{v}{}\\,//\\,\\dfrac{r}{}\\;(100\\,\\%)"],"rows":[["\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;(100\\,\\%)","\\dfrac{J}{v}\\,//\\,\\dfrac{L}{r}\\;[J,L]"]]},
+  {"type":"table","content":"","headers":["♀ \\\\ ♂","\\dfrac{v}{}\\,\\dfrac{r}{}\\;(100\\,\\%)"],"rows":[["\\dfrac{J}{}\\,\\dfrac{L}{}\\;(100\\,\\%)","\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]"]]},
   {"type":"box","content":"F1 : 100 % [J,L] doubles hétérozygotes","color":"green"}
 ]}}]}</ui>
 
@@ -226,46 +237,45 @@ entre crochets sur la MÊME cellule.
 ▸ MONOHYBRIDISME F1×F1 (4 cases) :
   headers = ["♀ \\ ♂","L (50 %)","r (50 %)"]
   rows    = [
-    ["L (50 %)","\\dfrac{L}{L}\\;[L]","\\dfrac{L}{r}\\;[L]"],
-    ["r (50 %)","\\dfrac{L}{r}\\;[L]","\\dfrac{r}{r}\\;[r]"]
+    ["L (50 %)","\\dfrac{L}{\\overline{L}}\\;[L]","\\dfrac{L}{\\overline{r}}\\;[L]"],
+    ["r (50 %)","\\dfrac{L}{\\overline{r}}\\;[L]","\\dfrac{r}{\\overline{r}}\\;[r]"]
   ]
   → [L] : 3/4 = 75 %    [r] : 1/4 = 25 %.
 
 ▸ DIHYBRIDISME INDÉPENDANT F1×F1 (16 cases) :
   ⚠️ EXEMPLE JSON COMPLET — copie cette structure EXACTEMENT, en
   remplaçant J/v et L/r par les allèles de l'énoncé. CHAQUE cellule
-  contient DEUX `\\dfrac` SÉPARÉS PAR `\\,//\\,` (double barre
-  BAC marocain) + le phénotype entre crochets. AUCUNE cellule en
-  ASCII (« J/J », « J//J », « J;J », « JJ ») — uniquement du LaTeX
-  `\\dfrac{a}{b}\\,//\\,\\dfrac{c}{d}`.
+  contient DEUX `\\dfrac` juxtaposés + le phénotype entre crochets.
+  AUCUNE cellule en ASCII (« J/J », « J//J », « J;J », « JJ ») —
+  uniquement du LaTeX `\\dfrac`.
 <ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Échiquier de croisement F1 × F1","lines":[
   {"type":"table","content":"","headers":[
     "♀ \\\\ ♂",
-    "\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
-    "\\dfrac{J}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)",
-    "\\dfrac{v}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
-    "\\dfrac{v}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)"
+    "\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+    "\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+    "\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+    "\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)"
   ],"rows":[
-    ["\\dfrac{J}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
-     "\\dfrac{J}{J}\\,//\\,\\dfrac{L}{L}\\;[J,L]",
-     "\\dfrac{J}{J}\\,//\\,\\dfrac{L}{r}\\;[J,L]",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{L}{L}\\;[J,L]",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{L}{r}\\;[J,L]"],
-    ["\\dfrac{J}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)",
-     "\\dfrac{J}{J}\\,//\\,\\dfrac{L}{r}\\;[J,L]",
-     "\\dfrac{J}{J}\\,//\\,\\dfrac{r}{r}\\;[J,r]",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{L}{r}\\;[J,L]",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{r}{r}\\;[J,r]"],
-    ["\\dfrac{v}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{L}{L}\\;[J,L]",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{L}{r}\\;[J,L]",
-     "\\dfrac{v}{v}\\,//\\,\\dfrac{L}{L}\\;[v,L]",
-     "\\dfrac{v}{v}\\,//\\,\\dfrac{L}{r}\\;[v,L]"],
-    ["\\dfrac{v}{}\\,//\\,\\dfrac{r}{}\\;(25\\,\\%)",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{L}{r}\\;[J,L]",
-     "\\dfrac{J}{v}\\,//\\,\\dfrac{r}{r}\\;[J,r]",
-     "\\dfrac{v}{v}\\,//\\,\\dfrac{L}{r}\\;[v,L]",
-     "\\dfrac{v}{v}\\,//\\,\\dfrac{r}{r}\\;[v,r]"]
+    ["\\dfrac{J}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{\\overline{J}}\\,\\dfrac{L}{\\overline{L}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{J}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{L}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]"],
+    ["\\dfrac{J}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{\\overline{J}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{J}}\\,\\dfrac{r}{\\overline{r}}\\;[J,r]",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{r}{\\overline{r}}\\;[J,r]"],
+    ["\\dfrac{v}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{L}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]",
+     "\\dfrac{v}{\\overline{v}}\\,\\dfrac{L}{\\overline{L}}\\;[v,L]",
+     "\\dfrac{v}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[v,L]"],
+    ["\\dfrac{v}{}\\,\\dfrac{r}{}\\;(25\\,\\%)",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[J,L]",
+     "\\dfrac{J}{\\overline{v}}\\,\\dfrac{r}{\\overline{r}}\\;[J,r]",
+     "\\dfrac{v}{\\overline{v}}\\,\\dfrac{L}{\\overline{r}}\\;[v,L]",
+     "\\dfrac{v}{\\overline{v}}\\,\\dfrac{r}{\\overline{r}}\\;[v,r]"]
   ]},
   {"type":"box","content":"Proportions F2 — [J,L] : 9/16 = 56,25 %  |  [J,r] : 3/16 = 18,75 %  |  [v,L] : 3/16 = 18,75 %  |  [v,r] : 1/16 = 6,25 %","color":"orange"}
 ]}}]}</ui>
@@ -277,8 +287,7 @@ entre crochets sur la MÊME cellule.
   d (en %), alors :
     • 2 gamètes parentaux : chacun (100−d)/2 %
     • 2 gamètes recombinés : chacun d/2 %
-  Notation gamètes (gènes liés — UNE seule fraction, PAS de `//`) :
-  `\\dfrac{J\\;L}{}` (parental), `\\dfrac{J\\;r}{}` (recombiné).
+  Notation gamètes : `\\dfrac{J\\;L}{}` (parental), `\\dfrac{J\\;r}{}` (recombiné).
 
 ═══════════════════════════════════════════════════════════════════════
 3️⃣ TABLEAU « RÉSULTATS THÉORIQUES vs EXPÉRIMENTAUX »
@@ -305,11 +314,12 @@ Plusieurs ordres possibles → un sous-tableau par cas (1er / 2e / 3e cas).
 5️⃣ CONVENTIONS DE NOTATION (à respecter strictement)
 ═══════════════════════════════════════════════════════════════════════
 ✓ Phénotype : crochets, virgules pour le dihybride : `[L]`, `[J,L]`.
-✓ Génotype mono : fraction unique `\dfrac{L}{r}`.
-✓ Génotype dihybride INDÉPENDANT : DEUX fractions juxtaposées
-  `\dfrac{J}{v}\,\dfrac{L}{r}`.
-✓ Génotype dihybride LIÉ : une fraction `\dfrac{J\;L}{v\;r}`.
-✓ Gamète : un allèle au-dessus, vide en dessous : `\dfrac{L}{}`.
+✓ Génotype mono (DIPLOÏDE — DEUX BARRES) : `\dfrac{L}{\overline{r}}`.
+✓ Génotype dihybride INDÉPENDANT : DEUX fractions juxtaposées,
+  chacune avec DEUX BARRES : `\dfrac{J}{\overline{v}}\,\dfrac{L}{\overline{r}}`.
+✓ Génotype dihybride LIÉ : une fraction `\dfrac{J\;L}{\overline{v\;r}}`.
+✓ Gamète (HAPLOÏDE — UNE SEULE BARRE) : un allèle au-dessus, vide en
+  dessous, SANS overline : `\dfrac{L}{}`.
   Dihybride indépendant : `\dfrac{J}{}\,\dfrac{L}{}`.
 ✓ Allèle dominant en MAJUSCULE, récessif en minuscule (sauf si
   l'énoncé fixe une autre convention).
@@ -320,7 +330,9 @@ Plusieurs ordres possibles → un sous-tableau par cas (1er / 2e / 3e cas).
 
 ⛔ JAMAIS de notation linéaire `vg b // vg b × vg+ b+ // vg+ b+`.
 ⛔ JAMAIS de point-virgule à l'intérieur des crochets `[a ; b]` → `[a,b]`.
-⛔ JAMAIS d'allèles collés `\dfrac{JL}{JL}` → `\dfrac{J}{J}\,\dfrac{L}{L}`.
+⛔ JAMAIS d'allèles collés `\dfrac{JL}{\overline{JL}}` → `\dfrac{J}{\overline{J}}\,\dfrac{L}{\overline{L}}`.
+⛔ JAMAIS de génotype à UNE seule barre `\dfrac{L}{L}` (haploïde !) →
+   toujours DEUX barres `\dfrac{L}{\overline{L}}` (diploïde).
 ⛔ JAMAIS d'échiquier en markdown / pipes `|` → toujours `type=table`.
 ⛔ JAMAIS de gamètes listés inline « 40,5 % vg+ b+ + 9,5 % vg+ b » →
    chaque gamète sur sa propre ligne `math` du show_board.

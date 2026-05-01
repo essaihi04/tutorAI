@@ -103,8 +103,12 @@ def build_explain_scenario_block(payload: dict) -> str:
         "\"payload\":{\"title\":\"...\",\"lines\":[...]}}]}</ui>, avec : "
         "phénotypes, génotypes en \\\\dfrac, gamètes, ÉCHIQUIER de "
         "fécondation en `type=table`, résultats.",
-        "- Dans les cellules : UNIQUEMENT du LaTeX `\\\\dfrac{G}{g}\\\\,"
-        "\\\\dfrac{L}{\\\\ell}` — JAMAIS d'ASCII `G//g`, `G/`, `DO//dø`.",
+        "- Dans les cellules : UNIQUEMENT du LaTeX. GÉNOTYPE diploïde → "
+        "DEUX BARRES `\\\\dfrac{G}{\\\\overline{g}}\\\\,\\\\dfrac{L}{\\\\overline{\\\\ell}}` "
+        "(une paire de chromosomes homologues = deux traits horizontaux). "
+        "GAMÈTE haploïde → UNE BARRE `\\\\dfrac{G}{}` (dénominateur vide). "
+        "JAMAIS d'ASCII `G//g`, `G/`, `DO//dø`, et JAMAIS de génotype à "
+        "une seule barre `\\\\dfrac{G}{g}` (= haploïde, faux).",
         "- Les phénotypes sont notés `[G,L]`, `[g,\\\\ell]` etc.",
         "",
     ]
@@ -298,14 +302,42 @@ def run_checks(boards: list[dict], response: str) -> list[CheckResult]:
         len(found_props) >= 3,
         f"trouvées : {found_props}"))
 
-    # 10. Double barre `//` entre les deux paires homologues (dihybride
-    #     indépendant — convention BAC marocaine, 1 trait = 1 paire).
-    sep_pattern = re.compile(r"\}\s*(?:\\,)?\s*//\s*(?:\\,)?\s*\\dfrac")
-    sep_count = len(sep_pattern.findall(all_text))
+    # 10. Génotypes en notation DIPLOÏDE — deux barres horizontales.
+    #     On exige qu'au moins une cellule du board contienne
+    #     `\dfrac{X}{\overline{Y}}` (la barre d'overline en plus de la
+    #     barre de fraction = paire de chromosomes homologues).
+    has_double_bar = bool(re.search(r"\\dfrac\{[^{}]+\}\{\\overline\{",
+                                    all_text))
+    # On compte aussi le nombre de génotypes diploïdes pour avoir un échantillon.
+    diploid_count = len(re.findall(r"\\dfrac\{[^{}]+\}\{\\overline\{[^{}]+\}\}",
+                                   all_text))
     results.append(CheckResult(
-        "Double barre `//` entre paires homologues (dihybride indépendant)",
-        sep_count >= 8,
-        f"séparateurs `}}\\,//\\,\\dfrac` trouvés : {sep_count}"))
+        "Génotypes en notation diploïde (\\overline{} = 2 barres)",
+        has_double_bar,
+        f"{diploid_count} génotype(s) diploïde(s) détecté(s)"))
+
+    # 11. Aucun génotype haploïde étranger — si une cellule de la TABLE
+    #     contient `\dfrac{A}{a}` où a est une lettre simple SANS
+    #     overline, c'est une fuite (gamètes ont `\dfrac{A}{}` vide).
+    leaked = []
+    for tbl in table_lines:
+        for row in (tbl.get("rows") or []):
+            if not isinstance(row, list):
+                continue
+            # Skip the first cell (= row header = gamete on the side).
+            for cell in row[1:]:
+                if not isinstance(cell, str):
+                    continue
+                # Find any \dfrac{X}{Y} where Y is a non-empty single allele
+                # WITHOUT \overline → that's a single-bar genotype = bug.
+                for m in re.finditer(r"\\dfrac\{([^{}]+)\}\{([^{}]+)\}", cell):
+                    denom = m.group(2)
+                    if denom and "\\overline" not in denom and "\\underline" not in denom:
+                        leaked.append(m.group(0))
+    results.append(CheckResult(
+        "Aucun génotype à une seule barre dans les cellules d'échiquier",
+        not leaked,
+        f"fuites : {leaked[:3]}" if leaked else "OK"))
 
     return results
 
