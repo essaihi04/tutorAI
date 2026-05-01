@@ -1664,13 +1664,23 @@ RÈGLES STRICTES :
 - Tu cites l'année et la session EXACTES indiquées ci-dessus. JAMAIS d'autres.
 - Tu ne mentionnes JAMAIS un examen/année différent à moins que l'étudiant ne te le demande explicitement.
 
-🔄 BASCULE VERS UN AUTRE EXERCICE BAC :
-- Si l'étudiant demande explicitement « un AUTRE exercice », « un nouvel exercice », « ferme et ouvre », « différent », « autre année », « autre session » (même thème ou thème différent), tu DOIS :
-  1. Émettre IMMÉDIATEMENT un nouveau `<exam_exercise>mots-clés du thème demandé</exam_exercise>` afin que le SYSTÈME charge un VRAI exercice depuis la banque officielle BAC.
-  2. NE PAS fabriquer un faux énoncé d'examen sur le tableau (`<ui>` whiteboard). NE JAMAIS inventer un titre comme « BAC National 2022 — Session Normale » avec un énoncé que tu rédigerais toi-même : seuls les exercices ouverts via `<exam_exercise>` sont des VRAIS exercices BAC.
+🔄 BASCULE VERS UN AUTRE EXERCICE BAC — RÈGLE ÉLARGIE :
+Tu DOIS émettre IMMÉDIATEMENT `<exam_exercise>mots-clés du thème demandé</exam_exercise>` dans CHACUN des cas suivants :
+  (a) L'étudiant dit « autre exercice », « nouvel exercice », « ferme et ouvre », « différent », « autre année », « autre session », « change ».
+  (b) L'étudiant demande un exercice BAC sur UN THÈME DIFFÉRENT de celui actuellement affiché ci-dessus, même SANS dire « autre ». Exemples :
+      → affiché = pollution, étudiant dit « je veux un exercice BAC sur la génétique » → ÉMETTRE `<exam_exercise>génétique</exam_exercise>`
+      → affiché = ATP, étudiant dit « donne-moi un exercice BAC sur la radioactivité » → ÉMETTRE `<exam_exercise>radioactivité désintégration noyau</exam_exercise>`
+      → affiché = génétique, étudiant dit « exercice bac sur la tectonique » → ÉMETTRE `<exam_exercise>subduction tectonique plaques</exam_exercise>`
+  (c) L'étudiant mentionne un thème clairement hors-sujet de l'exercice courant (mot-clé qui n'apparaît pas dans l'énoncé affiché).
+
+RÈGLES STRICTES pour la bascule :
+  1. TOUJOURS émettre `<exam_exercise>…</exam_exercise>` — JAMAIS juste du texte ou un `<ui>` whiteboard.
+  2. NE PAS fabriquer un faux énoncé d'examen sur le tableau. NE JAMAIS inventer un titre comme « BAC National 2022 — Session Normale » avec un énoncé que tu rédigerais toi-même : seuls les exercices ouverts via `<exam_exercise>` sont des VRAIS exercices BAC.
   3. NE PAS citer une année/session précise dans ta phrase d'introduction — laisse le système choisir l'exercice et afficher les vraies métadonnées dans le panneau.
-  4. Annonce simplement : « D'accord, je t'ouvre un autre exercice BAC sur [thème] » puis émets le tag.
-- Si l'étudiant veut continuer sur l'exercice actuel, reste sur celui affiché ci-dessus.
+  4. Annonce brièvement : « D'accord, je t'ouvre un exercice BAC sur [thème] » puis émets le tag IMMÉDIATEMENT après.
+
+- Si l'étudiant veut VRAIMENT continuer sur l'exercice actuel (il parle de « cette question », « la question N », « l'énoncé affiché »), reste sur celui affiché ci-dessus.
+- EN CAS DE DOUTE entre « rester » et « basculer », BASCULE — émets le tag. Mieux vaut ouvrir un nouvel exercice que de rester bloqué sur le précédent.
 """
             system_prompt = (system_prompt or "") + "\n\n" + exam_view_block
 
