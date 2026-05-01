@@ -298,6 +298,15 @@ def run_checks(boards: list[dict], response: str) -> list[CheckResult]:
         len(found_props) >= 3,
         f"trouvées : {found_props}"))
 
+    # 10. Double barre `//` entre les deux paires homologues (dihybride
+    #     indépendant — convention BAC marocaine, 1 trait = 1 paire).
+    sep_pattern = re.compile(r"\}\s*(?:\\,)?\s*//\s*(?:\\,)?\s*\\dfrac")
+    sep_count = len(sep_pattern.findall(all_text))
+    results.append(CheckResult(
+        "Double barre `//` entre paires homologues (dihybride indépendant)",
+        sep_count >= 8,
+        f"séparateurs `}}\\,//\\,\\dfrac` trouvés : {sep_count}"))
+
     return results
 
 

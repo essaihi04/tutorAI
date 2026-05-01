@@ -1,9 +1,9 @@
 # Test : Échiquier de croisement — SVT 2025 Normale (Q20)
 
-_Généré le 2026-05-01 12:34:04_
+_Généré le 2026-05-01 12:46:55_
 
 
-**Temps LLM** : 22.1s — **Réponse** : 5188 chars
+**Temps LLM** : 26.8s — **Réponse** : 5374 chars
 
 **Boards détectés** : 1
 
@@ -21,61 +21,119 @@ _Généré le 2026-05-01 12:34:04_
 | 7 | Pas de `\text`/`\times`/`\frac` corrompu en tab/formfeed | ✅ PASS | OK |
 | 8 | Les 4 phénotypes F2 apparaissent : [G,L] [G,ℓ] [g,L] [g,ℓ] | ✅ PASS | trouvés : ['[G,L]', '[G,ℓ]', '[g,L]', '[g,ℓ]'] |
 | 9 | Proportions 9/16, 3/16, 1/16 mentionnées | ✅ PASS | trouvées : ['9/16', '3/16', '1/16'] |
+| 10 | Double barre `//` entre paires homologues (dihybride indépendant) | ✅ PASS | séparateurs `}\,//\,\dfrac` trouvés : 30 |
 
-**Score : 9/9** — 🎉 TOUT VERT
+**Score : 10/10** — 🎉 TOUT VERT
 
 
 ## Contenu des boards (après sanitizer)
 
 
-### Board 1 — « Échiquier de croisement F1 × F1 (Gènes indépendants) »
+### Board 1 — « Interprétation chromosomique du 2e croisement »
 
 ```json
 [
+  {
+    "type": "subtitle",
+    "content": "1️⃣ Parents : F1 × F1"
+  },
+  {
+    "type": "math",
+    "content": "\\text{Phénotypes : }\\;[G,L]\\;\\times\\;[G,L]"
+  },
+  {
+    "type": "math",
+    "content": "\\text{Génotypes : }\\;\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;\\times\\;\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}"
+  },
+  {
+    "type": "separator",
+    "content": ""
+  },
+  {
+    "type": "subtitle",
+    "content": "2️⃣ Gamètes produits par chaque parent (équiprobables)"
+  },
+  {
+    "type": "math",
+    "content": "\\text{Gamète 1 : }\\;\\dfrac{G}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)"
+  },
+  {
+    "type": "math",
+    "content": "\\text{Gamète 2 : }\\;\\dfrac{G}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"
+  },
+  {
+    "type": "math",
+    "content": "\\text{Gamète 3 : }\\;\\dfrac{g}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)"
+  },
+  {
+    "type": "math",
+    "content": "\\text{Gamète 4 : }\\;\\dfrac{g}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"
+  },
+  {
+    "type": "separator",
+    "content": ""
+  },
+  {
+    "type": "subtitle",
+    "content": "3️⃣ Échiquier de fécondation F1 × F1"
+  },
   {
     "type": "table",
     "content": "",
     "headers": [
       "♀ \\\\ ♂",
-      "\\dfrac{G}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-      "\\dfrac{G}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
-      "\\dfrac{g}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-      "\\dfrac{g}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"
+      "\\dfrac{G}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+      "\\dfrac{G}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
+      "\\dfrac{g}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+      "\\dfrac{g}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"
     ],
     "rows": [
       [
-        "\\dfrac{G}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-        "\\dfrac{G}{G}\\,\\dfrac{L}{L}\\;[G,L]",
-        "\\dfrac{G}{G}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-        "\\dfrac{G}{g}\\,\\dfrac{L}{L}\\;[G,L]",
-        "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]"
+        "\\dfrac{G}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+        "\\dfrac{G}{G}\\,//\\,\\dfrac{L}{L}\\;[G,L]",
+        "\\dfrac{G}{G}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{L}\\;[G,L]",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]"
       ],
       [
-        "\\dfrac{G}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
-        "\\dfrac{G}{G}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-        "\\dfrac{G}{G}\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
-        "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-        "\\dfrac{G}{g}\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]"
+        "\\dfrac{G}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
+        "\\dfrac{G}{G}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+        "\\dfrac{G}{G}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]"
       ],
       [
-        "\\dfrac{g}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-        "\\dfrac{G}{g}\\,\\dfrac{L}{L}\\;[G,L]",
-        "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-        "\\dfrac{g}{g}\\,\\dfrac{L}{L}\\;[g,L]",
-        "\\dfrac{g}{g}\\,\\dfrac{L}{\\ell}\\;[g,L]"
+        "\\dfrac{g}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{L}\\;[G,L]",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+        "\\dfrac{g}{g}\\,//\\,\\dfrac{L}{L}\\;[g,L]",
+        "\\dfrac{g}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[g,L]"
       ],
       [
-        "\\dfrac{g}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
-        "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-        "\\dfrac{G}{g}\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
-        "\\dfrac{g}{g}\\,\\dfrac{L}{\\ell}\\;[g,L]",
-        "\\dfrac{g}{g}\\,\\dfrac{\\ell}{\\ell}\\;[g,\\ell]"
+        "\\dfrac{g}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+        "\\dfrac{G}{g}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
+        "\\dfrac{g}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[g,L]",
+        "\\dfrac{g}{g}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[g,\\ell]"
       ]
     ]
   },
   {
+    "type": "separator",
+    "content": ""
+  },
+  {
+    "type": "subtitle",
+    "content": "4️⃣ Résultats F2 — Proportions phénotypiques"
+  },
+  {
     "type": "box",
-    "content": "Résultats F2 : [G,L] = 9/16 ; [G,ℓ] = 3/16 ; [g,L] = 3/16 ; [g,ℓ] = 1/16. Soit une proportion 9:3:3:1.",
+    "content": "[G,L] = 9/16 = 56,25 %  |  [G,ℓ] = 3/16 = 18,75 %  |  [g,L] = 3/16 = 18,75 %  |  [g,ℓ] = 1/16 = 6,25 %",
+    "color": "green"
+  },
+  {
+    "type": "box",
+    "content": "Les résultats théoriques (9:3:3:1) sont conformes aux résultats expérimentaux → gènes indépendants",
     "color": "orange"
   }
 ]
@@ -84,85 +142,86 @@ _Généré le 2026-05-01 12:34:04_
 ## Réponse brute LLM
 
 ```
-Excellent ! Décortiquons ta réponse en détail pour que tu comprennes exactement ce qui a été bien fait et ce qui a manqué pour obtenir la note maximale. C'est une excellente méthode pour progresser.
+# Analyse détaillée de ta réponse — Question BAC SVT 2025
 
-### Analyse détaillée de ta réponse
+## 🔍 Décorticage phrase par phrase
 
-**1. Points forts (ce qui t'a rapporté 0.75 pt) :**
+| Ta réponse | Correction officielle | Analyse |
+|---|---|---|
+| « Le croisement F1 × F1 donne la F2 » | ✅ F1 × F1 → F2 | **Correct.** Bonne identification du croisement |
+| « Les parents F1 sont [G,L] × [G,L] » | ✅ F1 : [G,L] × [G,L] | **Correct.** Phénotypes bien notés |
+| « Les génotypes sont GgLl × GgLl » | ✅ G//g L//ℓ × G//g L//ℓ | **❌ Erreur de notation.** Tu as écrit `GgLl` en notation linéaire. La correction officielle exige `\dfrac{G}{g}\,//\,\dfrac{L}{\ell}` (deux fractions avec double barre `//` pour gènes indépendants) |
+| « Les gamètes sont GL, Gl, gL, gl » | ✅ ¼ G/L/ ; ¼ G/ℓ/ ; ¼ g/L/ ; ¼ g/ℓ/ | **❌ Notation incorrecte.** Tu as écrit les gamètes en lettres collées `GL`. Il faut `\dfrac{G}{}\,//\,\dfrac{L}{}` (un allèle au-dessus, vide en dessous) |
+| « Je n'ai pas fait l'échiquier » | ❌ Échiquier 4×4 obligatoire | **❌ Erreur majeure.** La question dit explicitement « en vous aidant d'un échiquier de croisement ». Tu as perdu 0,5 pt ici |
+| « Je sais qu'on obtient 9:3:3:1 » | ✅ [G,L]=9/16, [G,ℓ]=3/16, [g,L]=3/16, [g,ℓ]=1/16 | **Correct sur le fond** mais tu n'as pas détaillé les proportions en fractions |
+| « qui prouve que les gènes sont indépendants » | ✅ Conforme aux résultats expérimentaux | **Correct.** Bonne conclusion |
 
-*   **Identification correcte du croisement :** Tu as bien écrit « Le croisement F1 × F1 donne la F2. Les parents F1 sont [G,L] × [G,L]. » C'est la base.
-*   **Génotypes corrects :** Tu as noté « Les génotypes sont GgLl × GgLl ». C'est juste.
-*   **Gamètes corrects :** Tu as listé « Les gamètes sont GL, Gl, gL, gl ». C'est parfait.
-*   **Conclusion juste :** Tu as déduit « on obtient la proportion 9 : 3 : 3 : 1 qui prouve que les gènes sont indépendants. » C'est la conclusion attendue.
+## 📊 Bilan de ta réponse
 
-**2. Points faibles (ce qui t'a coûté 0.75 pt) :**
+| Critère | Points gagnés | Points perdus |
+|---|---|---|
+| Identification du croisement | ✅ 0,25 pt | — |
+| Génotypes des parents | — | ❌ -0,25 pt (notation) |
+| Gamètes | — | ❌ -0,25 pt (notation) |
+| Échiquier de croisement | — | ❌ -0,50 pt (absent) |
+| Proportions 9:3:3:1 | ✅ 0,25 pt | — |
+| Conclusion (gènes indépendants) | ✅ 0,25 pt | — |
+| **Total** | **0,75/1,5** | **-0,75 pt** |
 
-*   **Absence de l'échiquier de croisement :** La question était explicite : « on vous aidant d'un échiquier de croisement ». C'est l'outil central de l'interprétation chromosomique. En ne le faisant pas, tu as perdu la moitié des points.
-*   **Notation non conforme au BAC :** Tu as utilisé `GgLl` (notation dite "en ligne"). La correction officielle exige une **représentation chromosomique** avec des fractions LaTeX `\dfrac{G}{g}\;\dfrac{L}{\ell}` pour montrer les deux paires de chromosomes homologues. C'est un détail visuel très important pour le correcteur.
-*   **Proportions des gamètes manquantes :** Tu as listé les gamètes mais sans indiquer leurs proportions (¼ ou 25% chacun). Dans un échiquier, c'est essentiel pour calculer les résultats finaux.
+## ✍️ Version modèle — ce qu'il fallait écrire sur ta copie BAC
 
-### Version Modèle (rédigée comme sur une copie BAC)
-
-Voici comment tu aurais dû rédiger ta réponse pour obtenir la note maximale. Lis attentivement la structure et la notation.
-
-**Interprétation chromosomique du deuxième croisement :**
-
-**1. Parents :** F1 [G,L] × F1 [G,L]
-**2. Génotypes :** `\dfrac{G}{g}\;\dfrac{L}{\ell}` × `\dfrac{G}{g}\;\dfrac{L}{\ell}`
-**3. Gamètes :** Chaque parent produit 4 types de gamètes équiprobables (car gènes indépendants) :
-    *   `\dfrac{G}{}\;\dfrac{L}{}` (25%)
-    *   `\dfrac{G}{}\;\dfrac{\ell}{}` (25%)
-    *   `\dfrac{g}{}\;\dfrac{L}{}` (25%)
-    *   `\dfrac{g}{}\;\dfrac{\ell}{}` (25%)
-
-**4. Échiquier de croisement (Fécondation) :**
-
-Voici l'échiquier complet, comme tu dois le présenter.
-
-<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Échiquier de croisement F1 × F1 (Gènes indépendants)","lines":[
+<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Interprétation chromosomique du 2e croisement","lines":[
+  {"type":"subtitle","content":"1️⃣ Parents : F1 × F1"},
+  {"type":"math","content":"\\text{Phénotypes : }\\;[G,L]\\;\\times\\;[G,L]"},
+  {"type":"math","content":"\\text{Génotypes : }\\;\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;\\times\\;\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}"},
+  {"type":"separator","content":""},
+  {"type":"subtitle","content":"2️⃣ Gamètes produits par chaque parent (équiprobables)"},
+  {"type":"math","content":"\\text{Gamète 1 : }\\;\\dfrac{G}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)"},
+  {"type":"math","content":"\\text{Gamète 2 : }\\;\\dfrac{G}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"},
+  {"type":"math","content":"\\text{Gamète 3 : }\\;\\dfrac{g}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)"},
+  {"type":"math","content":"\\text{Gamète 4 : }\\;\\dfrac{g}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"},
+  {"type":"separator","content":""},
+  {"type":"subtitle","content":"3️⃣ Échiquier de fécondation F1 × F1"},
   {"type":"table","content":"","headers":[
     "♀ \\\\ ♂",
-    "\\dfrac{G}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-    "\\dfrac{G}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
-    "\\dfrac{g}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-    "\\dfrac{g}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"
+    "\\dfrac{G}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+    "\\dfrac{G}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
+    "\\dfrac{g}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+    "\\dfrac{g}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)"
   ],"rows":[
-    ["\\dfrac{G}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-     "\\dfrac{G}{G}\\,\\dfrac{L}{L}\\;[G,L]",
-     "\\dfrac{G}{G}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-     "\\dfrac{G}{g}\\,\\dfrac{L}{L}\\;[G,L]",
-     "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]"],
-    ["\\dfrac{G}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
-     "\\dfrac{G}{G}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-     "\\dfrac{G}{G}\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
-     "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-     "\\dfrac{G}{g}\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]"],
-    ["\\dfrac{g}{}\\,\\dfrac{L}{}\\;(25\\,\\%)",
-     "\\dfrac{G}{g}\\,\\dfrac{L}{L}\\;[G,L]",
-     "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-     "\\dfrac{g}{g}\\,\\dfrac{L}{L}\\;[g,L]",
-     "\\dfrac{g}{g}\\,\\dfrac{L}{\\ell}\\;[g,L]"],
-    ["\\dfrac{g}{}\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
-     "\\dfrac{G}{g}\\,\\dfrac{L}{\\ell}\\;[G,L]",
-     "\\dfrac{G}{g}\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
-     "\\dfrac{g}{g}\\,\\dfrac{L}{\\ell}\\;[g,L]",
-     "\\dfrac{g}{g}\\,\\dfrac{\\ell}{\\ell}\\;[g,\\ell]"]
+    ["\\dfrac{G}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+     "\\dfrac{G}{G}\\,//\\,\\dfrac{L}{L}\\;[G,L]",
+     "\\dfrac{G}{G}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{L}\\;[G,L]",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]"],
+    ["\\dfrac{G}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
+     "\\dfrac{G}{G}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+     "\\dfrac{G}{G}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]"],
+    ["\\dfrac{g}{}\\,//\\,\\dfrac{L}{}\\;(25\\,\\%)",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{L}\\;[G,L]",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+     "\\dfrac{g}{g}\\,//\\,\\dfrac{L}{L}\\;[g,L]",
+     "\\dfrac{g}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[g,L]"],
+    ["\\dfrac{g}{}\\,//\\,\\dfrac{\\ell}{}\\;(25\\,\\%)",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[G,L]",
+     "\\dfrac{G}{g}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[G,\\ell]",
+     "\\dfrac{g}{g}\\,//\\,\\dfrac{L}{\\ell}\\;[g,L]",
+     "\\dfrac{g}{g}\\,//\\,\\dfrac{\\ell}{\\ell}\\;[g,\\ell]"]
   ]},
-  {"type":"box","content":"Résultats F2 : [G,L] = 9/16 ; [G,ℓ] = 3/16 ; [g,L] = 3/16 ; [g,ℓ] = 1/16. Soit une proportion 9:3:3:1.","color":"orange"}
+  {"type":"separator","content":""},
+  {"type":"subtitle","content":"4️⃣ Résultats F2 — Proportions phénotypiques"},
+  {"type":"box","content":"[G,L] = 9/16 = 56,25 %  |  [G,ℓ] = 3/16 = 18,75 %  |  [g,L] = 3/16 = 18,75 %  |  [g,ℓ] = 1/16 = 6,25 %","color":"green"},
+  {"type":"box","content":"Les résultats théoriques (9:3:3:1) sont conformes aux résultats expérimentaux → gènes indépendants","color":"orange"}
 ]}}]}</ui>
 
-**5. Conclusion :** Les résultats théoriques (9:3:3:1) sont conformes aux résultats expérimentaux, ce qui confirme que les gènes responsables de la couleur (G/g) et de l'aspect (L/ℓ) du pelage sont **indépendants** (portés par deux paires de chromosomes différentes).
+## 🎯 Ce que tu dois retenir pour le BAC
 
-### 💡 Leçon à retenir pour le BAC
-
-*   **Lis la question deux fois :** Si on te demande un échiquier, tu DOIS le dessiner. C'est non-négociable.
-*   **Sois un "robot" de la notation :** Utilise TOUJOURS la notation `\dfrac{}{}` pour les génotypes. C'est la signature du BAC SVT.
-*   **Structure ta réponse :** Parents → Génotypes → Gamètes (avec %) → Échiquier → Résultats. C'est une recette qui marche à tous les coups.
-
-Maintenant que tu as vu la version modèle, je te propose de t'entraîner sur un cas similaire pour être sûr d'avoir bien compris.
-
-<suggestions>[
-  {"label":"✅ Oui, c'est clair !","prompt":"Oui, j'ai compris la différence. Je veux un autre exercice pour m'entraîner.","icon":"✅"},
-  {"label":"❓ Pourquoi ¼ pour chaque gamète ?","prompt":"Je ne comprends pas pourquoi chaque g
+| Point | Ta force | À améliorer |
+|---|---|---|
+| **Raisonnement** | ✅ Tu as compris la logique du dihybridisme | — |
+| **Proportions** | ✅ Tu connais 9:3:3:1 | — |
+| **Notation génotype** | ❌ `GgLl` → `\dfrac{G}{g}\,//\
 …[tronqué]
 ```

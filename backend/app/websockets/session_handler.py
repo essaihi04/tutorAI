@@ -214,7 +214,9 @@ def _to_latex_dihyb_zygote(m: re.Match) -> str:
     top, bot = s.split("//")
     top = top.strip()
     bot = bot.strip()
-    return rf"$\dfrac{{{top[0]}}}{{{bot[0]}}}\,\dfrac{{{top[1]}}}{{{bot[1]}}}$"
+    # Two pairs of homologous chromosomes (independent genes) → double bar `//`
+    # separator between the two fractions, per Moroccan BAC convention.
+    return rf"$\dfrac{{{top[0]}}}{{{bot[0]}}}\,//\,\dfrac{{{top[1]}}}{{{bot[1]}}}$"
 
 
 def _to_latex_monohyb_zygote(m: re.Match) -> str:
@@ -227,7 +229,9 @@ def _to_latex_monohyb_zygote(m: re.Match) -> str:
 
 def _to_latex_dihyb_gamete(m: re.Match) -> str:
     s = m.group(0).rstrip("/").strip()
-    return rf"$\dfrac{{{s[0]}}}{{}}\,\dfrac{{{s[1]}}}{{}}$"
+    # Dihybride gamete carries one allele from each pair → keep the `//`
+    # separator visible between the two pairs of chromosomes.
+    return rf"$\dfrac{{{s[0]}}}{{}}\,//\,\dfrac{{{s[1]}}}{{}}$"
 
 
 def _to_latex_monohyb_gamete(m: re.Match) -> str:
