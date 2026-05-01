@@ -107,10 +107,10 @@ type InputMode = 'text' | 'draw' | 'photo';
 export default function AnswerInput({
   questionContent,
   questionType = 'open',
-  choices = [],
-  itemsLeft = [],
-  itemsRight = [],
-  value,
+  choices: choicesProp = [],
+  itemsLeft: itemsLeftProp = [],
+  itemsRight: itemsRightProp = [],
+  value: valueProp,
   onChange,
   onImageChange,
   onSubmit,
@@ -121,7 +121,17 @@ export default function AnswerInput({
   correctAnswer,
   subject = '',
 }: Props) {
-  const detectedType = questionType !== 'open' ? questionType : detectQuestionType(questionContent);
+  // Defensive coercion: default-parameter only fires on `undefined`, NOT on
+  // `null`. The exam API can send `choices: null` / `items_left: null` on an
+  // open question, and `answers[qKey]` may momentarily be null when the
+  // panel switches exercise/question — calling `.length` / `.trim()` on
+  // those would crash the whole session with "Cannot read properties of
+  // null (reading 'length')".
+  const choices = Array.isArray(choicesProp) ? choicesProp : [];
+  const itemsLeft = Array.isArray(itemsLeftProp) ? itemsLeftProp : [];
+  const itemsRight = Array.isArray(itemsRightProp) ? itemsRightProp : [];
+  const value = typeof valueProp === 'string' ? valueProp : '';
+  const detectedType = questionType !== 'open' ? questionType : detectQuestionType(questionContent || '');
   const needsMath = detectedType === 'calcul' || detectedType === 'definition';
   const needsDraw = detectedType === 'graphe' || detectedType === 'schema';
   const defaultMode: InputMode = needsDraw ? 'draw' : 'text';
