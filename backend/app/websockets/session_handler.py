@@ -3229,8 +3229,36 @@ RÈGLES :
             schema_handled = True
 
         # ── 1b. EXAM EXERCISE detection ──
-        exam_ex_match = re.search(r'<exam_exercise>(.*?)</exam_exercise>', ai_response, re.DOTALL)
+        # Try closed tag first, then fall back to an UNCLOSED tag (truncation
+        # or LLM forgot the closing </exam_exercise>). The unclosed variant
+        # captures everything until either another opening tag (<ui>, <board>,
+        # <schema>, <draw>, <suggestions>) or the end of the response.
+        exam_ex_match = re.search(
+            r'<exam_exercise>(.*?)</exam_exercise>', ai_response, re.DOTALL
+        )
+        if not exam_ex_match:
+            # Stop at ANY '<' (covers truncated '</exam_exercise' without '>',
+            # a following <ui>/<board>/etc., or simple unclosed tag at EOR).
+            exam_ex_match = re.search(
+                r'<exam_exercise>([^<]*?)(?=<|$)',
+                ai_response, re.DOTALL,
+            )
+            if exam_ex_match:
+                _safe_log(
+                    "[AI Commands] UNCLOSED <exam_exercise> tag detected — "
+                    "recovering content up to next tag / EOR"
+                )
         exam_exercises_sent = False
+        # Treat empty / whitespace-only tags as no-match so the force_exam_panel
+        # cascade can recover using student_text (otherwise we'd fire an empty
+        # search, get 0 results, send hide_exam_panel, and the user sees the
+        # panel never open even though they clearly asked for a BAC exercise).
+        if exam_ex_match and not exam_ex_match.group(1).strip():
+            _safe_log(
+                "[AI Commands] Empty <exam_exercise> tag — treating as missing "
+                "tag so force_exam_panel fallback can recover from student_text"
+            )
+            exam_ex_match = None
         if exam_ex_match:
             exam_query = exam_ex_match.group(1).strip()
             # Capture the AI's announcement text right before the tag — this often
@@ -3321,8 +3349,23 @@ RÈGLES :
                     })
                     exam_exercises_sent = True
                 else:
-                    _safe_log(f"[AI Commands] No exam exercises found for '{exam_query}' — hiding stale panel")
-                    await self.websocket.send_json({"type": "hide_exam_panel"})
+                    # Defer hide_exam_panel when force_exam_panel fallback is
+                    # about to run — otherwise the user sees a close/reopen
+                    # flash, or (worse) a close when the fallback succeeds a
+                    # moment later. If the fallback is NOT going to run
+                    # (force_exam_panel=False or exam_context=True), hide now.
+                    if force_exam_panel and not exam_context:
+                        _safe_log(
+                            f"[AI Commands] No exam exercises found for "
+                            f"'{exam_query}' — letting force_exam_panel "
+                            "fallback try before hiding panel"
+                        )
+                    else:
+                        _safe_log(
+                            f"[AI Commands] No exam exercises found for "
+                            f"'{exam_query}' — hiding stale panel"
+                        )
+                        await self.websocket.send_json({"type": "hide_exam_panel"})
             except Exception as e:
                 _safe_log(f"[AI Commands] Error searching exam bank: {e}")
 
