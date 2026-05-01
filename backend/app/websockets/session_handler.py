@@ -1629,6 +1629,14 @@ RÈGLES STRICTES :
 - Si l'étudiant parle de "cette question", "la question N°X", "l'exercice", "l'examen", il parle TOUJOURS de CE qui est affiché ci-dessus.
 - Tu cites l'année et la session EXACTES indiquées ci-dessus. JAMAIS d'autres.
 - Tu ne mentionnes JAMAIS un examen/année différent à moins que l'étudiant ne te le demande explicitement.
+
+🔄 BASCULE VERS UN AUTRE EXERCICE BAC :
+- Si l'étudiant demande explicitement « un AUTRE exercice », « un nouvel exercice », « ferme et ouvre », « différent », « autre année », « autre session » (même thème ou thème différent), tu DOIS :
+  1. Émettre IMMÉDIATEMENT un nouveau `<exam_exercise>mots-clés du thème demandé</exam_exercise>` afin que le SYSTÈME charge un VRAI exercice depuis la banque officielle BAC.
+  2. NE PAS fabriquer un faux énoncé d'examen sur le tableau (`<ui>` whiteboard). NE JAMAIS inventer un titre comme « BAC National 2022 — Session Normale » avec un énoncé que tu rédigerais toi-même : seuls les exercices ouverts via `<exam_exercise>` sont des VRAIS exercices BAC.
+  3. NE PAS citer une année/session précise dans ta phrase d'introduction — laisse le système choisir l'exercice et afficher les vraies métadonnées dans le panneau.
+  4. Annonce simplement : « D'accord, je t'ouvre un autre exercice BAC sur [thème] » puis émets le tag.
+- Si l'étudiant veut continuer sur l'exercice actuel, reste sur celui affiché ci-dessus.
 """
             system_prompt = (system_prompt or "") + "\n\n" + exam_view_block
 
