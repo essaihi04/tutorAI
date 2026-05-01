@@ -96,6 +96,137 @@ def _json_cleanup_variants(s: str):
     yield _escape_bare_backslashes(cleaned)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Genetics ASCII → LaTeX sanitizer
+# ─────────────────────────────────────────────────────────────────────
+# Defense in depth: even with the strictest prompt, some LLM turns
+# still emit Moroccan BAC SVT genetics notation in ASCII form like
+# ``DO//dø``, ``dø//dø``, ``DO/`` instead of the required ``\dfrac``
+# LaTeX blocks.  This leaves the whiteboard rendering unreadable
+# (fractions collapsed onto a single line).  We rewrite every cell /
+# content string in board payloads before sending them to the frontend.
+#
+# Supported patterns (most specific first):
+#   •  Dihybride zygote  ``XY//xy``   → ``$\dfrac{X}{x}\,\dfrac{Y}{y}$``
+#   •  Monohybride       ``X//x``     → ``$\dfrac{X}{x}$``
+#   •  Dihybride gamète  ``XY/`` / ``XY //`` → ``$\dfrac{X}{}\,\dfrac{Y}{}$``
+#   •  Monohybride gamète ``X/``      → ``$\dfrac{X}{}$``
+# Allele alphabet includes accented Moroccan notations: ``ø``, ``ù``,
+# ``é``, plus ``+``/``-`` for wild-type markers.
+# Existing ``$...$`` blocks are preserved untouched so we don't
+# double-wrap cells the LLM already rendered correctly.
+_ALLELE = r"[A-Za-zøùéÉØ+\-]"
+# Match dihybride zygote XY//xy (letters × 2 // letters × 2).
+_RE_DIHYB_ZYGOTE = re.compile(
+    rf"(?<![A-Za-z${{\\]){_ALLELE}{_ALLELE}\s*//\s*{_ALLELE}{_ALLELE}(?![A-Za-z}}])"
+)
+# Match monohybride zygote X//x (letters × 1 // letters × 1).
+_RE_MONOHYB_ZYGOTE = re.compile(
+    rf"(?<![A-Za-z${{\\]){_ALLELE}\s*//\s*{_ALLELE}(?![A-Za-z}}])"
+)
+# Match dihybride gamete XY/ (letters × 2 /) — one slash only, no second letter.
+_RE_DIHYB_GAMETE = re.compile(
+    rf"(?<![A-Za-z${{\\/]){_ALLELE}{_ALLELE}\s*/(?!/)(?![A-Za-z}}])"
+)
+# Match monohybride gamete X/ (letters × 1 /) — last resort, narrow context.
+_RE_MONOHYB_GAMETE = re.compile(
+    rf"(?<![A-Za-z${{\\/]){_ALLELE}\s*/(?!/)(?![A-Za-z}}])"
+)
+
+
+def _to_latex_dihyb_zygote(m: re.Match) -> str:
+    s = m.group(0)
+    top, bot = s.split("//")
+    top = top.strip()
+    bot = bot.strip()
+    return rf"$\dfrac{{{top[0]}}}{{{bot[0]}}}\,\dfrac{{{top[1]}}}{{{bot[1]}}}$"
+
+
+def _to_latex_monohyb_zygote(m: re.Match) -> str:
+    s = m.group(0)
+    top, bot = s.split("//")
+    top = top.strip()
+    bot = bot.strip()
+    return rf"$\dfrac{{{top}}}{{{bot}}}$"
+
+
+def _to_latex_dihyb_gamete(m: re.Match) -> str:
+    s = m.group(0).rstrip("/").strip()
+    return rf"$\dfrac{{{s[0]}}}{{}}\,\dfrac{{{s[1]}}}{{}}$"
+
+
+def _to_latex_monohyb_gamete(m: re.Match) -> str:
+    s = m.group(0).rstrip("/").strip()
+    return rf"$\dfrac{{{s}}}{{}}$"
+
+
+def _rewrite_ascii_genetics(text: str) -> str:
+    """Rewrite ASCII genetics notation (DO//dø, dø/) to LaTeX \\dfrac blocks.
+
+    Applied cell-by-cell to board contents before they hit the frontend.
+    Protects existing ``$...$`` segments so we don't re-wrap them.
+    """
+    if not text or not isinstance(text, str):
+        return text or ""
+    if "//" not in text and "/" not in text:
+        return text
+
+    # Split on existing $...$ / $$...$$ so we don't rewrite inside LaTeX.
+    segments = re.split(r"(\$\$[^$]+\$\$|\$[^$]+\$)", text)
+    out = []
+    for seg in segments:
+        if seg.startswith("$"):
+            out.append(seg)
+            continue
+        # Order matters: dihybride zygote first (2+2 letters),
+        # then monohybride zygote, then dihybride gamete, then monohybride gamete.
+        seg = _RE_DIHYB_ZYGOTE.sub(_to_latex_dihyb_zygote, seg)
+        seg = _RE_MONOHYB_ZYGOTE.sub(_to_latex_monohyb_zygote, seg)
+        seg = _RE_DIHYB_GAMETE.sub(_to_latex_dihyb_gamete, seg)
+        # Monohybride gamete is dangerous (would match any ``X/`` in French
+        # prose like ``et/ou``).  Only apply when the line already contains
+        # a genetics marker — zygote or phénotype bracket.
+        if "\\dfrac" in seg or re.search(r"\[[A-Za-zøùéÉØ,+\- ]+\]", seg):
+            seg = _RE_MONOHYB_GAMETE.sub(_to_latex_monohyb_gamete, seg)
+        out.append(seg)
+    return "".join(out)
+
+
+def _sanitize_genetics_cells(lines):
+    """In-place rewrite ASCII genetics notation inside a board ``lines`` list.
+
+    Covers text content, table headers / rows, and step / box labels.
+    """
+    if not isinstance(lines, list):
+        return lines
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        if isinstance(line.get("content"), str):
+            line["content"] = _rewrite_ascii_genetics(line["content"])
+        if isinstance(line.get("explanation"), str):
+            line["explanation"] = _rewrite_ascii_genetics(line["explanation"])
+        headers = line.get("headers")
+        if isinstance(headers, list):
+            line["headers"] = [
+                _rewrite_ascii_genetics(h) if isinstance(h, str) else h
+                for h in headers
+            ]
+        rows = line.get("rows")
+        if isinstance(rows, list):
+            new_rows = []
+            for row in rows:
+                if isinstance(row, list):
+                    new_rows.append([
+                        _rewrite_ascii_genetics(c) if isinstance(c, str) else c
+                        for c in row
+                    ])
+                else:
+                    new_rows.append(row)
+            line["rows"] = new_rows
+    return lines
+
+
 class SessionHandler:
     """Handles a single tutoring session's voice pipeline."""
 
@@ -2736,6 +2867,10 @@ RÈGLES :
                         merged_lines.append({"type": "subtitle", "content": bp["title"]})
                     merged_lines.extend(bp["lines"])
                 _safe_log(f"[AI Commands] Merged {len(collected_board_payloads)} board payloads into one ({len(merged_lines)} total lines)")
+                # Defense in depth: rewrite any residual ASCII genetics
+                # notation (``DO//dø``, ``dø/``) to LaTeX ``\dfrac`` before
+                # the board lands on the student's screen.
+                merged_lines = _sanitize_genetics_cells(merged_lines)
                 await self.websocket.send_json({"type": "hide_exercise"})
                 await self.websocket.send_json({"type": "hide_media"})
                 await self.websocket.send_json({"type": "clear_whiteboard"})
@@ -2885,7 +3020,9 @@ RÈGLES :
                 _safe_log(f"[AI Commands] Board content detected: {board_data.get('title', 'Tableau')} ({len(normalized_lines)} lines)")
                 for i, line in enumerate(normalized_lines[:3]):
                     _safe_log(f"[AI Commands]   Line {i}: type={line.get('type')} content={repr(line.get('content', '')[:80])}")
-                
+
+                # Defense in depth: rewrite ASCII genetics (DO//dø) to \dfrac.
+                normalized_lines = _sanitize_genetics_cells(normalized_lines)
                 await self.websocket.send_json({"type": "hide_media"})
                 await self.websocket.send_json({"type": "clear_whiteboard"})
                 await self.websocket.send_json({
@@ -3676,6 +3813,8 @@ RÈGLES :
 
                 if auto_lines:
                     _safe_log(f"[AI Commands] Auto-board fallback: converting AI text to board ({len(auto_lines)} lines)")
+                    # Defense in depth: rewrite ASCII genetics (DO//dø) to \dfrac.
+                    auto_lines = _sanitize_genetics_cells(auto_lines)
                     await self.websocket.send_json({"type": "clear_whiteboard"})
                     await self.websocket.send_json({
                         "type": "whiteboard_board",
