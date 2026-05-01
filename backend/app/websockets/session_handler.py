@@ -704,6 +704,7 @@ class SessionHandler:
         lines.append("- Justification → « Cela s'explique par le fait que… », « En effet,… », « Car… ».")
         lines.append("- Dans un TABLEAU comparatif, chaque cellule « Réponse modèle » est UNE PHRASE COMPLÈTE (sujet + verbe + complément). Mots-clés isolés (« mitose », « prophase », « plus rapide ») = INTERDIT.")
         lines.append("- Chaque ligne du tableau traite UN critère DIFFÉRENT — interdit de répéter le même élément de réponse sur plusieurs lignes.")
+        lines.append("- COMPLÉTUDE TABLEAU : la cellule « Réponse modèle » contient la RÉDACTION COMPLÈTE du critère (mêmes phrases que celles que tu écrirais dans le chat) — JAMAIS « Idem », « Voir ci-dessus », « cf. chat », « Mêmes éléments », ou une version raccourcie. Le tableau doit pouvoir se lire tout seul, sans le chat, et donner à l'élève une copie BAC complète.")
         lines.append("")
         lines.append("🧬 RÈGLE GÉNÉTIQUE (si la question porte sur un croisement / hérédité) :")
         lines.append("- L'interprétation chromosomique va OBLIGATOIREMENT dans un bloc <ui> show_board, avec : phénotypes, génotypes en `\\\\dfrac`, gamètes, ÉCHIQUIER de fécondation en `type=table`, résultats. Cf. PROTOCOLE_GÉNÉTIQUE en haut.")
@@ -1968,14 +1969,22 @@ STRUCTURE OBLIGATOIRE (texte HORS des balises) :
 
 7. **Action suivante concrète** — UNE phrase : que doit-il refaire / réviser maintenant ?
 
-8. **APRÈS** ton texte, mets dans `<board>...</board>` un tableau comparatif "Ta réponse vs Réponse modèle" OU les éléments-clés à retenir.
+8. **APRÈS** ton texte, mets dans `<board>...</board>` (ou `<ui>` show_board) un tableau comparatif "Ta réponse vs Réponse modèle".
 
-   🚨 RÈGLE TABLEAU — chaque cellule de la colonne « Réponse modèle » DOIT être une PHRASE COMPLÈTE (pas un mot-clé isolé). Exemples :
+   🚨 RÈGLE CRITIQUE — COMPLÉTUDE DU TABLEAU (ce point a été signalé défaillant) :
+   - La colonne « Réponse modèle » du tableau DOIT contenir la RÉPONSE COMPLÈTE RÉDIGÉE — pas un résumé, pas des mots-clés, pas « voir ci-dessus », pas « cf. chat ».
+   - Si ta version modèle du point 4 fait 5 phrases, la cellule « Réponse modèle » contient CES 5 PHRASES intégralement (ou réparties sur plusieurs lignes du tableau, une phrase par critère).
+   - INTERDIT : cellule qui dit « Idem », « Voir rédaction », « Comme expliqué », « Mêmes éléments », ou qui ne contient qu'un fragment.
+   - Si le tableau a 3 lignes (Observation / Déduction / Justification), chaque ligne contient la PHRASE RÉDIGÉE complète correspondante, pas un mot-clé.
+
+   🚨 RÈGLE STYLE — chaque cellule « Réponse modèle » est une PHRASE COMPLÈTE avec connecteur scientifique :
    - ❌ MAUVAIS  : « mitose / prophase / fuseau »
    - ✅ BON     : « On observe que la cellule entre en prophase : les chromosomes se condensent et le fuseau mitotique se met en place. »
    - ❌ MAUVAIS  : « plus rapide / plus lent »
    - ✅ BON     : « On remarque que la réaction A est plus rapide que la réaction B car la concentration en ions H⁺ est plus élevée. »
-   Chaque ligne du tableau doit traiter UN critère DIFFÉRENT — ne JAMAIS répéter le même élément de réponse dans plusieurs lignes.
+   - ❌ MAUVAIS  : « Voir réponse modèle ci-dessus » / « Idem » / cellule vide
+   - ✅ BON     : la phrase rédigée complète, même si elle apparaît aussi dans le texte chat
+   Chaque ligne du tableau traite UN critère DIFFÉRENT — ne JAMAIS répéter le même élément de réponse dans plusieurs lignes.
 
 RÈGLES :
 - La RÉDACTION DU MODÈLE (point 4) prime sur la concision : 4 à 7 phrases bien construites pour la version modèle, pas des mots-clés.
