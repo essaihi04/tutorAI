@@ -3265,10 +3265,20 @@ RÈGLES :
                     _safe_log(f"[SubjectDetect] fallback infer_from_context -> {subject_hint}")
                 student_level = ctx.get("proficiency", None)
                 conv_context = ctx.get("lesson_title", "") or ctx.get("chapter_title", "")
+                # ── Exclude the currently-open exam so the LLM's switch
+                # intent actually changes the panel. Without this, generic
+                # tag keywords ("chromosome", "génétique"…) keep scoring
+                # the already-displayed exercise highest, giving the user
+                # the perception that "nothing happens" when they ask for
+                # another exercise.
+                open_exam_id = None
+                if isinstance(self.current_exam_view, dict):
+                    open_exam_id = self.current_exam_view.get("exam_id") or None
                 exercises = exam_bank.search_full_exercises(
                     query=exam_query,
                     subject=subject_hint,
                     count=1,
+                    exclude_exam_id=open_exam_id,
                     student_level=student_level,
                     conversation_context=conv_context if conv_context else None,
                 )
@@ -3281,9 +3291,24 @@ RÈGLES :
                             query=exam_query,
                             subject=None,
                             count=1,
+                            exclude_exam_id=open_exam_id,
                             student_level=student_level,
                             conversation_context=conv_context if conv_context else None,
                         )
+                # Very last resort: drop BOTH the exclude_exam_id and the
+                # subject filter. This covers the edge case where the exam
+                # bank only has one exercise matching the requested topic
+                # and that exercise IS the currently-open one — better to
+                # reopen it than leave the panel stuck / hidden.
+                if not exercises and open_exam_id:
+                    _safe_log(f"[AI Commands] Still 0 exercises after exclude_exam_id='{open_exam_id}', retrying WITHOUT exclude (user may only have this one match)")
+                    exercises = exam_bank.search_full_exercises(
+                        query=exam_query,
+                        subject=subject_hint,
+                        count=1,
+                        student_level=student_level,
+                        conversation_context=conv_context if conv_context else None,
+                    )
                 if exercises:
                     _safe_log(f"[AI Commands] Found {len(exercises)} full exercises for '{exam_query}' with {sum(len(e['questions']) for e in exercises)} questions")
                     # Hide any whiteboard/media before showing exam panel
@@ -3347,10 +3372,16 @@ RÈGLES :
                 #   3. Single-question search + subject (more permissive)
                 #   4. Single-question search + subject + generic "exercice bac"
                 #   5. Only as last resort: drop the subject filter
+                # Exclude currently-open exam so the user really gets a
+                # DIFFERENT exercise (see primary-path comment above).
+                open_exam_id_fb = None
+                if isinstance(self.current_exam_view, dict):
+                    open_exam_id_fb = self.current_exam_view.get("exam_id") or None
                 exercises = exam_bank.search_full_exercises(
                     query=search_query,
                     subject=subject_hint,
                     count=1,
+                    exclude_exam_id=open_exam_id_fb,
                     student_level=student_level,
                     conversation_context=conv_context if conv_context else None,
                 )
@@ -3360,6 +3391,7 @@ RÈGLES :
                         query=search_query,
                         subject=subject_hint,
                         count=1,
+                        exclude_exam_id=open_exam_id_fb,
                         student_level=student_level,
                         conversation_context=None,
                     )
@@ -3371,6 +3403,7 @@ RÈGLES :
                         query=search_query,
                         subject=subject_hint,
                         count=2,
+                        exclude_exam_id=open_exam_id_fb,
                     )
                     if not single_qs:
                         _safe_log(f"[AI Commands] Force exam fallback: single-question search empty for subject='{subject_hint}', trying generic 'exercice bac' within same subject")
@@ -3378,6 +3411,7 @@ RÈGLES :
                             query="exercice bac",
                             subject=subject_hint,
                             count=2,
+                            exclude_exam_id=open_exam_id_fb,
                         )
                 # Last resort: drop the subject filter entirely — but ONLY
                 # when we DON'T know which subject was requested. If the user
