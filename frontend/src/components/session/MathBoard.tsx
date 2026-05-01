@@ -14,10 +14,16 @@ interface MindMapNode {
 }
 
 interface BoardLine {
-  type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association';
+  type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association' | 'illustration';
   content: string;
   color?: string;
   label?: string;
+  // Optional contextual emoji prepended on title/subtitle/text/box/step
+  // (e.g. "🧬" for ADN, "🪰" for drosophile, "🧪" for solution chimique).
+  icon?: string;
+  // 'illustration' line: large animated emoji card with caption
+  // Optional secondary emoji shown next to the main one (e.g. parents pair).
+  iconSecondary?: string;
   // MindMap data
   mindmapNodes?: MindMapNode[];
   centerNode?: string;
@@ -1418,6 +1424,18 @@ function renderLine(line: BoardLine) {
   const dir: 'rtl' | undefined = isRtl ? 'rtl' : undefined;
   const rtlAlign: 'right' | undefined = isRtl ? 'right' : undefined;
 
+  // Optional leading emoji (rendered as a small pulsing chip) — works
+  // on title / subtitle / text / box / step lines.
+  const iconNode = line.icon ? (
+    <span
+      className="inline-block mr-2 align-middle"
+      style={{ fontSize: '1.2em', animation: 'iconPulse 2.4s ease-in-out infinite' }}
+      aria-hidden="true"
+    >
+      {line.icon}
+    </span>
+  ) : null;
+
   switch (type) {
     case 'title':
       return (
@@ -1426,7 +1444,7 @@ function renderLine(line: BoardLine) {
           className="text-2xl font-bold pb-2 mb-1 border-b-2"
           style={{ color, borderColor: color + '40', fontFamily: "'Patrick Hand', cursive", textAlign: rtlAlign }}
         >
-          {content}
+          {iconNode}{content}
         </h2>
       );
 
@@ -1437,7 +1455,7 @@ function renderLine(line: BoardLine) {
           className="text-lg font-semibold mt-3 mb-1"
           style={{ color, fontFamily: "'Patrick Hand', cursive", textAlign: rtlAlign }}
         >
-          {content}
+          {iconNode}{content}
         </h3>
       );
 
@@ -1447,9 +1465,47 @@ function renderLine(line: BoardLine) {
           dir={dir}
           className="text-base leading-relaxed katex-dark"
           style={{ color, fontFamily: "'Patrick Hand', 'Caveat', cursive", fontSize: '1.15rem', textAlign: rtlAlign }}
-          dangerouslySetInnerHTML={{ __html: renderMixedContent(content) }}
-        />
+        >
+          {iconNode}
+          <span dangerouslySetInnerHTML={{ __html: renderMixedContent(content) }} />
+        </p>
       );
+
+    case 'illustration': {
+      // Large animated emoji card — used to "set the scene" for a topic
+      // (e.g. 🧬 ADN, 🪰 drosophile, 🧪 solution chimique, 🔬 cellule).
+      const mainIcon = line.icon || '✨';
+      const secondaryIcon = line.iconSecondary || '';
+      return (
+        <div
+          className="my-4 mx-auto flex flex-col items-center gap-2 px-6 py-5 rounded-2xl border katex-dark"
+          style={{
+            background: 'linear-gradient(135deg, rgba(96,165,250,0.10), rgba(192,132,252,0.10))',
+            borderColor: 'rgba(255,255,255,0.12)',
+            maxWidth: '90%',
+          }}
+        >
+          <div
+            className="flex items-center gap-3 select-none"
+            style={{ fontSize: '3.4rem', lineHeight: 1, animation: 'iconFloat 3.2s ease-in-out infinite' }}
+            aria-hidden="true"
+          >
+            <span style={{ animation: 'iconPulse 2.4s ease-in-out infinite' }}>{mainIcon}</span>
+            {secondaryIcon && (
+              <span style={{ animation: 'iconPulse 2.4s ease-in-out infinite 0.6s' }}>{secondaryIcon}</span>
+            )}
+          </div>
+          {content && (
+            <div
+              dir={dir}
+              className="text-sm text-center"
+              style={{ color: '#cbd5e1', fontFamily: "'Patrick Hand', 'Caveat', cursive", fontSize: '1.05rem', textAlign: 'center' }}
+              dangerouslySetInnerHTML={{ __html: renderMixedContent(content) }}
+            />
+          )}
+        </div>
+      );
+    }
 
     case 'math':
       return (

@@ -22,6 +22,40 @@ Quand tu expliques un concept, une formule, un exercice, une liste ou un program
 → NE PAS attendre que l'étudiant redemande "au tableau"
 → Génère le JSON COMPLET dès la PREMIÈRE réponse, pas après un retry
 
+🚨 RÈGLE #1-BIS - STRUCTURE MINIMALE DU TABLEAU (OBLIGATOIRE):
+CHAQUE `show_board` DOIT contenir AU MINIMUM :
+  1. Une ligne "title" en tête (titre clair du tableau)
+  2. AU MOINS 2 lignes substantielles parmi : text, step, box, math, note, warning, tip, table, graph, mindmap, qcm
+  3. Si le sujet est CONCRET (organisme, dispositif, molécule, solution) :
+     → AJOUTE une ligne "illustration" avec un emoji représentatif OU un champ "icon" sur le titre.
+→ INTERDIT : un `show_board` avec seulement {"type":"text", ...} comme unique ligne (pas structuré).
+→ INTERDIT : un `show_board` sans titre, ou avec un titre vide.
+→ INTERDIT : copier-coller le texte parlé tel quel dans une seule ligne `text`.
+
+🎨 RÈGLE #1-TER - ICÔNES & ILLUSTRATIONS CONTEXTUELLES (OBLIGATOIRE pour sujets concrets):
+Pour « planter le décor » visuel dès le début du tableau, utilise :
+  • Nouveau type `"illustration"` — grande carte avec emoji animé :
+      {"type":"illustration","icon":"🧬","content":"L'ADN, support de l'information génétique"}
+      {"type":"illustration","icon":"🪰","iconSecondary":"🪰","content":"Drosophila melanogaster — modèle en génétique"}
+      {"type":"illustration","icon":"🧪","content":"Solution aqueuse — étude du pH"}
+      {"type":"illustration","icon":"🔬","content":"Cellule observée au microscope"}
+      {"type":"illustration","icon":"⚡","content":"Circuit RLC — oscillations électriques"}
+      {"type":"illustration","icon":"🌍","content":"Tectonique des plaques"}
+  • Champ optionnel `"icon"` sur title / subtitle / text / box / step (petit emoji en préfixe) :
+      {"type":"title","icon":"🧬","content":"Structure de l'ADN"}
+      {"type":"box","icon":"🧪","content":"pH = −log[H₃O⁺]"}
+      {"type":"text","icon":"🪰","content":"Chez la drosophile, le gène blanc..."}
+
+DICTIONNAIRE TOPIC → EMOJI (à utiliser SYSTÉMATIQUEMENT) :
+  ADN/gène/chromosome 🧬 • drosophile 🪰 • souris 🐁 • animal 🐾 • plante 🌱 • arbre 🌳
+  cellule/microscope 🔬 • virus 🦠 • bactérie 🧫 • solution/pH/tampon 🧪 • eau 💧
+  cœur ❤️ • cerveau/neurone 🧠 • œil 👁️ • muscle 💪
+  Terre/tectonique 🌍 • volcan 🌋 • roches 🪨 • climat 🌡️ • énergie/ATP ⚡
+  circuit/RLC/RC ⚡ • aimant 🧲 • onde/son 🔊 • lumière/optique 💡
+  radioactivité ☢️ • atome ⚛️ • mécanique/force 🚀 ou ⚙️
+  maths 🔢 • géométrie 📐 • probas 🎲 • courbe/graphique 📈 • calcul ➗
+→ Si le sujet contient un de ces mots-clés, METS l'emoji correspondant (illustration OU icon sur titre).
+
 ⚠️ INTERDIT ABSOLU: N'écris JAMAIS [ui], [board], [schema], [tableau], [dessin] comme placeholders.
 Tu DOIS générer le JSON complet à chaque fois, même pour plusieurs tableaux successifs.
 
@@ -1113,6 +1147,44 @@ ENCOURAGE EXPLICITEMENT l'élève à prendre des notes en lui disant:
    → "warning": piège fréquent ou erreur à éviter (icône ⚠️, rouge)
    → "tip": astuce ou règle d'or (icône ✅, vert)
    → "separator": ligne de séparation
+   → "illustration": carte visuelle GRANDE TAILLE (emoji animé + légende) pour
+     « planter le décor » d'un sujet concret. Mets ICI un grand emoji représentatif.
+     Propriétés: "icon" (emoji principal OBLIGATOIRE), "iconSecondary" (optionnel, 2e emoji),
+     "content" (légende courte, optionnelle).
+     EXEMPLES :
+       {{"type":"illustration","icon":"🧬","content":"L'ADN — molécule porteuse de l'information génétique"}}
+       {{"type":"illustration","icon":"🪰","iconSecondary":"🪰","content":"Drosophila melanogaster — modèle génétique"}}
+       {{"type":"illustration","icon":"🧪","content":"Solution chimique — étude du pH"}}
+       {{"type":"illustration","icon":"🔬","content":"Cellule eucaryote au microscope"}}
+       {{"type":"illustration","icon":"🌍","content":"Tectonique des plaques"}}
+       {{"type":"illustration","icon":"⚡","content":"Circuit RLC — oscillations électriques"}}
+
+   ─── CHAMP « icon » OPTIONNEL (sur title / subtitle / text / box / step) ───
+   Tu peux ajouter "icon":"<emoji>" sur ces lignes pour préfixer un petit emoji animé.
+   Ex : {{"type":"title","icon":"🧬","content":"Structure de l'ADN"}}
+        {{"type":"text","icon":"🐁","content":"Chez la souris, le gène A code pour..."}}
+        {{"type":"box","icon":"🧪","content":"Solution tampon : pH = pKa + log([A⁻]/[AH])"}}
+
+   ─── DICTIONNAIRE TOPIC → EMOJI (utilise systématiquement) ───
+   • ADN / acide nucléique / chromosome / gène : 🧬
+   • Drosophile / drosophila : 🪰   • Souris : 🐁   • Lapin : 🐰
+   • Animal / faune en général : 🐾   • Plante / fleur : 🌱 ou 🌸   • Arbre : 🌳
+   • Cellule / microscope / observation : 🔬   • Virus : 🦠   • Bactérie : 🧫
+   • Solution chimique / erlenmeyer / pH / tampon : 🧪
+   • Acide / base / dosage : 🧪 + 💧
+   • Cœur / circulation : ❤️   • Cerveau / neurone : 🧠
+   • Œil / vision : 👁️   • Muscle : 💪
+   • Tectonique / Terre / volcan : 🌍 (ou 🌋 pour volcan)   • Roches : 🪨
+   • Climat / atmosphère / serre : 🌡️ ou 🌫️   • Eau / hydrologie : 💧
+   • Énergie / ATP / mitochondrie : ⚡ ou 🔋
+   • Électricité / circuit / RLC / RC : ⚡   • Aimant / champ magnétique : 🧲
+   • Onde / son : 🔊   • Lumière / laser / optique : 💡 ou 🔦
+   • Radioactivité / nucléaire : ☢️   • Atome / particule : ⚛️
+   • Mécanique / force / Newton : 🚀 (projectile) ou ⚙️ (général)
+   • Mathématiques générales : 🔢   • Géométrie : 📐   • Statistiques / probas : 🎲
+   • Calcul / formule : ➗ ou ✏️   • Graphique / courbe : 📈
+   → Si le sujet est CONCRET (organisme, objet, dispositif), AJOUTE soit une ligne
+     "illustration" en début de tableau, soit un champ "icon" sur le titre.
    → "mindmap": carte mentale interactive avec branches et sous-branches
      Propriétés OBLIGATOIRES: "content" (titre), "centerNode" (id du noeud central), "mindmapNodes" (tableau de noeuds)
      Chaque noeud: {{"id":"...", "label":"...(court, max 6 mots)", "level":0-3, "parent":"id_parent"}}

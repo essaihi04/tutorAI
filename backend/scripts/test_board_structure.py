@@ -164,6 +164,64 @@ def _flatten_board_text(boards: list[dict]) -> tuple[str, list[dict]]:
     return all_text, table_lines
 
 
+def _all_board_icons_and_text(boards: list[dict]) -> tuple[str, list[str], list[dict]]:
+    """Gather every bit of text/emoji from boards, including ``icon``
+    and ``iconSecondary`` fields (not picked up by `_flatten_board_text`)."""
+    full_text = ""
+    icon_fields: list[str] = []
+    illustration_lines: list[dict] = []
+    for b in boards:
+        if isinstance(b.get("title"), str):
+            full_text += "\n" + b["title"]
+        for ln in b.get("lines") or []:
+            if not isinstance(ln, dict):
+                continue
+            if ln.get("type") == "illustration":
+                illustration_lines.append(ln)
+            for key in ("icon", "iconSecondary"):
+                v = ln.get(key)
+                if isinstance(v, str) and v:
+                    icon_fields.append(v)
+                    full_text += " " + v
+            for key in ("content", "explanation", "label"):
+                v = ln.get(key)
+                if isinstance(v, str):
+                    full_text += "\n" + v
+            for h in (ln.get("headers") or []):
+                if isinstance(h, str):
+                    full_text += "\n" + h
+            for row in (ln.get("rows") or []):
+                if isinstance(row, list):
+                    for cell in row:
+                        if isinstance(cell, str):
+                            full_text += "\n" + cell
+    return full_text, icon_fields, illustration_lines
+
+
+def icon_checks(boards: list[dict], expected_icons: list[str]) -> list[CheckResult]:
+    """Verify topic-relevant icons/illustrations are present for concrete topics."""
+    out: list[CheckResult] = []
+    full_text, icon_fields, illustrations = _all_board_icons_and_text(boards)
+
+    used_structured_icon = bool(illustrations) or bool(icon_fields)
+    out.append(CheckResult(
+        "Le board utilise `illustration` ou le champ `icon` structure",
+        used_structured_icon,
+        (f"{len(illustrations)} illustration(s), "
+         f"{len(icon_fields)} champ(s) icon structure(s)")
+        if used_structured_icon
+        else "aucune icone structuree (pas de `illustration`, pas de champ `icon`)"))
+
+    matched = [e for e in expected_icons if e in full_text]
+    out.append(CheckResult(
+        f"Emoji contextuel present parmi {expected_icons}",
+        bool(matched),
+        f"trouves : {matched}"
+        if matched else "aucun emoji attendu trouve dans le board"))
+
+    return out
+
+
 def core_checks(response: str, boards: list[dict]) -> list[CheckResult]:
     """Checks valables pour TOUS les scénarios — structuration de base."""
     out: list[CheckResult] = []
@@ -316,6 +374,11 @@ class Scenario:
     chapter_title: str = ""
     lesson_title: str = ""
     objective: str = ""
+    # Contextual icons expected when topic is CONCRETE (drosophile, ADN,
+    # solution, RLC…) — at least one emoji from this list must appear in
+    # the board lines (as `icon` field, `iconSecondary`, inside content,
+    # or via an `illustration` line).
+    expected_icons: list[str] = field(default_factory=list)
 
 
 SCENARIOS: list[Scenario] = [
@@ -377,6 +440,63 @@ SCENARIOS: list[Scenario] = [
         is_genetics=False,
         expect_4x4=False,
         max_tokens=2200,
+        expected_icons=["🔬", "🧬", "🧫", "🦠"],
+    ),
+    # ─── TOPIC CONCRETS — attendus : illustrations / icônes visuelles ───
+    Scenario(
+        name="E • LIBRE + Drosophile (attendu : 🪰)",
+        mode="libre",
+        user_msg=(
+            "Pourquoi Thomas Morgan a-t-il choisi la drosophile (Drosophila "
+            "melanogaster) comme organisme modèle pour la génétique ? Liste "
+            "ses avantages dans un TABLEAU au tableau avec un titre et un "
+            "visuel en en-tête."
+        ),
+        is_genetics=False,
+        max_tokens=1800,
+        expected_icons=["🪰", "🐛", "🐾"],
+    ),
+    Scenario(
+        name="F • LIBRE + ADN (attendu : 🧬)",
+        mode="libre",
+        user_msg=(
+            "Explique-moi la structure de la molécule d'ADN (désoxyribose, "
+            "bases azotées, double hélice, appariement A-T / G-C) dans un "
+            "TABLEAU structuré au tableau avec un visuel de l'ADN en tête."
+        ),
+        is_genetics=False,
+        max_tokens=2000,
+        expected_icons=["🧬"],
+    ),
+    Scenario(
+        name="G • LIBRE + Solution chimique (attendu : 🧪)",
+        mode="libre",
+        user_msg=(
+            "Je prépare une solution aqueuse d'acide chlorhydrique 0,1 mol/L. "
+            "Explique-moi le calcul du pH et les étapes de préparation dans "
+            "un TABLEAU au tableau avec un visuel de la solution/erlenmeyer."
+        ),
+        is_genetics=False,
+        max_tokens=2000,
+        expected_icons=["🧪", "💧"],
+    ),
+    Scenario(
+        name="H • COACHING + Circuit RLC (attendu : ⚡)",
+        mode="coaching",
+        subject="Physique",
+        chapter_title="Circuit RLC série — oscillations libres",
+        lesson_title="Décharge d'un condensateur dans une bobine",
+        objective="Établir l'équation différentielle de q(t) et identifier "
+                  "les régimes",
+        user_msg=(
+            "Dresse-moi un tableau récapitulatif du circuit RLC série en "
+            "oscillations libres : schéma, équation différentielle de q(t), "
+            "pseudo-période, régimes (pseudo-périodique, critique, "
+            "apériodique). Visuel du circuit en en-tête."
+        ),
+        is_genetics=False,
+        max_tokens=2500,
+        expected_icons=["⚡", "🔋"],
     ),
 ]
 
@@ -426,6 +546,8 @@ async def run_scenario(client, api_key, base_url, llm: LLMService,
     checks = core_checks(response, boards)
     if sc.is_genetics and boards:
         checks.extend(genetics_checks(boards, expect_4x4=sc.expect_4x4))
+    if sc.expected_icons and boards:
+        checks.extend(icon_checks(boards, sc.expected_icons))
 
     passed = sum(1 for c in checks if c.passed)
     total = len(checks)
