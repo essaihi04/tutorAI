@@ -139,27 +139,71 @@ if ! command -v certbot &> /dev/null; then
     esac
 fi
 
-cp nginx-analytics.conf /etc/nginx/conf.d/moalim-analytics.conf
+# Ouvre les ports 80/443 si firewalld est actif
+if systemctl is-active --quiet firewalld 2>/dev/null; then
+    log "Ouverture des ports 80/443 dans firewalld"
+    firewall-cmd --permanent --add-service=http  2>/dev/null || true
+    firewall-cmd --permanent --add-service=https 2>/dev/null || true
+    firewall-cmd --reload 2>/dev/null || true
+fi
 
-# Test syntaxe nginx
+# Étape 5a : déploie une config HTTP-only temporaire pour permettre le challenge ACME
+CERT_PATH="/etc/letsencrypt/live/analytics.moalim.online/fullchain.pem"
+NGINX_CONF="/etc/nginx/conf.d/moalim-analytics.conf"
+
+if [[ ! -f "$CERT_PATH" ]]; then
+    log "Certificat SSL absent — deploiement d'une config HTTP-only pour le challenge ACME"
+    mkdir -p /var/www/certbot
+    cat > "$NGINX_CONF" <<'EONGINX'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name analytics.moalim.online;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 200 'Umami bootstrap - SSL pending';
+        add_header Content-Type text/plain;
+    }
+}
+EONGINX
+
+    if ! nginx -t 2>&1; then
+        err "Erreur syntaxe nginx (bootstrap HTTP). Aborting."
+    fi
+    systemctl reload nginx || systemctl start nginx
+
+    # ── 6a) Demande du certificat via webroot ──
+    log "Demande du certificat SSL Let's Encrypt (webroot challenge)"
+    certbot certonly --webroot -w /var/www/certbot \
+        -d analytics.moalim.online \
+        --non-interactive --agree-tos \
+        --email contact@moalim.online \
+        || err "Echec certbot. Verifie que analytics.moalim.online pointe vers ce VPS (DNS propage)."
+
+    # S'assure que les options SSL recommandees existent
+    if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+        curl -fsSL https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf \
+             -o /etc/letsencrypt/options-ssl-nginx.conf
+    fi
+    if [[ ! -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
+        log "Generation des parametres DH (peut prendre 1-2 min)..."
+        openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048
+    fi
+else
+    log "Certificat SSL deja present — skip certbot"
+fi
+
+# ── 5b) Deploie la config HTTPS finale ──
+log "Deploiement de la config HTTPS finale"
+cp nginx-analytics.conf "$NGINX_CONF"
+
 if ! nginx -t 2>&1; then
-    err "Erreur de syntaxe nginx. Restaure /etc/nginx/conf.d/moalim-analytics.conf manuellement."
+    err "Erreur syntaxe nginx (HTTPS). Inspecte $NGINX_CONF"
 fi
-
-# ── 6) Obtenir le certificat SSL ──
-log "Demande du certificat SSL Let's Encrypt pour analytics.moalim.online"
-warn "ASSURE-TOI que le DNS analytics.moalim.online → IP de ce VPS est déjà propagé !"
-echo ""
-read -p "Le DNS est-il configuré et propagé ? (vérifie avec : dig analytics.moalim.online) [y/N] " confirm
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    warn "Setup SSL ignoré. Lance plus tard :"
-    echo "  certbot --nginx -d analytics.moalim.online"
-    echo ""
-    log "Installation Umami terminée (sans HTTPS pour l'instant)."
-    exit 0
-fi
-
-certbot --nginx -d analytics.moalim.online --non-interactive --agree-tos --email contact@moalim.online --redirect
 
 # ── 7) Reload nginx ──
 log "Reload nginx"
