@@ -353,9 +353,11 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'visits';
 
 // URL de partage public Umami pour le site Moalim
-// Pour la generer : analytics.moalim.online -> Settings -> Websites -> Moalim -> Edit -> toggle "Enable share URL"
-// Format : https://analytics.moalim.online/share/XXXXXXXX/Moalim
-const UMAMI_SHARE_URL = (import.meta as any).env?.VITE_UMAMI_SHARE_URL || '';
+// Cette URL est publique par nature (genere via Umami: Settings -> Websites -> Moalim -> Edit -> Enable share URL)
+// Override possible via VITE_UMAMI_SHARE_URL dans frontend/.env.production
+const UMAMI_SHARE_URL =
+  (import.meta as any).env?.VITE_UMAMI_SHARE_URL ||
+  'https://analytics.moalim.online/share/l9m6MrmCzAq43HEV';
 
 interface RegistrationRequest {
   id: string;
