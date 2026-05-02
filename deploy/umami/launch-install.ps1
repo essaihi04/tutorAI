@@ -85,16 +85,22 @@ echo '-- Git pull (s'\''assurer d'\''avoir les scripts Umami) --'
 git pull origin main || true
 
 echo ''
-echo '-- Lancement de install.sh --'
+echo '-- Normalisation line endings (CRLF -> LF) --'
 cd deploy/umami
-# Fix Windows CRLF line endings (self-heal)
-sed -i 's/\r$//' install.sh
+sed -i 's/\r`$//' install.sh docker-compose.yml nginx-analytics.conf 2>/dev/null || true
+
+echo ''
+echo '-- Lancement de install.sh --'
 chmod +x install.sh
 yes y | bash ./install.sh
 "@
 
+    # Normalise en LF puis encode en base64 pour neutraliser les conversions
+    # que PowerShell applique au pipe stdin de ssh (CRLF injection).
     $remoteScript = $remoteScript -replace "`r`n", "`n"
-    $remoteScript | ssh "$User@$ServerIp" "bash -s"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($remoteScript)
+    $b64 = [System.Convert]::ToBase64String($bytes)
+    ssh "$User@$ServerIp" "echo $b64 | base64 -d | bash"
 
     if ($LASTEXITCODE -ne 0) {
         Err "L'installation Umami a echoue"
