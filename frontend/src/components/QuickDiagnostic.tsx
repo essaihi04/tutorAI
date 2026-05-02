@@ -4,6 +4,7 @@ import {
   Sparkles, ArrowRight, Check, X, RotateCw, Trophy,
   Target, AlertCircle, TrendingUp, Brain,
 } from 'lucide-react';
+import { track, EVENTS } from '../lib/analytics';
 
 /* ════════════════════════════════════════════════════════════
    QUICK DIAGNOSTIC — démo anonyme sans inscription
@@ -118,6 +119,7 @@ export default function QuickDiagnostic() {
     setAnswers([]);
     setSelectedChoice(null);
     setShowFeedback(false);
+    track(EVENTS.DIAGNOSTIC_FILIERE_CHOSEN, { filiere: f });
   };
 
   const submitAnswer = () => {
@@ -125,13 +127,25 @@ export default function QuickDiagnostic() {
     const newAnswers = [...answers, selectedChoice];
     setAnswers(newAnswers);
     setShowFeedback(true);
+    const isCorrect = selectedChoice === questions[currentQ].correctIndex;
+    track(EVENTS.DIAGNOSTIC_QUESTION_ANSWERED, {
+      filiere,
+      question_index: currentQ,
+      correct: isCorrect,
+    });
   };
 
   const nextQuestion = () => {
     setShowFeedback(false);
     setSelectedChoice(null);
     if (currentQ + 1 >= questions.length) {
+      const finalScore = answers.filter((ans, i) => ans === questions[i]?.correctIndex).length;
       setStep('result');
+      track(EVENTS.DIAGNOSTIC_COMPLETED, {
+        filiere,
+        score: finalScore,
+        total: questions.length,
+      });
     } else {
       setCurrentQ(currentQ + 1);
     }
@@ -143,6 +157,7 @@ export default function QuickDiagnostic() {
     setAnswers([]);
     setSelectedChoice(null);
     setShowFeedback(false);
+    track(EVENTS.DIAGNOSTIC_RESTARTED, { filiere });
   };
 
   return (
@@ -375,6 +390,11 @@ export default function QuickDiagnostic() {
 
                 <Link
                   to="/inscription"
+                  onClick={() => track(EVENTS.CTA_SIGNUP_CLICKED, {
+                    source: 'diagnostic_result',
+                    filiere,
+                    score,
+                  })}
                   className="inline-flex items-center gap-2 px-7 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 text-white font-bold text-base shadow-2xl shadow-indigo-500/40 hover:shadow-indigo-500/60 transition-all hover:scale-[1.02]"
                 >
                   <Sparkles className="w-5 h-5" />
