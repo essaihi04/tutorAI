@@ -1,4 +1,4 @@
-/* ════════════════════════════════════════════════════════════
+﻿/* ════════════════════════════════════════════════════════════
    Moalim — Umami Analytics Loader
    ────────────────────────────────────────────────────────────
    Ce fichier est inclus dans TOUTES les pages publiques :
@@ -15,13 +15,13 @@
 
 (function () {
   // ⚠️ REMPLACE CETTE VALEUR PAR TON UMAMI WEBSITE ID
-  var WEBSITE_ID = "WEBSITE_ID_PLACEHOLDER";
+  var WEBSITE_ID = "e059c2f2-e7f0-49e7-9961-66fbc057927f";
 
   // URL du serveur Umami self-hosted
   var UMAMI_URL = "https://analytics.moalim.online";
 
   // Sécurité : ne charge rien tant que le placeholder n'est pas remplacé
-  if (WEBSITE_ID === "WEBSITE_ID_PLACEHOLDER" || !WEBSITE_ID) {
+  if (WEBSITE_ID === "e059c2f2-e7f0-49e7-9961-66fbc057927f" || !WEBSITE_ID) {
     if (window.console && console.info) {
       console.info("[Moalim Analytics] Tracking inactif. Configure WEBSITE_ID dans /js/umami.js");
     }
