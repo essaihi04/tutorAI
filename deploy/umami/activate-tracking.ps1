@@ -35,15 +35,15 @@ try {
         exit 1
     }
 
+    # IMPORTANT : on remplace UNIQUEMENT la ligne `var WEBSITE_ID = "..."` pour
+    # preserver la sentinelle "WEBSITE_ID_PLACEHOLDER" dans le garde de securite.
     $content = Get-Content -Path $umamiJs -Raw -Encoding UTF8
-    if ($content -notmatch "WEBSITE_ID_PLACEHOLDER") {
-        Write-Host "   [!] Placeholder non trouve. Le tracking est peut-etre deja active." -ForegroundColor Yellow
-        $answer = Read-Host "   Forcer le remplacement ? (y/N)"
-        if ($answer -ne "y" -and $answer -ne "Y") { exit 0 }
-        $content = $content -replace 'var WEBSITE_ID = "[^"]*";', "var WEBSITE_ID = `"$WebsiteId`";"
-    } else {
-        $content = $content -replace "WEBSITE_ID_PLACEHOLDER", $WebsiteId
+    $newContent = $content -replace 'var WEBSITE_ID = "[^"]*";', "var WEBSITE_ID = `"$WebsiteId`";"
+    if ($newContent -eq $content) {
+        Err "Impossible de trouver la ligne 'var WEBSITE_ID = ...' dans $umamiJs"
+        exit 1
     }
+    $content = $newContent
 
     Set-Content -Path $umamiJs -Value $content -Encoding UTF8 -NoNewline
     Ok "Website ID injecte"
