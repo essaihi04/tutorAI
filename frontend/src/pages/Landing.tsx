@@ -157,19 +157,35 @@ function HeroSection() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
             </span>
-            <span className="text-emerald-200">IA en direct • Spécial BAC Maroc 2026</span>
+            <span className="text-emerald-200">Prédictions BAC 2026 • Analyse 20 ans d'examens</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight mb-5">
-            Le tuteur IA qui te fait
+            Le seul tuteur IA qui te dit
             <br />
-            <span className="gradient-text">décrocher la mention</span>
+            <span className="gradient-text">ce qui va tomber au BAC 2026</span>
           </h1>
 
           <p className="text-lg text-white/65 leading-relaxed max-w-xl mb-8">
-            Coaching personnalisé, <b className="text-white">60 examens réels du BAC</b> corrigés instantanément, et explications au tableau interactif —
-            le tout 100% aligné sur le cadre de référence officiel <b className="text-white">2ème BAC PC BIOF</b>.
+            <b className="text-white">Analyse statistique de 20 ans d'examens nationaux</b> + tutorat IA personnalisé +
+            <b className="text-white"> 60 examens réels corrigés</b> instantanément.
+            Aligné sur le cadre de référence officiel <b className="text-white">2ème BAC SVT et PC BIOF</b>.
           </p>
+
+          {/* Article phare prédictions */}
+          <a href="/blog/predictions-bac-2026-maroc.html" className="group inline-flex items-center gap-3 px-5 py-3 mb-6 rounded-2xl bg-gradient-to-r from-indigo-500/20 to-cyan-500/20 border border-indigo-300/40 hover:border-indigo-300/80 transition-all backdrop-blur">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-cyan-500 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-indigo-100">Prédictions BAC 2026 — gènes indépendants, Krebs, subduction…</span>
+                <span className="text-[9px] bg-indigo-400 text-black px-1.5 py-0.5 rounded font-bold">NOUVEAU</span>
+              </div>
+              <div className="text-xs text-white/70">Lis l'analyse complète des chapitres probables →</div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-indigo-200 group-hover:translate-x-1 transition-transform" />
+          </a>
 
           <div className="flex flex-col sm:flex-row gap-3 mb-8">
             <Link to="/inscription" className="group relative inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 text-white font-bold text-base shadow-2xl shadow-indigo-500/40 hover:shadow-indigo-500/60 transition-all hover:scale-[1.02]">
@@ -1170,22 +1186,25 @@ function Footer() {
               <li><a href="#features" className="hover:text-white">Modes</a></li>
               <li><a href="#dashboard" className="hover:text-white">Tableau de bord</a></li>
               <li><Link to="/inscription" className="hover:text-white">Inscription</Link></li>
+              <li><a href="/blog/predictions-bac-2026-maroc.html" className="hover:text-white">Prédictions BAC 2026</a></li>
             </ul>
           </div>
           <div>
-            <div className="text-sm font-bold mb-3 text-white/80">Aide</div>
+            <div className="text-sm font-bold mb-3 text-white/80">Ressources</div>
             <ul className="space-y-2 text-xs text-white/50">
+              <li><a href="/blog/" className="hover:text-white">Blog</a></li>
               <li><a href="#faq" className="hover:text-white">FAQ</a></li>
-              <li><a href="mailto:contact@moalim.online" className="hover:text-white">Contact</a></li>
+              <li><a href="/about.html" className="hover:text-white">À propos</a></li>
               <li><Link to="/login" className="hover:text-white">Connexion</Link></li>
             </ul>
           </div>
           <div>
-            <div className="text-sm font-bold mb-3 text-white/80">Légal</div>
+            <div className="text-sm font-bold mb-3 text-white/80">Légal & contact</div>
             <ul className="space-y-2 text-xs text-white/50">
-              <li><span>Mentions légales</span></li>
-              <li><span>Politique de confidentialité</span></li>
-              <li><span>CGU</span></li>
+              <li><a href="/contact.html" className="hover:text-white">Contact</a></li>
+              <li><a href="/mentions-legales.html" className="hover:text-white">Mentions légales</a></li>
+              <li><a href="/mentions-legales.html#politique-confidentialite" className="hover:text-white">Confidentialité</a></li>
+              <li><a href="/mentions-legales.html#cgu" className="hover:text-white">CGU</a></li>
             </ul>
           </div>
         </div>
