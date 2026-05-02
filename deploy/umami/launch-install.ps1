@@ -81,8 +81,10 @@ set -e
 cd /root/moalim
 
 echo ''
-echo '-- Git pull (s'\''assurer d'\''avoir les scripts Umami) --'
-git pull origin main || true
+echo '-- Reset + pull (s'\''assurer d'\''avoir la derniere version) --'
+git fetch origin main
+git reset --hard origin/main
+git clean -fd deploy/umami
 
 echo ''
 echo '-- Normalisation line endings (CRLF -> LF) --'
