@@ -25,14 +25,58 @@ cd "$SCRIPT_DIR"
 
 # ── 1) Vérifier Docker ──
 log "Vérification de Docker"
+
+# Détection de la distribution
+if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    DISTRO_ID="${ID:-unknown}"
+    DISTRO_LIKE="${ID_LIKE:-}"
+else
+    DISTRO_ID="unknown"
+    DISTRO_LIKE=""
+fi
+log "Distribution détectée : $DISTRO_ID"
+
 if ! command -v docker &> /dev/null; then
     warn "Docker non installé. Installation…"
-    curl -fsSL https://get.docker.com | sh
+    case "$DISTRO_ID" in
+        almalinux|rocky|centos|rhel|ol)
+            # RHEL family : utilise le repo Docker CE officiel pour CentOS
+            dnf install -y dnf-plugins-core
+            dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            ;;
+        ubuntu|debian)
+            curl -fsSL https://get.docker.com | sh
+            ;;
+        *)
+            # Fallback : essaye get.docker.com, sinon tente le repo CentOS si ID_LIKE contient rhel
+            if [[ "$DISTRO_LIKE" == *"rhel"* || "$DISTRO_LIKE" == *"fedora"* ]]; then
+                dnf install -y dnf-plugins-core
+                dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+                dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            else
+                curl -fsSL https://get.docker.com | sh
+            fi
+            ;;
+    esac
     systemctl enable --now docker
 fi
 
 if ! docker compose version &> /dev/null; then
-    err "Docker Compose v2 manquant. Installe-le avec : apt install docker-compose-plugin"
+    warn "Docker Compose v2 manquant. Installation du plugin…"
+    case "$DISTRO_ID" in
+        almalinux|rocky|centos|rhel|ol)
+            dnf install -y docker-compose-plugin
+            ;;
+        ubuntu|debian)
+            apt install -y docker-compose-plugin
+            ;;
+    esac
+fi
+
+if ! docker compose version &> /dev/null; then
+    err "Docker Compose v2 toujours manquant. Vérifie l'installation."
 fi
 
 log "Docker OK : $(docker --version)"
@@ -72,6 +116,29 @@ done
 
 # ── 5) Configurer nginx ──
 log "Installation de la config nginx"
+
+# S'assure que certbot est installé
+if ! command -v certbot &> /dev/null; then
+    warn "certbot non installé. Installation…"
+    case "$DISTRO_ID" in
+        almalinux|rocky|centos|rhel|ol)
+            dnf install -y epel-release
+            dnf install -y certbot python3-certbot-nginx
+            ;;
+        ubuntu|debian)
+            apt install -y certbot python3-certbot-nginx
+            ;;
+        *)
+            if [[ "$DISTRO_LIKE" == *"rhel"* || "$DISTRO_LIKE" == *"fedora"* ]]; then
+                dnf install -y epel-release
+                dnf install -y certbot python3-certbot-nginx
+            else
+                apt install -y certbot python3-certbot-nginx || true
+            fi
+            ;;
+    esac
+fi
+
 cp nginx-analytics.conf /etc/nginx/conf.d/moalim-analytics.conf
 
 # Test syntaxe nginx
