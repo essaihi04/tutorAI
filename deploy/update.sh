@@ -35,11 +35,10 @@ fi
 npm run build:prod
 
 log "Déploiement du build vers $WEB_DIR (isolé)"
-rm -rf "$WEB_DIR/assets"
-cp "$APP_DIR/frontend/dist/index.html" "$WEB_DIR/index.html"
-cp -r "$APP_DIR/frontend/dist/assets" "$WEB_DIR/assets"
-find "$APP_DIR/frontend/dist" -maxdepth 1 -type f ! -name 'index.html' \
-    -exec cp {} "$WEB_DIR/" \;
+# On nettoie les sous-dossiers gérés par Vite pour éviter les fichiers fantômes,
+# puis on copie tout le contenu de dist/ (assets, blog, fichiers racine, etc.).
+rm -rf "$WEB_DIR/assets" "$WEB_DIR/blog"
+cp -r "$APP_DIR/frontend/dist/." "$WEB_DIR/"
 chown -R nginx:nginx "$WEB_DIR"
 chcon -R -t httpd_sys_content_t "$WEB_DIR" 2>/dev/null || true
 
