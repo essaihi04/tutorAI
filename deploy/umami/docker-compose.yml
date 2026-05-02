@@ -1,0 +1,58 @@
+# =============================================================
+# Umami Analytics — stack ISOLÉE pour Moalim
+# - Pas de conflit avec moalim-backend (FastAPI:8000)
+# - Postgres dédié interne (pas exposé)
+# - Umami écoute uniquement sur 127.0.0.1:3001 (proxy nginx)
+# =============================================================
+version: "3.8"
+
+name: moalim-umami
+
+services:
+  # ── PostgreSQL dédié à Umami (isolé du Postgres principal) ──
+  umami-db:
+    image: postgres:15-alpine
+    container_name: moalim-umami-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD:?Set UMAMI_DB_PASSWORD in .env}
+    volumes:
+      - umami_pgdata:/var/lib/postgresql/data
+    networks:
+      - umami-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Umami app ──
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: moalim-umami
+    restart: unless-stopped
+    ports:
+      # Expose UNIQUEMENT en local — nginx fera le reverse proxy
+      - "127.0.0.1:3001:3000"
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@umami-db:5432/umami
+      DATABASE_TYPE: postgresql
+      APP_SECRET: ${UMAMI_APP_SECRET:?Set UMAMI_APP_SECRET in .env (random 32+ chars)}
+      # Désactive les stats anonymes envoyées à umami.is
+      DISABLE_TELEMETRY: "1"
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    networks:
+      - umami-net
+
+volumes:
+  umami_pgdata:
+    name: moalim_umami_pgdata
+
+networks:
+  umami-net:
+    name: moalim-umami-net
+    driver: bridge
