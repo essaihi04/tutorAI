@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff, X, Check,
   Clock, Zap, BarChart3, TrendingUp, Server, AlertCircle,
   UserPlus, Lock, Mail, User, FileUp,
-  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload, ExternalLink
+  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload, ExternalLink, Globe
 } from 'lucide-react';
 import {
   adminLogin, getAdminDashboard, getAdminUsers, createAdminUser,
@@ -350,7 +350,12 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'visits';
+
+// URL de partage public Umami pour le site Moalim
+// Pour la generer : analytics.moalim.online -> Settings -> Websites -> Moalim -> Edit -> toggle "Enable share URL"
+// Format : https://analytics.moalim.online/share/XXXXXXXX/Moalim
+const UMAMI_SHARE_URL = (import.meta as any).env?.VITE_UMAMI_SHARE_URL || '';
 
 interface RegistrationRequest {
   id: string;
@@ -632,6 +637,7 @@ export default function AdminDashboard() {
     { key: 'usage', label: 'Consommation', icon: DollarSign },
     { key: 'requests', label: 'Requêtes récentes', icon: Activity },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
+    { key: 'visits', label: 'Visites', icon: Globe },
   ];
 
   return (
@@ -1305,6 +1311,9 @@ export default function AdminDashboard() {
 
         {/* ──── MOCK EXAMS TAB ──── */}
         {activeTab === 'mockExams' && <MockExamsTab />}
+
+        {/* ──── VISITS / ANALYTICS TAB ──── */}
+        {activeTab === 'visits' && <VisitsAnalyticsTab />}
       </div>
 
       {/* Modals */}
@@ -2334,6 +2343,79 @@ function MockExamsTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Visits / Analytics Tab (Umami embed) ────────────────────
+
+function VisitsAnalyticsTab() {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  if (!UMAMI_SHARE_URL) {
+    return (
+      <div className="bg-white rounded-2xl p-8 shadow-sm border max-w-2xl mx-auto">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-100 rounded-xl">
+            <Globe className="w-6 h-6 text-blue-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Analytics — Configuration requise</h2>
+        </div>
+        <p className="text-gray-600 mb-4">
+          Pour afficher les statistiques de visites ici, génère d'abord l'URL de partage publique dans Umami :
+        </p>
+        <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 mb-6">
+          <li>
+            Va sur{' '}
+            <a href="https://analytics.moalim.online" target="_blank" rel="noopener noreferrer"
+              className="text-blue-600 hover:underline inline-flex items-center gap-1">
+              analytics.moalim.online <ExternalLink className="w-3 h-3" />
+            </a>
+          </li>
+          <li><strong>Settings</strong> → <strong>Websites</strong> → clique sur <strong>Moalim</strong> → <strong>Edit</strong></li>
+          <li>Active le toggle <strong>"Enable share URL"</strong></li>
+          <li>Copie le lien (format <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">https://analytics.moalim.online/share/XXXX/Moalim</code>)</li>
+          <li>
+            Ajoute-le au fichier <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">frontend/.env.production</code> :
+            <pre className="mt-2 p-3 bg-gray-900 text-gray-100 rounded-lg text-xs overflow-x-auto">VITE_UMAMI_SHARE_URL=https://analytics.moalim.online/share/XXXX/Moalim</pre>
+          </li>
+          <li>Redéploie : <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">remote-deploy.ps1 -UpdateOnly</code></li>
+        </ol>
+        <div className="flex gap-3">
+          <a href="https://analytics.moalim.online" target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium">
+            <ExternalLink className="w-4 h-4" /> Ouvrir Umami
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={fullscreen ? 'fixed inset-0 z-50 bg-white p-4 flex flex-col' : 'space-y-3'}>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <Globe className="w-5 h-5 text-blue-600" /> Visites du site
+        </h2>
+        <div className="flex items-center gap-2">
+          <a href={UMAMI_SHARE_URL} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">
+            <ExternalLink className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Ouvrir dans un onglet</span>
+          </a>
+          <button onClick={() => setFullscreen(!fullscreen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800">
+            {fullscreen ? <X className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {fullscreen ? 'Réduire' : 'Plein écran'}
+          </button>
+        </div>
+      </div>
+      <iframe
+        src={UMAMI_SHARE_URL}
+        title="Umami Analytics — Moalim"
+        className={`w-full bg-white rounded-2xl shadow-sm border ${fullscreen ? 'flex-1' : 'h-[calc(100vh-220px)] min-h-[600px]'}`}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
     </div>
   );
 }
