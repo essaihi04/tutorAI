@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import ConcoursCalendarPopup from '../components/ConcoursCalendarPopup';
 import MoalimChatbot from '../components/MoalimChatbot';
+import QuickDiagnostic from '../components/QuickDiagnostic';
 import {
   Sparkles, Brain, Zap, Trophy, ArrowRight, Check, Star,
   GraduationCap, MessageCircle, ChevronDown,
@@ -128,6 +129,7 @@ export default function Landing() {
       </nav>
 
       <HeroSection />
+      <QuickDiagnostic />
       <TrustBar />
       <FeaturesSection />
       <DashboardPreviewSection />
@@ -194,9 +196,9 @@ function HeroSection() {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-400 to-cyan-400 blur-xl opacity-30 group-hover:opacity-50 transition-opacity -z-10" />
             </Link>
-            <a href="#features" className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-all">
+            <a href="#diagnostic" className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-all">
               <Play className="w-4 h-4" />
-              Voir la démo
+              Tester mon niveau
             </a>
           </div>
 
