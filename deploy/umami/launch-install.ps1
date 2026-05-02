@@ -87,8 +87,10 @@ git pull origin main || true
 echo ''
 echo '-- Lancement de install.sh --'
 cd deploy/umami
+# Fix Windows CRLF line endings (self-heal)
+sed -i 's/\r$//' install.sh
 chmod +x install.sh
-yes y | ./install.sh
+yes y | bash ./install.sh
 "@
 
     $remoteScript = $remoteScript -replace "`r`n", "`n"
