@@ -147,24 +147,28 @@ export default function ExamExercisePanel({ exercises, query: _query, onClose, o
   const adaptedQuestion = useMemo(() => {
     if (!ex || !question) return null;
 
-    // Extract per-partie preamble from the question content.
-    // Convention: if a question starts with "**Partie N ...**" followed by
-    // "---" separator, the preamble is shown as its own context card above
-    // the question card, and the content is the text after the separator.
+    // Resolve the Partie preamble that applies to the current question.
+    // The "owner" of a Partie preamble is the question whose content starts
+    // with "**Partie N ...**\n---\n...". ALL subsequent questions in the
+    // same exercise belong to that Partie (until the next owner appears)
+    // and must show the same preamble in their énoncé card.
+    //
+    // Also merge the exercise's global context (e.g. "Dans cet exercice…")
+    // with the Partie preamble so both are always visible — not one or the
+    // other.
+    const PREAMBLE_RE = /^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/;
+    let activePreamble = '';
     let content = question.content || '';
-    let partiePreamble = '';
-    const partieMatch = content.match(/^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/);
-    if (partieMatch) {
-      partiePreamble = partieMatch[1].trim();
-      content = partieMatch[2].trim();
+    for (let i = 0; i <= currentQIdx; i++) {
+      const qi = ex.questions[i];
+      if (!qi) continue;
+      const mm = (qi.content || '').match(PREAMBLE_RE);
+      if (mm) activePreamble = mm[1].trim();
+      if (i === currentQIdx && mm) content = mm[2].trim();
     }
-
-    // Exercise context: on Q1 show ex.exercise_context; for any question
-    // that has a Partie preamble, show that preamble instead (so the user
-    // always sees the relevant partie intro and nothing else).
-    const exerciseContext = partiePreamble
-      ? partiePreamble
-      : (currentQIdx === 0 ? (ex.exercise_context || '') : '');
+    const exerciseContext = [ex.exercise_context || '', activePreamble]
+      .filter(Boolean)
+      .join('\n\n');
 
     return {
       index: currentQIdx,

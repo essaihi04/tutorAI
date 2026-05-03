@@ -645,13 +645,31 @@ export default function ExamPractice() {
   const handleExplain = () => {
     if (!exam || !examId) return;
     const qRaw = exam.questions[currentQ];
-    // Split off the **Partie N** preamble (if any) so the LLM sees a
-    // clean question without raw markdown markers (`**...**`, `---`).
-    const rawContent = qRaw.content || '';
-    const partieMatch = rawContent.match(/^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/);
-    const cleanContent = partieMatch ? partieMatch[2].trim() : rawContent;
-    const partiePreamble = partieMatch ? partieMatch[1].trim() : '';
-    const mergedExerciseContext = [qRaw.exercise_context || '', partiePreamble]
+    // Resolve the Partie preamble that applies to the current question
+    // (owner question OR any later sibling of the same Partie in the same
+    // exercise). Strip the preamble off the current question's content so
+    // the LLM sees clean text, but include it in exercise_context so the
+    // AI has the full Partie framing.
+    const PREAMBLE_RE = /^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/;
+    let activePreamble = '';
+    let activeExercise: string | undefined;
+    let resolvedPreamble = '';
+    let cleanContent = qRaw.content || '';
+    for (let i = 0; i <= currentQ; i++) {
+      const qi = exam.questions[i];
+      if (!qi) continue;
+      if (qi.exercise !== activeExercise) {
+        activeExercise = qi.exercise;
+        activePreamble = '';
+      }
+      const mm = (qi.content || '').match(PREAMBLE_RE);
+      if (mm) activePreamble = mm[1].trim();
+      if (i === currentQ) {
+        resolvedPreamble = activePreamble;
+        if (mm) cleanContent = mm[2].trim();
+      }
+    }
+    const mergedExerciseContext = [qRaw.exercise_context || '', resolvedPreamble]
       .filter(Boolean)
       .join('\n\n');
 
@@ -707,21 +725,49 @@ export default function ExamPractice() {
     );
   }
 
-  // Extract per-partie preamble from question.content.
-  // Convention: a question whose content starts with "**Partie N ...**"
-  // followed by a "---" separator has its preamble moved into
-  // exercise_context so the frontend renders it as its own énoncé card
-  // above the question — keeping the question text clean.
+  // Resolve the Partie preamble that applies to the current question.
+  //
+  // Convention: a question whose content starts with "**Partie N ...**\n---\n..."
+  // is the *owner* of that Partie's preamble. ALL subsequent questions in the
+  // same exercise (until the next Partie owner) belong to the same Partie and
+  // must show the preamble in their énoncé card — not only the owner.
+  //
+  // We also preserve the original exercise_context (e.g. "Dans cet exercice…")
+  // by MERGING it with the Partie preamble instead of replacing it.
   const rawQuestion = exam.questions[currentQ];
   const question = ((): QuestionData => {
     if (!rawQuestion) return rawQuestion;
-    const content = rawQuestion.content || '';
-    const m = content.match(/^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/);
-    if (!m) return rawQuestion;
+    const PREAMBLE_RE = /^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/;
+
+    // Walk the flat question list and propagate each Partie preamble to
+    // siblings of the same exercise.
+    let activePreamble = '';
+    let activeExercise: string | undefined;
+    let currentPreamble = '';
+    let strippedContent: string | null = null;
+    for (let i = 0; i <= currentQ; i++) {
+      const qi = exam.questions[i];
+      if (!qi) continue;
+      // Reset preamble when we cross into a new exercise
+      if (qi.exercise !== activeExercise) {
+        activeExercise = qi.exercise;
+        activePreamble = '';
+      }
+      const m = (qi.content || '').match(PREAMBLE_RE);
+      if (m) activePreamble = m[1].trim();
+      if (i === currentQ) {
+        currentPreamble = activePreamble;
+        strippedContent = m ? m[2].trim() : null;
+      }
+    }
+
+    const baseCtx = rawQuestion.exercise_context || '';
+    const mergedCtx = [baseCtx, currentPreamble].filter(Boolean).join('\n\n');
+    if (!currentPreamble && strippedContent === null) return rawQuestion;
     return {
       ...rawQuestion,
-      content: m[2].trim(),
-      exercise_context: m[1].trim(),
+      content: strippedContent ?? (rawQuestion.content || ''),
+      exercise_context: mergedCtx,
     };
   })();
   const hasFeedback = feedbacks[currentQ] != null;
