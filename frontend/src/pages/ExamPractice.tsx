@@ -644,10 +644,20 @@ export default function ExamPractice() {
 
   const handleExplain = () => {
     if (!exam || !examId) return;
-    const q = exam.questions[currentQ];
+    const qRaw = exam.questions[currentQ];
+    // Split off the **Partie N** preamble (if any) so the LLM sees a
+    // clean question without raw markdown markers (`**...**`, `---`).
+    const rawContent = qRaw.content || '';
+    const partieMatch = rawContent.match(/^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/);
+    const cleanContent = partieMatch ? partieMatch[2].trim() : rawContent;
+    const partiePreamble = partieMatch ? partieMatch[1].trim() : '';
+    const mergedExerciseContext = [qRaw.exercise_context || '', partiePreamble]
+      .filter(Boolean)
+      .join('\n\n');
+
     const fb = feedbacks[currentQ];
     const hasAnswer = fb != null;
-    const correction = q.correction;
+    const correction = qRaw.correction;
     const corrText = typeof correction === 'object' && correction ? (correction.content || '') : '';
 
     // Save exam state so we can restore it when returning
@@ -661,18 +671,18 @@ export default function ExamPractice() {
     // (cite their phrases, point out missing elements) instead of just re-stating
     // the official correction generically.
     sessionStorage.setItem('explain_context', JSON.stringify({
-      questionContent: q.content,
-      questionType: q.type || 'open',
-      points: q.points,
-      parentContent: q.parent_content || '',
-      exerciseContext: q.exercise_context || '',
+      questionContent: cleanContent,
+      questionType: qRaw.type || 'open',
+      points: qRaw.points,
+      parentContent: qRaw.parent_content || '',
+      exerciseContext: mergedExerciseContext,
       correction: corrText,
       hasAnswer,
       // Student's response artefacts (only meaningful when hasAnswer=true)
       studentAnswer: hasAnswer ? (answers[currentQ] || '') : '',
       studentHasImage: hasAnswer ? !!imageData[currentQ] : false,
       studentScore: fb && typeof fb.score === 'number' ? fb.score : null,
-      studentPointsMax: fb && typeof fb.points_max === 'number' ? fb.points_max : (q.points || null),
+      studentPointsMax: fb && typeof fb.points_max === 'number' ? fb.points_max : (qRaw.points || null),
       evaluatorFeedback: fb && typeof fb.feedback === 'string' ? fb.feedback : '',
       subject: exam.subject,
       examTitle: `${exam.subject} ${exam.year} ${exam.session}`,
