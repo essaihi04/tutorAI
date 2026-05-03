@@ -146,13 +146,33 @@ export default function ExamExercisePanel({ exercises, query: _query, onClose, o
   // Adapt our ExamQuestion → QuestionData expected by QuestionRenderer.
   const adaptedQuestion = useMemo(() => {
     if (!ex || !question) return null;
+
+    // Extract per-partie preamble from the question content.
+    // Convention: if a question starts with "**Partie N ...**" followed by
+    // "---" separator, the preamble is shown as its own context card above
+    // the question card, and the content is the text after the separator.
+    let content = question.content || '';
+    let partiePreamble = '';
+    const partieMatch = content.match(/^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/);
+    if (partieMatch) {
+      partiePreamble = partieMatch[1].trim();
+      content = partieMatch[2].trim();
+    }
+
+    // Exercise context: on Q1 show ex.exercise_context; for any question
+    // that has a Partie preamble, show that preamble instead (so the user
+    // always sees the relevant partie intro and nothing else).
+    const exerciseContext = partiePreamble
+      ? partiePreamble
+      : (currentQIdx === 0 ? (ex.exercise_context || '') : '');
+
     return {
       index: currentQIdx,
-      content: question.content || '',
+      content,
       points: question.points || 0,
       type: (question.type as any) || 'open',
       exercise: ex.exercise_name || '',
-      exercise_context: currentQIdx === 0 ? (ex.exercise_context || '') : '', // only show context on first question
+      exercise_context: exerciseContext,
       documents: (question.documents || []).map((d, i) => ({
         id: d.id || `doc_${i}`,
         type: d.type || 'figure',
