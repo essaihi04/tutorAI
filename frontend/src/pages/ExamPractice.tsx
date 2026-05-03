@@ -697,7 +697,23 @@ export default function ExamPractice() {
     );
   }
 
-  const question = exam.questions[currentQ];
+  // Extract per-partie preamble from question.content.
+  // Convention: a question whose content starts with "**Partie N ...**"
+  // followed by a "---" separator has its preamble moved into
+  // exercise_context so the frontend renders it as its own énoncé card
+  // above the question — keeping the question text clean.
+  const rawQuestion = exam.questions[currentQ];
+  const question = ((): QuestionData => {
+    if (!rawQuestion) return rawQuestion;
+    const content = rawQuestion.content || '';
+    const m = content.match(/^(\s*\*\*Partie\s+\d[\s\S]*?)\n\s*---\s*\n([\s\S]*)$/);
+    if (!m) return rawQuestion;
+    return {
+      ...rawQuestion,
+      content: m[2].trim(),
+      exercise_context: m[1].trim(),
+    };
+  })();
   const hasFeedback = feedbacks[currentQ] != null;
   const currentPartData = parts[activePart];
 
