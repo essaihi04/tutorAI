@@ -1,15 +1,21 @@
 """Audit physique (PC) exam JSONs for missing data and structural issues.
 
-Extends the math audit with PC-specific checks:
-  - Bundled vrai/faux questions (several a-/b-/c- items + no sub_questions
-    and no correct_answer → UI shows one Vrai/Faux selector)
-  - Multiple `**Partie N**` headers embedded inside a single ex.context
-    (= unsplit parties, student sees all preambles bundled)
-  - Type=vrai_faux or qcm without correct_answer
-  - Figure references without attached documents
+Checks:
+  1. Open questions that are actually QCM  (| A | ... | B | ... | C | ... pattern)
+  2. Open questions that look like Vrai/Faux (a- / b- / c- items, no sub_questions)
+  3. QCM/vrai_faux without correct_answer
+  4. Multiple **Partie N** headers bundled in ex.context (unsplit parties)
+  5. Bundled vrai/faux (several a-/b-/c- assertions in one vf question)
+  6. Zero-point questions
+  7. Empty content or correction
+  8. Figure references with no attached documents
+  9. Exercise points ≠ sum of question points
+  10. Exam declared total ≠ sum of exercise points
 
 Usage:
     python backend/scripts/audit_physique_exams.py [year] [-v]
+    python backend/scripts/audit_physique_exams.py 2022        # one year
+    python backend/scripts/audit_physique_exams.py 2022 ratt   # one session
 """
 from __future__ import annotations
 import json, re, sys
@@ -20,7 +26,9 @@ ROOT = Path(__file__).resolve().parents[2]
 DIR = ROOT / 'backend' / 'data' / 'exams' / 'physique'
 VERBOSE = '-v' in sys.argv
 YEAR_FILTER = next((a for a in sys.argv[1:] if a.isdigit()), None)
+SESSION_FILTER = next((a for a in sys.argv[1:] if not a.isdigit() and not a.startswith('-')), None)
 
+# ── Regex patterns ───────────────────────────────────────────────────────────
 FIG_REF = re.compile(
     r'\b(figure|schéma|graphe|diagramme|courbe ci-|ci-contre|ci-dessous)\s*\d*',
     re.IGNORECASE,
@@ -28,15 +36,34 @@ FIG_REF = re.compile(
 PARTIE_RE = re.compile(r'\*\*Partie\s+([IVX\d]+)[^*]*\*\*')
 BUNDLED_VF_RE = re.compile(r'^\s*[a-z]-\s', re.MULTILINE)
 
+# A pipe-row with at least 2 labelled choices:  | A | ... | B | ...
+# Matches both inline (single row) and multi-row 2×2 grids.
+QCM_TABLE_RE = re.compile(
+    r'\|\s*[Aa]\s*\|.+\|\s*[Bb]\s*\|',
+    re.DOTALL,
+)
 
-def _get_correct_answer(q: dict) -> str | None:
+# Correction text that references a specific answer: "réponse correcte est B"
+CORR_ANSWER_RE = re.compile(
+    r'(r[eé]ponse\s+(correcte\s+)?est\s+([A-D])|correct[e]?\s+:\s+([A-D]))',
+    re.IGNORECASE,
+)
+
+
+def _get_correct_answer(q: dict) -> bool:
+    """Return True if a usable correct_answer is set (including index 0)."""
     v = q.get('correct_answer')
-    if v:
-        return v
+    if v is not None:
+        return True
     corr = q.get('correction') or {}
     if isinstance(corr, dict):
-        return corr.get('correct_answer')
-    return None
+        ca = corr.get('correct_answer')
+        if ca is not None:
+            return True
+        cp = corr.get('correct_pairs')
+        if cp:
+            return True
+    return False
 
 
 def audit_exam(path: Path, findings: list):
@@ -111,18 +138,43 @@ def audit_exam(path: Path, findings: list):
                 # and ex has no docs → flag.
                 # (Already emitted per-question below.)
 
-                # Closed-form without correct_answer
+                # ── Check 1: open question that looks like a QCM ──────────
+                if qtype == 'open' and QCM_TABLE_RE.search(content):
+                    # How many labelled choices A/B/C/D are in the table?
+                    n_choices = len(re.findall(r'\|\s*[A-D]\s*\|', content))
+                    # Does the correction name a specific answer?
+                    corr_text = ''
+                    if isinstance(corr, dict):
+                        corr_text = corr.get('content', '') or ''
+                    elif isinstance(corr, str):
+                        corr_text = corr
+                    hint = ''
+                    m = CORR_ANSWER_RE.search(corr_text)
+                    if m:
+                        ans = m.group(3) or m.group(4) or ''
+                        hint = f' → correct={ans}'
+                    findings.append((rel, exlabel,
+                        f'Q{num}: type=open but contains QCM table ({n_choices} choices){hint} [CONVERT TO QCM]'))
+
+                # ── Check 2: open question that looks like Vrai/Faux ─────
+                if qtype == 'open' and not q.get('sub_questions'):
+                    vf_items = BUNDLED_VF_RE.findall(content)
+                    if len(vf_items) >= 2:
+                        findings.append((rel, exlabel,
+                            f'Q{num}: type=open with {len(vf_items)} vrai/faux items (a-/b-/c-) [CONVERT TO VRAI_FAUX]'))
+
+                # ── Check 3: QCM/vrai_faux without correct_answer ────────
                 if qtype in ('qcm', 'vrai_faux'):
-                    if not _get_correct_answer(q):
+                    if not _get_correct_answer(q):  # _get_correct_answer handles index=0
                         findings.append((rel, exlabel,
                             f'Q{num}: type={qtype} but correct_answer missing'))
 
-                # Bundled vrai/faux: single vf question with multiple items
+                # ── Check 4: Bundled vrai/faux already typed correctly ───
                 if qtype == 'vrai_faux' and not q.get('sub_questions'):
                     items = len(BUNDLED_VF_RE.findall(content))
                     if items >= 2 and '.' not in str(num):
                         findings.append((rel, exlabel,
-                            f'Q{num}: bundled vrai/faux ({items} items in content)'))
+                            f'Q{num}: bundled vrai/faux ({items} items in content) [SPLIT]'))
 
             # Exercise-wide figure references without any docs
             all_text = ctx + '\n' + '\n'.join((q.get('content') or '') for q in leaves)
@@ -140,7 +192,9 @@ def main():
     findings: list = []
     files = sorted(DIR.rglob('exam.json'))
     if YEAR_FILTER:
-        files = [f for f in files if YEAR_FILTER in f.parts[-2]]
+        files = [f for f in files if YEAR_FILTER in str(f.parent.name)]
+    if SESSION_FILTER:
+        files = [f for f in files if SESSION_FILTER.lower() in str(f.parent.name).lower()]
     for f in files:
         audit_exam(f, findings)
 
@@ -149,14 +203,50 @@ def main():
         print('OK  No issues detected.')
         return
 
+    # ── Count by category ────────────────────────────────────────────────
+    cat_counts: dict[str, int] = defaultdict(int)
+    for _, _, msg in findings:
+        if 'CONVERT TO QCM' in msg:
+            cat_counts['open→QCM'] += 1
+        elif 'CONVERT TO VRAI_FAUX' in msg:
+            cat_counts['open→VF'] += 1
+        elif 'SPLIT' in msg:
+            cat_counts['bundled_vf'] += 1
+        elif 'unsplit' in msg:
+            cat_counts['unsplit_partie'] += 1
+        elif 'correct_answer missing' in msg:
+            cat_counts['missing_answer'] += 1
+        elif 'points=0' in msg:
+            cat_counts['zero_points'] += 1
+        elif 'EMPTY' in msg:
+            cat_counts['empty'] += 1
+        elif 'figure' in msg or 'document' in msg:
+            cat_counts['missing_fig'] += 1
+        elif 'mismatch' in msg:
+            cat_counts['pts_mismatch'] += 1
+        else:
+            cat_counts['other'] += 1
+
+    print('Summary by category:')
+    for cat, n in sorted(cat_counts.items(), key=lambda x: -x[1]):
+        print(f'  {cat:<20} {n}')
+    print()
+
     by_file: dict[str, list] = defaultdict(list)
     for rel, where, msg in findings:
         by_file[rel].append((where, msg))
-    print(f'Found {len(findings)} issue(s) in {len(by_file)} file(s):\n')
+    print(f'Total: {len(findings)} issue(s) in {len(by_file)} file(s):\n')
     for rel, items in sorted(by_file.items()):
         print(f'=== {rel}')
         for where, msg in items:
-            print(f'  [{where}] {msg}')
+            marker = ''
+            if 'CONVERT TO QCM' in msg:
+                marker = '  *** QCM ***'
+            elif 'CONVERT TO VRAI_FAUX' in msg:
+                marker = '  *** VF ***'
+            elif 'SPLIT' in msg:
+                marker = '  *** SPLIT ***'
+            print(f'  [{where}] {msg}{marker}')
         print()
 
 
