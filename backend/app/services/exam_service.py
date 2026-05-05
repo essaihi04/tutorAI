@@ -1108,6 +1108,9 @@ class ExamService:
         elif q_type == "association" and (q.get("items_left") or q.get("items_right")):
             content = self._strip_association_table(content)
 
+        # Clean LaTeX text-formatting commands (\newline, \textbf, \textit, \begin{tabular})
+        content = self._clean_text_latex(content)
+
         # Light LaTeX → Unicode normalisation for inline math that isn't rendered
         content = self._normalize_inline_math(content)
         
@@ -1120,6 +1123,8 @@ class ExamService:
         # then parent question context, then exercise-level context.
         # This lets different questions in the same exercise show different contexts.
         ex_context = q.get("context") or (parent_q.get("context") if parent_q else None) or (exercise.get("context") if exercise else None)
+        if ex_context:
+            ex_context = self._clean_text_latex(ex_context)
 
         # Points: use own points, or inherit from parent/exercise and divide equally
         points = q.get("points")
@@ -1278,6 +1283,58 @@ class ExamService:
     _SUB_RE = re.compile(r"_\{([0-9]+)\}|_([0-9])")
     _SUP_RE = re.compile(r"\^\{([0-9]+)\}|\^([0-9])")
     _MATH_DELIM_RE = re.compile(r"\$+([^$]*?)\$+")
+
+    # ── Tabular → Markdown table conversion ────────────────────────────────
+    _TABULAR_RE = re.compile(
+        r'\\begin\{tabular\}\{[^}]*\}(.*?)\\end\{tabular\}',
+        re.DOTALL,
+    )
+
+    @staticmethod
+    def _tabular_to_markdown(match: re.Match) -> str:
+        """Convert a simple LaTeX tabular to a Markdown table."""
+        inner = match.group(1)
+        # Split rows on \\ (double backslash), ignoring \hline
+        rows = [r.strip() for r in re.split(r'\\\\', inner)]
+        rows = [r.replace('\\hline', '').strip() for r in rows if r.replace('\\hline', '').strip()]
+        if not rows:
+            return ''
+        md_rows = []
+        for i, row in enumerate(rows):
+            cells = [c.strip() for c in row.split('&')]
+            md_rows.append('| ' + ' | '.join(cells) + ' |')
+            if i == 0:  # header separator
+                md_rows.append('| ' + ' | '.join(['---'] * len(cells)) + ' |')
+        return '\n' + '\n'.join(md_rows) + '\n'
+
+    def _clean_text_latex(self, text: str) -> str:
+        """Convert LaTeX text-formatting commands to Markdown/plain text.
+
+        Handles constructs typically found in exam context/content fields:
+          - ``\\newline``   → newline character
+          - ``\\textbf{x}`` → **x**
+          - ``\\textit{x}`` → *x*
+          - ``\\underline{x}`` → x
+          - ``\\begin{tabular}...\\end{tabular}`` → Markdown table
+        Does NOT touch ``$...$`` math delimiters.
+        """
+        if not text:
+            return text
+        # \newline → real newline
+        text = text.replace('\\newline', '\n')
+        # \textbf{...} → **...**
+        text = re.sub(r'\\textbf\{([^}]*)\}', r'**\1**', text)
+        # \textit{...} → *...*
+        text = re.sub(r'\\textit\{([^}]*)\}', r'*\1*', text)
+        # \underline{...} → plain text
+        text = re.sub(r'\\underline\{([^}]*)\}', r'\1', text)
+        # \emph{...} → *...*
+        text = re.sub(r'\\emph\{([^}]*)\}', r'*\1*', text)
+        # \begin{tabular}...\end{tabular} → Markdown table
+        text = self._TABULAR_RE.sub(self._tabular_to_markdown, text)
+        # Collapse 3+ consecutive newlines to 2
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text
 
     def _normalize_inline_math(self, text: str) -> str:
         """Best-effort LaTeX → Unicode for short inline math.
