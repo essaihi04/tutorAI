@@ -134,7 +134,7 @@ EXAM_PICKS = [
     {
         "exam_id": "physique_2024_normale",
         "subject": "Physique",
-        "find": {"text_contains": "demi-réaction"},
+je         "find": {"text_contains": "demi-réaction"},
     },
     {
         "exam_id": "physique_2025_normale",

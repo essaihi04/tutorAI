@@ -1441,10 +1441,11 @@ function renderLine(line: BoardLine) {
       return (
         <h2
           dir={dir}
-          className="text-2xl font-bold pb-2 mb-1 border-b-2"
+          className="text-2xl font-bold pb-2 mb-1 border-b-2 katex-dark"
           style={{ color, borderColor: color + '40', fontFamily: "'Patrick Hand', cursive", textAlign: rtlAlign }}
         >
-          {iconNode}{content}
+          {iconNode}
+          <span dangerouslySetInnerHTML={{ __html: renderMixedContent(content) }} />
         </h2>
       );
 
@@ -1452,10 +1453,11 @@ function renderLine(line: BoardLine) {
       return (
         <h3
           dir={dir}
-          className="text-lg font-semibold mt-3 mb-1"
+          className="text-lg font-semibold mt-3 mb-1 katex-dark"
           style={{ color, fontFamily: "'Patrick Hand', cursive", textAlign: rtlAlign }}
         >
-          {iconNode}{content}
+          {iconNode}
+          <span dangerouslySetInnerHTML={{ __html: renderMixedContent(content) }} />
         </h3>
       );
 
