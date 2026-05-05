@@ -219,6 +219,8 @@ export default function DiagnosticQuiz() {
   const [preloadDone, setPreloadDone] = useState(0);
   // Tracks in-flight preloads per subject to avoid duplicate concurrent calls
   const preloadingRef = useRef<Set<string>>(new Set());
+  // Incremented to force re-trigger of the preload effect after a failed attempt
+  const [preloadRetry, setPreloadRetry] = useState(0);
   const TOTAL_QUESTIONS = 10;
 
   useEffect(() => {
@@ -253,9 +255,16 @@ export default function DiagnosticQuiz() {
               if (cur.length >= TOTAL_QUESTIONS) return prev;
               return { ...prev, [subjectId]: [...cur, qRes.data.question] };
             });
+          } else if (!qRes.data.question && !qRes.data.completed) {
+            // Backend returned null but session isn't finished → retry after short delay
+            setTimeout(() => setPreloadRetry((n) => n + 1), 2000);
           }
         })
-        .catch((e) => console.error('Failed to preload question for', subjectId, e))
+        .catch((e) => {
+          console.error('Failed to preload question for', subjectId, e);
+          // Network/server error — retry after delay so user doesn't get stuck
+          setTimeout(() => setPreloadRetry((n) => n + 1), 3000);
+        })
         .finally(() => {
           preloadingRef.current.delete(subjectId);
         });
@@ -271,7 +280,7 @@ export default function DiagnosticQuiz() {
         triggerPreload(s.id);
       }
     });
-  }, [currentQuestionIndex, currentSubjectIndex, subjectSessionIds, subjectQuestions, subjects, phase]);
+  }, [currentQuestionIndex, currentSubjectIndex, subjectSessionIds, subjectQuestions, subjects, phase, preloadRetry]);
 
   const startFullDiagnostic = async () => {
     if (!subjects.length) return;

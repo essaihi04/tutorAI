@@ -112,20 +112,45 @@ async def next_diagnostic_question(
     """
     Generate the next question in a diagnostic session.
     Returns the question or null if all questions have been generated.
+    Retries up to 3 times if the LLM returns a rejected/invalid question,
+    to avoid permanently blocking the frontend at a given question index.
     """
     try:
-        question = await diagnostic_service.generate_next_question(
-            session_id=data.session_id,
-        )
+        session = diagnostic_service._sessions.get(data.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        already_done = session.get('questions_generated', 0) >= session.get('num_questions', 10)
+        if already_done:
+            return {"question": None, "completed": True}
+
+        # Retry up to 3 times: a None return from generate_next_question means
+        # the LLM output was rejected (bad chapter, bad pairs, …) — the session
+        # counter was NOT incremented, so retrying is safe.
+        question = None
+        for attempt in range(3):
+            question = await diagnostic_service.generate_next_question(
+                session_id=data.session_id,
+            )
+            if question is not None:
+                break
+            # Check if the session is now actually complete (counter caught up)
+            if session.get('questions_generated', 0) >= session.get('num_questions', 10):
+                break
+            print(f"[Diagnostic] next-question attempt {attempt+1} returned None, retrying…")
 
         if question is None:
-            return {"question": None, "completed": True}
+            # After 3 failed attempts check if truly done or just struggling
+            truly_done = session.get('questions_generated', 0) >= session.get('num_questions', 10)
+            return {"question": None, "completed": truly_done}
 
         return {
             "question": question,
             "completed": False,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
