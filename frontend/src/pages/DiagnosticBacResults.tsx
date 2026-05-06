@@ -70,14 +70,13 @@ function noteColor(n: number) {
 interface ShareCardProps {
   avg: number;
   mentionFr: string;
-  mentionColor: string;
   massarCode: string;
   isAdmis: boolean;
   subjects: Array<{ ar: string; short: string; note: number }>;
 }
 
 const BacResultShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
-  function BacResultShareCardImpl({ avg, mentionFr, mentionColor, massarCode, isAdmis, subjects }, ref) {
+  function BacResultShareCardImpl({ avg, mentionFr, massarCode, isAdmis, subjects }, ref) {
     const col = avg >= 10 ? '#4ade80' : '#f87171';
     return (
       <div ref={ref} style={{
@@ -218,19 +217,6 @@ function BacShareModal({ onClose, ...cardProps }: ShareModalProps) {
     } catch { window.prompt('Copie ce message :', shareText); }
   };
 
-  const handleNetworkClick = async (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
-    e.preventDefault();
-    try { await navigator.clipboard.writeText(shareText); } catch { /* noop */ }
-    await downloadImage();
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const networks = [
-    { name: 'WhatsApp', color: 'bg-[#25D366] hover:bg-[#1ebe5d]', url: `https://wa.me/?text=${encodeURIComponent(shareText)}` },
-    { name: 'Facebook', color: 'bg-[#1877F2] hover:bg-[#0f63d1]', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(DIAG_URL)}&quote=${encodeURIComponent(shareTextNoUrl)}` },
-    { name: 'Instagram / TikTok', color: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90', url: '#' },
-  ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-[#0d0d24] border border-white/[.12] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4">
@@ -292,23 +278,6 @@ function BacShareModal({ onClose, ...cardProps }: ShareModalProps) {
           )}
         </div>
 
-        {/* Network links */}
-        <div className="px-5 py-4">
-          <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">Ou directement sur un réseau</p>
-          <div className="grid grid-cols-3 gap-2">
-            {networks.map((net) => (
-              <a key={net.name} href={net.url}
-                onClick={(e) => handleNetworkClick(e, net.url)}
-                target="_blank" rel="noopener noreferrer"
-                className={`flex items-center justify-center px-2 py-2.5 rounded-xl ${net.color} text-white text-[11px] font-semibold transition-all hover:shadow-md`}>
-                {net.name}
-              </a>
-            ))}
-          </div>
-          <p className="text-[10px] text-white/25 text-center mt-2">
-            Instagram / TikTok : l'image se télécharge, puis joins-la à ton post
-          </p>
-        </div>
       </div>
     </div>
   );
@@ -601,7 +570,6 @@ export default function DiagnosticBacResults() {
           onClose={() => setShowShareModal(false)}
           avg={bac_note_predicted}
           mentionFr={mention.fr}
-          mentionColor={mention.tw}
           massarCode={massarCode}
           isAdmis={isAdmis}
           subjects={shareSubjects}
