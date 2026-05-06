@@ -8,7 +8,7 @@ import {
   Sparkles, Brain, Zap, Trophy, ArrowRight, Check, Star,
   GraduationCap, MessageCircle, ChevronDown,
   Shield, Clock, Target, BookOpen, FlaskConical, Calculator,
-  PenLine, BarChart3, Award, Users, Globe, Play, Quote, Atom,
+  PenLine, BarChart3, Award, Users, Globe, Play, Quote, Atom, Flame,
 } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────────────────
@@ -196,11 +196,26 @@ function HeroSection() {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-400 to-cyan-400 blur-xl opacity-30 group-hover:opacity-50 transition-opacity -z-10" />
             </Link>
-            <a href="#diagnostic" className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-all">
+            <Link to="/bac-diagnostic" className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-all">
               <Play className="w-4 h-4" />
               Tester mon niveau
-            </a>
+            </Link>
           </div>
+
+          {/* J-28 BAC Diagnostic teaser */}
+          <Link to="/bac-diagnostic" className="group inline-flex items-center gap-3 px-5 py-3 mb-4 rounded-2xl bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-400/40 hover:border-red-400/70 transition-all backdrop-blur">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shrink-0">
+              <Flame className="w-4 h-4 text-white" />
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-red-100">Test Diagnostic BAC — Découvre ta note estimée sur 20</span>
+                <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold animate-pulse">J-28</span>
+              </div>
+              <div className="text-xs text-white/70">20 questions tirées des vrais examens · Plan de révision personnalisé →</div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-red-300 group-hover:translate-x-1 transition-transform" />
+          </Link>
 
           {/* Orientation Post-BAC teaser */}
           <Link to="/orientation" className="group inline-flex items-center gap-3 px-5 py-3 mb-8 rounded-2xl bg-gradient-to-r from-amber-500/20 to-pink-500/20 border border-amber-300/30 hover:border-amber-300/60 transition-all backdrop-blur">
