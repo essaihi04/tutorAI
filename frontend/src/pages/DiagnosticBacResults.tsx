@@ -1,11 +1,16 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, forwardRef } from 'react';
+import html2canvas from 'html2canvas';
 import LatexRenderer from '../components/LatexRenderer';
 import BacCountdown from '../components/BacCountdown';
 import {
   CheckCircle, XCircle, RotateCcw, Zap,
   ChevronDown, ChevronUp, Calendar, Share2,
+  X, Check, Copy, Loader2, Download,
 } from 'lucide-react';
+
+const MOALIM_URL = 'https://moalim.online';
+const DIAG_URL  = `${MOALIM_URL}/bac-diagnostic`;
 
 interface PlanItem {
   day_start: number;
@@ -60,49 +65,253 @@ function noteColor(n: number) {
   return 'text-red-400';
 }
 
-function buildShareImage(avg: number, mentionFr: string, code: string): string {
-  const W = 1080, H = 1080;
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const ctx = cv.getContext('2d')!;
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#070718'); bg.addColorStop(1, '#0f0f2e');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  const glow = ctx.createRadialGradient(W/2, 0, 0, W/2, 0, 520);
-  glow.addColorStop(0, 'rgba(99,102,241,0.28)'); glow.addColorStop(1, 'transparent');
-  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 46px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.fillText('MOALIM · موليم', W/2, 92);
-  ctx.font = '30px Arial'; ctx.fillStyle = 'rgba(167,139,250,0.85)';
-  ctx.fillText('نتائج الباكالوريا 2026 — Session Normale', W/2, 144);
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(130, 168); ctx.lineTo(W-130, 168); ctx.stroke();
-  ctx.font = '26px monospace'; ctx.fillStyle = 'rgba(255,255,255,0.28)';
-  ctx.fillText('رمز مسار: ' + code, W/2, 208);
-  const CX = W/2, CY = 435, CR = 168;
-  const col = avg >= 10 ? '#4ade80' : '#f87171';
-  ctx.strokeStyle = col; ctx.lineWidth = 14;
-  ctx.beginPath(); ctx.arc(CX, CY, CR, 0, Math.PI*2); ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.03)';
-  ctx.beginPath(); ctx.arc(CX, CY, CR, 0, Math.PI*2); ctx.fill();
-  ctx.font = 'bold 112px Arial'; ctx.fillStyle = col;
-  ctx.fillText(avg.toFixed(2), CX, CY + 24);
-  ctx.font = 'bold 46px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.42)';
-  ctx.fillText('/ 20', CX, CY + 84);
-  ctx.font = 'bold 52px Arial'; ctx.fillStyle = col;
-  ctx.fillText('Mention : ' + mentionFr, CX, 665);
-  ctx.font = 'bold 40px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.88)';
-  ctx.fillText('انت كم حصلت في الباكالوريا 2026؟', CX, 768);
-  ctx.font = '34px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.52)';
-  ctx.fillText('اختبر نتيجتك في 20 سؤال فقط ↓', CX, 822);
-  ctx.fillStyle = 'rgba(99,102,241,0.65)';
-  ctx.fillRect(210, 866, W-420, 76);
-  ctx.font = 'bold 32px Arial'; ctx.fillStyle = 'white';
-  ctx.fillText('moalim.online/bac-diagnostic', CX, 913);
-  ctx.font = '22px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillText('Test diagnostique · Estimation BAC · non officiel', CX, 1004);
-  return cv.toDataURL('image/png');
+// ── Shareable card (captured by html2canvas) ────────────────────────────────
+
+interface ShareCardProps {
+  avg: number;
+  mentionFr: string;
+  mentionColor: string;
+  massarCode: string;
+  isAdmis: boolean;
+  subjects: Array<{ ar: string; short: string; note: number }>;
+}
+
+const BacResultShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
+  function BacResultShareCardImpl({ avg, mentionFr, mentionColor, massarCode, isAdmis, subjects }, ref) {
+    const col = avg >= 10 ? '#4ade80' : '#f87171';
+    return (
+      <div ref={ref} style={{
+        width: 480, fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
+        background: 'linear-gradient(145deg,#070718 0%,#0d0d28 60%,#130d2e 100%)',
+        color: 'white', padding: 28, position: 'relative', overflow: 'hidden',
+      }}>
+        {/* Glow */}
+        <div style={{ position:'absolute', top:-60, left:'50%', transform:'translateX(-50%)', width:340, height:200, borderRadius:'50%', background:'rgba(99,102,241,0.22)', filter:'blur(55px)' }} />
+        {/* Header */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:18, position:'relative' }}>
+          <div>
+            <div style={{ fontSize:9, color:'rgba(255,255,255,0.3)', textTransform:'uppercase', letterSpacing:2 }}>وزارة التربية الوطنية · MASSAR</div>
+            <div style={{ fontSize:13, fontWeight:800, marginTop:3 }}>نتائج الباكالوريا — Session Normale 2026</div>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:8, color:'rgba(255,255,255,0.28)' }}>رمز مسار</div>
+            <div style={{ fontSize:11, fontFamily:'monospace', fontWeight:700, color:'rgba(255,255,255,0.6)', marginTop:2 }}>{massarCode}</div>
+          </div>
+        </div>
+        {/* Divider */}
+        <div style={{ height:1, background:'rgba(255,255,255,0.08)', marginBottom:16, position:'relative' }} />
+        {/* Score circle + info */}
+        <div style={{ display:'flex', alignItems:'center', gap:20, marginBottom:18, position:'relative' }}>
+          <div style={{ width:110, height:110, borderRadius:'50%', border:`3px solid ${col}`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0, background:'rgba(255,255,255,0.04)', boxShadow:`0 0 24px ${col}44` }}>
+            <div style={{ fontSize:32, fontWeight:900, color:col, lineHeight:1 }}>{avg.toFixed(2)}</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', fontWeight:600, marginTop:2 }}>/ 20</div>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', textTransform:'uppercase', letterSpacing:1.2, marginBottom:4 }}>المستوى</div>
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>الثانية باكالوريا علوم فيزيائية</div>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', textTransform:'uppercase', letterSpacing:1.2, marginBottom:3 }}>النتيجة</div>
+            <div style={{ fontSize:14, fontWeight:800, color:col }}>
+              {isAdmis ? 'ناجح(ة)' : 'غير ناجح'} · Mention : {mentionFr}
+            </div>
+          </div>
+        </div>
+        {/* Subject table */}
+        <div style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'10px 14px', marginBottom:18, position:'relative' }}>
+          <div style={{ fontSize:10, color:'#f87171', fontWeight:700, marginBottom:8, textAlign:'right' }}>: بيان النقط حسب المادة</div>
+          {subjects.map((s, i) => (
+            <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom: i < subjects.length-1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+              <div style={{ fontSize:12, fontWeight:700, color: s.note >= 14 ? '#4ade80' : s.note >= 10 ? '#fbbf24' : '#f87171' }}>{s.note.toFixed(2)}</div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:12, fontWeight:500 }}>{s.ar}</div>
+                <div style={{ fontSize:9, color:'rgba(255,255,255,0.25)' }}>{s.short}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* CTA */}
+        <div style={{ background:'rgba(99,102,241,0.18)', border:'1px solid rgba(99,102,241,0.35)', borderRadius:12, padding:'10px 14px', position:'relative' }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>أنت كم حصلت في الباكالوريا 2026؟</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:6 }}>اختبر نتيجتك في 20 سؤال فقط · مجاني</div>
+          <div style={{ fontSize:12, fontWeight:800, color:'#a5b4fc' }}>{DIAG_URL.replace('https://','')}</div>
+        </div>
+        {/* Footer */}
+        <div style={{ marginTop:14, display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:10, color:'rgba(255,255,255,0.2)', position:'relative' }}>
+          <div>Estimation BAC · non officiel</div>
+          <div style={{ fontWeight:700, color:'rgba(165,180,252,0.5)' }}>moalim.online</div>
+        </div>
+      </div>
+    );
+  }
+);
+
+// ── Share modal ──────────────────────────────────────────────────────────────
+
+interface ShareModalProps extends ShareCardProps {
+  onClose: () => void;
+}
+
+function BacShareModal({ onClose, ...cardProps }: ShareModalProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [generating, setGenerating] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [fileShareUnsupported, setFileShareUnsupported] = useState(false);
+
+  const shareText =
+    `🎓 حصلت على ${cardProps.avg.toFixed(2)}/20 في الباكالوريا 2026!\n` +
+    `Mention : ${cardProps.mentionFr}\n\n` +
+    `أنت كم حصلت؟ اختبر نتيجتك في 20 سؤال 👇\n${DIAG_URL}`;
+  const shareTextNoUrl =
+    `🎓 حصلت على ${cardProps.avg.toFixed(2)}/20 في الباكالوريا 2026!\n` +
+    `Mention : ${cardProps.mentionFr}\n\n` +
+    `أنت كم حصلت في الباكالوريا 2026؟`;
+
+  const fileName = `bac-2026-resultats-${cardProps.massarCode}.png`;
+
+  const generatePng = async (): Promise<Blob | null> => {
+    if (!cardRef.current) return null;
+    const canvas = await html2canvas(cardRef.current, {
+      backgroundColor: null, scale: 2, useCORS: true, logging: false,
+    });
+    return new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((blob) => resolve(blob), 'image/png', 1)
+    );
+  };
+
+  const downloadImage = async (preBlob?: Blob) => {
+    const blob = preBlob ?? (await generatePng());
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    setDownloaded(true); setTimeout(() => setDownloaded(false), 2500);
+  };
+
+  const shareNative = async () => {
+    setGenerating(true); setFileShareUnsupported(false);
+    try {
+      const blob = await generatePng();
+      if (!blob) return;
+      const file = new File([blob], fileName, { type: 'image/png' });
+      const nav: any = navigator;
+      const shareData = { title: 'Moalim — Résultat BAC 2026', text: shareTextNoUrl, url: DIAG_URL, files: [file] };
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await nav.share(shareData); onClose();
+      } else {
+        await downloadImage(blob); setFileShareUnsupported(true);
+      }
+    } catch (e) { console.warn('Share failed:', e); }
+    finally { setGenerating(false); }
+  };
+
+  const handleDownload = async () => {
+    setGenerating(true);
+    try { await downloadImage(); } finally { setGenerating(false); }
+  };
+
+  const copyText = async () => {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    } catch { window.prompt('Copie ce message :', shareText); }
+  };
+
+  const handleNetworkClick = async (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+    e.preventDefault();
+    try { await navigator.clipboard.writeText(shareText); } catch { /* noop */ }
+    await downloadImage();
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const networks = [
+    { name: 'WhatsApp', color: 'bg-[#25D366] hover:bg-[#1ebe5d]', url: `https://wa.me/?text=${encodeURIComponent(shareText)}` },
+    { name: 'Facebook', color: 'bg-[#1877F2] hover:bg-[#0f63d1]', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(DIAG_URL)}&quote=${encodeURIComponent(shareTextNoUrl)}` },
+    { name: 'Instagram / TikTok', color: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90', url: '#' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-[#0d0d24] border border-white/[.12] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4">
+
+        {/* Modal header */}
+        <div className="bg-[#12122e] border-b border-white/[.08] px-5 py-4 flex items-start justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-white">Partager mes résultats</h3>
+            <p className="text-[10px] text-white/40 mt-0.5">
+              BAC 2026 · {cardProps.avg.toFixed(2)}/20 · Mention {cardProps.mentionFr}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Card preview */}
+        <div className="px-4 pt-4 pb-2">
+          <a href={DIAG_URL} target="_blank" rel="noopener noreferrer"
+            className="block rounded-xl overflow-hidden shadow-xl border border-white/[.08]">
+            <BacResultShareCard ref={cardRef} {...cardProps} />
+          </a>
+          <p className="text-[10px] text-center text-white/30 mt-2">
+            Image générée · Lien vers{' '}
+            <span className="font-semibold text-indigo-400">moalim.online/bac-diagnostic</span>
+          </p>
+        </div>
+
+        {/* Action buttons */}
+        <div className="px-5 pt-2 pb-2 space-y-2">
+          <button onClick={shareNative} disabled={generating}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-all disabled:opacity-60">
+            {generating
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Génération de l'image…</>
+              : <><Share2 className="w-4 h-4" /> Partager l'image + texte</>
+            }
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={handleDownload} disabled={generating}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white/[.06] border border-white/10 rounded-xl text-xs font-semibold text-white/75 hover:border-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-60">
+              {downloaded
+                ? <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Téléchargée</span></>
+                : <><Download className="w-3.5 h-3.5" /> Télécharger l'image</>
+              }
+            </button>
+            <button onClick={copyText}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white/[.06] border border-white/10 rounded-xl text-xs font-semibold text-white/75 hover:border-indigo-400 hover:text-indigo-300 transition-colors">
+              {copied
+                ? <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Texte copié</span></>
+                : <><Copy className="w-3.5 h-3.5" /> Copier le texte</>
+              }
+            </button>
+          </div>
+          {fileShareUnsupported && (
+            <p className="text-[11px] text-amber-200 bg-amber-500/10 border border-amber-400/25 rounded-lg px-3 py-2">
+              Image téléchargée ! Ton navigateur ne supporte pas le partage de fichier — joins-la manuellement.
+            </p>
+          )}
+        </div>
+
+        {/* Network links */}
+        <div className="px-5 py-4">
+          <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">Ou directement sur un réseau</p>
+          <div className="grid grid-cols-3 gap-2">
+            {networks.map((net) => (
+              <a key={net.name} href={net.url}
+                onClick={(e) => handleNetworkClick(e, net.url)}
+                target="_blank" rel="noopener noreferrer"
+                className={`flex items-center justify-center px-2 py-2.5 rounded-xl ${net.color} text-white text-[11px] font-semibold transition-all hover:shadow-md`}>
+                {net.name}
+              </a>
+            ))}
+          </div>
+          <p className="text-[10px] text-white/25 text-center mt-2">
+            Instagram / TikTok : l'image se télécharge, puis joins-la à ton post
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 
@@ -111,7 +320,7 @@ export default function DiagnosticBacResults() {
   const navigate = useNavigate();
   const results: Results | null = location.state?.results ?? null;
   const [showDetails, setShowDetails] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const daysLeft = getDaysLeft();
 
   const massarCode = useMemo(() => `B${Math.floor(10000000 + Math.random() * 89999999)}`, []);
@@ -143,23 +352,10 @@ export default function DiagnosticBacResults() {
     { key: 'Mathématiques',   ar: 'الرياضيات',           short: 'Maths' },
   ];
 
-  const shareText = `🎓 حصلت على ${bac_note_predicted.toFixed(2)}/20 في الباكالوريا 2026!\nMention: ${mention.fr}\n\nأنت كم حصلت؟ اختبر نتيجتك في 20 سؤال 👇\nhttps://moalim.online/bac-diagnostic`;
-
-  function shareWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
-  }
-  function shareFacebook() {
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://moalim.online/bac-diagnostic')}`, '_blank');
-  }
-  function downloadImage() {
-    const url = buildShareImage(bac_note_predicted, mention.fr, massarCode);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'bac-2026-resultats.png'; a.click();
-  }
-  async function copyText() {
-    await navigator.clipboard.writeText(shareText);
-    setCopied(true); setTimeout(() => setCopied(false), 2200);
-  }
+  const shareSubjects = SUBJECTS.map(s => ({
+    ar: s.ar, short: s.short,
+    note: by_subject[s.key] ? subjectNote(by_subject[s.key].pct) : 0,
+  }));
 
   return (
     <div className="min-h-screen bg-[#070718] text-white">
@@ -270,39 +466,14 @@ export default function DiagnosticBacResults() {
             </button>
           </div>
 
-          {/* ── Share buttons ── */}
-          <div>
-            <div className="flex items-center justify-center gap-1.5 mb-1.5">
-              <Share2 className="w-3 h-3 text-white/30" />
-              <span className="text-white/30 text-[9px] uppercase tracking-widest">Partager · شارك نتيجتك</span>
-            </div>
-            <div className="grid grid-cols-4 gap-1.5">
-              <button onClick={shareWhatsApp}
-                className="flex flex-col items-center gap-1 py-2 bg-[#25D366]/10 border border-[#25D366]/25 rounded-xl hover:bg-[#25D366]/20 active:scale-95 transition-all">
-                <span className="text-base">💬</span>
-                <span className="text-[9px] text-[#25D366] font-semibold">WhatsApp</span>
-              </button>
-              <button onClick={shareFacebook}
-                className="flex flex-col items-center gap-1 py-2 bg-[#1877F2]/10 border border-[#1877F2]/25 rounded-xl hover:bg-[#1877F2]/20 active:scale-95 transition-all">
-                <span className="text-base">📘</span>
-                <span className="text-[9px] text-[#1877F2] font-semibold">Facebook</span>
-              </button>
-              <button onClick={downloadImage}
-                className="flex flex-col items-center gap-1 py-2 bg-gradient-to-b from-purple-500/10 to-pink-500/10 border border-purple-400/25 rounded-xl hover:opacity-80 active:scale-95 transition-all">
-                <span className="text-base">📸</span>
-                <span className="text-[9px] text-purple-300 font-semibold">Instagram</span>
-              </button>
-              <button onClick={downloadImage}
-                className="flex flex-col items-center gap-1 py-2 bg-white/[.04] border border-white/10 rounded-xl hover:bg-white/[.08] active:scale-95 transition-all">
-                <span className="text-base">🎵</span>
-                <span className="text-[9px] text-white/50 font-semibold">TikTok</span>
-              </button>
-            </div>
-            <button onClick={copyText}
-              className="w-full mt-1 py-1.5 bg-white/[.03] border border-white/[.06] rounded-xl text-white/35 text-[10px] hover:bg-white/[.06] transition-all">
-              {copied ? '✓ Texte copié !' : '📋 Copier le texte pour Instagram / TikTok'}
-            </button>
-          </div>
+          {/* ── Share button ── */}
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="w-full py-3 bg-white/[.05] border border-white/10 rounded-xl text-white/70 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/[.09] hover:text-white active:scale-[.98] transition-all"
+          >
+            <Share2 className="w-4 h-4" />
+            Partager mes résultats · شارك نتيجتك
+          </button>
 
           {/* ── Details toggle ── */}
           <button
@@ -423,6 +594,18 @@ export default function DiagnosticBacResults() {
             </div>
           </div>
         </div>
+      )}
+
+      {showShareModal && (
+        <BacShareModal
+          onClose={() => setShowShareModal(false)}
+          avg={bac_note_predicted}
+          mentionFr={mention.fr}
+          mentionColor={mention.tw}
+          massarCode={massarCode}
+          isAdmis={isAdmis}
+          subjects={shareSubjects}
+        />
       )}
     </div>
   );
