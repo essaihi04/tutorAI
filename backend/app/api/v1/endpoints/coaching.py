@@ -555,7 +555,7 @@ async def get_bac_diagnostic_questions():
     This endpoint is public — no auth required — to maximise conversion.
     """
     import uuid as _uuid
-    questions = bac_diagnostic_service.get_questions(n_svt=12, n_pc=8)
+    questions = bac_diagnostic_service.get_questions(n_svt=7, n_pc=7, n_math=6)
     session_id = str(_uuid.uuid4())
     # Store with correct answers server-side
     _bac_diag_sessions[session_id] = questions

@@ -12,6 +12,73 @@ from typing import Optional
 _BANK_PATH = Path(__file__).resolve().parents[2] / "data/diagnostic_qcm_bank.json"
 
 # Domain → chapter / resource description for the plan
+_MATH_DOMAINS = {
+    "Suites numériques": {
+        "emoji": "🔢",
+        "tasks": [
+            "Réviser les suites arithmétiques et géométriques",
+            "Maîtriser les formules de somme",
+            "S'entraîner avec les exercices de raisonnement par récurrence",
+        ],
+    },
+    "Limites et continuité": {
+        "emoji": "📐",
+        "tasks": [
+            "Réviser les théorèmes de limites",
+            "Pratiquer les calculs de limites en ∞ et en 0",
+            "Étudier la continuité et la dérivabilité",
+        ],
+    },
+    "Dérivation": {
+        "emoji": "📈",
+        "tasks": [
+            "Maîtriser les règles de dérivation (composée, produit, quotient)",
+            "Tracer les tableaux de variations",
+            "S'entraîner avec les extrema et problèmes d'optimisation",
+        ],
+    },
+    "Calcul intégral": {
+        "emoji": "∫",
+        "tasks": [
+            "Réviser les primitives usuelles",
+            "Pratiquer le calcul d'intégrales définies",
+            "Calculer des aires et volumes",
+        ],
+    },
+    "Probabilités": {
+        "emoji": "🎲",
+        "tasks": [
+            "Réviser les lois binomiale et de Poisson",
+            "Pratiquer les probabilités conditionnelles",
+            "Maîtriser les calculs P(A∩B) et P(A∪B)",
+        ],
+    },
+    "Nombres complexes": {
+        "emoji": "ℂ",
+        "tasks": [
+            "Maîtriser module, argument et forme exponentielle",
+            "Réviser les opérations sur les complexes",
+            "Résoudre des équations dans ℂ",
+        ],
+    },
+    "Équations différentielles": {
+        "emoji": "dy/dx",
+        "tasks": [
+            "Réviser les équations y' + ay = 0 et y' + ay = b",
+            "Maîtriser les conditions initiales",
+            "S'entraîner avec les problèmes de croissance",
+        ],
+    },
+    "Logarithme et exponentielle": {
+        "emoji": "eˣ",
+        "tasks": [
+            "Maîtriser les propriétés de ln et exp",
+            "Résoudre les équations et inéquations",
+            "Étudier les fonctions logarithmiques et exponentielles",
+        ],
+    },
+}
+
 _DOMAIN_INFO: dict[str, dict] = {
     "Géologie": {
         "emoji": "🌋",
@@ -95,6 +162,9 @@ _DOMAIN_INFO: dict[str, dict] = {
     },
 }
 
+# Merge Math domains into the lookup table
+_DOMAIN_INFO.update(_MATH_DOMAINS)
+
 
 class BacDiagnosticService:
     def __init__(self):
@@ -105,9 +175,9 @@ class BacDiagnosticService:
             self._bank = json.loads(_BANK_PATH.read_text(encoding="utf-8"))
         return self._bank
 
-    def get_questions(self, n_svt: int = 12, n_pc: int = 8) -> list[dict]:
+    def get_questions(self, n_svt: int = 7, n_pc: int = 7, n_math: int = 6) -> list[dict]:
         """
-        Return n_svt SVT + n_pc PC questions randomly selected from the bank.
+        Return n_svt SVT + n_pc PC + n_math Math questions randomly selected.
         Correct answers are stripped — sent separately at scoring time.
         """
         bank = self._load_bank()
@@ -115,10 +185,12 @@ class BacDiagnosticService:
 
         svt_pool = [q for q in all_q if q["subject"] == "SVT"]
         pc_pool = [q for q in all_q if q["subject"] == "Physique-Chimie"]
+        math_pool = [q for q in all_q if q["subject"] == "Mathématiques"]
 
         selected = (
             random.sample(svt_pool, min(n_svt, len(svt_pool)))
             + random.sample(pc_pool, min(n_pc, len(pc_pool)))
+            + random.sample(math_pool, min(n_math, len(math_pool)))
         )
         random.shuffle(selected)
 

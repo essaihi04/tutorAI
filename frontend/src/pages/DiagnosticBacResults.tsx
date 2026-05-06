@@ -1,9 +1,10 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import LatexRenderer from '../components/LatexRenderer';
+import BacCountdown from '../components/BacCountdown';
 import {
-  Trophy, ArrowRight, CheckCircle, XCircle, RotateCcw,
-  BookOpen, Zap, Star, ChevronDown, ChevronUp, Calendar,
+  Trophy, CheckCircle, XCircle, RotateCcw,
+  Zap, Star, ChevronDown, ChevronUp, Calendar,
 } from 'lucide-react';
 
 interface PlanItem {
@@ -53,16 +54,16 @@ const NOTE_LABEL = (n: number) => {
   return { text: 'À travailler 💪', color: 'red' };
 };
 
-// Simple SVG Radar chart — 2 axes: SVT and PC
+// Simple SVG Radar chart — 3 axes: SVT, PC, Maths
 function RadarChart({ bySubject }: { bySubject: Results['by_subject'] }) {
-  const subjects = ['SVT', 'Physique-Chimie'];
+  const subjects = ['SVT', 'Physique-Chimie', 'Mathématiques'];
   const values = subjects.map(s => (bySubject[s]?.pct ?? 0) / 100);
-  const icons = ['🧬', '⚗️'];
-  const colors = ['#34d399', '#818cf8'];
+  const icons = ['🧬', '⚗️', '📐'];
+  const colors = ['#34d399', '#818cf8', '#a78bfa'];
 
-  const cx = 100, cy = 100, r = 70;
-  // 2 axes at 90° and 270°
-  const angles = [270, 90].map(d => (d * Math.PI) / 180);
+  const cx = 110, cy = 110, r = 72;
+  // 3 axes at 270°, 30°, 150° (equilateral triangle)
+  const angles = [270, 30, 150].map(d => (d * Math.PI) / 180);
   const pts = (v: number[]) =>
     v.map((val, i) => {
       const a = angles[i];
@@ -70,10 +71,12 @@ function RadarChart({ bySubject }: { bySubject: Results['by_subject'] }) {
     }).join(' ');
 
   return (
-    <svg viewBox="0 0 200 200" className="w-full max-w-[180px] mx-auto">
+    <svg viewBox="0 0 220 220" className="w-full max-w-[200px] mx-auto">
       {/* Grid circles */}
       {[0.25, 0.5, 0.75, 1].map(f => (
-        <circle key={f} cx={cx} cy={cy} r={r * f} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        <polygon key={f}
+          points={angles.map(a => `${cx + r * f * Math.cos(a)},${cy + r * f * Math.sin(a)}`).join(' ')}
+          fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
       ))}
       {/* Axes */}
       {angles.map((a, i) => (
@@ -89,12 +92,13 @@ function RadarChart({ bySubject }: { bySubject: Results['by_subject'] }) {
       ))}
       {/* Labels */}
       {subjects.map((s, i) => {
-        const lx = cx + (r + 18) * Math.cos(angles[i]);
-        const ly = cy + (r + 18) * Math.sin(angles[i]);
+        const lx = cx + (r + 20) * Math.cos(angles[i]);
+        const ly = cy + (r + 20) * Math.sin(angles[i]);
+        const label = s === 'Physique-Chimie' ? 'PC' : s === 'Mathématiques' ? 'Maths' : s;
         return (
           <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-            fill="rgba(255,255,255,0.8)" fontSize="9" fontWeight="600">
-            {icons[i]} {Math.round((bySubject[s]?.pct ?? 0))}%
+            fill="rgba(255,255,255,0.8)" fontSize="8.5" fontWeight="600">
+            {icons[i]} {label} {Math.round((bySubject[s]?.pct ?? 0))}%
           </text>
         );
       })}
@@ -102,11 +106,17 @@ function RadarChart({ bySubject }: { bySubject: Results['by_subject'] }) {
   );
 }
 
+const BAC_DATE = new Date('2026-06-04T08:00:00');
+function getDaysLeft() {
+  return Math.max(0, Math.ceil((BAC_DATE.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+}
+
 export default function DiagnosticBacResults() {
   const location = useLocation();
   const navigate = useNavigate();
   const results: Results | null = location.state?.results ?? null;
   const [showDetails, setShowDetails] = useState(false);
+  const daysLeft = getDaysLeft();
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -173,15 +183,25 @@ export default function DiagnosticBacResults() {
           {/* Radar */}
           <div className="mb-5">
             <RadarChart bySubject={by_subject} />
-            <div className="flex justify-center gap-6 mt-2">
-              {Object.entries(by_subject).map(([s, v]) => (
-                <div key={s} className="text-center">
-                  <div className="text-xs font-semibold text-white/80">{s === 'SVT' ? '🧬 SVT' : '⚗️ PC'}</div>
-                  <div className="text-lg font-black text-white">{v.pct}%</div>
-                  <div className="text-white/40 text-[10px]">{v.correct}/{v.total}</div>
-                </div>
-              ))}
+            <div className="flex justify-center gap-4 mt-2 flex-wrap">
+              {Object.entries(by_subject).map(([s, v]) => {
+                const icon = s === 'SVT' ? '🧬' : s === 'Mathématiques' ? '📐' : '⚗️';
+                const label = s === 'Physique-Chimie' ? 'PC' : s === 'Mathématiques' ? 'Maths' : s;
+                return (
+                  <div key={s} className="text-center">
+                    <div className="text-xs font-semibold text-white/80">{icon} {label}</div>
+                    <div className="text-lg font-black text-white">{v.pct}%</div>
+                    <div className="text-white/40 text-[10px]">{v.correct}/{v.total}</div>
+                  </div>
+                );
+              })}
             </div>
+          </div>
+
+          {/* Countdown */}
+          <div className="mb-4">
+            <p className="text-center text-white/40 text-[10px] mb-2 uppercase tracking-widest">⏱ Temps restant avant le BAC — 4 Juin 2026</p>
+            <BacCountdown size="md" />
           </div>
 
           {/* Gain banner */}
@@ -194,7 +214,7 @@ export default function DiagnosticBacResults() {
               {bac_note_predicted.toFixed(1)} → <span className="text-indigo-300">{Math.min(noteMax, 20).toFixed(1)}/20</span>
             </div>
             <div className="text-white/50 text-xs mt-1">
-              +{gain_if_subscribed} points en {28} jours de travail ciblé
+              +{gain_if_subscribed} points en {daysLeft} jours de travail ciblé
             </div>
           </div>
         </div>
@@ -287,6 +307,7 @@ export default function DiagnosticBacResults() {
             Passe de {bac_note_predicted.toFixed(1)} à {Math.min(noteMax, 20).toFixed(1)}/20
           </h3>
           <p className="text-white/60 text-sm mb-4 leading-relaxed">
+            Il te reste <span className="text-white font-bold">{daysLeft} jours</span> avant le BAC.
             Accède au coaching IA personnalisé, aux exercices ciblés sur tes lacunes,
             et à ton plan de révision adaptatif jour par jour.
           </p>

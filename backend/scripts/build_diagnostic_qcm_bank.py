@@ -174,6 +174,17 @@ def extract_pc_qcm(exam_path: Path, year: int, session: str) -> list:
     return questions
 
 
+MATH_MANUAL_PATH = ROOT / "backend/data/math_qcm_manual.json"
+
+
+def load_math_manual() -> list:
+    """Load handcrafted Math QCM questions."""
+    questions = json.loads(MATH_MANUAL_PATH.read_text(encoding="utf-8"))
+    for q in questions:
+        q["source"] = "entrainement"
+    return questions
+
+
 def main():
     all_questions = []
 
@@ -204,6 +215,11 @@ def main():
             if qs:
                 print(f"  PC {year} {session}: {len(qs)} questions")
             all_questions.extend(qs)
+
+    # ── Math (manual QCM) ────────────────────────────────────────────────────
+    math_qs = load_math_manual()
+    print(f"  Math manuel: {len(math_qs)} questions")
+    all_questions.extend(math_qs)
 
     # ── Deduplicate (by first 80 chars of content) ───────────────────────────
     seen: set[str] = set()

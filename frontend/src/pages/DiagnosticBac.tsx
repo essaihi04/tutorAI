@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getBacDiagnosticQuestions, submitBacDiagnostic } from '../services/api';
 import LatexRenderer from '../components/LatexRenderer';
+import BacCountdown from '../components/BacCountdown';
 import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, Brain,
-  Check, X as XIcon, HelpCircle, BookOpen, Zap, Trophy,
+  Check, HelpCircle, Zap, Trophy,
 } from 'lucide-react';
 
 interface Choice { letter: string; text: string }
@@ -20,12 +21,16 @@ interface Question {
   type: string;
 }
 
-const DAYS_LEFT = 28;
 const SUBJECT_COLOR: Record<string, string> = {
   'SVT': 'from-emerald-600 to-teal-600',
   'Physique-Chimie': 'from-blue-600 to-indigo-600',
+  'Mathématiques': 'from-violet-600 to-purple-600',
 };
-const SUBJECT_ICON: Record<string, string> = { 'SVT': '🧬', 'Physique-Chimie': '⚗️' };
+const SUBJECT_ICON: Record<string, string> = {
+  'SVT': '🧬',
+  'Physique-Chimie': '⚗️',
+  'Mathématiques': '📐',
+};
 
 export default function DiagnosticBac() {
   const navigate = useNavigate();
@@ -98,11 +103,13 @@ export default function DiagnosticBac() {
         <div className="pointer-events-none absolute bottom-0 right-0 w-[400px] h-[300px] bg-emerald-600/15 blur-[100px] rounded-full" />
 
         <div className="max-w-lg w-full relative z-10">
-          {/* Header badge */}
-          <div className="flex items-center justify-center mb-6">
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-500/15 border border-red-400/30 text-red-200 text-sm font-bold animate-pulse">
-              🔥 J-{DAYS_LEFT} avant le Bac National
-            </span>
+          {/* Countdown banner */}
+          <div className="mb-6 bg-red-500/10 border border-red-400/25 rounded-2xl p-4">
+            <p className="text-center text-red-200 text-xs font-bold mb-3 uppercase tracking-widest">
+              🔥 Temps restant avant l'Examen National BAC 2026
+            </p>
+            <BacCountdown size="lg" />
+            <p className="text-center text-white/30 text-[10px] mt-2">4 Juin 2026 · 08h00</p>
           </div>
 
           {/* Main card */}
@@ -123,7 +130,7 @@ export default function DiagnosticBac() {
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 mb-6">
               {[
-                { icon: '📝', label: '20 questions', sub: 'SVT + Physique-Chimie' },
+                { icon: '📝', label: '20 questions', sub: 'SVT + PC + Maths' },
                 { icon: '⏱️', label: '~15 minutes', sub: 'à ton rythme' },
                 { icon: '🎯', label: 'Note /20', sub: 'prédite BAC' },
               ].map((s, i) => (
@@ -168,7 +175,7 @@ export default function DiagnosticBac() {
                 Commencer le diagnostic gratuit
               </span>
             </button>
-            <p className="text-center text-white/30 text-xs mt-3">Gratuit · Sans inscription · 100% officiel BAC Maroc</p>
+            <p className="text-center text-white/30 text-xs mt-3">Gratuit · Sans inscription · Questions d'entraînement niveau BAC</p>
           </div>
         </div>
       </div>
@@ -199,13 +206,12 @@ export default function DiagnosticBac() {
           <div className="max-w-2xl mx-auto px-4 py-2">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-lg">{SUBJECT_ICON[currentQ.subject] || '📚'}</span>
+                <span className="text-base">{SUBJECT_ICON[currentQ.subject] || '📚'}</span>
                 <span className="text-xs font-semibold text-white/70">{currentQ.subject}</span>
-                <span className="text-white/30">·</span>
-                <span className="text-xs text-white/50">BAC {currentQ.year}</span>
               </div>
-              <div className="text-xs font-bold text-white">
-                {answeredCount}/{total} répondues
+              <div className="flex items-center gap-3">
+                <BacCountdown size="sm" />
+                <span className="text-xs font-bold text-white">{answeredCount}/{total}</span>
               </div>
             </div>
 
@@ -260,7 +266,7 @@ export default function DiagnosticBac() {
                 <div className="text-white/80 text-[10px] font-semibold uppercase tracking-wider">
                   {currentQ.domain || currentQ.subject}
                 </div>
-                <div className="text-white/60 text-[10px]">BAC {currentQ.year} {currentQ.session}</div>
+                <div className="text-white/60 text-[10px]">Question d'entraînement · {currentQ.subject}</div>
               </div>
               {isAnswered && <CheckCircle className="w-5 h-5 text-white/70 ml-auto" />}
             </div>
