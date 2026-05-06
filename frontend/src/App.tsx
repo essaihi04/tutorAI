@@ -22,6 +22,8 @@ const ExamReal = lazy(() => import('./pages/ExamReal'));
 const MockExamHub = lazy(() => import('./pages/MockExamHub'));
 const MockExamTake = lazy(() => import('./pages/MockExamTake'));
 const Orientation = lazy(() => import('./pages/Orientation'));
+const DiagnosticBac = lazy(() => import('./pages/DiagnosticBac'));
+const DiagnosticBacResults = lazy(() => import('./pages/DiagnosticBacResults'));
 
 function PageLoader() {
   return (
@@ -50,6 +52,8 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
           <Route path="/orientation" element={<Orientation />} />
+          <Route path="/bac-diagnostic" element={<DiagnosticBac />} />
+          <Route path="/bac-diagnostic/results" element={<DiagnosticBacResults />} />
 
           {/* Lazy-loaded protected routes */}
           <Route

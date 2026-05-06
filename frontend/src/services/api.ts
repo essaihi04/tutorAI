@@ -142,6 +142,11 @@ export const getAdaptiveNext = () => api.get('/coaching/adaptive-next');
 export const adaptPlan = () => api.post('/coaching/adapt-plan');
 export const getCoachingContext = () => api.get('/coaching/coaching-context');
 
+// BAC Diagnostic (public — no auth required)
+export const getBacDiagnosticQuestions = () => api.get('/coaching/bac-diagnostic/questions');
+export const submitBacDiagnostic = (sessionId: string, answers: Record<string, string>) =>
+  api.post('/coaching/bac-diagnostic/submit', { session_id: sessionId, answers });
+
 // Lesson Progress (Session Memory)
 export const getLessonProgress = (lessonId: string) =>
   api.get(`/coaching/lesson-progress/${lessonId}`);

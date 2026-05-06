@@ -8,6 +8,7 @@ from typing import Optional
 from app.dependencies import get_current_student
 from app.services.diagnostic_service import diagnostic_service
 from app.services.study_plan_service import study_plan_service
+from app.services.bac_diagnostic_service import bac_diagnostic_service
 from app.supabase_client import get_supabase_admin
 from datetime import date
 
@@ -535,6 +536,51 @@ async def mark_objective_completed(
         return {"success": True, "progress": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── In-memory session store for BAC diagnostic (questions with answers) ──
+_bac_diag_sessions: dict[str, list] = {}
+
+
+class BacDiagnosticSubmitRequest(BaseModel):
+    session_id: str
+    answers: dict  # {"1": "a", "2": "c", ...}
+
+
+@router.get("/bac-diagnostic/questions")
+async def get_bac_diagnostic_questions():
+    """
+    Return 20 QCM questions from the real BAC exam bank (12 SVT + 8 PC).
+    A session_id is generated to allow server-side answer checking.
+    This endpoint is public — no auth required — to maximise conversion.
+    """
+    import uuid as _uuid
+    questions = bac_diagnostic_service.get_questions(n_svt=12, n_pc=8)
+    session_id = str(_uuid.uuid4())
+    # Store with correct answers server-side
+    _bac_diag_sessions[session_id] = questions
+    # Strip _correct before sending to client
+    client_questions = [{k: v for k, v in q.items() if k != "_correct"} for q in questions]
+    return {"session_id": session_id, "questions": client_questions, "total": len(client_questions)}
+
+
+@router.post("/bac-diagnostic/submit")
+async def submit_bac_diagnostic(data: BacDiagnosticSubmitRequest):
+    """
+    Score the diagnostic and return:
+      - score /20, bac_note_predicted, gain_if_subscribed
+      - per-subject & per-domain breakdown
+      - weak_domains (worst first)
+      - 28-day personalised plan
+    This endpoint is public — no auth required.
+    """
+    session_questions = _bac_diag_sessions.get(data.session_id)
+    if not session_questions:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    result = bac_diagnostic_service.score(session_questions, data.answers)
+    # Clean up session after scoring
+    _bac_diag_sessions.pop(data.session_id, None)
+    return result
 
 
 @router.post("/save-session-summary")
