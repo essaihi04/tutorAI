@@ -5,10 +5,10 @@ import ConcoursCalendarPopup from '../components/ConcoursCalendarPopup';
 import MoalimChatbot from '../components/MoalimChatbot';
 import QuickDiagnostic from '../components/QuickDiagnostic';
 import {
-  Sparkles, Brain, Zap, Trophy, ArrowRight, Check, Star,
+  Sparkles, Brain, Trophy, ArrowRight, Check, Star,
   GraduationCap, MessageCircle, ChevronDown,
   Shield, Clock, Target, BookOpen, FlaskConical, Calculator,
-  PenLine, BarChart3, Award, Users, Globe, Play, Quote, Atom, Flame,
+  PenLine, BarChart3, Award, Users, Globe, Quote, Atom, Flame,
 } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────────────────
@@ -196,10 +196,6 @@ function HeroSection() {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-400 to-cyan-400 blur-xl opacity-30 group-hover:opacity-50 transition-opacity -z-10" />
             </Link>
-            <Link to="/bac-diagnostic" className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-all">
-              <Play className="w-4 h-4" />
-              Tester mon niveau
-            </Link>
           </div>
 
           {/* J-28 BAC Diagnostic teaser */}
@@ -285,33 +281,24 @@ function Hero3DVisual() {
         <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/60" />
       </div>
 
-      {/* Carte centrale "AI Tutor" */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-44 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 shadow-2xl shadow-indigo-500/50 flex flex-col items-center justify-center anim-float">
-        <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center mb-3 backdrop-blur-sm">
-          <Brain className="w-9 h-9 text-white" />
-        </div>
-        <div className="text-white font-bold text-sm">AI Tutor</div>
-        <div className="text-white/60 text-[10px] mt-1">en train de t'aider</div>
-      </div>
-
-      {/* Card haut-gauche : matière */}
+      {/* Card haut-gauche : Examen blanc */}
       <div className="absolute top-6 left-6 glass rounded-2xl p-4 anim-float-slow w-48 shadow-xl">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-            <Atom className="w-4 h-4 text-indigo-300" />
+          <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+            <PenLine className="w-4 h-4 text-cyan-300" />
           </div>
           <div>
-            <div className="text-xs font-semibold text-white">Physique — Ondes</div>
-            <div className="text-[10px] text-white/40">2ème BAC PC BIOF</div>
+            <div className="text-xs font-semibold text-white">Examen blanc</div>
+            <div className="text-[10px] text-white/40">conditions réelles · chrono</div>
           </div>
         </div>
         <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-indigo-400 to-cyan-400 rounded-full w-[78%]" />
+          <div className="h-full bg-gradient-to-r from-cyan-400 to-indigo-400 rounded-full w-[62%]" />
         </div>
-        <div className="text-[10px] text-indigo-200 mt-1.5 font-bold">78% maîtrisé</div>
+        <div className="text-[10px] text-cyan-200 mt-1.5 font-bold">Session normale 2025</div>
       </div>
 
-      {/* Card haut-droite : exam */}
+      {/* Card haut-droite : Examen réel */}
       <div className="absolute top-10 right-4 glass rounded-2xl p-4 anim-float w-44 shadow-xl" style={{ animationDelay: '1s' }}>
         <div className="flex items-center gap-2 mb-2">
           <Trophy className="w-4 h-4 text-amber-400" />
@@ -321,7 +308,7 @@ function Hero3DVisual() {
         <div className="text-[10px] text-white/50 mt-1">Corrigé en 0.8 s</div>
       </div>
 
-      {/* Card bas-gauche : feedback examen */}
+      {/* Card bas-gauche : Feedback IA */}
       <div className="absolute bottom-12 left-10 glass rounded-2xl p-3.5 anim-float-slow w-48 shadow-xl" style={{ animationDelay: '2s' }}>
         <div className="flex items-center gap-2 mb-2">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -337,25 +324,12 @@ function Hero3DVisual() {
         </div>
       </div>
 
-      {/* Card bas-droite : streak */}
-      <div className="absolute bottom-8 right-8 glass rounded-2xl p-4 anim-float w-36 shadow-xl" style={{ animationDelay: '1.5s' }}>
-        <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-yellow-400" />
-          <span className="text-xs font-semibold">Streak</span>
-        </div>
-        <div className="text-2xl font-black text-yellow-400 mt-1">12 jours</div>
-        <div className="text-[10px] text-white/50">consécutifs 🔥</div>
-      </div>
-
-      {/* Card flottante : Concours (Phase 2 — Bientôt) */}
+      {/* Card droite : Concours */}
       <div
         className="absolute top-1/2 -translate-y-1/2 right-2 sm:right-3 glass rounded-2xl p-3.5 anim-float-slow w-44 shadow-2xl border border-amber-300/20"
         style={{ animationDelay: '0.8s' }}
       >
-        {/* Glow accent */}
         <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-amber-400/20 via-pink-500/15 to-indigo-500/20 blur-md pointer-events-none -z-10" />
-
-        {/* Header avec badge */}
         <div className="flex items-center justify-between mb-2">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
             <GraduationCap className="w-5 h-5 text-white" />
@@ -364,12 +338,8 @@ function Hero3DVisual() {
             Bientôt
           </span>
         </div>
-
-        {/* Titre */}
         <div className="text-xs font-bold text-white leading-tight">Les concours</div>
         <div className="text-[10px] text-amber-200/90 font-medium mb-2">grandes écoles</div>
-
-        {/* Mini chips concours */}
         <div className="flex flex-wrap gap-1">
           {['ENSA', 'ENCG', 'Médecine', 'CPGE'].map((c) => (
             <span key={c} className="text-[8px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/70 font-semibold">
