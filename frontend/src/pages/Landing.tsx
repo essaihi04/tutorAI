@@ -6,9 +6,9 @@ import MoalimChatbot from '../components/MoalimChatbot';
 import QuickDiagnostic from '../components/QuickDiagnostic';
 import {
   Sparkles, Brain, Trophy, ArrowRight, Check, Star,
-  GraduationCap, MessageCircle, ChevronDown,
+  GraduationCap, MessageCircle, ChevronDown, Zap,
   Shield, Clock, Target, BookOpen, FlaskConical, Calculator,
-  PenLine, BarChart3, Award, Users, Globe, Quote, Atom, Flame,
+  PenLine, BarChart3, Award, Users, Globe, Quote, Atom, Flame, School,
 } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────────────────
@@ -391,20 +391,20 @@ function FeaturesSection() {
     <section id="features" className="relative z-10 py-20 sm:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <SectionHeader
-          eyebrow="3 façons d'apprendre"
+          eyebrow="4 façons d'apprendre"
           title={<>Choisis ton <span className="gradient-text">mode</span> selon ton objectif</>}
-          subtitle="Du cours guidé pas à pas à l'examen blanc chronométré, Moalim s'adapte à ton rythme."
+          subtitle="Du coaching IA personnalisé jusqu'aux concours des grandes écoles, Moalim s'adapte à ton niveau et à ton rythme."
         />
 
-        <div className="grid md:grid-cols-3 gap-5 mt-14">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-14">
           <FeatureCard
             color="from-indigo-500 to-purple-600"
             shadow="shadow-indigo-500/30"
             icon={Brain}
             tag="Mode Coaching"
-            title="Cours interactifs avec ton tuteur IA"
-            desc="Le prof IA t'explique au tableau, te pose des questions, vérifie ta compréhension à chaque étape."
-            features={['Tableau blanc IA', 'Voix + texte', 'Adaptation au programme officiel']}
+            title="Teste ton niveau et progresse"
+            desc="L'IA diagnostique tes lacunes, programme un planning personnalisé selon ton niveau et le temps restant avant le BAC, et suit ta progression jour après jour."
+            features={['Diagnostic de niveau initial', 'Planning adapté J-28 BAC', 'Progression et lacunes ciblées']}
           />
           <FeatureCard
             color="from-cyan-500 to-blue-600"
@@ -421,8 +421,17 @@ function FeaturesSection() {
             icon={Trophy}
             tag="Mode Examen Réel"
             title="60 examens réels du BAC corrigés en direct"
-            desc="Tous les sujets nationaux récents (sessions normale + rattrapage). Correction et explication instantanée à chaque question, plus une orientation personnalisée pour cibler tes points faibles."
-            features={['60 sujets BAC officiels', 'Correction + explication instantanée', 'Feedback + orientation chapitre par chapitre']}
+            desc="Tous les sujets nationaux récents (sessions normale + rattrapage). Correction et explication instantanée, feedback question par question."
+            features={['60 sujets BAC officiels', 'Correction + explication instantanée', 'Feedback chapitre par chapitre']}
+          />
+          <FeatureCard
+            color="from-fuchsia-500 to-pink-600"
+            shadow="shadow-fuchsia-500/30"
+            icon={School}
+            tag="Mode Concours"
+            title="Prépare les concours des grandes écoles"
+            desc="Exercices et annales de tous les concours des grandes écoles marocaines (ENSA, ENSAM, ENCG, Médecine, CPGE…). Explication interactive et détaillée de chaque question."
+            features={['Annales ENSA, ENSAM, ENCG, Médecine', 'Explication interactive par question', 'Coaching stratégique personnalisé']}
           />
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Sparkles, ArrowRight, Check, X, RotateCw, Trophy,
-  Target, AlertCircle, TrendingUp, Brain,
+  AlertCircle, TrendingUp, Brain,
 } from 'lucide-react';
 import { track, EVENTS } from '../lib/analytics';
 
@@ -101,8 +101,8 @@ const QUESTIONS: Record<Filiere, Question[]> = {
 };
 
 export default function QuickDiagnostic() {
-  const [step, setStep] = useState<'choose' | 'quiz' | 'result'>('choose');
-  const [filiere, setFiliere] = useState<Filiere>('svt');
+  const [step, setStep] = useState<'quiz' | 'result'>('quiz');
+  const [filiere, setFiliere] = useState<Filiere>('pc');
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
@@ -112,13 +112,14 @@ export default function QuickDiagnostic() {
   const score = answers.filter((ans, i) => ans === questions[i]?.correctIndex).length;
   const total = questions.length;
 
-  const startQuiz = (f: Filiere) => {
+  const switchFiliere = (f: Filiere) => {
+    if (f === filiere) return;
     setFiliere(f);
-    setStep('quiz');
     setCurrentQ(0);
     setAnswers([]);
     setSelectedChoice(null);
     setShowFeedback(false);
+    setStep('quiz');
     track(EVENTS.DIAGNOSTIC_FILIERE_CHOSEN, { filiere: f });
   };
 
@@ -152,7 +153,7 @@ export default function QuickDiagnostic() {
   };
 
   const restart = () => {
-    setStep('choose');
+    setStep('quiz');
     setCurrentQ(0);
     setAnswers([]);
     setSelectedChoice(null);
@@ -182,46 +183,33 @@ export default function QuickDiagnostic() {
 
         <div className="rounded-3xl glass border border-white/10 p-6 sm:p-10 shadow-2xl shadow-indigo-500/10">
 
-          {/* ─────── ÉTAPE 1 — Choix filière ─────── */}
-          {step === 'choose' && (
-            <div className="anim-fade-up">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
-                  <Target className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-bold mb-2">Quelle est ta filière ?</h3>
-                <p className="text-sm text-white/60">Choisis ta filière pour adapter les questions</p>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <button
-                  onClick={() => startQuiz('svt')}
-                  className="group p-6 rounded-2xl border-2 border-white/10 hover:border-emerald-400/60 bg-white/5 hover:bg-emerald-500/10 transition-all text-left"
-                >
-                  <div className="text-3xl mb-2">🧬</div>
-                  <div className="font-bold text-lg mb-1">2 BAC SVT</div>
-                  <div className="text-sm text-white/60 mb-3">Sciences de la Vie et de la Terre</div>
-                  <div className="text-xs text-emerald-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    Commencer le test <ArrowRight className="w-3 h-3" />
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => startQuiz('pc')}
-                  className="group p-6 rounded-2xl border-2 border-white/10 hover:border-indigo-400/60 bg-white/5 hover:bg-indigo-500/10 transition-all text-left"
-                >
-                  <div className="text-3xl mb-2">⚛️</div>
-                  <div className="font-bold text-lg mb-1">2 BAC PC BIOF</div>
-                  <div className="text-sm text-white/60 mb-3">Sciences Physiques-Chimiques</div>
-                  <div className="text-xs text-indigo-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    Commencer le test <ArrowRight className="w-3 h-3" />
-                  </div>
-                </button>
-              </div>
+          {/* Filière tab switcher */}
+          {step === 'quiz' && (
+            <div className="flex items-center gap-2 mb-6 p-1 rounded-xl bg-white/5 border border-white/10 w-fit">
+              <button
+                onClick={() => switchFiliere('pc')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  filiere === 'pc'
+                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
+                    : 'text-white/50 hover:text-white'
+                }`}
+              >
+                ⚛️ 2 BAC PC
+              </button>
+              <button
+                onClick={() => switchFiliere('svt')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  filiere === 'svt'
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    : 'text-white/50 hover:text-white'
+                }`}
+              >
+                🧬 2 BAC SVT
+              </button>
             </div>
           )}
 
-          {/* ─────── ÉTAPE 2 — Quiz ─────── */}
+          {/* ─────── Quiz ─────── */}
           {step === 'quiz' && (
             <div className="anim-fade-up">
               {/* Progress bar */}
