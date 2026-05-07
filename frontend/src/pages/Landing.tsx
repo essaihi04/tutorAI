@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import ConcoursCalendarPopup from '../components/ConcoursCalendarPopup';
 import MoalimChatbot from '../components/MoalimChatbot';
-import QuickDiagnostic from '../components/QuickDiagnostic';
 import {
   Sparkles, Brain, Trophy, ArrowRight, Check, Star,
   GraduationCap, MessageCircle, ChevronDown, Zap,
@@ -129,7 +128,6 @@ export default function Landing() {
       </nav>
 
       <HeroSection />
-      <QuickDiagnostic />
       <TrustBar />
       <FeaturesSection />
       <DashboardPreviewSection />
@@ -282,9 +280,9 @@ function Hero3DVisual() {
       </div>
 
       {/* Card haut-gauche : Examen blanc */}
-      <div className="absolute top-6 left-6 glass rounded-2xl p-4 anim-float-slow w-48 shadow-xl">
+      <div className="absolute top-8 left-6 glass rounded-2xl p-4 anim-float-slow w-[46%] shadow-xl">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center shrink-0">
             <PenLine className="w-4 h-4 text-cyan-300" />
           </div>
           <div>
@@ -295,11 +293,11 @@ function Hero3DVisual() {
         <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
           <div className="h-full bg-gradient-to-r from-cyan-400 to-indigo-400 rounded-full w-[62%]" />
         </div>
-        <div className="text-[10px] text-cyan-200 mt-1.5 font-bold">Session normale 2025</div>
+        <div className="text-[10px] text-cyan-200 mt-1.5 font-bold">Session normale 2026</div>
       </div>
 
       {/* Card haut-droite : Examen réel */}
-      <div className="absolute top-10 right-4 glass rounded-2xl p-4 anim-float w-44 shadow-xl" style={{ animationDelay: '1s' }}>
+      <div className="absolute top-8 right-6 glass rounded-2xl p-4 anim-float w-[44%] shadow-xl" style={{ animationDelay: '1s' }}>
         <div className="flex items-center gap-2 mb-2">
           <Trophy className="w-4 h-4 text-amber-400" />
           <div className="text-xs font-semibold">Examen réel BAC 2024</div>
@@ -309,29 +307,29 @@ function Hero3DVisual() {
       </div>
 
       {/* Card bas-gauche : Feedback IA */}
-      <div className="absolute bottom-12 left-10 glass rounded-2xl p-3.5 anim-float-slow w-48 shadow-xl" style={{ animationDelay: '2s' }}>
+      <div className="absolute bottom-8 left-6 glass rounded-2xl p-3.5 anim-float-slow w-[46%] shadow-xl" style={{ animationDelay: '2s' }}>
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
             <Target className="w-4 h-4 text-emerald-400" />
           </div>
           <span className="text-xs font-semibold">Feedback IA</span>
         </div>
         <div className="text-[10px] text-white/70 leading-tight mb-1.5">
-          "Très bien sur la cinétique. Revois les piles (ch.10)."
+          "لقد أجدت بشكل جيد في الحركية. أعد مراجعة البطاريات (ch.10)."
         </div>
         <div className="flex items-center gap-1 text-[9px] text-emerald-300">
           <Check className="w-2.5 h-2.5" /> Orientation personnalisée
         </div>
       </div>
 
-      {/* Card droite : Concours */}
+      {/* Card bas-droite : Concours */}
       <div
-        className="absolute top-1/2 -translate-y-1/2 right-2 sm:right-3 glass rounded-2xl p-3.5 anim-float-slow w-44 shadow-2xl border border-amber-300/20"
+        className="absolute bottom-8 right-6 glass rounded-2xl p-3.5 anim-float w-[44%] shadow-2xl border border-amber-300/20"
         style={{ animationDelay: '0.8s' }}
       >
         <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-amber-400/20 via-pink-500/15 to-indigo-500/20 blur-md pointer-events-none -z-10" />
         <div className="flex items-center justify-between mb-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg shrink-0">
             <GraduationCap className="w-5 h-5 text-white" />
           </div>
           <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-400 text-black animate-pulse">
