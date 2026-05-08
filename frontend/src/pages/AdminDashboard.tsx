@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Shield, Users, DollarSign, Activity, Wifi, WifiOff,
   Plus, Trash2, Key, Search, RefreshCw, LogOut,
@@ -1488,52 +1488,113 @@ function PromoCodesTab() {
 // ─── Registration Requests Tab ───────────────────────────────
 
 function RegistrationRequestsTab() {
-  const [items, setItems] = useState<RegistrationRequest[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<string>('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [items, setItems]         = useState<RegistrationRequest[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [search, setSearch]       = useState('');
+  const [filterPeriod, setFilterPeriod] = useState('');
+  const [filterPromo, setFilterPromo]   = useState('');
+  const [expandedId, setExpandedId]     = useState<string | null>(null);
   const [activateTarget, setActivateTarget] = useState<RegistrationRequest | null>(null);
+  const [selected, setSelected]   = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listRegistrationRequests(filter || undefined);
+      const res = await listRegistrationRequests(statusFilter || undefined);
       setItems(res.data.requests || []);
-    } catch (err) {
-      console.error('Failed to load registration requests:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
+      setSelected(new Set());
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
+  /* ── Phone normalisation (+212 par défaut) ── */
+  const normalizePhone = (raw: string) => {
+    const d = (raw || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d.startsWith('212')) return d;
+    if (d.startsWith('0'))   return '212' + d.slice(1);
+    if (d.length === 9)      return '212' + d;
+    return d;
+  };
+
+  /* ── Build WhatsApp deep-link (works iOS + Android) ── */
+  const buildWaLink = (r: RegistrationRequest) => {
+    const num = normalizePhone(r.phone);
+    const msg = `Salam ${r.prenom} ! Merci pour ta demande sur Moalim 🎓 Je te contacte pour activer ton compte. moalim.online`;
+    return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  };
+
+  /* ── Click WA → open + auto-set status contacté ── */
+  const handleWaClick = async (r: RegistrationRequest) => {
+    window.open(buildWaLink(r), '_blank', 'noopener,noreferrer');
+    if (r.status !== 'contacted' && r.status !== 'activated') {
+      try { await updateRegistrationRequest(r.id, { status: 'contacted' }); load(); }
+      catch (e) { console.error(e); }
+    }
+  };
+
   const changeStatus = async (id: string, status: string) => {
-    try {
-      await updateRegistrationRequest(id, { status });
-      load();
-    } catch (err) { console.error(err); }
+    try { await updateRegistrationRequest(id, { status }); load(); }
+    catch (err) { console.error(err); }
   };
 
   const saveNotes = async (id: string, admin_notes: string) => {
-    try {
-      await updateRegistrationRequest(id, { admin_notes });
-      load();
-    } catch (err) { console.error(err); }
+    try { await updateRegistrationRequest(id, { admin_notes }); load(); }
+    catch (err) { console.error(err); }
   };
 
   const remove = async (id: string) => {
     if (!confirm('Supprimer cette demande ?')) return;
-    try {
-      await deleteRegistrationRequest(id);
-      load();
-    } catch (err) { console.error(err); }
+    try { await deleteRegistrationRequest(id); load(); }
+    catch (err) { console.error(err); }
   };
 
-  const waLink = (r: RegistrationRequest) => {
-    const digits = (r.phone || '').replace(/\D/g, '');
-    const msg = `Salam ${r.prenom} ! Merci pour ta demande sur Mou3allim. Je te contacte pour activer ton compte.`;
-    return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+  /* ── Client-side filters ── */
+  const filtered = useMemo(() => items.filter(r => {
+    if (search) {
+      const q = search.toLowerCase();
+      if (!`${r.prenom} ${r.nom} ${r.phone} ${r.email || ''} ${r.ville}`.toLowerCase().includes(q)) return false;
+    }
+    if (filterPromo && !(r.promo_code || '').toLowerCase().includes(filterPromo.toLowerCase())) return false;
+    if (filterPeriod) {
+      const d = new Date(r.created_at);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (ym !== filterPeriod) return false;
+    }
+    return true;
+  }), [items, search, filterPromo, filterPeriod]);
+
+  const periodOptions = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach(r => {
+      const d = new Date(r.created_at);
+      set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+    return Array.from(set).sort().reverse();
+  }, [items]);
+
+  /* ── Multi-select ── */
+  const allIds       = filtered.map(r => r.id);
+  const allSelected  = allIds.length > 0 && allIds.every(id => selected.has(id));
+  const toggleAll    = () => setSelected(allSelected ? new Set() : new Set(allIds));
+  const toggleOne    = (id: string) => {
+    const s = new Set(selected);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setSelected(s);
+  };
+
+  /* ── Bulk WA send ── */
+  const bulkSendWa = async () => {
+    const targets = filtered.filter(r => selected.has(r.id));
+    targets.forEach((r, i) => setTimeout(() => window.open(buildWaLink(r), '_blank', 'noopener,noreferrer'), i * 900));
+    await Promise.all(
+      targets.filter(r => r.status !== 'contacted' && r.status !== 'activated')
+             .map(r => updateRegistrationRequest(r.id, { status: 'contacted' }))
+    );
+    load();
   };
 
   const statusStyle: Record<string, string> = {
@@ -1542,21 +1603,26 @@ function RegistrationRequestsTab() {
     activated: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     rejected:  'bg-gray-200 text-gray-600 border-gray-300',
   };
+  const statusLabel: Record<string, string> = {
+    '': 'Tous', pending: 'En attente', contacted: 'Contacté', activated: 'Activé', rejected: 'Rejeté',
+  };
 
   return (
     <div className="space-y-4">
+
+      {/* ── Header + status tabs ── */}
       <div className="flex items-center gap-2 flex-wrap">
         <h3 className="font-bold text-gray-900 flex items-center gap-2">
           <Inbox className="w-5 h-5 text-indigo-600" /> Demandes d'inscription
-          <span className="text-sm text-gray-400 font-normal">({items.length})</span>
+          <span className="text-sm text-gray-400 font-normal">({filtered.length}/{items.length})</span>
         </h3>
         <div className="flex-1" />
         {['', 'pending', 'contacted', 'activated', 'rejected'].map(s => (
-          <button key={s || 'all'} onClick={() => setFilter(s)}
+          <button key={s || 'all'} onClick={() => setStatusFilter(s)}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition ${
-              filter === s ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              statusFilter === s ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}>
-            {s === '' ? 'Tous' : s === 'pending' ? 'En attente' : s === 'contacted' ? 'Contactés' : s === 'activated' ? 'Activés' : 'Rejetés'}
+            {statusLabel[s]}
           </button>
         ))}
         <button onClick={load}
@@ -1565,96 +1631,151 @@ function RegistrationRequestsTab() {
         </button>
       </div>
 
+      {/* ── Extra filters row ── */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher nom / téléphone / email…"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white" />
+        </div>
+        <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white">
+          <option value="">📅 Toutes les périodes</option>
+          {periodOptions.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={filterPromo} onChange={e => setFilterPromo(e.target.value)}
+          placeholder="🏷 Code promo"
+          className="w-36 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white" />
+        {(search || filterPeriod || filterPromo) && (
+          <button onClick={() => { setSearch(''); setFilterPeriod(''); setFilterPromo(''); }}
+            className="px-3 py-2 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
+            Réinitialiser
+          </button>
+        )}
+      </div>
+
+      {/* ── Bulk action bar ── */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 flex-wrap px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+          <span className="text-sm font-semibold text-indigo-700">{selected.size} sélectionné(s)</span>
+          <button onClick={bulkSendWa}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#25D366] hover:bg-[#1fbb57] text-white text-sm font-semibold rounded-lg shadow-sm transition">
+            <MessageCircle className="w-4 h-4" /> Envoyer message d'activation WhatsApp
+          </button>
+          <button onClick={() => setSelected(new Set())}
+            className="ml-auto text-sm text-gray-500 hover:text-gray-700">
+            Annuler sélection
+          </button>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-        {items.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <Inbox className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             Aucune demande pour le moment.
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {items.map(r => {
-              const alreadyActivated = !!r.created_user_id;
-              return (
-              <div key={r.id} className="p-5 hover:bg-gray-50 transition">
-                <div className="flex items-start gap-4 flex-wrap">
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold shadow">
-                    {(r.prenom?.[0] || '?').toUpperCase()}{(r.nom?.[0] || '').toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-[220px]">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-gray-900">{r.prenom} {r.nom}</h4>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${statusStyle[r.status] || statusStyle.pending}`}>
-                        {r.status}
-                      </span>
-                      {r.promo_code && <span className="text-xs font-semibold text-indigo-600">· Code {r.promo_code}</span>}
-                      {alreadyActivated && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                          <Check className="w-3 h-3" /> Compte créé
-                        </span>
-                      )}
+          <>
+            {/* Select-all header */}
+            <div className="flex items-center gap-3 px-5 py-2.5 bg-gray-50 border-b border-gray-100">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                className="w-4 h-4 accent-indigo-600 cursor-pointer" />
+              <span className="text-xs text-gray-500 font-medium">
+                {allSelected ? 'Tout désélectionner' : `Tout sélectionner (${filtered.length})`}
+              </span>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {filtered.map(r => {
+                const alreadyActivated = !!r.created_user_id;
+                const isSelected = selected.has(r.id);
+                return (
+                  <div key={r.id} className={`p-5 hover:bg-gray-50 transition ${isSelected ? 'bg-indigo-50/40' : ''}`}>
+                    <div className="flex items-start gap-3 flex-wrap">
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleOne(r.id)}
+                        className="w-4 h-4 accent-indigo-600 cursor-pointer mt-3.5 shrink-0" />
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold shadow shrink-0">
+                        {(r.prenom?.[0] || '?').toUpperCase()}{(r.nom?.[0] || '').toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-[200px]">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-gray-900">{r.prenom} {r.nom}</h4>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${statusStyle[r.status] || statusStyle.pending}`}>
+                            {statusLabel[r.status] || r.status}
+                          </span>
+                          {r.promo_code && <span className="text-xs font-semibold text-indigo-600">🏷 {r.promo_code}</span>}
+                          {alreadyActivated && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              <Check className="w-3 h-3" /> Compte créé
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-1 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3.5 h-3.5" />
+                            {r.phone}
+                            {!r.phone?.startsWith('+') && !r.phone?.startsWith('212') && (
+                              <span className="text-[10px] text-amber-600 font-semibold">(→ +{normalizePhone(r.phone)})</span>
+                            )}
+                          </span>
+                          <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {r.ville}</span>
+                          {r.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {r.email}</span>}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Reçu le {new Date(r.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {!alreadyActivated && (
+                          <button onClick={() => setActivateTarget(r)}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+                            <UserPlus className="w-4 h-4" /> Créer le compte
+                          </button>
+                        )}
+                        <button onClick={() => handleWaClick(r)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#25D366] hover:bg-[#1fbb57] text-white text-sm font-semibold rounded-lg shadow-sm transition">
+                          <MessageCircle className="w-4 h-4" /> WhatsApp
+                        </button>
+                        <select value={r.status} onChange={e => changeStatus(r.id, e.target.value)}
+                          className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white">
+                          <option value="pending">En attente</option>
+                          <option value="contacted">Contacté</option>
+                          <option value="activated">Activé</option>
+                          <option value="rejected">Rejeté</option>
+                        </select>
+                        <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                          className="p-2 text-gray-400 hover:text-gray-700">
+                          {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => remove(r.id)} className="p-2 text-gray-400 hover:text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mt-1 flex-wrap">
-                      <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {r.phone}</span>
-                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {r.ville}</span>
-                      {r.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {r.email}</span>}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      Reçu le {new Date(r.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* ★ Create account button */}
-                    {!alreadyActivated && (
-                      <button
-                        onClick={() => setActivateTarget(r)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-semibold rounded-lg shadow-sm transition"
-                      >
-                        <UserPlus className="w-4 h-4" /> Créer le compte
-                      </button>
-                    )}
-                    <a href={waLink(r)} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#25D366] hover:bg-[#1fbb57] text-white text-sm font-semibold rounded-lg shadow-sm transition">
-                      <MessageCircle className="w-4 h-4" /> WhatsApp
-                    </a>
-                    <select value={r.status} onChange={e => changeStatus(r.id, e.target.value)}
-                      className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white">
-                      <option value="pending">En attente</option>
-                      <option value="contacted">Contacté</option>
-                      <option value="activated">Activé</option>
-                      <option value="rejected">Rejeté</option>
-                    </select>
-                    <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                      className="p-2 text-gray-400 hover:text-gray-700">
-                      {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                    <button onClick={() => remove(r.id)} className="p-2 text-gray-400 hover:text-red-600">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                {expandedId === r.id && (
-                  <div className="mt-4 pl-15 grid md:grid-cols-2 gap-4">
-                    {r.message && (
-                      <div>
-                        <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Message</div>
-                        <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 border border-gray-100">{r.message}</div>
+                    {expandedId === r.id && (
+                      <div className="mt-4 ml-[60px] grid md:grid-cols-2 gap-4">
+                        {r.message && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Message</div>
+                            <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 border border-gray-100">{r.message}</div>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Notes admin</div>
+                          <AdminNotesEditor initial={r.admin_notes || ''} onSave={v => saveNotes(r.id, v)} />
+                        </div>
                       </div>
                     )}
-                    <div>
-                      <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Notes admin</div>
-                      <AdminNotesEditor initial={r.admin_notes || ''} onSave={v => saveNotes(r.id, v)} />
-                    </div>
                   </div>
-                )}
-              </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 
-      {/* ★ Activate Modal */}
       {activateTarget && (
         <ActivateAccountModal
           request={activateTarget}
