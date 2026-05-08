@@ -380,14 +380,9 @@ interface RegistrationRequest {
 
 export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('admin_token'));
-  const [activeTab, setActiveTab] = useState<Tab>(
-    (localStorage.getItem('admin_active_tab') as Tab) || 'inscriptions'
-  );
+  const [activeTab, setActiveTab] = useState<Tab>('inscriptions');
 
-  const switchTab = (t: Tab) => {
-    setActiveTab(t);
-    localStorage.setItem('admin_active_tab', t);
-  };
+  const switchTab = (t: Tab) => { setActiveTab(t); };
   const [dataLoading, setDataLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
