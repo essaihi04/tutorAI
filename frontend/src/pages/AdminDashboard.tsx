@@ -380,7 +380,14 @@ interface RegistrationRequest {
 
 export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('admin_token'));
-  const [activeTab, setActiveTab] = useState<Tab>('inscriptions');
+  const [activeTab, setActiveTab] = useState<Tab>(
+    (localStorage.getItem('admin_active_tab') as Tab) || 'inscriptions'
+  );
+
+  const switchTab = (t: Tab) => {
+    setActiveTab(t);
+    localStorage.setItem('admin_active_tab', t);
+  };
   const [dataLoading, setDataLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -696,7 +703,7 @@ export default function AdminDashboard() {
         {/* Tabs — horizontally scrollable on mobile, equal-width from sm+ */}
         <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border mb-4 sm:mb-6 overflow-x-auto">
           {tabs.map(t => (
-            <button key={t.key} onClick={() => { setActiveTab(t.key); if (t.key === 'usage' || t.key === 'requests') loadUsageData(); }}
+            <button key={t.key} onClick={() => { switchTab(t.key); if (t.key === 'usage' || t.key === 'requests') loadUsageData(); }}
               className={`sm:flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap ${
                 activeTab === t.key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}>
@@ -1492,7 +1499,8 @@ function RegistrationRequestsTab() {
   const [loading, setLoading]     = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [search, setSearch]       = useState('');
-  const [filterPeriod, setFilterPeriod] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo]   = useState('');
   const [filterPromo, setFilterPromo]   = useState('');
   const [expandedId, setExpandedId]     = useState<string | null>(null);
   const [activateTarget, setActivateTarget] = useState<RegistrationRequest | null>(null);
@@ -1575,22 +1583,17 @@ function RegistrationRequestsTab() {
       if (!`${r.prenom} ${r.nom} ${r.phone} ${r.email || ''} ${r.ville}`.toLowerCase().includes(q)) return false;
     }
     if (filterPromo && !(r.promo_code || '').toLowerCase().includes(filterPromo.toLowerCase())) return false;
-    if (filterPeriod) {
-      const d = new Date(r.created_at);
-      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (ym !== filterPeriod) return false;
+    if (filterDateFrom) {
+      if (new Date(r.created_at) < new Date(filterDateFrom)) return false;
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo);
+      to.setDate(to.getDate() + 1);
+      if (new Date(r.created_at) > to) return false;
     }
     return true;
-  }), [items, search, filterPromo, filterPeriod]);
+  }), [items, search, filterPromo, filterDateFrom, filterDateTo]);
 
-  const periodOptions = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach(r => {
-      const d = new Date(r.created_at);
-      set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    });
-    return Array.from(set).sort().reverse();
-  }, [items]);
 
   /* ── Multi-select ── */
   const allIds       = filtered.map(r => r.id);
@@ -1706,16 +1709,21 @@ function RegistrationRequestsTab() {
             placeholder="Rechercher nom / téléphone / email…"
             className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white" />
         </div>
-        <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white">
-          <option value="">📅 Toutes les périodes</option>
-          {periodOptions.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
+        <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm">
+          <span className="text-gray-400 text-xs">Du</span>
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+            className="text-sm border-0 outline-none bg-transparent cursor-pointer" />
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm">
+          <span className="text-gray-400 text-xs">Au</span>
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+            className="text-sm border-0 outline-none bg-transparent cursor-pointer" />
+        </div>
         <input value={filterPromo} onChange={e => setFilterPromo(e.target.value)}
           placeholder="🏷 Code promo"
           className="w-36 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white" />
-        {(search || filterPeriod || filterPromo) && (
-          <button onClick={() => { setSearch(''); setFilterPeriod(''); setFilterPromo(''); }}
+        {(search || filterDateFrom || filterDateTo || filterPromo) && (
+          <button onClick={() => { setSearch(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterPromo(''); }}
             className="px-3 py-2 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
             Réinitialiser
           </button>
