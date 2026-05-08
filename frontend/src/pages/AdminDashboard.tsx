@@ -380,7 +380,7 @@ interface RegistrationRequest {
 
 export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('admin_token'));
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('inscriptions');
   const [dataLoading, setDataLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -632,10 +632,10 @@ export default function AdminDashboard() {
   };
 
   const tabs: { key: Tab; label: string; icon: any }[] = [
+    { key: 'inscriptions', label: 'Inscriptions', icon: Inbox },
     { key: 'overview', label: 'Vue d\'ensemble', icon: BarChart3 },
     { key: 'users', label: 'Utilisateurs', icon: Users },
     { key: 'promoCodes', label: 'Codes promo', icon: Key },
-    { key: 'inscriptions', label: 'Inscriptions', icon: Inbox },
     { key: 'usage', label: 'Consommation', icon: DollarSign },
     { key: 'requests', label: 'Requêtes récentes', icon: Activity },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
@@ -1553,6 +1553,21 @@ function RegistrationRequestsTab() {
     catch (err) { console.error(err); }
   };
 
+  /* ── Mini dashboard stats ── */
+  const stats = useMemo(() => {
+    const byStatus = { pending: 0, contacted: 0, activated: 0, rejected: 0 };
+    const promoMap: Record<string, number> = {};
+    const cityMap: Record<string, number> = {};
+    items.forEach(r => {
+      if (r.status in byStatus) byStatus[r.status as keyof typeof byStatus]++;
+      if (r.promo_code) promoMap[r.promo_code] = (promoMap[r.promo_code] || 0) + 1;
+      if (r.ville) cityMap[r.ville] = (cityMap[r.ville] || 0) + 1;
+    });
+    const topPromos = Object.entries(promoMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topCities = Object.entries(cityMap).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    return { byStatus, topPromos, topCities, total: items.length };
+  }, [items]);
+
   /* ── Client-side filters ── */
   const filtered = useMemo(() => items.filter(r => {
     if (search) {
@@ -1605,6 +1620,62 @@ function RegistrationRequestsTab() {
 
   return (
     <div className="space-y-4">
+
+      {/* ── Mini stats dashboard ── */}
+      {items.length > 0 && (
+        <div className="space-y-3">
+          {/* Status cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {[
+              { label: 'Total', value: stats.total, color: 'bg-indigo-50 border-indigo-100', text: 'text-indigo-700', dot: 'bg-indigo-400' },
+              { label: 'En attente', value: stats.byStatus.pending, color: 'bg-amber-50 border-amber-100', text: 'text-amber-700', dot: 'bg-amber-400' },
+              { label: 'Contactés', value: stats.byStatus.contacted, color: 'bg-blue-50 border-blue-100', text: 'text-blue-700', dot: 'bg-blue-400' },
+              { label: 'Activés', value: stats.byStatus.activated, color: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-400' },
+              { label: 'Rejetés', value: stats.byStatus.rejected, color: 'bg-gray-50 border-gray-200', text: 'text-gray-600', dot: 'bg-gray-400' },
+            ].map(s => (
+              <div key={s.label} className={`${s.color} border rounded-xl px-4 py-3 flex items-center gap-3`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${s.dot} shrink-0`} />
+                <div>
+                  <div className={`text-2xl font-black ${s.text}`}>{s.value}</div>
+                  <div className="text-xs text-gray-500 font-medium">{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Promo codes + top cities */}
+          {(stats.topPromos.length > 0 || stats.topCities.length > 0) && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {stats.topPromos.length > 0 && (
+                <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm">
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">🏷 Codes promo</div>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.topPromos.map(([code, count]) => (
+                      <span key={code} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-100 rounded-full text-xs font-semibold text-indigo-700">
+                        {code}
+                        <span className="bg-indigo-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {stats.topCities.length > 0 && (
+                <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm">
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">📍 Villes</div>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.topCities.map(([city, count]) => (
+                      <span key={city} className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold text-gray-700">
+                        {city}
+                        <span className="bg-gray-400 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Header + status tabs ── */}
       <div className="flex items-center gap-2 flex-wrap">
