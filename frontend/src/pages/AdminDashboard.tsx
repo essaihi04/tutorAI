@@ -1497,6 +1497,7 @@ function RegistrationRequestsTab() {
   const [expandedId, setExpandedId]     = useState<string | null>(null);
   const [activateTarget, setActivateTarget] = useState<RegistrationRequest | null>(null);
   const [selected, setSelected]   = useState<Set<string>>(new Set());
+  const [bulkQueue, setBulkQueue]  = useState<RegistrationRequest[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1586,15 +1587,10 @@ function RegistrationRequestsTab() {
     setSelected(s);
   };
 
-  /* ── Bulk WA send ── */
-  const bulkSendWa = async () => {
+  /* ── Bulk WA send — opens a sequential modal ── */
+  const bulkSendWa = () => {
     const targets = filtered.filter(r => selected.has(r.id));
-    targets.forEach((r, i) => setTimeout(() => window.open(buildWaLink(r), '_blank', 'noopener,noreferrer'), i * 900));
-    await Promise.all(
-      targets.filter(r => r.status !== 'contacted' && r.status !== 'activated')
-             .map(r => updateRegistrationRequest(r.id, { status: 'contacted' }))
-    );
-    load();
+    if (targets.length > 0) setBulkQueue(targets);
   };
 
   const statusStyle: Record<string, string> = {
@@ -1783,6 +1779,117 @@ function RegistrationRequestsTab() {
           onDone={() => { setActivateTarget(null); load(); }}
         />
       )}
+
+      {bulkQueue && (
+        <BulkSendModal
+          queue={bulkQueue}
+          buildWaLink={buildWaLink}
+          onSent={async (r) => {
+            if (r.status !== 'contacted' && r.status !== 'activated') {
+              try { await updateRegistrationRequest(r.id, { status: 'contacted' }); } catch {}
+            }
+          }}
+          onClose={() => { setBulkQueue(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   BULK SEND MODAL — sequential, each WA opened by real user click
+   ──────────────────────────────────────────────────────────────── */
+function BulkSendModal({
+  queue, buildWaLink, onSent, onClose,
+}: {
+  queue: RegistrationRequest[];
+  buildWaLink: (r: RegistrationRequest) => string;
+  onSent: (r: RegistrationRequest) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [sent, setSent] = useState<Set<string>>(new Set());
+  const done = sent.size === queue.length;
+
+  const handleSend = async (r: RegistrationRequest) => {
+    window.open(buildWaLink(r), '_blank', 'noopener,noreferrer');
+    await onSent(r);
+    setSent(prev => new Set([...prev, r.id]));
+    if (idx < queue.length - 1) setIdx(i => i + 1);
+  };
+
+  const current = queue[idx];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-bold text-gray-900">Envoi WhatsApp groupé</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{sent.size}/{queue.length} envoyés</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4" /></button>
+        </div>
+
+        {/* Progress bar */}
+        <div className="px-6 pt-4">
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-[#25D366] transition-all" style={{ width: `${(sent.size / queue.length) * 100}%` }} />
+          </div>
+        </div>
+
+        {done ? (
+          <div className="px-6 py-8 text-center">
+            <div className="text-4xl mb-3">✅</div>
+            <p className="font-bold text-gray-900 mb-1">Tous les messages envoyés !</p>
+            <p className="text-sm text-gray-500 mb-5">Les statuts ont été mis à jour en "Contacté".</p>
+            <button onClick={onClose} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-sm">Fermer</button>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            {/* Current contact */}
+            <div className="flex items-center gap-3 p-4 bg-[#25D366]/8 border border-[#25D366]/30 rounded-xl">
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold shrink-0">
+                {(current.prenom?.[0] || '?').toUpperCase()}{(current.nom?.[0] || '').toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-gray-900">{current.prenom} {current.nom}</div>
+                <div className="text-sm text-gray-500">{current.phone}</div>
+              </div>
+              <span className="text-xs font-bold text-indigo-600">{idx + 1}/{queue.length}</span>
+            </div>
+
+            <button
+              onClick={() => handleSend(current)}
+              disabled={sent.has(current.id)}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#25D366] hover:bg-[#1fbb57] disabled:opacity-50 text-white font-bold text-base rounded-xl shadow transition"
+            >
+              <MessageCircle className="w-5 h-5" />
+              {sent.has(current.id) ? '✓ Envoyé' : `Ouvrir WhatsApp — ${current.prenom}`}
+            </button>
+
+            {/* Queue overview */}
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {queue.map((r, i) => (
+                <div key={r.id}
+                  onClick={() => setIdx(i)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition text-sm ${
+                    i === idx ? 'bg-indigo-50 border border-indigo-200' :
+                    sent.has(r.id) ? 'bg-gray-50 text-gray-400' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    sent.has(r.id) ? 'bg-[#25D366] text-white' : 'bg-gray-200 text-gray-500'
+                  }`}>{sent.has(r.id) ? '✓' : i + 1}</span>
+                  <span className="font-medium">{r.prenom} {r.nom}</span>
+                  <span className="text-gray-400 ml-auto">{r.phone}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
