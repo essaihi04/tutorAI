@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Phone, MapPin, User, Mail, Sparkles, BookOpen, Brain, BarChart3,
+  Phone, MapPin, User, Sparkles, BookOpen, Brain, BarChart3,
   CheckCircle2, Clock, MessageCircle, ArrowRight, Star, ShieldCheck,
-  Rocket, ArrowLeft, Trophy,
+  Rocket, ArrowLeft, Trophy, GraduationCap, Package,
 } from 'lucide-react';
 import { submitRegistrationRequest } from '../services/api';
 import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
@@ -18,12 +18,16 @@ function waLink(prefillText?: string) {
 
 interface FormState {
   prenom: string; nom: string; phone: string; ville: string;
-  email: string; promo_code: string; message: string;
+  promo_code: string;
+  filiere: boolean;
+  pack: boolean;
 }
 
 const initialForm: FormState = {
   prenom: '', nom: '', phone: '', ville: '',
-  email: '', promo_code: '', message: '',
+  promo_code: '',
+  filiere: false,
+  pack: false,
 };
 
 export default function RegisterInterest() {
@@ -33,14 +37,20 @@ export default function RegisterInterest() {
   const [submitted, setSubmitted] = useState(false);
 
   const onChange = (k: keyof FormState) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm({ ...form, [k]: e.target.value });
+
+  const onCheck = (k: 'filiere' | 'pack') =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm({ ...form, [k]: e.target.checked });
 
   const validate = (): string | null => {
     if (form.prenom.trim().length < 2) return 'Prénom trop court';
     if (form.nom.trim().length < 2) return 'Nom trop court';
     if (form.phone.replace(/\D/g, '').length < 8) return 'Numéro de téléphone invalide';
     if (form.ville.trim().length < 2) return 'Ville requise';
+    if (!form.filiere) return 'Veuillez confirmer votre filière.';
+    if (!form.pack) return 'Veuillez sélectionner le pack pour continuer.';
     return null;
   };
 
@@ -56,9 +66,9 @@ export default function RegisterInterest() {
         nom: form.nom.trim(),
         phone: form.phone.trim(),
         ville: form.ville.trim(),
-        email: form.email.trim() || undefined,
+        niveau: '2BAC-PCF',
         promo_code: form.promo_code.trim() ? form.promo_code.trim().toUpperCase() : undefined,
-        message: form.message.trim() || undefined,
+        message: form.pack ? 'Pack BAC 2026 + Concours grandes écoles — 149 DH' : undefined,
       });
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -153,20 +163,52 @@ export default function RegisterInterest() {
             <Field label="Code promo (optionnel)" icon={Sparkles} placeholder="Ex : ECOLE123" value={form.promo_code} onChange={onChange('promo_code')} />
           </div>
 
-          <Field label="Email (optionnel)" icon={Mail} placeholder="exemple@gmail.com" value={form.email} onChange={onChange('email')} type="email" />
-
-          <div>
-            <label className="block text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">
-              Un mot pour nous ? (optionnel)
-            </label>
-            <textarea
-              value={form.message}
-              onChange={onChange('message')}
-              rows={3}
-              placeholder="Ex : Je veux surtout renforcer la Physique…"
-              className="moalim-input resize-none"
+          {/* Filière checkbox */}
+          <label className={`flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+            form.filiere
+              ? 'border-indigo-400 bg-indigo-500/15'
+              : 'border-white/10 bg-white/5 hover:border-white/20'
+          }`}>
+            <input
+              type="checkbox"
+              checked={form.filiere}
+              onChange={onCheck('filiere')}
+              className="mt-0.5 w-5 h-5 accent-indigo-500 shrink-0 cursor-pointer"
             />
-          </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-indigo-300" />
+                <span className="font-bold text-white text-sm">Je suis en 2ème BAC PC (Filière Française)</span>
+                <span className="text-[10px] font-bold text-rose-400">*</span>
+              </div>
+              <div className="text-xs text-white/50 mt-0.5">Sciences Physiques-Chimiques · Programme officiel marocain francophone</div>
+            </div>
+          </label>
+
+          {/* Pack checkbox */}
+          <label className={`flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+            form.pack
+              ? 'border-emerald-400 bg-emerald-500/15'
+              : 'border-white/10 bg-white/5 hover:border-white/20'
+          }`}>
+            <input
+              type="checkbox"
+              checked={form.pack}
+              onChange={onCheck('pack')}
+              className="mt-0.5 w-5 h-5 accent-emerald-500 shrink-0 cursor-pointer"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Package className="w-4 h-4 text-emerald-300" />
+                <span className="font-bold text-white text-sm">Je veux le Pack BAC 2026 + Concours des grandes écoles</span>
+                <span className="text-[10px] font-bold text-rose-400">*</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className="text-lg font-black text-emerald-300">149 DH</span>
+                <span className="text-xs text-white/50">· ENSA · ENSAM · ENCG · Médecine · CPGE</span>
+              </div>
+            </div>
+          </label>
 
           {error && (
             <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-200 text-sm px-4 py-3">
