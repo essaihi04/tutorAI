@@ -37,6 +37,7 @@ interface UserRecord {
   is_admin: boolean;
   is_online: boolean;
   created_at: string;
+  last_active_at?: string | null;
   expires_at?: string | null;
   preferred_language: string;
   promo_code?: string | null;
@@ -967,6 +968,8 @@ export default function AdminDashboard() {
                       <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Rôle</th>
                       <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">En ligne</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Inscrit le</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Dernière activité</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Conso. (DH)</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
@@ -1046,6 +1049,43 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {(() => {
+                            const usage = userUsage.find(uu => uu.student_email === u.email);
+                            const lastDate = u.last_active_at
+                              ? new Date(u.last_active_at)
+                              : usage?.last_request
+                                ? new Date(usage.last_request)
+                                : null;
+                            if (!lastDate) return <span className="text-gray-300">—</span>;
+                            const diffMs = Date.now() - lastDate.getTime();
+                            const diffH = diffMs / 3600000;
+                            const color = diffH < 1 ? 'text-green-600 font-semibold'
+                              : diffH < 24 ? 'text-emerald-600'
+                              : diffH < 168 ? 'text-amber-600'
+                              : 'text-gray-400';
+                            return (
+                              <span className={`text-xs ${color}`} title={lastDate.toLocaleString('fr-FR')}>
+                                {diffH < 1 ? 'Il y a < 1h'
+                                  : diffH < 24 ? `Il y a ${Math.floor(diffH)}h`
+                                  : diffH < 168 ? `Il y a ${Math.floor(diffH / 24)}j`
+                                  : lastDate.toLocaleDateString('fr-FR')}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {(() => {
+                            const usage = userUsage.find(uu => uu.student_email === u.email);
+                            if (!usage || usage.cost_usd === 0) return <span className="text-gray-300 text-xs">—</span>;
+                            const dh = (usage.cost_usd * 10).toFixed(2);
+                            return (
+                              <span className="text-xs font-bold text-emerald-700" title={`$${usage.cost_usd.toFixed(5)} USD · ${usage.requests} requêtes`}>
+                                {dh} DH
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
