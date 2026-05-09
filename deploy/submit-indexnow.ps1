@@ -72,7 +72,7 @@ foreach ($ep in $endpoints) {
     if ($code -eq 200 -or $code -eq 202) {
       Write-Host "  ✅ $ep → $code" -ForegroundColor Green
     } else {
-      Write-Host "  ⚠️  $ep → $($_.Exception.Message)" -ForegroundColor Yellow
+      Write-Host "  WARN $ep -> $($_.Exception.Message)" -ForegroundColor Yellow
     }
   }
 }

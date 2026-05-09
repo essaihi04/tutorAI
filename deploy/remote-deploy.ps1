@@ -12,7 +12,8 @@ param(
     [string]$ServerIp = "87.106.1.128",
     [string]$User     = "root",
     [string]$Branch   = "main",
-    [switch]$UpdateOnly  # use -UpdateOnly for re-deploys (faster)
+    [switch]$UpdateOnly,  # use -UpdateOnly for re-deploys (faster)
+    [switch]$UpdateEnv    # use -UpdateEnv to push updated backend.env to server
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +38,24 @@ $envFile = Join-Path $PSScriptRoot "backend.env"
 if (-not (Test-Path $envFile)) {
     Write-Host "✖ deploy/backend.env introuvable." -ForegroundColor Red
     exit 1
+}
+
+# ── Env-only update mode ─────────────────────────────────────
+if ($UpdateEnv) {
+    Step "Mise à jour du fichier .env sur le serveur"
+    $envFile = Join-Path $PSScriptRoot "backend.env"
+    if (-not (Test-Path $envFile)) {
+        Write-Host "✖ deploy/backend.env introuvable." -ForegroundColor Red
+        exit 1
+    }
+    $envContent = Get-Content $envFile -Raw
+    $envBytes   = [System.Text.Encoding]::UTF8.GetBytes($envContent)
+    $envBase64  = [System.Convert]::ToBase64String($envBytes)
+    $cmd = "echo '$envBase64' | base64 -d > /root/moalim/backend/.env && chmod 600 /root/moalim/backend/.env && systemctl restart moalim-backend && echo 'Backend .env mis à jour et service redémarré'"
+    ssh "$User@$ServerIp" $cmd
+    Write-Host ""
+    Write-Host "✅ .env mis à jour. https://moalim.online" -ForegroundColor Green
+    exit 0
 }
 
 # ── Update mode (faster, after first deploy) ─────────────────
