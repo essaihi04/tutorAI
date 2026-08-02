@@ -161,6 +161,60 @@ def _collapse_latex_padding_parsed(s: str) -> str:
     return s
 
 
+def _collapse_double_backslashes(s: str) -> str:
+    r"""Collapse ``\\ln`` → ``\ln`` when the doubling is a JSON-escaping leftover.
+
+    Text taken straight from the model's prose (auto-board fallback) never goes
+    through a JSON parser, so LaTeX the LLM escaped for JSON arrives doubled and
+    KaTeX renders it literally (``\\ln(a \\times b)`` shown as-is on the board).
+
+    Only a doubling directly followed by a LETTER is collapsed: in LaTeX ``\\``
+    followed by a space or a newline is a genuine line break (array/matrix rows)
+    and must be preserved.
+    """
+    if not s:
+        return s
+    return re.sub(r'\\{2,}(?=[a-zA-Z])', r'\\', s)
+
+
+# Segments to shield from markdown stripping: display math, inline math, and
+# bare LaTeX commands with their optional braced arguments.
+_MATH_SEGMENT_RE = re.compile(
+    r'(\$\$[^$]+\$\$|\$[^$]+\$|\\[a-zA-Z]+(?:\{[^{}]*\})*)'
+)
+
+
+def _clean_markdown_preserving_latex(s: str) -> str:
+    r"""Strip markdown emphasis WITHOUT destroying mathematical notation.
+
+    The naive version (``re.sub(r'_(.+?)_', r'\1', s)``) silently corrupted every
+    formula carrying subscripts: ``u_n = u_0 + r`` became ``un = u0 + r``, and
+    ``\mathcal{D}_f`` lost its index. Two safeguards here:
+
+    * math segments (``$…$``, ``$$…$$``, ``\cmd{…}``) are shielded entirely;
+    * outside them, ``_`` and ``*`` are treated as emphasis ONLY when they are
+      not glued to a word character — which is what markdown actually means.
+    """
+    if not s:
+        return ""
+    s = _collapse_double_backslashes(s)
+
+    parts = _MATH_SEGMENT_RE.split(s)
+    out = []
+    for idx, part in enumerate(parts):
+        # Odd indices are the captured math segments — keep them verbatim.
+        if idx % 2 == 1:
+            out.append(part)
+            continue
+        part = re.sub(r'\*\*(.+?)\*\*', r'\1', part)          # **bold**
+        part = re.sub(r'__(.+?)__', r'\1', part)              # __bold__
+        part = re.sub(r'(?<![\w\\])\*([^*\n]+?)\*(?!\w)', r'\1', part)  # *italic*
+        part = re.sub(r'(?<![\w\\])_([^_\n]+?)_(?!\w)', r'\1', part)    # _italic_
+        part = re.sub(r'`(.+?)`', r'\1', part)                # `code`
+        out.append(part)
+    return ''.join(out).strip()
+
+
 def _json_cleanup_variants(s: str):
     """Yield successive cleaned variants of the input to try parsing."""
     base = _strip_md_fence(s)
@@ -3004,6 +3058,9 @@ RÈGLES :
                     if not isinstance(value, str):
                         return value
                     cleaned = value.strip()
+                    # Over-escaped LaTeX ("\\\\ln" in the raw JSON → "\\ln" after
+                    # parsing) would reach KaTeX doubled and render literally.
+                    cleaned = _collapse_double_backslashes(cleaned)
                     cleaned = re.sub(r'\*\*(.+?)\*\*', r'\1', cleaned)
                     cleaned = re.sub(r'__(.+?)__', r'\1', cleaned)
                     cleaned = re.sub(r'`(.+?)`', r'\1', cleaned)
@@ -4289,14 +4346,10 @@ RÈGLES :
 
                 auto_lines = []
 
-                def _clean_md(s: str) -> str:
-                    """Strip markdown formatting from a string for clean board display."""
-                    s = re.sub(r'\*\*(.+?)\*\*', r'\1', s)  # **bold**
-                    s = re.sub(r'\*(.+?)\*', r'\1', s)        # *italic*
-                    s = re.sub(r'__(.+?)__', r'\1', s)        # __bold__
-                    s = re.sub(r'_(.+?)_', r'\1', s)          # _italic_
-                    s = re.sub(r'`(.+?)`', r'\1', s)          # `code`
-                    return s.strip()
+                # Markdown stripping that leaves formulas intact — the previous
+                # inline version mangled subscripts (u_n → un) and left the
+                # LLM's doubled backslashes (\\ln) visible on the board.
+                _clean_md = _clean_markdown_preserving_latex
 
                 # Split by double-newline for paragraphs, or single-newline for lines
                 paragraphs = re.split(r'\n{2,}', clean_text)
