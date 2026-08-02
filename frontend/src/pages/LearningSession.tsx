@@ -245,6 +245,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [whiteboardData, setWhiteboardData] = useState<any[] | null>(null);
   const [whiteboardSchemaId, setWhiteboardSchemaId] = useState<string | null>(null);
   const [boardContent, setBoardContent] = useState<any | null>(null);
+  const [liveScript, setLiveScript] = useState<any | null>(null);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [currentExercise, setCurrentExercise] = useState<any | null>(null);
   const [showExercise, setShowExercise] = useState(false);
@@ -779,7 +780,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     });
 
     wsService.on('hide_whiteboard', () => {
-      if (!whiteboardData && !whiteboardSchemaId && !boardContent) {
+      if (!whiteboardData && !whiteboardSchemaId && !boardContent && !liveScript) {
         console.warn('[Display][WARN] hide_whiteboard received while the whiteboard is already empty');
       }
       console.log('[Display] Hiding whiteboard');
@@ -788,13 +789,37 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     wsService.on('clear_whiteboard', () => {
       console.log('[Display] Clearing/resetting whiteboard explicitly');
-      if (!whiteboardData && !whiteboardSchemaId && !boardContent) {
+      if (!whiteboardData && !whiteboardSchemaId && !boardContent && !liveScript) {
         console.warn('[Display][WARN] clear_whiteboard received but there was no active whiteboard content to clear');
       }
       // Force clear all whiteboard data to trigger AIWhiteboard reset
       setWhiteboardData(null);
       setWhiteboardSchemaId(null);
       setBoardContent(null);
+      setLiveScript(null);
+    });
+
+    wsService.on('whiteboard_live', (data) => {
+      if (!Array.isArray(data?.steps) || data.steps.length === 0) {
+        console.error('[Display][ERROR] whiteboard_live received without valid steps:', data);
+        return;
+      }
+
+      // Hide exam panel if active (but keep data so user can return)
+      if (showExamPanelRef.current) {
+        console.log('[Display] Switching from exam panel to live board (keeping exam data)');
+        setShowExamPanel(false);
+      }
+
+      console.log('[Display] Live board script received:', data.title, data.steps.length, 'steps');
+      pendingMediaRef.current = null;
+      setWhiteboardData(null);
+      setWhiteboardSchemaId(null);
+      setBoardContent(null);
+      setLiveScript({ title: data.title || '', steps: data.steps });
+      setShowWhiteboard(true);
+      setShowMedia(false);
+      setShowExercise(false);
     });
 
     wsService.on('whiteboard_draw', (data) => {
@@ -830,6 +855,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       pendingMediaRef.current = null;
       setWhiteboardSchemaId(null);
       setBoardContent(null);
+      setLiveScript(null);
       // Force clear by setting null first, then new data after a tick
       // This ensures React detects the change and AIWhiteboard resets
       setWhiteboardData(null);
@@ -858,6 +884,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       pendingMediaRef.current = null;
       setWhiteboardData(null);
       setBoardContent(null);
+      setLiveScript(null);
       setWhiteboardSchemaId(data.schema_id);
       setShowWhiteboard(true);
       setShowMedia(false);
@@ -881,6 +908,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       pendingMediaRef.current = null;
       setWhiteboardData(null);
       setWhiteboardSchemaId(null);
+      setLiveScript(null);
       setBoardContent(data);
       setShowWhiteboard(true);
       setShowMedia(false);
@@ -901,6 +929,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setWhiteboardData(null);
       setWhiteboardSchemaId(null);
       setBoardContent(null);
+      setLiveScript(null);
       setCurrentMedia(null);
       setShowMedia(false);
       setShowWhiteboard(false);
@@ -927,6 +956,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         setWhiteboardData(null);
         setWhiteboardSchemaId(null);
         setBoardContent(null);
+        setLiveScript(null);
         setShowWhiteboard(false);
         setCurrentMedia(null);
         setShowMedia(false);
@@ -1306,7 +1336,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             {/* Display toggle buttons - whiteboard & media */}
             <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
               {/* Whiteboard toggle */}
-              {(whiteboardData || whiteboardSchemaId || boardContent) && (
+              {(whiteboardData || whiteboardSchemaId || boardContent || liveScript) && (
                 <button
                   onClick={() => {
                     if (showWhiteboard) {
@@ -1593,7 +1623,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 </div>
               </div>
             </>
-          ) : showWhiteboard && (whiteboardData || whiteboardSchemaId || boardContent) ? (
+          ) : showWhiteboard && (whiteboardData || whiteboardSchemaId || boardContent || liveScript) ? (
             <>
               {/* Small floating avatar pip — pointer-events-none: its unscaled 220×220 box would otherwise cover
                   the QuickActions / VoiceInput / send-text button on phones, intercepting all taps. */}
@@ -1635,6 +1665,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     drawCommands={whiteboardData}
                     schemaId={whiteboardSchemaId}
                     boardContent={boardContent}
+                    liveScript={liveScript}
                     isVisible={showWhiteboard}
                     onClose={handleCloseWhiteboard}
                   />

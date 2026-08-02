@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import SVGSchemaViewer from './schemas/SVGSchemaViewer';
 import { getSchemaById } from './schemas';
 import MathBoard from './MathBoard';
+import LiveBoard, { type LiveScript } from './LiveBoard';
 
 // Load handwritten fonts
 const loadHandwrittenFonts = () => {
@@ -80,6 +81,7 @@ interface AIWhiteboardProps {
   schemaId?: string | null;
   activeHighlights?: string[];
   boardContent?: BoardContent | null;
+  liveScript?: LiveScript | null;
 }
 
 // Chalk-on-dark palette — bright shades legible on the dark green chalkboard.
@@ -102,11 +104,12 @@ function resolveColor(color: string): string {
   return (COLORS as any)[color] || color || COLORS.black;
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
     hasBoardContent: !!(boardContent && boardContent.lines?.length > 0),
+    hasLiveScript: !!(liveScript && liveScript.steps?.length > 0),
     isVisible
   });
   const activeSchema = schemaId ? getSchemaById(schemaId) : undefined;
@@ -983,7 +986,18 @@ function resolveColor(color: string): string {
     }
   };
 
-  if (!isVisible || (!drawCommands && !activeSchema && !boardContent)) return null;
+  if (!isVisible || (!drawCommands && !activeSchema && !boardContent && !liveScript)) return null;
+
+  // ── Live mode (priorité maximale) : le professeur écrit/dessine en direct ──
+  if (liveScript && liveScript.steps && liveScript.steps.length > 0) {
+    return (
+      <LiveBoard
+        script={liveScript}
+        isVisible={isVisible}
+        onClose={onClose}
+      />
+    );
+  }
 
   const hasActiveDrawCommands = drawCommands && drawCommands.length > 0;
 

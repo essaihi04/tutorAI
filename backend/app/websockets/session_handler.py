@@ -400,6 +400,8 @@ class SessionHandler:
         cleaned = re.sub(r'<draw>[\s\S]*', '', cleaned, flags=re.DOTALL)
         cleaned = re.sub(r'<schema>[\s\S]*?</schema>', '', cleaned, flags=re.DOTALL)
         cleaned = re.sub(r'<schema>[\s\S]*', '', cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r'<live>[\s\S]*?</live>', '', cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r'<live>[\s\S]*', '', cleaned, flags=re.DOTALL)
         cleaned = re.sub(r'<exam_exercise>[\s\S]*?</exam_exercise>', '', cleaned, flags=re.DOTALL)
         cleaned = re.sub(r'<exam_exercise>[\s\S]*', '', cleaned, flags=re.DOTALL)
         cleaned = re.sub(r'<suggestions>[\s\S]*?</suggestions>', '', cleaned, flags=re.DOTALL)
@@ -670,7 +672,7 @@ class SessionHandler:
         if any(marker in text.lower() for marker in placeholder_markers):
             return "placeholder_detected"
 
-        structured_tags = ["ui", "draw", "schema", "board", "exam_exercise"]
+        structured_tags = ["ui", "draw", "schema", "board", "live", "exam_exercise"]
         for tag in structured_tags:
             open_count = text.count(f"<{tag}>")
             close_count = text.count(f"</{tag}>")
@@ -696,7 +698,7 @@ class SessionHandler:
         has_structured_content = any(
             marker in text
             for marker in [
-                "<ui>", "<draw>", "<schema>", "<board>", "<exam_exercise>",
+                "<ui>", "<draw>", "<schema>", "<board>", "<live>", "<exam_exercise>",
                 "OUVRIR_IMAGE", "OUVRIR_SIMULATION", "OUVRIR_EXERCICE",
                 "DESSINER_SCHEMA:", "EXERCICE:"
             ]
@@ -716,6 +718,8 @@ class SessionHandler:
         text = re.sub(r'<draw>[\s\S]*', '', text, flags=re.DOTALL)
         text = re.sub(r'<schema>[\s\S]*?</schema>', '', text, flags=re.DOTALL)
         text = re.sub(r'<schema>[\s\S]*', '', text, flags=re.DOTALL)
+        text = re.sub(r'<live>[\s\S]*?</live>', '', text, flags=re.DOTALL)
+        text = re.sub(r'<live>[\s\S]*', '', text, flags=re.DOTALL)
         text = re.sub(r'<exam_exercise>[\s\S]*?</exam_exercise>', '', text, flags=re.DOTALL)
         text = re.sub(r'<exam_exercise>[\s\S]*', '', text, flags=re.DOTALL)
         text = re.sub(r'<suggestions>[\s\S]*?</suggestions>', '', text, flags=re.DOTALL)
@@ -1465,6 +1469,15 @@ class SessionHandler:
             "SVT": ["svt", "biologie", "cellule", "ADN", "génétique", "enzyme",
                     "mitose", "immunolog", "glycolyse", "respiration cellulaire",
                     "fermentation", "géologie", "plaque", "subduction"],
+            "Anglais": ["anglais", "english", "reading comprehension", "writing",
+                        "grammar", "passive voice", "reported speech", "conditional",
+                        "phrasal verb", "vocabulary", "essay", "paragraph",
+                        "brain drain", "sustainable development"],
+            "Philosophie": ["philosophie", "philosophique", "فلسفة", "مجزوءة",
+                            "dissertation", "problématique", "الوضع البشري",
+                            "الشخص", "الغير", "الحقيقة", "النظرية والتجربة",
+                            "الدولة", "الحق والعدالة", "الواجب", "الحرية",
+                            "kant", "descartes", "spinoza", "sartre", "nietzsche"],
         }
         scores = {}
         for subj, keywords in subject_keywords.items():
@@ -1794,7 +1807,7 @@ TU DOIS OBLIGATOIREMENT:
         # so the user sees the pedagogical text immediately while the full response builds up.
         ai_response = ""
         try:
-            _tag_names = ['board', 'draw', 'ui', 'schema', 'exam_exercise', 'suggestions']
+            _tag_names = ['board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions']
             _safe_log(f"[LLM Stream] Starting streamed response (max_tokens={max_tokens})")
             async for token in llm_service.chat_stream(
                 messages=self.conversation_history,
@@ -2376,7 +2389,7 @@ RÈGLES :
                 # STREAM explain opening — tokens appear on screen within 1-2 seconds
                 opening = ""
                 _inside_tag = False
-                _tag_names = ['board', 'draw', 'ui', 'schema', 'exam_exercise', 'suggestions']
+                _tag_names = ['board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions']
                 _safe_log("[Session Init] Streaming explain opening via chat_stream")
                 async for token in llm_service.chat_stream(
                     messages=messages,
@@ -2436,6 +2449,87 @@ RÈGLES :
 
             # Single TTS on full text (non-blocking, reliable)
             asyncio.create_task(self.generate_and_send_audio_chunks(opening))
+
+    def _normalize_live_steps(self, payload):
+        """Validate/normalize a live-teaching script ("Mode Prof en Direct").
+
+        Accepts {"title": ..., "steps": [...]} or a bare list of steps.
+        Step actions: write {line:{type,content,color}}, draw {elements:[...]},
+        erase {zone}, pause {duration}, narrate {text}.
+        Returns (title, steps) or (None, None) if unusable.
+        """
+        if isinstance(payload, dict):
+            steps = payload.get("steps")
+            title = payload.get("title", "Cours en direct")
+        elif isinstance(payload, list):
+            steps = payload
+            title = "Cours en direct"
+        else:
+            return None, None
+        if not isinstance(steps, list) or not steps:
+            return None, None
+
+        drawable_types = {"line", "arrow", "rect", "circle", "text", "path"}
+        normalized = []
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            action = str(step.get("action", "")).lower().strip()
+            # Tolerate common synonyms the LLM might emit
+            if action in {"text", "ecrire", "write_line"}:
+                action = "write"
+            elif action in {"dessiner", "sketch"}:
+                action = "draw"
+            elif action in {"effacer", "clear", "wipe"}:
+                action = "erase"
+            elif action in {"wait", "attendre"}:
+                action = "pause"
+            elif action in {"say", "speak", "explain", "parler"}:
+                action = "narrate"
+
+            if action == "write" or (not action and isinstance(step.get("content"), str)):
+                line = step.get("line") if isinstance(step.get("line"), dict) else None
+                if line is None and isinstance(step.get("content"), str):
+                    line = {k: v for k, v in step.items() if k in ("type", "content", "color")}
+                if not isinstance(line, dict):
+                    continue
+                content = line.get("content")
+                if not isinstance(content, str) or not content.strip():
+                    continue
+                clean_line = {"type": str(line.get("type", "text")).lower(), "content": content.strip()}
+                if line.get("color"):
+                    clean_line["color"] = str(line["color"])
+                normalized.append({"action": "write", "line": clean_line})
+            elif action == "draw":
+                elements = step.get("elements")
+                if isinstance(elements, dict):
+                    elements = [elements]
+                if not isinstance(elements, list):
+                    continue
+                clean_els = [
+                    el for el in elements
+                    if isinstance(el, dict) and str(el.get("type", "")).lower() in drawable_types
+                ]
+                if clean_els:
+                    normalized.append({"action": "draw", "elements": clean_els})
+            elif action == "erase":
+                zone = str(step.get("zone", "all")).lower().strip()
+                normalized.append({"action": "erase", "zone": zone if zone in ("text", "draw", "all") else "all"})
+            elif action == "pause":
+                try:
+                    duration = int(step.get("duration", 900))
+                except (TypeError, ValueError):
+                    duration = 900
+                normalized.append({"action": "pause", "duration": max(200, min(8000, duration))})
+            elif action == "narrate":
+                text = step.get("text") or step.get("content") or ""
+                if isinstance(text, str) and text.strip():
+                    normalized.append({"action": "narrate", "text": text.strip()})
+
+        # A usable script must actually write or draw something
+        if not any(s["action"] in ("write", "draw") for s in normalized):
+            return None, None
+        return str(title or "Cours en direct"), normalized
 
     async def _execute_ai_commands(self, ai_response: str, suppress_draw: bool = False, suppress_media: bool = False, force_schema: bool = False, student_text: str = "", suppress_whiteboard: bool = False, exam_context: bool = False, force_exam_panel: bool = False):
         """Detect and execute commands in AI response (media, phase transitions, exercises)."""
@@ -3015,6 +3109,25 @@ RÈGLES :
                             ui_actions_handled = True
                         else:
                             _safe_log(f"[AI Commands][WARN] whiteboard draw action had no valid steps. action={action!r}")
+                    elif action_name in {"show_live", "live", "live_board", "teach_live"}:
+                        live_source = action.get("payload") if isinstance(action.get("payload"), (dict, list)) else action.get("live")
+                        if not isinstance(live_source, (dict, list)):
+                            live_source = action
+                        live_title, live_steps = self._normalize_live_steps(live_source)
+                        if live_steps:
+                            await self.websocket.send_json({"type": "hide_exercise"})
+                            await self.websocket.send_json({"type": "hide_media"})
+                            await self.websocket.send_json({"type": "clear_whiteboard"})
+                            await self.websocket.send_json({
+                                "type": "whiteboard_live",
+                                "title": live_title,
+                                "steps": live_steps,
+                            })
+                            self._remember_mode("whiteboard")
+                            ui_actions_handled = True
+                            _safe_log(f"[AI Commands] Live teaching script sent: '{live_title}' ({len(live_steps)} steps)")
+                        else:
+                            _safe_log(f"[AI Commands][WARN] whiteboard live action had no valid steps. action={action!r}")
                     elif action_name in {"clear", "reset"}:
                         await self.websocket.send_json({"type": "clear_whiteboard"})
                         ui_actions_handled = True
@@ -3133,6 +3246,30 @@ RÈGLES :
         if should_suppress_board:
             _safe_log("[AI Commands] Whiteboard suppressed — exam exercises active, skipping board/schema/draw")
         
+        # ── 1a-pre. LIVE script tag — professor writes/draws/erases progressively ──
+        live_match = re.search(r'<live>(.*?)</live>', ai_response, re.DOTALL)
+        if not live_match:
+            live_match = re.search(r'<live>(.*)', ai_response, re.DOTALL)
+        if live_match and not should_suppress_board:
+            live_json_str = live_match.group(1).strip().replace('</live>', '').strip()
+            _safe_log(f"[AI Commands] Raw live script JSON length: {len(live_json_str)} chars")
+            live_data = self._try_fix_ui_json(live_json_str)
+            live_title, live_steps = self._normalize_live_steps(live_data)
+            if live_steps:
+                await self.websocket.send_json({"type": "hide_exercise"})
+                await self.websocket.send_json({"type": "hide_media"})
+                await self.websocket.send_json({"type": "clear_whiteboard"})
+                await self.websocket.send_json({
+                    "type": "whiteboard_live",
+                    "title": live_title,
+                    "steps": live_steps,
+                })
+                self._remember_mode("whiteboard")
+                _safe_log(f"[AI Commands] Live teaching script sent (tag): '{live_title}' ({len(live_steps)} steps)")
+                return
+            else:
+                _safe_log("[AI Commands][WARN] <live> tag present but no valid steps could be extracted")
+
         board_match = re.search(r'<board>(.*?)</board>', ai_response, re.DOTALL)
         if not board_match:
             board_match = re.search(r'<board>(.*)', ai_response, re.DOTALL)
@@ -3601,6 +3738,9 @@ RÈGLES :
                         "physique": "Physique", "phys": "Physique",
                         "chimie": "Chimie", "chim": "Chimie",
                         "math": "Mathématiques", "maths": "Mathématiques",
+                        "anglais": "Anglais", "english": "Anglais",
+                        "philosophie": "Philosophie", "philo": "Philosophie",
+                        "فلسفة": "Philosophie",
                     }
                     subject_hint = None
                     for kw, subj in subject_map.items():

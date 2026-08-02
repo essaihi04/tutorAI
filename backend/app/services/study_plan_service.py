@@ -36,6 +36,11 @@ BAC_COEFFICIENTS = {
     "Mathématiques": 7,  # Same as Physique-Chimie
     "SVT": 5,            # Sciences de la Vie et de la Terre
     "Mathematiques": 7,  # Alias without accent
+    "Français": 3,       # Épreuve régionale, coeff 3
+    "Francais": 3,       # Alias without cedilla
+    "Anglais": 2,        # Examen national, coeff 2
+    "Philosophie": 2,    # Examen national, coeff 2 (filières scientifiques)
+    "Arabe": 2,          # Épreuve régionale, coeff 2
 }
 
 # Effective weight considering coefficient * exam weight
