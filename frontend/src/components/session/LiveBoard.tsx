@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import 'katex/dist/katex.min.css';
-import katex from 'katex';
+import { renderMixedContent, renderDisplayMath, containsArabic } from './MathBoard';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -69,36 +69,13 @@ const CHALK: Record<string, string> = {
 };
 const chalk = (c?: string) => (c ? (CHALK[c] || c) : '#e2e8f0');
 
-// ── Rendu texte + LaTeX inline ─────────────────────────────────────
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function renderMixed(text: string): string {
-  if (!text || typeof text !== 'string') return '';
-  let cleaned = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1');
-  cleaned = cleaned.replace(/\\\((.+?)\\\)/g, (_, m) => `$${m}$`);
-  cleaned = cleaned.replace(/\\\[(.+?)\\\]/g, (_, m) => `$$${m}$$`);
-  const parts = cleaned.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g);
-  return parts.map(part => {
-    if (part.startsWith('$$') && part.endsWith('$$')) {
-      try {
-        return katex.renderToString(part.slice(2, -2), { throwOnError: false, displayMode: true, strict: 'ignore' });
-      } catch { return `<code>${escapeHtml(part)}</code>`; }
-    }
-    if (part.startsWith('$') && part.endsWith('$')) {
-      try {
-        return katex.renderToString(part.slice(1, -1), { throwOnError: false, displayMode: false, strict: 'ignore' });
-      } catch { return `<code>${escapeHtml(part)}</code>`; }
-    }
-    return escapeHtml(part);
-  }).join('');
-}
-
-function containsArabic(s: string): boolean {
-  return /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/.test(s || '');
-}
+// ── Rendu texte + LaTeX ────────────────────────────────────────────
+// Le moteur de rendu est celui de MathBoard, éprouvé en production :
+// il ré-encapsule le LaTeX nu (`\mathcal{D}_f` sans délimiteurs $),
+// distingue une vraie formule d'une phrase française entre $…$, et gère
+// les commandes que le LLM émet sans `$`. Une copie locale simplifiée
+// avait fait s'afficher `mathcalD_f` et `neq` en toutes lettres.
+const renderMixed = renderMixedContent;
 
 // ── Durées (ms) ────────────────────────────────────────────────────
 
@@ -302,6 +279,20 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         @keyframes liveStroke { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
         @keyframes livePenPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
         .live-paused * { animation-play-state: paused !important; }
+
+        /* ── Intégrité des lignes ──
+           Une information ne doit JAMAIS être coupée en deux lignes : une
+           formule reste d'un seul tenant, et si la colonne est trop étroite
+           la ligne défile horizontalement au lieu de se briser au milieu.
+           Le texte courant, lui, continue de passer à la ligne aux espaces. */
+        .live-line { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+        .live-line .katex { white-space: nowrap; }
+        .live-line .katex-display { margin: 0.25em 0; overflow-x: auto; overflow-y: hidden; }
+        /* Un libellé court suivi d'une formule reste solidaire. */
+        .live-line .katex + .katex { margin-left: 0.25em; }
+        .live-line::-webkit-scrollbar { height: 4px; }
+        .live-line::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 2px; }
+        .live-line::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
       {/* ── Barre d'outils ── */}
@@ -442,7 +433,7 @@ function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: b
   switch (type) {
     case 'title':
       return (
-        <div className="mb-3" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="mb-3 live-line" dir={rtl ? 'rtl' : 'ltr'}>
           <span style={{ ...base, ...reveal, color: chalk(line.color || 'yellow'), fontSize: 24, fontWeight: 700, borderBottom: `2px solid ${chalk(line.color || 'yellow')}55`, paddingBottom: 2 }}
             className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
           {pen}
@@ -450,23 +441,26 @@ function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: b
       );
     case 'subtitle':
       return (
-        <div className="mt-3 mb-2" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="mt-3 mb-2 live-line" dir={rtl ? 'rtl' : 'ltr'}>
           <span style={{ ...base, ...reveal, color: chalk(line.color || 'cyan'), fontSize: 19, fontWeight: 600 }}
             className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
           {pen}
         </div>
       );
     case 'math':
+      // renderDisplayMath route une formule pure vers KaTeX display, et une
+      // ligne mixte (« Terme général : $u_n = …$ ») vers le rendu mixte —
+      // sans quoi KaTeX échoue et réaffiche toute la phrase en rouge.
       return (
-        <div className="my-2 text-center">
-          <span style={{ ...reveal, fontSize: 18, color: chalk(line.color || 'white') }}
-            className="katex-dark" dangerouslySetInnerHTML={{ __html: renderMixed(line.content.includes('$') ? line.content : `$$${line.content}$$`) }} />
+        <div className="my-2 live-line" style={{ textAlign: 'center' }}>
+          <span style={{ ...reveal, fontSize: 17, color: chalk(line.color || 'white') }}
+            className="katex-dark" dangerouslySetInnerHTML={{ __html: renderDisplayMath(line.content) }} />
           {pen}
         </div>
       );
     case 'step':
       return (
-        <div className="my-1.5 flex items-start gap-2" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="my-1.5 flex items-start gap-2 live-line" dir={rtl ? 'rtl' : 'ltr'}>
           <span className="shrink-0 w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center mt-0.5"
             style={{ background: `${chalk(line.color || 'blue')}33`, color: chalk(line.color || 'blue'), animation: 'liveFadeIn 0.3s ease-out both' }}>
             {stepNumber || '•'}
@@ -477,7 +471,7 @@ function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: b
       );
     case 'box':
       return (
-        <div className="my-2 px-3 py-2 rounded-lg" dir={rtl ? 'rtl' : 'ltr'}
+        <div className="my-2 px-3 py-2 rounded-lg live-line" dir={rtl ? 'rtl' : 'ltr'}
           style={{ border: `1.5px solid ${chalk(line.color || 'green')}88`, background: `${chalk(line.color || 'green')}11`, animation: 'liveFadeIn 0.3s ease-out both' }}>
           <span style={{ ...base, ...reveal, fontSize: 16, color: chalk(line.color || 'green') }}
             className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
@@ -490,8 +484,8 @@ function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: b
       const icon = type === 'warning' ? '⚠️' : type === 'tip' ? '💡' : '📝';
       const c = chalk(line.color || (type === 'warning' ? 'orange' : type === 'tip' ? 'yellow' : 'cyan'));
       return (
-        <div className="my-1.5 flex items-start gap-1.5" dir={rtl ? 'rtl' : 'ltr'}>
-          <span className="text-sm mt-0.5" style={{ animation: 'liveFadeIn 0.3s ease-out both' }}>{icon}</span>
+        <div className="my-1.5 flex items-start gap-1.5 live-line" dir={rtl ? 'rtl' : 'ltr'}>
+          <span className="text-sm mt-0.5 shrink-0" style={{ animation: 'liveFadeIn 0.3s ease-out both' }}>{icon}</span>
           <span style={{ ...base, ...reveal, fontSize: 14.5, color: c }} className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
           {pen}
         </div>
@@ -499,7 +493,7 @@ function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: b
     }
     default:
       return (
-        <div className="my-1" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="my-1 live-line" dir={rtl ? 'rtl' : 'ltr'}>
           <span style={{ ...base, ...reveal, fontSize: 16 }} className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
           {pen}
         </div>

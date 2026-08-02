@@ -101,14 +101,19 @@ function escapeHtml(s: string): string {
  * Used to apply dir="rtl" so the Unicode BiDi algorithm orders
  * mixed Arabic + embedded Latin tokens (e.g. "la mécanique") correctly.
  */
-function containsArabic(s: string): boolean {
+export function containsArabic(s: string): boolean {
   if (!s) return false;
   // Arabic block (U+0600–U+06FF) + Arabic Supplement + Presentation Forms
   return /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/.test(s);
 }
 
-/** Render a string that may contain inline LaTeX ($...$, \(...\)) mixed with plain text */
-function renderMixedContent(text: string): string {
+/** Render a string that may contain inline LaTeX ($...$, \(...\)) mixed with plain text.
+ *
+ * Exported so LiveBoard reuses the exact same engine — keeping two copies in
+ * sync proved impossible (LiveBoard's copy had lost the bare-LaTeX auto-wrap
+ * and rendered `\mathcal{D}_f` as literal text).
+ */
+export function renderMixedContent(text: string): string {
   if (!text || typeof text !== 'string') return '';
   
   // Strip leftover markdown bold/italic markers
@@ -124,8 +129,14 @@ function renderMixedContent(text: string): string {
   // without any $...$ wrappers. Without this, the backslashes are
   // HTML-escaped and the user sees raw "\dfrac{L}{L}" as text.
   if (!/\$/.test(cleaned)) {
-    // List of common LaTeX commands the LLM emits in board cells.
-    const LATEX_CMD_RE = /\\(?:d?frac|tfrac|cfrac|sqrt|text|mathrm|mathbb|mathbf|sum|prod|int|left|right|cdot|times|to|leftarrow|rightarrow|alpha|beta|gamma|delta|sigma|theta|phi|pi|lambda|mu|;|,|:|!|quad|qquad)\b/;
+    // Règle GÉNÉRALE plutôt qu'une liste blanche : toute séquence
+    // « \ suivi d'au moins deux lettres » est une commande LaTeX.
+    // L'ancienne liste énumérée laissait passer tout ce qu'elle n'avait pas
+    // prévu — `\mathcal`, `\infty`, `\ln`, `\neq`, `\iff` s'affichaient en
+    // toutes lettres ("mathcalD_f = ]0, +infty[").
+    // Les espacements courts (\, \; \: \! \quad) sont gardés à part car ils
+    // ne sont pas suivis de lettres.
+    const LATEX_CMD_RE = /\\(?:[a-zA-Z]{2,}|[,;:!])/;
     if (LATEX_CMD_RE.test(cleaned)) {
       // Wrap the whole cell as inline LaTeX. Plain text fragments
       // like "[L]" still render correctly inside KaTeX text mode.
@@ -171,7 +182,7 @@ function renderMixedContent(text: string): string {
  * it through renderMixedContent, which handles plain text + inline math
  * correctly.
  */
-function renderDisplayMath(latex: string): string {
+export function renderDisplayMath(latex: string): string {
   if (!latex || typeof latex !== 'string') return '';
 
   let clean = latex.trim();
