@@ -125,6 +125,7 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const textZoneRef = useRef<HTMLDivElement>(null);
   const stepCounterRef = useRef(0);
   const soundOnRef = useRef(true);
+  const revealRafRef = useRef<number | null>(null);
 
   playingRef.current = playing;
   speedRef.current = speed;
@@ -148,27 +149,66 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   }, []);
 
   /**
-   * Dit une ligne à voix haute en pilotant sa révélation.
+   * Dit une ligne à voix haute en pilotant sa révélation, lettre après lettre.
    *
-   * Retourne true si la parole a effectivement porté l'animation. Sinon
-   * (son coupé, navigateur sans synthèse, ligne muette comme un séparateur),
-   * l'appelant retombe sur l'animation minutée.
+   * ⚠️ Ne JAMAIS piloter l'écriture uniquement par l'événement `boundary` :
+   * les voix réseau de Chrome (« Google français », celle qu'on privilégie)
+   * ne l'émettent pas. La progression restait alors bloquée à 0 et la ligne
+   * ne s'écrivait jamais.
+   *
+   * L'écriture est donc portée par une horloge (durée estimée d'après le
+   * nombre de mots), et RECALÉE sur la voix chaque fois qu'un `boundary`
+   * arrive — ce qui donne une synchronisation exacte sur les voix locales,
+   * et une écriture fluide et jamais bloquée sur les autres.
+   *
+   * Retourne true si la parole a porté l'animation, false s'il faut retomber
+   * sur l'animation minutée (son coupé, pas de synthèse, ligne muette).
    */
   const speakAndReveal = useCallback(async (raw: string, runId: number): Promise<boolean> => {
     if (!soundOnRef.current || !speechService.ttsSupported) return false;
     const spoken = toSpokenText(raw);
     if (!spoken) return false;
 
+    const rate = speedRef.current;
+    // Durée présumée de la phrase ; recalibrée dès le premier `boundary`.
+    let estimatedMs = Math.max(600, estimateSpeechMs(spoken, rate));
+    let elapsed = 0;
+    let done = false;
+    let last = performance.now();
+
     setVoiceReveal(0);
+
+    // Horloge d'écriture : avance en continu, se fige quand l'élève met en
+    // pause, et ne dépasse jamais 99 % avant la fin réelle de la parole.
+    const tick = (now: number) => {
+      if (done || runId !== runIdRef.current) return;
+      const dt = now - last;
+      last = now;
+      if (playingRef.current) elapsed += dt;
+      const pct = Math.min(0.99, elapsed / estimatedMs);
+      setVoiceReveal(prev => (pct > prev ? pct : prev));
+      revealRafRef.current = requestAnimationFrame(tick);
+    };
+    revealRafRef.current = requestAnimationFrame(tick);
+
     await speechService.speakSynced(spoken, {
       lang: 'fr',
-      rate: speedRef.current,
+      rate,
       onProgress: (ratio) => {
-        if (runId !== runIdRef.current) return;
-        // La progression est un index de mot : on avance sans jamais reculer.
-        setVoiceReveal(prev => (ratio > prev ? ratio : prev));
+        if (runId !== runIdRef.current || ratio <= 0) return;
+        // Un `boundary` est arrivé : la voix nous dit où elle en est vraiment.
+        // On réaligne l'horloge dessus (sans jamais revenir en arrière).
+        const observed = ratio * estimatedMs;
+        if (observed > elapsed) elapsed = observed;
+        else estimatedMs = Math.max(600, elapsed / Math.max(ratio, 0.01));
       },
     });
+
+    done = true;
+    if (revealRafRef.current !== null) {
+      cancelAnimationFrame(revealRafRef.current);
+      revealRafRef.current = null;
+    }
     if (runId !== runIdRef.current) return true;
     setVoiceReveal(1);
     return true;
@@ -298,6 +338,10 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     return () => {
       runIdRef.current += 1;
       speechService.stop();
+      if (revealRafRef.current !== null) {
+        cancelAnimationFrame(revealRafRef.current);
+        revealRafRef.current = null;
+      }
     };
   }, [script, play]);
 
@@ -325,6 +369,10 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const skipToEnd = useCallback(() => {
     runIdRef.current += 1;
     speechService.stop();
+    if (revealRafRef.current !== null) {
+      cancelAnimationFrame(revealRafRef.current);
+      revealRafRef.current = null;
+    }
     setVoiceReveal(1);
     const finalWritten: WrittenEntry[] = [];
     const finalDrawn: DrawnEntry[] = [];
@@ -358,6 +406,10 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const replay = useCallback(() => {
     const runId = ++runIdRef.current;
     speechService.stop();
+    if (revealRafRef.current !== null) {
+      cancelAnimationFrame(revealRafRef.current);
+      revealRafRef.current = null;
+    }
     setWritten([]);
     setDrawn([]);
     setNarration(null);
@@ -384,7 +436,29 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         @keyframes liveEraseWipe { from { opacity: 1; filter: blur(0); } to { opacity: 0; filter: blur(6px); } }
         @keyframes liveStroke { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
         @keyframes livePenPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+        /* La main parcourt la ligne en mode minuté (sans voix). */
+        @keyframes livePenTravel { from { left: 0%; } to { left: 100%; } }
+        @keyframes livePenWiggle { 0%,100% { transform: translate(-30%, 0) rotate(-8deg); } 50% { transform: translate(-30%, -1.5px) rotate(-2deg); } }
         .live-paused * { animation-play-state: paused !important; }
+
+        /* ── Main du professeur ──
+           Placée sur le bord exact de la zone révélée, elle avance donc le
+           long du texte à mesure qu'il s'écrit, au lieu d'attendre à la fin
+           de la ligne. Le léger tremblement imite le geste de la main. */
+        .live-pen {
+          position: absolute;
+          bottom: -0.2em;
+          font-size: 0.95em;
+          line-height: 1;
+          pointer-events: none;
+          white-space: nowrap;
+          transform: translate(-30%, 0) rotate(-8deg);
+          transform-origin: 20% 80%;
+          filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+          animation: livePenWiggle 0.45s ease-in-out infinite;
+          will-change: left, transform;
+        }
+        .live-write { position: relative; }
 
         /* ── Intégrité des lignes ──
            Une information ne doit JAMAIS être coupée en deux lignes : une
@@ -532,6 +606,53 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
 
 // ── Ligne écrite avec révélation manuscrite ────────────────────────
 
+/**
+ * Texte qui s'écrit, avec la main du professeur au bout du trait.
+ *
+ * Le texte est dévoilé par un `clip-path` qui balaie de gauche à droite —
+ * les lettres apparaissent donc au fur et à mesure, en se formant — et la
+ * main ✍️ est positionnée exactement sur ce bord, si bien qu'elle avance
+ * le long de l'écriture au lieu de rester collée à la fin de la ligne.
+ */
+function WritingSpan({ html, style, pct, revealMs, showPen }: {
+  html: string;
+  style: React.CSSProperties;
+  /** 0→1 quand l'écriture suit la voix ; undefined en mode minuté. */
+  pct?: number;
+  revealMs: number;
+  showPen: boolean;
+}) {
+  const voiceMode = pct !== undefined;
+  // Léger surplomb : le trait est écrit juste avant d'être prononcé, comme
+  // une main qui devance d'un ou deux caractères ce qu'elle dit.
+  const shown = voiceMode ? Math.min(100, pct * 100 + 6) : 0;
+
+  const clip: React.CSSProperties = voiceMode
+    ? { clipPath: `inset(0 ${Math.max(0, 100 - shown)}% 0 0)`, transition: 'clip-path 120ms linear' }
+    : revealMs > 0
+    ? { animation: `liveReveal ${revealMs}ms linear both` }
+    : {};
+
+  const penStyle: React.CSSProperties = voiceMode
+    // En mode voix la position vient de React ; le tremblement reste porté
+    // par la classe CSS.
+    ? { left: `${shown}%`, transition: 'left 120ms linear' }
+    // En mode minuté, l'animation inline écrase celle de la classe : on
+    // rejoue donc le tremblement en même temps que le déplacement.
+    : { animation: `livePenTravel ${revealMs}ms linear both, livePenWiggle 0.45s ease-in-out infinite` };
+
+  return (
+    <span className="live-write" style={{ display: 'inline-block', maxWidth: '100%', position: 'relative' }}>
+      <span
+        className="katex-dark"
+        style={{ ...style, ...clip, display: 'inline-block', maxWidth: '100%' }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      {showPen && <span className="live-pen" style={penStyle} aria-hidden="true">✍️</span>}
+    </span>
+  );
+}
+
 function LiveWrittenLine({ entry, isActive, voicePct }: {
   entry: WrittenEntry;
   isActive: boolean;
@@ -542,46 +663,39 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
   const type = (line.type || 'text').toLowerCase();
   const color = chalk(line.color);
   const rtl = containsArabic(line.content);
-  // Mode voix : la découpe suit la parole, pas une animation minutée.
-  // On garde une petite avance (+8 %) pour que le mot prononcé soit déjà
-  // visible — un prof écrit le mot avant de finir de le dire.
-  const reveal: React.CSSProperties = voicePct !== undefined
-    ? {
-        clipPath: `inset(0 ${Math.max(0, 100 - Math.min(100, voicePct * 100 + 8))}% 0 0)`,
-        transition: 'clip-path 180ms linear',
-        display: 'inline-block',
-        maxWidth: '100%',
-      }
-    : revealMs > 0
-    ? { animation: `liveReveal ${revealMs}ms linear both`, display: 'inline-block', maxWidth: '100%' }
-    : { display: 'inline-block', maxWidth: '100%' };
 
   if (type === 'separator') {
     return <hr className="my-3 border-white/15" style={{ animation: 'liveFadeIn 0.4s ease-out both' }} />;
   }
 
-  const html = renderMixed(line.content);
-  const pen = isActive && (revealMs > 0 || voicePct !== undefined) && (
-    <span className="ml-1 text-sm align-middle" style={{ animation: 'livePenPulse 0.9s ease-in-out infinite' }}>✍️</span>
-  );
-
+  const html = type === 'math' ? renderDisplayMath(line.content) : renderMixed(line.content);
+  const showPen = isActive && (revealMs > 0 || voicePct !== undefined);
   const base: React.CSSProperties = { fontFamily: "'Patrick Hand', 'Caveat', cursive", color };
+
+  const writing = (extra: React.CSSProperties) => (
+    <WritingSpan
+      html={html}
+      style={{ ...base, ...extra }}
+      pct={voicePct}
+      revealMs={revealMs}
+      showPen={showPen}
+    />
+  );
 
   switch (type) {
     case 'title':
       return (
         <div className="mb-3 live-line" dir={rtl ? 'rtl' : 'ltr'}>
-          <span style={{ ...base, ...reveal, color: chalk(line.color || 'yellow'), fontSize: 24, fontWeight: 700, borderBottom: `2px solid ${chalk(line.color || 'yellow')}55`, paddingBottom: 2 }}
-            className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
-          {pen}
+          {writing({
+            color: chalk(line.color || 'yellow'), fontSize: 24, fontWeight: 700,
+            borderBottom: `2px solid ${chalk(line.color || 'yellow')}55`, paddingBottom: 2,
+          })}
         </div>
       );
     case 'subtitle':
       return (
         <div className="mt-3 mb-2 live-line" dir={rtl ? 'rtl' : 'ltr'}>
-          <span style={{ ...base, ...reveal, color: chalk(line.color || 'cyan'), fontSize: 19, fontWeight: 600 }}
-            className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
-          {pen}
+          {writing({ color: chalk(line.color || 'cyan'), fontSize: 19, fontWeight: 600 })}
         </div>
       );
     case 'math':
@@ -590,9 +704,7 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
       // sans quoi KaTeX échoue et réaffiche toute la phrase en rouge.
       return (
         <div className="my-2 live-line" style={{ textAlign: 'center' }}>
-          <span style={{ ...reveal, fontSize: 17, color: chalk(line.color || 'white') }}
-            className="katex-dark" dangerouslySetInnerHTML={{ __html: renderDisplayMath(line.content) }} />
-          {pen}
+          {writing({ fontFamily: undefined, fontSize: 17, color: chalk(line.color || 'white') })}
         </div>
       );
     case 'step':
@@ -602,17 +714,14 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
             style={{ background: `${chalk(line.color || 'blue')}33`, color: chalk(line.color || 'blue'), animation: 'liveFadeIn 0.3s ease-out both' }}>
             {stepNumber || '•'}
           </span>
-          <span style={{ ...base, ...reveal, fontSize: 16 }} className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
-          {pen}
+          {writing({ fontSize: 16 })}
         </div>
       );
     case 'box':
       return (
         <div className="my-2 px-3 py-2 rounded-lg live-line" dir={rtl ? 'rtl' : 'ltr'}
           style={{ border: `1.5px solid ${chalk(line.color || 'green')}88`, background: `${chalk(line.color || 'green')}11`, animation: 'liveFadeIn 0.3s ease-out both' }}>
-          <span style={{ ...base, ...reveal, fontSize: 16, color: chalk(line.color || 'green') }}
-            className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
-          {pen}
+          {writing({ fontSize: 16, color: chalk(line.color || 'green') })}
         </div>
       );
     case 'note':
@@ -623,16 +732,14 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
       return (
         <div className="my-1.5 flex items-start gap-1.5 live-line" dir={rtl ? 'rtl' : 'ltr'}>
           <span className="text-sm mt-0.5 shrink-0" style={{ animation: 'liveFadeIn 0.3s ease-out both' }}>{icon}</span>
-          <span style={{ ...base, ...reveal, fontSize: 14.5, color: c }} className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
-          {pen}
+          {writing({ fontSize: 14.5, color: c })}
         </div>
       );
     }
     default:
       return (
         <div className="my-1 live-line" dir={rtl ? 'rtl' : 'ltr'}>
-          <span style={{ ...base, ...reveal, fontSize: 16 }} className="katex-dark" dangerouslySetInnerHTML={{ __html: html }} />
-          {pen}
+          {writing({ fontSize: 16 })}
         </div>
       );
   }
