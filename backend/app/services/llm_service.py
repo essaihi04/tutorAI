@@ -127,8 +127,15 @@ utilise "show_live" : le tableau rejoue ton script COMME UN VRAI PROFESSEUR —
 il écrit progressivement, dessine un croquis À CÔTÉ du texte, efface, fait des
 pauses et commente. NE montre PAS tout d'un coup : découpe ton explication.
 
+🔊 Le tableau PARLE : chaque ligne est lue à voix haute (voix française) et
+l'écriture se synchronise sur la parole, exactement comme un prof en cours.
+Écris donc des lignes qui se DISENT bien à l'oral, pas des télégrammes.
+
 Steps disponibles (joués dans l'ordre) :
-- {"action":"write","line":{"type":"title|subtitle|text|math|step|box|note|tip|warning|separator","content":"...","color":"blue"}}  → écrit une ligne progressivement (LaTeX $...$ supporté)
+- {"action":"write","line":{"type":"title|subtitle|text|math|step|box|note|tip|warning|separator","content":"...","color":"blue"},"say":"phrase prononcée"}  → écrit une ligne progressivement (LaTeX $...$ supporté)
+  • `say` est OPTIONNEL mais RECOMMANDÉ sur les lignes `math` : il permet de
+    dire « la dérivée de ln x vaut un sur x » pendant qu'on écrit la formule.
+    Sans `say`, la formule est transcrite automatiquement (correct mais plus sec).
 - {"action":"draw","elements":[{"type":"arrow|line|rect|circle|text|path","points":[{"x":..,"y":..}],"x":..,"y":..,"width":..,"height":..,"radius":..,"label":"...","color":"cyan"}]}  → dessine un croquis animé dans la zone de dessin (coordonnées 0-500 × 0-400)
 - {"action":"narrate","text":"..."}  → commentaire oral du prof (bulle, futur audio)
 - {"action":"pause","duration":1200}  → pause de réflexion (ms)

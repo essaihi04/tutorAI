@@ -144,6 +144,93 @@ class TTSService {
     });
   }
 
+  /**
+   * Speak a SHORT text while reporting how far the voice has got (0 → 1).
+   *
+   * Used by the live board to write at the exact pace of the speech: the
+   * `boundary` event fires on each word, so the reveal follows the voice
+   * instead of a guessed duration.
+   *
+   * Deliberately not chunked — callers pass one board line at a time, and
+   * chunking would break the char offsets the progress relies on.
+   *
+   * Resolves when speech ends (or immediately if there is nothing to say).
+   * Returns progress 1 at the end so callers can always settle the UI.
+   */
+  speakSynced(
+    text: string,
+    options: SpeakOptions & { onProgress?: (ratio: number) => void } = {},
+  ): Promise<void> {
+    const { lang = 'fr', rate = 1.0, pitch = 1.0, onStart, onEnd, onProgress } = options;
+    const clean = (text || '').replace(/\s+/g, ' ').trim();
+
+    return new Promise((resolve) => {
+      if (!clean || typeof window === 'undefined' || !window.speechSynthesis) {
+        onProgress?.(1);
+        onEnd?.();
+        resolve();
+        return;
+      }
+
+      const normalizedLang = lang === 'mixed' ? 'fr' : lang;
+      const utterance = new SpeechSynthesisUtterance(clean);
+      const voice = this._getVoice(lang);
+      if (voice) utterance.voice = voice;
+      utterance.lang = normalizedLang === 'fr' ? 'fr-FR' : 'ar-SA';
+      utterance.rate = rate;
+      utterance.pitch = pitch;
+      utterance.volume = 1;
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        onProgress?.(1);
+        onEnd?.();
+        resolve();
+      };
+
+      utterance.onstart = () => onStart?.();
+      utterance.onboundary = (e: SpeechSynthesisEvent) => {
+        const idx = typeof e.charIndex === 'number' ? e.charIndex : 0;
+        onProgress?.(Math.max(0, Math.min(1, idx / clean.length)));
+      };
+      utterance.onend = finish;
+      // 'interrupted'/'canceled' happen on every stop() — never treat as fatal.
+      utterance.onerror = finish;
+
+      this.synthesis.speak(utterance);
+    });
+  }
+
+  /** True when the browser can actually synthesise speech right now. */
+  get supported(): boolean {
+    return typeof window !== 'undefined' && 'speechSynthesis' in window;
+  }
+
+  /** Resolve once the voice list is populated (Chrome loads it async). */
+  ensureVoices(timeoutMs = 1500): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.voices.length > 0) return resolve();
+      const done = () => resolve();
+      const t = setTimeout(done, timeoutMs);
+      const handler = () => {
+        this._loadVoices();
+        if (this.voices.length > 0) {
+          clearTimeout(t);
+          this.synthesis.removeEventListener?.('voiceschanged', handler);
+          resolve();
+        }
+      };
+      this.synthesis.addEventListener?.('voiceschanged', handler);
+      this._loadVoices();
+      if (this.voices.length > 0) {
+        clearTimeout(t);
+        resolve();
+      }
+    });
+  }
+
   stop() {
     this.synthesis.cancel();
   }
@@ -247,6 +334,19 @@ class CombinedSpeechService {
 
   speak(text: string, options?: SpeakOptions) {
     return this.tts.speak(text, options);
+  }
+
+  /** Speak one short line while reporting progress — used to write in sync. */
+  speakSynced(text: string, options?: SpeakOptions & { onProgress?: (ratio: number) => void }) {
+    return this.tts.speakSynced(text, options);
+  }
+
+  get ttsSupported() {
+    return this.tts.supported;
+  }
+
+  ensureVoices(timeoutMs?: number) {
+    return this.tts.ensureVoices(timeoutMs);
   }
 
   stop() {

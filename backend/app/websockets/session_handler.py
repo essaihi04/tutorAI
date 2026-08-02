@@ -2664,7 +2664,14 @@ RÈGLES :
                 clean_line = {"type": str(line.get("type", "text")).lower(), "content": content.strip()}
                 if line.get("color"):
                     clean_line["color"] = str(line["color"])
-                normalized.append({"action": "write", "line": clean_line})
+                write_step = {"action": "write", "line": clean_line}
+                # `say` : phrase que le professeur prononce en écrivant cette
+                # ligne. Sans elle, le frontend transcrit la ligne elle-même,
+                # ce qui donne une lecture correcte mais plus mécanique.
+                say = step.get("say") or step.get("narration")
+                if isinstance(say, str) and say.strip():
+                    write_step["say"] = say.strip()
+                normalized.append(write_step)
             elif action == "draw":
                 elements = step.get("elements")
                 if isinstance(elements, dict):

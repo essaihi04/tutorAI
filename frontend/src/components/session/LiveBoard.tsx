@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import 'katex/dist/katex.min.css';
 import { renderMixedContent, renderDisplayMath, containsArabic } from './MathBoard';
+import { speechService } from '../../services/speechService';
+import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -47,6 +49,8 @@ export interface LiveStep {
   zone?: 'text' | 'draw' | 'all'; // erase
   duration?: number;        // pause (ms)
   text?: string;            // narrate
+  /** Phrase à prononcer pour un `write` — sinon la ligne est transcrite. */
+  say?: string;
 }
 
 export interface LiveScript {
@@ -88,7 +92,14 @@ const ERASE_MS = 700;
 
 // ── Entrées d'affichage internes ───────────────────────────────────
 
-interface WrittenEntry { key: number; line: LiveLine; revealMs: number; stepNumber?: number }
+interface WrittenEntry {
+  key: number;
+  line: LiveLine;
+  revealMs: number;
+  /** true = la révélation suit la voix, pas une durée fixe. */
+  voiceDriven?: boolean;
+  stepNumber?: number;
+}
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
 function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
@@ -101,15 +112,25 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const [speed, setSpeed] = useState(1);
   const [stepIndex, setStepIndex] = useState(0);
 
+  // Le professeur parle pendant qu'il écrit : la révélation de la ligne en
+  // cours est pilotée par la progression réelle de la voix (word boundaries),
+  // pas par une durée devinée.
+  const [soundOn, setSoundOn] = useState(true);
+  const [voiceReveal, setVoiceReveal] = useState(1);
+
   const runIdRef = useRef(0);
   const playingRef = useRef(true);
   const speedRef = useRef(1);
   const keyRef = useRef(0);
   const textZoneRef = useRef<HTMLDivElement>(null);
   const stepCounterRef = useRef(0);
+  const soundOnRef = useRef(true);
 
   playingRef.current = playing;
   speedRef.current = speed;
+  soundOnRef.current = soundOn;
+
+  const canSpeak = speechService.ttsSupported;
 
   const hasDrawSteps = Array.isArray(script?.steps) && script.steps.some(
     s => s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0
@@ -126,6 +147,33 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     return runId === runIdRef.current;
   }, []);
 
+  /**
+   * Dit une ligne à voix haute en pilotant sa révélation.
+   *
+   * Retourne true si la parole a effectivement porté l'animation. Sinon
+   * (son coupé, navigateur sans synthèse, ligne muette comme un séparateur),
+   * l'appelant retombe sur l'animation minutée.
+   */
+  const speakAndReveal = useCallback(async (raw: string, runId: number): Promise<boolean> => {
+    if (!soundOnRef.current || !speechService.ttsSupported) return false;
+    const spoken = toSpokenText(raw);
+    if (!spoken) return false;
+
+    setVoiceReveal(0);
+    await speechService.speakSynced(spoken, {
+      lang: 'fr',
+      rate: speedRef.current,
+      onProgress: (ratio) => {
+        if (runId !== runIdRef.current) return;
+        // La progression est un index de mot : on avance sans jamais reculer.
+        setVoiceReveal(prev => (ratio > prev ? ratio : prev));
+      },
+    });
+    if (runId !== runIdRef.current) return true;
+    setVoiceReveal(1);
+    return true;
+  }, []);
+
   // Moteur de lecture séquentielle du script
   const play = useCallback(async (steps: LiveStep[], runId: number) => {
     for (let i = 0; i < steps.length; i++) {
@@ -138,17 +186,41 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         case 'write': {
           const line = step.line;
           if (!line || typeof line.content !== 'string') break;
-          const revealMs = writeDuration(line.content) / speedRef.current;
           const isStep = (line.type || '') === 'step';
           if (isStep) stepCounterRef.current += 1;
+
+          // Texte à prononcer : le script peut l'imposer via `say`
+          // (le LLM formule alors une phrase de prof), sinon on transcrit
+          // la ligne elle-même en français lisible.
+          const toSay = typeof step.say === 'string' && step.say.trim()
+            ? step.say.trim()
+            : line.content;
+          const willSpeak = soundOnRef.current
+            && speechService.ttsSupported
+            && !!toSpokenText(toSay);
+
           const entry: WrittenEntry = {
             key: ++keyRef.current,
             line,
-            revealMs,
+            // En mode voix la durée n'est pas connue à l'avance : la
+            // révélation est pilotée par speakAndReveal.
+            revealMs: willSpeak ? 0 : writeDuration(line.content) / speedRef.current,
+            voiceDriven: willSpeak,
             stepNumber: isStep ? stepCounterRef.current : undefined,
           };
           setWritten(prev => [...prev, entry]);
-          if (!(await wait(revealMs * speedRef.current + 300, runId))) return;
+
+          if (willSpeak) {
+            const spoke = await speakAndReveal(toSay, runId);
+            if (runId !== runIdRef.current) return;
+            if (!spoke) {
+              // La voix a échoué au dernier moment : on laisse le temps de lire.
+              if (!(await wait(estimateSpeechMs(toSpokenText(toSay)), runId))) return;
+            }
+            if (!(await wait(250, runId))) return;
+          } else {
+            if (!(await wait(entry.revealMs * speedRef.current + 300, runId))) return;
+          }
           break;
         }
         case 'draw': {
@@ -183,9 +255,12 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         }
         case 'narrate': {
           if (typeof step.text === 'string' && step.text.trim()) {
-            setNarration(step.text.trim());
-            // 🔊 Point d'accroche audio : la narration sera lue en TTS ici.
-            if (!(await wait(narrateDuration(step.text), runId))) return;
+            const text = step.text.trim();
+            setNarration(text);
+            const spoke = await speakAndReveal(text, runId);
+            if (runId !== runIdRef.current) return;
+            // Son coupé ou voix indisponible : on laisse le temps de lire.
+            if (!spoke && !(await wait(narrateDuration(text), runId))) return;
           }
           break;
         }
@@ -194,7 +269,7 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
       }
     }
     if (runId === runIdRef.current) setFinished(true);
-  }, [wait]);
+  }, [wait, speakAndReveal]);
 
   // (Re)démarrage quand un nouveau script arrive
   useEffect(() => {
@@ -206,12 +281,39 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     setFinished(false);
     setStepIndex(0);
     setPlaying(true);
+    setVoiceReveal(1);
     stepCounterRef.current = 0;
+
+    // Le tableau prend la parole : on coupe la voix du chat pour ce tour,
+    // sinon deux voix se superposent (le backend lit déjà la réponse).
+    speechService.stop();
+
     if (script && Array.isArray(script.steps) && script.steps.length > 0) {
-      play(script.steps, runId);
+      // Chrome charge la liste des voix de façon asynchrone : sans cette
+      // attente la première ligne serait lue par la voix par défaut (anglaise).
+      speechService.ensureVoices().then(() => {
+        if (runId === runIdRef.current) play(script.steps, runId);
+      });
     }
-    return () => { runIdRef.current += 1; };
+    return () => {
+      runIdRef.current += 1;
+      speechService.stop();
+    };
   }, [script, play]);
+
+  // Pause / reprise : la voix suit l'état de lecture.
+  useEffect(() => {
+    if (!speechService.ttsSupported) return;
+    try {
+      if (playing) window.speechSynthesis.resume();
+      else window.speechSynthesis.pause();
+    } catch { /* navigateur récalcitrant : on ignore */ }
+  }, [playing]);
+
+  // Couper le son doit faire taire la ligne en cours immédiatement.
+  useEffect(() => {
+    if (!soundOn) speechService.stop();
+  }, [soundOn]);
 
   // Auto-scroll de la zone d'écriture
   useEffect(() => {
@@ -222,6 +324,8 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   // ⏭ Aller à la fin : état final calculé d'un coup
   const skipToEnd = useCallback(() => {
     runIdRef.current += 1;
+    speechService.stop();
+    setVoiceReveal(1);
     const finalWritten: WrittenEntry[] = [];
     const finalDrawn: DrawnEntry[] = [];
     let lastNarration: string | null = null;
@@ -253,6 +357,7 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   // ↻ Rejouer
   const replay = useCallback(() => {
     const runId = ++runIdRef.current;
+    speechService.stop();
     setWritten([]);
     setDrawn([]);
     setNarration(null);
@@ -260,6 +365,7 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     setFinished(false);
     setStepIndex(0);
     setPlaying(true);
+    setVoiceReveal(1);
     stepCounterRef.current = 0;
     if (script?.steps?.length) play(script.steps, runId);
   }, [script, play]);
@@ -315,6 +421,15 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
               {Math.min(stepIndex + 1, totalSteps)}/{totalSteps}
             </span>
           )}
+          {canSpeak && (
+            <button
+              onClick={() => setSoundOn(s => !s)}
+              className="text-white/70 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+              title={soundOn ? 'Couper la voix du professeur' : 'Activer la voix du professeur'}
+            >
+              {soundOn ? '🔊' : '🔇'}
+            </button>
+          )}
           <button
             onClick={() => setPlaying(p => !p)}
             disabled={finished}
@@ -360,6 +475,13 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
               key={entry.key}
               entry={entry}
               isActive={!finished && i === written.length - 1 && erasingZone === null}
+              // La dernière ligne se dévoile au rythme de la voix ; les
+              // précédentes sont déjà entièrement écrites.
+              voicePct={
+                entry.voiceDriven && i === written.length - 1 && !finished
+                  ? voiceReveal
+                  : undefined
+              }
             />
           ))}
           {written.length === 0 && drawn.length === 0 && !finished && (
@@ -410,12 +532,27 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
 
 // ── Ligne écrite avec révélation manuscrite ────────────────────────
 
-function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: boolean }) {
+function LiveWrittenLine({ entry, isActive, voicePct }: {
+  entry: WrittenEntry;
+  isActive: boolean;
+  /** 0→1 : avancement de la voix sur cette ligne (mode synchronisé). */
+  voicePct?: number;
+}) {
   const { line, revealMs, stepNumber } = entry;
   const type = (line.type || 'text').toLowerCase();
   const color = chalk(line.color);
   const rtl = containsArabic(line.content);
-  const reveal: React.CSSProperties = revealMs > 0
+  // Mode voix : la découpe suit la parole, pas une animation minutée.
+  // On garde une petite avance (+8 %) pour que le mot prononcé soit déjà
+  // visible — un prof écrit le mot avant de finir de le dire.
+  const reveal: React.CSSProperties = voicePct !== undefined
+    ? {
+        clipPath: `inset(0 ${Math.max(0, 100 - Math.min(100, voicePct * 100 + 8))}% 0 0)`,
+        transition: 'clip-path 180ms linear',
+        display: 'inline-block',
+        maxWidth: '100%',
+      }
+    : revealMs > 0
     ? { animation: `liveReveal ${revealMs}ms linear both`, display: 'inline-block', maxWidth: '100%' }
     : { display: 'inline-block', maxWidth: '100%' };
 
@@ -424,7 +561,7 @@ function LiveWrittenLine({ entry, isActive }: { entry: WrittenEntry; isActive: b
   }
 
   const html = renderMixed(line.content);
-  const pen = isActive && revealMs > 0 && (
+  const pen = isActive && (revealMs > 0 || voicePct !== undefined) && (
     <span className="ml-1 text-sm align-middle" style={{ animation: 'livePenPulse 0.9s ease-in-out infinite' }}>✍️</span>
   );
 

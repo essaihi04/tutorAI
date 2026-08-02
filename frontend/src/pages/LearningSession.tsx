@@ -520,6 +520,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const lastAiTextRef = useRef<string>('');
   const audioChunksRef = useRef<Array<{index: number, audio: string, format: string}>>([]);
   const isPlayingChunksRef = useRef(false);
+  // Quand un tableau "prof en direct" est à l'écran, c'est LUI qui parle :
+  // il lit ses propres lignes en synchronisant l'écriture sur la voix. Le TTS
+  // du chat doit se taire pour ce tour, sinon deux voix se superposent.
+  const liveBoardOwnsAudioRef = useRef(false);
   const expectedChunksRef = useRef<number>(0);
   const streamingTextRef = useRef<string>('');
   const streamingMsgIdRef = useRef<string | null>(null);
@@ -630,6 +634,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
+      if (liveBoardOwnsAudioRef.current) {
+        console.log('[Handler] audio_response ignoré : tableau en direct actif');
+        return;
+      }
       playAudio(data.audio, data.format);
     });
 
@@ -637,7 +645,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
-      
+
+      if (liveBoardOwnsAudioRef.current) {
+        console.log('[Audio Chunk] Ignoré : le tableau en direct lit déjà son contenu');
+        return;
+      }
+
       console.log(`[Audio Chunk] Received chunk ${data.chunk_index + 1}/${data.total_chunks}`);
       
       audioChunksRef.current.push({
@@ -673,6 +686,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       const text: string = data?.text || '';
       const lang: SessionLanguage = (data?.language as SessionLanguage) || 'fr';
       if (!text) return;
+      if (liveBoardOwnsAudioRef.current) {
+        console.log('[TTS] Ignoré : le tableau en direct lit déjà son contenu');
+        return;
+      }
       console.log(`[TTS] use_browser_tts (lang=${lang}, provider=${data?.provider})`);
       setSpeaking(true);
       speechService
@@ -812,6 +829,21 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       }
 
       console.log('[Display] Live board script received:', data.title, data.steps.length, 'steps');
+
+      // Le tableau prend la parole pour ce tour : on fait taire le TTS du chat
+      // (Web Speech ET flux audio backend), qui a pu démarrer avant l'arrivée
+      // du script — le backend lance la synthèse avant d'exécuter les commandes.
+      liveBoardOwnsAudioRef.current = true;
+      speechService.stop();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+      audioChunksRef.current = [];
+      isPlayingChunksRef.current = false;
+      setSpeaking(false);
+
       pendingMediaRef.current = null;
       setWhiteboardData(null);
       setWhiteboardSchemaId(null);
@@ -1133,6 +1165,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const handleSendText = (text: string) => {
     if (!text.trim()) return;
     setContextSuggestions([]);
+    // Nouveau tour : le tableau du tour précédent ne détient plus la parole.
+    liveBoardOwnsAudioRef.current = false;
     addMessage('student', text);
     wsService.sendJson({ type: 'text_input', text });
   };
