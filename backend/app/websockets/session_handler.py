@@ -2450,23 +2450,68 @@ RÈGLES :
             # Single TTS on full text (non-blocking, reliable)
             asyncio.create_task(self.generate_and_send_audio_chunks(opening))
 
-    # Formulations par lesquelles l'élève demande explicitement une
-    # explication "en direct" au tableau (fr / darija / arabe / en).
-    _LIVE_REQUEST_KEYWORDS = (
-        "en direct", "live", "au tableau", "comme un prof", "comme un professeur",
-        "etape par etape", "étape par étape", "pas a pas", "pas à pas",
-        "explique moi au tableau", "explique-moi au tableau",
-        "ecris au tableau", "écris au tableau", "montre au tableau",
-        "step by step", "on the board",
-        "بالتدريج", "خطوة بخطوة", "على السبورة", "شرح مباشر",
-    )
+    # Types de lignes que le tableau live ne sait PAS rejouer progressivement.
+    # Leur présence signe un contenu "figé" (données à consulter d'un bloc)
+    # qui doit rester sur le tableau statique.
+    _BOARD_ONLY_LINE_TYPES = {
+        "table", "graph", "mindmap", "diagram",
+        "qcm", "vrai_faux", "association",
+    }
 
-    def _wants_live_board(self, text: str) -> bool:
-        """True when the student explicitly asked for a live board explanation."""
-        if not text:
+    @classmethod
+    def _board_is_live_renderable(cls, lines: list) -> bool:
+        """True when a board can be replayed live WITHOUT losing content.
+
+        Live mode is the default for teaching, but it can only write text-like
+        lines. A board containing a table, a curve, a mind map or an interactive
+        exercise must stay static — converting it would silently drop exactly
+        the content the student needs (échiquier génétique, courbe, QCM…).
+        """
+        if not lines:
             return False
-        t = text.lower()
-        return any(kw in t for kw in self._LIVE_REQUEST_KEYWORDS)
+        has_renderable = False
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            ltype = str(line.get("type", "text")).lower().strip()
+            if ltype in cls._BOARD_ONLY_LINE_TYPES:
+                return False
+            if ltype != "separator":
+                has_renderable = True
+        return has_renderable
+
+    async def _send_board_or_live(self, title: str, lines: list, *, context: str = ""):
+        """Single exit point for every board the student sees.
+
+        Live ("prof en direct") is the DEFAULT in every mode — libre as well as
+        coaching. The static board is kept only when the content cannot be
+        written progressively without loss (see _board_is_live_renderable).
+        """
+        if self._board_is_live_renderable(lines):
+            steps = self._board_lines_to_live_steps(lines)
+            if steps:
+                _safe_log(
+                    f"[AI Commands] Live board (défaut){' — ' + context if context else ''}: "
+                    f"{len(steps)} steps"
+                )
+                await self.websocket.send_json({
+                    "type": "whiteboard_live",
+                    "title": title,
+                    "steps": steps,
+                })
+                self._remember_mode("whiteboard")
+                return
+
+        _safe_log(
+            f"[AI Commands] Static board{' — ' + context if context else ''}: "
+            f"contenu non rejouable en direct ({len(lines)} lignes)"
+        )
+        await self.websocket.send_json({
+            "type": "whiteboard_board",
+            "title": title,
+            "lines": lines,
+        })
+        self._remember_mode("whiteboard")
 
     @staticmethod
     def _board_lines_to_live_steps(lines: list) -> list:
@@ -3261,32 +3306,7 @@ RÈGLES :
                 await self.websocket.send_json({"type": "hide_media"})
                 await self.websocket.send_json({"type": "clear_whiteboard"})
 
-                # ── Repli déterministe vers le mode direct ──
-                # L'élève a explicitement demandé une explication "en direct"
-                # mais le LLM a quand même produit un tableau statique : on
-                # rejoue ce tableau comme si le prof l'écrivait au fur et à
-                # mesure, au lieu de tout afficher d'un coup.
-                live_fallback_steps = []
-                if self._wants_live_board(student_text):
-                    live_fallback_steps = self._board_lines_to_live_steps(merged_lines)
-
-                if live_fallback_steps:
-                    _safe_log(
-                        f"[AI Commands] Live requested by student — replaying the board "
-                        f"as a live script ({len(live_fallback_steps)} steps)"
-                    )
-                    await self.websocket.send_json({
-                        "type": "whiteboard_live",
-                        "title": merged_title,
-                        "steps": live_fallback_steps,
-                    })
-                else:
-                    await self.websocket.send_json({
-                        "type": "whiteboard_board",
-                        "title": merged_title,
-                        "lines": merged_lines,
-                    })
-                self._remember_mode("whiteboard")
+                await self._send_board_or_live(merged_title, merged_lines, context="<ui> show_board")
 
             if ui_actions_handled:
                 # ── ALWAYS run exam exercise detection even when UI actions
@@ -3457,30 +3477,9 @@ RÈGLES :
                 await self.websocket.send_json({"type": "hide_media"})
                 await self.websocket.send_json({"type": "clear_whiteboard"})
 
-                # Même repli déterministe que pour le canal <ui> : si l'élève a
-                # demandé une explication en direct, on rejoue le tableau ligne
-                # à ligne au lieu de l'afficher d'un bloc.
-                legacy_live_steps = []
-                if self._wants_live_board(student_text):
-                    legacy_live_steps = self._board_lines_to_live_steps(normalized_lines)
-
-                if legacy_live_steps:
-                    _safe_log(
-                        f"[AI Commands] Live requested — replaying legacy <board> as a "
-                        f"live script ({len(legacy_live_steps)} steps)"
-                    )
-                    await self.websocket.send_json({
-                        "type": "whiteboard_live",
-                        "title": board_data.get("title", "Tableau"),
-                        "steps": legacy_live_steps,
-                    })
-                else:
-                    await self.websocket.send_json({
-                        "type": "whiteboard_board",
-                        "title": board_data.get("title", "Tableau"),
-                        "lines": normalized_lines
-                    })
-                self._remember_mode("whiteboard")
+                await self._send_board_or_live(
+                    board_data.get("title", "Tableau"), normalized_lines, context="tag <board>"
+                )
                 board_handled = True
             elif board_data and isinstance(board_data, dict):
                 _safe_log(f"[AI Commands][WARN] Board JSON parsed but missing usable 'lines'. Keys: {list(board_data.keys())}")
@@ -4346,12 +4345,9 @@ RÈGLES :
                     # Defense in depth: rewrite ASCII genetics (DO//dø) to \dfrac.
                     auto_lines = _sanitize_genetics_cells(auto_lines)
                     await self.websocket.send_json({"type": "clear_whiteboard"})
-                    await self.websocket.send_json({
-                        "type": "whiteboard_board",
-                        "title": "Explication",
-                        "lines": auto_lines,
-                    })
-                    self._remember_mode("whiteboard")
+                    await self._send_board_or_live(
+                        "Explication", auto_lines, context="auto-board fallback"
+                    )
 
     async def _auto_advance_phase(self):
         """Automatically advance to the next phase and update progress."""
