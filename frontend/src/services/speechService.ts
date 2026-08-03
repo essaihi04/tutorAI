@@ -156,11 +156,17 @@ class TTSService {
    *
    * Resolves when speech ends (or immediately if there is nothing to say).
    * Returns progress 1 at the end so callers can always settle the UI.
+   *
+   * Resolves `true` only if the voice ACTUALLY started speaking. Chrome can
+   * fail an utterance instantly (`not-allowed` without recent user gesture,
+   * or the notorious cancel()-then-speak() race) — in that case `onerror`
+   * fires immediately and we resolve `false`, so the caller can fall back to
+   * a timed animation instead of snapping its UI to the final state.
    */
   speakSynced(
     text: string,
     options: SpeakOptions & { onProgress?: (ratio: number) => void } = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     const { lang = 'fr', rate = 1.0, pitch = 1.0, onStart, onEnd, onProgress } = options;
     const clean = (text || '').replace(/\s+/g, ' ').trim();
 
@@ -168,7 +174,7 @@ class TTSService {
       if (!clean || typeof window === 'undefined' || !window.speechSynthesis) {
         onProgress?.(1);
         onEnd?.();
-        resolve();
+        resolve(false);
         return;
       }
 
@@ -182,15 +188,31 @@ class TTSService {
       utterance.volume = 1;
 
       let settled = false;
+      let started = false;
+      let watchdog: number | undefined;
       const finish = () => {
         if (settled) return;
         settled = true;
+        clearTimeout(watchdog);
         onProgress?.(1);
         onEnd?.();
-        resolve();
+        resolve(started);
       };
+      // Garde-fou : si la synthèse reste coincée en file (Chrome, après un
+      // cancel() malheureux) l'utterance ne démarre jamais et n'émet aucun
+      // événement — sans ce timeout la promesse ne se résoudrait jamais et
+      // le tableau resterait bloqué sur la ligne en cours.
+      watchdog = window.setTimeout(() => {
+        if (!started && !settled) {
+          try { this.synthesis.cancel(); } catch { /* ignore */ }
+          finish();
+        }
+      }, 2500);
 
-      utterance.onstart = () => onStart?.();
+      utterance.onstart = () => {
+        started = true;
+        onStart?.();
+      };
       utterance.onboundary = (e: SpeechSynthesisEvent) => {
         const idx = typeof e.charIndex === 'number' ? e.charIndex : 0;
         onProgress?.(Math.max(0, Math.min(1, idx / clean.length)));
@@ -199,6 +221,9 @@ class TTSService {
       // 'interrupted'/'canceled' happen on every stop() — never treat as fatal.
       utterance.onerror = finish;
 
+      // Chrome laisse parfois la synthèse coincée en "paused" après un
+      // cancel() : sans resume(), speak() reste en file et rien ne démarre.
+      try { this.synthesis.resume(); } catch { /* ignore */ }
       this.synthesis.speak(utterance);
     });
   }

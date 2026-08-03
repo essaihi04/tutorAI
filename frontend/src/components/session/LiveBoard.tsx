@@ -191,7 +191,7 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     };
     revealRafRef.current = requestAnimationFrame(tick);
 
-    await speechService.speakSynced(spoken, {
+    const voiceSpoke = await speechService.speakSynced(spoken, {
       lang: 'fr',
       rate,
       onProgress: (ratio) => {
@@ -203,6 +203,18 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         else estimatedMs = Math.max(600, elapsed / Math.max(ratio, 0.01));
       },
     });
+
+    // ⚠️ Chrome peut refuser l'utterance INSTANTANÉMENT (pas de geste
+    // utilisateur récent → `not-allowed`, ou speak() juste après cancel()).
+    // La promesse se résout alors avant le premier tick de l'horloge : si on
+    // figeait ici, la ligne apparaîtrait d'un seul coup. On laisse donc
+    // l'horloge finir d'écrire, lettre après lettre, sur la durée estimée.
+    if (!voiceSpoke && runId === runIdRef.current) {
+      while (elapsed < estimatedMs) {
+        await new Promise(r => setTimeout(r, 60));
+        if (runId !== runIdRef.current) break;
+      }
+    }
 
     done = true;
     if (revealRafRef.current !== null) {
