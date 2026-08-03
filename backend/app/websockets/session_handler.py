@@ -2799,7 +2799,13 @@ RÈGLES :
                     if isinstance(el, dict) and str(el.get("type", "")).lower() in drawable_types
                 ]
                 if clean_els:
-                    normalized.append({"action": "draw", "elements": clean_els})
+                    draw_step = {"action": "draw", "elements": clean_els}
+                    # `say` : le professeur commente le croquis pendant le
+                    # tracé (même mécanique vocale que sur les lignes écrites).
+                    say = step.get("say") or step.get("narration")
+                    if isinstance(say, str) and say.strip():
+                        draw_step["say"] = say.strip()
+                    normalized.append(draw_step)
             elif action == "erase":
                 zone = str(step.get("zone", "all")).lower().strip()
                 normalized.append({"action": "erase", "zone": zone if zone in ("text", "draw", "all") else "all"})

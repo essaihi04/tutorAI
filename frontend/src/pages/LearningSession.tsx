@@ -1702,6 +1702,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     liveScript={liveScript}
                     isVisible={showWhiteboard}
                     onClose={handleCloseWhiteboard}
+                    // Coin élève du mode plein écran : question au professeur
+                    // (même pipeline que le chat), état « le prof réfléchit »,
+                    // et dernière réponse texte pour la bulle de réponse.
+                    onStudentMessage={handleQuickSend}
+                    busy={isProcessing}
+                    assistantReply={
+                      [...conversation].reverse().find(m => m.speaker === 'ai')?.text ?? null
+                    }
                   />
                 </div>
               </div>

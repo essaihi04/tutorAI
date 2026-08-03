@@ -3,6 +3,7 @@ import 'katex/dist/katex.min.css';
 import { renderMixedContent, renderDisplayMath, containsArabic } from './MathBoard';
 import { speechService } from '../../services/speechService';
 import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
+import { useSessionStore } from '../../stores/sessionStore';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -49,7 +50,8 @@ export interface LiveStep {
   zone?: 'text' | 'draw' | 'all'; // erase
   duration?: number;        // pause (ms)
   text?: string;            // narrate
-  /** Phrase à prononcer pour un `write` — sinon la ligne est transcrite. */
+  /** Phrase à prononcer pendant un `write` (sinon la ligne est transcrite)
+   *  ou pendant un `draw` (le prof commente son croquis en le traçant). */
   say?: string;
 }
 
@@ -62,6 +64,12 @@ interface LiveBoardProps {
   script: LiveScript;
   isVisible: boolean;
   onClose?: () => void;
+  /** Envoie une question de l'élève au professeur (chat ou voix) pendant le cours. */
+  onStudentMessage?: (text: string) => void;
+  /** Dernière réponse texte du professeur — affichée dans la bulle de réponse du plein écran. */
+  assistantReply?: string | null;
+  /** Le professeur réfléchit (requête LLM en cours). */
+  busy?: boolean;
 }
 
 // ── Palette craie (tableau sombre) ─────────────────────────────────
@@ -102,7 +110,7 @@ interface WrittenEntry {
 }
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
-function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   const [narration, setNarration] = useState<string | null>(null);
@@ -118,6 +126,24 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const [soundOn, setSoundOn] = useState(true);
   const [voiceReveal, setVoiceReveal] = useState(1);
 
+  // ── Loupe du tableau : zoom sur un endroit précis + déplacement ──
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPanState] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+
+  // ── Mode plein écran « cours magistral » ──
+  // Dès que le professeur prend la parole, le tableau occupe tout l'écran
+  // avec une interface minimale (auto-masquée) pour garder l'élève concentré.
+  // L'élève peut « lever la main » : le cours se met en pause et il pose sa
+  // question au clavier ou à la voix, comme dans une vraie salle de classe.
+  const [focus, setFocus] = useState(true);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [askOpen, setAskOpen] = useState(false);
+  const [questionText, setQuestionText] = useState('');
+  const [listening, setListening] = useState(false);
+  const [awaitingReply, setAwaitingReply] = useState(false);
+  const language = useSessionStore((s) => s.language);
+
   const runIdRef = useRef(0);
   const playingRef = useRef(true);
   const speedRef = useRef(1);
@@ -126,6 +152,15 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const stepCounterRef = useRef(0);
   const soundOnRef = useRef(true);
   const revealRafRef = useRef<number | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const panDragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const hideTimerRef = useRef<number | null>(null);
+  const replyBaselineRef = useRef<string | null>(null);
+  const questionFieldRef = useRef<HTMLInputElement>(null);
 
   playingRef.current = playing;
   speedRef.current = speed;
@@ -286,7 +321,23 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
             drawMs: DRAW_ELEMENT_MS / spd,
           }));
           setDrawn(prev => [...prev, ...entries]);
-          if (!(await wait(els.length * DRAW_ELEMENT_STAGGER + DRAW_ELEMENT_MS, runId))) return;
+          const drawTotal = els.length * DRAW_ELEMENT_STAGGER + DRAW_ELEMENT_MS;
+          // Le prof commente son croquis pendant qu'il le trace (`say` sur le
+          // step draw) : la voix et le tracé courent en parallèle, et on
+          // attend la fin du plus long des deux avant de continuer.
+          const toSayDraw = typeof step.say === 'string' ? step.say.trim() : '';
+          const spokenDraw = toSayDraw && soundOnRef.current && speechService.ttsSupported
+            ? toSpokenText(toSayDraw)
+            : '';
+          if (spokenDraw) {
+            const [, waited] = await Promise.all([
+              speechService.speakSynced(spokenDraw, { lang: 'fr', rate: speedRef.current }),
+              wait(drawTotal, runId),
+            ]);
+            if (!waited || runId !== runIdRef.current) return;
+          } else {
+            if (!(await wait(drawTotal, runId))) return;
+          }
           break;
         }
         case 'erase': {
@@ -335,6 +386,12 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     setPlaying(true);
     setVoiceReveal(1);
     stepCounterRef.current = 0;
+    // Nouveau cours : le professeur reprend la parole en plein écran, la
+    // question en cours est close (la réponse arrive justement via ce script).
+    setFocus(true);
+    setAskOpen(false);
+    setQuestionText('');
+    setAwaitingReply(false);
 
     // Le tableau prend la parole : on coupe la voix du chat pour ce tour,
     // sinon deux voix se superposent (le backend lit déjà la réponse).
@@ -434,6 +491,233 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
     if (script?.steps?.length) play(script.steps, runId);
   }, [script, play]);
 
+  // ── Loupe : zoomer/dézoomer sur un point donné ────────────────────
+  // Le point visé (curseur, double-clic, milieu du pincement) reste fixe à
+  // l'écran pendant le changement d'échelle, comme une loupe posée sur le
+  // tableau. Le déplacement est borné : on ne sort jamais du tableau.
+
+  const clampPan = useCallback((x: number, y: number, z: number) => {
+    const el = viewportRef.current;
+    if (!el || z <= 1) return { x: 0, y: 0 };
+    const minX = el.clientWidth * (1 - z);
+    const minY = el.clientHeight * (1 - z);
+    return { x: Math.min(0, Math.max(minX, x)), y: Math.min(0, Math.max(minY, y)) };
+  }, []);
+
+  const applyZoom = useCallback((next: number, cx: number, cy: number) => {
+    const z = zoomRef.current;
+    const nz = Math.min(4, Math.max(1, next));
+    const ratio = nz / z;
+    const p = panRef.current;
+    const cl = clampPan(cx - (cx - p.x) * ratio, cy - (cy - p.y) * ratio, nz);
+    zoomRef.current = nz;
+    panRef.current = cl;
+    setZoom(nz);
+    setPanState(cl);
+  }, [clampPan]);
+
+  const zoomBy = useCallback((factor: number) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    applyZoom(zoomRef.current * factor, el.clientWidth / 2, el.clientHeight / 2);
+  }, [applyZoom]);
+
+  const resetZoom = useCallback(() => applyZoom(1, 0, 0), [applyZoom]);
+
+  // Ctrl+molette (= pincement sur pavé tactile) : zoom centré sur le curseur.
+  // Molette simple quand on est déjà zoomé : déplacement du tableau.
+  // Listener natif obligatoire : React attache `wheel` en mode passif,
+  // ce qui rend preventDefault() inopérant et ferait zoomer toute la page.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && zoomRef.current === 1) return; // laisse défiler le texte
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      if (e.ctrlKey) {
+        applyZoom(zoomRef.current * Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top);
+      } else {
+        const cl = clampPan(panRef.current.x - e.deltaX, panRef.current.y - e.deltaY, zoomRef.current);
+        panRef.current = cl;
+        setPanState(cl);
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [applyZoom, clampPan]);
+
+  // Un doigt (zoomé) = déplacer le tableau ; deux doigts = pincer pour zoomer.
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // setPointerCapture peut lever (pointeur déjà relâché) : ne jamais laisser
+    // cette exception empêcher le démarrage du geste.
+    const capture = () => { try { el.setPointerCapture?.(e.pointerId); } catch { /* ignore */ } };
+    if (pointersRef.current.size === 2) {
+      const [a, b] = [...pointersRef.current.values()];
+      pinchRef.current = { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: zoomRef.current };
+      panDragRef.current = null;
+      capture();
+    } else if (zoomRef.current > 1) {
+      panDragRef.current = { startX: e.clientX, startY: e.clientY, panX: panRef.current.x, panY: panRef.current.y };
+      setDragging(true);
+      capture();
+      e.preventDefault();
+    }
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const el = viewportRef.current;
+    if (!el) return;
+    if (pinchRef.current && pointersRef.current.size >= 2) {
+      const [a, b] = [...pointersRef.current.values()];
+      const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      const rect = el.getBoundingClientRect();
+      applyZoom(
+        pinchRef.current.zoom * (dist / pinchRef.current.dist),
+        (a.x + b.x) / 2 - rect.left,
+        (a.y + b.y) / 2 - rect.top,
+      );
+    } else if (panDragRef.current) {
+      const d = panDragRef.current;
+      const cl = clampPan(d.panX + (e.clientX - d.startX), d.panY + (e.clientY - d.startY), zoomRef.current);
+      panRef.current = cl;
+      setPanState(cl);
+    }
+  }, [applyZoom, clampPan]);
+
+  const onPointerEnd = useCallback((e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    if (pointersRef.current.size === 0) {
+      panDragRef.current = null;
+      setDragging(false);
+    }
+  }, []);
+
+  // Double-clic : zoomer sur CET endroit ; re-double-clic : revenir au tableau entier.
+  const onDoubleClick = useCallback((e: React.MouseEvent) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    if (zoomRef.current > 1.01) applyZoom(1, cx, cy);
+    else applyZoom(2.2, cx, cy);
+  }, [applyZoom]);
+
+  // ── Interface minimale : les commandes s'effacent pendant que le
+  // professeur parle, et réapparaissent au moindre geste de l'élève.
+  const pokeControls = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3500);
+  }, []);
+
+  useEffect(() => {
+    // Hors plein écran, en pause, pendant une question ou à la fin du cours,
+    // les commandes restent visibles : on ne masque que pendant l'explication.
+    if (!focus || !playing || askOpen || finished) {
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      setControlsVisible(true);
+      return;
+    }
+    pokeControls();
+    return () => {
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    };
+  }, [focus, playing, askOpen, finished, pokeControls]);
+
+  // Raccourcis d'élève : Espace = pause/reprendre, Échap = fermer la question
+  // puis quitter le plein écran. (Espace est ignoré pendant la saisie.)
+  useEffect(() => {
+    if (!focus) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (askOpen) setAskOpen(false);
+        else setFocus(false);
+      } else if ((e.key === ' ' || e.code === 'Space') && !typing) {
+        e.preventDefault();
+        setPlaying(p => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focus, askOpen]);
+
+  // ── Lever la main : le cours se met en pause, l'élève pose sa question ──
+
+  const submitQuestion = useCallback((raw: string) => {
+    const text = raw.trim();
+    if (!text || !onStudentMessage) return;
+    // Mémorise la réponse actuelle : seule une NOUVELLE réponse du professeur
+    // sera affichée dans la bulle (pas celle d'un tour précédent).
+    replyBaselineRef.current = typeof assistantReply === 'string' ? assistantReply : null;
+    setAwaitingReply(true);
+    setQuestionText('');
+    onStudentMessage(text);
+  }, [onStudentMessage, assistantReply]);
+
+  const openAsk = useCallback(() => {
+    setPlaying(false); // le professeur s'interrompt et écoute
+    setAskOpen(true);
+    setTimeout(() => questionFieldRef.current?.focus(), 80);
+  }, []);
+
+  const closeAsk = useCallback(() => {
+    if (listening) {
+      try { speechService.stopListening(); } catch { /* noop */ }
+    }
+    setListening(false);
+    setAskOpen(false);
+  }, [listening]);
+
+  const toggleVoiceQuestion = useCallback(() => {
+    if (listening) {
+      try { speechService.stopListening(); } catch { /* noop */ }
+      setListening(false);
+      return;
+    }
+    if (!speechService.isRecognitionSupported()) return;
+    speechService.stop(); // couper la voix du prof avant d'ouvrir le micro
+    setPlaying(false);
+    setListening(true);
+    speechService.listen({
+      lang: language,
+      continuous: false,
+      interimResults: true,
+      onResult: (text: string, isFinal: boolean) => {
+        const t = (text || '').trim();
+        if (isFinal) {
+          if (t) submitQuestion(t);
+        } else if (t) {
+          setQuestionText(t);
+        }
+      },
+      onEnd: () => setListening(false),
+      onError: () => setListening(false),
+    }).catch(() => setListening(false));
+  }, [listening, language, submitQuestion]);
+
+  // Réponse du professeur à afficher : uniquement une réponse arrivée APRÈS
+  // l'envoi de la question de l'élève.
+  const profReply =
+    awaitingReply
+    && typeof assistantReply === 'string'
+    && assistantReply.trim()
+    && assistantReply !== replyBaselineRef.current
+      ? assistantReply
+      : null;
+
+  // NB : pas d'éponge côté élève — seul le professeur efface le tableau,
+  // via les steps `erase` de son script (comme dans une vraie salle de classe).
+
   if (!isVisible || !script || !Array.isArray(script.steps) || script.steps.length === 0) return null;
 
   const totalSteps = script.steps.length;
@@ -441,7 +725,28 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
   const eraseDraw = erasingZone === 'draw' || erasingZone === 'all';
 
   return (
-    <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden shadow-lg" style={{ background: '#12241c' }}>
+    <div
+      className={
+        focus
+          ? 'fixed inset-0 z-[100] flex flex-col overflow-hidden'
+          : 'w-full h-full flex flex-col rounded-2xl overflow-hidden shadow-lg relative'
+      }
+      style={{ background: '#12241c' }}
+      onMouseMove={focus ? pokeControls : undefined}
+      onPointerDown={focus ? pokeControls : undefined}
+    >
+      {/* Fil de progression du cours (plein écran) : toujours visible, jamais intrusif */}
+      {focus && (
+        <div className="absolute top-0 left-0 right-0 z-40 h-0.5 bg-white/10">
+          <div
+            className="h-full transition-all duration-500"
+            style={{
+              background: 'rgba(52,211,153,0.85)',
+              width: `${finished ? 100 : Math.round((Math.min(stepIndex + 1, totalSteps) / totalSteps) * 100)}%`,
+            }}
+          />
+        </div>
+      )}
       <style>{`
         @keyframes liveReveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
         @keyframes liveFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -487,8 +792,21 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         .live-line::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
-      {/* ── Barre d'outils ── */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-1.5" style={{ background: '#0d1b15', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      {/* ── Barre d'outils ──
+           En plein écran elle flotte au-dessus du tableau et s'efface toute
+           seule pendant que le professeur parle (un geste la fait revenir). */}
+      <div
+        className={`${
+          focus
+            ? `absolute top-0 left-0 right-0 z-30 transition-all duration-300 ${controlsVisible ? '' : '-translate-y-full opacity-0 pointer-events-none'}`
+            : 'shrink-0'
+        } flex items-center justify-between px-3 py-1.5`}
+        style={{
+          background: focus ? 'rgba(13,27,21,0.92)' : '#0d1b15',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          backdropFilter: focus ? 'blur(6px)' : undefined,
+        }}
+      >
         <div className="flex items-center gap-2 min-w-0">
           <div className="flex items-center gap-1.5 shrink-0">
             <div className="w-2 h-2 rounded-full bg-red-400" />
@@ -507,6 +825,34 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
               {Math.min(stepIndex + 1, totalSteps)}/{totalSteps}
             </span>
           )}
+          {/* Loupe : dézoomer / niveau (clic = 100 %) / zoomer.
+              Masquée en plein écran (moins de boutons) : les gestes suffisent
+              — double-clic, Ctrl+molette, pincement. */}
+          <div className={`${focus ? 'hidden' : 'hidden sm:flex'} items-center gap-0.5 mr-0.5`}>
+            <button
+              onClick={() => zoomBy(1 / 1.35)}
+              className="text-white/70 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
+              disabled={zoom <= 1.01}
+              title="Dézoomer"
+            >
+              −
+            </button>
+            <button
+              onClick={resetZoom}
+              className="text-white/70 hover:text-white text-[11px] px-1 py-0.5 rounded hover:bg-white/10 transition-colors tabular-nums"
+              title="Revenir au tableau entier (100 %)"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={() => zoomBy(1.35)}
+              className="text-white/70 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
+              disabled={zoom >= 3.99}
+              title="Zoomer (ou : double-clic / Ctrl+molette sur un endroit du tableau)"
+            >
+              ＋
+            </button>
+          </div>
           {canSpeak && (
             <button
               onClick={() => setSoundOn(s => !s)}
@@ -540,6 +886,13 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
               ↻
             </button>
           )}
+          <button
+            onClick={() => setFocus(f => !f)}
+            className="text-white/70 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+            title={focus ? 'Quitter le plein écran (Échap)' : 'Plein écran'}
+          >
+            {focus ? '⤡' : '⤢'}
+          </button>
           {onClose && (
             <button onClick={onClose} className="text-white/40 hover:text-white/80 text-xs px-2 py-0.5 rounded hover:bg-white/10 transition-colors">
               ✕
@@ -548,12 +901,36 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         </div>
       </div>
 
-      {/* ── Corps : écriture à gauche, dessin à droite ── */}
-      <div className={`flex-1 min-h-0 flex flex-col md:flex-row ${playing ? '' : 'live-paused'}`}>
+      {/* ── Corps : écriture à gauche, dessin à droite ──
+           Enveloppé dans une « loupe » : Ctrl+molette ou double-clic zoome
+           sur l'endroit visé, un doigt/la souris déplace le tableau zoomé,
+           deux doigts pincent pour zoomer. */}
+      <div
+        ref={viewportRef}
+        className="flex-1 min-h-0 relative overflow-hidden"
+        style={{
+          touchAction: zoom > 1 ? 'none' : 'pan-y',
+          cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : undefined,
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onDoubleClick={onDoubleClick}
+      >
+      <div
+        className={`w-full h-full flex flex-col md:flex-row ${playing ? '' : 'live-paused'}`}
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+          transition: dragging ? 'none' : 'transform 140ms ease-out',
+          willChange: 'transform',
+        }}
+      >
         {/* Zone d'écriture */}
         <div
           ref={textZoneRef}
-          className="flex-1 min-w-0 overflow-y-auto px-5 py-4"
+          className={`flex-1 min-w-0 overflow-y-auto px-5 ${focus ? 'pt-10 pb-16' : 'py-4'}`}
           style={eraseText ? { animation: `liveEraseWipe ${ERASE_MS}ms ease-in forwards` } : undefined}
         >
           {written.map((entry, i) => (
@@ -596,11 +973,157 @@ function LiveBoardInner({ script, isVisible, onClose }: LiveBoardProps) {
         )}
       </div>
 
+      {/* Badge de zoom : rappel discret + retour au tableau entier en un clic */}
+      {zoom > 1.01 && (
+        <button
+          onClick={resetZoom}
+          className={`absolute ${focus ? 'top-10' : 'bottom-2'} left-2 z-20 text-[11px] px-2 py-1 rounded-md hover:bg-white/10 transition-colors`}
+          style={{ background: 'rgba(13,27,21,0.85)', color: '#a7f3d0', border: '1px solid rgba(255,255,255,0.15)' }}
+          title="Revenir au tableau entier"
+        >
+          🔍 {Math.round(zoom * 100)} % — tableau entier
+        </button>
+      )}
+      </div>
+
+      {/* ── Pause façon lecteur : grand bouton central pour reprendre ── */}
+      {focus && !playing && !askOpen && !finished && (
+        <button
+          onClick={() => setPlaying(true)}
+          className="absolute inset-0 m-auto z-20 w-20 h-20 rounded-full text-3xl text-white flex items-center justify-center hover:scale-105 transition-transform"
+          style={{ background: 'rgba(16,185,129,0.25)', border: '2px solid rgba(52,211,153,0.6)', backdropFilter: 'blur(4px)' }}
+          title="Reprendre le cours (Espace)"
+        >
+          ▶
+        </button>
+      )}
+
+      {/* ── Coin élève (plein écran) : pause + lever la main + réponse du prof ── */}
+      {focus && (
+        <div className="absolute bottom-0 left-0 right-0 z-40 flex flex-col items-center gap-2 px-3 pb-3 pointer-events-none">
+          {/* Réponse du professeur à la question posée */}
+          {askOpen && profReply && (
+            <div
+              className="pointer-events-auto w-full max-w-2xl max-h-44 overflow-y-auto rounded-xl px-4 py-3 text-[14px] leading-relaxed"
+              style={{ background: 'rgba(13,27,21,0.95)', border: '1px solid rgba(52,211,153,0.3)', color: '#d1fae5' }}
+              dir={containsArabic(profReply) ? 'rtl' : 'ltr'}
+            >
+              <div className="text-[11px] mb-1" style={{ color: '#34d399' }}>👨‍🏫 Réponse du professeur</div>
+              <div className="katex-dark" dangerouslySetInnerHTML={{ __html: renderMixed(profReply) }} />
+            </div>
+          )}
+
+          {askOpen ? (
+            /* Main levée : le cours attend, l'élève écrit ou parle */
+            <div
+              className="pointer-events-auto w-full max-w-2xl rounded-2xl px-3 py-2.5"
+              style={{ background: 'rgba(13,27,21,0.95)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  ref={questionFieldRef}
+                  value={questionText}
+                  onChange={e => setQuestionText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') submitQuestion(questionText); }}
+                  placeholder={listening ? '🎙️ Je t’écoute… parle maintenant' : 'Pose ta question au professeur…'}
+                  className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/50 transition-colors"
+                  disabled={busy}
+                />
+                {speechService.isRecognitionSupported() && (
+                  <button
+                    onClick={toggleVoiceQuestion}
+                    disabled={busy}
+                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm transition-all ${
+                      listening ? 'bg-red-500/80 animate-pulse' : 'bg-white/10 hover:bg-white/20'
+                    }`}
+                    title={listening ? 'Arrêter le micro' : 'Poser la question à la voix'}
+                  >
+                    🎙️
+                  </button>
+                )}
+                <button
+                  onClick={() => submitQuestion(questionText)}
+                  disabled={busy || !questionText.trim()}
+                  className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-30"
+                  title="Envoyer la question"
+                >
+                  ➤
+                </button>
+                <button
+                  onClick={closeAsk}
+                  className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Fermer (Échap) — le cours reste en pause"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="mt-1.5 text-[11px] text-center" style={{ color: busy ? '#67e8f9' : 'rgba(255,255,255,0.4)' }}>
+                {busy
+                  ? '👨‍🏫 Le professeur réfléchit à ta question…'
+                  : '⏸ Le cours est en pause — pose ta question, le professeur t’écoute'}
+              </div>
+            </div>
+          ) : finished ? (
+            /* Fin du cours : bilan et suites possibles */
+            <div
+              className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl px-4 py-2.5"
+              style={{ background: 'rgba(13,27,21,0.95)', border: '1px solid rgba(255,255,255,0.15)' }}
+            >
+              <span className="text-sm" style={{ color: '#6ee7b7' }}>✔ Explication terminée</span>
+              <button onClick={replay} className="text-white/80 hover:text-white text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 transition-colors">
+                ↻ Revoir
+              </button>
+              {onStudentMessage && (
+                <button onClick={openAsk} className="text-xs px-3 py-1.5 rounded-full transition-colors" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(52,211,153,0.35)', color: '#a7f3d0' }}>
+                  ✋ Une question ?
+                </button>
+              )}
+              <button onClick={() => setFocus(false)} className="text-white/60 hover:text-white text-xs px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors">
+                Quitter le plein écran
+              </button>
+            </div>
+          ) : (
+            /* Pendant le cours : deux commandes seulement, auto-masquées */
+            <div
+              className={`flex items-center gap-2 transition-opacity duration-300 ${
+                controlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+              }`}
+            >
+              <button
+                onClick={() => setPlaying(p => !p)}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white text-base hover:scale-105 transition-transform"
+                style={{ background: 'rgba(13,27,21,0.9)', border: '1px solid rgba(255,255,255,0.18)' }}
+                title={playing ? 'Pause (Espace)' : 'Reprendre (Espace)'}
+              >
+                {playing ? '⏸' : '▶'}
+              </button>
+              {onStudentMessage && (
+                <button
+                  onClick={openAsk}
+                  className="h-10 px-4 rounded-full text-sm flex items-center gap-2 hover:scale-[1.03] transition-transform"
+                  style={{ background: 'rgba(13,27,21,0.9)', border: '1px solid rgba(52,211,153,0.35)', color: '#a7f3d0' }}
+                  title="Le cours se met en pause pendant ta question"
+                >
+                  ✋ Poser une question
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Narration du professeur (futur audio) ── */}
       {narration && (
         <div
           className="shrink-0 flex items-start gap-2 px-4 py-2.5"
-          style={{ background: 'rgba(34,211,238,0.07)', borderTop: '1px solid rgba(34,211,238,0.2)', animation: 'liveFadeIn 0.3s ease-out both' }}
+          style={{
+            background: 'rgba(34,211,238,0.07)',
+            borderTop: '1px solid rgba(34,211,238,0.2)',
+            animation: 'liveFadeIn 0.3s ease-out both',
+            // En plein écran le coin élève (pause / question) occupe le bas :
+            // la bulle de narration remonte pour rester lisible.
+            marginBottom: focus ? '3.25rem' : undefined,
+          }}
         >
           <span className="text-lg leading-none mt-0.5">💬</span>
           <p

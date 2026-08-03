@@ -82,6 +82,12 @@ interface AIWhiteboardProps {
   activeHighlights?: string[];
   boardContent?: BoardContent | null;
   liveScript?: LiveScript | null;
+  /** Mode live plein écran : envoi d'une question de l'élève au professeur. */
+  onStudentMessage?: (text: string) => void;
+  /** Mode live plein écran : dernière réponse texte du professeur. */
+  assistantReply?: string | null;
+  /** Mode live plein écran : une requête est en cours (le prof réfléchit). */
+  busy?: boolean;
 }
 
 // Chalk-on-dark palette — bright shades legible on the dark green chalkboard.
@@ -104,7 +110,7 @@ function resolveColor(color: string): string {
   return (COLORS as any)[color] || color || COLORS.black;
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -995,6 +1001,9 @@ function resolveColor(color: string): string {
         script={liveScript}
         isVisible={isVisible}
         onClose={onClose}
+        onStudentMessage={onStudentMessage}
+        assistantReply={assistantReply}
+        busy={busy}
       />
     );
   }
