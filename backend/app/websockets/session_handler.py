@@ -31,6 +31,137 @@ def _safe_log(*parts):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Streaming tag filter
+# ─────────────────────────────────────────────────────────────────────
+# Balises que le LLM émet pour piloter l'affichage : leur contenu part au
+# tableau, JAMAIS dans le fil de discussion.
+_STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions')
+
+# Le LLM emballe souvent la balise dans du gras (« **<ui>… »). Une fois le
+# bloc retiré, ces marqueurs restent seuls sur leur ligne dans le chat.
+_EMPHASIS_TAIL_RE = re.compile(r'[*_]+$')
+
+
+class _StreamTagFilter:
+    """Ne laisse passer vers le chat que le texte SITUÉ HORS des balises.
+
+    Le filtrage doit porter sur la réponse ACCUMULÉE, jamais sur un token
+    isolé, pour deux raisons que l'ancienne version ignorait :
+
+    1. Une réponse peut contenir PLUSIEURS blocs de la même balise (un
+       ``<ui>`` pour l'énoncé, un second pour la correction). L'ancien test
+       ``'<ui>' in acc and '</ui>' not in acc`` devenait aveugle dès que le
+       premier bloc se fermait : tout bloc suivant était diffusé tel quel et
+       l'élève lisait le JSON du tableau au milieu du cours.
+    2. Une balise arrive souvent coupée en deux tokens (``<u`` puis ``i>``) ;
+       filtrer token par token laissait fuir le fragment ``<u``.
+
+    Le gras que le LLM colle parfois devant la balise (« **<ui>… ») est
+    retiré avec elle, sinon un ``**`` orphelin reste dans le chat.
+
+    Usage : ``feed(accumulé)`` après chaque token, puis ``flush(accumulé)``
+    à la fin du flux.
+    """
+
+    __slots__ = ('_pos', '_open', '_pending')
+
+    # Longueur de la plus longue balise : au-delà, un « < » est du vrai texte.
+    _MAX_TAG_LEN = max(len(f'</{t}>') for t in _STREAM_TAG_NAMES)
+
+    def __init__(self):
+        self._pos = 0
+        self._open = None
+        # Marqueurs de gras retenus : on ne sait pas encore s'ils ouvrent du
+        # texte en gras ou s'ils emballent une balise à venir.
+        self._pending = ''
+
+    def _hold(self, buf: str) -> str:
+        """Émet ``buf`` en retenant un éventuel ``**`` de fin (sort indécis)."""
+        m = _EMPHASIS_TAIL_RE.search(buf)
+        if not m:
+            return buf
+        self._pending = m.group(0)
+        return buf[:m.start()]
+
+    def feed(self, acc: str) -> str:
+        """Renvoie le texte nouvellement affichable, vu la réponse accumulée."""
+        buf = self._pending
+        self._pending = ''
+        while True:
+            # ── Dans un bloc : on attend sa fermeture, rien ne sort ──
+            if self._open:
+                close = f'</{self._open}>'
+                end = acc.find(close, self._pos)
+                if end < 0:
+                    return self._hold(buf)
+                self._pos = end + len(close)
+                self._open = None
+                continue
+
+            # ── Hors bloc : jusqu'au prochain marqueur ──
+            nxt = acc.find('<', self._pos)
+            if nxt < 0:
+                buf += acc[self._pos:]
+                self._pos = len(acc)
+                return self._hold(buf)
+
+            opened = closed = None
+            for t in _STREAM_TAG_NAMES:
+                if acc.startswith(f'<{t}>', nxt):
+                    opened = t
+                    break
+                if acc.startswith(f'</{t}>', nxt):
+                    closed = t
+                    break
+
+            if opened:
+                buf += acc[self._pos:nxt]
+                # Le gras collé à la balise part avec elle.
+                buf = _EMPHASIS_TAIL_RE.sub('', buf)
+                self._pos = nxt + len(f'<{opened}>')
+                self._open = opened
+                continue
+
+            if closed:
+                # Fermeture orpheline (bévue du LLM) : on la retire du texte.
+                buf += acc[self._pos:nxt]
+                self._pos = nxt + len(f'</{closed}>')
+                continue
+
+            rest = acc[nxt:]
+            if len(rest) < self._MAX_TAG_LEN and any(
+                f'<{t}>'.startswith(rest) or f'</{t}>'.startswith(rest)
+                for t in _STREAM_TAG_NAMES
+            ):
+                # Une balise est peut-être en train d'arriver : on retient ce
+                # fragment au lieu de laisser fuir « <u » dans le chat.
+                buf += acc[self._pos:nxt]
+                self._pos = nxt
+                return self._hold(buf)
+
+            # Un vrai « < » de rédaction (« si x < 3 »).
+            buf += acc[self._pos:nxt + 1]
+            self._pos = nxt + 1
+
+    def flush(self, acc: str) -> str:
+        """Fin du flux : libère ce qui était retenu, sauf balise inachevée."""
+        pending, self._pending = self._pending, ''
+        if self._open:
+            # Le bloc n'a jamais été fermé (réponse tronquée) : son contenu
+            # est du JSON, il ne doit pas atterrir dans le chat.
+            self._pos = len(acc)
+            return pending
+        tail = acc[self._pos:]
+        self._pos = len(acc)
+        if tail.startswith('<') and any(
+            f'<{t}>'.startswith(tail) or f'</{t}>'.startswith(tail)
+            for t in _STREAM_TAG_NAMES
+        ):
+            return pending  # balise coupée en fin de réponse
+        return pending + tail
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Shared JSON repair helpers (used by both <board> and <ui> parsers)
 # ─────────────────────────────────────────────────────────────────────
 _VALID_JSON_ESC_RE = re.compile(r'\\(["\\/bfnrt]|u[0-9a-fA-F]{4})')
@@ -1861,7 +1992,7 @@ TU DOIS OBLIGATOIREMENT:
         # so the user sees the pedagogical text immediately while the full response builds up.
         ai_response = ""
         try:
-            _tag_names = ['board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions']
+            _filter = _StreamTagFilter()
             _safe_log(f"[LLM Stream] Starting streamed response (max_tokens={max_tokens})")
             async for token in llm_service.chat_stream(
                 messages=self.conversation_history,
@@ -1870,27 +2001,18 @@ TU DOIS OBLIGATOIREMENT:
                 session_type=self.session_mode or "coaching",
             ):
                 ai_response += token
-                # Detect if we're currently inside a tag block
-                _inside_tag = False
-                for tname in _tag_names:
-                    if f'<{tname}>' in ai_response and f'</{tname}>' not in ai_response:
-                        _inside_tag = True
-                        break
-                # Stream displayable tokens only when outside tag blocks
-                if not _inside_tag:
-                    clean = token
-                    for tname in _tag_names:
-                        clean = clean.replace(f'</{tname}>', '')
-                    # Strip opening tag markers that might be in this token
-                    for tname in _tag_names:
-                        idx = clean.find(f'<{tname}>')
-                        if idx >= 0:
-                            clean = clean[:idx]
-                    if clean:
-                        await self.websocket.send_json({
-                            "type": "ai_response_chunk",
-                            "token": clean,
-                        })
+                clean = _filter.feed(ai_response)
+                if clean:
+                    await self.websocket.send_json({
+                        "type": "ai_response_chunk",
+                        "token": clean,
+                    })
+            tail = _filter.flush(ai_response)
+            if tail:
+                await self.websocket.send_json({
+                    "type": "ai_response_chunk",
+                    "token": tail,
+                })
             await self.websocket.send_json({"type": "ai_response_done"})
             _safe_log(f"[LLM Stream] Completed ({len(ai_response)} chars)")
         except Exception as e:
@@ -2442,8 +2564,7 @@ RÈGLES :
             if self.session_mode == "explain":
                 # STREAM explain opening — tokens appear on screen within 1-2 seconds
                 opening = ""
-                _inside_tag = False
-                _tag_names = ['board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions']
+                _filter = _StreamTagFilter()
                 _safe_log("[Session Init] Streaming explain opening via chat_stream")
                 async for token in llm_service.chat_stream(
                     messages=messages,
@@ -2452,23 +2573,18 @@ RÈGLES :
                     session_type="explain",
                 ):
                     opening += token
-                    # Track if we're inside a tag block — don't send tag content to chat
-                    for tname in _tag_names:
-                        if f'<{tname}>' in opening and f'</{tname}>' not in opening:
-                            _inside_tag = True
-                            break
-                    else:
-                        _inside_tag = False
-                    # Send displayable tokens only when outside tags
-                    if not _inside_tag:
-                        clean = token
-                        for tname in _tag_names:
-                            clean = clean.replace(f'</{tname}>', '')
-                        if clean:
-                            await self.websocket.send_json({
-                                "type": "ai_response_chunk",
-                                "token": clean,
-                            })
+                    clean = _filter.feed(opening)
+                    if clean:
+                        await self.websocket.send_json({
+                            "type": "ai_response_chunk",
+                            "token": clean,
+                        })
+                tail = _filter.flush(opening)
+                if tail:
+                    await self.websocket.send_json({
+                        "type": "ai_response_chunk",
+                        "token": tail,
+                    })
                 await self.websocket.send_json({"type": "ai_response_done"})
             else:
                 opening = await self._generate_validated_ai_response(
