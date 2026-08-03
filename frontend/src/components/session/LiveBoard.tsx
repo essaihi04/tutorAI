@@ -44,15 +44,23 @@ interface LiveDrawElement {
 }
 
 export interface LiveStep {
-  action: 'write' | 'draw' | 'erase' | 'pause' | 'narrate';
+  action: 'write' | 'draw' | 'erase' | 'pause' | 'narrate' | 'ask' | 'zoom';
   line?: LiveLine;          // write
   elements?: LiveDrawElement[]; // draw
   zone?: 'text' | 'draw' | 'all'; // erase
   duration?: number;        // pause (ms)
-  text?: string;            // narrate
-  /** Phrase à prononcer pendant un `write` (sinon la ligne est transcrite)
-   *  ou pendant un `draw` (le prof commente son croquis en le traçant). */
+  text?: string;            // narrate | ask (question posée)
+  /** Phrase à prononcer pendant un `write` (sinon la ligne est transcrite),
+   *  un `draw` (le prof commente son croquis) ou un `zoom`. */
   say?: string;
+  /** ask : boutons de réponse proposés (la bonne + distracteurs). */
+  options?: string[];
+  /** zoom : point visé (coordonnées croquis 0-500 × 0-400) + échelle.
+   *  scale 1 = retour au tableau entier. */
+  x?: number;
+  y?: number;
+  scale?: number;
+  target?: 'draw' | 'text';
 }
 
 export interface LiveScript {
@@ -125,6 +133,14 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // pas par une durée devinée.
   const [soundOn, setSoundOn] = useState(true);
   const [voiceReveal, setVoiceReveal] = useState(1);
+  // Clé de la ligne écrite que la voix pilote EN CE MOMENT. Sans elle, un
+  // narrate/ask qui remet voiceReveal à 0 faisait disparaître puis réapparaître
+  // la dernière ligne écrite (c'est elle qui suivait voiceReveal par défaut).
+  const [voiceKey, setVoiceKey] = useState<number | null>(null);
+
+  // ── Question du professeur (step `ask`) : le tableau attend l'élève ──
+  const [pendingAsk, setPendingAsk] = useState<{ text: string; options: string[] } | null>(null);
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
 
   // ── Loupe du tableau : zoom sur un endroit précis + déplacement ──
   const [zoom, setZoom] = useState(1);
@@ -151,7 +167,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const textZoneRef = useRef<HTMLDivElement>(null);
   const stepCounterRef = useRef(0);
   const soundOnRef = useRef(true);
-  const revealRafRef = useRef<number | null>(null);
+  // Horloge d'écriture de la ligne en cours (id de setInterval).
+  const revealClockRef = useRef<number | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(1);
   const panRef = useRef({ x: 0, y: 0 });
@@ -161,6 +178,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const hideTimerRef = useRef<number | null>(null);
   const replyBaselineRef = useRef<string | null>(null);
   const questionFieldRef = useRef<HTMLInputElement>(null);
+  // Résout la promesse sur laquelle le script attend la réponse de l'élève.
+  const askResolveRef = useRef<(() => void) | null>(null);
+  const drawZoneRef = useRef<HTMLDivElement>(null);
+  // Zoom piloté par le prof — via ref car défini après play() dans le fichier.
+  const zoomToPointRef = useRef<(x: number, y: number, s: number) => void>(() => {});
 
   playingRef.current = playing;
   speedRef.current = speed;
@@ -208,6 +230,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     // Durée présumée de la phrase ; recalibrée dès le premier `boundary`.
     let estimatedMs = Math.max(600, estimateSpeechMs(spoken, rate));
     let elapsed = 0;
+    let revealNow = 0;
     let done = false;
     let last = performance.now();
 
@@ -215,22 +238,30 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
 
     // Horloge d'écriture : avance en continu, se fige quand l'élève met en
     // pause, et ne dépasse jamais 99 % avant la fin réelle de la parole.
-    const tick = (now: number) => {
+    // ⚠️ setInterval, PAS requestAnimationFrame : rAF s'arrête net dès que
+    // l'onglet passe en arrière-plan ou que le navigateur suspend le rendu —
+    // l'écriture restait alors gelée, puis tout apparaissait d'un coup.
+    revealClockRef.current = window.setInterval(() => {
       if (done || runId !== runIdRef.current) return;
+      const now = performance.now();
       const dt = now - last;
       last = now;
       if (playingRef.current) elapsed += dt;
       const pct = Math.min(0.99, elapsed / estimatedMs);
-      setVoiceReveal(prev => (pct > prev ? pct : prev));
-      revealRafRef.current = requestAnimationFrame(tick);
-    };
-    revealRafRef.current = requestAnimationFrame(tick);
+      if (pct > revealNow) {
+        revealNow = pct;
+        setVoiceReveal(pct);
+      }
+    }, 50);
 
     const voiceSpoke = await speechService.speakSynced(spoken, {
       lang: 'fr',
       rate,
       onProgress: (ratio) => {
-        if (runId !== runIdRef.current || ratio <= 0) return;
+        // ratio >= 1 est le signal de FIN (émis aussi par les garde-fous) :
+        // le recalage sur cette valeur faisait sauter la ligne à 99 % d'un
+        // coup — la rampe de rattrapage ci-dessous s'en charge en douceur.
+        if (runId !== runIdRef.current || ratio <= 0 || ratio >= 1) return;
         // Un `boundary` est arrivé : la voix nous dit où elle en est vraiment.
         // On réaligne l'horloge dessus (sans jamais revenir en arrière).
         const observed = ratio * estimatedMs;
@@ -252,11 +283,29 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     }
 
     done = true;
-    if (revealRafRef.current !== null) {
-      cancelAnimationFrame(revealRafRef.current);
-      revealRafRef.current = null;
+    if (revealClockRef.current !== null) {
+      clearInterval(revealClockRef.current);
+      revealClockRef.current = null;
     }
     if (runId !== runIdRef.current) return true;
+
+    // Rattrapage en douceur : la voix et l'estimation ne finissent jamais
+    // exactement ensemble. Le reste de la ligne s'écrit en une courte rampe
+    // (respectant la pause) au lieu d'apparaître brusquement.
+    if (revealNow < 0.97) {
+      const rampMs = Math.min(800, 150 + (1 - revealNow) * 700);
+      const startPct = revealNow;
+      let k = 0;
+      let prev = performance.now();
+      while (k < 1) {
+        await new Promise(r => setTimeout(r, 40));
+        if (runId !== runIdRef.current) return true;
+        const now = performance.now();
+        if (playingRef.current) k = Math.min(1, k + (now - prev) / rampMs);
+        prev = now;
+        setVoiceReveal(startPct + (1 - startPct) * k);
+      }
+    }
     setVoiceReveal(1);
     return true;
   }, []);
@@ -298,8 +347,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           setWritten(prev => [...prev, entry]);
 
           if (willSpeak) {
+            // C'est CETTE ligne (et aucune autre) que la voix révèle.
+            setVoiceKey(entry.key);
             const spoke = await speakAndReveal(toSay, runId);
             if (runId !== runIdRef.current) return;
+            setVoiceKey(null);
             if (!spoke) {
               // La voix a échoué au dernier moment : on laisse le temps de lire.
               if (!(await wait(estimateSpeechMs(toSpokenText(toSay)), runId))) return;
@@ -367,6 +419,74 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           }
           break;
         }
+        case 'ask': {
+          // Le professeur pose une question et S'ARRÊTE : le cours ne reprend
+          // que quand l'élève répond (bouton), demande à continuer, ou pose sa
+          // propre question — comme dans une vraie classe.
+          const text = typeof step.text === 'string' ? step.text.trim() : '';
+          if (!text) break;
+          const options = Array.isArray(step.options)
+            ? step.options.filter((o): o is string => typeof o === 'string' && !!o.trim()).map(o => o.trim()).slice(0, 4)
+            : [];
+          setPendingAsk({ text, options });
+          setAskAnswer(null);
+          const toAsk = typeof step.say === 'string' && step.say.trim() ? step.say.trim() : text;
+          await speakAndReveal(toAsk, runId);
+          if (runId !== runIdRef.current) return;
+          await new Promise<void>(resolve => { askResolveRef.current = resolve; });
+          if (runId !== runIdRef.current) return;
+          setPendingAsk(null);
+          setAskAnswer(null);
+          break;
+        }
+        case 'zoom': {
+          // Le professeur zoome lui-même sur une partie du tableau pour
+          // concentrer l'attention (scale 1 = retour au tableau entier).
+          const rawScale = typeof step.scale === 'number' ? step.scale : 2;
+          const scale = Math.max(1, Math.min(4, rawScale));
+          const vp = viewportRef.current;
+          if (vp) {
+            if (scale <= 1.01) {
+              zoomToPointRef.current(0, 0, 1);
+            } else {
+              const vr = vp.getBoundingClientRect();
+              let sx = vr.width / 2, sy = vr.height / 2;
+              const target = step.target === 'text' ? 'text' : 'draw';
+              if (target === 'draw' && drawZoneRef.current) {
+                // Coordonnées croquis (0-500 × 0-400, viewBox `meet` centré)
+                // → pixels écran relatifs au viewport.
+                const zr = drawZoneRef.current.getBoundingClientRect();
+                const s = Math.min(zr.width / 500, zr.height / 400) || 1;
+                const px = Math.max(0, Math.min(500, step.x ?? 250));
+                const py = Math.max(0, Math.min(400, step.y ?? 200));
+                sx = zr.left - vr.left + (zr.width - 500 * s) / 2 + px * s;
+                sy = zr.top - vr.top + (zr.height - 400 * s) / 2 + py * s;
+              } else if (target === 'text' && textZoneRef.current) {
+                // Vise la dernière ligne écrite.
+                const lines = textZoneRef.current.querySelectorAll('.live-line');
+                const lastLine = lines[lines.length - 1] as HTMLElement | undefined;
+                if (lastLine) {
+                  const lr = lastLine.getBoundingClientRect();
+                  sx = lr.left - vr.left + Math.min(lr.width, 240) / 2;
+                  sy = lr.top - vr.top + lr.height / 2;
+                }
+              }
+              // Écran → coordonnées non transformées du contenu.
+              const cx = (sx - panRef.current.x) / zoomRef.current;
+              const cy = (sy - panRef.current.y) / zoomRef.current;
+              zoomToPointRef.current(cx, cy, scale);
+            }
+          }
+          const zsay = typeof step.say === 'string' ? step.say.trim() : '';
+          if (zsay) {
+            const spoke = await speakAndReveal(zsay, runId);
+            if (runId !== runIdRef.current) return;
+            if (!spoke && !(await wait(narrateDuration(zsay), runId))) return;
+          } else {
+            if (!(await wait(900, runId))) return;
+          }
+          break;
+        }
         default:
           break;
       }
@@ -392,6 +512,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setAskOpen(false);
     setQuestionText('');
     setAwaitingReply(false);
+    setVoiceKey(null);
+    setPendingAsk(null);
+    setAskAnswer(null);
+    askResolveRef.current?.();
+    askResolveRef.current = null;
 
     // Le tableau prend la parole : on coupe la voix du chat pour ce tour,
     // sinon deux voix se superposent (le backend lit déjà la réponse).
@@ -407,10 +532,13 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     return () => {
       runIdRef.current += 1;
       speechService.stop();
-      if (revealRafRef.current !== null) {
-        cancelAnimationFrame(revealRafRef.current);
-        revealRafRef.current = null;
+      if (revealClockRef.current !== null) {
+        clearInterval(revealClockRef.current);
+        revealClockRef.current = null;
       }
+      // Ne jamais laisser le moteur suspendu sur une question sans réponse.
+      askResolveRef.current?.();
+      askResolveRef.current = null;
     };
   }, [script, play]);
 
@@ -438,10 +566,15 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const skipToEnd = useCallback(() => {
     runIdRef.current += 1;
     speechService.stop();
-    if (revealRafRef.current !== null) {
-      cancelAnimationFrame(revealRafRef.current);
-      revealRafRef.current = null;
+    if (revealClockRef.current !== null) {
+      clearInterval(revealClockRef.current);
+      revealClockRef.current = null;
     }
+    askResolveRef.current?.();
+    askResolveRef.current = null;
+    setPendingAsk(null);
+    setAskAnswer(null);
+    setVoiceKey(null);
     setVoiceReveal(1);
     const finalWritten: WrittenEntry[] = [];
     const finalDrawn: DrawnEntry[] = [];
@@ -475,10 +608,15 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const replay = useCallback(() => {
     const runId = ++runIdRef.current;
     speechService.stop();
-    if (revealRafRef.current !== null) {
-      cancelAnimationFrame(revealRafRef.current);
-      revealRafRef.current = null;
+    if (revealClockRef.current !== null) {
+      clearInterval(revealClockRef.current);
+      revealClockRef.current = null;
     }
+    askResolveRef.current?.();
+    askResolveRef.current = null;
+    setPendingAsk(null);
+    setAskAnswer(null);
+    setVoiceKey(null);
     setWritten([]);
     setDrawn([]);
     setNarration(null);
@@ -523,6 +661,36 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   }, [applyZoom]);
 
   const resetZoom = useCallback(() => applyZoom(1, 0, 0), [applyZoom]);
+
+  // Zoom du PROFESSEUR : centre le point visé (coordonnées non transformées
+  // du contenu) au milieu du viewport — c'est le geste « regardez ici ».
+  const zoomToPoint = useCallback((contentX: number, contentY: number, scale: number) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const nz = Math.min(4, Math.max(1, scale));
+    const cl = clampPan(el.clientWidth / 2 - contentX * nz, el.clientHeight / 2 - contentY * nz, nz);
+    zoomRef.current = nz;
+    panRef.current = cl;
+    setZoom(nz);
+    setPanState(cl);
+  }, [clampPan]);
+  useEffect(() => { zoomToPointRef.current = zoomToPoint; }, [zoomToPoint]);
+
+  // Réponse de l'élève à la question du professeur (step `ask`).
+  const answerAsk = useCallback((option?: string) => {
+    if (option) {
+      setAskAnswer(option);
+      // Laisse l'élève voir son choix, puis le cours reprend : la suite du
+      // script donne la correction.
+      window.setTimeout(() => {
+        askResolveRef.current?.();
+        askResolveRef.current = null;
+      }, 500);
+    } else {
+      askResolveRef.current?.();
+      askResolveRef.current = null;
+    }
+  }, []);
 
   // Ctrl+molette (= pincement sur pavé tactile) : zoom centré sur le curseur.
   // Molette simple quand on est déjà zoomé : déplacement du tableau.
@@ -938,10 +1106,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
               key={entry.key}
               entry={entry}
               isActive={!finished && i === written.length - 1 && erasingZone === null}
-              // La dernière ligne se dévoile au rythme de la voix ; les
-              // précédentes sont déjà entièrement écrites.
+              // Seule la ligne que la voix est EN TRAIN de dire se dévoile à
+              // son rythme (voiceKey) ; les autres sont entièrement écrites —
+              // une narration ne doit pas ré-animer la dernière ligne.
               voicePct={
-                entry.voiceDriven && i === written.length - 1 && !finished
+                entry.voiceDriven && entry.key === voiceKey && !finished
                   ? voiceReveal
                   : undefined
               }
@@ -957,6 +1126,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         {/* Zone de dessin (croquis) */}
         {hasDrawSteps && (
           <div
+            ref={drawZoneRef}
             className="shrink-0 md:w-[42%] h-[45%] md:h-auto min-h-0 border-t md:border-t-0 md:border-l"
             style={{
               borderColor: 'rgba(255,255,255,0.1)',
@@ -987,7 +1157,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       </div>
 
       {/* ── Pause façon lecteur : grand bouton central pour reprendre ── */}
-      {focus && !playing && !askOpen && !finished && (
+      {focus && !playing && !askOpen && !pendingAsk && !finished && (
         <button
           onClick={() => setPlaying(true)}
           className="absolute inset-0 m-auto z-20 w-20 h-20 rounded-full text-3xl text-white flex items-center justify-center hover:scale-105 transition-transform"
@@ -998,8 +1168,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         </button>
       )}
 
-      {/* ── Coin élève (plein écran) : pause + lever la main + réponse du prof ── */}
-      {focus && (
+      {/* ── Coin élève : pause + lever la main + question du prof + réponse ──
+           (affiché aussi hors plein écran quand le professeur pose une question) */}
+      {(focus || pendingAsk) && (
         <div className="absolute bottom-0 left-0 right-0 z-40 flex flex-col items-center gap-2 px-3 pb-3 pointer-events-none">
           {/* Réponse du professeur à la question posée */}
           {askOpen && profReply && (
@@ -1063,7 +1234,60 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                   : '⏸ Le cours est en pause — pose ta question, le professeur t’écoute'}
               </div>
             </div>
-          ) : finished ? (
+          ) : pendingAsk ? (
+            /* ❓ Le professeur pose une question et ATTEND la réponse */
+            <div
+              className="pointer-events-auto w-full max-w-2xl rounded-2xl px-4 py-3"
+              style={{ background: 'rgba(13,27,21,0.96)', border: '1px solid rgba(250,204,21,0.35)', backdropFilter: 'blur(8px)' }}
+            >
+              <div className="flex items-start gap-2 mb-2">
+                <span className="text-base leading-none mt-0.5">❓</span>
+                <p
+                  className="text-[14px] leading-snug"
+                  dir={containsArabic(pendingAsk.text) ? 'rtl' : 'ltr'}
+                  style={{ color: '#fef3c7', fontFamily: "'Patrick Hand', cursive" }}
+                >
+                  {pendingAsk.text}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {pendingAsk.options.map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => answerAsk(opt)}
+                    disabled={askAnswer !== null}
+                    className="text-xs px-3 py-1.5 rounded-full transition-colors"
+                    style={
+                      askAnswer === opt
+                        ? { background: 'rgba(52,211,153,0.3)', border: '1px solid rgba(52,211,153,0.6)', color: '#d1fae5' }
+                        : { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)' }
+                    }
+                  >
+                    {opt}
+                  </button>
+                ))}
+                {onStudentMessage && (
+                  <button
+                    onClick={openAsk}
+                    className="text-xs px-3 py-1.5 rounded-full transition-colors"
+                    style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#a7f3d0' }}
+                    title="Répondre librement ou poser une autre question"
+                  >
+                    ✋ Autre réponse
+                  </button>
+                )}
+                <button
+                  onClick={() => answerAsk()}
+                  className="text-xs px-3 py-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors ml-auto"
+                >
+                  Continuer ➜
+                </button>
+              </div>
+              <div className="mt-1.5 text-[10px] text-center text-white/35">
+                Le professeur attend ta réponse pour continuer le cours
+              </div>
+            </div>
+          ) : finished && focus ? (
             /* Fin du cours : bilan et suites possibles */
             <div
               className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl px-4 py-2.5"
@@ -1082,7 +1306,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                 Quitter le plein écran
               </button>
             </div>
-          ) : (
+          ) : focus ? (
             /* Pendant le cours : deux commandes seulement, auto-masquées */
             <div
               className={`flex items-center gap-2 transition-opacity duration-300 ${
@@ -1108,7 +1332,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                 </button>
               )}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 

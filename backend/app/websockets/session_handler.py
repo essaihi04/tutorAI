@@ -2767,6 +2767,10 @@ RÈGLES :
                 action = "pause"
             elif action in {"say", "speak", "explain", "parler"}:
                 action = "narrate"
+            elif action in {"question", "quiz", "check", "checkpoint"}:
+                action = "ask"
+            elif action in {"focus", "zoom_in", "zoom_out", "dezoom", "unzoom"}:
+                action = "zoom"
 
             if action == "write" or (not action and isinstance(step.get("content"), str)):
                 line = step.get("line") if isinstance(step.get("line"), dict) else None
@@ -2819,6 +2823,41 @@ RÈGLES :
                 text = step.get("text") or step.get("content") or ""
                 if isinstance(text, str) and text.strip():
                     normalized.append({"action": "narrate", "text": text.strip()})
+            elif action == "ask":
+                # Question de compréhension : le tableau S'ARRÊTE et attend la
+                # réponse de l'élève avant de dérouler la suite du script.
+                text = step.get("text") or step.get("question") or step.get("content") or ""
+                if isinstance(text, str) and text.strip():
+                    ask_step = {"action": "ask", "text": text.strip()}
+                    options = step.get("options") or step.get("suggestions") or step.get("choices")
+                    if isinstance(options, list):
+                        clean_opts = [
+                            str(o).strip() for o in options
+                            if isinstance(o, (str, int, float)) and str(o).strip()
+                        ][:4]
+                        if clean_opts:
+                            ask_step["options"] = clean_opts
+                    say = step.get("say")
+                    if isinstance(say, str) and say.strip():
+                        ask_step["say"] = say.strip()
+                    normalized.append(ask_step)
+            elif action == "zoom":
+                # Zoom du professeur sur une partie du tableau (scale 1 = retour).
+                try:
+                    scale = float(step.get("scale", 2))
+                except (TypeError, ValueError):
+                    scale = 2.0
+                zoom_step = {"action": "zoom", "scale": max(1.0, min(4.0, scale))}
+                target = str(step.get("target", "draw")).lower().strip()
+                zoom_step["target"] = "text" if target == "text" else "draw"
+                for key in ("x", "y"):
+                    value = step.get(key)
+                    if isinstance(value, (int, float)):
+                        zoom_step[key] = float(value)
+                say = step.get("say")
+                if isinstance(say, str) and say.strip():
+                    zoom_step["say"] = say.strip()
+                normalized.append(zoom_step)
 
         # A usable script must actually write or draw something
         if not any(s["action"] in ("write", "draw") for s in normalized):

@@ -189,28 +189,57 @@ class TTSService {
 
       let settled = false;
       let started = false;
-      let watchdog: number | undefined;
+      let queueWatchdog: number | undefined;
+      let capWatchdog: number | undefined;
+      let keepAlive: number | undefined;
       const finish = () => {
         if (settled) return;
         settled = true;
-        clearTimeout(watchdog);
+        clearTimeout(queueWatchdog);
+        clearTimeout(capWatchdog);
+        clearInterval(keepAlive);
         onProgress?.(1);
         onEnd?.();
         resolve(started);
       };
-      // Garde-fou : si la synthèse reste coincée en file (Chrome, après un
+      // Garde-fou n°1 : si la synthèse reste coincée en file (Chrome, après un
       // cancel() malheureux) l'utterance ne démarre jamais et n'émet aucun
       // événement — sans ce timeout la promesse ne se résoudrait jamais et
       // le tableau resterait bloqué sur la ligne en cours.
-      watchdog = window.setTimeout(() => {
+      queueWatchdog = window.setTimeout(() => {
         if (!started && !settled) {
           try { this.synthesis.cancel(); } catch { /* ignore */ }
           finish();
         }
       }, 2500);
 
+      // Garde-fou n°2 : démarrée mais JAMAIS terminée. Bug Chrome notoire
+      // (surtout avec les voix réseau comme « Google français ») : la parole
+      // s'arrête ou se perd et `end`/`error` ne viennent jamais — l'écriture
+      // restait alors bloquée sur la ligne en cours. Plafond dur proportionnel
+      // à la longueur du texte ; si l'élève a mis le cours en pause, on
+      // repousse l'échéance au lieu de couper sa ligne.
+      const capMs = ((clean.length * 75) / Math.max(0.5, rate)) * 2.5 + 2500;
+      const armCap = (ms: number) => {
+        capWatchdog = window.setTimeout(() => {
+          if (settled) return;
+          if (this.synthesis.paused) { armCap(4000); return; }
+          try { this.synthesis.cancel(); } catch { /* ignore */ }
+          finish();
+        }, ms);
+      };
+
       utterance.onstart = () => {
         started = true;
+        clearTimeout(queueWatchdog);
+        armCap(Math.max(6000, capMs));
+        // Garde-fou n°3 : anti-coupure Chrome. Sur les phrases un peu longues
+        // la synthèse s'arrête net (~15 s) si on ne la « réveille » pas
+        // périodiquement. On ne touche à rien quand l'élève a mis en pause.
+        keepAlive = window.setInterval(() => {
+          if (settled || this.synthesis.paused) return;
+          try { this.synthesis.pause(); this.synthesis.resume(); } catch { /* ignore */ }
+        }, 8000);
         onStart?.();
       };
       utterance.onboundary = (e: SpeechSynthesisEvent) => {

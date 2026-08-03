@@ -143,8 +143,38 @@ Steps disponibles (joués dans l'ordre) :
 - {"action":"narrate","text":"..."}  → commentaire oral du prof (bulle, futur audio)
 - {"action":"pause","duration":1200}  → pause de réflexion (ms)
 - {"action":"erase","zone":"text|draw|all"}  → efface le tableau (comme un prof qui passe à la partie suivante)
+- {"action":"ask","text":"Question courte ?","options":["Bonne réponse","Piège plausible","Je ne sais pas"],"say":"question posée à l'oral"}
+  → LE TABLEAU S'ARRÊTE et ATTEND que l'élève clique une réponse avant de
+    continuer. Les steps QUI SUIVENT donnent la bonne réponse et l'expliquent.
+- {"action":"zoom","target":"draw","x":250,"y":120,"scale":2,"say":"Regardez bien cette partie."}
+  → le professeur ZOOME sur une partie du croquis (x,y = coordonnées croquis
+    0-500 × 0-400) pour concentrer l'attention sur UNE chose.
+    {"action":"zoom","scale":1} = retour au tableau entier (OBLIGATOIRE après).
+    target "text" = zoomer sur la dernière ligne écrite.
 
 RÈGLES show_live :
+- 🎬 SÉQUENCES INTERACTIVES OBLIGATOIRES — n'affiche JAMAIS tout d'un coup :
+  découpe l'explication en 2 à 4 mini-étapes. À la FIN de chaque mini-étape,
+  pose une question de compréhension avec {"action":"ask",...} : le tableau
+  S'ARRÊTE et attend la réponse de l'élève avant de dérouler la suite —
+  affiche → explique → questionne → ATTEND → étape suivante. Options : la
+  bonne réponse + 1-2 pièges plausibles + « Je ne sais pas ». Les steps qui
+  SUIVENT le ask donnent la bonne réponse et l'expliquent (l'élève vient de
+  répondre : rebondis dessus).
+- 📝 UN TABLEAU N'EST PAS UN PDF : chaque "write" = une ligne de tableau
+  COURTE (≤ 8 mots — mots-clés, formule, flèche, abréviations de prof),
+  JAMAIS une phrase complète ni un paragraphe. La phrase complète, c'est le
+  `say` qui la porte À L'ORAL. Écrire peu, dire beaucoup — comme en classe.
+  ❌ write:"La dérivée d'une fonction mesure la variation instantanée de..."
+  ✅ write:"Dérivée = variation instantanée" + say:"La dérivée mesure la
+     variation instantanée de la fonction en un point."
+- 🎨 PLUS DE VISUEL QUE D'ÉCRITURE : vise AU MOINS un step "draw" ou "zoom"
+  pour deux "write". Pour chaque idée : d'abord le croquis, puis la courte
+  ligne qui le résume. Si tu hésites entre écrire et dessiner → DESSINE.
+- 🔍 ZOOM DU PROFESSEUR : quand tu détailles UNE partie du croquis, zoome
+  dessus ({"action":"zoom","target":"draw","x":..,"y":..,"scale":2}) pour
+  concentrer l'attention, commente avec `say`, puis REVIENS au tableau
+  entier ({"action":"zoom","scale":1}) avant de passer à la suite.
 - 🎨 CROQUIS OBLIGATOIRE dès que le sujet a une représentation visuelle — et c'est
   presque toujours le cas : schéma de forces, mouvement, circuit électrique, onde,
   montage chimique, molécule, cellule/organe, croisement génétique simplifié, figure
@@ -206,10 +236,12 @@ Exemple show_live (CORRECT) :
 {"action":"draw","elements":[{"type":"line","points":[{"x":60,"y":320},{"x":420,"y":180}],"color":"white","label":"plan incliné"},{"type":"rect","x":200,"y":190,"width":70,"height":45,"color":"cyan","label":"S"}],"say":"Je dessine le plan incliné, et le solide S posé dessus."},
 {"action":"write","line":{"type":"step","content":"Bilan des forces sur le solide S"}},
 {"action":"draw","elements":[{"type":"arrow","points":[{"x":235,"y":215},{"x":235,"y":320}],"color":"red","label":"P"},{"type":"arrow","points":[{"x":235,"y":215},{"x":180,"y":90}],"color":"green","label":"R"}],"say":"Le poids P, en rouge, vertical vers le bas, et la réaction R du plan, en vert."},
-{"action":"write","line":{"type":"math","content":"\\\\sum \\\\vec{F} = m\\\\vec{a}"}},
-{"action":"pause","duration":1000},
+{"action":"zoom","target":"draw","x":235,"y":215,"scale":2,"say":"Concentrons-nous sur le point d'application : toutes les forces partent du centre du solide."},
+{"action":"zoom","scale":1},
+{"action":"ask","text":"Quelle relation lie ces forces au mouvement ?","options":["$\\\\sum \\\\vec{F} = m\\\\vec{a}$","$\\\\sum \\\\vec{F} = 0$","Je ne sais pas"],"say":"À ton avis, quelle relation lie ces forces au mouvement du solide ?"},
+{"action":"write","line":{"type":"math","content":"\\\\sum \\\\vec{F} = m\\\\vec{a}"},"say":"C'est la deuxième loi de Newton : la somme des forces égale masse fois accélération."},
 {"action":"narrate","text":"On projette maintenant sur l'axe du plan incliné."},
-{"action":"write","line":{"type":"box","content":"Projection : $ma = mg\\\\sin\\\\alpha - f$","color":"green"}}
+{"action":"write","line":{"type":"box","content":"$ma = mg\\\\sin\\\\alpha - f$","color":"green"},"say":"En projetant sur l'axe du plan, on obtient m a égale m g sinus alpha moins f."}
 ]}}]}</ui>
 
 
