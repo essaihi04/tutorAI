@@ -7,6 +7,12 @@ interface LessonProgressBarProps {
   currentIndex: number;
   lessonTitle: string;
   isResumed?: boolean;
+  lessonIndex?: number;
+  totalLessons?: number;
+  currentEvidence?: {
+    correctAnswers: number;
+    hasReasoning: boolean;
+  };
 }
 
 export const LessonProgressBar: React.FC<LessonProgressBarProps> = ({
@@ -15,6 +21,9 @@ export const LessonProgressBar: React.FC<LessonProgressBarProps> = ({
   currentIndex,
   lessonTitle,
   isResumed = false,
+  lessonIndex = 1,
+  totalLessons = 1,
+  currentEvidence = { correctAnswers: 0, hasReasoning: false },
 }) => {
   const [expanded, setExpanded] = useState(false);
   const totalObjectives = objectives.length;
@@ -39,6 +48,9 @@ export const LessonProgressBar: React.FC<LessonProgressBarProps> = ({
         <Target className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
         <span className="text-white/90 text-xs font-medium truncate max-w-[180px]">
           {lessonTitle}
+        </span>
+        <span className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-200 text-[10px] rounded-full border border-indigo-400/20 shrink-0">
+          Leçon {lessonIndex}/{totalLessons}
         </span>
         {isResumed && (
           <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] rounded-full border border-amber-500/30 shrink-0">
@@ -71,6 +83,14 @@ export const LessonProgressBar: React.FC<LessonProgressBarProps> = ({
       {/* Expandable objectives list */}
       {expanded && (
         <div className="px-3 pb-2 pt-1 border-t border-indigo-500/20 flex flex-wrap gap-1.5">
+          {!allDone && (
+            <div className="w-full mb-1 text-[10px] text-indigo-200/80 flex items-center gap-2">
+              <span>Validation : {Math.min(currentEvidence.correctAnswers, 2)}/2 réponses correctes</span>
+              <span className={currentEvidence.hasReasoning ? 'text-emerald-300' : 'text-amber-300'}>
+                {currentEvidence.hasReasoning ? '✓ raisonnement validé' : '• analyse/interprétation requise'}
+              </span>
+            </div>
+          )}
           {objectives.map((objective, index) => {
             const status = getObjectiveStatus(index);
             return (

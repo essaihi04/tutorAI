@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reconnaître les myogrammes</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#071426;color:#eef8ff;font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:14px}.app{width:min(940px,100%);background:#0d2038;border:1px solid #294d6d;border-radius:20px;padding:18px}h1{font-size:clamp(18px,3vw,26px);margin:0 0 14px}.curves{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.curve{background:#f9fbfe;color:#15304a;border-radius:15px;padding:9px}.curve strong{display:block;margin-bottom:4px}.curve svg{width:100%;height:auto}.axis{stroke:#8699aa;stroke-width:2}.trace{fill:none;stroke:#7c3aed;stroke-width:5;stroke-linecap:round}.labels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.select{display:flex;gap:6px;flex-wrap:wrap}.select button{flex:1;min-width:78px;border:2px solid #37648d;border-radius:11px;background:#183b5b;color:#fff;padding:9px 5px;font-weight:750;cursor:pointer}.select button.selected{background:#8b5cf6;border-color:#c4b5fd}.actions{text-align:center;margin-top:15px}.actions button{border:0;border-radius:12px;background:#34d399;color:#06251b;padding:11px 20px;font-weight:850;cursor:pointer}.feedback{text-align:center;min-height:30px;margin-top:9px;font-weight:800}.ok{color:#6ee7b7}.no{color:#fda4af}@media(max-width:720px){.curves,.labels{grid-template-columns:1fr}.curve svg{max-height:150px}.select{margin-bottom:8px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Identifie les trois myogrammes</h1>
+    <div class="curves">
+      <section class="curve"><strong>A</strong><svg viewBox="0 0 300 180" role="img" aria-label="Une seule contraction brève"><path class="axis" d="M20 150H285M25 20V155"/><path class="trace" d="M28 148 L85 148 C100 146 105 60 135 55 C165 62 170 146 190 148 L280 148"/></svg></section>
+      <section class="curve"><strong>B</strong><svg viewBox="0 0 300 180" role="img" aria-label="Contractions successives dont l'amplitude augmente"><path class="axis" d="M20 150H285M25 20V155"/><path class="trace" d="M28 148 C45 145 48 110 63 105 C78 110 80 145 92 148 C105 145 108 83 125 77 C143 84 145 145 158 148 C170 144 174 55 194 48 C217 57 218 145 233 148 L280 148"/></svg></section>
+      <section class="curve"><strong>C</strong><svg viewBox="0 0 300 180" role="img" aria-label="Contraction forte et maintenue"><path class="axis" d="M20 150H285M25 20V155"/><path class="trace" d="M28 148 C55 145 58 48 82 45 C105 42 120 50 140 44 C160 39 178 50 197 44 C220 39 235 50 250 45 C268 48 270 140 280 148"/></svg></section>
+    </div>
+    <div class="labels" id="labels"></div>
+    <div class="actions"><button id="check">Vérifier</button></div><div class="feedback" id="feedback" aria-live="polite"></div>
+  </main>
+  <script>
+    window.SIMULATION_CONFIG={id:'myogrammes_svt',variants:[{id:'exercise',label:'Reconnaissance de myogrammes'}]};
+    const names=[['secousse','Secousse'],['sommation','Sommation'],['tetanos','Tétanos']];const expected={A:'secousse',B:'sommation',C:'tetanos'};let selected={A:null,B:null,C:null},actions=[];
+    function render(){const root=document.getElementById('labels');root.innerHTML='';['A','B','C'].forEach(key=>{const group=document.createElement('div');group.className='select';group.dataset.key=key;names.forEach(([id,label])=>{const b=document.createElement('button');b.type='button';b.textContent=label;if(selected[key]===id)b.classList.add('selected');b.onclick=()=>{selected[key]=id;actions.push('choose_'+key+'_'+id);render()};group.appendChild(b)});root.appendChild(group)})}
+    function submit(){const correct=Object.keys(expected).every(key=>selected[key]===expected[key]);const feedback=document.getElementById('feedback');feedback.className='feedback '+(correct?'ok':'no');feedback.textContent=correct?'✓ Les trois tracés sont reconnus':'↺ Compare durée, amplitude et fusion des secousses';actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'myogrammes_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,answers:selected,skill:'analyser_myogrammes'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
+    function reset(){selected={A:null,B:null,C:null};actions.push('reset');document.getElementById('feedback').textContent='';render()}
+    window.runVariant=reset;window.executeAICommand=(command)=>{if(command==='reset'||command==='start'||command==='set_variant')reset()};document.getElementById('check').onclick=submit;render();
+  </script>
+</body>
+</html>

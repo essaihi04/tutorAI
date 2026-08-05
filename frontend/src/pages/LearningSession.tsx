@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useSessionStore, type SessionLanguage } from '../stores/sessionStore';
 import { wsService } from '../services/websocket';
-import { getLessons, startSession, endSession } from '../services/api';
+import { getLessons, getAllLessonProgress, startSession, endSession } from '../services/api';
 import { speechService } from '../services/speechService';
 import VoiceInput from '../components/session/VoiceInput';
 import AIAvatar from '../components/session/AIAvatar';
@@ -13,6 +13,7 @@ import AIWhiteboard from '../components/session/AIWhiteboard';
 import ExamExercisePanel from '../components/session/ExamExercisePanel';
 import type { ExamExercise } from '../components/session/ExamExercisePanel';
 import LessonProgressBar from '../components/session/LessonProgressBar';
+import PhaseProgress from '../components/session/PhaseProgress';
 import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
 
@@ -23,10 +24,10 @@ const COACHING_QUICK_ACTIONS: QuickAction[] = [
   {
     id: 'compris',
     icon: '✅',
-    label: "J'ai compris",
-    prompt: "J'ai bien compris cette partie, on peut passer à l'objectif suivant.",
+    label: 'Je veux valider',
+    prompt: "Je pense avoir compris. Pose-moi deux questions, dont une d'analyse ou d'interprétation, pour valider cet objectif.",
     mode: 'send',
-    tooltip: 'Passer à la partie suivante',
+    tooltip: 'Vérifier la maîtrise avant de progresser',
   },
   {
     id: 'bloque',
@@ -141,6 +142,18 @@ interface LearningSessionProps {
   mode?: 'standard' | 'libre' | 'explain';
 }
 
+interface LessonSummary {
+  id: string;
+  title_fr: string;
+  title_ar?: string;
+  learning_objectives?: string[];
+}
+
+interface LessonProgressRow {
+  lesson_id: string;
+  status?: string;
+}
+
 /**
  * Convert any legacy / coaching / libre exercise payload into the unified
  * ExamExercise shape consumed by ExamExercisePanel. This guarantees that ALL
@@ -208,19 +221,21 @@ function adaptExerciseToExamFormat(raw: any): ExamExercise {
 }
 
 export default function LearningSession({ mode = 'standard' }: LearningSessionProps) {
-  const { chapterId } = useParams<{ chapterId: string }>();
+  const { chapterId, lessonId } = useParams<{ chapterId: string; lessonId?: string }>();
   const isLibre = mode === 'libre' || mode === 'explain';
   const navigate = useNavigate();
   const { token, student } = useAuthStore();
   const {
-    sessionId, setSessionId, setPhase,
+    sessionId, setSessionId, currentPhase, setPhase,
     isProcessing, processingStage, setProcessing,
     isSpeaking, setSpeaking, addMessage, updateMessage, conversation,
     setLanguage, clearSession, language,
   } = useSessionStore();
 
   const [connected, setConnected] = useState(false);
-  const [lessonInfo, setLessonInfo] = useState<any>(null);
+  const [lessonInfo, setLessonInfo] = useState<LessonSummary | null>(null);
+  const [lessonPosition, setLessonPosition] = useState({ current: 1, total: 1 });
+  const [nextLesson, setNextLesson] = useState<LessonSummary | null>(null);
   const [currentMedia, setCurrentMedia] = useState<any>(null);
   const [showMedia, setShowMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +272,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [learningObjectives, setLearningObjectives] = useState<string[]>([]);
   const [completedObjectives, setCompletedObjectives] = useState<number[]>([]);
   const [currentObjectiveIndex, setCurrentObjectiveIndex] = useState(0);
+  const [objectiveEvidence, setObjectiveEvidence] = useState({ correctAnswers: 0, hasReasoning: false });
   const [isResumedSession, setIsResumedSession] = useState(false);
   const [showProgressBar, setShowProgressBar] = useState(false);
   const [lessonCompleted, setLessonCompleted] = useState(false);
@@ -443,7 +459,29 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       console.log('[Session] Loading lessons for chapter:', chapterId);
       const lessonsRes = await getLessons(chapterId!);
       console.log('[Session] Lessons response:', lessonsRes);
-      const lesson = lessonsRes.data[0];
+      const lessons: LessonSummary[] = Array.isArray(lessonsRes.data) ? lessonsRes.data : [];
+      let lesson = lessonId ? lessons.find((item) => item.id === lessonId) : null;
+      let isReview = false;
+
+      if (!lesson && lessons.length > 0) {
+        try {
+          const progressRes = await getAllLessonProgress();
+          const progressRows: LessonProgressRow[] = Array.isArray(progressRes.data)
+            ? progressRes.data
+            : (Array.isArray(progressRes.data?.progress) ? progressRes.data.progress : []);
+          const progressByLesson = new Map(
+            progressRows.map((row) => [row.lesson_id, row])
+          );
+          lesson = lessons.find((item) => progressByLesson.get(item.id)?.status !== 'completed');
+          if (!lesson) {
+            lesson = lessons[0];
+            isReview = true;
+          }
+        } catch (progressError) {
+          console.warn('[Session] Unable to load lesson progress; using first lesson', progressError);
+          lesson = lessons[0];
+        }
+      }
       
       if (!lesson) {
         console.error('[Session] No lesson found in response:', lessonsRes.data);
@@ -453,10 +491,20 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       }
       
       setLessonInfo(lesson);
+      const selectedLessonIndex = lessons.findIndex((item) => item.id === lesson.id);
+      setLessonPosition({
+        current: Math.max(1, selectedLessonIndex + 1),
+        total: Math.max(1, lessons.length),
+      });
+      setNextLesson(
+        selectedLessonIndex >= 0 && selectedLessonIndex < lessons.length - 1
+          ? lessons[selectedLessonIndex + 1]
+          : null
+      );
 
       // Create session in DB
       try {
-        const sessionRes = await startSession(lesson.id);
+        const sessionRes = await startSession(lesson.id, isReview);
         setSessionId(sessionRes.data.id);
       } catch (sessionErr: any) {
         if (sessionErr.response?.status === 401) {
@@ -488,6 +536,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         chapter_title: '',
         lesson_title: lesson.title_fr,
         objective: lesson.learning_objectives?.[0] || '',
+        learning_objectives: lesson.learning_objectives || [],
         phase: 'activation',
         student_name: student?.full_name || 'l\'étudiant',
         language: preferredLanguage,
@@ -722,6 +771,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       if (data.progress) {
         setCompletedObjectives(data.progress.objectives_completed || []);
         setCurrentObjectiveIndex(data.progress.current_objective_index || 0);
+        setObjectiveEvidence({ correctAnswers: 0, hasReasoning: false });
         // Restore lesson completion status
         const isDone = data.progress.status === 'completed' ||
           (data.learning_objectives && Array.isArray(data.learning_objectives) &&
@@ -764,6 +814,23 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           prev.includes(data.objective_index) ? prev : [...prev, data.objective_index]
         );
         setCurrentObjectiveIndex(data.objective_index + 1);
+        setObjectiveEvidence({ correctAnswers: 0, hasReasoning: false });
+      }
+    });
+
+    wsService.on('objective_changed', (data) => {
+      if (typeof data.objective_index === 'number') {
+        setCurrentObjectiveIndex(data.objective_index);
+        setObjectiveEvidence({ correctAnswers: 0, hasReasoning: false });
+      }
+    });
+
+    wsService.on('objective_evidence_updated', (data) => {
+      if (typeof data.objective_index === 'number') {
+        setObjectiveEvidence({
+          correctAnswers: Number(data.correct_answers || 0),
+          hasReasoning: Boolean(data.has_reasoning),
+        });
       }
     });
 
@@ -1207,6 +1274,18 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     }
   };
 
+  const handleOpenNextLesson = async () => {
+    if (!nextLesson || !chapterId) return;
+    speechService.stop();
+    if (sessionId) {
+      await endSession(sessionId).catch(() => {});
+    }
+    wsService.disconnect();
+    clearSession();
+    // A full navigation guarantees a fresh WebSocket and clean lesson state.
+    window.location.assign(`/session/${chapterId}/${nextLesson.id}`);
+  };
+
   // Error screen
   if (error) {
     return (
@@ -1272,8 +1351,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             currentIndex={currentObjectiveIndex}
             lessonTitle={lessonInfo?.title_fr || 'Leçon'}
             isResumed={isResumedSession}
+            lessonIndex={lessonPosition.current}
+            totalLessons={lessonPosition.total}
+            currentEvidence={objectiveEvidence}
           />
         </div>
+      )}
+
+      {showProgressBar && learningObjectives.length > 0 && !isLibre && (
+        <PhaseProgress currentPhase={currentPhase} />
       )}
 
       {/* Lesson Completed Banner */}
@@ -1285,15 +1371,17 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               <div>
                 <div className="text-emerald-300 font-semibold text-sm">Leçon terminée !</div>
                 <div className="text-emerald-200/70 text-xs">
-                  Tu as complété tous les objectifs. Cette leçon est marquée comme terminée.
+                  {nextLesson
+                    ? `Prochaine étape : ${nextLesson.title_fr}`
+                    : 'Tu as validé toutes les leçons de ce chapitre.'}
                 </div>
               </div>
             </div>
             <button
-              onClick={handleEndSession}
+              onClick={nextLesson ? handleOpenNextLesson : handleEndSession}
               className="shrink-0 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-emerald-500/30"
             >
-              Fermer la session
+              {nextLesson ? 'Continuer vers la leçon suivante' : 'Fermer la session'}
             </button>
           </div>
         </div>

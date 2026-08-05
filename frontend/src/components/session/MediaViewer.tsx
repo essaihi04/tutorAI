@@ -37,8 +37,7 @@ export function MediaViewer({ media, onClose, onSimulationUpdate }: MediaViewerP
   // Convert local paths to proper URLs or clean Supabase URLs
   let cleanUrl = media.url;
   
-  // If it's a local path starting with /media/, it's a legacy resource
-  // These files don't exist anymore, so we'll show an error
+  // Versioned /media/ assets are shipped with the frontend.
   if (cleanUrl.startsWith('/media/')) {
     // For now, we'll let it try to load and fail gracefully
     cleanUrl = media.url;
@@ -438,14 +437,25 @@ window.__AI_AUTOSTART_BRIDGE__ = true;
 export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: SessionMediaDisplayProps) {
   const [imageError, setImageError] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const nativeManifestSeenRef = useRef(false);
   const onSimUpdateRef = useRef(onSimulationUpdate);
-  onSimUpdateRef.current = onSimulationUpdate;
+
+  useEffect(() => {
+    onSimUpdateRef.current = onSimulationUpdate;
+  }, [onSimulationUpdate]);
+
+  useEffect(() => {
+    nativeManifestSeenRef.current = false;
+  }, [media?.url]);
 
   useEffect(() => {
     const handleSimulationMessage = (event: MessageEvent) => {
       const data = event.data;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'simulation_state' || data.type === 'simulation_manifest') {
+        if (data.type === 'simulation_manifest') {
+          nativeManifestSeenRef.current = true;
+        }
         console.log('[SessionMediaDisplay] Simulation message received:', data.type, data);
         if (onSimUpdateRef.current) {
           onSimUpdateRef.current(data);
@@ -463,22 +473,16 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
   let cleanUrl = media.url;
   
   if (cleanUrl.startsWith('/media/')) {
-    // Legacy local path - will fail to load
+    // Versioned local asset served by the frontend.
     cleanUrl = media.url;
   } else if (cleanUrl.endsWith('?')) {
     cleanUrl = cleanUrl.slice(0, -1);
   }
 
   const simulationHtml = media.type === 'simulation' ? buildSimulationHtml(cleanUrl) : null;
-  const prevSimUrlRef = useRef<string | null>(null);
-  if (media.type === 'simulation' && cleanUrl !== prevSimUrlRef.current) {
-    prevSimUrlRef.current = cleanUrl;
-    console.log('[SessionMediaDisplay] Simulation URL starts with:', cleanUrl.substring(0, 80));
-    console.log('[SessionMediaDisplay] Bridge injected (srcDoc):', !!simulationHtml);
-    if (!simulationHtml) {
-      console.warn('[SessionMediaDisplay] WARNING: No srcDoc — simulation will load via src= (no bridge!)');
-    }
-  }
+  const usesNativeSimulationViewport = cleanUrl.includes(
+    '/media/simulations/svt/ch2_information_genetique/expression/'
+  );
 
   const handleSimulationLoad = () => {
     if (media.type !== 'simulation' || !iframeRef.current?.contentWindow) return;
@@ -487,10 +491,16 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
     // Fallback: if bridge postMessage doesn't reach parent, actively poll for manifest
     let manifestSent = false;
     const pollForManifest = () => {
-      if (manifestSent) return;
+      if (manifestSent || nativeManifestSeenRef.current) return;
       try {
         const iframeWin = iframeRef.current?.contentWindow as any;
         if (!iframeWin) return;
+        // Native v2 simulations publish their own complete manifest. Avoid a
+        // second, reduced fallback manifest that would restart orchestration.
+        if (iframeWin.__SIMULATION_MANIFEST_SENT__) {
+          manifestSent = true;
+          return;
+        }
         
         // Try to read SIMULATION_CONFIG from iframe
         let simConfig: any = null;
@@ -502,8 +512,13 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
         if (simConfig && simConfig.id) {
           console.log('[SessionMediaDisplay] Fallback: Read SIMULATION_CONFIG from iframe:', simConfig.id);
           // Build manifest and send it
-          const caps: any = { commands: ['start','reset','click_button','call_function','set_variant'], buttons: [], globals: [] };
+          const caps: any = { commands: simConfig.commands || ['start','reset','click_button','call_function','set_variant'], buttons: [], globals: [] };
           try { caps.config = JSON.parse(JSON.stringify(simConfig)); } catch(e) {}
+          if (Array.isArray(simConfig.commands)) {
+            caps.commands = [...new Set([...caps.commands, ...simConfig.commands])];
+          }
+          if (simConfig.command_schema) caps.command_schema = simConfig.command_schema;
+          if (simConfig.state_schema) caps.state_schema = simConfig.state_schema;
           // Check for known functions
           ['executeAICommand','simulate','startSimulation','resetSimulation','runVariant'].forEach(fn => {
             try { if (typeof iframeWin[fn] === 'function') caps.globals.push(fn); } catch(e) {}
@@ -567,7 +582,9 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
 
       {media.type === 'simulation' && (
         <div className="h-full w-full overflow-hidden rounded-lg border bg-white">
-          <div className="w-[145%] h-[145%] origin-top-left scale-[0.68]">
+          <div className={usesNativeSimulationViewport
+            ? 'w-full h-full'
+            : 'w-[145%] h-[145%] origin-top-left scale-[0.68]'}>
             <iframe
               ref={iframeRef}
               src={simulationHtml ? undefined : media.url}

@@ -1442,24 +1442,6 @@ class SessionHandler:
             if len(student_text.strip()) < 3 or len(ai_response) < 20:
                 return
 
-            # ── EXPLICIT NAVIGATION INTENT ──
-            # If student explicitly asks to advance, treat as successful progression
-            student_lower = student_text.lower().strip()
-            advance_intents = [
-                "objectif suivant", "passer à la suite", "passer a la suite",
-                "j'ai compris", "j'ai bien compris", "c'est clair",
-                "continuer", "passons à", "passons a",
-                "étape suivante", "etape suivante",
-                "question suivante",
-            ]
-            is_explicit_advance = any(p in student_lower for p in advance_intents)
-            
-            if is_explicit_advance and self.session_mode == "coaching" \
-               and hasattr(self, 'lesson_objectives') and self.lesson_objectives:
-                _safe_log(f"[ChatDetect] Explicit advance intent detected: '{student_text[:60]}'")
-                await self._advance_next_objective()
-                return
-
             # Check if previous AI message contained a question
             prev_ai = None
             for msg in reversed(self.conversation_history[:-1]):
@@ -1528,18 +1510,46 @@ class SessionHandler:
                 self.session_mode == "coaching" and
                 hasattr(self, 'lesson_objectives') and self.lesson_objectives):
 
-                # Initialize per-objective correct answer counter
-                if not hasattr(self, '_correct_answers_counter'):
-                    self._correct_answers_counter = 0
                 if not hasattr(self, '_completed_objective_indices'):
                     self._completed_objective_indices = set()
 
-                self._correct_answers_counter += 1
+                objective_index = next(
+                    (i for i in range(len(self.lesson_objectives))
+                     if i not in self._completed_objective_indices),
+                    None,
+                )
+                if objective_index is None:
+                    return
 
-                # After 2 correct answers, advance to next objective
-                if self._correct_answers_counter >= 2:
+                if not hasattr(self, '_objective_evidence'):
+                    self._objective_evidence = {}
+                evidence = self._objective_evidence.setdefault(
+                    objective_index,
+                    {"correct_answers": 0, "has_reasoning": False},
+                )
+                evidence["correct_answers"] += 1
+
+                reasoning_markers = [
+                    "analyse", "analy", "interpr", "explique", "justifie",
+                    "compare", "déduis", "deduis", "calcule", "calcul",
+                    "document", "courbe", "résultat", "resultat", "bilan",
+                    "rendement", "hypothèse", "hypothese", "protocole",
+                ]
+                previous_question = prev_ai.lower()
+                if any(marker in previous_question for marker in reasoning_markers):
+                    evidence["has_reasoning"] = True
+
+                await self.websocket.send_json({
+                    "type": "objective_evidence_updated",
+                    "objective_index": objective_index,
+                    "correct_answers": evidence["correct_answers"],
+                    "has_reasoning": evidence["has_reasoning"],
+                    "required_correct_answers": 2,
+                })
+
+                # Mastery gate: two correct answers, including one reasoning/data task.
+                if evidence["correct_answers"] >= 2 and evidence["has_reasoning"]:
                     await self._advance_next_objective()
-                    self._correct_answers_counter = 0  # Reset for next objective
         except Exception as e:
             _safe_log(f"[ChatDetect] Error: {e}")
 
@@ -1570,13 +1580,12 @@ class SessionHandler:
             lesson_id = getattr(self, 'current_lesson_id', None)
             try:
                 if lesson_id:
-                    await session_progress_service.create_or_update_progress(
+                    await session_progress_service.mark_objective_completed(
                         student_id=self.student_id,
                         lesson_id=lesson_id,
-                        objectives_total=total_objectives,
-                        objectives_completed=list(self._completed_objective_indices),
-                        current_objective_index=next_idx + 1,
-                        status="completed" if is_lesson_complete else "in_progress",
+                        objective_index=next_idx,
+                        objective_text=self.lesson_objectives[next_idx],
+                        key_points=[self.lesson_objectives[next_idx]],
                     )
                     _safe_log(f"[Progress] Saved objective {next_idx} to DB (lesson_id={lesson_id[:8]}..), complete={is_lesson_complete}")
                 else:
@@ -1591,6 +1600,37 @@ class SessionHandler:
                 "objective": self.lesson_objectives[next_idx],
             })
             _safe_log(f"[Progress] Advanced objective {next_idx} ({len(self._completed_objective_indices)}/{total_objectives})")
+
+            next_objective_index = next(
+                (i for i in range(total_objectives)
+                 if i not in self._completed_objective_indices),
+                None,
+            )
+            if next_objective_index is not None:
+                self.session_context["objective"] = self.lesson_objectives[next_objective_index]
+                await self.websocket.send_json({
+                    "type": "objective_changed",
+                    "objective_index": next_objective_index,
+                    "objective": self.lesson_objectives[next_objective_index],
+                })
+
+            phase_order = ["activation", "exploration", "explanation", "application", "consolidation"]
+            completion_ratio = len(self._completed_objective_indices) / max(total_objectives, 1)
+            if is_lesson_complete:
+                target_phase = "consolidation"
+            elif completion_ratio <= 0.20:
+                target_phase = "exploration"
+            elif completion_ratio <= 0.70:
+                target_phase = "explanation"
+            else:
+                target_phase = "application"
+            if phase_order.index(target_phase) > phase_order.index(self.current_phase):
+                self.current_phase = target_phase
+                await self.websocket.send_json({
+                    "type": "phase_changed",
+                    "phase": self.current_phase,
+                    "auto": True,
+                })
             
             # Lesson completion
             if is_lesson_complete:
@@ -1615,13 +1655,24 @@ class SessionHandler:
                         if lesson_row.data:
                             chapter_id = lesson_row.data[0].get("chapter_id")
                             if chapter_id:
-                                # Find earliest pending study_plan_session for this chapter + student
-                                sps_result = sb.table("study_plan_sessions").select("id, plan_id, status").eq(
-                                    "chapter_id", chapter_id
-                                ).neq("status", "completed").order("scheduled_date").limit(1).execute()
+                                chapter_complete = await session_progress_service.is_chapter_completed(
+                                    student_id=self.student_id,
+                                    chapter_id=chapter_id,
+                                )
+                                if not chapter_complete:
+                                    _safe_log(
+                                        "[Progress] Lesson complete; study-plan chapter remains pending "
+                                        "until all chapter lessons are validated"
+                                    )
+                                    sps_result = None
+                                else:
+                                    # Find earliest pending study-plan session for this chapter.
+                                    sps_result = sb.table("study_plan_sessions").select("id, plan_id, status").eq(
+                                        "chapter_id", chapter_id
+                                    ).neq("status", "completed").order("scheduled_date").limit(1).execute()
                                 
                                 # Must also check it belongs to this student via the plan
-                                if sps_result.data:
+                                if sps_result and sps_result.data:
                                     sps = sps_result.data[0]
                                     plan_row = sb.table("study_plans").select("student_id").eq(
                                         "id", sps["plan_id"]
@@ -1941,6 +1992,46 @@ TU DOIS OBLIGATOIREMENT:
 """
             system_prompt += closure_instruction
 
+        # Give the LLM a machine-readable view of the active simulation. This
+        # lets it reason from the student's real manipulations and, when useful,
+        # emit a validated simulation control action instead of guessing.
+        active_simulation_id = self.simulation_state.get("id")
+        if active_simulation_id:
+            active_orch = self.simulation_orchestration.get(active_simulation_id, {})
+            active_manifest = active_orch.get("manifest", {})
+            active_capabilities = active_manifest.get("capabilities", {})
+            active_commands = active_capabilities.get("commands", [])
+            command_schema = active_capabilities.get("command_schema", {})
+            simulation_controls = active_capabilities.get("controls", {})
+            simulation_config = active_capabilities.get("config", {})
+            simulation_snapshot = {
+                "simulation_id": active_simulation_id,
+                "title": simulation_config.get("title"),
+                "learning_objectives": simulation_config.get("learning_objectives", []),
+                "state": self.simulation_state.get("state", {}),
+                "progress": self.simulation_state.get("progress", 0),
+                "recent_actions": self.simulation_state.get("actions", [])[-8:],
+                "available_commands": active_commands,
+                "controls": simulation_controls,
+                "command_schema": command_schema,
+            }
+            snapshot_json = json.dumps(simulation_snapshot, ensure_ascii=False, default=str)
+            if len(snapshot_json) > 6000:
+                snapshot_json = snapshot_json[:6000] + "…"
+            system_prompt += f"""
+
+[SIMULATION INTERACTIVE ACTIVE — ÉTAT RÉEL À UTILISER]
+{snapshot_json}
+
+RÈGLES:
+- Fonde tes observations uniquement sur cet état réel; n'invente aucune manipulation.
+- Si l'élève demande une manipulation disponible, utilise une action UI de contrôle. Exemple générique:
+  <ui>{{"actions":[{{"type":"simulation","action":"control","payload":{{"command":"set_parameters","parameters":{{"nom_exact_du_controle":"valeur_valide"}},"guidance_text":"Observe ce qui change."}}}}]}}</ui>
+- Choisis exclusivement une commande de available_commands et respecte command_schema.
+- Une seule commande de manipulation par réponse, avec une courte consigne d'observation.
+- Ne déduis pas un résultat absent: invite l'élève à lancer run_trial après avoir formulé sa prédiction.
+"""
+
         decision = resource_decision_service.decide(
             phase=self.current_phase,
             student_text=student_text,
@@ -2171,9 +2262,57 @@ TU DOIS OBLIGATOIREMENT:
                         self.is_resumed_session = True
                         # Restore completed objectives from database
                         self._completed_objective_indices = set(
-                            self.lesson_progress.get("objectives_completed", [])
+                            index for index in self.lesson_progress.get("objectives_completed", [])
+                            if isinstance(index, int) and 0 <= index < len(self.lesson_objectives)
                         )
-                        self._correct_answers_counter = 0  # Reset counter for new session
+                        objectives_count = len(self.lesson_objectives) if self.lesson_objectives else 4
+                        # Content revisions can add or split objectives. Keep valid
+                        # achievements, but align the stored total before resuming.
+                        if self.lesson_progress.get("objectives_total") != objectives_count:
+                            raw_progress = await session_progress_service.get_lesson_progress(
+                                student_id=self.student_id,
+                                lesson_id=lesson_id,
+                            ) or {}
+                            await session_progress_service.create_or_update_progress(
+                                student_id=self.student_id,
+                                lesson_id=lesson_id,
+                                objectives_total=objectives_count,
+                                objectives_completed=sorted(self._completed_objective_indices),
+                                current_objective_index=next(
+                                    (i for i in range(objectives_count)
+                                     if i not in self._completed_objective_indices),
+                                    objectives_count,
+                                ),
+                                topics_covered=raw_progress.get("topics_covered", []),
+                                key_points_learned=raw_progress.get("key_points_learned", []),
+                                last_ai_summary=raw_progress.get("last_ai_summary", ""),
+                                status=(
+                                    "completed"
+                                    if len(self._completed_objective_indices) >= objectives_count
+                                    else "in_progress"
+                                ),
+                            )
+                        self._objective_evidence = {}
+                        current_objective_index = next(
+                            (i for i in range(len(self.lesson_objectives))
+                             if i not in self._completed_objective_indices),
+                            max(0, len(self.lesson_objectives) - 1),
+                        )
+                        self.lesson_progress.update({
+                            "objectives_completed": sorted(self._completed_objective_indices),
+                            "objectives_total": objectives_count,
+                            "current_objective_index": current_objective_index,
+                            "completion_percent": round(
+                                len(self._completed_objective_indices) / max(objectives_count, 1) * 100
+                            ),
+                            "status": (
+                                "completed"
+                                if len(self._completed_objective_indices) >= objectives_count
+                                else "in_progress"
+                            ),
+                        })
+                        if self.lesson_objectives:
+                            self.session_context["objective"] = self.lesson_objectives[current_objective_index]
                         # Restore completion flag
                         self._lesson_completed = (
                             self.lesson_progress.get("status") == "completed"
@@ -2192,10 +2331,20 @@ TU DOIS OBLIGATOIREMENT:
                                 if lesson_row.data:
                                     chapter_id = lesson_row.data[0].get("chapter_id")
                                     if chapter_id:
-                                        sps_result = sb.table("study_plan_sessions").select("id, plan_id, status").eq(
-                                            "chapter_id", chapter_id
-                                        ).neq("status", "completed").order("scheduled_date").limit(1).execute()
-                                        if sps_result.data:
+                                        chapter_complete = await session_progress_service.is_chapter_completed(
+                                            student_id=self.student_id,
+                                            chapter_id=chapter_id,
+                                        )
+                                        if not chapter_complete:
+                                            _safe_log(
+                                                "[Session Init][Backfill] Chapter still has lessons to validate"
+                                            )
+                                            sps_result = None
+                                        else:
+                                            sps_result = sb.table("study_plan_sessions").select("id, plan_id, status").eq(
+                                                "chapter_id", chapter_id
+                                            ).neq("status", "completed").order("scheduled_date").limit(1).execute()
+                                        if sps_result and sps_result.data:
                                             sps = sps_result.data[0]
                                             plan_row = sb.table("study_plans").select("student_id").eq("id", sps["plan_id"]).execute()
                                             if plan_row.data and plan_row.data[0]["student_id"] == self.student_id:
@@ -2209,8 +2358,10 @@ TU DOIS OBLIGATOIREMENT:
                     else:
                         # Initialize new progress
                         self._completed_objective_indices = set()
-                        self._correct_answers_counter = 0
+                        self._objective_evidence = {}
                         self._lesson_completed = False
+                        if self.lesson_objectives:
+                            self.session_context["objective"] = self.lesson_objectives[0]
                         objectives_count = len(self.lesson_objectives) if self.lesson_objectives else 4
                         await session_progress_service.create_or_update_progress(
                             student_id=self.student_id,
@@ -2337,44 +2488,25 @@ RÈGLES STRICTES:
                 _full_name = (self.session_context.get("student_name") or "").strip()
                 _first_name = _full_name.split()[0] if _full_name and _full_name != "l'étudiant" else "mon ami"
 
-                lesson_plan_opening = f"""Ouvre la séance par un PLAN DE LEÇON clair pour : « {_lesson_topic} ».
+                lesson_plan_opening = f"""Démarre la séance « {_lesson_topic} » en MODE VISUEL.
 
-⚠️ STRUCTURE OBLIGATOIRE — respecte-la SANS exception :
+RÈGLES OBLIGATOIRES :
+1. Salue {_first_name} en UNE phrase de 15 mots maximum.
+2. Écris immédiatement OUVRIR_IMAGE afin d'afficher la ressource d'activation.
+3. Ne donne encore aucun paragraphe de cours et n'affiche pas de plan textuel.
+4. Pose UNE question d'observation très courte sur ce que l'élève voit.
+5. Termine par trois <suggestions> courtes : deux observations plausibles et « Je ne sais pas ».
+6. Après sa réponse, alterne ressource visuelle ou simulation puis question. Limite chaque prise de parole à 2 phrases courtes sauf demande explicite d'explication détaillée.
+7. Utilise une simulation interactive dès qu'un exercice visuel correspondant est disponible.
 
-1) SALUTATION BRÈVE (1 phrase hors balise) qui commence par le prénom de l'élève « {_first_name} » et situe le sujet du jour (ex. : « Salut {_first_name} ! Aujourd'hui on va étudier ... »).
-
-2) AFFICHE IMMÉDIATEMENT le plan de la leçon dans un tableau <ui>show_board</ui>.
-   Le tableau DOIT contenir EXACTEMENT cette structure (pas les exemples génériques du template) :
-
-<ui>{{"actions":[{{"type":"whiteboard","action":"show_board","payload":{{"title":"🎯 Plan de la leçon : {_lesson_topic}","lines":[
-  {{"type":"subtitle","content":"📚 Ce que nous allons étudier aujourd'hui"}},
-  {{"type":"step","label":"1","content":"[Titre du point 1 — tiré du cadre de référence] — 📝 À noter (type d'évaluation : QCM / calcul / raisonnement / schéma)"}},
-  {{"type":"step","label":"2","content":"[Titre du point 2 — tiré du cadre de référence] — 📝 À noter / 💡 Culture (type d'évaluation)"}},
-  {{"type":"step","label":"3","content":"[Titre du point 3 — tiré du cadre de référence] — 📝 À noter (type d'évaluation)"}},
-  {{"type":"step","label":"4","content":"[Titre du point 4 — optionnel — tiré du cadre de référence]"}},
-  {{"type":"separator","content":""}},
-  {{"type":"tip","content":"Objectif final : [compétence mesurable à atteindre à la fin de la leçon]"}}
-]}}}}]}}</ui>
-
-   RÈGLES STRICTES POUR LE PLAN :
-   - 3 à 5 étapes "step" numérotées, PAS MOINS. Une seule étape = REFUSÉ.
-   - Chaque "content" commence par un TITRE DE POINT (ex. "Définition d'une transformation lente", "Facteurs cinétiques"), PAS par "Objectif :" ou "À noter".
-   - Les titres viennent STRICTEMENT du programme officiel / [ÉLÉMENTS PRIORITAIRES DU CADRE DE RÉFÉRENCE] fourni dans ton contexte. N'INVENTE rien.
-   - Indique pour chaque étape le marqueur 📝 À noter (examen) ou 💡 Culture (hors examen) ET le type d'évaluation attendu.
-   - Ne mets PAS les subtitles "📝 À NOTER DANS TON CAHIER" ni "💡 Pense à ton quotidien" dans CE tableau d'ouverture — ces sections sont réservées aux tableaux d'explication qui viendront ensuite, point par point.
-
-3) APRÈS le tableau (hors balises), pose UNE seule question d'accroche courte (1 phrase) pour démarrer l'étape 1 du plan.
-
-4) TERMINE par un bloc <suggestions> contenant 3 boutons de réponse alignés sur ta question d'accroche (ex. deux réponses plausibles + "❓ Je ne sais pas").
-
-5) N'avance pas dans l'explication du premier point tant que l'élève n'a pas répondu."""
+But : l'élève observe et agit avant de lire l'explication."""
 
                 opening_prompt = {
                     "activation": lesson_plan_opening,
                     "exploration": lesson_plan_opening,
                     "explanation": lesson_plan_opening,
-                    "application": f"Salue {_first_name} puis propose-lui le premier exercice d'application.",
-                    "consolidation": f"Félicite {_first_name} par son prénom et résume les points clés de la leçon.",
+                    "application": f"Salue {_first_name} en une phrase, écris OUVRIR_SIMULATION et laisse-le agir avant toute explication.",
+                    "consolidation": f"Félicite {_first_name} en une phrase, écris OUVRIR_SIMULATION puis demande une synthèse très courte.",
                     "libre": (
                         f"Salue l'étudiant PAR SON PRÉNOM ({_first_name}) "
                         "et dis-lui qu'il peut poser n'importe quelle question sur les matières du BAC "
@@ -3488,6 +3620,49 @@ RÈGLES :
                         await self.websocket.send_json({"type": "hide_media"})
                         ui_actions_handled = True
 
+                elif action_type == "simulation":
+                    if action_name in {"open", "show"}:
+                        await self.websocket.send_json({"type": "hide_whiteboard"})
+                        await self._auto_suggest_resource(preferred_resource_type="simulation")
+                        ui_actions_handled = True
+                    elif action_name in {"close", "hide"}:
+                        await self.websocket.send_json({"type": "hide_media"})
+                        ui_actions_handled = True
+                    elif action_name in {"control", "manipulate", "command"}:
+                        control_source = payload if isinstance(payload, dict) else action
+                        command = str(control_source.get("command", "")).strip()
+                        parameters = control_source.get("parameters", {})
+                        if not isinstance(parameters, dict):
+                            parameters = {}
+                        guidance_text = str(control_source.get("guidance_text", ""))[:300] or None
+                        simulation_id = (
+                            control_source.get("simulation_id")
+                            or self.simulation_state.get("id")
+                            or next(iter(self.simulation_orchestration), None)
+                        )
+
+                        orch = self.simulation_orchestration.get(simulation_id, {}) if simulation_id else {}
+                        capabilities = orch.get("manifest", {}).get("capabilities", {})
+                        allowed_commands = set(capabilities.get("commands", []) or [])
+                        # These lifecycle commands are safe for every simulation.
+                        allowed_commands.update({"start", "reset", "set_variant", "check", "reveal_hint", "highlight"})
+
+                        if not simulation_id:
+                            _safe_log("[AI Commands][WARN] simulation control requested without an active simulation")
+                        elif not command or command not in allowed_commands:
+                            _safe_log(
+                                f"[AI Commands][WARN] rejected simulation command '{command}'. "
+                                f"Allowed={sorted(allowed_commands)}"
+                            )
+                        else:
+                            await self._send_simulation_control(
+                                simulation_id,
+                                command,
+                                parameters,
+                                guidance_text,
+                            )
+                            ui_actions_handled = True
+
                 elif action_type == "exercise":
                     if action_name in {"open", "show"}:
                         await self.websocket.send_json({"type": "hide_whiteboard"})
@@ -4576,16 +4751,6 @@ RÈGLES :
         try:
             current_idx = phases.index(self.current_phase)
             if current_idx < len(phases) - 1:
-                # Mark current objective as completed before advancing
-                if hasattr(self, 'lesson_objectives') and self.lesson_objectives:
-                    objective_index = min(current_idx, len(self.lesson_objectives) - 1)
-                    await self.websocket.send_json({
-                        "type": "objective_completed",
-                        "objective_index": objective_index,
-                        "objective": self.lesson_objectives[objective_index] if objective_index < len(self.lesson_objectives) else None
-                    })
-                    _safe_log(f"[Progress] Objective {objective_index} completed")
-                
                 self.current_phase = phases[current_idx + 1]
                 await self.websocket.send_json({
                     "type": "phase_changed",
@@ -5001,21 +5166,13 @@ RÈGLES :
                 simulation_active=bool(self.simulation_state.get("id")),
             )
             
-            # For simulations, allow legacy /media/ paths (local HTML files may still work)
-            # For images/videos, strict filter to avoid broken legacy paths
-            if target_resource_type == 'simulation':
-                candidate_resources = [
-                    r for r in self.lesson_resources 
-                    if r.get('resource_type') == target_resource_type
-                    and (r.get('file_path') or r.get('external_url'))
-                ]
-            else:
-                candidate_resources = [
-                    r for r in self.lesson_resources 
-                    if r.get('resource_type') == target_resource_type
-                    and (r.get('file_path') or r.get('external_url'))
-                    and not (r.get('file_path') or '').startswith('/media/')
-                ]
+            # Both Supabase URLs and versioned /media/ assets are valid. Local
+            # assets are shipped with the frontend build and served by nginx.
+            candidate_resources = [
+                r for r in self.lesson_resources
+                if r.get('resource_type') == target_resource_type
+                and (r.get('file_path') or r.get('external_url'))
+            ]
 
             if not candidate_resources and preferred_resource_type:
                 _safe_log(f"[Auto Suggest] No valid {preferred_resource_type} resources found, falling back to image")
@@ -5024,7 +5181,6 @@ RÈGLES :
                     r for r in self.lesson_resources 
                     if r.get('resource_type') == 'image'
                     and (r.get('file_path') or r.get('external_url'))
-                    and not (r.get('file_path') or '').startswith('/media/')
                 ]
             
             if not candidate_resources:
@@ -5039,6 +5195,14 @@ RÈGLES :
                 title = (resource.get('title') or '').lower()
                 description = (resource.get('description') or '').lower()
                 concepts = resource.get('concepts', []) or []
+                metadata = resource.get('metadata', {}) or {}
+
+                # Advanced investigation labs are the preferred simulation
+                # surface; short drills remain available for consolidation.
+                if metadata.get('is_primary'):
+                    score += 12
+                if resource.get('phase') == self.current_phase:
+                    score += 5
                 
                 # Check concept matches
                 for concept in concepts:
@@ -5103,9 +5267,7 @@ RÈGLES :
                 return
         
         if url.startswith('/media/'):
-            _safe_log(f"[Display Resource] ERROR: Trying to display legacy local path: {url}")
-            _safe_log(f"[Display Resource] Resource ID: {resource.get('id')}")
-            _safe_log(f"[Display Resource] This resource needs to be re-uploaded to Supabase Storage")
+            _safe_log(f"[Display Resource] Serving versioned frontend asset: {url}")
         
         # Add cache-busting timestamp to force fresh reload of images
         # This prevents browser/CDN from serving stale cached versions
@@ -5167,6 +5329,23 @@ RÈGLES :
         simulation_id = message.get('simulation_id', 'unknown')
         capabilities = message.get('capabilities', {})
         page_text = message.get('page_text', '')
+
+        # The native simulation can announce itself before the frontend's
+        # fallback poll. Keep the running state machine and only enrich a
+        # duplicate manifest when it contains more capabilities.
+        existing_orch = self.simulation_orchestration.get(simulation_id)
+        if existing_orch and not existing_orch.get('finalized'):
+            existing_manifest = existing_orch.setdefault('manifest', {})
+            existing_caps = existing_manifest.get('capabilities', {})
+            existing_score = len(existing_caps.get('commands', []) or []) + len(existing_caps.get('globals', []) or [])
+            incoming_score = len(capabilities.get('commands', []) or []) + len(capabilities.get('globals', []) or [])
+            if incoming_score > existing_score:
+                existing_manifest['capabilities'] = capabilities
+                existing_manifest['page_text'] = page_text or existing_manifest.get('page_text', '')
+                _safe_log(f"[Simulation] Enriched duplicate manifest for '{simulation_id}'")
+            else:
+                _safe_log(f"[Simulation] Ignored duplicate manifest for '{simulation_id}'")
+            return
 
         self.simulation_orchestration[simulation_id] = {
             'manifest': {
@@ -5368,7 +5547,17 @@ RÈGLES :
         variants = self._get_simulation_variants(orch)
         variant_label = variants[variant_idx]['label'] if variant_idx < len(variants) else f'Variante {variant_idx+1}'
         
-        state_summary = ', '.join(f"{k}={v}" for k, v in state.items()) if state else 'état initial'
+        manifest_config = orch.get('manifest', {}).get('capabilities', {}).get('config', {})
+        configured_variants = manifest_config.get('variants', []) if isinstance(manifest_config, dict) else []
+        variant_objective = ''
+        if variant_idx < len(configured_variants):
+            variant_objective = configured_variants[variant_idx].get('objective', '')
+
+        # Keep sequences, errors and observations structured so the LLM reads
+        # the experiment exactly as the student produced it.
+        state_summary = json.dumps(state, ensure_ascii=False, default=str, indent=2) if state else '{}'
+        if len(state_summary) > 7000:
+            state_summary = state_summary[:7000] + '…'
         ctx = self.session_context
 
         prompt = f"""Tu es un tuteur IA en {ctx.get('subject', 'Sciences')} pour un élève de 2ème BAC.
@@ -5376,14 +5565,16 @@ Leçon: {ctx.get('lesson_title', '')}
 Objectif: {ctx.get('objective', '')}
 
 La simulation vient de terminer la variante: {variant_label}
-Résultats observés: {state_summary}
+Objectif scientifique de la variante: {variant_objective or ctx.get('objective', '')}
+ÉTAT STRUCTURÉ RÉEL DE L'EXPÉRIENCE:
+{state_summary}
 
 CONSIGNE: 
-1. Explique en 2-3 phrases ce que l'élève vient d'observer scientifiquement. 
-2. Relie au cours.
-3. Pose UNE question de compréhension à l'élève sur ce qu'il vient de voir.
+1. Cite une manipulation réellement effectuée par l'élève et une observation présente dans l'état.
+2. Explique en 2 phrases maximum le mécanisme scientifique correspondant.
+3. Pose UNE question de compréhension fondée sur les séquences ou résultats affichés.
 
-IMPORTANT: Sois concis. Parle en français. Termine par ta question."""
+IMPORTANT: N'invente aucune donnée absente de l'état. Sois concis. Parle en français. Termine par ta question."""
 
         try:
             ai_text = await llm_service.chat(
@@ -5429,7 +5620,9 @@ IMPORTANT: Sois concis. Parle en français. Termine par ta question."""
         variants = self._get_simulation_variants(active_orch)
         variant_label = variants[variant_idx]['label'] if variant_idx < len(variants) else f'Variante {variant_idx+1}'
         
-        state_summary = ', '.join(f"{k}={v}" for k, v in variant_state.items()) if variant_state else ''
+        state_summary = json.dumps(variant_state, ensure_ascii=False, default=str, indent=2) if variant_state else '{}'
+        if len(state_summary) > 7000:
+            state_summary = state_summary[:7000] + '…'
         ctx = self.session_context
 
         prompt = f"""Tu es un tuteur IA en {ctx.get('subject', 'Sciences')}.
@@ -5510,7 +5703,9 @@ Sois concis. Parle en français."""
         results_summary = ""
         for i, state in enumerate(orch.get('variants_completed', [])):
             label = variants[i]['label'] if i < len(variants) else f'Variante {i+1}'
-            state_str = ', '.join(f"{k}={v}" for k, v in state.items())
+            state_str = json.dumps(state, ensure_ascii=False, default=str)
+            if len(state_str) > 3500:
+                state_str = state_str[:3500] + '…'
             results_summary += f"\n- {label}: {state_str}"
 
         answers_summary = ""

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ordre des étapes de la respiration</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#071426;color:#eaf4ff;font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:14px}.app{width:min(900px,100%);background:#0d2038;border:1px solid #27486a;border-radius:20px;padding:18px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px}.top h1{font-size:clamp(18px,3vw,26px);margin:0}.score{background:#163655;border-radius:999px;padding:7px 12px;color:#9ed7ff}.cell{margin:18px 0;display:grid;grid-template-columns:1fr 1.45fr;gap:12px}.zone{min-height:190px;border:2px dashed #3d6b91;border-radius:18px;padding:12px;position:relative;display:flex;align-items:center;justify-content:center}.zone strong{position:absolute;top:10px;left:12px;color:#9ed7ff}.mito{width:82%;height:125px;border:10px solid #fb8d72;border-radius:48% 52% 46% 54%;position:relative;background:#102b48;display:flex;align-items:center;justify-content:center}.mito:before{content:"";position:absolute;inset:13px;border:7px solid #ffd3a8;border-radius:45%;clip-path:polygon(0 0,100% 0,100% 35%,20% 35%,20% 65%,100% 65%,100% 100%,0 100%)}.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.slot{min-height:76px;border:2px solid #315779;border-radius:14px;display:grid;place-items:center;text-align:center;padding:8px;color:#7996b2}.slot.filled{background:#173b5b;color:white;border-color:#55b8ed}.choices{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.choice{border:0;border-radius:14px;padding:12px 8px;background:#25527a;color:white;cursor:pointer;font-weight:700;min-height:66px}.choice:hover,.choice:focus-visible{background:#3170a6;outline:3px solid #78ccff}.choice[disabled]{opacity:.3;cursor:default}.actions{display:flex;justify-content:center;gap:10px;margin-top:15px}.actions button{border:0;border-radius:12px;padding:11px 18px;font-weight:800;cursor:pointer}.check{background:#34d399;color:#06251b}.reset{background:#243b55;color:white}.feedback{text-align:center;min-height:30px;margin-top:10px;font-weight:800}.ok{color:#6ee7b7}.no{color:#fda4af}@media(max-width:620px){.cell{grid-template-columns:1fr}.zone{min-height:125px}.mito{height:90px}.choices{grid-template-columns:1fr 1fr}.slots{grid-template-columns:1fr}.slot{min-height:54px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="top"><h1>Place les 3 étapes dans l'ordre</h1><div class="score" id="score">0 / 3</div></div>
+    <div class="cell" aria-label="Cellule avec cytoplasme et mitochondrie">
+      <div class="zone"><strong>Cytoplasme</strong><span style="font-size:54px">⬡</span></div>
+      <div class="zone"><strong>Mitochondrie</strong><div class="mito" aria-hidden="true"></div></div>
+    </div>
+    <div class="slots" id="slots" aria-label="Ordre choisi"></div>
+    <div class="choices" id="choices"></div>
+    <div class="actions"><button class="reset" id="btnReset">Recommencer</button><button class="check" id="check">Vérifier</button></div>
+    <div class="feedback" id="feedback" aria-live="polite"></div>
+  </main>
+  <script>
+    window.SIMULATION_CONFIG={id:'ordre_respiration_svt',variants:[{id:'exercise',label:'Classement visuel'}]};
+    const items=[{id:'glycolyse',icon:'⬡ → 2×',label:'Glycolyse'},{id:'krebs',icon:'⟳ CO₂',label:'Cycle de Krebs'},{id:'chaine',icon:'O₂ ⚡ ATP',label:'Chaîne respiratoire'},{id:'fermentation',icon:'🚫 O₂',label:'Fermentation'}];
+    const answer=['glycolyse','krebs','chaine'];let selected=[];let actions=[];
+    const slots=document.getElementById('slots'),choices=document.getElementById('choices'),feedback=document.getElementById('feedback');
+    function render(){slots.innerHTML='';for(let i=0;i<3;i++){const box=document.createElement('button');box.className='slot'+(selected[i]?' filled':'');box.type='button';box.textContent=selected[i]?items.find(x=>x.id===selected[i]).icon+' '+items.find(x=>x.id===selected[i]).label:(i+1)+' ?';box.onclick=()=>{if(selected[i]){selected.splice(i,1);render()}};slots.appendChild(box)}choices.innerHTML='';items.forEach(item=>{const b=document.createElement('button');b.className='choice';b.type='button';b.disabled=selected.includes(item.id);b.innerHTML='<div style="font-size:24px">'+item.icon+'</div>'+item.label;b.onclick=()=>{if(selected.length<3){selected.push(item.id);actions.push('place_'+item.id);render()}};choices.appendChild(b)});document.getElementById('score').textContent=selected.length+' / 3'}
+    function submit(){const correct=answer.every((id,i)=>selected[i]===id);feedback.className='feedback '+(correct?'ok':'no');feedback.textContent=correct?'✓ Ordre correct':'↺ Observe les lieux et essaie encore';actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'ordre_respiration_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,selected,expected:answer,skill:'ordonner_les_etapes'},objective_progress:correct?1:0.35,timestamp:Date.now()},'*')}
+    function reset(){selected=[];actions.push('reset');feedback.textContent='';render()}
+    window.runVariant=reset;window.executeAICommand=(command)=>{if(command==='reset'||command==='start'||command==='set_variant')reset()};document.getElementById('check').onclick=submit;document.getElementById('btnReset').onclick=reset;render();
+  </script>
+</body>
+</html>

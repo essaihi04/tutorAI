@@ -125,6 +125,7 @@ class SessionProgressService:
                 current_objective_index=objective_index + 1,
                 topics_covered=topics,
                 key_points_learned=points,
+                last_ai_summary=existing.get("last_ai_summary", ""),
                 status=status,
             )
         except Exception as e:
@@ -196,6 +197,28 @@ class SessionProgressService:
         except Exception as e:
             _log.error(f"[Progress] Error getting all progress: {e}")
             return []
+
+    async def is_chapter_completed(self, student_id: str, chapter_id: str) -> bool:
+        """Return True only when every lesson in the chapter is completed."""
+        try:
+            lessons_result = self.supabase.table("lessons").select("id").eq(
+                "chapter_id", chapter_id
+            ).execute()
+            lesson_ids = {row["id"] for row in (lessons_result.data or [])}
+            if not lesson_ids:
+                return False
+
+            progress_result = self.supabase.table("lesson_progress").select(
+                "lesson_id,status"
+            ).eq("student_id", student_id).execute()
+            completed_ids = {
+                row["lesson_id"] for row in (progress_result.data or [])
+                if row.get("status") == "completed"
+            }
+            return lesson_ids.issubset(completed_ids)
+        except Exception as e:
+            _log.error(f"[Progress] Error checking chapter completion: {e}")
+            return False
 
 
 # Singleton instance

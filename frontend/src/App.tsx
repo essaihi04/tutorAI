@@ -65,7 +65,7 @@ export default function App() {
             }
           />
           <Route
-            path="/session/:chapterId"
+            path="/session/:chapterId/:lessonId?"
             element={
               <ProtectedRoute>
                 <LearningSession />

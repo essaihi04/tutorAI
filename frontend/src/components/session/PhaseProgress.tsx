@@ -1,14 +1,14 @@
 const PHASES = [
-  { key: 'activation', label: 'Activation', icon: '⚡' },
-  { key: 'exploration', label: 'Exploration', icon: '🔍' },
-  { key: 'explanation', label: 'Explication', icon: '💡' },
-  { key: 'application', label: 'Application', icon: '🧪' },
-  { key: 'consolidation', label: 'Consolidation', icon: '🏆' },
+  { key: 'activation', label: 'Question de départ', icon: '⚡' },
+  { key: 'exploration', label: "J'observe", icon: '🔍' },
+  { key: 'explanation', label: "J'explique", icon: '💡' },
+  { key: 'application', label: "Je m'entraîne", icon: '🧪' },
+  { key: 'consolidation', label: 'Je valide', icon: '🏆' },
 ] as const;
 
 interface PhaseProgressProps {
   currentPhase: string;
-  onAdvance: () => void;
+  onAdvance?: () => void;
 }
 
 export default function PhaseProgress({ currentPhase, onAdvance }: PhaseProgressProps) {
@@ -73,7 +73,7 @@ export default function PhaseProgress({ currentPhase, onAdvance }: PhaseProgress
         </div>
 
         {/* Advance button */}
-        {!isLastPhase && (
+        {!isLastPhase && onAdvance && (
           <div className="flex justify-end mt-1">
             <button
               onClick={onAdvance}

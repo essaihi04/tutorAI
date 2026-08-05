@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Filières énergétiques de l'effort</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#071426;color:#eef8ff;font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:14px}.app{width:min(900px,100%);background:#0d2038;border:1px solid #294d6d;border-radius:20px;padding:18px}h1{font-size:clamp(18px,3vw,26px);margin:0 0 14px}.scenarios{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.scenario{border:2px solid #37648d;border-radius:15px;background:#173753;color:white;padding:13px 8px;cursor:pointer;text-align:center}.scenario .icon{font-size:40px;display:block}.scenario .time{display:block;color:#9ed7ff;margin-top:5px;font-weight:800}.scenario.selected{background:#235f89;border-color:#8dddff}.timeline{height:18px;background:linear-gradient(90deg,#fbbf24 0 8%,#f97316 8% 28%,#22c55e 28% 100%);border-radius:999px;margin:18px 4px;position:relative}.marker{position:absolute;top:-7px;width:4px;height:32px;background:white;left:2%;transition:left .3s}.pathways{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.pathway{border:0;border-radius:14px;background:#263f5b;color:#fff;padding:13px 8px;cursor:pointer;font-weight:800;min-height:82px}.pathway .symbol{display:block;font-size:27px;margin-bottom:5px}.pathway.selected{outline:3px solid #a7f3d0;background:#17634e}.actions{text-align:center;margin-top:15px}.actions button{border:0;border-radius:12px;background:#34d399;color:#06251b;padding:11px 20px;font-weight:850;cursor:pointer}.feedback{text-align:center;min-height:30px;margin-top:9px;font-weight:800}.ok{color:#6ee7b7}.no{color:#fda4af}@media(max-width:640px){.scenarios,.pathways{grid-template-columns:1fr}.scenario,.pathway{min-height:60px}.scenario .icon,.pathway .symbol{font-size:26px;display:inline;margin-right:8px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Choisis l'effort puis sa filière dominante</h1>
+    <div class="scenarios">
+      <button class="scenario" data-id="sprint"><span class="icon">🏃‍♂️</span>Sprint 60 m<span class="time">≈ 7 s</span></button>
+      <button class="scenario" data-id="tour"><span class="icon">🏃</span>Tour de piste<span class="time">≈ 50 s</span></button>
+      <button class="scenario" data-id="marathon"><span class="icon">🏃‍♀️</span>Marathon<span class="time">≈ 3 h</span></button>
+    </div>
+    <div class="timeline" aria-label="Durée de l'effort"><span class="marker" id="marker"></span></div>
+    <div class="pathways">
+      <button class="pathway" data-id="pcr"><span class="symbol">⚡</span>ATP–phosphocréatine</button>
+      <button class="pathway" data-id="lactique"><span class="symbol">🔥</span>Fermentation lactique</button>
+      <button class="pathway" data-id="respiration"><span class="symbol">O₂</span>Respiration</button>
+    </div>
+    <div class="actions"><button id="check">Vérifier</button></div><div class="feedback" id="feedback" aria-live="polite"></div>
+  </main>
+  <script>
+    window.SIMULATION_CONFIG={id:'filieres_effort_svt',variants:[{id:'exercise',label:'Filières selon l’effort'}]};
+    const expected={sprint:'pcr',tour:'lactique',marathon:'respiration'},positions={sprint:'2%',tour:'18%',marathon:'88%'};let scenario=null,pathway=null,actions=[];
+    document.querySelectorAll('.scenario').forEach(button=>button.onclick=()=>{document.querySelectorAll('.scenario').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');scenario=button.dataset.id;document.getElementById('marker').style.left=positions[scenario];actions.push('scenario_'+scenario)});
+    document.querySelectorAll('.pathway').forEach(button=>button.onclick=()=>{document.querySelectorAll('.pathway').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');pathway=button.dataset.id;actions.push('pathway_'+pathway)});
+    function submit(){const correct=scenario&&pathway&&expected[scenario]===pathway;const feedback=document.getElementById('feedback');feedback.className='feedback '+(correct?'ok':'no');feedback.textContent=correct?'✓ Association correcte':'↺ Relie surtout la durée à la vitesse de production d’ATP';actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'filieres_effort_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,scenario,pathway,expected:scenario?expected[scenario]:null,skill:'choisir_filiere_energetique'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
+    function reset(){scenario=null;pathway=null;actions.push('reset');document.querySelectorAll('button').forEach(b=>b.classList.remove('selected'));document.getElementById('marker').style.left='2%';document.getElementById('feedback').textContent=''}
+    window.runVariant=reset;window.executeAICommand=(command)=>{if(command==='reset'||command==='start'||command==='set_variant')reset()};document.getElementById('check').onclick=submit;
+  </script>
+</body>
+</html>

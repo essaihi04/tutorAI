@@ -185,7 +185,7 @@ async def seed_lessons(session: AsyncSession):
             learning_objectives=lesson_data["learning_objectives"],
             duration_minutes=lesson_data["duration_minutes"],
             media_resources=lesson_data.get("media_resources", []),
-            order_index=0
+            order_index=lesson_data.get("order_index", 0)
         )
         session.add(lesson)
         total_lessons += 1

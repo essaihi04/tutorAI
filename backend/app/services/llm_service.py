@@ -83,6 +83,7 @@ Actions supportées:
 - {"type":"media","action":"open","resource_type":"image"}
 - {"type":"media","action":"open","resource_type":"simulation"}
 - {"type":"media","action":"close"}
+- {"type":"simulation","action":"control","payload":{"command":"<commande autorisée>","parameters":{},"guidance_text":"Consigne brève"}}
 - {"type":"exercise","action":"open"}
 - {"type":"exercise","action":"close"}
 - {"type":"session","action":"close_all"}
@@ -96,6 +97,7 @@ Règles:
 - Exemple: un tableau de définition puis un autre tableau d'exemple peuvent apparaître comme deux actions whiteboard séparées.
 - CHAQUE action whiteboard DOIT contenir le JSON complet avec title et lines/steps. Pas de placeholder!
 - Le backend valide et traduit ces actions vers l'interface réelle.
+- Quand une simulation est active, lis son bloc [SIMULATION INTERACTIVE ACTIVE] avant de commenter. Pour la manipuler, utilise uniquement une commande déclarée dans available_commands et command_schema.
 - Les tags legacy restent supportés, mais le bloc <ui> est désormais la voie recommandée.
 
 Exemple de 3 tableaux successifs (CORRECT):

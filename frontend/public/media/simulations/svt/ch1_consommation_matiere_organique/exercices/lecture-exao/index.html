@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lecture de courbes EXAO</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#071426;color:#edf7ff;font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:14px}.app{width:min(900px,100%);background:#0d2038;border:1px solid #294c6c;border-radius:20px;padding:18px}h1{font-size:clamp(18px,3vw,26px);margin:0 0 14px}.graphs{display:grid;grid-template-columns:1fr 1fr;gap:14px}.graph{background:#f8fbff;border-radius:16px;padding:10px;color:#15304a}.graph h2{font-size:18px;margin:0 0 5px}.graph svg{width:100%;height:auto;display:block}.axis{stroke:#58718a;stroke-width:2}.grid{stroke:#d9e5ef;stroke-width:1}.o2{fill:none;stroke:#2185d0;stroke-width:5}.co2{fill:none;stroke:#ef7a43;stroke-width:5}.legend{display:flex;gap:14px;font-weight:700;font-size:13px}.dot{display:inline-block;width:12px;height:4px;margin-right:4px;vertical-align:middle}.match{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.choices{display:flex;gap:8px}.choices button{flex:1;border:2px solid #37648d;border-radius:12px;background:#183b5b;color:white;padding:11px 6px;font-weight:750;cursor:pointer}.choices button.selected{background:#45a3d8;border-color:#9ee3ff}.actions{text-align:center;margin-top:14px}.actions button{border:0;border-radius:12px;background:#34d399;color:#06251b;padding:11px 20px;font-weight:850;cursor:pointer}.feedback{text-align:center;min-height:30px;margin-top:9px;font-weight:800}.ok{color:#6ee7b7}.no{color:#fda4af}@media(max-width:650px){.graphs,.match{grid-template-columns:1fr}}
+    .axis,.grid{fill:none}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Associe chaque courbe à la bonne voie</h1>
+    <div class="graphs">
+      <section class="graph"><h2>Courbe A</h2><svg viewBox="0 0 340 210" role="img" aria-label="Oxygène diminue et dioxyde de carbone augmente"><path class="grid" d="M35 30H325M35 85H325M35 140H325"/><path class="axis" d="M35 20V175H325"/><path class="o2" d="M40 45 C120 50 180 95 315 150"/><path class="co2" d="M40 155 C130 145 210 80 315 45"/></svg><div class="legend"><span><i class="dot" style="background:#2185d0"></i>O₂</span><span><i class="dot" style="background:#ef7a43"></i>CO₂</span></div></section>
+      <section class="graph"><h2>Courbe B</h2><svg viewBox="0 0 340 210" role="img" aria-label="Oxygène reste nul et dioxyde de carbone augmente"><path class="grid" d="M35 30H325M35 85H325M35 140H325"/><path class="axis" d="M35 20V175H325"/><path class="o2" d="M40 157 L315 157"/><path class="co2" d="M40 152 C140 145 210 90 315 42"/></svg><div class="legend"><span><i class="dot" style="background:#2185d0"></i>O₂</span><span><i class="dot" style="background:#ef7a43"></i>CO₂</span></div></section>
+    </div>
+    <div class="match"><div class="choices" data-graph="A"><button data-value="respiration">Respiration</button><button data-value="fermentation">Fermentation</button></div><div class="choices" data-graph="B"><button data-value="respiration">Respiration</button><button data-value="fermentation">Fermentation</button></div></div>
+    <div class="actions"><button id="check">Vérifier</button></div><div id="feedback" class="feedback" aria-live="polite"></div>
+  </main>
+  <script>
+    window.SIMULATION_CONFIG={id:'lecture_exao_svt',variants:[{id:'exercise',label:'Interprétation EXAO'}]};
+    let selected={A:null,B:null},actions=[];
+    document.querySelectorAll('.choices button').forEach(button=>button.onclick=()=>{const group=button.closest('.choices'),key=group.dataset.graph;group.querySelectorAll('button').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');selected[key]=button.dataset.value;actions.push('choose_'+key+'_'+button.dataset.value)});
+    function submit(){const correct=selected.A==='respiration'&&selected.B==='fermentation';const feedback=document.getElementById('feedback');feedback.className='feedback '+(correct?'ok':'no');feedback.textContent=correct?'✓ Bonne interprétation':'↺ Regarde surtout l’évolution de O₂';actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'lecture_exao_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,answers:selected,skill:'interpreter_courbes_exao'},objective_progress:correct?1:0.35,timestamp:Date.now()},'*')}
+    function reset(){selected={A:null,B:null};actions.push('reset');document.querySelectorAll('.choices button').forEach(b=>b.classList.remove('selected'));document.getElementById('feedback').textContent=''}
+    window.runVariant=reset;window.executeAICommand=(command)=>{if(command==='reset'||command==='start'||command==='set_variant')reset()};document.getElementById('check').onclick=submit;
+  </script>
+</body>
+</html>
