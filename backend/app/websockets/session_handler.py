@@ -315,6 +315,31 @@ _MATH_SEGMENT_RE = re.compile(
 )
 
 
+def _split_inline_heading(text: str, max_len: int = 70) -> tuple[str, str]:
+    """Sépare un titre de son corps quand les deux sont sur la même ligne.
+
+    Le modèle écrit « 1. Le gène Le gène houwa l'unité d'information… » : sans
+    découpage, tout le paragraphe atterrissait sur le tableau comme un titre.
+    Renvoie (titre, corps) — `corps` vide si la ligne est déjà courte.
+    """
+    t = (text or "").strip()
+    if len(t) <= max_len:
+        return t, ""
+    # Une numérotation de tête (« 1. ») ne marque pas la fin du titre.
+    lead = re.match(r'^\d+[\.\)]\s*', t)
+    start = lead.end() if lead else 0
+    # Fin de phrase proche : c'est la coupure la plus naturelle.
+    m = re.search(r'[.!?:]\s+', t[start:start + max_len + 50])
+    if m:
+        cut = start + m.end()
+        return t[:cut].strip(' .:!?'), t[cut:].strip()
+    # Sinon : dernier espace avant la limite.
+    cut = t.rfind(' ', 0, max_len)
+    if cut <= 0:
+        return t, ""
+    return t[:cut].strip(), t[cut:].strip()
+
+
 def _clean_markdown_preserving_latex(s: str) -> str:
     r"""Strip markdown emphasis WITHOUT destroying mathematical notation.
 
@@ -4645,7 +4670,14 @@ RÈGLES :
                 return
 
             if len(clean_text) > 20:
-                if force_schema:
+                # ⚠️ La relance n'était tentée qu'en coaching/explain
+                # (`force_schema`). En mode LIBRE, une vraie leçon sans bloc
+                # <ui> tombait donc directement dans le repli automatique :
+                # le cours restait dans le chat et le tableau n'affichait
+                # qu'une étape. On relance désormais dès que la réponse a un
+                # contenu réellement pédagogique — le bavardage, lui, a déjà
+                # été écarté plus haut et ne déclenche aucune relance.
+                if force_schema or has_educational_content:
                     retry_count = getattr(self, '_structured_board_retry_count', 0)
                     max_retries = 3  # Increased from 1 to 3 retries
                     if retry_count < max_retries:
@@ -4723,8 +4755,26 @@ RÈGLES :
                 # LLM's doubled backslashes (\\ln) visible on the board.
                 _clean_md = _clean_markdown_preserving_latex
 
+                # ── Le modèle écrit souvent TOUT SUR UNE SEULE LIGNE ──
+                # Il place ses marqueurs markdown EN MILIEU de phrase
+                # (« … fhemtich. --- ### 1. Le gène **Le gène** houwa … »).
+                # Sans retour à la ligne, le découpage ci-dessous produisait UNE
+                # ligne unique → un tableau d'une seule étape, et toute la leçon
+                # restait dans le chat. On rétablit donc la structure à partir
+                # des marqueurs eux-mêmes avant de découper.
+                structured = clean_text
+                # Séparateurs `---` (jamais un mot composé : on exige des
+                # frontières non alphanumériques de part et d'autre)
+                structured = re.sub(r'\s*(?<![-\w])-{3,}(?![-\w])\s*', '\n\n', structured)
+                # Titres `###` inline → nouvelle ligne
+                structured = re.sub(r'\s*(#{1,6}\s+)', r'\n\1', structured)
+                # Puces « * texte » inline (sans toucher au `**gras**`)
+                structured = re.sub(r'\s+\*\s+(?=\S)', '\n- ', structured)
+                # Éléments numérotés « 2. » après une fin de phrase
+                structured = re.sub(r'(?<=[.!?:])\s+(\d+[\.\)]\s)', r'\n\1', structured)
+
                 # Split by double-newline for paragraphs, or single-newline for lines
-                paragraphs = re.split(r'\n{2,}', clean_text)
+                paragraphs = re.split(r'\n{2,}', structured)
                 for para in paragraphs:
                     para = para.strip()
                     if not para:
@@ -4736,12 +4786,20 @@ RÈGLES :
                         if not raw_line:
                             continue
                         # Detect headings
-                        if raw_line.startswith('### '):
-                            auto_lines.append({"type": "subtitle", "content": _clean_md(raw_line[4:])})
-                        elif raw_line.startswith('## '):
-                            auto_lines.append({"type": "subtitle", "content": _clean_md(raw_line[3:])})
+                        # ⚠️ Le modèle enchaîne le corps du texte sur la MÊME
+                        # ligne que son titre (« ### 1. Le gène Le gène houwa
+                        # l'unité… ») : sans séparation, tout le paragraphe
+                        # devenait un titre géant sur le tableau.
+                        if raw_line.startswith('### ') or raw_line.startswith('## '):
+                            head, body = _split_inline_heading(raw_line.split(' ', 1)[1])
+                            auto_lines.append({"type": "subtitle", "content": _clean_md(head)})
+                            if body:
+                                auto_lines.append({"type": "text", "content": _clean_md(body)})
                         elif raw_line.startswith('# '):
-                            auto_lines.append({"type": "title", "content": _clean_md(raw_line[2:])})
+                            head, body = _split_inline_heading(raw_line[2:])
+                            auto_lines.append({"type": "title", "content": _clean_md(head)})
+                            if body:
+                                auto_lines.append({"type": "text", "content": _clean_md(body)})
                         # Detect bold-only lines as subtitles
                         elif re.match(r'^\*\*(.+?)\*\*\s*:?\s*$', raw_line):
                             title_text = re.sub(r'\*\*', '', raw_line).strip().rstrip(':')
@@ -4758,6 +4816,26 @@ RÈGLES :
                         # Display-mode math ($$...$$)
                         elif raw_line.startswith('$$') and raw_line.endswith('$$'):
                             auto_lines.append({"type": "math", "content": raw_line})
+                        # Un pavé de texte n'est pas une ligne de tableau : un
+                        # professeur écrit une idée par ligne. On redécoupe en
+                        # phrases pour que le cours se déroule progressivement.
+                        elif len(raw_line) > 180:
+                            sentences = re.split(r'(?<=[.!?؟])\s+(?=[A-ZÀ-ÖØ-Þ؀-ۿ0-9])', raw_line)
+                            buf = ""
+                            for sentence in sentences:
+                                sentence = sentence.strip()
+                                if not sentence:
+                                    continue
+                                # Regroupe les phrases très courtes pour ne pas
+                                # émietter le tableau en fragments de 3 mots.
+                                if len(buf) + len(sentence) + 1 <= 180:
+                                    buf = f"{buf} {sentence}".strip()
+                                else:
+                                    if buf:
+                                        auto_lines.append({"type": "text", "content": _clean_md(buf)})
+                                    buf = sentence
+                            if buf:
+                                auto_lines.append({"type": "text", "content": _clean_md(buf)})
                         else:
                             auto_lines.append({"type": "text", "content": _clean_md(raw_line)})
 
