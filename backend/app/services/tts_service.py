@@ -67,6 +67,18 @@ _TAG_PATTERNS = [
 _MULTISPACE_RE = re.compile(r"[ \t]{2,}")
 _MULTINEWLINE_RE = re.compile(r"\n{3,}")
 
+# Marqueurs de diction compris par le modèle Academy ([pause] pour respirer,
+# [hes], [breath], [laugh]). Les autres moteurs les liraient à voix haute
+# (« crochet pause »…) : on les retire avant de leur envoyer le texte.
+_VOICE_MARKER_RE = re.compile(r"\[(?:pause|hes|breath|laugh)\]", re.IGNORECASE)
+
+
+def strip_voice_markers(text: str) -> str:
+    """Retire les marqueurs de diction — pour tout moteur SAUF Academy."""
+    if not text:
+        return ""
+    return _MULTISPACE_RE.sub(" ", _VOICE_MARKER_RE.sub(" ", text)).strip()
+
 
 def clean_for_tts(text: str) -> str:
     """Remove markup, formulas and icons; return a speakable version."""
@@ -219,6 +231,7 @@ def _trip_gemini_breaker(reason: str):
 
 async def _synthesize_gemini(text: str, lang: str) -> Optional[bytes]:
     """Call Gemini 2.5 Flash TTS. Returns WAV bytes or None on error."""
+    text = strip_voice_markers(text)
     key = settings.gemini_tts_api_key
     if not key:
         _safe_log("[TTS] Gemini TTS skipped: no API key")
@@ -283,6 +296,7 @@ _GCLOUD_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize?key={k
 
 async def _synthesize_google_cloud(text: str, lang: str) -> Optional[bytes]:
     """Call Google Cloud TTS Standard. Returns MP3 bytes or None."""
+    text = strip_voice_markers(text)
     key = settings.google_cloud_tts_api_key or settings.gemini_tts_api_key
     if not key:
         _safe_log("[TTS] Google Cloud TTS skipped: no API key")
@@ -318,6 +332,166 @@ async def _synthesize_google_cloud(text: str, lang: str) -> Optional[bytes]:
         return base64.b64decode(b64)
     except Exception as e:
         _safe_log(f"[TTS][GCloud] Exception: {e}")
+        return None
+
+
+# ─── Provider: Academy Darija-FR TTS (self-hosted, Colab + tunnel) ──
+#
+# Modèle fine-tuné maison (voix « prof »), exposé par une petite API FastAPI :
+#   POST {base}/tts   header `Authorization: Bearer <jeton>`
+#         body {"texte": …, "langue": "ma"|"darija"|"fr", "voix": …,
+#               "normaliser": true, "exaggeration", "temperature", "cfg_weight"}
+#         → renvoie directement les octets WAV (audio/wav)
+#   GET  {base}/health   → {"statut":"ok","device":"cuda","voix":[…]}
+#   GET  {base}/voices   → identifiants de voix disponibles
+#
+# C'est le provider PRIORITAIRE : gratuit, voix du professeur, sans quota.
+# L'URL du tunnel change à chaque redémarrage du notebook → elle vit dans
+# backend/.env (ACADEMY_TTS_URL / ACADEMY_TTS_TOKEN), jamais dans le code.
+#
+# Contrat du modèle (contraintes fortes) :
+#   • 5 000 caractères maximum par requête ;
+#   • `normaliser` applique l'orthographe darija (ال → ل) sur les lettres
+#     lunaires ; les solaires non traitées reviennent dans l'en-tête
+#     `X-A-Verifier` (on les journalise pour pouvoir corriger le texte source) ;
+#   • exaggeration > 0.6 dérive sur les phrases longues — d'où le défaut 0.45.
+
+_ACADEMY_COOLDOWN_UNTIL: float = 0.0
+_ACADEMY_COOLDOWN_SECONDS = 120.0   # le temps qu'un Colab tombé redémarre
+
+# Le GPU Colab traite UN job à la fois : sérialiser les appels évite que les
+# segments lancés en parallèle expirent tous dans la file d'attente.
+_ACADEMY_SEM = asyncio.Semaphore(1)
+
+# Un 500 isolé arrive quand le GPU vient d'enchaîner un autre job : ce n'est
+# PAS une panne. On ne coupe le provider qu'après plusieurs échecs d'affilée,
+# sinon un simple à-coup nous priverait de la voix du prof pendant 2 minutes.
+_ACADEMY_FAILS = 0
+_ACADEMY_MAX_FAILS = 3
+
+
+def _academy_is_available() -> bool:
+    return (
+        bool(settings.academy_tts_url)
+        and time.time() >= _ACADEMY_COOLDOWN_UNTIL
+    )
+
+
+def _academy_note_success():
+    global _ACADEMY_FAILS
+    _ACADEMY_FAILS = 0
+
+
+def _trip_academy_breaker(reason: str, *, immediate: bool = False):
+    """Ouvre le disjoncteur — tout de suite si la panne est certaine
+    (jeton refusé, tunnel injoignable), sinon après plusieurs échecs."""
+    global _ACADEMY_COOLDOWN_UNTIL, _ACADEMY_FAILS
+    _ACADEMY_FAILS += 1
+    if not immediate and _ACADEMY_FAILS < _ACADEMY_MAX_FAILS:
+        _safe_log(
+            f"[TTS][Academy] Échec {_ACADEMY_FAILS}/{_ACADEMY_MAX_FAILS} "
+            f"({reason}) — on garde le provider actif"
+        )
+        return
+    _ACADEMY_COOLDOWN_UNTIL = time.time() + _ACADEMY_COOLDOWN_SECONDS
+    _ACADEMY_FAILS = 0
+    _safe_log(
+        f"[TTS][Academy] Circuit breaker OPEN for {_ACADEMY_COOLDOWN_SECONDS:.0f}s "
+        f"(reason: {reason})"
+    )
+
+
+# Le modèle plafonne à 5 000 caractères par requête.
+_ACADEMY_MAX_CHARS = 5000
+
+
+def _academy_lang(lang: str) -> str:
+    """Notre `mixed`/`ar` = darija (« ma » côté API) ; le reste = français.
+
+    Le contrat précise qu'une phrase darija contenant des mots français
+    (écrits en caractères latins) reste en `ma` — on ne bascule sur `fr`
+    que pour un contenu réellement francophone.
+    """
+    return "fr" if lang == "fr" else "ma"
+
+
+async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
+    """Appelle l'API Academy TTS. Renvoie les octets WAV, ou None en cas d'échec."""
+    base = (settings.academy_tts_url or "").rstrip("/")
+    if not base or not _academy_is_available():
+        return None
+
+    # Le serveur refuse au-delà de 5 000 caractères : on coupe à une frontière
+    # de mot plutôt que de laisser partir une requête vouée à l'échec.
+    if len(text) > _ACADEMY_MAX_CHARS:
+        text = text[:_ACADEMY_MAX_CHARS].rsplit(" ", 1)[0]
+
+    payload = {
+        "texte": text,
+        "langue": _academy_lang(lang),
+        "normaliser": bool(settings.academy_tts_normaliser),
+        "exaggeration": settings.academy_tts_exaggeration,
+        "temperature": settings.academy_tts_temperature,
+        "cfg_weight": settings.academy_tts_cfg_weight,
+    }
+    if settings.academy_tts_voice:
+        payload["voix"] = settings.academy_tts_voice
+
+    headers = {"Content-Type": "application/json"}
+    if settings.academy_tts_token:
+        headers["Authorization"] = f"Bearer {settings.academy_tts_token}"
+
+    try:
+        async with _ACADEMY_SEM:
+            t0 = time.time()
+            # Une tentative, puis UN essai de rattrapage : le GPU renvoie
+            # parfois un 500 quand il vient juste de finir un autre segment.
+            for attempt in (1, 2):
+                async with httpx.AsyncClient(timeout=180.0) as client:
+                    resp = await client.post(f"{base}/tts", json=payload, headers=headers)
+
+                if resp.status_code == 200:
+                    audio = resp.content
+                    # L'API renvoie du WAV brut ; un corps JSON (ou du HTML)
+                    # signale une erreur applicative ou une page du tunnel.
+                    if not audio or not audio.startswith(b"RIFF"):
+                        _safe_log(f"[TTS][Academy] Réponse non-WAV: {audio[:120]!r}")
+                        _trip_academy_breaker("réponse non-WAV")
+                        return None
+                    _academy_note_success()
+                    # Lettres solaires que le normaliseur n'a pas pu traiter :
+                    # le texte source gagnerait à être écrit en darija (لشمس
+                    # plutôt que الشمس) — on le signale sans bloquer l'audio.
+                    a_verifier = resp.headers.get("X-A-Verifier")
+                    if a_verifier:
+                        _safe_log(f"[TTS][Academy] À vérifier (orthographe darija): {a_verifier[:200]}")
+                    _safe_log(
+                        f"[TTS][Academy] OK lang={lang} len={len(text)} "
+                        f"bytes={len(audio)} t={int((time.time() - t0) * 1000)}ms"
+                    )
+                    return audio
+
+                _safe_log(f"[TTS][Academy] HTTP {resp.status_code}: {resp.text[:200]}")
+                # 401/403 = jeton refusé : réessayer ne servirait à rien.
+                if resp.status_code in (401, 403):
+                    _trip_academy_breaker(
+                        f"HTTP {resp.status_code} (jeton invalide ?)", immediate=True
+                    )
+                    return None
+                if resp.status_code >= 500 and attempt == 1:
+                    await asyncio.sleep(1.5)   # laisse le GPU se libérer
+                    continue
+                _trip_academy_breaker(f"HTTP {resp.status_code}")
+                return None
+            return None
+    except httpx.ConnectError:
+        _trip_academy_breaker("Colab injoignable (ConnectError)", immediate=True)
+        return None
+    except httpx.ReadTimeout:
+        _trip_academy_breaker("Colab timeout (ReadTimeout)")
+        return None
+    except Exception as e:
+        _safe_log(f"[TTS][Academy] Exception: {e}")
         return None
 
 
@@ -365,6 +539,7 @@ async def _synthesize_gradio(text: str, lang: str) -> Optional[bytes]:
     a time. Without this, parallel segment tasks all hit the endpoint
     together and the 2nd+ ones timeout waiting in the Gradio queue.
     """
+    text = strip_voice_markers(text)
     base = settings.gradio_tts_url.rstrip("/")
     if not base:
         return None
@@ -507,13 +682,16 @@ def _route(lang: str, text: str = "") -> tuple[str, str, str]:
     """Return (provider, voice, extension) for a given language + text.
 
     Priority order:
-      1. Self-hosted Darija TTS via Gradio (FREE, ~2-5s, no quota)
-         → used for mixed (Darija) and ar (Arabic)
-      2. Gemini 2.5 Flash TTS (authentic but 429-prone on free tier)
-         → used for fr (French) or as fallback when Gradio is down
-      3. Google Cloud TTS
+      1. Academy Darija-FR TTS (modèle fine-tuné maison, voix du professeur)
+         → FREE, sans quota, gère darija ET français
+      2. Self-hosted Darija TTS via Gradio (FREE, ~2-5s, no quota)
+      3. Gemini 2.5 Flash TTS (authentic but 429-prone on free tier)
+      4. Google Cloud TTS
          → emergency fallback only
     """
+    # Notre modèle maison passe avant tout le reste (gratuit + voix du prof)
+    if _academy_is_available():
+        return ("academy", settings.academy_tts_voice or "prof", "wav")
     # Darija & Arabic → self-hosted Gradio TTS (Chatterbox on Colab)
     if lang in ("mixed", "ar") and _gradio_is_available():
         return ("gradio", "darija", "wav")
@@ -574,8 +752,25 @@ _SEG_MIN_CHARS = 20          # avoid wasting API calls on 2-word fragments
 _SEG_MAX_CHARS = 200         # keep each Gemini call short & focused
 _SEG_MERGE_TARGET = 90       # aim for ~90-char chunks (~15-20 words)
 
+# ── Academy TTS : gros blocs plutôt que micro-segments ──
+# Son contrat demande d'envoyer les textes longs ENTIERS : le serveur découpe
+# lui-même aux frontières de phrase et concatène avec 0,25 s de silence — donc
+# une prosodie et des respirations bien meilleures que si on le hachait.
+# On ne garde qu'un découpage GROSSIER (et toujours sur une fin de phrase) pour
+# que l'élève entende le début du cours sans attendre la génération complète :
+# le GPU Colab traite un job à la fois (~1 s d'audio par seconde de calcul),
+# une réponse longue envoyée d'un bloc le ferait patienter plusieurs minutes.
+# En pratique la quasi-totalité des réponses tient dans un seul bloc.
+_SEG_ACADEMY_MAX_CHARS = 1200
+_SEG_ACADEMY_TARGET = 700
 
-def split_into_segments(text: str) -> list[str]:
+
+def split_into_segments(
+    text: str,
+    *,
+    max_chars: int = _SEG_MAX_CHARS,
+    merge_target: int = _SEG_MERGE_TARGET,
+) -> list[str]:
     """Split text into TTS-friendly segments at sentence boundaries."""
     if not text:
         return []
@@ -589,16 +784,16 @@ def split_into_segments(text: str) -> list[str]:
         if out and len(out[-1]) < _SEG_MIN_CHARS:
             out[-1] = (out[-1] + " " + piece).strip()
             continue
-        if out and len(out[-1]) + len(piece) + 1 <= _SEG_MERGE_TARGET:
+        if out and len(out[-1]) + len(piece) + 1 <= merge_target:
             # Merge short adjacent sentences toward target size
             out[-1] = (out[-1] + " " + piece).strip()
             continue
-        if len(piece) > _SEG_MAX_CHARS:
+        if len(piece) > max_chars:
             # Hard split long run-on sentences on commas / semicolons
             chunks = re.split(r"(?<=[,;:\u060C])\s+", piece)
             buf = ""
             for c in chunks:
-                if len(buf) + len(c) + 1 > _SEG_MAX_CHARS:
+                if len(buf) + len(c) + 1 > max_chars:
                     if buf:
                         out.append(buf.strip())
                     buf = c
@@ -645,7 +840,19 @@ async def _synthesize_one_segment(
             )
 
     audio_bytes: Optional[bytes] = None
-    if provider == "gradio":
+    if provider == "academy":
+        audio_bytes = await _synthesize_academy(cleaned, language)
+        if not audio_bytes:
+            # Colab tombé → on redescend la chaîne de secours pour ce segment
+            _safe_log("[TTS][seg] Academy fail → Gradio/Gemini fallback")
+            audio_bytes = await _synthesize_gradio(cleaned, language)
+            if audio_bytes:
+                provider, voice, ext = "gradio", "darija", "wav"
+            else:
+                audio_bytes = await _synthesize_gemini(cleaned, language)
+                if audio_bytes:
+                    provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
+    elif provider == "gradio":
         audio_bytes = await _synthesize_gradio(cleaned, language)
         if not audio_bytes:
             # Gradio failed → try Gemini as fallback for this segment
@@ -707,7 +914,17 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
     if len(cleaned) > 3000:
         cleaned = cleaned[:3000].rsplit(" ", 1)[0] + "…"
 
-    segments = split_into_segments(cleaned)
+    # Le modèle Academy veut des textes longs entiers (il gère lui-même les
+    # frontières de phrase) ; les providers cloud préfèrent de petits appels
+    # parallélisables.
+    if _academy_is_available():
+        segments = split_into_segments(
+            cleaned,
+            max_chars=_SEG_ACADEMY_MAX_CHARS,
+            merge_target=_SEG_ACADEMY_TARGET,
+        )
+    else:
+        segments = split_into_segments(cleaned)
     if not segments:
         return
 
@@ -720,7 +937,7 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
         for seg in segments
     ]
 
-    stats = {"gradio": 0, "gemini": 0, "google_cloud": 0, "cached": 0, "failed": 0}
+    stats = {"academy": 0, "gradio": 0, "gemini": 0, "google_cloud": 0, "cached": 0, "failed": 0}
     first_ms: Optional[int] = None
 
     try:
@@ -753,7 +970,7 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
         _safe_log(
             f"[TTS][stream] lang={language} segs={total} "
             f"first={first_ms}ms total={elapsed_ms}ms "
-            f"cached={stats['cached']} "
+            f"cached={stats['cached']} academy={stats.get('academy', 0)} "
             f"gradio={stats.get('gradio', 0)} gemini={stats.get('gemini', 0)} "
             f"gcloud={stats.get('google_cloud', 0)} failed={stats['failed']}"
         )
@@ -797,7 +1014,17 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     # Miss → synthesize (Gradio first, then Gemini, then GCloud)
     t0 = time.time()
     audio_bytes: Optional[bytes] = None
-    if provider == "gradio":
+    if provider == "academy":
+        audio_bytes = await _synthesize_academy(cleaned, language)
+        if not audio_bytes:
+            audio_bytes = await _synthesize_gradio(cleaned, language)
+            if audio_bytes:
+                provider, voice, ext = "gradio", "darija", "wav"
+            else:
+                audio_bytes = await _synthesize_gemini(cleaned, language)
+                if audio_bytes:
+                    provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
+    elif provider == "gradio":
         audio_bytes = await _synthesize_gradio(cleaned, language)
         if not audio_bytes:
             audio_bytes = await _synthesize_gemini(cleaned, language)

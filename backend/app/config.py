@@ -58,6 +58,20 @@ class Settings(BaseSettings):
     gradio_tts_temperature: float = 0.8
     gradio_tts_cfg_weight: float = 0.5
 
+    # Academy Darija-FR TTS (modèle fine-tuné auto-hébergé — Colab + tunnel).
+    # API FastAPI : POST /tts (WAV brut), GET /health, GET /voices.
+    # ⚠️ URL et JETON vivent dans backend/.env (jamais dans le dépôt) :
+    #    ACADEMY_TTS_URL=https://…trycloudflare.com
+    #    ACADEMY_TTS_TOKEN=…
+    # L'URL du tunnel change à chaque redémarrage du notebook Colab.
+    academy_tts_url: str = ""
+    academy_tts_token: str = ""
+    academy_tts_voice: str = ""          # vide = première voix du serveur
+    academy_tts_normaliser: int = 1      # applique l'orthographe darija (ال → ل)
+    academy_tts_exaggeration: float = 0.45   # > 0.6 dérive sur les phrases longues
+    academy_tts_temperature: float = 0.7     # 0.3 = quasi déterministe, plus plat
+    academy_tts_cfg_weight: float = 0.5      # 0.7 colle davantage au texte
+
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1
     tts_cache_dir: str = "data/tts_cache"

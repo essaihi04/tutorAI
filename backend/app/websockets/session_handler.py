@@ -910,6 +910,10 @@ class SessionHandler:
         text = re.sub(r'<suggestions>[\s\S]*?</suggestions>', '', text, flags=re.DOTALL)
         text = re.sub(r'<suggestions>[\s\S]*', '', text, flags=re.DOTALL)
         text = re.sub(r'\[CMD:[^\]]+\]', '', text)
+        # Marqueurs de diction destinés au modèle vocal ([pause], [breath]…) :
+        # ils pilotent la voix du professeur mais ne doivent JAMAIS apparaître
+        # dans la bulle de chat lue par l'élève.
+        text = re.sub(r'\[(?:pause|hes|breath|laugh)\]', ' ', text, flags=re.IGNORECASE)
 
         command_keywords = [
             "FERMER_TABLEAU", "OUVRIR_IMAGE", "FERMER_IMAGE", "CACHER_MEDIA",
