@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import 'katex/dist/katex.min.css';
 import { renderMixedContent, renderDisplayMath, containsArabic } from './MathBoard';
 import { speechService } from '../../services/speechService';
+import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
 import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
 
@@ -180,6 +181,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const questionFieldRef = useRef<HTMLInputElement>(null);
   // Résout la promesse sur laquelle le script attend la réponse de l'élève.
   const askResolveRef = useRef<(() => void) | null>(null);
+  // Lecture audio en cours (notre voix) + langue de la session, lues depuis
+  // le moteur de lecture sans le faire dépendre du cycle de rendu React.
+  const voiceHandleRef = useRef<BoardSpeakHandle | null>(null);
+  const langRef = useRef<'fr' | 'ar' | 'mixed'>('fr');
   const drawZoneRef = useRef<HTMLDivElement>(null);
   // Zoom piloté par le prof — via ref car défini après play() dans le fichier.
   const zoomToPointRef = useRef<(x: number, y: number, s: number) => void>(() => {});
@@ -187,12 +192,45 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   playingRef.current = playing;
   speedRef.current = speed;
   soundOnRef.current = soundOn;
+  langRef.current = language;
 
-  const canSpeak = speechService.ttsSupported;
+  // La voix vient du serveur : elle est toujours disponible, quel que soit le
+  // navigateur (plus de dépendance à la synthèse Web Speech).
+  const canSpeak = true;
 
   const hasDrawSteps = Array.isArray(script?.steps) && script.steps.some(
     s => s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0
   );
+
+  /**
+   * Texte réellement prononcé pour un step — `say` s'il existe, sinon la
+   * ligne écrite (transcrite) ou la narration.
+   */
+  const spokenTextOf = useCallback((step: LiveStep): string => {
+    if (!step) return '';
+    if (typeof step.say === 'string' && step.say.trim()) return step.say.trim();
+    if (step.action === 'write' && typeof step.line?.content === 'string') return step.line.content;
+    if ((step.action === 'narrate' || step.action === 'ask') && typeof step.text === 'string') return step.text;
+    return '';
+  }, []);
+
+  /**
+   * Prépare l'audio des prochaines répliques pendant que la courante est lue.
+   *
+   * Le GPU génère à peu près une seconde d'audio par seconde de calcul : sans
+   * ce préchargement, le tableau s'arrêterait à chaque ligne le temps de la
+   * synthèse. On garde une petite avance (2 répliques) pour ne pas saturer la
+   * file d'un coup — le serveur traite un job à la fois.
+   */
+  const prefetchFrom = useCallback((steps: LiveStep[], fromIndex: number) => {
+    let queued = 0;
+    for (let j = fromIndex; j < steps.length && queued < 2; j++) {
+      const t = toSpokenText(spokenTextOf(steps[j]));
+      if (!t) continue;
+      boardVoice.prefetch(t, langRef.current);
+      queued += 1;
+    }
+  }, [spokenTextOf]);
 
   // Attente "consciente" : respecte pause + vitesse + annulation
   const wait = useCallback(async (ms: number, runId: number): Promise<boolean> => {
@@ -206,28 +244,28 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   }, []);
 
   /**
-   * Dit une ligne à voix haute en pilotant sa révélation, lettre après lettre.
+   * Dit une ligne avec NOTRE voix (modèle serveur) en pilotant sa révélation.
    *
-   * ⚠️ Ne JAMAIS piloter l'écriture uniquement par l'événement `boundary` :
-   * les voix réseau de Chrome (« Google français », celle qu'on privilégie)
-   * ne l'émettent pas. La progression restait alors bloquée à 0 et la ligne
-   * ne s'écrivait jamais.
+   * ⚠️ La synthèse du navigateur n'est plus utilisée : elle ne sait pas dire
+   * la darija (elle la lit avec une voix MSA robotique, quand elle ne refuse
+   * pas), alors que notre modèle est entraîné exactement pour ça. Le tableau
+   * demande donc chaque fragment au serveur et joue le WAV reçu.
    *
-   * L'écriture est donc portée par une horloge (durée estimée d'après le
-   * nombre de mots), et RECALÉE sur la voix chaque fois qu'un `boundary`
-   * arrive — ce qui donne une synchronisation exacte sur les voix locales,
-   * et une écriture fluide et jamais bloquée sur les autres.
+   * L'écriture est portée par une horloge (durée estimée), RECALÉE en continu
+   * sur la position réelle de lecture de l'audio. L'horloge reste nécessaire :
+   * elle couvre le temps de génération avant le premier son, et prend le
+   * relais si la voix échoue — sans elle, la ligne resterait figée.
    *
    * Retourne true si la parole a porté l'animation, false s'il faut retomber
-   * sur l'animation minutée (son coupé, pas de synthèse, ligne muette).
+   * sur l'animation minutée (son coupé, serveur indisponible, ligne muette).
    */
   const speakAndReveal = useCallback(async (raw: string, runId: number): Promise<boolean> => {
-    if (!soundOnRef.current || !speechService.ttsSupported) return false;
+    if (!soundOnRef.current) return false;
     const spoken = toSpokenText(raw);
     if (!spoken) return false;
 
     const rate = speedRef.current;
-    // Durée présumée de la phrase ; recalibrée dès le premier `boundary`.
+    // Durée présumée de la phrase ; recalibrée sur l'audio dès qu'il démarre.
     let estimatedMs = Math.max(600, estimateSpeechMs(spoken, rate));
     let elapsed = 0;
     let revealNow = 0;
@@ -254,27 +292,25 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       }
     }, 50);
 
-    const voiceSpoke = await speechService.speakSynced(spoken, {
-      lang: 'fr',
-      rate,
-      onProgress: (ratio) => {
-        // ratio >= 1 est le signal de FIN (émis aussi par les garde-fous) :
-        // le recalage sur cette valeur faisait sauter la ligne à 99 % d'un
-        // coup — la rampe de rattrapage ci-dessous s'en charge en douceur.
-        if (runId !== runIdRef.current || ratio <= 0 || ratio >= 1) return;
-        // Un `boundary` est arrivé : la voix nous dit où elle en est vraiment.
-        // On réaligne l'horloge dessus (sans jamais revenir en arrière).
-        const observed = ratio * estimatedMs;
-        if (observed > elapsed) elapsed = observed;
-        else estimatedMs = Math.max(600, elapsed / Math.max(ratio, 0.01));
-      },
+    const handle = boardVoice.speak(spoken, langRef.current, (ratio) => {
+      // ratio >= 1 est le signal de FIN : s'y recaler ferait sauter la ligne
+      // à 99 % d'un coup — la rampe de rattrapage s'en charge en douceur.
+      if (runId !== runIdRef.current || ratio <= 0 || ratio >= 1) return;
+      // Position RÉELLE de lecture : on réaligne l'horloge dessus, sans
+      // jamais revenir en arrière.
+      const observed = ratio * estimatedMs;
+      if (observed > elapsed) elapsed = observed;
+      else estimatedMs = Math.max(600, elapsed / Math.max(ratio, 0.01));
     });
+    voiceHandleRef.current = handle;
+    // L'élève a pu mettre en pause pendant la génération de l'audio.
+    if (!playingRef.current) handle.pause();
 
-    // ⚠️ Chrome peut refuser l'utterance INSTANTANÉMENT (pas de geste
-    // utilisateur récent → `not-allowed`, ou speak() juste après cancel()).
-    // La promesse se résout alors avant le premier tick de l'horloge : si on
-    // figeait ici, la ligne apparaîtrait d'un seul coup. On laisse donc
-    // l'horloge finir d'écrire, lettre après lettre, sur la durée estimée.
+    const voiceSpoke = await handle.done;
+    if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
+
+    // Voix indisponible (serveur muet, lecture refusée) : on laisse l'horloge
+    // finir d'écrire lettre après lettre, plutôt que de figer la ligne.
     if (!voiceSpoke && runId === runIdRef.current) {
       while (elapsed < estimatedMs) {
         await new Promise(r => setTimeout(r, 60));
@@ -317,6 +353,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       const step = steps[i];
       if (!step || typeof step !== 'object') continue;
       setStepIndex(i);
+      // Le professeur prépare déjà ce qu'il dira ensuite.
+      prefetchFrom(steps, i + 1);
 
       switch (step.action) {
         case 'write': {
@@ -331,9 +369,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const toSay = typeof step.say === 'string' && step.say.trim()
             ? step.say.trim()
             : line.content;
-          const willSpeak = soundOnRef.current
-            && speechService.ttsSupported
-            && !!toSpokenText(toSay);
+          const willSpeak = soundOnRef.current && !!toSpokenText(toSay);
 
           const entry: WrittenEntry = {
             key: ++keyRef.current,
@@ -378,14 +414,13 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           // step draw) : la voix et le tracé courent en parallèle, et on
           // attend la fin du plus long des deux avant de continuer.
           const toSayDraw = typeof step.say === 'string' ? step.say.trim() : '';
-          const spokenDraw = toSayDraw && soundOnRef.current && speechService.ttsSupported
-            ? toSpokenText(toSayDraw)
-            : '';
+          const spokenDraw = toSayDraw && soundOnRef.current ? toSpokenText(toSayDraw) : '';
           if (spokenDraw) {
-            const [, waited] = await Promise.all([
-              speechService.speakSynced(spokenDraw, { lang: 'fr', rate: speedRef.current }),
-              wait(drawTotal, runId),
-            ]);
+            const handle = boardVoice.speak(spokenDraw, langRef.current);
+            voiceHandleRef.current = handle;
+            if (!playingRef.current) handle.pause();
+            const [, waited] = await Promise.all([handle.done, wait(drawTotal, runId)]);
+            if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
             if (!waited || runId !== runIdRef.current) return;
           } else {
             if (!(await wait(drawTotal, runId))) return;
@@ -492,7 +527,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       }
     }
     if (runId === runIdRef.current) setFinished(true);
-  }, [wait, speakAndReveal]);
+  }, [wait, speakAndReveal, prefetchFrom]);
 
   // (Re)démarrage quand un nouveau script arrive
   useEffect(() => {
@@ -520,18 +555,23 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
 
     // Le tableau prend la parole : on coupe la voix du chat pour ce tour,
     // sinon deux voix se superposent (le backend lit déjà la réponse).
-    speechService.stop();
+    voiceHandleRef.current?.stop();
+    voiceHandleRef.current = null;
+    boardVoice.stop();
 
     if (script && Array.isArray(script.steps) && script.steps.length > 0) {
-      // Chrome charge la liste des voix de façon asynchrone : sans cette
-      // attente la première ligne serait lue par la voix par défaut (anglaise).
-      speechService.ensureVoices().then(() => {
-        if (runId === runIdRef.current) play(script.steps, runId);
-      });
+      // La voix vient du serveur : plus besoin d'attendre la liste des voix
+      // du navigateur, le cours démarre immédiatement. On lance en revanche
+      // la génération des premières répliques pour que le professeur n'ait
+      // pas à marquer un temps d'arrêt entre chaque ligne.
+      prefetchFrom(script.steps, 0);
+      play(script.steps, runId);
     }
     return () => {
       runIdRef.current += 1;
-      speechService.stop();
+      voiceHandleRef.current?.stop();
+      voiceHandleRef.current = null;
+      boardVoice.stop();
       if (revealClockRef.current !== null) {
         clearInterval(revealClockRef.current);
         revealClockRef.current = null;
@@ -540,20 +580,23 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       askResolveRef.current?.();
       askResolveRef.current = null;
     };
-  }, [script, play]);
+  }, [script, play, prefetchFrom]);
 
-  // Pause / reprise : la voix suit l'état de lecture.
+  // Pause / reprise : la voix du professeur suit l'état de lecture.
   useEffect(() => {
-    if (!speechService.ttsSupported) return;
-    try {
-      if (playing) window.speechSynthesis.resume();
-      else window.speechSynthesis.pause();
-    } catch { /* navigateur récalcitrant : on ignore */ }
+    const h = voiceHandleRef.current;
+    if (!h) return;
+    if (playing) h.resume();
+    else h.pause();
   }, [playing]);
 
   // Couper le son doit faire taire la ligne en cours immédiatement.
   useEffect(() => {
-    if (!soundOn) speechService.stop();
+    if (!soundOn) {
+      voiceHandleRef.current?.stop();
+      voiceHandleRef.current = null;
+      boardVoice.stop();
+    }
   }, [soundOn]);
 
   // Auto-scroll de la zone d'écriture
@@ -565,7 +608,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // ⏭ Aller à la fin : état final calculé d'un coup
   const skipToEnd = useCallback(() => {
     runIdRef.current += 1;
-    speechService.stop();
+    voiceHandleRef.current?.stop();
+    voiceHandleRef.current = null;
+    boardVoice.stop();
     if (revealClockRef.current !== null) {
       clearInterval(revealClockRef.current);
       revealClockRef.current = null;
@@ -607,7 +652,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // ↻ Rejouer
   const replay = useCallback(() => {
     const runId = ++runIdRef.current;
-    speechService.stop();
+    voiceHandleRef.current?.stop();
+    voiceHandleRef.current = null;
+    boardVoice.stop();
     if (revealClockRef.current !== null) {
       clearInterval(revealClockRef.current);
       revealClockRef.current = null;
@@ -853,7 +900,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       return;
     }
     if (!speechService.isRecognitionSupported()) return;
-    speechService.stop(); // couper la voix du prof avant d'ouvrir le micro
+    voiceHandleRef.current?.stop();
+    voiceHandleRef.current = null;
+    boardVoice.stop(); // couper la voix du prof avant d'ouvrir le micro
     setPlaying(false);
     setListening(true);
     speechService.listen({

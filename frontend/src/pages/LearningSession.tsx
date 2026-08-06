@@ -726,31 +726,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       revealPendingMedia();
     });
 
-    // Server-side routing: for French (or fallback) backend asks us to speak
-    // via the free Web Speech API instead of sending audio bytes.
-    wsService.on('use_browser_tts', (data) => {
-      audioReceivedRef.current = true;
-      setProcessing(false);
-      setTtsErrorMessage(null);
-      const text: string = data?.text || '';
-      const lang: SessionLanguage = (data?.language as SessionLanguage) || 'fr';
-      if (!text) return;
-      if (liveBoardOwnsAudioRef.current) {
-        console.log('[TTS] Ignoré : le tableau en direct lit déjà son contenu');
-        return;
-      }
-      console.log(`[TTS] use_browser_tts (lang=${lang}, provider=${data?.provider})`);
-      setSpeaking(true);
-      speechService
-        .speak(text, {
-          lang,
-          onEnd: () => setSpeaking(false),
-        })
-        .catch((err) => {
-          console.warn('[TTS] Browser TTS failed:', err);
-          setSpeaking(false);
-        });
-    });
+    // ⚠️ Plus AUCUNE voix de navigateur : la synthèse Web Speech ne sait pas
+    // dire la darija, et notre modèle serveur est entraîné exactement pour
+    // ça. Le backend n'émet plus `use_browser_tts` — tout l'audio arrive en
+    // `audio_chunk`, et le tableau en direct demande ses répliques à
+    // /api/v1/tts/speak (voir services/boardVoice.ts).
 
     wsService.on('processing', (data) => {
       if (data.stage === 'tts') return;
