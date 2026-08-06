@@ -88,6 +88,8 @@ interface AIWhiteboardProps {
   assistantReply?: string | null;
   /** Mode live plein écran : une requête est en cours (le prof réfléchit). */
   busy?: boolean;
+  /** false = le tableau s'affiche sans voix (c'est le chat qui parle). */
+  voiceEnabled?: boolean;
 }
 
 // Chalk-on-dark palette — bright shades legible on the dark green chalkboard.
@@ -110,7 +112,7 @@ function resolveColor(color: string): string {
   return (COLORS as any)[color] || color || COLORS.black;
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -1012,6 +1014,7 @@ function resolveColor(color: string): string {
         onStudentMessage={onStudentMessage}
         assistantReply={assistantReply}
         busy={busy}
+        voiceEnabled={voiceEnabled}
       />
     );
   }

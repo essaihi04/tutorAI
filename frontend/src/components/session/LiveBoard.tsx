@@ -79,6 +79,8 @@ interface LiveBoardProps {
   assistantReply?: string | null;
   /** Le professeur réfléchit (requête LLM en cours). */
   busy?: boolean;
+  /** false = tableau muet (la narration est portée par l'audio du chat). */
+  voiceEnabled?: boolean;
 }
 
 // ── Palette craie (tableau sombre) ─────────────────────────────────
@@ -119,7 +121,7 @@ interface WrittenEntry {
 }
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
-function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy }: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   const [narration, setNarration] = useState<string | null>(null);
@@ -191,12 +193,17 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
 
   playingRef.current = playing;
   speedRef.current = speed;
-  soundOnRef.current = soundOn;
+  // `voiceEnabled=false` : le script est trop maigre pour porter le cours,
+  // c'est l'audio du chat qui narre — le tableau doit rester muet, sinon
+  // deux voix se superposeraient.
+  soundOnRef.current = soundOn && voiceEnabled;
   langRef.current = language;
 
   // La voix vient du serveur : elle est toujours disponible, quel que soit le
-  // navigateur (plus de dépendance à la synthèse Web Speech).
-  const canSpeak = true;
+  // navigateur (plus de dépendance à la synthèse Web Speech). Le bouton est
+  // masqué quand c'est le chat qui porte la narration : le tableau n'a alors
+  // aucune voix à couper.
+  const canSpeak = voiceEnabled;
 
   const hasDrawSteps = Array.isArray(script?.steps) && script.steps.some(
     s => s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0
@@ -223,6 +230,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
    * file d'un coup — le serveur traite un job à la fois.
    */
   const prefetchFrom = useCallback((steps: LiveStep[], fromIndex: number) => {
+    // Tableau muet (son coupé, ou narration portée par le chat) : ne pas
+    // faire générer un audio qui ne sera jamais joué.
+    if (!soundOnRef.current) return;
     let queued = 0;
     for (let j = fromIndex; j < steps.length && queued < 2; j++) {
       const t = toSpokenText(spokenTextOf(steps[j]));
