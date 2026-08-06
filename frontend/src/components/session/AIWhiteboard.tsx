@@ -294,6 +294,14 @@ function resolveColor(color: string): string {
       return;
     }
 
+    // Le mode live rend <LiveBoard/> à la place du canvas : celui-ci n'existe
+    // donc pas dans le DOM. Sans ce retour anticipé, chaque rendu d'un cours
+    // en direct journalisait « Canvas ref is null » en ERREUR — un bruit qui
+    // noyait les vraies erreurs dans la console.
+    if (liveScript && liveScript.steps && liveScript.steps.length > 0) {
+      return;
+    }
+
     // Only skip canvas render if board/schema mode is truly active AND we have NO draw elements
     // This prevents stale boardContent from blocking a newly arrived draw command
     const boardActive = boardContent && boardContent.lines?.length > 0;

@@ -924,6 +924,31 @@ class SessionHandler:
         for cmd in command_keywords:
             text = text.replace(cmd, "")
 
+        # ── Markdown résiduel ──
+        # Le prompt l'interdit dans le texte parlé, mais le modèle en produit
+        # encore (tableaux `|…|`, titres `###`, `**gras**`). Ces symboles
+        # s'affichaient tels quels dans la bulle de chat ET se retrouvaient
+        # dans la voix (« étoile étoile »). On les retire ici, à l'unique
+        # endroit par lequel passe le texte affiché.
+        # ⚠️ Le modèle écrit ces marqueurs AU MILIEU des lignes, pas seulement
+        # en début : des motifs ancrés sur `^` laissaient tout passer.
+        # Un tableau markdown n'a rien à faire à l'oral (il appartient au
+        # bloc <ui>) : on supprime toute suite de cellules `|…|…|`.
+        text = re.sub(r'(?:\|[^|\n]*){2,}\|', ' ', text)
+        text = re.sub(r'\|', ' ', text)
+        # Séparateurs `---` / `***` (où qu'ils soient)
+        text = re.sub(r'(?<!-)[-*_]{3,}(?!-)', ' ', text)
+        # Titres `###` (début de ligne ou après un séparateur inline)
+        text = re.sub(r'#{1,6}\s*', '', text)
+        # Puces en début de ligne
+        text = re.sub(r'^\s{0,3}[-*+]\s+', '', text, flags=re.MULTILINE)
+        # Emphases : on garde le mot, on jette les marqueurs
+        text = re.sub(r'\*\*([^*\n]+)\*\*', r'\1', text)
+        text = re.sub(r'(?<!\w)\*([^*\n]+)\*(?!\w)', r'\1', text)
+        text = re.sub(r'(?<!\w)__([^_\n]+)__(?!\w)', r'\1', text)
+        # Astérisques orphelines laissées par un markdown tronqué
+        text = re.sub(r'\*{1,3}', '', text)
+
         text = re.sub(r'[ \t]+\n', '\n', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r'[ \t]{2,}', ' ', text)

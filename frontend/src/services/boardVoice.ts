@@ -33,6 +33,16 @@ class BoardVoiceService {
   /** Requêtes en vol, pour ne jamais demander deux fois le même fragment. */
   private inflight = new Map<string, Promise<string | null>>();
   private current: HTMLAudioElement | null = null;
+  /**
+   * Voix serveur indisponible jusqu'à cet instant (timestamp ms).
+   *
+   * Sans ce garde-fou, un serveur TTS non configuré (503) était re-sollicité
+   * à CHAQUE ligne et à chaque préchargement : le cours partait en cascade
+   * d'erreurs réseau, et l'écriture attendait un aller-retour à chaque fois.
+   * On échoue vite pendant une minute, puis on retente — le tableau écrit
+   * simplement en silence entre-temps.
+   */
+  private unavailableUntil = 0;
 
   private key(text: string, lang: Lang) {
     return `${lang}|${text}`;
@@ -47,6 +57,9 @@ class BoardVoiceService {
     const pending = this.inflight.get(k);
     if (pending) return pending;
 
+    // Serveur muet il y a moins d'une minute : on n'insiste pas.
+    if (Date.now() < this.unavailableUntil) return Promise.resolve(null);
+
     const req = (async (): Promise<string | null> => {
       try {
         const resp = await fetch('/api/v1/tts/speak', {
@@ -55,7 +68,18 @@ class BoardVoiceService {
           body: JSON.stringify({ text, language: lang }),
         });
         if (!resp.ok) {
-          console.warn(`[BoardVoice] TTS indisponible (HTTP ${resp.status})`);
+          // 503 = aucun moteur disponible côté serveur (TTS_DISABLED, tunnel
+          // Colab éteint…). Inutile de retenter à chaque ligne du cours.
+          if (resp.status === 503 || resp.status >= 500) {
+            this.unavailableUntil = Date.now() + 60_000;
+            console.warn(
+              `[BoardVoice] Voix serveur indisponible (HTTP ${resp.status}) — ` +
+              `le tableau écrit sans voix pendant 60 s. ` +
+              `Vérifie ACADEMY_TTS_URL et TTS_DISABLED côté backend.`,
+            );
+          } else {
+            console.warn(`[BoardVoice] TTS refusé (HTTP ${resp.status})`);
+          }
           return null;
         }
         const blob = await resp.blob();
@@ -70,8 +94,11 @@ class BoardVoiceService {
           }
         }
         this.cache.set(k, url);
+        this.unavailableUntil = 0;   // la voix est revenue
         return url;
       } catch (err) {
+        // Réseau coupé / backend éteint : même logique de temporisation.
+        this.unavailableUntil = Date.now() + 60_000;
         console.warn('[BoardVoice] Échec de la requête TTS:', err);
         return null;
       } finally {
