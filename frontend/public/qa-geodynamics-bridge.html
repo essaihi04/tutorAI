@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>QA GeoLab bridge</title>
+  <style>
+    body{font-family:system-ui;margin:0;padding:12px;background:#eef1f6}
+    button{padding:10px 16px;margin-bottom:8px}
+    iframe{width:100%;height:560px;border:1px solid #9aa4b8;background:white}
+    pre{max-height:180px;overflow:auto;background:#111a35;color:#d8f1ff;padding:10px;font-size:12px}
+  </style>
+</head>
+<body>
+  <button id="run">Exécuter le scénario IA</button>
+  <strong id="result">En attente du manifeste…</strong>
+  <iframe id="lab" src="/media/simulations/svt/ch4_geodynamique_interne/index.html?variant=chains"></iframe>
+  <pre id="manifest"></pre>
+  <pre id="state"></pre>
+  <script>
+    const lab=document.getElementById('lab');
+    const manifest=document.getElementById('manifest');
+    const state=document.getElementById('state');
+    const result=document.getElementById('result');
+    let lastState=null;
+    window.addEventListener('message',event=>{
+      if(event.data?.type==='simulation_manifest'){
+        manifest.textContent=JSON.stringify(event.data,null,2);
+        result.textContent='Manifeste reçu';
+      }
+      if(event.data?.type==='simulation_state'){
+        lastState=event.data;
+        state.textContent=JSON.stringify(event.data,null,2);
+        if(event.data.current_state?.completed_variants?.includes('chains')) result.textContent='PASS · commandes et état bidirectionnels';
+      }
+    });
+    function command(name,parameters={}){
+      lab.contentWindow.postMessage({type:'simulation_control',simulation_id:'svt_internal_geodynamics_advanced_lab',command:name,parameters},'*');
+    }
+    document.getElementById('run').onclick=()=>{
+      command('set_variant',{variant_id:'chains'});
+      ['Océanisation','Subduction','Obduction','Collision'].forEach((stage,slot)=>command('place_stage',{slot,stage}));
+      command('highlight',{target:'root'});
+      command('check');
+    };
+  </script>
+</body>
+</html>

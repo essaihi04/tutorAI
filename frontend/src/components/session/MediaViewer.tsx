@@ -480,9 +480,10 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
   }
 
   const simulationHtml = media.type === 'simulation' ? buildSimulationHtml(cleanUrl) : null;
-  const usesNativeSimulationViewport = cleanUrl.includes(
-    '/media/simulations/svt/ch2_information_genetique/expression/'
-  );
+  const usesNativeSimulationViewport = [
+    '/media/simulations/svt/ch2_information_genetique/expression/',
+    '/media/simulations/svt/ch4_geodynamique_interne/',
+  ].some((path) => cleanUrl.includes(path));
 
   const handleSimulationLoad = () => {
     if (media.type !== 'simulation' || !iframeRef.current?.contentWindow) return;

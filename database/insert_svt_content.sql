@@ -463,35 +463,52 @@ BEGIN
         'تلوث الأوساط الطبيعية',
         'theory',
         jsonb_build_object(
-            'sections', jsonb_build_array(
-                jsonb_build_object(
-                    'title', 'Pollution de l''air',
-                    'content', 'Émissions de CO2, effet de serre, pluies acides.',
-                    'type', 'text'
-                ),
-                jsonb_build_object(
-                    'title', 'Pollution de l''eau',
-                    'content', 'Eutrophisation, métaux lourds, pesticides.',
-                    'type', 'text'
-                ),
-                jsonb_build_object(
-                    'title', 'Solutions',
-                    'content', 'Énergies renouvelables, traitement des eaux, agriculture biologique.',
-                    'type', 'definition'
-                )
+            'guiding_question', 'Comment une activité humaine perturbe-t-elle un milieu, et comment démontrer qu''une solution le restaure ?',
+            'micro_enseignements', jsonb_build_array(
+                jsonb_build_object('id','svt_ch3_pollution_diagnostic','title','1. Diagnostiquer : source → polluant → milieu → indicateur','type','activation'),
+                jsonb_build_object('id','svt_ch3_pollution_eutrophisation','title','2. Enquêter : nutriments, algues et manque de O₂','type','exploration'),
+                jsonb_build_object('id','svt_ch3_pollution_reseau','title','3. Suivre un polluant dans le réseau trophique','type','exploration'),
+                jsonb_build_object('id','svt_ch3_pollution_air','title','4. Modéliser : émissions, météo et smog','type','exploration'),
+                jsonb_build_object('id','svt_ch3_pollution_acide','title','5. Relier les émissions aux dépôts acides','type','explanation'),
+                jsonb_build_object('id','svt_ch3_pollution_solutions','title','6. Décider : prévention, traitement et restauration','type','application'),
+                jsonb_build_object('id','svt_ch3_pollution_bac','title','7. Argumenter comme au BAC avec des indicateurs','type','consolidation')
             ),
-            'key_concepts', jsonb_build_array('pollution', 'effet de serre', 'eutrophisation', 'énergies renouvelables')
+            'sections', jsonb_build_array(
+                jsonb_build_object('title','Pollution des eaux','content','Nutriments → algues → décomposition → demande en O₂ → hypoxie.','type','modele_causal'),
+                jsonb_build_object('title','Polluants persistants','content','Bioaccumulation dans un organisme et biomagnification le long du réseau trophique.','type','modele_causal'),
+                jsonb_build_object('title','Pollution atmosphérique','content','La concentration au sol dépend des émissions, du vent et de la stabilité atmosphérique.','type','modele_causal'),
+                jsonb_build_object('title','Dépôts acides','content','SO₂ et NOₓ peuvent former des acides transportés puis déposés sur les sols et les eaux.','type','modele_causal'),
+                jsonb_build_object('title','Solutions','content','Réduire à la source, intercepter les flux et restaurer le milieu sont complémentaires.','type','decision')
+            ),
+            'phases', jsonb_build_object(
+                'activation',jsonb_build_object('duration_minutes',10,'focus',jsonb_build_array('photographies-problèmes','hypothèses')),
+                'exploration',jsonb_build_object('duration_minutes',45,'focus',jsonb_build_array('AquaLab','AtmosLab','essais contrôlés')),
+                'explanation',jsonb_build_object('duration_minutes',25,'focus',jsonb_build_array('chaînes causales','indicateurs')),
+                'application',jsonb_build_object('duration_minutes',20,'focus',jsonb_build_array('stratégies multi-barrières')),
+                'consolidation',jsonb_build_object('duration_minutes',10,'focus',jsonb_build_array('argumentation type BAC'))
+            ),
+            'investigation_cycle', jsonb_build_array('observer','prédire','manipuler une variable','mesurer','comparer au témoin','expliquer','proposer une solution'),
+            'key_concepts', jsonb_build_array('pollution', 'eutrophisation', 'hypoxie', 'biomagnification', 'dispersion', 'inversion thermique', 'dépôts acides')
         ),
         jsonb_build_array(
-            'Identifier les types de pollution',
-            'Expliquer leurs conséquences',
-            'Proposer des solutions durables'
+            'Identifier les sources, les polluants et les milieux récepteurs à partir de documents',
+            'Expliquer la chaîne causale nutriments → prolifération algale → décomposition → hypoxie',
+            'Distinguer bioaccumulation et biomagnification dans un réseau trophique',
+            'Relier émissions, vent et inversion thermique à la dispersion du smog',
+            'Expliquer la formation des dépôts acides et leurs effets sur les écosystèmes',
+            'Comparer des stratégies de prévention, de traitement et de restauration à partir d''indicateurs'
         ),
-        90,
+        110,
         2,
         jsonb_build_array(
-            jsonb_build_object('type', 'image', 'caption', 'Sources de pollution'),
-            jsonb_build_object('type', 'image', 'caption', 'Énergies renouvelables')
+            jsonb_build_object('type','image','url','/media/simulations/svt/ch3_pollution/labs/aqua-ecosysteme/assets/reservoir-bloom.webp','caption','Réservoir : zone claire et prolifération algale.','trigger','observe le réservoir et formule une hypothèse'),
+            jsonb_build_object('type','simulation','url','/media/simulations/svt/ch3_pollution/labs/aqua-ecosysteme/index.html','caption','AquaLab : eutrophisation, biomagnification et restauration.','trigger','ouvre le laboratoire pollution de l''eau'),
+            jsonb_build_object('type','image','url','/media/simulations/svt/ch3_pollution/labs/aqua-ecosysteme/assets/food-web.webp','caption','Réseau trophique aquatique.','trigger','observe le réseau trophique aquatique'),
+            jsonb_build_object('type','image','url','/media/simulations/svt/ch3_pollution/labs/aqua-ecosysteme/assets/restoration.webp','caption','Traitement, zone humide et bande végétalisée.','trigger','compare les dispositifs de dépollution'),
+            jsonb_build_object('type','image','url','/media/simulations/svt/ch3_pollution/labs/air-dispersion/assets/urban-smog.webp','caption','Ville sous une couche de smog.','trigger','observe le smog urbain et ses sources'),
+            jsonb_build_object('type','simulation','url','/media/simulations/svt/ch3_pollution/labs/air-dispersion/index.html','caption','AtmosLab : dispersion, dépôts acides et solutions.','trigger','ouvre le laboratoire pollution de l''air'),
+            jsonb_build_object('type','image','url','/media/simulations/svt/ch3_pollution/labs/air-dispersion/assets/acid-rain.webp','caption','Du panache industriel au lac soumis aux dépôts acides.','trigger','observe le trajet des dépôts acides'),
+            jsonb_build_object('type','image','url','/media/simulations/svt/ch3_pollution/labs/air-dispersion/assets/clean-air-transition.webp','caption','Transport collectif, filtration et renouvelables.','trigger','compare les solutions pour la qualité de l''air')
         )
     );
 
