@@ -41,6 +41,30 @@ _STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', '
 # bloc retiré, ces marqueurs restent seuls sur leur ligne dans le chat.
 _EMPHASIS_TAIL_RE = re.compile(r'[*_]+$')
 
+# Plages Unicode de l'écriture arabe (arabe + supplément + formes de présentation).
+_ARABIC_RE = re.compile(r'[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]')
+# Lettres latines, pour ne pas compter la ponctuation ni les chiffres.
+_LATIN_RE = re.compile(r'[A-Za-zÀ-ÖØ-öø-ÿ]')
+
+
+def _is_mostly_arabic(text: str, seuil: float = 0.30) -> bool:
+    """True si le texte est majoritairement en écriture arabe.
+
+    Sert à reconnaître une réponse en darija. Le seuil est BAS (30 %) parce
+    qu'une phrase darija est truffée de termes techniques français en lettres
+    latines (« la vitesse », « ADN ») : à 50 % on classerait comme française
+    une phrase pourtant illisible au tableau. On ne compte que les lettres —
+    la ponctuation et les chiffres sont communs aux deux écritures.
+    """
+    if not text:
+        return False
+    arabe = len(_ARABIC_RE.findall(text))
+    latin = len(_LATIN_RE.findall(text))
+    total = arabe + latin
+    if total == 0:
+        return False
+    return (arabe / total) >= seuil
+
 
 # ── Nettoyage markdown du texte parlé ────────────────────────────────
 # Le prompt interdit le markdown dans le texte hors <ui>, mais le modèle en
@@ -1884,6 +1908,18 @@ class SessionHandler:
 
     async def _process_student_input(self, student_text: str, exam_context: bool = False, force_suppress_whiteboard: bool = False, exam_question_number: int = None, exam_total_questions: int = None):
         """Process student text through streaming LLM and return TTS audio."""
+        # ⚠️ Compteur de relances REMIS À ZÉRO À CHAQUE TOUR.
+        #
+        # Il était cumulatif sur toute la session : chaque réponse sans bloc
+        # <ui> l'incrémentait, et il n'était jamais remis à zéro en cas de
+        # succès. Au 4ᵉ tour concerné, il valait 3, plus aucune relance
+        # n'était tentée, et TOUTES les réponses suivantes tombaient dans le
+        # repli auto-board — qui recopie la prose du chat sur le tableau.
+        # C'est exactement le « après 3-4 réponses, le tableau affiche la
+        # discussion ». Le budget de relances est celui d'UN tour, pas d'une
+        # session.
+        self._structured_board_retry_count = 0
+
         # Check if a simulation is waiting for student answer
         handled = await self.handle_simulation_student_answer(student_text)
         if handled:
@@ -4815,6 +4851,27 @@ RÈGLES :
                         except Exception as e:
                             _safe_log(f"[AI Commands] Structured whiteboard retry failed: {e}")
                             self._structured_board_retry_count = 0
+
+                # ⚠️ DERNIER REMPART — après les relances, pas avant.
+                #
+                # Le repli qui suit recopie la PROSE DU CHAT sur le tableau. En
+                # session darija cette prose est en caractères arabes, alors que
+                # le tableau s'écrit en français (l'élève le recopie et compose
+                # le BAC en français) : on obtenait un tableau rempli de la
+                # discussion, exactement le bug signalé.
+                #
+                # On abandonne donc le repli plutôt que d'afficher ça. Les
+                # relances ci-dessus ont déjà eu leurs 3 chances de produire un
+                # vrai <ui> français — c'est pour ça que cette garde est ICI et
+                # pas plus haut : la placer avant les aurait court-circuitées.
+                # Rien n'est perdu : le chat porte l'explication, et c'est lui
+                # que l'élève entend.
+                if _is_mostly_arabic(clean_text):
+                    _safe_log(
+                        "[AI Commands] Repli auto-board abandonné : réponse en "
+                        "darija, le tableau s'écrit en français"
+                    )
+                    return
 
                 auto_lines = []
 
