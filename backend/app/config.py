@@ -53,20 +53,24 @@ class Settings(BaseSettings):
 
     # Self-hosted Darija TTS (Gradio endpoint — e.g. Chatterbox on Colab)
     # Set this to your Gradio public URL; leave empty to disable.
-    gradio_tts_url: str = "https://46a78facb3c86e65b4.gradio.live"
+    # Vide : l'ancien tunnel gradio.live est mort et chaque segment perdait un
+    # aller-retour dessus avant de retomber sur Gemini. Academy le remplace.
+    gradio_tts_url: str = ""
     gradio_tts_exaggeration: float = 0.5
     gradio_tts_temperature: float = 0.8
     gradio_tts_cfg_weight: float = 0.5
 
     # Academy Darija-FR TTS (modèle fine-tuné auto-hébergé — Colab + tunnel).
     # API FastAPI : POST /tts (WAV brut), GET /health, GET /voices.
-    # ⚠️ URL et JETON vivent dans backend/.env (jamais dans le dépôt) :
+    # ⚠️ URL et JETON changent à CHAQUE redémarrage du notebook Colab et ne
+    # doivent jamais entrer dans le dépôt : ils vivent dans backend/.env.
     #    ACADEMY_TTS_URL=https://…trycloudflare.com
     #    ACADEMY_TTS_TOKEN=…
-    # L'URL du tunnel change à chaque redémarrage du notebook Colab.
+    # `python scripts/set_academy_tts.py <url> <jeton>` écrit ces deux lignes
+    # et vérifie que l'API répond avant qu'on redémarre le backend.
     academy_tts_url: str = ""
     academy_tts_token: str = ""
-    academy_tts_voice: str = ""          # vide = première voix du serveur
+    academy_tts_voice: str = "prof_faress"   # vide = première voix du serveur
     academy_tts_normaliser: int = 1      # applique l'orthographe darija (ال → ل)
     academy_tts_exaggeration: float = 0.45   # > 0.6 dérive sur les phrases longues
     academy_tts_temperature: float = 0.7     # 0.3 = quasi déterministe, plus plat
@@ -76,8 +80,10 @@ class Settings(BaseSettings):
     tts_cache_enabled: int = 1
     tts_cache_dir: str = "data/tts_cache"
     tts_cache_max_bytes: int = 500 * 1024 * 1024  # 500 MB cap
-    # Global kill-switch: set to 1 to disable all server-side TTS (costs $0)
-    tts_disabled: int = 1
+    # Global kill-switch: set to 1 to disable all server-side TTS (costs $0).
+    # À 0 : la voix vient du serveur — c'est Academy qui répond en premier,
+    # donc gratuit tant que le notebook Colab tourne.
+    tts_disabled: int = 0
 
     # Mistral OCR API (for extracting text from images)
     mistral_api_key: str = "vagL3uMJ8KSNqbVptYHCRjEphmUzSGmf"
