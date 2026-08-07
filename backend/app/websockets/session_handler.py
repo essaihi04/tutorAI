@@ -657,7 +657,11 @@ class SessionHandler:
         self.session_context: dict = {}
         self.current_phase: str = "activation"
         self.session_mode: str = "coaching"  # 'coaching' or 'libre'
-        self.language: str = "fr"
+        # Darija par défaut : c'est la langue d'enseignement, et la seule que
+        # notre modèle vocal sait réellement dire. Le front envoie de toute
+        # façon `set_language` à l'ouverture, mais si ce message se perd, mieux
+        # vaut retomber sur la darija que sur du français.
+        self.language: str = "mixed"
         self.lesson_resources: list[dict] = []  # Cached lesson resources
         self.current_lesson_id: str = None
         self.simulation_state: dict = {}  # Track current simulation state
@@ -1479,7 +1483,7 @@ class SessionHandler:
                 "phase": self.current_phase
             })
         elif msg_type == "set_language":
-            self.language = message.get("language", "fr")
+            self.language = message.get("language", "mixed")
 
     async def _handle_exam_answer(self, message: dict):
         """Handle structured exam answer from the exam panel for proficiency tracking."""
@@ -2327,10 +2331,10 @@ RÈGLES:
 
     def _speech_language_for_tts(self) -> str:
         """Map the session language to the TTS router input."""
-        lang = getattr(self, "language", "fr") or "fr"
+        lang = getattr(self, "language", "mixed") or "mixed"
         if lang in ("fr", "ar", "mixed"):
             return lang
-        return "fr"
+        return "mixed"
 
     async def _init_session(self, message: dict):
         """Initialize session context from lesson data."""
@@ -2350,7 +2354,7 @@ RÈGLES:
             "teaching_mode": message.get("teaching_mode", "Socratique"),
         }
         self.current_phase = message.get("phase", "activation") if self.session_mode == "coaching" else "libre"
-        self.language = message.get("language", "fr")
+        self.language = message.get("language", "mixed")
         self.conversation_history = []
         self.simulation_state = {}
         self.simulation_history = []

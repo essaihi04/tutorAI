@@ -57,7 +57,10 @@ export const useSessionStore = create<SessionState>((set) => ({
   isRecording: false,
   isSpeaking: false,
   conversation: [],
-  language: 'fr',
+  // Darija par défaut : c'est la langue dans laquelle le prof enseigne, et la
+  // seule que notre modèle vocal sait vraiment dire. `mixed` porte le
+  // code-switching darija/français des cours 2BAC.
+  language: 'mixed',
   examPanelState: {
     answers: {},
     images: {},

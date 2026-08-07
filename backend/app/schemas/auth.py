@@ -8,7 +8,7 @@ class StudentRegister(BaseModel):
     email: str
     password: str
     full_name: str
-    preferred_language: str = "fr"
+    preferred_language: str = "mixed"   # darija — langue d'enseignement
 
 
 class StudentLogin(BaseModel):
