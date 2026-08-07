@@ -1638,17 +1638,34 @@ class LLMService:
         self.model = "deepseek-chat"
         self._rag_initialized = False
     
-    def _ensure_rag_initialized(self):
-        """Initialize RAG service with all available content (courses + cadres de référence)"""
+    def _ensure_rag_initialized(self) -> bool:
+        """Dit si le RAG est prêt. N'INDEXE JAMAIS ICI.
+
+        ⚠️ Cette méthode est appelée depuis la construction des prompts, donc
+        DANS LA BOUCLE ASYNCIO. Elle lançait `rag.index_all()` — une opération
+        synchrone de plusieurs minutes (lecture des caches + reconstruction
+        FAISS). Résultat : la toute première session bloquait la boucle
+        entière ; le navigateur restait « connecté » sans recevoir un seul
+        message, et il fallait recharger la page deux ou trois fois — le temps
+        que l'indexation démarrée au boot finisse et que le drapeau bascule.
+
+        L'indexation appartient au thread de démarrage (voir main.lifespan).
+        Si elle n'est pas terminée, on rend simplement la main : ce tour-ci
+        n'aura pas d'enrichissement RAG. Une réponse un peu moins documentée
+        vaut infiniment mieux qu'une session gelée.
+        """
         if self._rag_initialized:
-            return
+            return True
         try:
             rag = get_rag_service()
-            rag.index_all()
+            if not getattr(rag, "_initialized", False):
+                return False
             self._rag_initialized = True
-            print(f"[LLM] RAG initialized for all subjects ({len(rag.documents)} chunks)")
+            print(f"[LLM] RAG prêt ({len(rag.documents)} chunks)")
+            return True
         except Exception as e:
-            print(f"[LLM] RAG initialization failed: {e}")
+            print(f"[LLM] RAG check failed: {e}")
+            return False
     
     def _detect_subject_from_query(self, query: str) -> str:
         """Detect subject from user query for cadre de référence lookup.
@@ -2011,9 +2028,10 @@ class LLMService:
         proficiency: str = "intermédiaire",
         user_query: str = "",
     ) -> str:
-        # Initialize RAG with all content (courses + cadres de référence)
-        self._ensure_rag_initialized()
-        
+        # RAG prêt ? Sinon on construit le prompt SANS lui — l'indexation
+        # appartient au thread de démarrage et ne doit jamais bloquer ici.
+        rag_ready = self._ensure_rag_initialized()
+
         # ── Canonical BAC coefficients (source of truth) ────────────
         # Injected on every libre turn so the LLM can never invent wrong
         # values (e.g. "SVT coef 2" instead of 5).
@@ -2051,14 +2069,14 @@ class LLMService:
             print(f"[LLM] Libre official program block error: {e}")
             official_program_block = ""
 
-        if user_query:
+        if user_query and rag_ready:
             # Get cadre de référence priority notes
             try:
                 from app.services.cadre_reference_service import cadre_service
                 cadre_priority_notes = cadre_service.get_priority_notes(detected_subject, user_query)
             except Exception as e:
                 print(f"[LLM] Libre cadre reference error: {e}")
-            
+
             try:
                 rag = get_rag_service()
                 # build_grounded_context = citation rules + [src:<id>] tagged chunks
@@ -2329,9 +2347,10 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
         rag_context = ""
         cadre_priority_notes = ""
         
-        # Initialize RAG for all subjects (courses + cadres de référence)
-        self._ensure_rag_initialized()
-        
+        # RAG prêt ? Sinon on se passe de lui pour ce tour (cf. la note dans
+        # _ensure_rag_initialized : indexer ici gèlerait la boucle asyncio).
+        rag_ready = self._ensure_rag_initialized()
+
         # Get cadre de référence priority notes for this subject/topic
         try:
             from app.services.cadre_reference_service import cadre_service
@@ -2344,7 +2363,7 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
         
         # ALWAYS get RAG context — use user_query, fallback to chapter/lesson/subject
         rag_query = user_query or f"{subject} {chapter_title} {lesson_title}".strip()
-        if rag_query:
+        if rag_query and rag_ready:
             try:
                 rag = get_rag_service()
                 # Grounded block = citation rules + [src:<id>] tagged chunks
