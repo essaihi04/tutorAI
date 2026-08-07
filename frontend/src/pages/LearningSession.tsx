@@ -1769,6 +1769,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     onStudentMessage={handleQuickSend}
                     busy={isProcessing}
                     voiceEnabled={liveBoardVoice}
+                    // Le tableau n'écrit que pendant que la voix parle : sans
+                    // ce lien, le script se déroulait entièrement pendant la
+                    // synthèse et l'audio arrivait sur un tableau déjà fini.
+                    audioActive={isSpeaking}
                     assistantReply={
                       [...conversation].reverse().find(m => m.speaker === 'ai')?.text ?? null
                     }

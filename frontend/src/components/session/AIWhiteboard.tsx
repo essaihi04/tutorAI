@@ -90,6 +90,8 @@ interface AIWhiteboardProps {
   busy?: boolean;
   /** false = le tableau s'affiche sans voix (c'est le chat qui parle). */
   voiceEnabled?: boolean;
+  /** true tant que la voix du chat parle — le tableau s'écrit à son rythme. */
+  audioActive?: boolean;
 }
 
 // Chalk-on-dark palette — bright shades legible on the dark green chalkboard.
@@ -112,7 +114,7 @@ function resolveColor(color: string): string {
   return (COLORS as any)[color] || color || COLORS.black;
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -1015,6 +1017,7 @@ function resolveColor(color: string): string {
         assistantReply={assistantReply}
         busy={busy}
         voiceEnabled={voiceEnabled}
+        audioActive={audioActive}
       />
     );
   }
