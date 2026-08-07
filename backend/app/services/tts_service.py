@@ -752,17 +752,40 @@ _SEG_MIN_CHARS = 20          # avoid wasting API calls on 2-word fragments
 _SEG_MAX_CHARS = 200         # keep each Gemini call short & focused
 _SEG_MERGE_TARGET = 90       # aim for ~90-char chunks (~15-20 words)
 
-# ── Academy TTS : gros blocs plutôt que micro-segments ──
-# Son contrat demande d'envoyer les textes longs ENTIERS : le serveur découpe
-# lui-même aux frontières de phrase et concatène avec 0,25 s de silence — donc
-# une prosodie et des respirations bien meilleures que si on le hachait.
-# On ne garde qu'un découpage GROSSIER (et toujours sur une fin de phrase) pour
-# que l'élève entende le début du cours sans attendre la génération complète :
-# le GPU Colab traite un job à la fois (~1 s d'audio par seconde de calcul),
-# une réponse longue envoyée d'un bloc le ferait patienter plusieurs minutes.
-# En pratique la quasi-totalité des réponses tient dans un seul bloc.
-_SEG_ACADEMY_MAX_CHARS = 1200
-_SEG_ACADEMY_TARGET = 700
+# ── Academy TTS : petits segments réguliers ──
+#
+# Mesuré sur le tunnel Colab (T4), textes darija, cache froid :
+#
+#     98 car. →  9,8 s d'audio en 10,7 s de calcul   (1,09×)
+#    171 car. → 14,4 s d'audio en 16,5 s de calcul   (1,14×)
+#    317 car. → 24,2 s d'audio en 25,7 s de calcul   (1,06×)
+#    609 car. → 45,4 s d'audio en 51,1 s de calcul   (1,13×)
+#
+# Deux faits en découlent, et ils commandent tout le dimensionnement.
+#
+# 1. Le délai avant le PREMIER son est proportionnel à la taille du premier
+#    segment. Avec l'ancienne cible de 700 caractères, l'élève n'entendait
+#    rien pendant ~55 s puis recevait tout d'un bloc — le « en vrac ».
+#
+# 2. La génération est ~1,1× PLUS LENTE que le temps réel. La lecture rattrape
+#    donc toujours la génération : le tampon ne se remplit jamais. C'est une
+#    propriété du GPU, pas du découpage — aucune taille de segment ne rend le
+#    flux parfaitement continu.
+#
+# La conséquence est contre-intuitive : mieux vaut des segments PETITS et
+# RÉGULIERS. Le retard accumulé vaut ~10 % de la durée du segment, donc de
+# petits segments donnent de petits trous fréquents (≈ 1 s toutes les 10 s,
+# qui passent pour des respirations) là où de gros segments donnent des trous
+# énormes et manifestement cassés.
+#
+# ~110 caractères ≈ 10 s d'audio ≈ 11 s de calcul : premier son à ~11 s au
+# lieu de ~55 s, puis des pauses d'environ une seconde.
+#
+# On reste sous les ~200 caractères « d'un seul tenant » au-delà desquels le
+# contrat du modèle signale des dérives, et le découpage tombe toujours sur
+# une fin de phrase — donc la prosodie reste celle du serveur.
+_SEG_ACADEMY_MAX_CHARS = 220
+_SEG_ACADEMY_TARGET = 110
 
 
 def split_into_segments(

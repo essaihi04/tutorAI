@@ -1091,15 +1091,30 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           }
         });
       } else {
-        // Chunk not here yet — wait briefly then retry
+        // ── Le morceau suivant n'est pas encore arrivé ──
+        //
+        // ⚠️ On attendait 3 s puis on ABANDONNAIT tout le reste de la voix.
+        // C'était sans conséquence tant qu'une réponse tenait en un seul gros
+        // morceau ; depuis que le texte est découpé en segments d'une dizaine
+        // de secondes, ça coupait le cours au premier trou — et il y en a
+        // forcément, le GPU générant ~1,1× plus lentement que le temps réel.
+        //
+        // Tant que le serveur a annoncé d'autres morceaux, on patiente. Le
+        // plafond ne couvre que le cas où la connexion meurt en silence : un
+        // segment de 220 caractères demande ~25 s, 90 s laissent une marge
+        // large sans jamais figer la session indéfiniment.
+        const ATTENTE_MAX_MS = 90_000;
         let waited = 0;
         const poll = setInterval(() => {
           waited += 200;
           const c = audioChunksRef.current.find(c => c.index === nextIndex);
+          const enAttendDautres = expectedChunksRef.current > 0
+            && nextIndex < expectedChunksRef.current;
           if (c) {
             clearInterval(poll);
             playNext();
-          } else if (waited > 3000 || (expectedChunksRef.current > 0 && nextIndex >= expectedChunksRef.current)) {
+          } else if (waited > (enAttendDautres ? ATTENTE_MAX_MS : 3000)
+                     || (expectedChunksRef.current > 0 && nextIndex >= expectedChunksRef.current)) {
             clearInterval(poll);
             console.log('[Audio] Done');
             isPlayingChunksRef.current = false;
