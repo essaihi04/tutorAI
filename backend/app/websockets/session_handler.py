@@ -42,6 +42,43 @@ _STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', '
 _EMPHASIS_TAIL_RE = re.compile(r'[*_]+$')
 
 
+# ── Nettoyage markdown du texte parlé ────────────────────────────────
+# Le prompt interdit le markdown dans le texte hors <ui>, mais le modèle en
+# produit encore : l'élève lisait « **Domaine 2** » et des lignes de tableau
+# `|:---:|` dans le chat. Ces fonctions sont partagées par le flux (streaming)
+# et par le chemin non streamé, pour que les deux nettoient à l'identique.
+
+_MD_TABLE_ROW_RE = re.compile(r'(?:\|[^|\n]*){2,}\|')
+_MD_SEP_RE = re.compile(r'(?<!-)[-*_]{3,}(?!-)')
+_MD_HEADING_RE = re.compile(r'#{1,6}\s*')
+_MD_BULLET_RE = re.compile(r'^\s{0,3}[-*+]\s+')
+_MD_UNDERLINE_RE = re.compile(r'(?<!\w)__([^_\n]+)__(?!\w)')
+
+
+def _strip_markdown_inline(text: str) -> str:
+    """Retire les marqueurs indépendants du reste de la ligne.
+
+    Sûr sur un fragment de flux : ces marqueurs se suppriment un par un, sans
+    avoir besoin de retrouver leur paire.
+    """
+    text = _MD_SEP_RE.sub(' ', text)
+    text = _MD_HEADING_RE.sub('', text)
+    text = _MD_UNDERLINE_RE.sub(r'\1', text)
+    return text.replace('*', '')
+
+
+def _strip_markdown_line(line: str) -> str:
+    """Nettoyage complet d'une ligne ENTIÈRE, tableaux markdown compris."""
+    # ⚠️ On ne touche aux `|` que sur une ligne qui ressemble vraiment à un
+    # tableau ET qui ne contient pas de LaTeX : `$|x|$` (valeur absolue) a lui
+    # aussi deux barres et ne doit pas être charcuté.
+    if '$' not in line and _MD_TABLE_ROW_RE.search(line):
+        line = _MD_TABLE_ROW_RE.sub(' ', line)
+        line = line.replace('|', ' ')
+    line = _MD_BULLET_RE.sub('', line)
+    return _strip_markdown_inline(line)
+
+
 class _StreamTagFilter:
     """Ne laisse passer vers le chat que le texte SITUÉ HORS des balises.
 
@@ -63,10 +100,15 @@ class _StreamTagFilter:
     à la fin du flux.
     """
 
-    __slots__ = ('_pos', '_open', '_pending')
+    __slots__ = ('_pos', '_open', '_pending', '_md_buf')
 
     # Longueur de la plus longue balise : au-delà, un « < » est du vrai texte.
     _MAX_TAG_LEN = max(len(f'</{t}>') for t in _STREAM_TAG_NAMES)
+
+    # Au-delà de cette longueur sans retour à la ligne, on diffuse quand même
+    # (nettoyage restreint) pour ne pas figer l'affichage sur un long
+    # paragraphe écrit d'un seul tenant.
+    _MD_FLUSH_AT = 200
 
     def __init__(self):
         self._pos = 0
@@ -74,6 +116,9 @@ class _StreamTagFilter:
         # Marqueurs de gras retenus : on ne sait pas encore s'ils ouvrent du
         # texte en gras ou s'ils emballent une balise à venir.
         self._pending = ''
+        # Ligne en cours de constitution : un tableau markdown ne peut être
+        # reconnu qu'une fois la ligne complète.
+        self._md_buf = ''
 
     def _hold(self, buf: str) -> str:
         """Émet ``buf`` en retenant un éventuel ``**`` de fin (sort indécis)."""
@@ -84,6 +129,34 @@ class _StreamTagFilter:
         return buf[:m.start()]
 
     def feed(self, acc: str) -> str:
+        """Texte nouvellement affichable, balises ET markdown retirés."""
+        return self._clean_stream(self._feed_tags(acc), final=False)
+
+    def _clean_stream(self, raw: str, *, final: bool) -> str:
+        """Bufferise par ligne pour nettoyer le markdown de façon fiable.
+
+        Un tableau markdown ne se reconnaît qu'une fois la ligne entière
+        connue : on ne diffuse donc une ligne qu'après son retour à la ligne.
+        Un paragraphe très long est libéré avant, avec le nettoyage restreint,
+        pour que l'affichage reste vivant.
+        """
+        if raw:
+            self._md_buf += raw
+        out = ''
+        if '\n' in self._md_buf:
+            *complete, self._md_buf = self._md_buf.split('\n')
+            out += '\n'.join(_strip_markdown_line(line) for line in complete) + '\n'
+        if final:
+            out += _strip_markdown_line(self._md_buf)
+            self._md_buf = ''
+        elif len(self._md_buf) >= self._MD_FLUSH_AT:
+            # On retient une courte queue : un marqueur peut être à cheval sur
+            # deux tokens (« ** » puis « BB »).
+            head, self._md_buf = self._md_buf[:-8], self._md_buf[-8:]
+            out += _strip_markdown_inline(head)
+        return out
+
+    def _feed_tags(self, acc: str) -> str:
         """Renvoie le texte nouvellement affichable, vu la réponse accumulée."""
         buf = self._pending
         self._pending = ''
@@ -144,6 +217,10 @@ class _StreamTagFilter:
             self._pos = nxt + 1
 
     def flush(self, acc: str) -> str:
+        """Fin du flux : libère tout ce qui restait, nettoyé."""
+        return self._clean_stream(self._flush_tags(acc), final=True)
+
+    def _flush_tags(self, acc: str) -> str:
         """Fin du flux : libère ce qui était retenu, sauf balise inachevée."""
         pending, self._pending = self._pending, ''
         if self._open:
@@ -957,22 +1034,9 @@ class SessionHandler:
         # endroit par lequel passe le texte affiché.
         # ⚠️ Le modèle écrit ces marqueurs AU MILIEU des lignes, pas seulement
         # en début : des motifs ancrés sur `^` laissaient tout passer.
-        # Un tableau markdown n'a rien à faire à l'oral (il appartient au
-        # bloc <ui>) : on supprime toute suite de cellules `|…|…|`.
-        text = re.sub(r'(?:\|[^|\n]*){2,}\|', ' ', text)
-        text = re.sub(r'\|', ' ', text)
-        # Séparateurs `---` / `***` (où qu'ils soient)
-        text = re.sub(r'(?<!-)[-*_]{3,}(?!-)', ' ', text)
-        # Titres `###` (début de ligne ou après un séparateur inline)
-        text = re.sub(r'#{1,6}\s*', '', text)
-        # Puces en début de ligne
-        text = re.sub(r'^\s{0,3}[-*+]\s+', '', text, flags=re.MULTILINE)
-        # Emphases : on garde le mot, on jette les marqueurs
-        text = re.sub(r'\*\*([^*\n]+)\*\*', r'\1', text)
-        text = re.sub(r'(?<!\w)\*([^*\n]+)\*(?!\w)', r'\1', text)
-        text = re.sub(r'(?<!\w)__([^_\n]+)__(?!\w)', r'\1', text)
-        # Astérisques orphelines laissées par un markdown tronqué
-        text = re.sub(r'\*{1,3}', '', text)
+        # Même nettoyage que le flux streamé (fonctions partagées), ligne par
+        # ligne pour que les tableaux markdown soient reconnus.
+        text = '\n'.join(_strip_markdown_line(line) for line in text.split('\n'))
 
         text = re.sub(r'[ \t]+\n', '\n', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
