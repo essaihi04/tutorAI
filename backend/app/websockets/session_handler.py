@@ -66,6 +66,20 @@ def _is_mostly_arabic(text: str, seuil: float = 0.30) -> bool:
     return (arabe / total) >= seuil
 
 
+def _ecrit_en_arabe(text: object) -> bool:
+    """True si ce texte contient de l'écriture arabe.
+
+    Sert de VERROU sur tout ce qui s'AFFICHE au tableau. Le prompt interdit
+    déjà l'arabe à l'écrit, mais un prompt reste une consigne : le modèle
+    passait outre. Une ligne de tableau française ne contient jamais de
+    caractère arabe, donc le moindre suffit à disqualifier la ligne.
+
+    ⚠️ Ne s'applique QU'À L'ÉCRIT. Ce qui est parlé (le texte du chat) doit au
+    contraire rester en darija.
+    """
+    return isinstance(text, str) and bool(_ARABIC_RE.search(text))
+
+
 # ── Nettoyage markdown du texte parlé ────────────────────────────────
 # Le prompt interdit le markdown dans le texte hors <ui>, mais le modèle en
 # produit encore : l'élève lisait « **Domaine 2** » et des lignes de tableau
@@ -2946,7 +2960,26 @@ RÈGLES :
         Live ("prof en direct") is the DEFAULT in every mode — libre as well as
         coaching. The static board is kept only when the content cannot be
         written progressively without loss (see _board_is_live_renderable).
+
+        Point de passage unique = bon endroit pour le verrou « pas d'arabe au
+        tableau » : tout ce que l'élève voit écrit passe par ici.
         """
+        avant = len(lines or [])
+        lines = [
+            ligne for ligne in (lines or [])
+            if not (isinstance(ligne, dict) and _ecrit_en_arabe(ligne.get("content")))
+        ]
+        if len(lines) < avant:
+            _safe_log(
+                f"[Board] {avant - len(lines)} ligne(s) en arabe rejetée(s) — "
+                f"le tableau s'écrit en français"
+            )
+        if not lines:
+            _safe_log("[Board] Tableau abandonné : plus aucune ligne en français")
+            return
+        if _ecrit_en_arabe(title):
+            title = "Cours en direct"
+
         if self._board_is_live_renderable(lines):
             steps = self._board_lines_to_live_steps(lines)
             if steps:
@@ -3071,6 +3104,11 @@ RÈGLES :
                 content = line.get("content")
                 if not isinstance(content, str) or not content.strip():
                     continue
+                # Le tableau s'écrit en français : une ligne en arabe est
+                # rejetée, pas affichée. L'élève recopie ce tableau.
+                if _ecrit_en_arabe(content):
+                    _safe_log(f"[Live] Ligne écrite en arabe rejetée: {content[:60]!r}")
+                    continue
                 clean_line = {"type": str(line.get("type", "text")).lower(), "content": content.strip()}
                 if line.get("color"):
                     clean_line["color"] = str(line["color"])
@@ -3092,6 +3130,14 @@ RÈGLES :
                     el for el in elements
                     if isinstance(el, dict) and str(el.get("type", "")).lower() in drawable_types
                 ]
+                # Les `label` sont peints sur le croquis : en arabe, on retire
+                # l'étiquette et on garde la forme — une flèche sans nom reste
+                # utile, une flèche annotée en arabe ne l'est pas.
+                for el in clean_els:
+                    for champ in ("label", "text"):
+                        if _ecrit_en_arabe(el.get(champ)):
+                            _safe_log(f"[Live] Label arabe retiré: {el.get(champ)!r}")
+                            el.pop(champ, None)
                 if clean_els:
                     draw_step = {"action": "draw", "elements": clean_els}
                     # `say` : le professeur commente le croquis pendant le
@@ -3110,20 +3156,25 @@ RÈGLES :
                     duration = 900
                 normalized.append({"action": "pause", "duration": max(200, min(8000, duration))})
             elif action == "narrate":
+                # `narrate` s'AFFICHE (bulle du tableau) : même règle que les
+                # lignes écrites. Le commentaire parlé, lui, est dans le chat.
                 text = step.get("text") or step.get("content") or ""
-                if isinstance(text, str) and text.strip():
+                if isinstance(text, str) and text.strip() and not _ecrit_en_arabe(text):
                     normalized.append({"action": "narrate", "text": text.strip()})
             elif action == "ask":
                 # Question de compréhension : le tableau S'ARRÊTE et attend la
                 # réponse de l'élève avant de dérouler la suite du script.
+                # Question et options sont LUES À L'ÉCRAN par l'élève : en
+                # français, donc, comme le reste du tableau.
                 text = step.get("text") or step.get("question") or step.get("content") or ""
-                if isinstance(text, str) and text.strip():
+                if isinstance(text, str) and text.strip() and not _ecrit_en_arabe(text):
                     ask_step = {"action": "ask", "text": text.strip()}
                     options = step.get("options") or step.get("suggestions") or step.get("choices")
                     if isinstance(options, list):
                         clean_opts = [
                             str(o).strip() for o in options
                             if isinstance(o, (str, int, float)) and str(o).strip()
+                            and not _ecrit_en_arabe(str(o))
                         ][:4]
                         if clean_opts:
                             ask_step["options"] = clean_opts
@@ -3149,10 +3200,16 @@ RÈGLES :
                     zoom_step["say"] = say.strip()
                 normalized.append(zoom_step)
 
-        # A usable script must actually write or draw something
+        # A usable script must actually write or draw something.
+        # ⚠️ Peut désormais échouer parce que TOUTES les lignes étaient en
+        # arabe : c'est voulu. Aucun tableau vaut mieux qu'un tableau que
+        # l'élève ne peut pas recopier — le chat porte déjà l'explication.
         if not any(s["action"] in ("write", "draw") for s in normalized):
             return None, None
-        return str(title or "Cours en direct"), normalized
+        titre = str(title or "Cours en direct")
+        if _ecrit_en_arabe(titre):
+            titre = "Cours en direct"
+        return titre, normalized
 
     async def _execute_ai_commands(self, ai_response: str, suppress_draw: bool = False, suppress_media: bool = False, force_schema: bool = False, student_text: str = "", suppress_whiteboard: bool = False, exam_context: bool = False, force_exam_panel: bool = False):
         """Detect and execute commands in AI response (media, phase transitions, exercises)."""
