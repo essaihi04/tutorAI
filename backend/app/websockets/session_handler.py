@@ -3075,6 +3075,13 @@ RÈGLES :
 
         drawable_types = {"line", "arrow", "rect", "circle", "text", "path"}
         normalized = []
+        # Garde-fou superposition : les éléments dessinés s'ACCUMULENT dans la
+        # zone de croquis tant qu'aucun erase ne passe. Un script qui enchaîne
+        # les croquis sans jamais effacer finit en schémas superposés
+        # illisibles — au-delà de ce seuil, on efface d'office avant de
+        # dessiner la suite. (Un croquis complet fait typiquement 5-10 éléments.)
+        _MAX_ELEMENTS_SANS_ERASE = 12
+        drawn_since_erase = 0
         for step in steps:
             if not isinstance(step, dict):
                 continue
@@ -3139,6 +3146,14 @@ RÈGLES :
                             _safe_log(f"[Live] Label arabe retiré: {el.get(champ)!r}")
                             el.pop(champ, None)
                 if clean_els:
+                    if drawn_since_erase >= _MAX_ELEMENTS_SANS_ERASE:
+                        _safe_log(
+                            f"[Live] {drawn_since_erase} éléments dessinés sans erase — "
+                            "effacement automatique du croquis pour éviter la superposition"
+                        )
+                        normalized.append({"action": "erase", "zone": "draw"})
+                        drawn_since_erase = 0
+                    drawn_since_erase += len(clean_els)
                     draw_step = {"action": "draw", "elements": clean_els}
                     # `say` : le professeur commente le croquis pendant le
                     # tracé (même mécanique vocale que sur les lignes écrites).
@@ -3148,7 +3163,10 @@ RÈGLES :
                     normalized.append(draw_step)
             elif action == "erase":
                 zone = str(step.get("zone", "all")).lower().strip()
-                normalized.append({"action": "erase", "zone": zone if zone in ("text", "draw", "all") else "all"})
+                zone = zone if zone in ("text", "draw", "all") else "all"
+                if zone in ("draw", "all"):
+                    drawn_since_erase = 0
+                normalized.append({"action": "erase", "zone": zone})
             elif action == "pause":
                 try:
                     duration = int(step.get("duration", 900))
