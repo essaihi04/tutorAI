@@ -9,7 +9,10 @@ sur deux), on colle ici les deux valeurs affichées par la cellule 5.
         https://combines-checking-guests-boom.trycloudflare.com \
         c4UzKjMkUzPQNcnVpdFYGZJXPEjcly2k
 
-Sans argument, le script relit backend/.env et teste seulement l'API.
+Il verifie ensuite /health, /voices, puis SYNTHETISE une phrase de test ecrite
+dans backend/data/test_academy.wav — a ecouter, c'est ce que l'eleve entendra.
+
+Sans argument, le script relit backend/.env et se contente de tester.
 Le backend lit .env au démarrage (Settings est en lru_cache) : il faut le
 redémarrer après avoir lancé ce script.
 """
@@ -100,6 +103,59 @@ def tester(url: str, jeton: str) -> bool:
     return True
 
 
+def tester_audio(url: str, jeton: str) -> bool:
+    """Genere un vrai WAV et l'ecrit sur le disque : c'est le seul test qui
+    prouve que la voix sort — /health peut repondre alors que le checkpoint
+    n'est pas charge ou que le clip de reference manque."""
+    phrase = "أهلا بيكم أصحابي، اليوم غادي نبداو le chapitre الجديد."
+    corps = json.dumps({
+        "texte": phrase,
+        "langue": "ma",
+        "voix": "prof_faress",
+        "normaliser": True,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{url.rstrip('/')}/tts",
+        data=corps,
+        headers={"Authorization": f"Bearer {jeton}",
+                 "Content-Type": "application/json"},
+    )
+    print(f"synthese de : {phrase}")
+    print("  (~1 s de calcul par seconde d'audio sur T4, sois patient)")
+    try:
+        # Genereux : le GPU Colab traite un seul job a la fois.
+        with urllib.request.urlopen(req, timeout=300) as r:
+            audio = r.read()
+            entetes = dict(r.headers)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:300]
+        print(f"  HTTP {e.code} : {detail}")
+        if e.code == 422:
+            print("  -> le modele a echoue sur ce fragment (voir cellule 6bis)")
+        return False
+    except Exception as e:
+        print(f"  echec ({type(e).__name__}: {e})")
+        return False
+
+    if not audio.startswith(b"RIFF"):
+        # Une page HTML du tunnel ou un corps JSON = pas d'audio.
+        print(f"  reponse NON-WAV ({len(audio)} octets) : {audio[:120]!r}")
+        return False
+
+    sortie = ENV_PATH.parent / "data" / "test_academy.wav"
+    sortie.parent.mkdir(parents=True, exist_ok=True)
+    sortie.write_bytes(audio)
+    print(f"  {len(audio)/1024:.0f} Ko ecrits dans {sortie}")
+    print(f"  duree {entetes.get('X-Duree-Secondes','?')} s, "
+          f"generee en {entetes.get('X-Genere-En','?')} s, "
+          f"{entetes.get('X-Morceaux','?')} morceaux, "
+          f"{entetes.get('X-Reessayes','0')} reessai(s)")
+    if entetes.get("X-A-Verifier"):
+        print(f"  lettres solaires a verifier : {entetes['X-A-Verifier']}")
+    print("  ECOUTE ce fichier : c'est exactement ce que l'eleve entendra.")
+    return True
+
+
 def main() -> int:
     args = sys.argv[1:]
     if args:
@@ -117,10 +173,15 @@ def main() -> int:
         print(f"valeurs actuelles de {ENV_PATH} : {url}")
 
     print()
-    ok = tester(url, jeton)
+    if not tester(url, jeton):
+        print("\nAPI NON joignable — voir ci-dessus")
+        return 1
+
     print()
-    print("API joignable — redemarre le backend pour qu'il relise .env"
-          if ok else "API NON joignable — voir ci-dessus")
+    ok = tester_audio(url, jeton)
+    print()
+    print("tout est bon — redemarre le backend pour qu'il relise .env"
+          if ok else "l'API repond mais ne produit pas d'audio — voir ci-dessus")
     return 0 if ok else 1
 
 
