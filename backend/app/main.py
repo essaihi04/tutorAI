@@ -62,6 +62,22 @@ async def lifespan(app: FastAPI):
     # proactively warm the cache between sessions.
     print("[Startup] TTS warmup skipped (cache fills on demand).")
 
+    # Bilan de configuration : sans clé DeepSeek le tuteur reste muet (aucun
+    # token, donc ni texte ni voix), et sans ACADEMY_TTS_URL la voix du prof
+    # ne peut pas être choisie. Autant le voir au demarrage plutot qu'en cours.
+    if settings.deepseek_api_key:
+        print("[Startup] LLM  : DeepSeek OK (cle presente)")
+    else:
+        print("[Startup] LLM  : /!\\ DEEPSEEK_API_KEY VIDE — le tuteur ne pourra "
+              "PAS repondre. Renseigne-la dans backend/.env")
+    if settings.tts_disabled:
+        print("[Startup] VOIX : desactivee (TTS_DISABLED=1)")
+    elif settings.academy_tts_url:
+        print(f"[Startup] VOIX : Academy {settings.academy_tts_url}")
+    else:
+        print("[Startup] VOIX : /!\\ ACADEMY_TTS_URL vide — repli Gemini/Google "
+              "Cloud. `python scripts/set_academy_tts.py <url> <jeton>`")
+
     yield
     print("[Shutdown] Server stopping.")
 

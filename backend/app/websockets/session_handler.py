@@ -9,7 +9,7 @@ import asyncio
 import sys
 from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
-from app.services.llm_service import llm_service
+from app.services.llm_service import llm_service, LLMError
 from app.services.resource_decision_service import resource_decision_service
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
@@ -2158,13 +2158,33 @@ RÈGLES:
                     "type": "ai_response_chunk",
                     "token": tail,
                 })
-            await self.websocket.send_json({"type": "ai_response_done"})
             _safe_log(f"[LLM Stream] Completed ({len(ai_response)} chars)")
+            if not ai_response.strip():
+                # Flux terminé sans le moindre token : rien à afficher, rien à
+                # lire. Ne PAS clore en silence — c'est exactement ce qui
+                # donnait un tuteur muet, sans erreur nulle part.
+                _safe_log("[LLM Stream] Réponse VIDE — envoi du message de repli")
+                ai_response = ("Je n'ai rien reçu de mon moteur de réponse. "
+                               "Reformule ta question, et si ça recommence "
+                               "préviens ton professeur.")
+                await self._send_ai_response_text(ai_response)
+            else:
+                await self.websocket.send_json({"type": "ai_response_done"})
+        except LLMError as e:
+            # Clé refusée, crédit épuisé, débit dépassé : l'élève doit le voir.
+            _safe_log(f"[LLM Stream] {e}")
+            if not ai_response.strip():
+                ai_response = e.message_eleve
+                await self._send_ai_response_text(ai_response)
+            else:
+                await self.websocket.send_json({"type": "ai_response_done"})
         except Exception as e:
             _safe_log(f"[LLM Stream] Error: {type(e).__name__}: {str(e)}")
-            if not ai_response:
+            if not ai_response.strip():
                 ai_response = "Laisse-moi réfléchir un instant... Peux-tu reformuler ta question ?"
                 await self._send_ai_response_text(ai_response)
+            else:
+                await self.websocket.send_json({"type": "ai_response_done"})
 
         # Contextual quick-reply buttons aligned on what the AI just asked
         asyncio.create_task(self._extract_and_send_suggestions(ai_response))

@@ -1605,6 +1605,32 @@ ENCOURAGE EXPLICITEMENT l'élève à prendre des notes en lui disant:
 """
 
 
+class LLMError(RuntimeError):
+    """L'API DeepSeek a refusé la requête (clé, quota, débit…).
+
+    Existe pour que l'appelant distingue « le modèle n'a rien à dire » d'un
+    refus de l'API : le second doit remonter à l'élève, pas rester muet.
+    """
+
+    def __init__(self, status: int, detail: str):
+        self.status = status
+        self.detail = detail
+        super().__init__(f"DeepSeek HTTP {status}: {detail}")
+
+    @property
+    def message_eleve(self) -> str:
+        """Phrase affichable — sans jargon HTTP ni contenu de la réponse."""
+        if self.status in (401, 403):
+            return ("Je n'arrive pas à joindre mon moteur de réponse "
+                    "(clé d'API refusée). Préviens ton professeur.")
+        if self.status == 402:
+            return ("Mon moteur de réponse n'a plus de crédit. "
+                    "Préviens ton professeur, ça se recharge en une minute.")
+        if self.status == 429:
+            return "Trop de questions en même temps — réessaie dans quelques secondes."
+        return "Mon moteur de réponse ne répond pas pour l'instant. Réessaie dans un instant."
+
+
 class LLMService:
     def __init__(self):
         self.api_key = settings.deepseek_api_key
@@ -2497,6 +2523,11 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
         student_email: Optional[str] = None,
         session_type: str = "coaching",
     ) -> AsyncGenerator[str, None]:
+        if not self.api_key:
+            # Cas le plus fréquent en local : DEEPSEEK_API_KEY absent de
+            # backend/.env. Autant le dire tout de suite, sans appel réseau.
+            raise LLMError(401, "DEEPSEEK_API_KEY vide (backend/.env)")
+
         full_messages = [{"role": "system", "content": system_prompt}] + messages
         _start = token_tracker.start_timer()
         _total_chars = 0
@@ -2519,6 +2550,15 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
                     "stream": True
                 }
             ) as response:
+                # Sans ce contrôle, un 401/402/429 n'était PAS une exception :
+                # le corps d'erreur ne commence pas par « data: », la boucle
+                # ci-dessous n'émettait aucun token, et l'élève voyait une
+                # réponse vide sans le moindre message — ni texte, ni voix.
+                if response.status_code != 200:
+                    corps = (await response.aread()).decode("utf-8", "replace")
+                    print(f"[LLM] chat_stream HTTP {response.status_code}: {corps[:300]}")
+                    raise LLMError(response.status_code, corps[:300])
+
                 async for line in response.aiter_lines():
                     if line.startswith("data: ") and line != "data: [DONE]":
                         import json
