@@ -404,6 +404,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       audioChunksRef.current = [];
       isPlayingChunksRef.current = false;
       expectedChunksRef.current = 0;
+      relanceAudioRef.current = null;
       streamingTextRef.current = '';
       streamingMsgIdRef.current = null;
       if (streamingRafRef.current) cancelAnimationFrame(streamingRafRef.current);
@@ -585,6 +586,43 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const streamingTextRef = useRef<string>('');
   const streamingMsgIdRef = useRef<string | null>(null);
   const streamingRafRef = useRef<number | null>(null);
+
+  // ── Autorisation de jouer du son ──────────────────────────────
+  //
+  // Chrome refuse TOUT son tant que l'élève n'a pas touché la page. Or le
+  // prof parle de lui-même dès l'ouverture de la session : sur un accès
+  // direct ou un rechargement, aucun geste n'a encore eu lieu et la voix
+  // était perdue en silence, sans que rien ne l'indique à l'écran.
+  const audioDebloqueRef = useRef(false);
+  const relanceAudioRef = useRef<(() => void) | null>(null);
+  const [audioBloque, setAudioBloque] = useState(false);
+
+  const debloquerAudio = () => {
+    if (audioDebloqueRef.current) return;
+    audioDebloqueRef.current = true;
+    setAudioBloque(false);
+    // Safari n'accorde l'autorisation qu'à un `play()` lancé DANS le geste :
+    // un son muet suffit à l'obtenir pour le reste de la session.
+    try {
+      const muet = new Audio(
+        'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=',
+      );
+      muet.volume = 0;
+      void muet.play().catch(() => {});
+    } catch {
+      /* pas de son muet possible : le geste suffit sur Chrome */
+    }
+    const relance = relanceAudioRef.current;
+    relanceAudioRef.current = null;
+    relance?.();
+  };
+
+  useEffect(() => {
+    const gestes: Array<keyof DocumentEventMap> = ['pointerdown', 'keydown', 'touchstart'];
+    const onGeste = () => debloquerAudio();
+    gestes.forEach((g) => document.addEventListener(g, onGeste, { once: true }));
+    return () => gestes.forEach((g) => document.removeEventListener(g, onGeste));
+  }, []);
 
   const revealPendingMedia = () => {
     if (pendingMediaRef.current) {
@@ -1145,22 +1183,49 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       revealPendingMedia();
     };
     
+    // Un morceau peut se terminer de trois façons : fin de lecture, erreur du
+    // média, refus de `play()`. Sans ce verrou, `onEnd` partait DEUX fois —
+    // la promesse rejetée révoquait l'URL, l'élément levait alors une erreur
+    // (ERR_FILE_NOT_FOUND sur le blob), et l'index sautait un morceau. La file
+    // se vidait donc avant l'arrivée du segment suivant : la voix s'arrêtait
+    // au premier morceau et le reste du cours ne se jouait jamais.
+    let fini = false;
+    const terminer = () => {
+      if (fini) return;
+      fini = true;
+      URL.revokeObjectURL(audioUrl);
+      onEnd();
+    };
+
     audio.onended = () => {
       console.log('[Audio Chunk] Audio ended event fired');
-      URL.revokeObjectURL(audioUrl);
-      onEnd();
+      terminer();
     };
-    
+
     audio.onerror = (e) => {
+      if (fini) return;
       console.error('[Audio Chunk] Audio error:', e);
-      URL.revokeObjectURL(audioUrl);
-      onEnd();
+      terminer();
     };
-    
+
     audio.play().catch((err) => {
+      if (fini) return;
+      // Blocage d'autoplay : le morceau n'est PAS perdu. On le garde, on
+      // affiche le bouton, et on le rejoue au premier geste de l'élève —
+      // l'abandonner ici faisait démarrer le cours muet, définitivement.
+      if (err?.name === 'NotAllowedError' && !audioDebloqueRef.current) {
+        console.warn('[Audio Chunk] Son bloqué par le navigateur — en attente d\'un geste de l\'élève');
+        setAudioBloque(true);
+        relanceAudioRef.current = () => {
+          audio.play().catch((e2) => {
+            console.error('[Audio Chunk] Relance échouée:', e2);
+            terminer();
+          });
+        };
+        return;
+      }
       console.error('[Audio Chunk] Play failed:', err);
-      URL.revokeObjectURL(audioUrl);
-      onEnd();
+      terminer();
     });
   };
 
@@ -1329,6 +1394,23 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
       `}</style>
+
+      {/* Son bloqué par le navigateur : un clic suffit, mais il faut le dire —
+          sinon l'élève croit que le prof est muet. */}
+      {audioBloque && (
+        <div className="shrink-0 px-3 pt-2">
+          <button
+            type="button"
+            onClick={debloquerAudio}
+            className="w-full rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/40 px-4 py-3 flex items-center justify-center gap-3 shadow-lg shadow-amber-500/10 hover:from-amber-500/30 hover:to-orange-500/30 transition"
+          >
+            <span className="text-2xl">🔊</span>
+            <span className="text-sm font-medium">
+              Clique ici pour activer le son — ton navigateur l'a mis en pause
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Progress Bar for Coaching Mode */}
       {showProgressBar && learningObjectives.length > 0 && !isLibre && (
