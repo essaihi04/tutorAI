@@ -24,12 +24,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote
 
 import asyncio
 
 import httpx
 
 from app.config import get_settings
+from app.services.speech_normalizer import normalize_for_speech
 
 
 settings = get_settings()
@@ -45,7 +47,8 @@ def _safe_log(*parts):
 
 
 # ─── Text sanitization ───────────────────────────────────────────────
-# Strip content that must not be spoken (markup, formulas, icons…)
+# Strip content that must not be spoken (markup and icons). Math is preserved
+# so speech_normalizer can turn it into words instead of dropping it.
 
 _TAG_PATTERNS = [
     re.compile(r"<board>.*?</board>", re.DOTALL | re.IGNORECASE),
@@ -55,10 +58,6 @@ _TAG_PATTERNS = [
     re.compile(r"<suggestions>.*?</suggestions>", re.DOTALL | re.IGNORECASE),
     re.compile(r"<[A-Za-z/][^>]*>"),             # any other html-like tag
     re.compile(r"\[src:[^\]]+\]"),               # citation markers
-    re.compile(r"\$\$[\s\S]+?\$\$"),             # display LaTeX
-    re.compile(r"\$[^$\n]+?\$"),                 # inline LaTeX
-    re.compile(r"\\\[([\s\S]+?)\\\]"),           # \[ … \]
-    re.compile(r"\\\(([\s\S]+?)\\\)"),           # \( … \)
     re.compile(r"`[^`\n]+`"),                    # inline code
     re.compile(r"```[\s\S]+?```"),               # code blocks
     re.compile(r"[📚📝📊📈📉✏️✅❌⚠️💡🎯🔥⭐️✨🚀👍👎💬🧠📖📘📙❓❗️]"),
@@ -81,14 +80,17 @@ def strip_voice_markers(text: str) -> str:
 
 
 def clean_for_tts(text: str) -> str:
-    """Remove markup, formulas and icons; return a speakable version."""
+    """Remove non-spoken markup while preserving math for normalization."""
     if not text:
         return ""
     out = text
     for pat in _TAG_PATTERNS:
         out = pat.sub(" ", out)
-    # markdown emphasis / headings / table pipes
-    out = re.sub(r"[#*_~]{1,3}", "", out)
+    # Markdown headings/emphasis. Preserve mathematical `*` and `_` when they
+    # are not paired formatting markers (1.5 * 10^-3, H_2O).
+    out = re.sub(r"(?m)^\s*#{1,6}\s*", "", out)
+    out = out.replace("**", "").replace("__", "").replace("~~", "")
+    out = re.sub(r"(?<!\w)[*_~](?=\w)|(?<=\w)[*_~](?!\w)", "", out)
     out = re.sub(r"^\s*\|.*\|\s*$", "", out, flags=re.MULTILINE)
     out = _MULTISPACE_RE.sub(" ", out)
     out = _MULTINEWLINE_RE.sub("\n\n", out)
@@ -350,6 +352,10 @@ async def _synthesize_google_cloud(text: str, lang: str) -> Optional[bytes]:
 # backend/.env (ACADEMY_TTS_URL / ACADEMY_TTS_TOKEN), jamais dans le code.
 #
 # Contrat du modèle (contraintes fortes) :
+#   • le tunnel ngrok en offre gratuite renvoie une PAGE HTML d'avertissement
+#     à toute requête qu'il prend pour un navigateur → l'en-tête
+#     `ngrok-skip-browser-warning` est OBLIGATOIRE sur tous les appels, et on
+#     vérifie le Content-Type avant de considérer le corps comme du WAV ;
 #   • 5 000 caractères maximum par requête ;
 #   • `normaliser` applique l'orthographe darija (ال → ل) sur les lettres
 #     lunaires ; les solaires non traitées reviennent dans l'en-tête
@@ -382,9 +388,33 @@ def _academy_note_success():
     _ACADEMY_FAILS = 0
 
 
-def _trip_academy_breaker(reason: str, *, immediate: bool = False):
+def _retry_after_seconds(resp: "httpx.Response", default: float = 45.0) -> float:
+    """Combien de temps le serveur nous demande d'attendre, en secondes.
+
+    Il l'annonce dans `Retry-After` (secondes) et double l'info dans
+    `X-Attente` / `attente_estimee_s`. On borne : un en-tête absurde ne doit
+    pas nous couper la voix du prof pendant une heure.
+    """
+    for header in ("Retry-After", "X-Attente"):
+        raw = resp.headers.get(header)
+        if not raw:
+            continue
+        try:
+            return max(1.0, min(float(raw), 300.0))
+        except ValueError:
+            continue
+    return default
+
+
+def _trip_academy_breaker(
+    reason: str, *, immediate: bool = False, cooldown: Optional[float] = None
+):
     """Ouvre le disjoncteur — tout de suite si la panne est certaine
-    (jeton refusé, tunnel injoignable), sinon après plusieurs échecs."""
+    (jeton refusé, tunnel injoignable), sinon après plusieurs échecs.
+
+    `cooldown` permet de respecter la durée annoncée par le serveur (503
+    saturé) plutôt que notre forfait.
+    """
     global _ACADEMY_COOLDOWN_UNTIL, _ACADEMY_FAILS
     _ACADEMY_FAILS += 1
     if not immediate and _ACADEMY_FAILS < _ACADEMY_MAX_FAILS:
@@ -393,11 +423,11 @@ def _trip_academy_breaker(reason: str, *, immediate: bool = False):
             f"({reason}) — on garde le provider actif"
         )
         return
-    _ACADEMY_COOLDOWN_UNTIL = time.time() + _ACADEMY_COOLDOWN_SECONDS
+    delay = _ACADEMY_COOLDOWN_SECONDS if cooldown is None else cooldown
+    _ACADEMY_COOLDOWN_UNTIL = time.time() + delay
     _ACADEMY_FAILS = 0
     _safe_log(
-        f"[TTS][Academy] Circuit breaker OPEN for {_ACADEMY_COOLDOWN_SECONDS:.0f}s "
-        f"(reason: {reason})"
+        f"[TTS][Academy] Circuit breaker OPEN for {delay:.0f}s (reason: {reason})"
     )
 
 
@@ -437,7 +467,12 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
     if settings.academy_tts_voice:
         payload["voix"] = settings.academy_tts_voice
 
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        # Sans cet en-tête, ngrok (offre gratuite) sert une page HTML
+        # d'avertissement à la place de l'audio.
+        "ngrok-skip-browser-warning": "true",
+    }
     if settings.academy_tts_token:
         headers["Authorization"] = f"Bearer {settings.academy_tts_token}"
 
@@ -452,19 +487,30 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
 
                 if resp.status_code == 200:
                     audio = resp.content
+                    ctype = resp.headers.get("Content-Type", "")
                     # L'API renvoie du WAV brut ; un corps JSON (ou du HTML)
-                    # signale une erreur applicative ou une page du tunnel.
-                    if not audio or not audio.startswith(b"RIFF"):
-                        _safe_log(f"[TTS][Academy] Réponse non-WAV: {audio[:120]!r}")
-                        _trip_academy_breaker("réponse non-WAV")
+                    # signale une erreur applicative ou la page d'avertissement
+                    # du tunnel ngrok — dans les deux cas ce n'est pas de l'audio.
+                    if not ctype.startswith("audio") or not audio or not audio.startswith(b"RIFF"):
+                        _safe_log(
+                            f"[TTS][Academy] Réponse non-audio (Content-Type={ctype!r}): "
+                            f"{audio[:120]!r}"
+                        )
+                        _trip_academy_breaker("réponse non-audio (page ngrok ?)")
                         return None
                     _academy_note_success()
                     # Lettres solaires que le normaliseur n'a pas pu traiter :
                     # le texte source gagnerait à être écrit en darija (لشمس
                     # plutôt que الشمس) — on le signale sans bloquer l'audio.
+                    # Un en-tête HTTP ne transporte que du latin-1 : le serveur
+                    # encode ces valeurs arabes en pourcent. Sans unquote on
+                    # journaliserait « %D8%A7%D9%84… » au lieu des mots.
                     a_verifier = resp.headers.get("X-A-Verifier")
                     if a_verifier:
-                        _safe_log(f"[TTS][Academy] À vérifier (orthographe darija): {a_verifier[:200]}")
+                        _safe_log(
+                            "[TTS][Academy] À vérifier (orthographe darija): "
+                            f"{unquote(a_verifier)[:200]}"
+                        )
                     _safe_log(
                         f"[TTS][Academy] OK lang={lang} len={len(text)} "
                         f"bytes={len(audio)} t={int((time.time() - t0) * 1000)}ms"
@@ -472,11 +518,62 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
                     return audio
 
                 _safe_log(f"[TTS][Academy] HTTP {resp.status_code}: {resp.text[:200]}")
+
+                # Une réponse HTML ne vient JAMAIS de l'API (qui ne parle que
+                # JSON ou WAV) : c'est ngrok qui répond à sa place, donc le
+                # tunnel est mort. Mesuré : Colab arrêté → 404 + page HTML,
+                # alors que 404 signifie « voix inconnue » dans le contrat.
+                # Sans ce test on attendrait 3 échecs avant de basculer, et on
+                # chercherait une erreur de voix qui n'existe pas.
+                if resp.headers.get("Content-Type", "").startswith("text/html"):
+                    _trip_academy_breaker(
+                        f"HTTP {resp.status_code} + HTML (tunnel ngrok éteint)",
+                        immediate=True,
+                    )
+                    return None
+
                 # 401/403 = jeton refusé : réessayer ne servirait à rien.
                 if resp.status_code in (401, 403):
                     _trip_academy_breaker(
                         f"HTTP {resp.status_code} (jeton invalide ?)", immediate=True
                     )
+                    return None
+                # 502 = le Colab n'est pas allumé. C'est le cas NORMAL hors
+                # session : inutile de marteler le tunnel, on passe au repli.
+                if resp.status_code == 502:
+                    _trip_academy_breaker("HTTP 502 (Colab éteint)", immediate=True)
+                    return None
+                # 503 = modèle en chargement OU serveur saturé. Le serveur
+                # annonce lui-même combien de temps attendre (Retry-After /
+                # X-Attente) : on le RESPECTE au lieu d'appliquer notre
+                # cooldown forfaitaire. Réessayer plus tôt aggraverait très
+                # exactement la saturation dont on souffre — le compteur
+                # `refusees` de /health montre que c'est un risque réel.
+                if resp.status_code == 503:
+                    wait = _retry_after_seconds(resp)
+                    _trip_academy_breaker(
+                        f"HTTP 503 (chargement ou saturation, attente {wait:.0f}s)",
+                        immediate=True,
+                        cooldown=wait,
+                    )
+                    return None
+                # 404 (JSON) = la voix demandée n'existe pas sur ce
+                # checkpoint. Réessayer est inutile et le message générique
+                # « HTTP 404 » masque la vraie cause : on la nomme, car le
+                # symptôme visible est « plus aucun son » côté élève.
+                if resp.status_code == 404:
+                    _trip_academy_breaker(
+                        f"HTTP 404 — voix ACADEMY_TTS_VOICE="
+                        f"{settings.academy_tts_voice!r} refusée par le serveur "
+                        f"({resp.text[:120]})",
+                        immediate=True,
+                    )
+                    return None
+                # 422 = ce fragment précis est illisible pour le modèle. Le
+                # serveur va très bien : on abandonne CE segment sans pénaliser
+                # le provider (sinon un mot bizarre nous coupe la voix 2 min).
+                if resp.status_code == 422:
+                    _safe_log("[TTS][Academy] Fragment illisible (422) — segment abandonné")
                     return None
                 if resp.status_code >= 500 and attempt == 1:
                     await asyncio.sleep(1.5)   # laisse le GPU se libérer
@@ -752,40 +849,47 @@ _SEG_MIN_CHARS = 20          # avoid wasting API calls on 2-word fragments
 _SEG_MAX_CHARS = 200         # keep each Gemini call short & focused
 _SEG_MERGE_TARGET = 90       # aim for ~90-char chunks (~15-20 words)
 
-# ── Academy TTS : petits segments réguliers ──
+# ── Academy TTS : un opener court, puis de gros blocs ──
 #
-# Mesuré sur le tunnel Colab (T4), textes darija, cache froid :
+# ⚠️ Ce dimensionnement a été REFAIT après la mise à jour du serveur (décodage
+# `torch.compile`, visible dans /health : "decodage":"compile"). L'ancien
+# réglage supposait une génération PLUS LENTE que le temps réel ; c'est faux
+# depuis. Mesuré sur le tunnel, darija, cache froid, après un appel de chauffe
+# (le premier appel paie la compilation) :
 #
-#     98 car. →  9,8 s d'audio en 10,7 s de calcul   (1,09×)
-#    171 car. → 14,4 s d'audio en 16,5 s de calcul   (1,14×)
-#    317 car. → 24,2 s d'audio en 25,7 s de calcul   (1,06×)
-#    609 car. → 45,4 s d'audio en 51,1 s de calcul   (1,13×)
+#     11 car. →  1,32 s d'audio en  1,34 s de calcul   (RTF 1,02)
+#     33 car. →  2,48 s d'audio en  1,43 s de calcul   (RTF 0,58)
+#     98 car. →  5,68 s d'audio en  2,44 s de calcul   (RTF 0,43)
+#    205 car. → 13,33 s d'audio en  5,80 s de calcul   (RTF 0,44)
+#    463 car. → 29,50 s d'audio en 12,38 s de calcul   (RTF 0,42)
 #
-# Deux faits en découlent, et ils commandent tout le dimensionnement.
+#     régression :  calcul ≈ 0,40 × audio + 0,48 s
+#     + ~1,4 à 2,8 s de tunnel ngrok par appel (aller-retour + transfert WAV)
 #
-# 1. Le délai avant le PREMIER son est proportionnel à la taille du premier
-#    segment. Avec l'ancienne cible de 700 caractères, l'élève n'entendait
-#    rien pendant ~55 s puis recevait tout d'un bloc — le « en vrac ».
+# Deux faits en découlent, et ils inversent l'ancienne conclusion.
 #
-# 2. La génération est ~1,1× PLUS LENTE que le temps réel. La lecture rattrape
-#    donc toujours la génération : le tampon ne se remplit jamais. C'est une
-#    propriété du GPU, pas du découpage — aucune taille de segment ne rend le
-#    flux parfaitement continu.
+# 1. La génération est ~2,4× PLUS RAPIDE que le temps réel. Une fois la
+#    lecture lancée, elle ne rattrape JAMAIS la génération : le tampon se
+#    remplit tout seul. Le streaming est donc sans risque de coupure — ce
+#    n'est plus une contrainte de dimensionnement.
 #
-# La conséquence est contre-intuitive : mieux vaut des segments PETITS et
-# RÉGULIERS. Le retard accumulé vaut ~10 % de la durée du segment, donc de
-# petits segments donnent de petits trous fréquents (≈ 1 s toutes les 10 s,
-# qui passent pour des respirations) là où de gros segments donnent des trous
-# énormes et manifestement cassés.
+# 2. Ce qui coûte, maintenant, c'est le FIXE par appel : ~0,5 s de calcul plus
+#    ~1,4 s de tunnel. Chaque segment supplémentaire ajoute ~2 s au total.
+#    Multiplier les petits segments RALLONGE la réponse — exactement le
+#    contraire de ce que faisait l'ancien réglage à 110 caractères uniformes.
 #
-# ~110 caractères ≈ 10 s d'audio ≈ 11 s de calcul : premier son à ~11 s au
-# lieu de ~55 s, puis des pauses d'environ une seconde.
+# D'où la forme retenue : un PREMIER segment court, puis de GROS blocs.
+#   • l'opener court donne le premier son vite (~2,5 s de mur) ;
+#   • les blocs suivants se génèrent 2,4× plus vite qu'ils ne se jouent, donc
+#     ils arrivent tous en avance pendant que l'opener passe ;
+#   • peu de blocs = peu de surcoût fixe = réponse totale plus courte.
 #
-# On reste sous les ~200 caractères « d'un seul tenant » au-delà desquels le
-# contrat du modèle signale des dérives, et le découpage tombe toujours sur
-# une fin de phrase — donc la prosodie reste celle du serveur.
-_SEG_ACADEMY_MAX_CHARS = 220
-_SEG_ACADEMY_TARGET = 110
+# Un bloc large ne dégrade PAS la prosodie : le contrat du serveur précise
+# qu'il redécoupe lui-même aux frontières de phrase (en-tête X-Morceaux) et
+# concatène avec 0,25 s de silence. C'est même l'inverse — il recommande
+# explicitement de NE PAS pré-découper. On lui laisse donc le travail.
+_SEG_ACADEMY_FIRST_CHARS = 90     # opener : 1 phrase, ~5 s d'audio, ~2,5 s de mur
+_SEG_ACADEMY_MAX_CHARS = 900      # blocs suivants (le serveur redécoupe dedans)
 
 
 def split_into_segments(
@@ -829,6 +933,55 @@ def split_into_segments(
     return [s for s in out if s]
 
 
+def split_for_academy(
+    text: str,
+    *,
+    first_chars: int = _SEG_ACADEMY_FIRST_CHARS,
+    max_chars: int = _SEG_ACADEMY_MAX_CHARS,
+) -> list[str]:
+    """Découpe en « opener court + gros blocs », aux frontières de phrase.
+
+    Voir le bloc de mesures plus haut : le serveur génère 2,4× plus vite que
+    le temps réel mais paie ~2 s de fixe par appel. On veut donc le MINIMUM
+    d'appels, avec une seule exception — le premier, qu'on garde court pour
+    que l'élève entende quelque chose tout de suite.
+    """
+    if not text:
+        return []
+
+    sentences = [s.strip() for s in _SENTENCE_RE.split(text.strip()) if s.strip()]
+    if not sentences:
+        return []
+
+    out: list[str] = []
+    buf = ""
+    # Le premier bloc se ferme dès qu'il atteint `first_chars` ; les suivants
+    # se remplissent jusqu'à `max_chars`.
+    limit = first_chars
+
+    for s in sentences:
+        # Une phrase à elle seule plus longue que la limite part telle quelle :
+        # la couper au milieu casserait la prosodie que le serveur sait gérer.
+        if not buf and len(s) >= limit:
+            out.append(s)
+            limit = max_chars
+            continue
+        if buf and len(buf) + 1 + len(s) > limit:
+            out.append(buf)
+            buf = s
+            limit = max_chars
+            continue
+        buf = f"{buf} {s}".strip()
+        if len(buf) >= limit:
+            out.append(buf)
+            buf = ""
+            limit = max_chars
+
+    if buf:
+        out.append(buf)
+    return out
+
+
 @dataclass
 class TTSSegment:
     """One ready-to-play audio segment produced by the hybrid pipeline."""
@@ -845,11 +998,14 @@ async def _synthesize_one_segment(
     language: str,
 ) -> Optional[TTSSegment]:
     """Route + cache + synth a single segment. Returns None on total failure."""
-    cleaned = clean_for_tts(text)
-    if not cleaned:
+    display_text = clean_for_tts(text)
+    if not display_text:
         return None
-    cache_text = _normalize_for_cache(cleaned)
-    provider, voice, ext = _route(language, cleaned)
+    spoken_text = normalize_for_speech(display_text, language)
+    if not spoken_text:
+        return None
+    cache_text = _normalize_for_cache(spoken_text)
+    provider, voice, ext = _route(language, spoken_text)
 
     cache = _get_cache()
     if cache is not None:
@@ -859,34 +1015,34 @@ async def _synthesize_one_segment(
             return TTSSegment(
                 audio_b64=base64.b64encode(cached).decode("ascii"),
                 mime=mime, provider=provider, language=language,
-                cached=True, text=cleaned,
+                cached=True, text=display_text,
             )
 
     audio_bytes: Optional[bytes] = None
     if provider == "academy":
-        audio_bytes = await _synthesize_academy(cleaned, language)
+        audio_bytes = await _synthesize_academy(spoken_text, language)
         if not audio_bytes:
             # Colab tombé → on redescend la chaîne de secours pour ce segment
             _safe_log("[TTS][seg] Academy fail → Gradio/Gemini fallback")
-            audio_bytes = await _synthesize_gradio(cleaned, language)
+            audio_bytes = await _synthesize_gradio(spoken_text, language)
             if audio_bytes:
                 provider, voice, ext = "gradio", "darija", "wav"
             else:
-                audio_bytes = await _synthesize_gemini(cleaned, language)
+                audio_bytes = await _synthesize_gemini(spoken_text, language)
                 if audio_bytes:
                     provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
     elif provider == "gradio":
-        audio_bytes = await _synthesize_gradio(cleaned, language)
+        audio_bytes = await _synthesize_gradio(spoken_text, language)
         if not audio_bytes:
             # Gradio failed → try Gemini as fallback for this segment
             _safe_log("[TTS][seg] Gradio fail → Gemini fallback")
-            audio_bytes = await _synthesize_gemini(cleaned, language)
+            audio_bytes = await _synthesize_gemini(spoken_text, language)
             if audio_bytes:
                 provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
     elif provider == "gemini":
-        audio_bytes = await _synthesize_gemini(cleaned, language)
+        audio_bytes = await _synthesize_gemini(spoken_text, language)
     elif provider == "google_cloud":
-        audio_bytes = await _synthesize_google_cloud(cleaned, language)
+        audio_bytes = await _synthesize_google_cloud(spoken_text, language)
 
     if not audio_bytes:
         return None
@@ -898,7 +1054,7 @@ async def _synthesize_one_segment(
     return TTSSegment(
         audio_b64=base64.b64encode(audio_bytes).decode("ascii"),
         mime=mime, provider=provider, language=language,
-        cached=False, text=cleaned,
+        cached=False, text=display_text,
     )
 
 
@@ -941,11 +1097,7 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
     # frontières de phrase) ; les providers cloud préfèrent de petits appels
     # parallélisables.
     if _academy_is_available():
-        segments = split_into_segments(
-            cleaned,
-            max_chars=_SEG_ACADEMY_MAX_CHARS,
-            merge_target=_SEG_ACADEMY_TARGET,
-        )
+        segments = split_for_academy(cleaned)
     else:
         segments = split_into_segments(cleaned)
     if not segments:
@@ -1007,26 +1159,29 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     if settings.tts_disabled:
         return TTSResult(audio_b64=None, mime="", provider="disabled", use_browser=False)
 
-    cleaned = clean_for_tts(text)
-    if not cleaned:
+    display_text = clean_for_tts(text)
+    if not display_text:
+        return TTSResult(audio_b64=None, mime="", provider="empty", use_browser=False)
+    spoken_text = normalize_for_speech(display_text, language)
+    if not spoken_text:
         return TTSResult(audio_b64=None, mime="", provider="empty", use_browser=False)
 
     # Cap length per request to avoid runaway cost (roughly 2 min of speech)
-    if len(cleaned) > 2500:
-        cleaned = cleaned[:2500].rsplit(" ", 1)[0] + "…"
+    if len(spoken_text) > 2500:
+        spoken_text = spoken_text[:2500].rsplit(" ", 1)[0] + "…"
 
-    provider, voice, ext = _route(language, cleaned)
+    provider, voice, ext = _route(language, spoken_text)
 
     if language == "mixed":
         _safe_log(
             f"[TTS][route] mixed → {provider} "
-            f"(len={len(cleaned)}, key={_is_darija_key_phrase(cleaned)})"
+            f"(len={len(spoken_text)}, key={_is_darija_key_phrase(spoken_text)})"
         )
 
     # Cache hit?
     cache = _get_cache()
     if cache is not None:
-        cached = cache.get(provider, voice, language, cleaned, ext)
+        cached = cache.get(provider, voice, language, spoken_text, ext)
         if cached:
             mime = "audio/wav" if ext == "wav" else "audio/mpeg"
             return TTSResult(
@@ -1038,25 +1193,25 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     t0 = time.time()
     audio_bytes: Optional[bytes] = None
     if provider == "academy":
-        audio_bytes = await _synthesize_academy(cleaned, language)
+        audio_bytes = await _synthesize_academy(spoken_text, language)
         if not audio_bytes:
-            audio_bytes = await _synthesize_gradio(cleaned, language)
+            audio_bytes = await _synthesize_gradio(spoken_text, language)
             if audio_bytes:
                 provider, voice, ext = "gradio", "darija", "wav"
             else:
-                audio_bytes = await _synthesize_gemini(cleaned, language)
+                audio_bytes = await _synthesize_gemini(spoken_text, language)
                 if audio_bytes:
                     provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
     elif provider == "gradio":
-        audio_bytes = await _synthesize_gradio(cleaned, language)
+        audio_bytes = await _synthesize_gradio(spoken_text, language)
         if not audio_bytes:
-            audio_bytes = await _synthesize_gemini(cleaned, language)
+            audio_bytes = await _synthesize_gemini(spoken_text, language)
             if audio_bytes:
                 provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
     elif provider == "gemini":
-        audio_bytes = await _synthesize_gemini(cleaned, language)
+        audio_bytes = await _synthesize_gemini(spoken_text, language)
     elif provider == "google_cloud":
-        audio_bytes = await _synthesize_google_cloud(cleaned, language)
+        audio_bytes = await _synthesize_google_cloud(spoken_text, language)
 
     if not audio_bytes:
         _safe_log(f"[TTS] All providers failed for lang={language}")
@@ -1065,12 +1220,12 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
 
     elapsed_ms = int((time.time() - t0) * 1000)
     _safe_log(
-        f"[TTS] {provider} lang={language} len={len(cleaned)} "
+        f"[TTS] {provider} lang={language} len={len(spoken_text)} "
         f"bytes={len(audio_bytes)} t={elapsed_ms}ms"
     )
 
     if cache is not None:
-        cache.put(provider, voice, language, cleaned, ext, audio_bytes)
+        cache.put(provider, voice, language, spoken_text, ext, audio_bytes)
 
     mime = "audio/wav" if ext == "wav" else "audio/mpeg"
     return TTSResult(
@@ -1343,8 +1498,9 @@ async def warmup_cache() -> dict[str, int]:
 
         # Fast path: cache hit → no API call, no delay needed
         cleaned = clean_for_tts(phrase)
-        cache_text = _normalize_for_cache(cleaned)
-        provider, voice, ext = _route(lang, cleaned)
+        spoken_text = normalize_for_speech(cleaned, lang)
+        cache_text = _normalize_for_cache(spoken_text)
+        provider, voice, ext = _route(lang, spoken_text)
         cache = _get_cache()
         if cache is not None and cache.get(provider, voice, lang, cache_text, ext):
             counts["cached_hit"] += 1
