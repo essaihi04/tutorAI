@@ -483,6 +483,7 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
   const usesNativeSimulationViewport = [
     '/media/simulations/svt/ch2_information_genetique/expression/',
     '/media/simulations/svt/ch4_geodynamique_interne/',
+    '/media/simulations/physics/advanced/',
   ].some((path) => cleanUrl.includes(path));
 
   const handleSimulationLoad = () => {

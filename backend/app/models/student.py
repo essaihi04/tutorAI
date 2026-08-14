@@ -14,7 +14,7 @@ class Student(Base):
     email = Column(String(255), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=False)
-    preferred_language = Column(String(10), default="fr")
+    preferred_language = Column(String(10), default="mixed")   # darija
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     last_active_at = Column(DateTime(timezone=True), default=datetime.utcnow)

@@ -41,6 +41,81 @@ _STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', '
 # bloc retiré, ces marqueurs restent seuls sur leur ligne dans le chat.
 _EMPHASIS_TAIL_RE = re.compile(r'[*_]+$')
 
+# Plages Unicode de l'écriture arabe (arabe + supplément + formes de présentation).
+_ARABIC_RE = re.compile(r'[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]')
+# Lettres latines, pour ne pas compter la ponctuation ni les chiffres.
+_LATIN_RE = re.compile(r'[A-Za-zÀ-ÖØ-öø-ÿ]')
+
+
+def _is_mostly_arabic(text: str, seuil: float = 0.30) -> bool:
+    """True si le texte est majoritairement en écriture arabe.
+
+    Sert à reconnaître une réponse en darija. Le seuil est BAS (30 %) parce
+    qu'une phrase darija est truffée de termes techniques français en lettres
+    latines (« la vitesse », « ADN ») : à 50 % on classerait comme française
+    une phrase pourtant illisible au tableau. On ne compte que les lettres —
+    la ponctuation et les chiffres sont communs aux deux écritures.
+    """
+    if not text:
+        return False
+    arabe = len(_ARABIC_RE.findall(text))
+    latin = len(_LATIN_RE.findall(text))
+    total = arabe + latin
+    if total == 0:
+        return False
+    return (arabe / total) >= seuil
+
+
+def _ecrit_en_arabe(text: object) -> bool:
+    """True si ce texte contient de l'écriture arabe.
+
+    Sert de VERROU sur tout ce qui s'AFFICHE au tableau. Le prompt interdit
+    déjà l'arabe à l'écrit, mais un prompt reste une consigne : le modèle
+    passait outre. Une ligne de tableau française ne contient jamais de
+    caractère arabe, donc le moindre suffit à disqualifier la ligne.
+
+    ⚠️ Ne s'applique QU'À L'ÉCRIT. Ce qui est parlé (le texte du chat) doit au
+    contraire rester en darija.
+    """
+    return isinstance(text, str) and bool(_ARABIC_RE.search(text))
+
+
+# ── Nettoyage markdown du texte parlé ────────────────────────────────
+# Le prompt interdit le markdown dans le texte hors <ui>, mais le modèle en
+# produit encore : l'élève lisait « **Domaine 2** » et des lignes de tableau
+# `|:---:|` dans le chat. Ces fonctions sont partagées par le flux (streaming)
+# et par le chemin non streamé, pour que les deux nettoient à l'identique.
+
+_MD_TABLE_ROW_RE = re.compile(r'(?:\|[^|\n]*){2,}\|')
+_MD_SEP_RE = re.compile(r'(?<!-)[-*_]{3,}(?!-)')
+_MD_HEADING_RE = re.compile(r'#{1,6}\s*')
+_MD_BULLET_RE = re.compile(r'^\s{0,3}[-*+]\s+')
+_MD_UNDERLINE_RE = re.compile(r'(?<!\w)__([^_\n]+)__(?!\w)')
+
+
+def _strip_markdown_inline(text: str) -> str:
+    """Retire les marqueurs indépendants du reste de la ligne.
+
+    Sûr sur un fragment de flux : ces marqueurs se suppriment un par un, sans
+    avoir besoin de retrouver leur paire.
+    """
+    text = _MD_SEP_RE.sub(' ', text)
+    text = _MD_HEADING_RE.sub('', text)
+    text = _MD_UNDERLINE_RE.sub(r'\1', text)
+    return text.replace('*', '')
+
+
+def _strip_markdown_line(line: str) -> str:
+    """Nettoyage complet d'une ligne ENTIÈRE, tableaux markdown compris."""
+    # ⚠️ On ne touche aux `|` que sur une ligne qui ressemble vraiment à un
+    # tableau ET qui ne contient pas de LaTeX : `$|x|$` (valeur absolue) a lui
+    # aussi deux barres et ne doit pas être charcuté.
+    if '$' not in line and _MD_TABLE_ROW_RE.search(line):
+        line = _MD_TABLE_ROW_RE.sub(' ', line)
+        line = line.replace('|', ' ')
+    line = _MD_BULLET_RE.sub('', line)
+    return _strip_markdown_inline(line)
+
 
 class _StreamTagFilter:
     """Ne laisse passer vers le chat que le texte SITUÉ HORS des balises.
@@ -63,10 +138,15 @@ class _StreamTagFilter:
     à la fin du flux.
     """
 
-    __slots__ = ('_pos', '_open', '_pending')
+    __slots__ = ('_pos', '_open', '_pending', '_md_buf')
 
     # Longueur de la plus longue balise : au-delà, un « < » est du vrai texte.
     _MAX_TAG_LEN = max(len(f'</{t}>') for t in _STREAM_TAG_NAMES)
+
+    # Au-delà de cette longueur sans retour à la ligne, on diffuse quand même
+    # (nettoyage restreint) pour ne pas figer l'affichage sur un long
+    # paragraphe écrit d'un seul tenant.
+    _MD_FLUSH_AT = 200
 
     def __init__(self):
         self._pos = 0
@@ -74,6 +154,9 @@ class _StreamTagFilter:
         # Marqueurs de gras retenus : on ne sait pas encore s'ils ouvrent du
         # texte en gras ou s'ils emballent une balise à venir.
         self._pending = ''
+        # Ligne en cours de constitution : un tableau markdown ne peut être
+        # reconnu qu'une fois la ligne complète.
+        self._md_buf = ''
 
     def _hold(self, buf: str) -> str:
         """Émet ``buf`` en retenant un éventuel ``**`` de fin (sort indécis)."""
@@ -84,6 +167,34 @@ class _StreamTagFilter:
         return buf[:m.start()]
 
     def feed(self, acc: str) -> str:
+        """Texte nouvellement affichable, balises ET markdown retirés."""
+        return self._clean_stream(self._feed_tags(acc), final=False)
+
+    def _clean_stream(self, raw: str, *, final: bool) -> str:
+        """Bufferise par ligne pour nettoyer le markdown de façon fiable.
+
+        Un tableau markdown ne se reconnaît qu'une fois la ligne entière
+        connue : on ne diffuse donc une ligne qu'après son retour à la ligne.
+        Un paragraphe très long est libéré avant, avec le nettoyage restreint,
+        pour que l'affichage reste vivant.
+        """
+        if raw:
+            self._md_buf += raw
+        out = ''
+        if '\n' in self._md_buf:
+            *complete, self._md_buf = self._md_buf.split('\n')
+            out += '\n'.join(_strip_markdown_line(line) for line in complete) + '\n'
+        if final:
+            out += _strip_markdown_line(self._md_buf)
+            self._md_buf = ''
+        elif len(self._md_buf) >= self._MD_FLUSH_AT:
+            # On retient une courte queue : un marqueur peut être à cheval sur
+            # deux tokens (« ** » puis « BB »).
+            head, self._md_buf = self._md_buf[:-8], self._md_buf[-8:]
+            out += _strip_markdown_inline(head)
+        return out
+
+    def _feed_tags(self, acc: str) -> str:
         """Renvoie le texte nouvellement affichable, vu la réponse accumulée."""
         buf = self._pending
         self._pending = ''
@@ -144,6 +255,10 @@ class _StreamTagFilter:
             self._pos = nxt + 1
 
     def flush(self, acc: str) -> str:
+        """Fin du flux : libère tout ce qui restait, nettoyé."""
+        return self._clean_stream(self._flush_tags(acc), final=True)
+
+    def _flush_tags(self, acc: str) -> str:
         """Fin du flux : libère ce qui était retenu, sauf balise inachevée."""
         pending, self._pending = self._pending, ''
         if self._open:
@@ -580,7 +695,11 @@ class SessionHandler:
         self.session_context: dict = {}
         self.current_phase: str = "activation"
         self.session_mode: str = "coaching"  # 'coaching' or 'libre'
-        self.language: str = "fr"
+        # Darija par défaut : c'est la langue d'enseignement, et la seule que
+        # notre modèle vocal sait réellement dire. Le front envoie de toute
+        # façon `set_language` à l'ouverture, mais si ce message se perd, mieux
+        # vaut retomber sur la darija que sur du français.
+        self.language: str = "mixed"
         self.lesson_resources: list[dict] = []  # Cached lesson resources
         self.current_lesson_id: str = None
         self.simulation_state: dict = {}  # Track current simulation state
@@ -957,22 +1076,9 @@ class SessionHandler:
         # endroit par lequel passe le texte affiché.
         # ⚠️ Le modèle écrit ces marqueurs AU MILIEU des lignes, pas seulement
         # en début : des motifs ancrés sur `^` laissaient tout passer.
-        # Un tableau markdown n'a rien à faire à l'oral (il appartient au
-        # bloc <ui>) : on supprime toute suite de cellules `|…|…|`.
-        text = re.sub(r'(?:\|[^|\n]*){2,}\|', ' ', text)
-        text = re.sub(r'\|', ' ', text)
-        # Séparateurs `---` / `***` (où qu'ils soient)
-        text = re.sub(r'(?<!-)[-*_]{3,}(?!-)', ' ', text)
-        # Titres `###` (début de ligne ou après un séparateur inline)
-        text = re.sub(r'#{1,6}\s*', '', text)
-        # Puces en début de ligne
-        text = re.sub(r'^\s{0,3}[-*+]\s+', '', text, flags=re.MULTILINE)
-        # Emphases : on garde le mot, on jette les marqueurs
-        text = re.sub(r'\*\*([^*\n]+)\*\*', r'\1', text)
-        text = re.sub(r'(?<!\w)\*([^*\n]+)\*(?!\w)', r'\1', text)
-        text = re.sub(r'(?<!\w)__([^_\n]+)__(?!\w)', r'\1', text)
-        # Astérisques orphelines laissées par un markdown tronqué
-        text = re.sub(r'\*{1,3}', '', text)
+        # Même nettoyage que le flux streamé (fonctions partagées), ligne par
+        # ligne pour que les tableaux markdown soient reconnus.
+        text = '\n'.join(_strip_markdown_line(line) for line in text.split('\n'))
 
         text = re.sub(r'[ \t]+\n', '\n', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
@@ -1415,7 +1521,7 @@ class SessionHandler:
                 "phase": self.current_phase
             })
         elif msg_type == "set_language":
-            self.language = message.get("language", "fr")
+            self.language = message.get("language", "mixed")
 
     async def _handle_exam_answer(self, message: dict):
         """Handle structured exam answer from the exam panel for proficiency tracking."""
@@ -1816,6 +1922,18 @@ class SessionHandler:
 
     async def _process_student_input(self, student_text: str, exam_context: bool = False, force_suppress_whiteboard: bool = False, exam_question_number: int = None, exam_total_questions: int = None):
         """Process student text through streaming LLM and return TTS audio."""
+        # ⚠️ Compteur de relances REMIS À ZÉRO À CHAQUE TOUR.
+        #
+        # Il était cumulatif sur toute la session : chaque réponse sans bloc
+        # <ui> l'incrémentait, et il n'était jamais remis à zéro en cas de
+        # succès. Au 4ᵉ tour concerné, il valait 3, plus aucune relance
+        # n'était tentée, et TOUTES les réponses suivantes tombaient dans le
+        # repli auto-board — qui recopie la prose du chat sur le tableau.
+        # C'est exactement le « après 3-4 réponses, le tableau affiche la
+        # discussion ». Le budget de relances est celui d'UN tour, pas d'une
+        # session.
+        self._structured_board_retry_count = 0
+
         # Check if a simulation is waiting for student answer
         handled = await self.handle_simulation_student_answer(student_text)
         if handled:
@@ -2283,10 +2401,10 @@ RÈGLES:
 
     def _speech_language_for_tts(self) -> str:
         """Map the session language to the TTS router input."""
-        lang = getattr(self, "language", "fr") or "fr"
+        lang = getattr(self, "language", "mixed") or "mixed"
         if lang in ("fr", "ar", "mixed"):
             return lang
-        return "fr"
+        return "mixed"
 
     async def _init_session(self, message: dict):
         """Initialize session context from lesson data."""
@@ -2306,7 +2424,7 @@ RÈGLES:
             "teaching_mode": message.get("teaching_mode", "Socratique"),
         }
         self.current_phase = message.get("phase", "activation") if self.session_mode == "coaching" else "libre"
-        self.language = message.get("language", "fr")
+        self.language = message.get("language", "mixed")
         self.conversation_history = []
         self.simulation_state = {}
         self.simulation_history = []
@@ -2862,7 +2980,26 @@ RÈGLES :
         Live ("prof en direct") is the DEFAULT in every mode — libre as well as
         coaching. The static board is kept only when the content cannot be
         written progressively without loss (see _board_is_live_renderable).
+
+        Point de passage unique = bon endroit pour le verrou « pas d'arabe au
+        tableau » : tout ce que l'élève voit écrit passe par ici.
         """
+        avant = len(lines or [])
+        lines = [
+            ligne for ligne in (lines or [])
+            if not (isinstance(ligne, dict) and _ecrit_en_arabe(ligne.get("content")))
+        ]
+        if len(lines) < avant:
+            _safe_log(
+                f"[Board] {avant - len(lines)} ligne(s) en arabe rejetée(s) — "
+                f"le tableau s'écrit en français"
+            )
+        if not lines:
+            _safe_log("[Board] Tableau abandonné : plus aucune ligne en français")
+            return
+        if _ecrit_en_arabe(title):
+            title = "Cours en direct"
+
         if self._board_is_live_renderable(lines):
             steps = self._board_lines_to_live_steps(lines)
             if steps:
@@ -2958,6 +3095,13 @@ RÈGLES :
 
         drawable_types = {"line", "arrow", "rect", "circle", "text", "path"}
         normalized = []
+        # Garde-fou superposition : les éléments dessinés s'ACCUMULENT dans la
+        # zone de croquis tant qu'aucun erase ne passe. Un script qui enchaîne
+        # les croquis sans jamais effacer finit en schémas superposés
+        # illisibles — au-delà de ce seuil, on efface d'office avant de
+        # dessiner la suite. (Un croquis complet fait typiquement 5-10 éléments.)
+        _MAX_ELEMENTS_SANS_ERASE = 12
+        drawn_since_erase = 0
         for step in steps:
             if not isinstance(step, dict):
                 continue
@@ -2987,6 +3131,11 @@ RÈGLES :
                 content = line.get("content")
                 if not isinstance(content, str) or not content.strip():
                     continue
+                # Le tableau s'écrit en français : une ligne en arabe est
+                # rejetée, pas affichée. L'élève recopie ce tableau.
+                if _ecrit_en_arabe(content):
+                    _safe_log(f"[Live] Ligne écrite en arabe rejetée: {content[:60]!r}")
+                    continue
                 clean_line = {"type": str(line.get("type", "text")).lower(), "content": content.strip()}
                 if line.get("color"):
                     clean_line["color"] = str(line["color"])
@@ -3008,7 +3157,23 @@ RÈGLES :
                     el for el in elements
                     if isinstance(el, dict) and str(el.get("type", "")).lower() in drawable_types
                 ]
+                # Les `label` sont peints sur le croquis : en arabe, on retire
+                # l'étiquette et on garde la forme — une flèche sans nom reste
+                # utile, une flèche annotée en arabe ne l'est pas.
+                for el in clean_els:
+                    for champ in ("label", "text"):
+                        if _ecrit_en_arabe(el.get(champ)):
+                            _safe_log(f"[Live] Label arabe retiré: {el.get(champ)!r}")
+                            el.pop(champ, None)
                 if clean_els:
+                    if drawn_since_erase >= _MAX_ELEMENTS_SANS_ERASE:
+                        _safe_log(
+                            f"[Live] {drawn_since_erase} éléments dessinés sans erase — "
+                            "effacement automatique du croquis pour éviter la superposition"
+                        )
+                        normalized.append({"action": "erase", "zone": "draw"})
+                        drawn_since_erase = 0
+                    drawn_since_erase += len(clean_els)
                     draw_step = {"action": "draw", "elements": clean_els}
                     # `say` : le professeur commente le croquis pendant le
                     # tracé (même mécanique vocale que sur les lignes écrites).
@@ -3018,7 +3183,10 @@ RÈGLES :
                     normalized.append(draw_step)
             elif action == "erase":
                 zone = str(step.get("zone", "all")).lower().strip()
-                normalized.append({"action": "erase", "zone": zone if zone in ("text", "draw", "all") else "all"})
+                zone = zone if zone in ("text", "draw", "all") else "all"
+                if zone in ("draw", "all"):
+                    drawn_since_erase = 0
+                normalized.append({"action": "erase", "zone": zone})
             elif action == "pause":
                 try:
                     duration = int(step.get("duration", 900))
@@ -3026,20 +3194,25 @@ RÈGLES :
                     duration = 900
                 normalized.append({"action": "pause", "duration": max(200, min(8000, duration))})
             elif action == "narrate":
+                # `narrate` s'AFFICHE (bulle du tableau) : même règle que les
+                # lignes écrites. Le commentaire parlé, lui, est dans le chat.
                 text = step.get("text") or step.get("content") or ""
-                if isinstance(text, str) and text.strip():
+                if isinstance(text, str) and text.strip() and not _ecrit_en_arabe(text):
                     normalized.append({"action": "narrate", "text": text.strip()})
             elif action == "ask":
                 # Question de compréhension : le tableau S'ARRÊTE et attend la
                 # réponse de l'élève avant de dérouler la suite du script.
+                # Question et options sont LUES À L'ÉCRAN par l'élève : en
+                # français, donc, comme le reste du tableau.
                 text = step.get("text") or step.get("question") or step.get("content") or ""
-                if isinstance(text, str) and text.strip():
+                if isinstance(text, str) and text.strip() and not _ecrit_en_arabe(text):
                     ask_step = {"action": "ask", "text": text.strip()}
                     options = step.get("options") or step.get("suggestions") or step.get("choices")
                     if isinstance(options, list):
                         clean_opts = [
                             str(o).strip() for o in options
                             if isinstance(o, (str, int, float)) and str(o).strip()
+                            and not _ecrit_en_arabe(str(o))
                         ][:4]
                         if clean_opts:
                             ask_step["options"] = clean_opts
@@ -3065,10 +3238,16 @@ RÈGLES :
                     zoom_step["say"] = say.strip()
                 normalized.append(zoom_step)
 
-        # A usable script must actually write or draw something
+        # A usable script must actually write or draw something.
+        # ⚠️ Peut désormais échouer parce que TOUTES les lignes étaient en
+        # arabe : c'est voulu. Aucun tableau vaut mieux qu'un tableau que
+        # l'élève ne peut pas recopier — le chat porte déjà l'explication.
         if not any(s["action"] in ("write", "draw") for s in normalized):
             return None, None
-        return str(title or "Cours en direct"), normalized
+        titre = str(title or "Cours en direct")
+        if _ecrit_en_arabe(titre):
+            titre = "Cours en direct"
+        return titre, normalized
 
     async def _execute_ai_commands(self, ai_response: str, suppress_draw: bool = False, suppress_media: bool = False, force_schema: bool = False, student_text: str = "", suppress_whiteboard: bool = False, exam_context: bool = False, force_exam_panel: bool = False):
         """Detect and execute commands in AI response (media, phase transitions, exercises)."""
@@ -4767,6 +4946,27 @@ RÈGLES :
                         except Exception as e:
                             _safe_log(f"[AI Commands] Structured whiteboard retry failed: {e}")
                             self._structured_board_retry_count = 0
+
+                # ⚠️ DERNIER REMPART — après les relances, pas avant.
+                #
+                # Le repli qui suit recopie la PROSE DU CHAT sur le tableau. En
+                # session darija cette prose est en caractères arabes, alors que
+                # le tableau s'écrit en français (l'élève le recopie et compose
+                # le BAC en français) : on obtenait un tableau rempli de la
+                # discussion, exactement le bug signalé.
+                #
+                # On abandonne donc le repli plutôt que d'afficher ça. Les
+                # relances ci-dessus ont déjà eu leurs 3 chances de produire un
+                # vrai <ui> français — c'est pour ça que cette garde est ICI et
+                # pas plus haut : la placer avant les aurait court-circuitées.
+                # Rien n'est perdu : le chat porte l'explication, et c'est lui
+                # que l'élève entend.
+                if _is_mostly_arabic(clean_text):
+                    _safe_log(
+                        "[AI Commands] Repli auto-board abandonné : réponse en "
+                        "darija, le tableau s'écrit en français"
+                    )
+                    return
 
                 auto_lines = []
 

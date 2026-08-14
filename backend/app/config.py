@@ -35,26 +35,34 @@ class Settings(BaseSettings):
     # vertex_project_id: str = ""
     # vertex_location: str = ""
 
+    # ⚠️ AUCUNE CLÉ EN DUR ICI. Ce dépôt est public : une clé écrite dans ce
+    # fichier finit indexée, et Google la révoque — c'est exactement ce qui est
+    # arrivé à la clé TTS (« Your API key was reported as leaked »), qui a fait
+    # tomber le dernier repli vocal le jour où le tunnel Colab s'est coupé.
+    # Toutes les valeurs ci-dessous vivent dans backend/.env (et son jumeau de
+    # déploiement deploy/backend.env), tous deux ignorés par git.
+
     # Gemini API (used for LLM, NOT for TTS)
-    gemini_api_key: str = "AIzaSyDgiqb3bRFO97SIPvUnLBI0wF6iU1aLgI8"
+    gemini_api_key: str = ""
 
     # Gemini TTS (using 2.5 Flash Preview for fast multilingual TTS)
     # Used ONLY for Darija (mixed) — expressive voice needed for dialect
-    gemini_tts_api_key: str = "AIzaSyChw2Ab-CXl1Ynm2c9iS-lp35cqD1HRQNo"
+    gemini_tts_api_key: str = ""
     gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
     gemini_tts_voice: str = "Kore"  # Fast, clear female voice
 
     # Google Cloud Text-to-Speech (Standard voices, ~4$/1M chars)
     # Used for Arabic MSA (ar-XA). French uses browser Web Speech API (free).
     # Reuses Gemini API key by default — requires Cloud TTS API enabled on the same project.
-    google_cloud_tts_api_key: str = "AIzaSyAmfczktE0VKLvdeA6dWflDj8PTowr97tY"   # falls back to gemini_tts_api_key if empty
+    google_cloud_tts_api_key: str = ""   # falls back to gemini_tts_api_key if empty
     google_cloud_tts_voice_ar: str = "ar-XA-Standard-D"  # female MSA standard voice
     google_cloud_tts_voice_fr: str = "fr-FR-Standard-C"  # used only if frontend fallback fails
 
     # Self-hosted Darija TTS (Gradio endpoint — e.g. Chatterbox on Colab)
     # Set this to your Gradio public URL; leave empty to disable.
-    # Vide : l'ancien tunnel gradio.live est mort et chaque segment perdait un
-    # aller-retour dessus avant de retomber sur Gemini. Academy le remplace.
+    # ⚠️ Une URL gradio.live expire en ~72 h. En laisser une périmée en dur ne
+    # sert à rien et coûte un aller-retour 404 à CHAQUE échec d'Academy, juste
+    # avant le repli utile. Vide = repli désactivé ; la remettre via GRADIO_TTS_URL.
     gradio_tts_url: str = ""
     gradio_tts_exaggeration: float = 0.5
     gradio_tts_temperature: float = 0.8
@@ -86,7 +94,7 @@ class Settings(BaseSettings):
     tts_disabled: int = 0
 
     # Mistral OCR API (for extracting text from images)
-    mistral_api_key: str = "vagL3uMJ8KSNqbVptYHCRjEphmUzSGmf"
+    mistral_api_key: str = ""
     mistral_ocr_model: str = "mistral-ocr-latest"
 
     # Google Cloud Vertex AI (not used - using Gemini API key instead)

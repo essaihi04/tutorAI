@@ -81,6 +81,15 @@ interface LiveBoardProps {
   busy?: boolean;
   /** false = tableau muet (la narration est portée par l'audio du chat). */
   voiceEnabled?: boolean;
+  /**
+   * true tant que la voix du chat parle.
+   *
+   * C'est LE signal de synchronisation : le tableau n'écrit que pendant que
+   * le professeur parle. Sans lui, le script démarrait dès sa réception et
+   * finissait de s'écrire bien avant que le premier son n'arrive — la
+   * synthèse prend plusieurs secondes.
+   */
+  audioActive?: boolean;
 }
 
 // ── Palette craie (tableau sombre) ─────────────────────────────────
@@ -121,7 +130,7 @@ interface WrittenEntry {
 }
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
-function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true }: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   const [narration, setNarration] = useState<string | null>(null);
@@ -190,9 +199,33 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const drawZoneRef = useRef<HTMLDivElement>(null);
   // Zoom piloté par le prof — via ref car défini après play() dans le fichier.
   const zoomToPointRef = useRef<(x: number, y: number, s: number) => void>(() => {});
+  // État de la voix du chat, vu depuis la boucle de lecture (voir plus bas).
+  const audioActiveRef = useRef(false);
+  const audioStartedRef = useRef(false);
+  const audioEndedRef = useRef(false);
+  /** Instant au-delà duquel on démarre même sans voix (ms, horloge perf). */
+  const startDeadlineRef = useRef(0);
 
   playingRef.current = playing;
   speedRef.current = speed;
+
+  // ── Synchronisation écriture ↔ parole ──────────────────────────────
+  //
+  // Le tableau avance UNIQUEMENT pendant que la voix du chat parle. Trois
+  // garde-fous, chacun pour une panne réelle :
+  //
+  //  • `audioStartedRef` — avant le premier son, on patiente. Sinon le script
+  //    s'écrivait en entier pendant les ~10 s de synthèse, et l'élève voyait
+  //    tout le tableau puis entendait le cours par-dessus un tableau fini.
+  //  • `audioEndedRef` — une fois la voix terminée, on déroule librement le
+  //    reste : le texte du chat est plus court que le script, et geler le
+  //    tableau à mi-chemin serait pire que de le finir sans voix.
+  //  • `startDeadlineRef` — si aucun son n'arrive (TTS coupé, tunnel mort,
+  //    autoplay refusé), on démarre quand même après ce délai. Un tableau
+  //    silencieux vaut mieux qu'un tableau figé.
+  audioActiveRef.current = audioActive;
+  if (audioActive && !audioStartedRef.current) audioStartedRef.current = true;
+  if (!audioActive && audioStartedRef.current) audioEndedRef.current = true;
   // `voiceEnabled=false` : le script est trop maigre pour porter le cours,
   // c'est l'audio du chat qui narre — le tableau doit rester muet, sinon
   // deux voix se superposeraient.
@@ -242,16 +275,30 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     }
   }, [spokenTextOf]);
 
-  // Attente "consciente" : respecte pause + vitesse + annulation
+  /**
+   * Le tableau a-t-il le droit d'avancer maintenant ?
+   *
+   * Il suit la voix du chat : il n'écrit que pendant qu'elle parle. Les trois
+   * échappatoires évitent qu'un défaut de voix ne fige le cours (voir la note
+   * sur les refs de synchronisation).
+   */
+  const mayAdvance = useCallback((): boolean => {
+    if (!voiceEnabled) return true;      // tableau autonome (mode muet assumé)
+    if (audioActiveRef.current) return true;   // ça parle → on écrit
+    if (audioEndedRef.current) return true;    // ça a parlé et c'est fini → on termine
+    return performance.now() >= startDeadlineRef.current;  // la voix n'est jamais venue
+  }, [voiceEnabled]);
+
+  // Attente "consciente" : respecte pause + vitesse + annulation + la voix
   const wait = useCallback(async (ms: number, runId: number): Promise<boolean> => {
     let remaining = ms;
     while (remaining > 0) {
       await new Promise(r => setTimeout(r, 50));
       if (runId !== runIdRef.current) return false;
-      if (playingRef.current) remaining -= 50 * speedRef.current;
+      if (playingRef.current && mayAdvance()) remaining -= 50 * speedRef.current;
     }
     return runId === runIdRef.current;
-  }, []);
+  }, [mayAdvance]);
 
   /**
    * Dit une ligne avec NOTRE voix (modèle serveur) en pilotant sa révélation.
@@ -562,6 +609,14 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setAskAnswer(null);
     askResolveRef.current?.();
     askResolveRef.current = null;
+
+    // Nouveau tour : on réarme la synchronisation sur la voix. Le script
+    // patiente jusqu'au premier son — sauf si aucun ne vient dans les 15 s,
+    // auquel cas il se déroule en silence plutôt que de rester figé. Ce délai
+    // couvre largement la synthèse (≈ 1 s de calcul par seconde d'audio).
+    audioStartedRef.current = false;
+    audioEndedRef.current = false;
+    startDeadlineRef.current = performance.now() + 15000;
 
     // Le tableau prend la parole : on coupe la voix du chat pour ce tour,
     // sinon deux voix se superposent (le backend lit déjà la réponse).

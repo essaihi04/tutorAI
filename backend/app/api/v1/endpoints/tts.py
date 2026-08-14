@@ -21,7 +21,8 @@ router = APIRouter(prefix="/tts", tags=["tts"])
 class SpeakRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
     # 'fr' | 'ar' | 'mixed' (darija) — même vocabulaire que la session.
-    language: str = "fr"
+    # Darija par défaut : c'est la langue d'enseignement.
+    language: str = "mixed"
 
 
 @router.post("/speak")
@@ -31,7 +32,7 @@ async def speak(payload: SpeakRequest):
     Le cache disque du service évite de refaire générer une phrase déjà dite —
     ce qui compte beaucoup ici : un cours rejoué ne recalcule rien.
     """
-    lang = payload.language if payload.language in ("fr", "ar", "mixed") else "fr"
+    lang = payload.language if payload.language in ("fr", "ar", "mixed") else "mixed"
     result = await synthesize(payload.text, lang)
 
     if not result.audio_b64:

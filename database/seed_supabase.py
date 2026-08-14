@@ -118,12 +118,11 @@ async def seed_lessons(session: AsyncSession):
     chapters = {row[1]: row[0] for row in result}
     svt_chapters_data = load_json_sync("seed_data/svt_chapters.json")
     
-    lesson_files = [
-        ("lessons/phys_ch1_l1.json", "Ondes mecaniques progressives"),
-    ]
+    lesson_files = []
 
-    # Auto-discover SVT and Math lesson files
+    # Auto-discover all local lesson files and map them to their chapter.
     auto_discover = [
+        ("phys", "seed_data/physics_chapters.json"),
         ("svt", "seed_data/svt_chapters.json"),
         ("math", "seed_data/math_chapters.json"),
     ]

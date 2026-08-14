@@ -261,9 +261,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [whiteboardSchemaId, setWhiteboardSchemaId] = useState<string | null>(null);
   const [boardContent, setBoardContent] = useState<any | null>(null);
   const [liveScript, setLiveScript] = useState<any | null>(null);
-  // false quand le script est trop maigre pour porter le cours : le tableau
-  // s'affiche alors sans voix et c'est le flux audio du chat qui parle.
-  const [liveBoardVoice, setLiveBoardVoice] = useState(true);
+  // ⚠️ La voix appartient TOUJOURS au chat, jamais au tableau.
+  //
+  // Le tableau et le chat ne disent pas la même chose : le tableau écrit des
+  // titres et des formules, le chat porte l'explication. Laisser le tableau
+  // prendre la parole revenait donc à faire lire à l'élève un squelette de
+  // notes pendant que le vrai cours partait à la poubelle.
+  //
+  // Ce drapeau reste pour l'API du composant, mais il ne repasse plus à true.
+  const [liveBoardVoice] = useState(false);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [currentExercise, setCurrentExercise] = useState<any | null>(null);
   const [showExercise, setShowExercise] = useState(false);
@@ -415,8 +421,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       return;
     }
 
-    const preferredLanguage = ((student?.preferred_language as SessionLanguage) || 'fr');
-    setLanguage(preferredLanguage === 'mixed' ? 'mixed' : preferredLanguage);
+    // Darija par défaut. Un élève qui a explicitement choisi `fr` ou `ar` garde
+    // son choix ; c'est seulement l'absence de préférence qui bascule sur
+    // `mixed`, la langue d'enseignement et la seule que notre voix sait dire.
+    const preferredLanguage = ((student?.preferred_language as SessionLanguage) || 'mixed');
+    setLanguage(preferredLanguage);
 
     setIsLoading(true);
     setError(null);
@@ -572,10 +581,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const lastAiTextRef = useRef<string>('');
   const audioChunksRef = useRef<Array<{index: number, audio: string, format: string}>>([]);
   const isPlayingChunksRef = useRef(false);
-  // Quand un tableau "prof en direct" est à l'écran, c'est LUI qui parle :
-  // il lit ses propres lignes en synchronisant l'écriture sur la voix. Le TTS
-  // du chat doit se taire pour ce tour, sinon deux voix se superposent.
-  const liveBoardOwnsAudioRef = useRef(false);
   const expectedChunksRef = useRef<number>(0);
   const streamingTextRef = useRef<string>('');
   const streamingMsgIdRef = useRef<string | null>(null);
@@ -686,10 +691,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
-      if (liveBoardOwnsAudioRef.current) {
-        console.log('[Handler] audio_response ignoré : tableau en direct actif');
-        return;
-      }
       playAudio(data.audio, data.format);
     });
 
@@ -697,11 +698,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
-
-      if (liveBoardOwnsAudioRef.current) {
-        console.log('[Audio Chunk] Ignoré : le tableau en direct lit déjà son contenu');
-        return;
-      }
 
       console.log(`[Audio Chunk] Received chunk ${data.chunk_index + 1}/${data.total_chunks}`);
       
@@ -880,44 +876,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
       console.log('[Display] Live board script received:', data.title, data.steps.length, 'steps');
 
-      // ⚠️ Le tableau ne prend la parole QUE s'il a vraiment de quoi parler.
+      // ⚠️ Un script live ne confisque JAMAIS la voix du chat.
       //
-      // Avant, tout script live confisquait la voix du chat : les `audio_chunk`
-      // du tour étaient jetés. Quand le modèle renvoyait un script squelettique
-      // (souvent à l'ouverture du mode libre : une seule étape), l'élève
-      // n'entendait plus rien du tout — le tableau disait une ligne, et toute
-      // la narration d'ouverture partait à la poubelle.
+      // Avant, il la confisquait dès qu'il portait deux répliques : les
+      // `audio_chunk` du tour étaient jetés et l'élève entendait le tableau
+      // réciter ses lignes — des titres, des formules, des fragments de notes
+      // — pendant que l'explication du chat, elle, ne sortait jamais.
       //
-      // On exige donc au moins deux répliques réelles avant de couper le chat.
-      const speechSteps = (data.steps as any[]).filter((s) => {
-        if (!s || typeof s !== 'object') return false;
-        if (typeof s.say === 'string' && s.say.trim()) return true;
-        if (s.action === 'write' && typeof s.line?.content === 'string' && s.line.content.trim()) return true;
-        if ((s.action === 'narrate' || s.action === 'ask') && typeof s.text === 'string' && s.text.trim()) return true;
-        return false;
-      }).length;
-      const boardCarriesVoice = speechSteps >= 2;
-      setLiveBoardVoice(boardCarriesVoice);
-      liveBoardOwnsAudioRef.current = boardCarriesVoice;
-
-      if (boardCarriesVoice) {
-        // Le backend lance la synthèse avant d'exécuter les commandes : un
-        // flux audio a pu démarrer, on l'arrête pour éviter deux voix.
-        speechService.stop();
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          audioRef.current = null;
-        }
-        audioChunksRef.current = [];
-        isPlayingChunksRef.current = false;
-        setSpeaking(false);
-      } else {
-        console.log(
-          `[Display] Script live trop maigre (${speechSteps} réplique(s)) — ` +
-          `la voix reste au chat, le tableau s'affiche en silence`,
-        );
-      }
+      // Le tableau s'écrit donc en silence, à son propre rythme, et c'est le
+      // flux audio du chat qui parle. Une seule voix, celle qui a le contenu.
 
       pendingMediaRef.current = null;
       setWhiteboardData(null);
@@ -1124,15 +1091,30 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           }
         });
       } else {
-        // Chunk not here yet — wait briefly then retry
+        // ── Le morceau suivant n'est pas encore arrivé ──
+        //
+        // ⚠️ On attendait 3 s puis on ABANDONNAIT tout le reste de la voix.
+        // C'était sans conséquence tant qu'une réponse tenait en un seul gros
+        // morceau ; depuis que le texte est découpé en segments d'une dizaine
+        // de secondes, ça coupait le cours au premier trou — et il y en a
+        // forcément, le GPU générant ~1,1× plus lentement que le temps réel.
+        //
+        // Tant que le serveur a annoncé d'autres morceaux, on patiente. Le
+        // plafond ne couvre que le cas où la connexion meurt en silence : un
+        // segment de 220 caractères demande ~25 s, 90 s laissent une marge
+        // large sans jamais figer la session indéfiniment.
+        const ATTENTE_MAX_MS = 90_000;
         let waited = 0;
         const poll = setInterval(() => {
           waited += 200;
           const c = audioChunksRef.current.find(c => c.index === nextIndex);
+          const enAttendDautres = expectedChunksRef.current > 0
+            && nextIndex < expectedChunksRef.current;
           if (c) {
             clearInterval(poll);
             playNext();
-          } else if (waited > 3000 || (expectedChunksRef.current > 0 && nextIndex >= expectedChunksRef.current)) {
+          } else if (waited > (enAttendDautres ? ATTENTE_MAX_MS : 3000)
+                     || (expectedChunksRef.current > 0 && nextIndex >= expectedChunksRef.current)) {
             clearInterval(poll);
             console.log('[Audio] Done');
             isPlayingChunksRef.current = false;
@@ -1240,8 +1222,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const handleSendText = (text: string) => {
     if (!text.trim()) return;
     setContextSuggestions([]);
-    // Nouveau tour : le tableau du tour précédent ne détient plus la parole.
-    liveBoardOwnsAudioRef.current = false;
     addMessage('student', text);
     wsService.sendJson({ type: 'text_input', text });
   };
@@ -1804,6 +1784,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     onStudentMessage={handleQuickSend}
                     busy={isProcessing}
                     voiceEnabled={liveBoardVoice}
+                    // Le tableau n'écrit que pendant que la voix parle : sans
+                    // ce lien, le script se déroulait entièrement pendant la
+                    // synthèse et l'audio arrivait sur un tableau déjà fini.
+                    audioActive={isSpeaking}
                     assistantReply={
                       [...conversation].reverse().find(m => m.speaker === 'ai')?.text ?? null
                     }

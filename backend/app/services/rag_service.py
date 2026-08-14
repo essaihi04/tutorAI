@@ -8,6 +8,7 @@ import os
 import re
 import json
 import hashlib
+import threading
 import base64
 import httpx
 from pathlib import Path
@@ -64,6 +65,11 @@ class RAGService:
         # Track which subjects/sources have been indexed
         self._indexed_sources: set[str] = set()
         self._initialized = False
+        # ⚠️ L'indexation tourne dans le thread de démarrage ET pouvait être
+        # relancée depuis la boucle asyncio (voir index_all). Deux threads
+        # écrivant `self.documents` en même temps, c'est un corpus dupliqué et
+        # un FAISS reconstruit pour rien.
+        self._index_lock = threading.Lock()
         
         # Map cadre de ref filenames to subject tags
         self._cadre_subject_map = {
@@ -1102,9 +1108,25 @@ Thèmes abordés:
         available. Course caches are pre-built by scripts/index_*_courses.py.
 
         FAISS is built ONCE at the end to avoid re-embedding 5x.
+
+        IDEMPOTENT : un second appel ne refait rien. Sans ce garde-fou, le
+        thread de démarrage indexait, PUIS la première session réindexait tout
+        depuis la boucle asyncio — corpus dupliqué, FAISS reconstruit (jusqu'à
+        ~5 min), et surtout boucle d'événements bloquée : la session restait
+        « connectée » sans qu'aucun message ne parte.
         """
         if RAG_DISABLED:
             return
+        if self._initialized and not force_reindex:
+            return
+        with self._index_lock:
+            # Re-test sous le verrou : un autre thread a pu finir entre-temps.
+            if self._initialized and not force_reindex:
+                return
+            self._index_all_locked(force_reindex)
+
+    def _index_all_locked(self, force_reindex: bool = False):
+        """Corps de index_all — appelé verrou tenu."""
         # Course content — folder name must match what _get_cache_path expects:
         #   SVT   → cours 2bac pc/SVT/  + svt_rag_cache.json
         #   Math  → cours 2bac pc/Math/ + math_rag_cache.json

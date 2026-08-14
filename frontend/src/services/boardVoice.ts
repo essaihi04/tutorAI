@@ -43,6 +43,16 @@ class BoardVoiceService {
    * simplement en silence entre-temps.
    */
   private unavailableUntil = 0;
+  /**
+   * File d'attente : une seule requête TTS à la fois.
+   *
+   * Deux raisons. D'abord le GPU du serveur ne traite qu'un job à la fois —
+   * paralléliser ne gagne rien. Ensuite et surtout, sans sérialisation la
+   * lecture et les préchargements partaient ENSEMBLE : tous passaient le test
+   * de disponibilité avant que la première réponse n'arme la temporisation,
+   * et un serveur muet se prenait trois 503 au lieu d'un seul.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
 
   private key(text: string, lang: Lang) {
     return `${lang}|${text}`;
@@ -61,6 +71,12 @@ class BoardVoiceService {
     if (Date.now() < this.unavailableUntil) return Promise.resolve(null);
 
     const req = (async (): Promise<string | null> => {
+      // Attend son tour, puis RE-vérifie : la requête précédente a pu
+      // constater entre-temps que le serveur est muet.
+      await this.queue.catch(() => {});
+      if (Date.now() < this.unavailableUntil) return null;
+      const fresh = this.cache.get(k);
+      if (fresh) return fresh;
       try {
         const resp = await fetch('/api/v1/tts/speak', {
           method: 'POST',
@@ -107,6 +123,8 @@ class BoardVoiceService {
     })();
 
     this.inflight.set(k, req);
+    // La requête suivante attendra celle-ci (chaîne jamais rompue par un rejet).
+    this.queue = req.catch(() => {});
     return req;
   }
 
