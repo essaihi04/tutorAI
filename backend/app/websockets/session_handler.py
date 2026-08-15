@@ -16,6 +16,7 @@ from app.services.tts_service import tts_service
 from app.services.prompt_builder import prompt_builder
 from app.services.exercise_evaluator import exercise_evaluator
 from app.services.session_progress_service import session_progress_service
+from app.services.lesson_phase import PhaseLesson
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
 
@@ -693,7 +694,11 @@ class SessionHandler:
         self.student_id = student_id
         self.conversation_history: list[dict] = []
         self.session_context: dict = {}
-        self.current_phase: str = "activation"
+        # La phase n'est plus un simple attribut : c'est un état arbitré par
+        # `PhaseLesson`, seul juge des transitions (voir lesson_phase.py).
+        # `current_phase` reste lisible et assignable comme avant — la
+        # propriété plus bas valide chaque écriture au passage.
+        self._phase = PhaseLesson()
         self.session_mode: str = "coaching"  # 'coaching' or 'libre'
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
@@ -710,6 +715,20 @@ class SessionHandler:
         # Used to inject accurate exam metadata into the LLM system prompt
         # so the model never hallucinates the wrong year/session/exercise/question.
         self.current_exam_view: dict | None = None
+
+    @property
+    def current_phase(self) -> str:
+        return self._phase.courante
+
+    @current_phase.setter
+    def current_phase(self, valeur: str) -> None:
+        """Écriture validée : une phase inconnue est REFUSÉE, pas stockée.
+
+        C'est le garde-fou central. Auparavant n'importe quelle chaîne
+        arrivait ici — y compris depuis le navigateur — et faisait ensuite
+        lever `phase_order.index()` dans la progression des objectifs.
+        """
+        self._phase.definir(valeur)
 
     def _sanitize_history_content(self, content: str) -> str:
         """Remove heavy command payloads before re-sending history to the LLM."""
@@ -1519,11 +1538,18 @@ class SessionHandler:
         elif msg_type == "simulation_update":
             await self._handle_simulation_update(message)
         elif msg_type == "change_phase":
-            self.current_phase = message.get("phase", self.current_phase)
-            await self.websocket.send_json({
-                "type": "phase_changed",
-                "phase": self.current_phase
-            })
+            # Le navigateur PROPOSE, il n'impose pas : une phase inconnue est
+            # refusée et l'état ne bouge pas. On ne répond que si quelque
+            # chose a réellement changé, sinon le client se croit d'accord
+            # avec un serveur qui ne l'a pas suivi.
+            demandee = message.get("phase", "")
+            if self._phase.definir(demandee):
+                await self.websocket.send_json({
+                    "type": "phase_changed",
+                    "phase": self.current_phase
+                })
+            else:
+                _safe_log(f"[Phase] change_phase refusé: {demandee!r}")
         elif msg_type == "set_language":
             self.language = message.get("language", "mixed")
 
@@ -1778,18 +1804,13 @@ class SessionHandler:
                     "objective": self.lesson_objectives[next_objective_index],
                 })
 
-            phase_order = ["activation", "exploration", "explanation", "application", "consolidation"]
             completion_ratio = len(self._completed_objective_indices) / max(total_objectives, 1)
-            if is_lesson_complete:
-                target_phase = "consolidation"
-            elif completion_ratio <= 0.20:
-                target_phase = "exploration"
-            elif completion_ratio <= 0.70:
-                target_phase = "explanation"
-            else:
-                target_phase = "application"
-            if phase_order.index(target_phase) > phase_order.index(self.current_phase):
-                self.current_phase = target_phase
+            visee = PhaseLesson.pour_avancement(completion_ratio, is_lesson_complete)
+            # `viser` refuse tout recul et toute phase inconnue. Il ne peut
+            # plus lever : c'est exactement ce qui interrompait cette méthode
+            # avant sa fin, empêchant la détection de fin de leçon juste
+            # en dessous.
+            if self._phase.viser(visee):
                 await self.websocket.send_json({
                     "type": "phase_changed",
                     "phase": self.current_phase,
@@ -2543,7 +2564,13 @@ RÈGLES:
             "mastered": message.get("mastered", ""),
             "teaching_mode": message.get("teaching_mode", "Socratique"),
         }
-        self.current_phase = message.get("phase", "activation") if self.session_mode == "coaching" else "libre"
+        # Nouvelle session : on repart d'un état neuf plutôt que de corriger
+        # l'ancien. Le mode libre n'a pas de progression — « libre » est un
+        # état à part entière, pas la première phase d'un cours.
+        if self.session_mode == "coaching":
+            self._phase = PhaseLesson(message.get("phase") or "activation")
+        else:
+            self._phase = PhaseLesson("libre")
         self.language = message.get("language", "mixed")
         self.conversation_history = []
         self.simulation_state = {}
@@ -5193,20 +5220,19 @@ RÈGLES :
                     )
 
     async def _auto_advance_phase(self):
-        """Automatically advance to the next phase and update progress."""
-        phases = ["activation", "exploration", "explanation", "application", "consolidation"]
-        try:
-            current_idx = phases.index(self.current_phase)
-            if current_idx < len(phases) - 1:
-                self.current_phase = phases[current_idx + 1]
-                await self.websocket.send_json({
-                    "type": "phase_changed",
-                    "phase": self.current_phase,
-                    "auto": True
-                })
-                _safe_log(f"[Phase] Advanced to {self.current_phase}")
-        except ValueError:
-            pass
+        """Avance d'un cran — déclenché par « PHASE_SUIVANTE » dans la réponse.
+
+        Plus de `try/except ValueError` : `avancer` ne lève pas et renvoie
+        False quand il n'y a plus de cran (dernière phase, ou mode libre qui
+        n'a pas de progression).
+        """
+        if self._phase.avancer():
+            await self.websocket.send_json({
+                "type": "phase_changed",
+                "phase": self.current_phase,
+                "auto": True
+            })
+            _safe_log(f"[Phase] Advanced to {self.current_phase}")
 
     def _available_resource_types(self) -> set[str]:
         return {
