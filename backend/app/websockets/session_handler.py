@@ -2258,6 +2258,15 @@ RÈGLES:
         # Stream tokens to chat as they arrive, filter out tag content (board/draw/ui/schema)
         # so the user sees the pedagogical text immediately while the full response builds up.
         ai_response = ""
+        # ── Voix anticipée ────────────────────────────────────────────
+        #
+        # La synthèse ne démarrait qu'au dernier token : l'élève voyait le
+        # texte défiler en silence pendant toute la génération. On prononce
+        # donc la PREMIÈRE PHRASE dès qu'elle est écrite, et le reste quand
+        # il l'est — le prof parle pendant qu'il rédige, comme un vrai cours.
+        texte_parle = ""
+        coupe_ouverture = 0
+        reste_a_dire: "Optional[asyncio.Future[str]]" = None
         try:
             _filter = _StreamTagFilter()
             _safe_log(f"[LLM Stream] Starting streamed response (max_tokens={max_tokens})")
@@ -2274,12 +2283,27 @@ RÈGLES:
                         "type": "ai_response_chunk",
                         "token": clean,
                     })
+                    texte_parle += clean
+                    # `texte_parle` est le texte pédagogique SEUL : le filtre
+                    # en a déjà retiré les blocs d'affichage. C'est donc
+                    # exactement ce qui doit être prononcé.
+                    if reste_a_dire is None and tts_service.academy_stream_ready():
+                        coupe = self._fin_de_premiere_phrase(texte_parle)
+                        if coupe:
+                            coupe_ouverture = coupe
+                            reste_a_dire = asyncio.get_running_loop().create_future()
+                            asyncio.create_task(self._parler_en_deux_temps(
+                                texte_parle[:coupe],
+                                reste_a_dire,
+                                self._speech_language_for_tts(),
+                            ))
             tail = _filter.flush(ai_response)
             if tail:
                 await self.websocket.send_json({
                     "type": "ai_response_chunk",
                     "token": tail,
                 })
+                texte_parle += tail
             await self.websocket.send_json({"type": "ai_response_done"})
             _safe_log(f"[LLM Stream] Completed ({len(ai_response)} chars)")
         except Exception as e:
@@ -2291,8 +2315,14 @@ RÈGLES:
         # Contextual quick-reply buttons aligned on what the AI just asked
         asyncio.create_task(self._extract_and_send_suggestions(ai_response))
 
-        # Single TTS call on full text (non-blocking, reliable)
-        asyncio.create_task(self.generate_and_send_audio_chunks(ai_response))
+        # La voix : soit elle a déjà commencé (première phrase prononcée
+        # pendant la rédaction) et il ne reste que la suite à livrer, soit
+        # rien n'est parti et on synthétise la réponse entière comme avant.
+        if reste_a_dire is not None:
+            if not reste_a_dire.done():
+                reste_a_dire.set_result(texte_parle[coupe_ouverture:])
+        else:
+            asyncio.create_task(self.generate_and_send_audio_chunks(ai_response))
 
         # Add AI response to history
         self._append_history("assistant", ai_response)
@@ -2353,6 +2383,15 @@ RÈGLES:
         except Exception:
             pass
 
+        # ── Chemin rapide : flux PCM continu ──────────────────────────
+        #
+        # Le son part dès les premières syllabes au lieu d'attendre qu'un
+        # segment entier soit synthétisé. Si Academy n'est pas joignable ou
+        # que son streaming est coupé, on retombe sans bruit sur le chemin
+        # historique par segments complets, juste en dessous.
+        if await self._send_audio_stream(ai_response, lang):
+            return
+
         # Progressive streaming: each segment is launched in parallel server-side
         # and forwarded to the client as soon as it is ready, in reading order.
         any_sent = False
@@ -2382,6 +2421,103 @@ RÈGLES:
 
         if not any_sent:
             _safe_log("[TTS] No segments produced (empty or all failed)")
+
+    # Longueurs de l'ouverture prononcée pendant que le LLM écrit encore.
+    # En dessous de 30 caractères la phrase ne porte aucun sens ; au-delà de
+    # 240 on repaie en synthèse ce qu'on gagne en réactivité.
+    _OUVERTURE_MIN = 30
+    _OUVERTURE_MAX = 240
+
+    @staticmethod
+    def _fin_de_premiere_phrase(texte: str) -> int:
+        """Index de fin de la première phrase complète, 0 s'il n'y en a pas.
+
+        On ne coupe QUE sur une ponctuation forte suivie d'un blanc : couper
+        au milieu d'une phrase ferait entendre au prof une intonation de fin
+        là où il n'y en a pas, et le morceau suivant repartirait de travers.
+        """
+        if len(texte) < SessionHandler._OUVERTURE_MIN:
+            return 0
+        limite = min(len(texte), SessionHandler._OUVERTURE_MAX)
+        for i in range(SessionHandler._OUVERTURE_MIN - 1, limite):
+            if texte[i] in ".!?:" and (i + 1 >= len(texte) or texte[i + 1] in " \n"):
+                # La PREMIÈRE frontière, pas la dernière : prendre la dernière
+                # de la fenêtre ferait avaler deux phrases à l'ouverture et
+                # rendrait exactement l'attente qu'on cherche à supprimer.
+                return i + 1
+        return 0
+
+    async def _parler_en_deux_temps(
+        self, ouverture: str, reste: "asyncio.Future[str]", lang: str
+    ):
+        """Prononce l'ouverture tout de suite, la suite dès qu'elle est écrite.
+
+        C'est ce qui fait démarrer la voix PENDANT la génération du texte au
+        lieu d'attendre le dernier token. Le serveur ne traite qu'une synthèse
+        à la fois, donc les deux appels s'enchaînent sans se disputer le GPU,
+        et le lecteur du navigateur colle le second flux au bout du premier.
+        """
+        try:
+            await self.websocket.send_json({"type": "processing", "stage": "tts"})
+        except Exception:
+            pass
+
+        dite = await self._send_audio_stream(ouverture, lang)
+        try:
+            suite = await reste
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            suite = ""
+
+        if not dite:
+            # L'ouverture n'a produit aucun son : rien n'a été entendu, on
+            # repasse donc la réponse ENTIÈRE par le chemin historique.
+            await self.generate_and_send_audio_chunks(ouverture + suite)
+            return
+
+        if suite.strip() and not await self._send_audio_stream(suite, lang):
+            await self.generate_and_send_audio_chunks(suite)
+
+    async def _send_audio_stream(self, ai_response: str, lang: str) -> bool:
+        """Diffuse la réponse en PCM continu. Renvoie False si rien n'est parti.
+
+        False signifie « ce chemin n'a produit aucun son » — l'appelant doit
+        alors employer le repli par segments. Dès qu'un bloc est parti, on
+        renvoie True même si le flux s'interrompt ensuite : rejouer la même
+        phrase par un autre chemin la ferait entendre deux fois.
+        """
+        cleaned = tts_service.clean_for_tts(ai_response)
+        if not cleaned:
+            return False
+
+        ouvert = False
+        blocs = 0
+        try:
+            async for sample_rate, pcm in tts_service.stream_academy_pcm(cleaned, lang):
+                if not ouvert:
+                    await self.websocket.send_json({
+                        "type": "audio_stream_start",
+                        "sample_rate": sample_rate,
+                        "channels": 1,
+                        "format": "pcm_s16le",
+                    })
+                    ouvert = True
+                await self.websocket.send_json({
+                    "type": "audio_stream_chunk",
+                    "pcm": base64.b64encode(pcm).decode("ascii"),
+                })
+                blocs += 1
+        except Exception as e:
+            _safe_log(f"[TTS][flux] interrompu après {blocs} blocs: {e}")
+
+        if ouvert:
+            try:
+                await self.websocket.send_json({"type": "audio_stream_end"})
+            except Exception:
+                pass
+            _safe_log(f"[TTS][flux] {blocs} blocs envoyés")
+        return ouvert
 
     def _speech_language_for_tts(self) -> str:
         """Map the session language to the TTS router input."""

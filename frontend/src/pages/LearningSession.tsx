@@ -405,6 +405,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       isPlayingChunksRef.current = false;
       expectedChunksRef.current = 0;
       relanceAudioRef.current = null;
+      arreterFluxPcm();
+      if (audioCtxRef.current) {
+        void audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
       streamingTextRef.current = '';
       streamingMsgIdRef.current = null;
       if (streamingRafRef.current) cancelAnimationFrame(streamingRafRef.current);
@@ -624,6 +629,109 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     return () => gestes.forEach((g) => document.removeEventListener(g, onGeste));
   }, []);
 
+  // ── Lecteur de flux PCM ───────────────────────────────────────
+  //
+  // Web Audio plutôt qu'un élément <audio> : on peut planifier un bloc à un
+  // instant précis, donc coller les blocs bout à bout sans le petit silence
+  // qu'imposait l'enchaînement d'éléments. Chaque bloc est joué à la fin
+  // exacte du précédent ; si le réseau prend du retard, on repart de
+  // `currentTime` plutôt que de planifier dans le passé (ce qui jouerait tout
+  // d'un coup et hacherait la voix).
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const prochainDepartRef = useRef(0);
+  const sourcesPcmRef = useRef<AudioBufferSourceNode[]>([]);
+  const fluxSampleRateRef = useRef(24000);
+  const fluxTermineRef = useRef(false);
+
+  // Marge d'avance : le premier bloc est planifié 60 ms plus tard pour
+  // absorber la gigue du WebSocket. Au-delà on n'entend plus le délai, en
+  // deçà un bloc en retard produit un trou.
+  const AVANCE_S = 0.06;
+
+  const contexteAudio = (): AudioContext | null => {
+    if (audioCtxRef.current) return audioCtxRef.current;
+    const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!Ctor) return null;
+    audioCtxRef.current = new Ctor();
+    return audioCtxRef.current;
+  };
+
+  const demarrerFluxPcm = (sampleRate: number) => {
+    const ctx = contexteAudio();
+    if (!ctx) return;
+    fluxSampleRateRef.current = sampleRate;
+    fluxTermineRef.current = false;
+    // Le prof parle en deux temps : l'ouverture pendant qu'il rédige, la
+    // suite ensuite. Le second flux doit se COLLER au bout du premier — on ne
+    // remet donc l'horloge à zéro que si plus rien n'est en attente, sinon
+    // les deux moitiés de la phrase se joueraient l'une par-dessus l'autre.
+    if (sourcesPcmRef.current.length === 0) prochainDepartRef.current = 0;
+    setSpeaking(true);
+    revealPendingMedia();
+
+    // Même blocage d'autoplay que pour les éléments <audio> : le contexte
+    // naît « suspended » tant que l'élève n'a pas touché la page. Les blocs
+    // planifiés ne sont PAS perdus — l'horloge du contexte est gelée, donc
+    // tout repart dans l'ordre au premier geste.
+    if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+      if (!audioDebloqueRef.current) {
+        setAudioBloque(true);
+        relanceAudioRef.current = () => { void ctx.resume().catch(() => {}); };
+      }
+    }
+  };
+
+  const jouerBlocPcm = (pcmBase64: string) => {
+    const ctx = contexteAudio();
+    if (!ctx) return;
+
+    const binaire = atob(pcmBase64);
+    const octets = new Uint8Array(binaire.length);
+    for (let i = 0; i < binaire.length; i += 1) octets[i] = binaire.charCodeAt(i);
+
+    // PCM 16 bits signé little-endian → flottants [-1, 1] attendus par Web Audio.
+    const echantillons = new Int16Array(octets.buffer, 0, Math.floor(octets.length / 2));
+    if (echantillons.length === 0) return;
+    const buffer = ctx.createBuffer(1, echantillons.length, fluxSampleRateRef.current);
+    const canal = buffer.getChannelData(0);
+    for (let i = 0; i < echantillons.length; i += 1) canal[i] = echantillons[i] / 32768;
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+
+    const maintenant = ctx.currentTime;
+    const depart = Math.max(maintenant + AVANCE_S, prochainDepartRef.current);
+    source.start(depart);
+    prochainDepartRef.current = depart + buffer.duration;
+
+    sourcesPcmRef.current.push(source);
+    source.onended = () => {
+      sourcesPcmRef.current = sourcesPcmRef.current.filter((s) => s !== source);
+      // La fin de la voix, c'est le dernier bloc joué APRÈS que le serveur a
+      // annoncé la fin — sinon un creux réseau ferait croire que le prof a
+      // fini de parler alors qu'il lui reste une phrase.
+      if (fluxTermineRef.current && sourcesPcmRef.current.length === 0) {
+        setSpeaking(false);
+      }
+    };
+  };
+
+  const terminerFluxPcm = () => {
+    fluxTermineRef.current = true;
+    if (sourcesPcmRef.current.length === 0) setSpeaking(false);
+  };
+
+  const arreterFluxPcm = () => {
+    sourcesPcmRef.current.forEach((s) => {
+      try { s.onended = null; s.stop(); } catch { /* déjà terminée */ }
+    });
+    sourcesPcmRef.current = [];
+    prochainDepartRef.current = 0;
+    fluxTermineRef.current = false;
+  };
+
   const revealPendingMedia = () => {
     if (pendingMediaRef.current) {
       setShowWhiteboard(false);
@@ -751,6 +859,28 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       if (!isPlayingChunksRef.current && audioChunksRef.current[0]?.index === 0) {
         playAudioChunks();
       }
+    });
+
+    // ── Flux PCM continu (chemin rapide) ──────────────────────────
+    //
+    // Le serveur n'attend plus d'avoir synthétisé un segment entier : il
+    // pousse le PCM dès les premières syllabes. On planifie donc chaque bloc
+    // bout à bout sur l'horloge du contexte audio, au lieu d'enchaîner des
+    // éléments <audio> — le silence entre deux éléments était audible, et
+    // c'est ce même enchaînement qui produisait les bugs d'index.
+    wsService.on('audio_stream_start', (data) => {
+      audioReceivedRef.current = true;
+      setProcessing(false);
+      setTtsErrorMessage(null);
+      demarrerFluxPcm(data.sample_rate || 24000);
+    });
+
+    wsService.on('audio_stream_chunk', (data) => {
+      if (data?.pcm) jouerBlocPcm(data.pcm);
+    });
+
+    wsService.on('audio_stream_end', () => {
+      terminerFluxPcm();
     });
 
     wsService.on('tts_error', (data) => {
@@ -1231,6 +1361,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
   const playAudio = (base64Audio: string, mimeType = 'audio/wav') => {
     speechService.stop();
+    // Un flux encore en cours doit se taire : deux voix simultanées, l'une
+    // planifiée sur Web Audio et l'autre sur un élément <audio>, se
+    // superposeraient sans jamais s'arrêter l'une l'autre.
+    arreterFluxPcm();
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;

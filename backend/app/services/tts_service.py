@@ -592,6 +592,218 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
         return None
 
 
+# ─── Academy en flux continu — le chemin à faible latence ──────────
+#
+# `/tts` ne rend la main qu'une fois le segment ENTIER synthétisé : pour dix
+# secondes d'audio, l'élève attend dix secondes avant d'entendre la première
+# syllabe. `/tts/stream` émet le PCM par blocs dès le début de la génération
+# (40 jetons ≈ 1,6 s d'audio côté serveur).
+#
+# C'est LÀ que se joue le passage de « secondes » à « dizaines de
+# millisecondes » — pas dans le transport. Le base64 sur WebSocket coûte 33 %
+# de débit, ce qui est invisible à côté d'une attente de segment complet.
+#
+# Deux pièges documentés par le serveur, dont ce code tient compte :
+#   - la taille annoncée dans l'en-tête WAV est FAUSSE (0xFFFFFFFF) : il faut
+#     lire jusqu'à la fin du flux, jamais se fier au Content-Length ;
+#   - le code HTTP part AVANT la synthèse : une panne en cours de route ne
+#     peut plus devenir un 500, le flux se termine simplement plus tôt.
+_ENTETE_WAV = 44        # RIFF + fmt + data, taille fixe côté serveur
+
+# Taille de regroupement des blocs PCM. Le premier part IMMÉDIATEMENT (c'est
+# tout l'intérêt), les suivants sont agrégés : 8 192 octets = 4 096
+# échantillons ≈ 170 ms à 24 kHz. Assez gros pour ne pas noyer le WebSocket
+# sous les messages, assez petit pour que le lecteur ne manque jamais d'avance.
+_PCM_BLOC_MIN = 8192
+
+# Délai maximal avant le PREMIER son. Le serveur annonce lui-même une attente
+# plafond de 45 s (`attente_max_s` dans /health) ; au-delà, sa file est
+# engorgée et insister ne fait que l'aggraver. Mesuré une fois à 194 s derrière
+# une file saturée : inacceptable en cours, et le timeout httpx de 300 s
+# laissait passer. Tant qu'aucun octet audio n'est parti, abandonner est SANS
+# RISQUE — l'appelant se rabat sur /tts et l'élève entend quelque chose.
+_PREMIER_SON_MAX_S = 50.0
+
+
+async def stream_academy_pcm(text: str, lang: str):
+    """Rend `(sample_rate, pcm_s16le)` au fil de la synthèse Academy.
+
+    Générateur VIDE si Academy est indisponible ou si le flux échoue avant le
+    premier octet audio : l'appelant retombe alors sur le chemin par segments
+    complets, qui reste inchangé.
+
+    Une fois le premier bloc rendu, un incident ne peut plus faire l'objet
+    d'un repli — le flux s'arrête simplement plus court, comme le prévoit le
+    contrat du serveur.
+    """
+    base = (settings.academy_tts_url or "").rstrip("/")
+    if not base or not _academy_is_available() or not settings.academy_tts_stream:
+        return
+
+    text = strip_voice_markers(text)
+    if not text.strip():
+        return
+    if len(text) > _ACADEMY_MAX_CHARS:
+        text = text[:_ACADEMY_MAX_CHARS].rsplit(" ", 1)[0]
+
+    payload = {
+        "texte": text,
+        "langue": _academy_lang(lang),
+        "normaliser": bool(settings.academy_tts_normaliser),
+        "exaggeration": settings.academy_tts_exaggeration,
+        "temperature": settings.academy_tts_temperature,
+        "cfg_weight": settings.academy_tts_cfg_weight,
+    }
+    if settings.academy_tts_voice:
+        payload["voix"] = settings.academy_tts_voice
+
+    headers = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+    }
+    if settings.academy_tts_token:
+        headers["Authorization"] = f"Bearer {settings.academy_tts_token}"
+
+    t0 = time.time()
+    sr = 24000
+    entete_lu = False
+    tampon = b""            # octets pas encore rendus (dont l'en-tête)
+    en_attente = b""        # blocs agrégés en attente de la taille minimale
+    premier_rendu = False
+    octets = 0
+
+    try:
+        # Le GPU ne traite qu'une synthèse à la fois : deux flux simultanés se
+        # hacheraient mutuellement. Le sémaphore est le même que pour /tts.
+        async with _ACADEMY_SEM:
+            timeout = httpx.Timeout(300.0, connect=15.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream(
+                    "POST", f"{base}/tts/stream", json=payload, headers=headers
+                ) as resp:
+                    if resp.status_code != 200:
+                        corps = (await resp.aread())[:200]
+                        _safe_log(
+                            f"[TTS][Academy][flux] HTTP {resp.status_code}: {corps!r}"
+                        )
+                        # Un flux refusé n'est PAS une panne du provider : le
+                        # serveur peut très bien servir /tts (streaming coupé,
+                        # file saturée…). On laisse donc le disjoncteur fermé
+                        # et le repli par segments décidera lui-même.
+                        return
+
+                    ctype = resp.headers.get("Content-Type", "")
+                    if not ctype.startswith("audio"):
+                        _safe_log(
+                            f"[TTS][Academy][flux] Réponse non-audio "
+                            f"(Content-Type={ctype!r})"
+                        )
+                        return
+
+                    flux_octets = resp.aiter_bytes()
+                    while True:
+                        # Avant le premier son, on borne l'attente nous-mêmes :
+                        # le serveur envoie son en-tête WAV immédiatement puis
+                        # se tait tant que le GPU ne s'est pas libéré, si bien
+                        # qu'un timeout de lecture classique ne se déclenche
+                        # jamais pendant l'attente en file.
+                        try:
+                            if premier_rendu:
+                                morceau = await flux_octets.__anext__()
+                            else:
+                                reste_s = _PREMIER_SON_MAX_S - (time.time() - t0)
+                                if reste_s <= 0:
+                                    raise asyncio.TimeoutError
+                                morceau = await asyncio.wait_for(
+                                    flux_octets.__anext__(), timeout=reste_s
+                                )
+                        except StopAsyncIteration:
+                            break
+                        except asyncio.TimeoutError:
+                            _safe_log(
+                                f"[TTS][Academy][flux] pas de son après "
+                                f"{_PREMIER_SON_MAX_S:.0f} s (file engorgée ?) "
+                                f"— repli sur /tts"
+                            )
+                            return
+
+                        if not morceau:
+                            continue
+                        tampon += morceau
+
+                        if not entete_lu:
+                            if len(tampon) < _ENTETE_WAV:
+                                continue
+                            if not tampon.startswith(b"RIFF"):
+                                _safe_log(
+                                    "[TTS][Academy][flux] En-tête non-RIFF — "
+                                    "flux abandonné"
+                                )
+                                return
+                            # Le débit réel est annoncé dans l'en-tête : on ne
+                            # présume pas 24 kHz, un checkpoint peut changer.
+                            sr = int.from_bytes(tampon[24:28], "little") or 24000
+                            tampon = tampon[_ENTETE_WAV:]
+                            entete_lu = True
+
+                        # PCM 16 bits : un échantillon ne doit jamais être coupé
+                        # en deux entre deux messages, sinon tout le reste du
+                        # flux est décalé d'un octet et devient du bruit blanc.
+                        pair = len(tampon) - (len(tampon) % 2)
+                        if not pair:
+                            continue
+                        en_attente += tampon[:pair]
+                        tampon = tampon[pair:]
+
+                        # Le tout premier bloc part sans attendre : c'est lui
+                        # qui fait la latence perçue.
+                        if not premier_rendu:
+                            _safe_log(
+                                f"[TTS][Academy][flux] premier son en "
+                                f"{int((time.time() - t0) * 1000)} ms"
+                            )
+                            _academy_note_success()
+                            premier_rendu = True
+                            octets += len(en_attente)
+                            yield sr, en_attente
+                            en_attente = b""
+                        elif len(en_attente) >= _PCM_BLOC_MIN:
+                            octets += len(en_attente)
+                            yield sr, en_attente
+                            en_attente = b""
+
+                    if en_attente:
+                        octets += len(en_attente)
+                        yield sr, en_attente
+    except (httpx.ConnectError, httpx.ReadTimeout) as e:
+        # Avant le premier octet, l'appelant peut encore se rabattre sur /tts,
+        # qui déclenchera lui-même le disjoncteur si la panne est réelle.
+        _safe_log(f"[TTS][Academy][flux] {type(e).__name__} — repli sur /tts")
+        return
+    except Exception as e:
+        # Coupure EN COURS de flux : mesurée sur le tunnel ngrok gratuit
+        # (« peer closed connection without sending complete message body »).
+        # L'élève a déjà entendu le début, donc on ne peut plus rejouer la
+        # phrase sans la lui dire deux fois — on le signale clairement, c'est
+        # le symptôme à reconnaître si une explication s'arrête au milieu.
+        if premier_rendu:
+            duree = octets / 2 / sr if sr else 0.0
+            _safe_log(
+                f"[TTS][Academy][flux] /!\\ FLUX TRONQUÉ après {duree:.1f}s "
+                f"d'audio ({type(e).__name__}) — la fin de la phrase est perdue"
+            )
+        else:
+            _safe_log(f"[TTS][Academy][flux] Exception: {type(e).__name__}: {e}")
+        return
+
+    if premier_rendu:
+        duree = octets / 2 / sr if sr else 0.0
+        _safe_log(
+            f"[TTS][Academy][flux] OK lang={lang} len={len(text)} "
+            f"audio={duree:.1f}s total={int((time.time() - t0) * 1000)}ms"
+        )
+
+
 # ─── Provider: Self-hosted Darija TTS (Gradio on Colab) ─────────────
 #
 # Calls the Gradio /generate endpoint using the SSE v3 protocol:
@@ -1558,6 +1770,21 @@ class TTSService:
     def stream_synthesize_segments(self, text: str, language: str = "fr"):
         """Async generator yielding (index, total, segment) as each completes in order."""
         return stream_synthesize_segments(text, language)
+
+    def stream_academy_pcm(self, text: str, language: str = "fr"):
+        """Async generator yielding (sample_rate, pcm_s16le) as it is vocoded."""
+        return stream_academy_pcm(text, language)
+
+    def clean_for_tts(self, text: str) -> str:
+        return clean_for_tts(text)
+
+    def academy_stream_ready(self) -> bool:
+        """Le chemin à faible latence est-il utilisable maintenant ?
+
+        Sert à décider AVANT de découper la réponse : sans Academy, parler en
+        deux temps n'apporterait rien et compliquerait le repli.
+        """
+        return bool(settings.academy_tts_stream) and _academy_is_available()
 
     async def warmup(self) -> dict[str, int]:
         return await warmup_cache()

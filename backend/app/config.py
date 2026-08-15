@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     academy_tts_exaggeration: float = 0.45   # > 0.6 dérive sur les phrases longues
     academy_tts_temperature: float = 0.7     # 0.3 = quasi déterministe, plus plat
     academy_tts_cfg_weight: float = 0.5      # 0.7 colle davantage au texte
+    # Flux continu (/tts/stream) : premier son ~5x plus tôt (2,9 s au lieu de
+    # 14,5 s, mesuré). ⚠️ Tant que le serveur n'est pas corrigé, il PERD ~0,7 s
+    # à la fin de chaque énoncé (le dernier mot est coupé). Mettre à 0 pour
+    # revenir au chemin par segments complets, sans redéploiement de code.
+    academy_tts_stream: int = 1
 
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1
