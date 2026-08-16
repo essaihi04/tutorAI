@@ -17,6 +17,7 @@ from app.services.prompt_builder import prompt_builder
 from app.services.exercise_evaluator import exercise_evaluator
 from app.services.session_progress_service import session_progress_service
 from app.services.lesson_phase import PhaseLesson
+from app.services import tag_decoder
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
 
@@ -740,20 +741,10 @@ class SessionHandler:
         # text at all. The LLM mimics ANY text it sees in its history (whether
         # [ui], (contenu affiché), or anything else). Removing them silently is
         # the only safe approach.
-        cleaned = re.sub(r'<ui>[\s\S]*?</ui>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<ui>[\s\S]*', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<board>[\s\S]*?</board>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<board>[\s\S]*', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<draw>[\s\S]*?</draw>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<draw>[\s\S]*', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<schema>[\s\S]*?</schema>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<schema>[\s\S]*', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<live>[\s\S]*?</live>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<live>[\s\S]*', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<exam_exercise>[\s\S]*?</exam_exercise>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<exam_exercise>[\s\S]*', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<suggestions>[\s\S]*?</suggestions>', '', cleaned, flags=re.DOTALL)
-        cleaned = re.sub(r'<suggestions>[\s\S]*', '', cleaned, flags=re.DOTALL)
+        # Le vocabulaire vit dans `tag_decoder` : le recopier ici, comme
+        # c'était le cas, obligeait à tenir deux listes synchronisées à la
+        # main — et à les retrouver pour comprendre ce que le prof pilote.
+        cleaned = tag_decoder.retirer_balises(cleaned)
         cleaned = re.sub(r'DESSINER_SCHEMA:.*?(\n|$)', '', cleaned)
         cleaned = re.sub(r'\[CMD:[^\]]+\]', '', cleaned)
         # Also remove any leftover placeholder-like patterns the AI might have generated
@@ -1062,20 +1053,8 @@ class SessionHandler:
 
     def _extract_display_text(self, ai_response: str) -> str:
         text = ai_response or ""
-        text = re.sub(r'<ui>[\s\S]*?</ui>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<ui>[\s\S]*', '', text, flags=re.DOTALL)
-        text = re.sub(r'<board>[\s\S]*?</board>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<board>[\s\S]*', '', text, flags=re.DOTALL)
-        text = re.sub(r'<draw>[\s\S]*?</draw>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<draw>[\s\S]*', '', text, flags=re.DOTALL)
-        text = re.sub(r'<schema>[\s\S]*?</schema>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<schema>[\s\S]*', '', text, flags=re.DOTALL)
-        text = re.sub(r'<live>[\s\S]*?</live>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<live>[\s\S]*', '', text, flags=re.DOTALL)
-        text = re.sub(r'<exam_exercise>[\s\S]*?</exam_exercise>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<exam_exercise>[\s\S]*', '', text, flags=re.DOTALL)
-        text = re.sub(r'<suggestions>[\s\S]*?</suggestions>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<suggestions>[\s\S]*', '', text, flags=re.DOTALL)
+        # Même vocabulaire que l'historique : une seule liste, un seul endroit.
+        text = tag_decoder.retirer_balises(text)
         text = re.sub(r'\[CMD:[^\]]+\]', '', text)
         # Marqueurs de diction destinés au modèle vocal ([pause], [breath]…) :
         # ils pilotent la voix du professeur mais ne doivent JAMAIS apparaître
