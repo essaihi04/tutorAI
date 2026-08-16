@@ -9,12 +9,24 @@ from app.dependencies import get_current_student
 from app.services.diagnostic_service import diagnostic_service
 from app.services.study_plan_service import study_plan_service
 from app.services.bac_diagnostic_service import bac_diagnostic_service
+from app.services.subject_access_service import canonical_subject_key, subject_access_service
 from app.supabase_client import get_supabase_admin
 from datetime import date
 
 supabase = get_supabase_admin()
 
 router = APIRouter(prefix="/coaching", tags=["coaching"])
+
+
+def _require_subject(student: dict, subject_id: str) -> None:
+    if not subject_access_service.is_subject_id_allowed(student, subject_id):
+        raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
+
+
+def _filter_scores(student: dict, scores: dict) -> dict:
+    context = subject_access_service.get_context(student)
+    allowed = {canonical_subject_key(name) for name in context["subject_names"]}
+    return {name: score for name, score in scores.items() if canonical_subject_key(name) in allowed}
 
 
 class DiagnosticStartRequest(BaseModel):
@@ -55,6 +67,7 @@ async def start_diagnostic(
     Generates 10 QCM/association questions grounded in real BAC exams.
     Each call with a different variation_seed generates different questions.
     """
+    _require_subject(student, data.subject_id)
     try:
         questions = await diagnostic_service.generate_diagnostic_questions(
             subject_id=data.subject_id,
@@ -88,6 +101,7 @@ async def start_diagnostic_session(
     Start a diagnostic session for question-by-question generation.
     Returns a session_id that can be used to generate questions one by one.
     """
+    _require_subject(student, data.subject_id)
     try:
         session_id = await diagnostic_service.start_diagnostic_session(
             subject_id=data.subject_id,
@@ -120,6 +134,9 @@ async def next_diagnostic_question(
         session = diagnostic_service._sessions.get(data.session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        if session.get("student_id") and str(session.get("student_id")) != str(student["id"]):
+            raise HTTPException(status_code=404, detail="Session not found")
+        _require_subject(student, str(session.get("subject_id") or ""))
 
         already_done = session.get('questions_generated', 0) >= session.get('num_questions', 10)
         if already_done:
@@ -165,6 +182,7 @@ async def submit_diagnostic(
     Submit diagnostic answers and get evaluation results.
     Returns score, weak topics, and strong topics.
     """
+    _require_subject(student, data.subject_id)
     try:
         result = await diagnostic_service.evaluate_diagnostic(
             student_id=student['id'],
@@ -189,9 +207,12 @@ async def generate_study_plan(
     Creates sessions scheduled until exam date.
     """
     try:
+        diagnostic_scores = _filter_scores(student, data.diagnostic_scores)
+        if not diagnostic_scores:
+            raise HTTPException(status_code=400, detail="Aucune matière autorisée dans les résultats du diagnostic")
         result = await study_plan_service.generate_plan(
             student['id'],
-            data.diagnostic_scores
+            diagnostic_scores
         )
         
         return {
@@ -203,6 +224,8 @@ async def generate_study_plan(
             "phase_split": result.get("phase_split", {}),
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -244,6 +267,7 @@ async def regenerate_study_plan(
                     diagnostic_scores[subject_name] = float(result.get('score', 0))
                     seen_subjects.add(subject_name)
         
+        diagnostic_scores = _filter_scores(student, diagnostic_scores)
         print(f"[API] Final diagnostic_scores to pass: {diagnostic_scores}")
         
         if not diagnostic_scores:
@@ -284,7 +308,8 @@ async def get_plan(
         
         if not plan:
             return {"has_plan": False, "plan": None}
-        
+
+        plan["diagnostic_scores"] = _filter_scores(student, plan.get("diagnostic_scores") or {})
         return {"has_plan": True, "plan": plan}
     
     except Exception as e:
@@ -301,6 +326,8 @@ async def get_today_schedule(
     """
     try:
         sessions = await study_plan_service.get_today_schedule(student['id'])
+        allowed_ids = set(subject_access_service.get_context(student)["subject_ids"])
+        sessions = [session for session in sessions if str(session.get("subject_id")) in allowed_ids]
         
         return {
             "date": date.today().isoformat(),
@@ -322,7 +349,34 @@ async def get_all_sessions(
     """
     try:
         data = await study_plan_service.get_all_sessions(student['id'])
-        
+        context = subject_access_service.get_context(student)
+        allowed_ids = set(context["subject_ids"])
+        allowed_names = {canonical_subject_key(name) for name in context["subject_names"]}
+
+        sessions_by_date = {}
+        for session_date, sessions in (data.get("sessions_by_date") or {}).items():
+            scoped = [session for session in sessions if str(session.get("subject_id")) in allowed_ids]
+            if scoped:
+                sessions_by_date[session_date] = scoped
+
+        sessions_by_subject = {
+            name: sessions
+            for name, sessions in (data.get("sessions_by_subject") or {}).items()
+            if canonical_subject_key(name) in allowed_names
+        }
+        flat_sessions = [session for sessions in sessions_by_date.values() for session in sessions]
+        data = {
+            **data,
+            "sessions_by_date": sessions_by_date,
+            "sessions_by_subject": sessions_by_subject,
+            "total_sessions": len(flat_sessions),
+            "total_duration_minutes": sum(session.get("duration_minutes", 0) for session in flat_sessions),
+            "completed_duration_minutes": sum(
+                session.get("duration_minutes", 0)
+                for session in flat_sessions
+                if session.get("status") == "completed"
+            ),
+        }
         return data
     
     except Exception as e:
@@ -360,7 +414,12 @@ async def get_progress(
     """
     try:
         progress = await study_plan_service.get_progress(student['id'])
-        
+        allowed_ids = set(subject_access_service.get_context(student)["subject_ids"])
+        progress["subject_progress"] = {
+            subject_id: value
+            for subject_id, value in (progress.get("subject_progress") or {}).items()
+            if str(subject_id) in allowed_ids
+        }
         return progress
     
     except Exception as e:

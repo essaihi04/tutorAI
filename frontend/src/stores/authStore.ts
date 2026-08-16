@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useLearningContextStore } from './learningContextStore';
 
 interface AuthState {
   token: string | null;
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   student: JSON.parse(localStorage.getItem('student') || 'null'),
   isAuthenticated: !!localStorage.getItem('token'),
   login: (token, student, refreshToken) => {
+    useLearningContextStore.getState().reset();
     localStorage.setItem('token', token);
     if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
     localStorage.setItem('student', JSON.stringify(student));
@@ -34,10 +36,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token, refreshToken: refreshToken ?? null });
   },
   setStudent: (student) => {
+    if (student?.id !== useLearningContextStore.getState().context?.student_id) {
+      useLearningContextStore.getState().reset();
+    }
     if (student) localStorage.setItem('student', JSON.stringify(student));
     set({ student });
   },
   logout: () => {
+    useLearningContextStore.getState().reset();
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('student');

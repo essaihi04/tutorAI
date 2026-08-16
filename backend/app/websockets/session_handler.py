@@ -701,6 +701,8 @@ class SessionHandler:
         # propriété plus bas valide chaque écriture au passage.
         self._phase = PhaseLesson()
         self.session_mode: str = "coaching"  # 'coaching' or 'libre'
+        self.allowed_subject_names: list[str] = []
+        self.allowed_subject_keys: set[str] = set()
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
         # façon `set_language` à l'ouverture, mais si ce message se perd, mieux
@@ -1370,6 +1372,7 @@ class SessionHandler:
                 student_name=ctx.get("student_name", "l'étudiant"),
                 proficiency=prof_ctx["proficiency"] if prof_ctx else ctx.get("proficiency", "intermédiaire"),
                 user_query=user_query,
+                allowed_subjects=self.allowed_subject_names,
             )
 
             # ── EXPLAIN MODE: persist exam-question scenario (official correction
@@ -1926,6 +1929,22 @@ class SessionHandler:
 
     async def _process_student_input(self, student_text: str, exam_context: bool = False, force_suppress_whiteboard: bool = False, exam_question_number: int = None, exam_total_questions: int = None):
         """Process student text through streaming LLM and return TTS audio."""
+        if self.session_mode == "libre" and self.allowed_subject_keys:
+            from app.services.subject_access_service import canonical_subject_key
+
+            detected_subject = self._detect_subject(student_text)
+            detected_key = canonical_subject_key(detected_subject)
+            if detected_key and detected_key not in self.allowed_subject_keys:
+                available = ", ".join(self.allowed_subject_names) or "tes matières disponibles"
+                await self.websocket.send_json({
+                    "type": "ai_response",
+                    "text": (
+                        f"La matière {detected_subject} n'est pas incluse dans ton accès actuel. "
+                        f"Tu peux me poser des questions sur : {available}."
+                    ),
+                })
+                return
+
         # ⚠️ Compteur de relances REMIS À ZÉRO À CHAQUE TOUR.
         #
         # Il était cumulatif sur toute la session : chaque réponse sans bloc
@@ -2529,6 +2548,20 @@ RÈGLES:
     async def _init_session(self, message: dict):
         """Initialize session context from lesson data."""
         _safe_log(f"[Session Init] _init_session called with message keys: {list(message.keys())}")
+        try:
+            from app.services.subject_access_service import canonical_subject_key, subject_access_service
+
+            access_context = subject_access_service.get_context_for_student_id(self.student_id)
+            self.allowed_subject_names = access_context.get("subject_names") or []
+            self.allowed_subject_keys = {
+                canonical_subject_key(name) for name in self.allowed_subject_names if name
+            }
+        except Exception as exc:
+            # REST endpoints remain authoritative. A legacy session keeps
+            # working if the additive access migration is not installed yet.
+            _safe_log(f"[Session Init] Subject access context unavailable: {exc}")
+            self.allowed_subject_names = []
+            self.allowed_subject_keys = set()
         self.session_mode = message.get("mode", "coaching")
         _safe_log(f"[Session Init] Mode: {self.session_mode}")
         self.session_context = {

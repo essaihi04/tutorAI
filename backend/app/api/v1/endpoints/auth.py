@@ -3,6 +3,7 @@ from app.schemas.auth import StudentRegister, StudentLogin, Token, StudentRespon
 from app.supabase_client import get_supabase
 from app.config import get_settings
 from app.dependencies import get_current_student
+from app.services.subject_access_service import subject_access_service
 from datetime import datetime
 import uuid
 import httpx
@@ -16,6 +17,15 @@ settings = get_settings()
 async def get_me(student: dict = Depends(get_current_student)):
     """Return the currently-authenticated student."""
     return StudentResponse(**student)
+
+
+@router.get("/learning-context")
+async def get_learning_context(student: dict = Depends(get_current_student)):
+    """Return the single subject scope used by every student-facing screen."""
+    try:
+        return subject_access_service.get_context(student)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load learning context: {str(exc)}")
 
 
 @router.post("/register", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)

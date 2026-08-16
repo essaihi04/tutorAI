@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listPublishedMockExams } from '../services/api';
-// import { useAuthStore } from '../stores/authStore';
+import { useLearningContextStore } from '../stores/learningContextStore';
 import MobileBottomNav from '../components/MobileBottomNav';
 import {
   ArrowLeft, Clock, Award, Play, FileText, Loader2,
@@ -26,28 +26,57 @@ const DOMAIN_LABELS: Record<string, string> = {
   environnement_sante: 'Environnement & Santé',
 };
 
+const MOCK_SUBJECT_OPTIONS = [
+  { apiKey: 'SVT', accessKey: 'svt', label: '🧬 SVT' },
+  { apiKey: 'mathematiques', accessKey: 'mathematiques', label: '📐 Maths' },
+  { apiKey: 'physique', accessKey: 'physique-chimie', label: '⚛️ Physique-Chimie' },
+];
+const EMPTY_SUBJECT_KEYS: string[] = [];
+
 export default function MockExamHub() {
   const navigate = useNavigate();
+  const examSubjectKeys = useLearningContextStore(
+    (state) => state.context?.exam_subject_keys || EMPTY_SUBJECT_KEYS,
+  );
+  const subjectOptions = useMemo(
+    () => MOCK_SUBJECT_OPTIONS.filter((option) => examSubjectKeys.includes(option.accessKey)),
+    [examSubjectKeys],
+  );
   const [exams, setExams] = useState<MockExamMeta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSubject, setSelectedSubject] = useState('SVT');
+  const [loadedSubject, setLoadedSubject] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedExam, setSelectedExam] = useState<MockExamMeta | null>(null);
+  const activeSubject = subjectOptions.some((option) => option.apiKey === selectedSubject)
+    ? selectedSubject
+    : (subjectOptions[0]?.apiKey || '');
+  const visibleLoading = Boolean(activeSubject) && (loading || loadedSubject !== activeSubject);
 
   useEffect(() => {
-    loadExams();
-  }, [selectedSubject]);
+    if (!activeSubject) return;
 
-  const loadExams = async () => {
-    setLoading(true);
-    try {
-      const res = await listPublishedMockExams(selectedSubject);
-      setExams(res.data || []);
-    } catch {
-      setExams([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    let cancelled = false;
+    void listPublishedMockExams(activeSubject)
+      .then((response) => {
+        if (!cancelled) {
+          setExams(response.data || []);
+          setLoadedSubject(activeSubject);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExams([]);
+          setLoadedSubject(activeSubject);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubject]);
 
   return (
     <div className="min-h-screen bg-[#070718] text-white pb-24 md:pb-8">
@@ -90,42 +119,51 @@ export default function MockExamHub() {
         </div>
 
         {/* Subject Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6 -mx-1 px-1 overflow-x-auto sm:overflow-visible">
-          {['SVT', 'mathematiques', 'physique'].map(s => (
+        {subjectOptions.length > 1 && <div className="flex flex-wrap gap-2 mb-6 -mx-1 px-1 overflow-x-auto sm:overflow-visible">
+          {subjectOptions.map((option) => (
             <button
-              key={s}
-              onClick={() => setSelectedSubject(s)}
+              key={option.apiKey}
+              onClick={() => {
+                setLoading(true);
+                setSelectedSubject(option.apiKey);
+              }}
               className={`flex-shrink-0 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition whitespace-nowrap ${
-                selectedSubject === s
+                activeSubject === option.apiKey
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20'
                   : 'bg-white/5 text-white/50 hover:bg-white/10'
               }`}
             >
-              {s === 'SVT' ? '🧬 SVT' : s === 'mathematiques' ? '📐 Maths' : s === 'physique' ? '⚛️ Physique' : s}
+              {option.label}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Loading */}
-        {loading && (
+        {visibleLoading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
           </div>
         )}
 
         {/* Empty State */}
-        {!loading && exams.length === 0 && (
+        {!visibleLoading && exams.length === 0 && (
           <div className="text-center py-20">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
               <FileText size={28} className="text-white/20" />
             </div>
-            <h3 className="text-lg font-semibold text-white/40 mb-2">Aucun examen blanc disponible</h3>
-            <p className="text-sm text-white/25">Les examens blancs seront publiés prochainement.</p>
+            <h3 className="text-lg font-semibold text-white/40 mb-2">
+              {subjectOptions.length === 0 ? "Aucune matière d'examen dans ton accès" : 'Aucun examen blanc disponible'}
+            </h3>
+            <p className="text-sm text-white/25">
+              {subjectOptions.length === 0
+                ? 'Les examens apparaîtront ici dès qu’une matière compatible sera activée.'
+                : 'Les examens blancs seront publiés prochainement.'}
+            </p>
           </div>
         )}
 
         {/* Exam Cards */}
-        {!loading && exams.length > 0 && (
+        {!visibleLoading && exams.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2">
             {exams.map(exam => {
               const domains = exam.domains_covered?.part2 || [];

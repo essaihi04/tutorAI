@@ -15,6 +15,8 @@ class Student(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=False)
     preferred_language = Column(String(10), default="mixed")   # darija
+    filiere = Column(String(10), default="SP")
+    subject_access_managed = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     last_active_at = Column(DateTime(timezone=True), default=datetime.utcnow)

@@ -5,11 +5,15 @@ Protected by admin password.
 """
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.services.admin_service import admin_service
+from app.services.subject_access_service import subject_access_service
+from app.supabase_client import get_supabase_admin
 from app.schemas.admin import AdminLogin, CreateUser, UpdateUser, ResetPassword, CreatePromoCode, UpdatePromoCode, BulkUserAction
 from jose import jwt
 from datetime import datetime, timedelta
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,6 +23,13 @@ settings = get_settings()
 
 ADMIN_JWT_SECRET = settings.secret_key + "_admin"
 ADMIN_TOKEN_EXPIRE_HOURS = 24
+
+
+class SubjectAccessUpdate(BaseModel):
+    managed: bool = True
+    subject_ids: list[str] = Field(default_factory=list)
+    source: str = "manual"
+    ends_at: Optional[datetime] = None
 
 
 def _create_admin_token() -> str:
@@ -111,6 +122,73 @@ async def update_user(user_id: str, data: UpdateUser, admin: bool = Depends(_ver
         return {"user": user}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/users/{user_id}/subject-access")
+async def get_user_subject_access(user_id: str, admin: bool = Depends(_verify_admin_token)):
+    """Return the exact learning scope an admin would apply to a student."""
+    try:
+        return subject_access_service.get_context_for_student_id(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/users/{user_id}/subject-access")
+async def update_user_subject_access(
+    user_id: str,
+    data: SubjectAccessUpdate,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Activate a strict subject pack, or return an account to legacy mode."""
+    db = get_supabase_admin()
+    try:
+        student_result = db.table("students").select("id").eq("id", user_id).limit(1).execute()
+        if not student_result.data:
+            raise HTTPException(status_code=404, detail="Élève introuvable")
+
+        if data.managed:
+            requested_ids = list(dict.fromkeys(data.subject_ids))
+            if requested_ids:
+                subject_result = db.table("subjects").select("id").in_("id", requested_ids).execute()
+                valid_ids = {str(row["id"]) for row in (subject_result.data or [])}
+                invalid_ids = [subject_id for subject_id in requested_ids if subject_id not in valid_ids]
+                if invalid_ids:
+                    raise HTTPException(status_code=400, detail={"invalid_subject_ids": invalid_ids})
+
+            # Preserve rows for auditability: old access is suspended, then the
+            # requested pack is reactivated with its current commercial source.
+            db.table("student_subject_access").update({
+                "status": "suspended",
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("student_id", user_id).execute()
+
+            if requested_ids:
+                rows = [
+                    {
+                        "student_id": user_id,
+                        "subject_id": subject_id,
+                        "status": "active",
+                        "source": data.source,
+                        "starts_at": datetime.utcnow().isoformat(),
+                        "ends_at": data.ends_at.isoformat() if data.ends_at else None,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                    for subject_id in requested_ids
+                ]
+                db.table("student_subject_access").upsert(
+                    rows,
+                    on_conflict="student_id,subject_id",
+                ).execute()
+
+        db.table("students").update({
+            "subject_access_managed": data.managed,
+        }).eq("id", user_id).execute()
+
+        return subject_access_service.get_context_for_student_id(user_id)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useLearningContextStore } from '../stores/learningContextStore';
 import { useSessionStore, type SessionLanguage } from '../stores/sessionStore';
 import { wsService } from '../services/websocket';
 import { getLessons, getAllLessonProgress, startSession, endSession } from '../services/api';
@@ -225,6 +226,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const isLibre = mode === 'libre' || mode === 'explain';
   const navigate = useNavigate();
   const { token, student } = useAuthStore();
+  const learningContext = useLearningContextStore((state) => state.context);
+  const allowedSubjectNames = learningContext?.subject_names || [];
+  const subjectScopeLabel = allowedSubjectNames.length > 0
+    ? allowedSubjectNames.join(', ')
+    : 'tes matières';
   const {
     sessionId, setSessionId, currentPhase, setPhase,
     isProcessing, processingStage, setProcessing,
@@ -454,14 +460,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         wsService.sendJson({
           type: 'init_session',
           mode: mode === 'explain' ? 'explain' : 'libre',
-          subject: mode === 'explain' ? explainSubject : 'Général',
+          subject: mode === 'explain' ? explainSubject : 'Mes matières',
           chapter_title: '',
           lesson_title: mode === 'explain' ? 'Explication Examen' : 'Mode Libre',
           objective: mode === 'explain'
             ? (explainHasAnswer
                 ? "Expliquer en PROFONDEUR la réponse de cette question d'examen avec démonstration, cours associé, schémas et astuces BAC. UTILISE le tableau (whiteboard) pour illustrer."
                 : "Aider l'élève à COMPRENDRE cette question d'examen SANS donner la réponse. Donne la méthode, les notions du cours utiles, et illustre avec des schémas au tableau.")
-            : "Répondre aux questions de l'étudiant sur toutes les matières du BAC",
+            : `Répondre uniquement aux questions de l'étudiant sur ses matières autorisées : ${subjectScopeLabel}`,
           scenario: mode === 'explain' ? JSON.stringify(explainCtx) : '',
           student_name: student?.full_name || 'l\'étudiant',
           proficiency: 'intermédiaire',
@@ -1607,7 +1613,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="text-xs font-semibold text-white/90 leading-tight truncate">{mode === 'explain' ? 'Explication Examen' : isLibre ? 'Mode Libre' : (lessonInfo?.title_fr || 'Session')}</h1>
-              <p className="text-[10px] text-white/30 leading-tight truncate hidden sm:block">{mode === 'explain' ? 'Aide interactive au tableau' : isLibre ? 'Pose tes questions sur toutes les matières' : (lessonInfo?.title_ar || 'SVT - 2ème BAC')}</p>
+              <p className="text-[10px] text-white/30 leading-tight truncate hidden sm:block">{mode === 'explain' ? 'Aide interactive au tableau' : isLibre ? `Pose tes questions sur ${allowedSubjectNames.length === 1 ? allowedSubjectNames[0] : 'tes matières'}` : (lessonInfo?.title_ar || 'SVT - 2ème BAC')}</p>
             </div>
           </div>
 

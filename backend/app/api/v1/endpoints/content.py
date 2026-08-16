@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.supabase_client import get_supabase, get_supabase_admin
 from app.schemas.content import SubjectResponse, ChapterResponse, LessonResponse, ExerciseResponse
 from app.dependencies import get_current_student
+from app.services.subject_access_service import subject_access_service
 
 _log = logging.getLogger(__name__)
 
@@ -26,62 +27,39 @@ async def get_filieres():
 
 
 @router.get("/subjects")
-async def get_subjects(filiere: Optional[str] = Query(None, description="Code filière (SP, SM_A, SM_B, SGC, SE)")):
-    """Subjects for a filière.
+async def get_subjects(
+    filiere: Optional[str] = Query(None, description="Deprecated: the authenticated student's filière is used"),
+    student: dict = Depends(get_current_student),
+):
+    """Subjects available to the authenticated student.
 
-    Falls back to returning every subject when the multi-filière migration
-    has not been applied yet, or when the filière has no mapping — the app
-    must never show an empty dashboard.
+    ``filiere`` is retained for backward-compatible clients but cannot widen
+    the student's server-side scope.
     """
     try:
-        all_subjects = supabase.table('subjects').select('*').order('order_index').execute().data or []
+        return subject_access_service.get_context(student)["subjects"]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get subjects: {str(e)}")
 
-    if not filiere:
-        return all_subjects
-
-    try:
-        mapping = supabase.table('subjects_filieres') \
-            .select('subject_id, coefficient, exam_type, duree_minutes, order_index') \
-            .eq('filiere_code', filiere).execute().data or []
-    except Exception as e:
-        _log.warning(f"[Content] subjects_filieres unavailable ({e}); returning all subjects")
-        return all_subjects
-
-    if not mapping:
-        _log.warning(f"[Content] No subject mapped to filière '{filiere}'; returning all subjects")
-        return all_subjects
-
-    by_id = {m['subject_id']: m for m in mapping}
-    scoped = []
-    for s in all_subjects:
-        m = by_id.get(s['id'])
-        if not m:
-            continue
-        scoped.append({
-            **s,
-            'coefficient': m.get('coefficient'),
-            'exam_type': m.get('exam_type'),
-            'duree_minutes': m.get('duree_minutes'),
-            'order_index': m.get('order_index', s.get('order_index', 0)),
-        })
-    scoped.sort(key=lambda x: x.get('order_index') or 0)
-    return scoped
-
 
 @router.get("/subjects/{subject_id}/chapters")
-async def get_chapters(subject_id: str):
+async def get_chapters(subject_id: str, student: dict = Depends(get_current_student)):
     try:
+        if not subject_access_service.is_subject_id_allowed(student, subject_id):
+            raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
         result = supabase.table('chapters').select('*').eq('subject_id', subject_id).order('order_index').execute()
         return result.data if result.data else []
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get chapters: {str(e)}")
 
 
 @router.get("/chapters/{chapter_id}/lessons")
-async def get_lessons(chapter_id: str):
+async def get_lessons(chapter_id: str, student: dict = Depends(get_current_student)):
     try:
+        if not subject_access_service.is_chapter_allowed(student, chapter_id):
+            raise HTTPException(status_code=403, detail="Ce chapitre n'est pas inclus dans votre accès")
         print(f"[Content] Fetching lessons for chapter_id: {chapter_id}")
         result = supabase.table('lessons').select('*').eq('chapter_id', chapter_id).order('order_index').execute()
         lessons = result.data if result.data else []
@@ -130,9 +108,13 @@ async def get_lessons(chapter_id: str):
 
 
 @router.get("/lessons/{lesson_id}/exercises")
-async def get_exercises(lesson_id: str):
+async def get_exercises(lesson_id: str, student: dict = Depends(get_current_student)):
     try:
+        if not subject_access_service.is_lesson_allowed(student, lesson_id):
+            raise HTTPException(status_code=403, detail="Cette leçon n'est pas incluse dans votre accès")
         result = supabase.table('exercises').select('*').eq('lesson_id', lesson_id).order('order_index').execute()
         return result.data if result.data else []
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get exercises: {str(e)}")

@@ -8,8 +8,30 @@ from pydantic import BaseModel
 from typing import Optional
 from app.dependencies import get_current_student
 from app.services.exam_service import exam_service
+from app.services.subject_access_service import (
+    canonical_subject_key,
+    is_exam_subject_allowed,
+    subject_access_service,
+)
 
 router = APIRouter(prefix="/exam", tags=["exam"])
+
+
+def _allowed_exam_keys(student: dict) -> set[str]:
+    return set(subject_access_service.get_context(student)["exam_subject_keys"])
+
+
+def _require_exam_subject(student: dict, subject: str) -> None:
+    if not is_exam_subject_allowed(subject, _allowed_exam_keys(student)):
+        raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
+
+
+def _require_exam(student: dict, exam_id: str) -> dict:
+    meta = exam_service.get_exam_meta(exam_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Examen introuvable")
+    _require_exam_subject(student, str(meta.get("subject") or ""))
+    return meta
 
 
 class EvaluateAnswerRequest(BaseModel):
@@ -50,14 +72,22 @@ class SaveProgressRequest(BaseModel):
 async def list_exams(
     subject: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
+    student: dict = Depends(get_current_student),
 ):
     """List available exams, optionally filtered by subject and/or year."""
-    exams = exam_service.list_exams(subject=subject, year=year)
+    allowed = _allowed_exam_keys(student)
+    requested_key = canonical_subject_key(subject or "")
+    if subject and requested_key not in allowed:
+        raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
+    exams = exam_service.list_exams(year=year)
+    exams = [exam for exam in exams if canonical_subject_key(str(exam.get("subject") or "")) in allowed]
+    if requested_key:
+        exams = [exam for exam in exams if canonical_subject_key(str(exam.get("subject") or "")) == requested_key]
     return {"exams": exams, "count": len(exams)}
 
 
 @router.get("/stats")
-async def get_exam_stats():
+async def get_exam_stats(student: dict = Depends(get_current_student)):
     """
     Return aggregate statistics about the exam bank:
     - total_exams  : total number of national BAC exams indexed
@@ -69,19 +99,26 @@ async def get_exam_stats():
     """
     from app.services.exam_bank_service import exam_bank
     stats = exam_bank.get_stats()
+    allowed = _allowed_exam_keys(student)
+    by_subject = [
+        row for row in stats.get("by_subject", [])
+        if canonical_subject_key(str(row.get("subject") or "")) in allowed
+    ]
+    years = sorted({year for row in by_subject for year in (row.get("years") or [])}, reverse=True)
     # Return only the useful fields for the frontend (skip 'topics' which is heavy)
     return {
-        "total_exams": stats.get("total_exams", 0),
-        "total_questions": stats.get("total_questions", 0),
-        "by_subject": stats.get("by_subject", []),
-        "year_range": stats.get("year_range", []),
-        "years": stats.get("years", []),
+        "total_exams": sum(int(row.get("exams", 0) or 0) for row in by_subject),
+        "total_questions": sum(int(row.get("questions", 0) or 0) for row in by_subject),
+        "by_subject": by_subject,
+        "year_range": [min(years), max(years)] if years else [],
+        "years": years,
     }
 
 
 @router.get("/detail/{exam_id}")
-async def get_exam(exam_id: str):
+async def get_exam(exam_id: str, student: dict = Depends(get_current_student)):
     """Get full exam content with structured questions."""
+    _require_exam(student, exam_id)
     exam = exam_service.get_exam(exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Examen introuvable")
@@ -89,8 +126,13 @@ async def get_exam(exam_id: str):
 
 
 @router.get("/question/{exam_id}/{question_index}")
-async def get_question(exam_id: str, question_index: int):
+async def get_question(
+    exam_id: str,
+    question_index: int,
+    student: dict = Depends(get_current_student),
+):
     """Get a single question with its context."""
+    _require_exam(student, exam_id)
     question = exam_service.get_question(exam_id, question_index)
     if not question:
         raise HTTPException(status_code=404, detail="Question introuvable")
@@ -120,6 +162,7 @@ async def evaluate_answer(
     in-progress attempt so the dashboard reflects practice progress without
     requiring a final submission.
     """
+    _require_exam(student, data.exam_id)
     result = await exam_service.evaluate_answer(
         exam_id=data.exam_id,
         question_index=data.question_index,
@@ -142,11 +185,17 @@ async def evaluate_answer(
 
 
 @router.post("/extract-text")
-async def extract_text_from_image(data: ExtractTextRequest):
+async def extract_text_from_image(
+    data: ExtractTextRequest,
+    student: dict = Depends(get_current_student),
+):
     """
     Extract text from a student's image (photo of handwritten answer).
     Returns the extracted text so it can be displayed in the input field before evaluation.
     """
+    if data.subject:
+        _require_exam_subject(student, data.subject)
+
     import logging
     logger = logging.getLogger(__name__)
     
@@ -191,13 +240,17 @@ class ExplainRequest(BaseModel):
 
 
 @router.post("/explain")
-async def explain_question(data: ExplainRequest):
+async def explain_question(
+    data: ExplainRequest,
+    student: dict = Depends(get_current_student),
+):
     """Generate an explanation for a question.
 
     ``mode='before'`` — Socratic guidance, never reveal the answer.
     ``mode='after'``  — Diagnostic correction of the student's specific answer
                         (decorticate, cite phrases, link to course).
     """
+    _require_exam(student, data.exam_id)
     question = exam_service.get_question(data.exam_id, data.question_index)
     if not question:
         raise HTTPException(status_code=404, detail="Question introuvable")
@@ -320,6 +373,7 @@ async def start_exam(
     practice) so that dashboards can show activity even before submission.
     Idempotent: if an in-progress attempt already exists, it is reused.
     """
+    _require_exam(student, data.exam_id)
     result = await exam_service.start_attempt(
         student_id=student["id"],
         exam_id=data.exam_id,
@@ -354,6 +408,7 @@ async def submit_exam(
     student: dict = Depends(get_current_student),
 ):
     """Submit a complete exam for evaluation (practice or real mode)."""
+    _require_exam(student, data.exam_id)
     result = await exam_service.submit_exam(
         student_id=student["id"],
         exam_id=data.exam_id,
@@ -374,6 +429,11 @@ async def get_history(
 ):
     """Get exam attempt history for the current student."""
     history = await exam_service.get_history(student["id"], limit=limit)
+    allowed = _allowed_exam_keys(student)
+    history = [
+        row for row in history
+        if canonical_subject_key(str(row.get("exam_subject") or row.get("subject") or "")) in allowed
+    ]
     return {"history": history, "count": len(history)}
 
 
@@ -387,7 +447,17 @@ async def get_my_exam_stats(
     Used by the ExamHub page to display a personal progress panel and
     fuel the "Share my progress" feature.
     """
-    return await exam_service.get_student_exam_stats(student["id"])
+    stats = await exam_service.get_student_exam_stats(student["id"])
+    allowed = _allowed_exam_keys(student)
+    stats["by_subject"] = [
+        row for row in (stats.get("by_subject") or [])
+        if canonical_subject_key(str(row.get("subject") or "")) in allowed
+    ]
+    stats["exams_detail"] = [
+        row for row in (stats.get("exams_detail") or [])
+        if canonical_subject_key(str(row.get("subject") or "")) in allowed
+    ]
+    return stats
 
 
 # ──────────────────────────────────────────────
@@ -398,9 +468,15 @@ async def get_my_exam_stats(
 async def list_extracted_exams(
     subject: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
+    student: dict = Depends(get_current_student),
 ):
     """List extracted exams from exam_documents table."""
     from app.supabase_client import supabase_admin
+
+    allowed = _allowed_exam_keys(student)
+    requested_key = canonical_subject_key(subject or "")
+    if subject and requested_key not in allowed:
+        raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
 
     result = supabase_admin.table("exam_documents").select(
         "id, created_at, is_published"
@@ -411,7 +487,10 @@ async def list_extracted_exams(
         meta = exam_service.get_extracted_exam_meta(row["id"])
         if not meta:
             continue
-        if subject and str(meta.get("subject", "")).lower() != subject.lower():
+        meta_key = canonical_subject_key(str(meta.get("subject") or ""))
+        if meta_key not in allowed:
+            continue
+        if requested_key and meta_key != requested_key:
             continue
         if year and meta.get("year") != year:
             continue
@@ -429,7 +508,7 @@ async def list_extracted_exams(
 
 
 @router.get("/extracted/{doc_id}")
-async def get_extracted_exam(doc_id: str):
+async def get_extracted_exam(doc_id: str, student: dict = Depends(get_current_student)):
     """Get a specific extracted exam with full content."""
     from app.supabase_client import supabase_admin
     
@@ -437,7 +516,10 @@ async def get_extracted_exam(doc_id: str):
     
     if not result.data:
         raise HTTPException(status_code=404, detail="Examen introuvable")
-    
+
+    structured = result.data.get("structured_content") or {}
+    subject = structured.get("subject") or result.data.get("subject") or ""
+    _require_exam_subject(student, str(subject))
     return result.data
 
 

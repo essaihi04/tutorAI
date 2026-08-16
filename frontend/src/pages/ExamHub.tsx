@@ -384,7 +384,7 @@ export default function ExamHub() {
                 </div>
 
                 {/* Matière */}
-                <div className="space-y-1.5">
+                {subjects.length > 1 && <div className="space-y-1.5">
                   <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
                     Matière
                   </p>
@@ -395,7 +395,7 @@ export default function ExamHub() {
                       count={exams.length}
                       sidebar
                     >
-                      Toutes les matières
+                      Toutes mes matières
                     </FilterChip>
                     {subjects.map((s) => {
                       const cfg = getConfig(s);
@@ -415,7 +415,7 @@ export default function ExamHub() {
                       );
                     })}
                   </div>
-                </div>
+                </div>}
 
                 {/* Année */}
                 <div className="space-y-1.5">

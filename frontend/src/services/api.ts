@@ -100,6 +100,7 @@ export const loginStudent = (data: { email: string; password: string }) =>
   api.post('/auth/login', data);
 
 export const getMe = () => api.get('/auth/me');
+export const getLearningContext = () => api.get('/auth/learning-context');
 
 // Content
 export const getSubjects = () => api.get('/content/subjects');

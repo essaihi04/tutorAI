@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
 
 from app.services.mock_exam_service import mock_exam_service, MOCK_EXAMS_DIR
+from app.dependencies import get_current_student
+from app.services.subject_access_service import subject_access_service
 from app.services.mock_exam_printable import render_printable_html
 
 logger = logging.getLogger(__name__)
@@ -72,8 +74,14 @@ async def list_mock_exams(
 
 
 @router.get("/{subject}/{exam_id}")
-async def get_mock_exam(subject: str, exam_id: str):
+async def get_mock_exam(
+    subject: str,
+    exam_id: str,
+    student: dict = Depends(get_current_student),
+):
     """Get a specific mock exam. Published exams accessible by students."""
+    if not subject_access_service.is_exam_allowed(student, subject):
+        raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
     exam = mock_exam_service.get_mock_exam(subject, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Mock exam not found")
@@ -132,10 +140,22 @@ async def update_status(
 
 
 @router.get("/published")
-async def list_published_exams(subject: Optional[str] = None):
+async def list_published_exams(
+    subject: Optional[str] = None,
+    student: dict = Depends(get_current_student),
+):
     """List published mock exams (accessible by students)."""
+    if subject and not subject_access_service.is_exam_allowed(student, subject):
+        raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
     all_exams = mock_exam_service.list_mock_exams(subject)
-    return [e for e in all_exams if e.get("status") == "published"]
+    return [
+        exam for exam in all_exams
+        if exam.get("status") == "published"
+        and subject_access_service.is_exam_allowed(
+            student,
+            str(exam.get("subject") or subject or ""),
+        )
+    ]
 
 
 @router.post("/{subject}/{exam_id}/upload-image")

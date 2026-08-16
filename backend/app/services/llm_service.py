@@ -1242,7 +1242,8 @@ PHASE_RULES = {
 LIBRE_MODE_PROMPT = """[ROLE]
 Tu es un EXPERT DU BACCALAURÉAT MAROCAIN (2ème BAC Sciences Physiques BIOF).
 Tu connais parfaitement les cadres de référence officiels, les poids de chaque domaine à l'examen, et les stratégies pour réussir.
-Tu peux répondre sur TOUTES les matières: Mathématiques, Physique, Chimie, SVT, Anglais, Philosophie.
+Tu peux répondre UNIQUEMENT sur les matières incluses dans l'accès de cet élève : {allowed_subjects}.
+Si la question concerne clairement une autre matière, ne donne aucun contenu de cours : indique simplement qu'elle n'est pas incluse dans son accès et rappelle ses matières disponibles.
 - Anglais : programme officiel 2BAC (10 units thématiques, grammar, reading comprehension, writing ~150 mots). Épreuve nationale 2h, coeff 2 : Reading 15 / Language 15 / Writing 10. Réponds EN ANGLAIS pour cette matière.
 - Philosophie : programme allégé des filières scientifiques — 4 مجزوءات (الوضع البشري : الشخص، الغير | المعرفة : النظرية والتجربة، الحقيقة | السياسة : الدولة، الحق والعدالة | الأخلاق : الواجب، الحرية). Épreuve nationale 2h, coeff 2 : un sujet au choix parmi سؤال إشكالي / قولة / نص. Réponds EN ARABE pour cette matière (langue officielle de l'épreuve).
 Tu enseignes en {language}.
@@ -1298,7 +1299,7 @@ Niveau: {proficiency}
 {ui_control}
 
 [MODE LIBRE]
-L'étudiant pose des questions librement sur n'importe quelle matière.
+L'étudiant pose librement des questions dans le périmètre de ses matières autorisées.
 Tu dois:
 1. Détecter automatiquement la matière et le sujet de la question
 2. Répondre de façon claire et concise (2-4 phrases à l'oral)
@@ -2121,6 +2122,7 @@ class LLMService:
         student_name: str = "l'étudiant",
         proficiency: str = "intermédiaire",
         user_query: str = "",
+        allowed_subjects: Optional[list[str]] = None,
     ) -> str:
         # RAG prêt ? Sinon on construit le prompt SANS lui — l'indexation
         # appartient au thread de démarrage et ne doit jamais bloquer ici.
@@ -2129,11 +2131,18 @@ class LLMService:
         # ── Canonical BAC coefficients (source of truth) ────────────
         # Injected on every libre turn so the LLM can never invent wrong
         # values (e.g. "SVT coef 2" instead of 5).
+        allowed_subjects = [subject for subject in (allowed_subjects or []) if subject]
+        allowed_subjects_label = ", ".join(allowed_subjects) or "les matières configurées pour l'élève"
+
         try:
             from app.services.student_proficiency_service import BAC_COEFFICIENTS
+            from app.services.subject_access_service import canonical_subject_key
+
+            allowed_coefficient_keys = {canonical_subject_key(value) for value in allowed_subjects}
             coef_lines = []
             for subj in ("Mathematiques", "Physique", "Chimie", "SVT"):
-                coef_lines.append(f"- {subj}: coefficient {BAC_COEFFICIENTS[subj]}")
+                if not allowed_subjects or canonical_subject_key(subj) in allowed_coefficient_keys:
+                    coef_lines.append(f"- {subj}: coefficient {BAC_COEFFICIENTS[subj]}")
             coefficients_block = (
                 "[COEFFICIENTS OFFICIELS — CADRE DE RÉFÉRENCE BAC 2BAC SC PHYSIQUES BIOF]\n"
                 + "\n".join(coef_lines)
@@ -2239,6 +2248,7 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
             language=language,
             student_name=student_name,
             proficiency=proficiency,
+            allowed_subjects=allowed_subjects_label,
             rag_context=rag_section,
             ui_control=UI_CONTROL_PROMPT,
             current_date=date.today().strftime("%d/%m/%Y"),

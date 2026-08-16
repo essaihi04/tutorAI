@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './stores/authStore';
+import { useLearningContextStore } from './stores/learningContextStore';
 
 // ── Eagerly loaded (landing / auth — needed on first paint) ──
 import Landing from './pages/Landing';
@@ -38,7 +39,17 @@ function PageLoader() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+  const studentId = useAuthStore((s) => s.student?.id || 'authenticated-student');
+  const loadLearningContext = useLearningContextStore((s) => s.load);
+  const readyForStudentId = useLearningContextStore((s) => s.readyForStudentId);
+
+  useEffect(() => {
+    if (isAuthenticated) void loadLearningContext(studentId);
+  }, [isAuthenticated, loadLearningContext, studentId]);
+
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (readyForStudentId !== studentId) return <PageLoader />;
+  return <>{children}</>;
 }
 
 export default function App() {
