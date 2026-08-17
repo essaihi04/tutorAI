@@ -141,3 +141,117 @@ def test_une_decision_absurde_ne_casse_rien():
     directive = composer({"recommendation": 42, "topic": None, "session_type": []})
     assert isinstance(directive, Directive)
     assert directive.mode == "cours"
+
+
+# ── Les critères de sortie ────────────────────────────────────────
+
+from app.services.scenario_service import CRITERES, Progression, consigne_de_mode
+
+
+def _suite(progression, resultats):
+    """Joue une suite de réponses et renvoie les transitions déclenchées."""
+    return [t for r in resultats if (t := progression.enregistrer(r))]
+
+
+def test_deux_reussites_font_passer_du_cours_a_l_exercice():
+    p = Progression("cours")
+    assert p.enregistrer(True) is None
+    transition = p.enregistrer(True)
+    assert transition.mode == "exercice"
+    assert transition.raison
+
+
+def test_trois_reussites_font_passer_de_l_exercice_a_l_examen():
+    p = Progression("exercice")
+    assert _suite(p, [True, True]) == []
+    assert p.enregistrer(True).mode == "examen"
+
+
+def test_la_maitrise_doit_etre_CONSECUTIVE():
+    """Trois bonnes réponses sur dix ne valent pas trois d'affilée. Traiter
+    les deux pareil ferait passer en examen un élève qui alterne au hasard."""
+    p = Progression("exercice")
+    assert _suite(p, [True, True, False, True, True]) == []
+    assert p.mode == "exercice"
+
+
+def test_une_erreur_isolee_ne_fait_pas_reculer():
+    """Un faux pas est une inattention ; reculer dessus serait humiliant."""
+    p = Progression("exercice")
+    assert p.enregistrer(False) is None
+    assert p.mode == "exercice"
+
+
+def test_deux_echecs_de_suite_ramenent_au_cours():
+    p = Progression("exercice")
+    p.enregistrer(False)
+    transition = p.enregistrer(False)
+    assert transition.mode == "cours"
+    assert "reprend" in transition.raison.lower()
+
+
+def test_une_reussite_annule_la_serie_d_echecs():
+    p = Progression("exercice")
+    assert _suite(p, [False, True, False]) == []
+    assert p.mode == "exercice"
+
+
+def test_les_compteurs_repartent_a_zero_apres_une_transition():
+    """Sinon l'élève traverserait trois modes sur une seule bonne réponse."""
+    p = Progression("cours")
+    _suite(p, [True, True])          # → exercice
+    assert p.mode == "exercice"
+    assert _suite(p, [True, True]) == []   # il en faut trois, pas une
+    assert p.enregistrer(True).mode == "examen"
+
+
+def test_aucune_preuve_ne_fait_sortir_d_un_examen():
+    """Une épreuve chronométrée ne s'interrompt pas sur une bonne réponse —
+    ni sur une mauvaise. Seul l'élève, ou la fin du sujet."""
+    p = Progression("examen")
+    assert _suite(p, [True, True, True, True, False, False, False]) == []
+    assert p.mode == "examen"
+
+
+def test_une_question_libre_n_est_pas_une_etape():
+    p = Progression("question")
+    assert _suite(p, [True, True, True]) == []
+    assert p.mode == "question"
+
+
+def test_un_mode_inconnu_retombe_sur_le_cours():
+    assert Progression("n'importe quoi").mode == "cours"
+
+
+def test_le_parcours_complet_d_une_seance():
+    """Cours → exercice → examen, sur des preuves uniquement."""
+    p = Progression("cours")
+    transitions = _suite(p, [True, True, True, True, True])
+    assert [t.mode for t in transitions] == ["exercice", "examen"]
+
+
+def test_chaque_mode_avec_critere_sait_ou_il_va():
+    for mode, critere in CRITERES.items():
+        assert critere.vers, mode
+        assert critere.motif_avance, mode
+        if critere.apres_echecs:
+            assert critere.retour and critere.motif_recul, mode
+
+
+# ── La consigne qui remplace le scénario ──────────────────────────
+
+def test_la_consigne_suit_le_nouveau_mode():
+    """Laisser le scénario d'ouverture ferait redémarrer le tuteur sur une
+    étape déjà franchie."""
+    assert "exercices" in consigne_de_mode("exercice", "les limites")
+    assert "chronomètre" in consigne_de_mode("examen")
+    assert "les limites" in consigne_de_mode("exercice", "les limites")
+
+
+def test_le_retour_au_cours_dit_de_ne_pas_repeter():
+    consigne = consigne_de_mode("cours", "les limites")
+    assert "autrement" in consigne
+
+
+def test_une_question_libre_n_a_pas_de_consigne():
+    assert consigne_de_mode("question") == ""

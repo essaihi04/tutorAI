@@ -23,9 +23,9 @@ Deux disciplines reprises du briefing, pour les mêmes raisons :
   * ne lève jamais — un scénario absent laisse un tuteur qui enseigne
     normalement, une exception laisse un élève devant un écran vide.
 
-Ce qui MANQUE encore, et qui viendra avec la table de scénarios : les
-critères de sortie (« passe à l'exercice quand il reformule juste »). Pour
-l'instant le scénario dit quoi faire et pourquoi, pas quand s'arrêter.
+`Progression`, plus bas, ajoute le « quand s'arrêter » : le mode ne change
+plus sur l'humeur du modèle mais sur une PREUVE — une réponse juste, une
+erreur répétée.
 """
 from __future__ import annotations
 
@@ -151,6 +151,132 @@ def composer(decision: Optional[dict], budget: int = BUDGET_CARACTERES) -> Direc
         mode=mode,
         sujet=entete or sujet,
         recommandation=recommandation,
+    )
+
+
+# ── Les critères de sortie ────────────────────────────────────────
+
+@dataclass(frozen=True)
+class Critere:
+    """Ce qu'il faut prouver pour quitter un mode.
+
+    `apres_reussites` compte des réussites CONSÉCUTIVES, jamais un total :
+    trois bonnes réponses sur dix ne valent pas trois d'affilée, et traiter
+    les deux pareil ferait passer en examen un élève qui alterne au hasard.
+    """
+
+    apres_reussites: int = 0
+    vers: str = ""
+    motif_avance: str = ""
+    #: Deux échecs, pas un : une erreur isolée est une inattention, deux de
+    #: suite sont un trou. Reculer au premier faux pas rendrait le tuteur
+    #: instable et humiliant.
+    apres_echecs: int = 0
+    retour: str = ""
+    motif_recul: str = ""
+
+
+#: La table de scénarios : ce qui fait sortir de chaque mode.
+#:
+#: `examen` n'y figure pas, et c'est délibéré — une épreuve chronométrée ne
+#: s'interrompt ni sur une bonne réponse ni sur une mauvaise. Seul l'élève,
+#: ou la fin du sujet, en sort (cf. session_mode). `question` non plus : une
+#: parenthèse n'a pas de critère de réussite.
+CRITERES: dict[str, Critere] = {
+    "cours": Critere(
+        apres_reussites=2,
+        vers="exercice",
+        motif_avance="Tu as compris — on passe à la pratique.",
+    ),
+    "exercice": Critere(
+        apres_reussites=3,
+        vers="examen",
+        motif_avance="Trois réussites d'affilée : on passe en conditions d'examen.",
+        apres_echecs=2,
+        retour="cours",
+        motif_recul="On reprend la notion : deux erreurs de suite.",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class Transition:
+    mode: str
+    #: Montré à l'élève. Un changement non expliqué est vécu comme un bug.
+    raison: str
+
+
+class Progression:
+    """Compte les preuves et décide quand le mode doit changer.
+
+    Volontairement sans base de données ni horloge : une séance se raconte
+    par la suite des réponses, et rien d'autre. C'est ce qui rend la règle
+    testable en trois lignes.
+    """
+
+    def __init__(self, mode: str = "cours"):
+        self.mode = mode if mode in ("cours", "exercice", "examen", "question") else "cours"
+        self.reussites = 0
+        self.echecs = 0
+
+    def _basculer(self, vers: str, raison: str) -> Transition:
+        self.mode = vers
+        # Les compteurs repartent de zéro : sans ça, les réussites accumulées
+        # en cours feraient franchir l'étape suivante immédiatement, et
+        # l'élève traverserait trois modes sur une seule bonne réponse.
+        self.reussites = 0
+        self.echecs = 0
+        return Transition(mode=vers, raison=raison)
+
+    def enregistrer(self, reussite: bool) -> Optional[Transition]:
+        """Prend une preuve, renvoie la transition qu'elle déclenche — ou None.
+
+        None est le cas normal : la plupart des réponses ne changent rien.
+        """
+        critere = CRITERES.get(self.mode)
+        if critere is None:
+            # Examen et question : aucune preuve ne fait sortir d'ici.
+            return None
+
+        if reussite:
+            self.echecs = 0
+            self.reussites += 1
+            if critere.apres_reussites and self.reussites >= critere.apres_reussites:
+                return self._basculer(critere.vers, critere.motif_avance)
+            return None
+
+        # Un échec annule la série en cours : la maîtrise doit être continue.
+        self.reussites = 0
+        self.echecs += 1
+        if critere.apres_echecs and self.echecs >= critere.apres_echecs:
+            return self._basculer(critere.retour, critere.motif_recul)
+        return None
+
+
+def consigne_de_mode(mode: str, sujet: str = "") -> str:
+    """La consigne qui remplace le scénario après une transition.
+
+    Le scénario d'ouverture parlait d'une situation qui n'existe plus — le
+    laisser en place ferait redémarrer le tuteur sur l'ancienne étape.
+    """
+    quoi = f" sur {sujet}" if sujet else ""
+    if mode == "exercice":
+        return (
+            f"À travailler maintenant : des exercices{quoi}.\n"
+            "Laisse-le chercher seul, donne un indice avant la réponse, "
+            "corrige sa méthode plutôt que son résultat."
+        )
+    if mode == "examen":
+        return (
+            f"À travailler maintenant : un sujet complet{quoi}.\n"
+            "Conditions réelles : chronomètre, aucun indice, note sur 20 à la fin."
+        )
+    if mode == "question":
+        return ""
+    return (
+        f"À travailler maintenant : la notion{quoi}.\n"
+        "Reprends l'explication autrement — la précédente n'a pas suffi. "
+        "Vérifie chaque étape avant de continuer."
     )
 
 

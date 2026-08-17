@@ -19,6 +19,7 @@ from app.services.session_progress_service import session_progress_service
 from app.services.lesson_phase import PhaseLesson
 from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
+from app.services.scenario_service import Progression
 from app.services import tag_decoder
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
@@ -719,6 +720,10 @@ class SessionHandler:
         # le choisit pas — sinon deux élèves identiques reçoivent deux
         # parcours différents.
         self.scenario: str = ""
+        #: Sur quoi porte la séance, pour réécrire la consigne après une étape.
+        self.scenario_sujet: str = ""
+        #: Compte les preuves et décide des changements d'étape.
+        self._progression = Progression()
         self._resume_proficiency: Optional[dict] = None
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
@@ -1579,6 +1584,7 @@ class SessionHandler:
             precedent = self._mode.courant
             nouveau = self._mode.demander(demande, par="eleve")
             if nouveau:
+                self._adopter_mode(nouveau)
                 await self.websocket.send_json({
                     "type": "mode_changed",
                     "mode": nouveau,
@@ -1650,6 +1656,12 @@ class SessionHandler:
 
             _safe_log(f"[ExamAnswer] Recorded: subject={subject} topic={topic} "
                       f"type={question_type} correct={is_correct} score={score}/{max_points}")
+
+            # Une réponse du panneau est une preuve PLUS SÛRE que celle
+            # devinée dans le chat : le QCM et le vrai/faux sont évalués
+            # mécaniquement. Elle compte donc pour la progression au même
+            # titre — en examen, la progression n'agit pas de toute façon.
+            await self._enregistrer_preuve(bool(is_correct))
         except Exception as e:
             _safe_log(f"[ExamAnswer] Error: {e}")
 
@@ -1731,6 +1743,10 @@ class SessionHandler:
             )
             _safe_log(f"[ChatDetect] Recorded chat answer: subject={subject} "
                       f"correct={is_correct and not is_wrong} mode={self.session_mode}")
+
+            # La même preuve nourrit la progression : c'est elle qui décide
+            # si la séance doit changer d'étape.
+            await self._enregistrer_preuve(is_correct and not is_wrong)
 
             # ── AUTO-ADVANCE PROGRESS BAR ──
             # In coaching mode, advance objective after correct answers
@@ -2677,6 +2693,7 @@ RÈGLES:
                 self.student_id, resume_proficiency=self._resume_proficiency
             )
             self.scenario = directive.texte
+            self.scenario_sujet = directive.sujet
 
             # Le moteur choisit le mode UNIQUEMENT quand l'élève n'a rien
             # demandé de précis. S'il a ouvert un chapitre, c'est son choix
@@ -2688,6 +2705,12 @@ RÈGLES:
         except Exception as exc:
             _safe_log(f"[Session Init] Scénario indisponible: {exc}")
             self.scenario = ""
+            self.scenario_sujet = ""
+
+        # La progression compte à partir du mode réellement adopté : la faire
+        # démarrer ailleurs lui ferait appliquer les critères d'une étape que
+        # l'élève n'a pas commencée.
+        self._progression = Progression(self._mode.courant)
 
         # Nouvelle session : on repart d'un état neuf plutôt que de corriger
         # l'ancien. Le mode libre n'a pas de progression — « libre » est un
@@ -3525,6 +3548,70 @@ RÈGLES :
             titre = "Cours en direct"
         return titre, normalized
 
+    def _adopter_mode(self, nouveau: str) -> None:
+        """Aligne la séance sur le mode qui vient d'être adopté.
+
+        Deux choses doivent suivre TOUT changement de mode, d'où qu'il vienne
+        — progression, balise `<mode>` du tuteur, ou demande de l'élève :
+
+          * la consigne. Le scénario d'ouverture décrivait une étape franchie ;
+            le laisser en place ferait redémarrer le tuteur dessus.
+          * les compteurs. Repartir de zéro évite qu'une série accumulée dans
+            l'étape précédente fasse franchir la suivante immédiatement.
+        """
+        try:
+            from app.services.scenario_service import consigne_de_mode
+
+            self.scenario = consigne_de_mode(nouveau, self.scenario_sujet)
+        except Exception as exc:
+            _safe_log(f"[Mode] consigne indisponible: {exc}")
+        self._progression = Progression(nouveau)
+
+    async def _enregistrer_preuve(self, reussite: bool) -> Optional[str]:
+        """Une réponse évaluée entre dans la progression, qui peut faire
+        changer d'étape.
+
+        C'est la différence entre un tuteur qui démarre bien et un tuteur qui
+        fait progresser : le mode ne bouge plus quand le modèle en a envie,
+        mais quand l'élève a PROUVÉ quelque chose — deux réussites d'affilée
+        pour passer à la pratique, deux erreurs de suite pour revenir sur la
+        notion.
+
+        Renvoie le nouveau mode, ou None — le cas de loin le plus fréquent.
+        """
+        progression = getattr(self, "_progression", None)
+        if progression is None:
+            return None
+
+        transition = progression.enregistrer(bool(reussite))
+        if transition is None:
+            return None
+
+        precedent = self._mode.courant
+        nouveau = self._mode.demander(transition.mode, par="tuteur")
+        if not nouveau:
+            # Refus légitime : on ne sort pas d'un examen sur une réponse.
+            # La progression, elle, a déjà pris acte — on la remet d'accord
+            # avec la session pour qu'elle ne recompte pas depuis un état
+            # imaginaire.
+            progression.mode = precedent
+            _safe_log(f"[Progression] transition {transition.mode} refusée depuis {precedent}")
+            return None
+
+        self._adopter_mode(nouveau)
+        _safe_log(f"[Progression] {precedent} → {nouveau} ({transition.raison})")
+        try:
+            await self.websocket.send_json({
+                "type": "mode_changed",
+                "mode": nouveau,
+                "previous": precedent,
+                "reason": transition.raison,
+                "phase": self.current_phase,
+            })
+        except Exception as exc:
+            _safe_log(f"[Progression] notification impossible: {exc}")
+        return nouveau
+
     async def _appliquer_mode_demande(self, ai_response: str) -> Optional[str]:
         """Exécute le ``<mode>`` de la réponse, s'il y en a un de valide.
 
@@ -3558,6 +3645,7 @@ RÈGLES :
             _safe_log(f"[Mode] refusé: {precedent} → {demande}")
             return None
 
+        self._adopter_mode(nouveau)
         _safe_log(f"[Mode] {precedent} → {nouveau} ({motif or 'sans raison donnée'})")
         try:
             await self.websocket.send_json({
