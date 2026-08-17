@@ -167,12 +167,52 @@ def test_trois_reussites_font_passer_de_l_exercice_a_l_examen():
     assert p.enregistrer(True).mode == "examen"
 
 
-def test_la_maitrise_doit_etre_CONSECUTIVE():
-    """Trois bonnes réponses sur dix ne valent pas trois d'affilée. Traiter
-    les deux pareil ferait passer en examen un élève qui alterne au hasard."""
+def test_un_eleve_qui_alterne_au_hasard_ne_passe_pas_en_examen():
+    """Répondre juste une fois sur deux n'est pas maîtriser. C'était la
+    raison d'être de la règle « consécutive » ; le modèle la conserve, mais
+    sans son effet de bord."""
     p = Progression("exercice")
-    assert _suite(p, [True, True, False, True, True]) == []
+    assert _suite(p, [True, False] * 5) == []
     assert p.mode == "exercice"
+
+
+def test_une_erreur_precoce_n_efface_plus_quatre_reussites():
+    """Ce que le comptage consécutif ratait : il remettait tout à zéro au
+    premier faux pas, donc quatre réussites sur cinq ne valaient rien. Le
+    crédit est maintenant GRADUÉ — c'est le gain du modèle, pas un
+    relâchement."""
+    p = Progression("exercice")
+    transitions = _suite(p, [True, True, False, True, True])
+    assert [t.mode for t in transitions] == ["examen"]
+
+
+def test_la_maitrise_estimee_est_lisible():
+    """Le modèle doit rester inspectable : quand il se trompe, on veut
+    pouvoir lire pourquoi."""
+    p = Progression("exercice")
+    assert p.maitrise == pytest.approx(0.25)
+    p.enregistrer(True)
+    assert 0.6 < p.maitrise < 0.7
+
+
+def test_deux_sujets_ne_partagent_pas_leur_maitrise():
+    """Sans ça, l'alternance ferait passer en examen un élève sur un
+    chapitre qu'il vient d'ouvrir."""
+    p = Progression("exercice", "Limites")
+    _suite(p, [True, True])
+    p.sujet = "Dérivées"
+    assert p.maitrise == pytest.approx(0.25)
+
+
+def test_ce_qui_est_prouve_survit_au_changement_d_etape():
+    """La maîtrise est une connaissance de l'élève, pas un compteur de
+    séance : revenir au cours ne l'efface pas."""
+    p = Progression("cours", "Limites")
+    _suite(p, [True, True])          # cours → exercice
+    acquis = p.suivi.pour("Limites", "cours").p
+
+    p.mode, p.sujet = "cours", "Limites"
+    assert p.maitrise == pytest.approx(acquis)
 
 
 def test_une_erreur_isolee_ne_fait_pas_reculer():

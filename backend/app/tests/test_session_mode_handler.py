@@ -22,12 +22,23 @@ class FauxWebSocket:
 
 
 def _handler() -> SessionHandler:
+    """Un handler réduit à ce que ces tests exercent.
+
+    Les attributs posés ici sont ceux que `__init__` garantit toujours en
+    production : les omettre ferait échouer les tests pour une raison qui
+    n'existe pas dans l'application.
+    """
+    from app.services.lesson_phase import PhaseLesson
+    from app.services.scenario_service import Alternance, Progression
+
     handler = SessionHandler.__new__(SessionHandler)
     handler.websocket = FauxWebSocket()
     handler._mode = ModeSession("cours")
-    from app.services.lesson_phase import PhaseLesson
-
     handler._phase = PhaseLesson("application")
+    handler.scenario = ""
+    handler.scenario_sujet = ""
+    handler._progression = Progression("cours")
+    handler._alternance = Alternance()
     return handler
 
 
@@ -275,3 +286,37 @@ def test_la_regle_du_cahier_accompagne_chaque_etape():
     asyncio.run(handler._enregistrer_preuve(True))
     asyncio.run(handler._enregistrer_preuve(True))
     assert "ATTENDS" in handler.scenario
+
+
+def test_la_preuve_est_creditee_au_sujet_travaille_pas_au_suivant():
+    """L'alternance change le sujet du PROCHAIN exercice. Créditer la réponse
+    qui vient d'arriver au nouveau sujet ferait progresser l'élève sur un
+    chapitre qu'il n'a pas encore vu."""
+    handler = _handler_en_seance("exercice")
+    handler.scenario_sujet = "Limites"
+    handler._progression = Progression("exercice", "Limites")
+    handler._alternance = Alternance("Limites", ["Dérivées"])
+
+    for resultat in (True, True, False):
+        asyncio.run(handler._enregistrer_preuve(resultat))
+
+    assert handler.scenario_sujet == "Dérivées"
+    assert handler._progression.sujet == "Dérivées"
+    # Les trois réponses sont allées sur Limites, pas sur Dérivées.
+    assert handler._progression.suivi.pour("Limites", "exercice").observations == 3
+    assert handler._progression.suivi.pour("Dérivées", "exercice").observations == 0
+
+
+def test_la_maitrise_survit_a_un_aller_retour_de_mode():
+    """Ce que l'élève a prouvé en cours reste vrai quand il y revient."""
+    handler = _handler_en_seance("cours")
+    handler.scenario_sujet = "Limites"
+    handler._progression = Progression("cours", "Limites")
+
+    asyncio.run(handler._enregistrer_preuve(True))
+    acquis = handler._progression.suivi.pour("Limites", "cours").p
+
+    asyncio.run(handler._appliquer_mode_demande('<mode>{"mode":"question"}</mode>'))
+    asyncio.run(handler._appliquer_mode_demande('<mode>{"mode":"cours"}</mode>'))
+
+    assert handler._progression.maitrise == acquis

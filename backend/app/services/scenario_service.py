@@ -33,6 +33,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from app.services.knowledge_tracing import SuiviMaitrise
 from app.services.session_mode import mode_pour_seance
 
 _log = logging.getLogger(__name__)
@@ -184,12 +185,23 @@ def composer(
 class Critere:
     """Ce qu'il faut prouver pour quitter un mode.
 
-    `apres_reussites` compte des réussites CONSÉCUTIVES, jamais un total :
-    trois bonnes réponses sur dix ne valent pas trois d'affilée, et traiter
-    les deux pareil ferait passer en examen un élève qui alterne au hasard.
+    **Avancer et reculer ne se mesurent pas de la même façon**, et c'est une
+    décision, pas une inconséquence.
+
+    Avancer répond à « qu'est-ce qu'il SAIT ? » — une question sur des
+    connaissances accumulées, à laquelle le BKT répond en tenant compte de la
+    chance et de l'étourderie. D'où un seuil de probabilité, pas un compteur :
+    trois QCM réussis au hasard ne valent pas trois maîtrises.
+
+    Reculer répond à « est-il bloqué MAINTENANT ? » — une question sur
+    l'instant, pas sur le cumul. Le BKT y répond mal par construction : son
+    terme d'apprentissage l'empêche de chuter vite, parce qu'il suppose que
+    l'enseignement sert à quelque chose. Deux échecs de suite le disent
+    mieux, et tout de suite.
     """
 
-    apres_reussites: int = 0
+    #: Probabilité de maîtrise à atteindre pour passer à l'étape suivante.
+    seuil_maitrise: float = 0.0
     vers: str = ""
     motif_avance: str = ""
     #: Deux échecs, pas un : une erreur isolée est une inattention, deux de
@@ -206,16 +218,21 @@ class Critere:
 #: s'interrompt ni sur une bonne réponse ni sur une mauvaise. Seul l'élève,
 #: ou la fin du sujet, en sort (cf. session_mode). `question` non plus : une
 #: parenthèse n'a pas de critère de réussite.
+#: Les seuils sont ceux de la littérature sur le BKT : 0,85 pour « il a
+#: compris », 0,95 pour « il est prêt à être évalué ». Avec les paramètres
+#: par défaut, ils se franchissent en deux et trois bonnes réponses — soit
+#: exactement les seuils empiriques utilisés avant le modèle. Concordance
+#: rassurante sur les deux.
 CRITERES: dict[str, Critere] = {
     "cours": Critere(
-        apres_reussites=2,
+        seuil_maitrise=0.85,
         vers="exercice",
         motif_avance="Tu as compris — on passe à la pratique.",
     ),
     "exercice": Critere(
-        apres_reussites=3,
+        seuil_maitrise=0.95,
         vers="examen",
-        motif_avance="Trois réussites d'affilée : on passe en conditions d'examen.",
+        motif_avance="Tu maîtrises : on passe en conditions d'examen.",
         apres_echecs=2,
         retour="cours",
         motif_recul="On reprend la notion : deux erreurs de suite.",
@@ -231,24 +248,47 @@ class Transition:
 
 
 class Progression:
-    """Compte les preuves et décide quand le mode doit changer.
+    """Estime la maîtrise et décide quand le mode doit changer.
 
     Volontairement sans base de données ni horloge : une séance se raconte
     par la suite des réponses, et rien d'autre. C'est ce qui rend la règle
     testable en trois lignes.
+
+    L'estimation est portée par `SuiviMaitrise`, une par couple (sujet,
+    mode) : avoir compris une explication et savoir l'appliquer sont deux
+    apprentissages distincts, et les confondre ferait passer en examen un
+    élève qui a seulement suivi le cours.
     """
 
-    def __init__(self, mode: str = "cours"):
+    def __init__(self, mode: str = "cours", sujet: str = "",
+                 suivi: Optional[SuiviMaitrise] = None):
         self.mode = mode if mode in ("cours", "exercice", "examen", "question") else "cours"
-        self.reussites = 0
+        self.sujet = sujet
+        # Le suivi survit aux changements de mode : ce qu'un élève a prouvé
+        # en cours reste vrai quand il revient au cours plus tard.
+        self.suivi = suivi if suivi is not None else SuiviMaitrise()
         self.echecs = 0
+
+    @property
+    def maitrise(self) -> float:
+        """La probabilité de maîtrise sur ce que l'élève travaille là."""
+        return self.suivi.pour(self.sujet, self.mode).p
+
+    @property
+    def reussites(self) -> int:
+        """Nombre d'observations sur la compétence courante.
+
+        Gardé pour les journaux et l'affichage : la décision, elle, ne
+        s'appuie plus sur un comptage.
+        """
+        return self.suivi.pour(self.sujet, self.mode).observations
 
     def _basculer(self, vers: str, raison: str) -> Transition:
         self.mode = vers
-        # Les compteurs repartent de zéro : sans ça, les réussites accumulées
-        # en cours feraient franchir l'étape suivante immédiatement, et
-        # l'élève traverserait trois modes sur une seule bonne réponse.
-        self.reussites = 0
+        # La série d'échecs repart de zéro : elle décrit un blocage sur
+        # l'étape qu'on vient de quitter. L'estimation de maîtrise, elle,
+        # est conservée — c'est une connaissance, pas un compteur de séance,
+        # et la nouvelle étape est de toute façon une autre compétence.
         self.echecs = 0
         return Transition(mode=vers, raison=raison)
 
@@ -262,15 +302,15 @@ class Progression:
             # Examen et question : aucune preuve ne fait sortir d'ici.
             return None
 
+        competence = self.suivi.pour(self.sujet, self.mode)
+        competence.observer(bool(reussite))
+
         if reussite:
             self.echecs = 0
-            self.reussites += 1
-            if critere.apres_reussites and self.reussites >= critere.apres_reussites:
+            if critere.seuil_maitrise and competence.acquise(critere.seuil_maitrise):
                 return self._basculer(critere.vers, critere.motif_avance)
             return None
 
-        # Un échec annule la série en cours : la maîtrise doit être continue.
-        self.reussites = 0
         self.echecs += 1
         if critere.apres_echecs and self.echecs >= critere.apres_echecs:
             return self._basculer(critere.retour, critere.motif_recul)

@@ -2714,7 +2714,7 @@ RÈGLES:
         # La progression compte à partir du mode réellement adopté : la faire
         # démarrer ailleurs lui ferait appliquer les critères d'une étape que
         # l'élève n'a pas commencée.
-        self._progression = Progression(self._mode.courant)
+        self._progression = Progression(self._mode.courant, self.scenario_sujet)
         self._alternance = Alternance(
             self.scenario_sujet, list(getattr(self, "_scenario_alternatives", ()))
         )
@@ -3581,7 +3581,12 @@ RÈGLES :
         tuteur a changé d'exercice serait une punition sans motif.
         """
         self._adopter_consigne(nouveau)
-        self._progression = Progression(nouveau)
+        # Le suivi de maîtrise est CONSERVÉ à travers les étapes : c'est une
+        # connaissance de l'élève, pas un compteur de séance. Ce qu'il a
+        # prouvé en cours reste vrai s'il y revient.
+        self._progression = Progression(
+            nouveau, self.scenario_sujet, suivi=self._progression.suivi
+        )
 
     def _alterner_si_besoin(self) -> Optional[str]:
         """Fait tourner le sujet des exercices après quelques répétitions.
@@ -3602,6 +3607,10 @@ RÈGLES :
             return None
 
         self.scenario_sujet = suivant
+        # La maîtrise est estimée PAR SUJET : sans cette ligne, les réponses
+        # sur le nouveau sujet iraient créditer l'ancien, et l'élève
+        # passerait en examen sur un chapitre qu'il vient d'ouvrir.
+        self._progression.sujet = suivant
         self._adopter_consigne("exercice")
         _safe_log(f"[Alternance] on passe à {suivant}")
         return suivant
@@ -3622,14 +3631,19 @@ RÈGLES :
         if progression is None:
             return None
 
-        # L'alternance ne compte que les EXERCICES : elle porte sur la
-        # sélection des problèmes, pas sur l'explication. Alterner pendant
-        # qu'on installe une notion l'empêcherait au lieu de la consolider.
-        if self._mode.courant == "exercice":
-            self._alterner_si_besoin()
-
+        # La preuve est attribuée AVANT toute alternance : elle porte sur
+        # l'exercice qui vient d'être résolu, donc sur le sujet courant.
+        # Alterner d'abord créditerait la réponse au sujet suivant, que
+        # l'élève n'a pas encore vu.
         transition = progression.enregistrer(bool(reussite))
+
         if transition is None:
+            # L'alternance ne concerne que les EXERCICES : elle porte sur la
+            # sélection des problèmes, pas sur l'explication. Alterner
+            # pendant qu'on installe une notion l'empêcherait au lieu de la
+            # consolider.
+            if self._mode.courant == "exercice":
+                self._alterner_si_besoin()
             return None
 
         precedent = self._mode.courant
