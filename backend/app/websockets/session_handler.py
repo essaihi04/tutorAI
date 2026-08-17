@@ -20,6 +20,7 @@ from app.services.lesson_phase import PhaseLesson
 from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
 from app.services.scenario_service import Alternance, Progression
+from app.services.teaching_tactics import BanditTactiques, marquer_source
 from app.services import tag_decoder
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
@@ -726,6 +727,10 @@ class SessionHandler:
         self._progression = Progression()
         #: Fait tourner les sujets d'exercice (alternance / interleaving).
         self._alternance = Alternance()
+        #: Apprend quelle façon d'expliquer marche pour CET élève.
+        self._bandit = BanditTactiques()
+        self._tactique_en_cours: Optional[str] = None
+        self._tactique_echouee: Optional[str] = None
         self._resume_proficiency: Optional[dict] = None
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
@@ -1741,7 +1746,13 @@ class SessionHandler:
                 question_type="open",
                 score=1.0 if (is_correct and not is_wrong) else 0.0,
                 max_score=1.0,
-                source="chat_" + self.session_mode,
+                # La tactique employée voyage avec la réponse : c'est ce qui
+                # permet au bandit de se reconstruire à la séance suivante,
+                # sans nouvelle table (`source` est du texte libre).
+                source=marquer_source(
+                    "chat_" + self.session_mode,
+                    getattr(self, "_tactique_en_cours", None),
+                ),
             )
             _safe_log(f"[ChatDetect] Recorded chat answer: subject={subject} "
                       f"correct={is_correct and not is_wrong} mode={self.session_mode}")
@@ -2714,6 +2725,22 @@ RÈGLES:
         # La progression compte à partir du mode réellement adopté : la faire
         # démarrer ailleurs lui ferait appliquer les critères d'une étape que
         # l'élève n'a pas commencée.
+        # Ce que l'élève a montré les séances précédentes compte autant
+        # qu'aujourd'hui : sans cette relecture, le bandit repartirait de
+        # zéro à chaque connexion et passerait sa vie à explorer.
+        try:
+            from app.services.teaching_tactics import depuis_historique
+
+            self._bandit = depuis_historique(await self._historique_tactiques())
+            classement = self._bandit.classement()
+            if classement:
+                _safe_log(f"[Tactique] historique: {classement}")
+        except Exception as exc:
+            _safe_log(f"[Tactique] historique indisponible: {exc}")
+            self._bandit = BanditTactiques()
+        self._tactique_en_cours = None
+        self._tactique_echouee = None
+
         self._progression = Progression(self._mode.courant, self.scenario_sujet)
         self._alternance = Alternance(
             self.scenario_sujet, list(getattr(self, "_scenario_alternatives", ()))
@@ -3565,9 +3592,33 @@ RÈGLES :
         try:
             from app.services.scenario_service import consigne_de_mode
 
-            self.scenario = consigne_de_mode(mode, self.scenario_sujet)
+            self.scenario = consigne_de_mode(
+                mode, self.scenario_sujet, self._consigne_tactique(mode)
+            )
         except Exception as exc:
             _safe_log(f"[Mode] consigne indisponible: {exc}")
+
+    def _consigne_tactique(self, mode: str) -> str:
+        """Choisit COMMENT expliquer, et retient le choix pour l'évaluer.
+
+        Uniquement en mode cours : c'est là qu'on explique. En exercice,
+        imposer une forme de raisonnement reviendrait à souffler à l'élève la
+        méthode qu'on lui demande justement de choisir.
+        """
+        if mode != "cours":
+            self._tactique_en_cours = None
+            return ""
+
+        bandit = getattr(self, "_bandit", None)
+        if bandit is None:
+            return ""
+
+        # On exclut la tactique qui vient d'échouer : réexpliquer
+        # « autrement » est le principe même du retour au cours.
+        tactique = bandit.choisir(exclure=self._tactique_echouee)
+        self._tactique_en_cours = tactique.cle
+        _safe_log(f"[Tactique] {tactique.cle}")
+        return tactique.consigne
 
     def _adopter_mode(self, nouveau: str) -> None:
         """Aligne la séance sur le mode qui vient d'être adopté.
@@ -3587,6 +3638,38 @@ RÈGLES :
         self._progression = Progression(
             nouveau, self.scenario_sujet, suivi=self._progression.suivi
         )
+
+    async def _historique_tactiques(self) -> list:
+        """Les réponses passées qui portent une tactique.
+
+        Requête étroite et bornée : deux colonnes, 200 lignes. On la paie une
+        fois à l'ouverture, pas à chaque tour.
+        """
+        from app.supabase_client import get_supabase_admin
+
+        resultat = get_supabase_admin().table("student_answer_history").select(
+            "source,is_correct"
+        ).eq("student_id", self.student_id).order(
+            "created_at", desc=True
+        ).limit(200).execute()
+        return resultat.data or []
+
+    def _recompenser_tactique(self, reussite: bool) -> None:
+        """Note la façon d'expliquer d'après ce que l'élève répond ensuite.
+
+        C'est tout l'apprentissage du bandit : on ne postule pas un « style »
+        d'élève, on mesure ce qui a marché pour lui.
+        """
+        tactique = getattr(self, "_tactique_en_cours", None)
+        bandit = getattr(self, "_bandit", None)
+        if not tactique or bandit is None:
+            return
+
+        bandit.recompenser(tactique, reussite)
+        # Retenue seulement en cas d'échec, pour ne pas la rejouer telle
+        # quelle à l'explication suivante.
+        self._tactique_echouee = None if reussite else tactique
+        self._tactique_en_cours = None
 
     def _alterner_si_besoin(self) -> Optional[str]:
         """Fait tourner le sujet des exercices après quelques répétitions.
@@ -3630,6 +3713,11 @@ RÈGLES :
         progression = getattr(self, "_progression", None)
         if progression is None:
             return None
+
+        # La tactique employée pour la dernière explication est jugée par
+        # cette réponse-ci. Récompenser AVANT de choisir la suivante, sinon
+        # le bandit noterait un choix qu'il n'a pas encore fait.
+        self._recompenser_tactique(bool(reussite))
 
         # La preuve est attribuée AVANT toute alternance : elle porte sur
         # l'exercice qui vient d'être résolu, donc sur le sujet courant.

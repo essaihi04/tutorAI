@@ -338,7 +338,7 @@ REGLE_CAHIER = (
 MODES_AVEC_CAHIER = ("cours", "exercice")
 
 
-def consigne_de_mode(mode: str, sujet: str = "") -> str:
+def consigne_de_mode(mode: str, sujet: str = "", tactique: str = "") -> str:
     """La consigne qui remplace le scénario après une transition.
 
     Le scénario d'ouverture parlait d'une situation qui n'existe plus — le
@@ -364,6 +364,12 @@ def consigne_de_mode(mode: str, sujet: str = "") -> str:
             "Reprends l'explication autrement — la précédente n'a pas suffi. "
             "Vérifie chaque étape avant de continuer."
         )
+
+    # La tactique ne vaut que pour l'explication : en exercice l'élève
+    # cherche, et lui imposer une forme de raisonnement reviendrait à lui
+    # souffler la méthode qu'on lui demande justement de choisir.
+    if tactique and mode == "cours":
+        base = f"{base}\n{tactique}"
 
     if mode in MODES_AVEC_CAHIER:
         return f"{base}\n{REGLE_CAHIER}"

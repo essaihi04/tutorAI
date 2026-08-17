@@ -30,6 +30,7 @@ def _handler() -> SessionHandler:
     """
     from app.services.lesson_phase import PhaseLesson
     from app.services.scenario_service import Alternance, Progression
+    from app.services.teaching_tactics import BanditTactiques
 
     handler = SessionHandler.__new__(SessionHandler)
     handler.websocket = FauxWebSocket()
@@ -39,6 +40,9 @@ def _handler() -> SessionHandler:
     handler.scenario_sujet = ""
     handler._progression = Progression("cours")
     handler._alternance = Alternance()
+    handler._bandit = BanditTactiques()
+    handler._tactique_en_cours = None
+    handler._tactique_echouee = None
     return handler
 
 
@@ -320,3 +324,83 @@ def test_la_maitrise_survit_a_un_aller_retour_de_mode():
     asyncio.run(handler._appliquer_mode_demande('<mode>{"mode":"cours"}</mode>'))
 
     assert handler._progression.maitrise == acquis
+
+
+# ── Le bandit de tactiques, une fois branché ──────────────────────
+
+from app.services.teaching_tactics import BanditTactiques, lire_tactique
+
+
+def test_la_tactique_entre_dans_la_consigne_du_cours():
+    handler = _handler_en_seance("cours")
+    handler._bandit = BanditTactiques()
+    handler._adopter_consigne("cours")
+
+    assert handler._tactique_en_cours is not None
+    assert len(handler.scenario.splitlines()) >= 4
+
+
+def test_aucune_tactique_pendant_les_exercices():
+    """Imposer une forme de raisonnement pendant qu'il cherche reviendrait à
+    lui souffler la méthode qu'on lui demande de choisir."""
+    handler = _handler_en_seance("exercice")
+    handler._bandit = BanditTactiques()
+    handler._adopter_consigne("exercice")
+
+    assert handler._tactique_en_cours is None
+
+
+def test_la_reponse_suivante_note_la_tactique():
+    handler = _handler_en_seance("cours")
+    handler._bandit = BanditTactiques()
+    handler._adopter_consigne("cours")
+    employee = handler._tactique_en_cours
+
+    asyncio.run(handler._enregistrer_preuve(True))
+
+    assert handler._bandit.classement() == [(employee, 1, 1)]
+    assert handler._tactique_en_cours is None
+
+
+def test_une_tactique_qui_echoue_n_est_pas_rejouee_telle_quelle():
+    handler = _handler_en_seance("cours")
+    handler._bandit = BanditTactiques()
+    handler._adopter_consigne("cours")
+    ratee = handler._tactique_en_cours
+
+    asyncio.run(handler._enregistrer_preuve(False))
+    assert handler._tactique_echouee == ratee
+
+    handler._adopter_consigne("cours")
+    assert handler._tactique_en_cours != ratee
+
+
+def test_une_reussite_libere_la_tactique():
+    """Elle a marché : rien n'interdit de la reprendre."""
+    handler = _handler_en_seance("cours")
+    handler._bandit = BanditTactiques()
+    handler._adopter_consigne("cours")
+
+    asyncio.run(handler._enregistrer_preuve(True))
+    assert handler._tactique_echouee is None
+
+
+def test_une_tactique_n_est_notee_qu_une_fois():
+    """Sans remise à zéro, une seule explication serait créditée par toutes
+    les réponses qui suivent."""
+    handler = _handler_en_seance("cours")
+    handler._bandit = BanditTactiques()
+    handler._adopter_consigne("cours")
+
+    asyncio.run(handler._enregistrer_preuve(True))
+    asyncio.run(handler._enregistrer_preuve(True))
+
+    assert handler._bandit.total_essais == 1
+
+
+def test_la_tactique_voyage_avec_la_reponse_enregistree():
+    """C'est ce qui permet au bandit de renaître à la séance suivante."""
+    from app.services.teaching_tactics import marquer_source
+
+    marquee = marquer_source("chat_coaching", "analogie")
+    assert lire_tactique(marquee) == "analogie"
