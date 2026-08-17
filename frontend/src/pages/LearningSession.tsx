@@ -17,6 +17,8 @@ import LessonProgressBar from '../components/session/LessonProgressBar';
 import PhaseProgress from '../components/session/PhaseProgress';
 import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
+import SessionModeBar from '../components/session/SessionModeBar';
+import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
 
 /* ------------------------------------------------------------------ */
 /*  Raccourcis — adaptés au mode Coaching et au mode Libre/Explain     */
@@ -223,7 +225,27 @@ function adaptExerciseToExamFormat(raw: any): ExamExercise {
 
 export default function LearningSession({ mode = 'standard' }: LearningSessionProps) {
   const { chapterId, lessonId } = useParams<{ chapterId: string; lessonId?: string }>();
-  const isLibre = mode === 'libre' || mode === 'explain';
+
+  // ── LE MODE D'OUVERTURE, ET LE MODE COURANT ──
+  //
+  // `mode` est la prop de route : elle décide COMMENT la session se connecte
+  // (avec ou sans chapitre) et ne bouge plus ensuite — une connexion établie
+  // ne se rejoue pas.
+  //
+  // `activeMode` est ce que l'élève fait MAINTENANT. C'est le serveur qui en
+  // décide, via `mode_changed` : le tuteur bascule de cours à exercice sans
+  // que personne ne change de page. C'est là toute la fusion — les trois
+  // anciennes routes étaient déjà ce même composant, seule l'URL différait.
+  const isLibreConnexion = mode === 'libre' || mode === 'explain';
+  const [activeMode, setActiveMode] = useState<TutorMode>(() => modeDepuisRoute(mode));
+  const [modeReason, setModeReason] = useState<string>('');
+  const isLibre = activeMode === 'question' || activeMode === 'examen';
+
+  const demanderMode = useCallback((cible: TutorMode) => {
+    // On PROPOSE. Le serveur tranche et répond `mode_changed` ; l'affichage
+    // attend cette confirmation (cf. SessionModeBar).
+    wsService.sendJson({ type: 'set_mode', mode: cible });
+  }, []);
   const navigate = useNavigate();
   const { token, student } = useAuthStore();
   const learningContext = useLearningContextStore((state) => state.context);
@@ -291,6 +313,19 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [isResumedSession, setIsResumedSession] = useState(false);
   const [showProgressBar, setShowProgressBar] = useState(false);
   const [lessonCompleted, setLessonCompleted] = useState(false);
+
+  // Le titre suit le mode COURANT : c'est le seul repère qui dit à l'élève ce
+  // qui se passe, maintenant qu'il ne change plus d'écran ni d'URL.
+  const titreSession =
+    activeMode === 'examen' ? 'Examen'
+    : activeMode === 'exercice' ? 'Exercices'
+    : activeMode === 'question' ? 'Tes questions'
+    : (lessonInfo?.title_fr || 'Cours');
+  const sousTitreSession =
+    activeMode === 'examen' ? 'Conditions réelles — chrono et note sur 20'
+    : activeMode === 'exercice' ? 'Cherche d’abord, le tuteur corrige ta méthode'
+    : activeMode === 'question' ? `Pose tes questions sur ${allowedSubjectNames.length === 1 ? allowedSubjectNames[0] : 'tes matières'}`
+    : (lessonInfo?.title_ar || subjectScopeLabel);
 
   // Quick-actions injection state
   const [injectedText, setInjectedText] = useState<string | undefined>(undefined);
@@ -428,7 +463,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   }, []);
 
   const initSession = async () => {
-    if (!token || (!chapterId && !isLibre)) {
+    // La connexion suit le mode d'OUVERTURE, pas le mode courant : basculer
+    // en « question » au milieu d'un cours ne doit pas faire croire qu'on n'a
+    // plus besoin du chapitre, ni relancer la session.
+    if (!token || (!chapterId && !isLibreConnexion)) {
       setIsLoading(false);
       return;
     }
@@ -443,7 +481,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     setError(null);
 
     try {
-      if (isLibre) {
+      if (isLibreConnexion) {
         // --- LIBRE / EXPLAIN MODE: no chapter/lesson, connect WS directly ---
         console.log(`[Session] ${mode} mode — setting up handlers then connecting`);
         setupWSHandlers();
@@ -912,6 +950,21 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     wsService.on('phase_changed', (data) => {
       setPhase(data.phase);
+    });
+
+    // Le tuteur vient de décider de ce que l'élève fait maintenant — ou le
+    // serveur confirme un clic de l'élève. Dans les deux cas c'est la SEULE
+    // source du mode affiché : le serveur refuse les demandes invalides et ne
+    // renvoie ce message que si la session a réellement changé d'état.
+    //
+    // Rien ne navigue. La phase de leçon revient inchangée dans le message,
+    // et c'est exactement le point : l'élève part poser une question, revient,
+    // et son cours l'attend là où il l'avait laissé.
+    wsService.on('mode_changed', (data) => {
+      if (!estUnMode(data?.mode)) return;
+      setActiveMode(data.mode);
+      setModeReason(typeof data.reason === 'string' ? data.reason : '');
+      if (typeof data.phase === 'string' && data.phase) setPhase(data.phase);
     });
 
     // Handle session initialization with progress data
@@ -1612,8 +1665,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               </svg>
             </button>
             <div className="min-w-0 flex-1">
-              <h1 className="text-xs font-semibold text-white/90 leading-tight truncate">{mode === 'explain' ? 'Explication Examen' : isLibre ? 'Mode Libre' : (lessonInfo?.title_fr || 'Session')}</h1>
-              <p className="text-[10px] text-white/30 leading-tight truncate hidden sm:block">{mode === 'explain' ? 'Aide interactive au tableau' : isLibre ? `Pose tes questions sur ${allowedSubjectNames.length === 1 ? allowedSubjectNames[0] : 'tes matières'}` : (lessonInfo?.title_ar || 'SVT - 2ème BAC')}</p>
+              <h1 className="text-xs font-semibold text-white/90 leading-tight truncate">{titreSession}</h1>
+              <p className="text-[10px] text-white/30 leading-tight truncate hidden sm:block">{sousTitreSession}</p>
             </div>
           </div>
 
@@ -1772,6 +1825,19 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           </div>
         </div>
       </header>
+
+      {/* Ce que l'élève fait maintenant — toujours visible, jamais dans un
+          menu. C'est ce qui remplace les trois anciennes routes. */}
+      <div className="shrink-0 border-b border-white/5 bg-[#0c0c1d]/60 px-2 py-1.5 sm:px-3">
+        <div className="mx-auto max-w-3xl">
+          <SessionModeBar
+            mode={activeMode}
+            reason={modeReason}
+            onSelect={demanderMode}
+            disabled={!connected}
+          />
+        </div>
+      </div>
 
       {/* TTS Error Banner */}
       {ttsErrorMessage && (

@@ -11,7 +11,6 @@ import RegisterInterest from './pages/RegisterInterest';
 
 // ── Lazy-loaded (code-split into separate chunks) ──
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const TutorHub = lazy(() => import('./pages/TutorHub'));
 const Progress = lazy(() => import('./pages/Progress'));
 const LearningSession = lazy(() => import('./pages/LearningSession'));
 const AdminResources = lazy(() => import('./pages/AdminResources'));
@@ -77,11 +76,15 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* `/tutor` n'est plus un menu : c'est la session elle-même.
+              L'élève y entre et il est déjà en train de travailler ; le mode
+              (cours, exercice, examen, question) change DANS l'écran, sans
+              navigation, et le tuteur peut en décider lui-même. */}
           <Route
             path="/tutor"
             element={
               <ProtectedRoute>
-                <TutorHub />
+                <LearningSession mode="libre" />
               </ProtectedRoute>
             }
           />
