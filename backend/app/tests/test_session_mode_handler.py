@@ -220,3 +220,58 @@ def test_la_lecon_garde_sa_phase_a_travers_les_etapes():
     asyncio.run(handler._enregistrer_preuve(True))
     asyncio.run(handler._enregistrer_preuve(True))
     assert handler.current_phase == "application"
+
+
+# ── L'alternance, une fois branchée ───────────────────────────────
+
+from app.services.scenario_service import Alternance
+
+
+def test_l_alternance_fait_tourner_le_sujet_des_exercices():
+    handler = _handler_en_seance("exercice")
+    handler.scenario_sujet = "Limites"
+    handler._alternance = Alternance("Limites", ["Dérivées"])
+
+    # Deux réussites puis un échec : trois exercices, mais aucun critère de
+    # sortie franchi. L'alternance est donc seule à agir.
+    for resultat in (True, True, False):
+        assert asyncio.run(handler._enregistrer_preuve(resultat)) is None
+
+    assert handler._mode.courant == "exercice"
+    assert handler.scenario_sujet == "Dérivées"
+    assert "Dérivées" in handler.scenario
+
+
+def test_on_n_alterne_pas_pendant_une_explication():
+    """Alterner pendant qu'on installe une notion l'empêche au lieu de la
+    consolider."""
+    handler = _handler_en_seance("cours")
+    handler.scenario_sujet = "Limites"
+    handler._alternance = Alternance("Limites", ["Dérivées"])
+
+    asyncio.run(handler._enregistrer_preuve(False))
+    asyncio.run(handler._enregistrer_preuve(False))
+
+    assert handler.scenario_sujet == "Limites"
+
+
+def test_changer_de_sujet_ne_reprend_pas_la_serie_de_l_eleve():
+    """Lui retirer ses réussites parce que le tuteur a change d'exercice
+    serait une punition sans motif."""
+    handler = _handler_en_seance("exercice")
+    handler._alternance = Alternance("Limites", ["Dérivées"])
+
+    asyncio.run(handler._enregistrer_preuve(True))
+    asyncio.run(handler._enregistrer_preuve(True))
+    assert handler._progression.reussites == 2
+
+    # Le 3e exercice declenche l'alternance ET la 3e reussite : l'etape
+    # doit quand meme etre franchie.
+    assert asyncio.run(handler._enregistrer_preuve(True)) == "examen"
+
+
+def test_la_regle_du_cahier_accompagne_chaque_etape():
+    handler = _handler_en_seance("cours")
+    asyncio.run(handler._enregistrer_preuve(True))
+    asyncio.run(handler._enregistrer_preuve(True))
+    assert "ATTENDS" in handler.scenario

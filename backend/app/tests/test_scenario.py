@@ -255,3 +255,99 @@ def test_le_retour_au_cours_dit_de_ne_pas_repeter():
 
 def test_une_question_libre_n_a_pas_de_consigne():
     assert consigne_de_mode("question") == ""
+
+
+# ── Le cahier (effet de génération) ───────────────────────────────
+
+from app.services.scenario_service import (
+    Alternance,
+    MODES_AVEC_CAHIER,
+    REGLE_CAHIER,
+    _alternatives,
+)
+
+
+def test_le_tuteur_fait_ecrire_avant_de_corriger():
+    """Produire sa réponse avant de la voir la fait retenir mieux que la
+    lire. C'est le geste le moins cher de tout le projet."""
+    for mode in MODES_AVEC_CAHIER:
+        assert REGLE_CAHIER in consigne_de_mode(mode, "les limites")
+
+
+def test_la_regle_du_cahier_interdit_de_repondre_a_sa_propre_question():
+    """Sans ça, le modèle pose la question et enchaîne la réponse dans le
+    même message — ce qui supprime exactement l'effet recherché."""
+    assert "ATTENDS" in REGLE_CAHIER
+    assert "même message" in REGLE_CAHIER
+
+
+def test_pas_de_rappel_du_cahier_pendant_une_epreuve():
+    """L'élève rédige déjà ; le lui rappeler sous chronomètre est du bruit."""
+    assert REGLE_CAHIER not in consigne_de_mode("examen")
+
+
+# ── L'alternance (interleaving) ───────────────────────────────────
+
+def test_on_ne_fait_pas_dix_exercices_du_meme_type():
+    """Enchaîner des exercices identiques entraîne à reconnaître un patron,
+    pas à choisir une méthode — or c'est choisir qu'on demande au BAC."""
+    a = Alternance("Limites", ["Dérivées", "Suites"])
+    assert a.enregistrer() is None
+    assert a.enregistrer() is None
+    assert a.enregistrer() == "Dérivées"
+    assert a.sujet == "Dérivées"
+
+
+def test_l_ancien_sujet_revient_plus_tard():
+    """Alterner n'est pas abandonner : le retour espacé est ce qui
+    consolide."""
+    a = Alternance("Limites", ["Dérivées"])
+    assert [a.enregistrer() for _ in range(3)][-1] == "Dérivées"
+    assert [a.enregistrer() for _ in range(3)][-1] == "Limites"
+
+
+def test_le_compteur_repart_apres_chaque_bascule():
+    a = Alternance("Limites", ["Dérivées", "Suites"])
+    for _ in range(3):
+        a.enregistrer()
+    assert a.consecutifs == 0
+
+
+def test_sans_second_sujet_on_n_alterne_pas():
+    """Proposer un changement vers rien ferait inventer un chapitre."""
+    a = Alternance("Limites", [])
+    assert [a.enregistrer() for _ in range(9)] == [None] * 9
+    assert a.sujet == "Limites"
+    assert a.possible is False
+
+
+def test_le_sujet_courant_n_est_pas_sa_propre_alternative():
+    a = Alternance("Limites", ["Limites", "Dérivées"])
+    for _ in range(3):
+        resultat = a.enregistrer()
+    assert resultat == "Dérivées"
+
+
+def test_les_alternatives_viennent_des_lacunes_du_moteur():
+    lacunes = [
+        {"topic": "Limites"},
+        {"topic": "Dérivées"},
+        {"topic": "Suites"},
+        {"topic": "Intégrales"},
+        {"topic": "Complexes"},
+    ]
+    assert _alternatives(lacunes, "Limites") == ("Dérivées", "Suites", "Intégrales")
+
+
+def test_les_alternatives_ignorent_les_doublons_et_le_bruit():
+    lacunes = [{"topic": "Dérivées"}, "pas un dict", {"topic": "Dérivées"}, {"topic": ""}]
+    assert _alternatives(lacunes, "Limites") == ("Dérivées",)
+
+
+def test_la_directive_porte_ses_alternatives():
+    directive = composer(_decision(), lacunes=[{"topic": "Limites"}, {"topic": "Dérivées"}])
+    assert directive.alternatives == ("Dérivées",)
+
+
+def test_une_directive_sans_lacunes_n_alterne_pas():
+    assert composer(_decision()).alternatives == ()

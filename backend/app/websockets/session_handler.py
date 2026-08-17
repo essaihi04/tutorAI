@@ -19,7 +19,7 @@ from app.services.session_progress_service import session_progress_service
 from app.services.lesson_phase import PhaseLesson
 from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
-from app.services.scenario_service import Progression
+from app.services.scenario_service import Alternance, Progression
 from app.services import tag_decoder
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
@@ -724,6 +724,8 @@ class SessionHandler:
         self.scenario_sujet: str = ""
         #: Compte les preuves et décide des changements d'étape.
         self._progression = Progression()
+        #: Fait tourner les sujets d'exercice (alternance / interleaving).
+        self._alternance = Alternance()
         self._resume_proficiency: Optional[dict] = None
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
@@ -2694,6 +2696,7 @@ RÈGLES:
             )
             self.scenario = directive.texte
             self.scenario_sujet = directive.sujet
+            self._scenario_alternatives = directive.alternatives
 
             # Le moteur choisit le mode UNIQUEMENT quand l'élève n'a rien
             # demandé de précis. S'il a ouvert un chapitre, c'est son choix
@@ -2706,11 +2709,15 @@ RÈGLES:
             _safe_log(f"[Session Init] Scénario indisponible: {exc}")
             self.scenario = ""
             self.scenario_sujet = ""
+            self._scenario_alternatives = ()
 
         # La progression compte à partir du mode réellement adopté : la faire
         # démarrer ailleurs lui ferait appliquer les critères d'une étape que
         # l'élève n'a pas commencée.
         self._progression = Progression(self._mode.courant)
+        self._alternance = Alternance(
+            self.scenario_sujet, list(getattr(self, "_scenario_alternatives", ()))
+        )
 
         # Nouvelle session : on repart d'un état neuf plutôt que de corriger
         # l'ancien. Le mode libre n'a pas de progression — « libre » est un
@@ -3548,24 +3555,56 @@ RÈGLES :
             titre = "Cours en direct"
         return titre, normalized
 
-    def _adopter_mode(self, nouveau: str) -> None:
-        """Aligne la séance sur le mode qui vient d'être adopté.
+    def _adopter_consigne(self, mode: str) -> None:
+        """Réécrit le plan de séance pour l'état courant.
 
-        Deux choses doivent suivre TOUT changement de mode, d'où qu'il vienne
-        — progression, balise `<mode>` du tuteur, ou demande de l'élève :
-
-          * la consigne. Le scénario d'ouverture décrivait une étape franchie ;
-            le laisser en place ferait redémarrer le tuteur dessus.
-          * les compteurs. Repartir de zéro évite qu'une série accumulée dans
-            l'étape précédente fasse franchir la suivante immédiatement.
+        Appelé à chaque changement de mode ET à chaque changement de sujet :
+        laisser une consigne périmée ferait redémarrer le tuteur sur une
+        étape franchie, ou sur un chapitre qu'on vient de quitter.
         """
         try:
             from app.services.scenario_service import consigne_de_mode
 
-            self.scenario = consigne_de_mode(nouveau, self.scenario_sujet)
+            self.scenario = consigne_de_mode(mode, self.scenario_sujet)
         except Exception as exc:
             _safe_log(f"[Mode] consigne indisponible: {exc}")
+
+    def _adopter_mode(self, nouveau: str) -> None:
+        """Aligne la séance sur le mode qui vient d'être adopté.
+
+        La consigne suit, et les compteurs repartent de zéro — sans quoi une
+        série accumulée dans l'étape précédente ferait franchir la suivante
+        immédiatement.
+
+        Un changement de SUJET, lui, ne remet pas les compteurs : l'élève
+        reste dans la même étape, et lui reprendre sa série parce que le
+        tuteur a changé d'exercice serait une punition sans motif.
+        """
+        self._adopter_consigne(nouveau)
         self._progression = Progression(nouveau)
+
+    def _alterner_si_besoin(self) -> Optional[str]:
+        """Fait tourner le sujet des exercices après quelques répétitions.
+
+        Enchaîner des exercices identiques entraîne à reconnaître un patron ;
+        le jour du BAC, on demande de CHOISIR une méthode. L'alternance rend
+        la séance un peu plus dure et l'examen nettement plus facile.
+
+        Les sujets viennent des lacunes déjà classées par le moteur : rien
+        n'est décidé ici, seulement l'ordre.
+        """
+        alternance = getattr(self, "_alternance", None)
+        if alternance is None:
+            return None
+
+        suivant = alternance.enregistrer()
+        if not suivant:
+            return None
+
+        self.scenario_sujet = suivant
+        self._adopter_consigne("exercice")
+        _safe_log(f"[Alternance] on passe à {suivant}")
+        return suivant
 
     async def _enregistrer_preuve(self, reussite: bool) -> Optional[str]:
         """Une réponse évaluée entre dans la progression, qui peut faire
@@ -3582,6 +3621,12 @@ RÈGLES :
         progression = getattr(self, "_progression", None)
         if progression is None:
             return None
+
+        # L'alternance ne compte que les EXERCICES : elle porte sur la
+        # sélection des problèmes, pas sur l'explication. Alterner pendant
+        # qu'on installe une notion l'empêcherait au lieu de la consolider.
+        if self._mode.courant == "exercice":
+            self._alterner_si_besoin()
 
         transition = progression.enregistrer(bool(reussite))
         if transition is None:

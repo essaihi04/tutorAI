@@ -91,6 +91,9 @@ class Directive:
     sujet: str
     #: La recommandation brute du moteur, pour le journal.
     recommandation: str
+    #: Les autres sujets faibles, dans l'ordre du moteur : de quoi alterner
+    #: sans avoir à redécider quoi que ce soit.
+    alternatives: tuple[str, ...] = ()
 
     def __bool__(self) -> bool:
         return bool(self.texte)
@@ -99,7 +102,27 @@ class Directive:
 VIDE = Directive(texte="", mode="cours", sujet="", recommandation="")
 
 
-def composer(decision: Optional[dict], budget: int = BUDGET_CARACTERES) -> Directive:
+def _alternatives(lacunes: Optional[list], sujet_principal: str) -> tuple[str, ...]:
+    """Les autres sujets faibles, prêts pour l'alternance.
+
+    On garde l'ordre du moteur — il classe déjà par urgence — et on se limite
+    à trois : au-delà, alterner devient de la dispersion.
+    """
+    vus: list[str] = []
+    for lacune in (lacunes or [])[:6]:
+        if not isinstance(lacune, dict):
+            continue
+        sujet = str(lacune.get("topic") or "").strip()
+        if sujet and sujet != sujet_principal and sujet not in vus:
+            vus.append(sujet)
+    return tuple(vus[:3])
+
+
+def composer(
+    decision: Optional[dict],
+    budget: int = BUDGET_CARACTERES,
+    lacunes: Optional[list] = None,
+) -> Directive:
     """Traduit une décision du moteur en consigne pour le tuteur.
 
     Les lignes sont ajoutées par ordre d'utilité et coupées par la fin, comme
@@ -151,6 +174,7 @@ def composer(decision: Optional[dict], budget: int = BUDGET_CARACTERES) -> Direc
         mode=mode,
         sujet=entete or sujet,
         recommandation=recommandation,
+        alternatives=_alternatives(lacunes, sujet),
     )
 
 
@@ -253,6 +277,27 @@ class Progression:
         return None
 
 
+#: L'effet de génération : produire soi-même une réponse avant de la voir la
+#: fait retenir nettement mieux que la lire. C'est un des résultats les plus
+#: solides de la psychologie de l'apprentissage, et le moins cher à appliquer
+#: — quelques phrases, aucun modèle.
+#:
+#: Le mot « ATTENDS » porte tout : sans lui le modèle pose la question et
+#: enchaîne sur la réponse dans le même message, ce qui supprime exactement
+#: l'effet recherché. Et l'attente a un second bénéfice, structurel : sans
+#: réponse de l'élève, `Progression` ne reçoit aucune preuve et la séance
+#: n'avance pas. Demander est donc dans l'intérêt du tuteur.
+REGLE_CAHIER = (
+    "Avant de donner une réponse ou une correction : demande-lui d'écrire la "
+    "sienne sur son cahier, puis ATTENDS. Ne réponds pas à ta propre question "
+    "dans le même message."
+)
+
+#: En examen, la règle n'a pas lieu d'être : l'élève rédige déjà, et lui
+#: rappeler d'écrire au milieu d'une épreuve chronométrée serait du bruit.
+MODES_AVEC_CAHIER = ("cours", "exercice")
+
+
 def consigne_de_mode(mode: str, sujet: str = "") -> str:
     """La consigne qui remplace le scénario après une transition.
 
@@ -261,23 +306,81 @@ def consigne_de_mode(mode: str, sujet: str = "") -> str:
     """
     quoi = f" sur {sujet}" if sujet else ""
     if mode == "exercice":
-        return (
+        base = (
             f"À travailler maintenant : des exercices{quoi}.\n"
             "Laisse-le chercher seul, donne un indice avant la réponse, "
             "corrige sa méthode plutôt que son résultat."
         )
-    if mode == "examen":
-        return (
+    elif mode == "examen":
+        base = (
             f"À travailler maintenant : un sujet complet{quoi}.\n"
             "Conditions réelles : chronomètre, aucun indice, note sur 20 à la fin."
         )
-    if mode == "question":
+    elif mode == "question":
         return ""
-    return (
-        f"À travailler maintenant : la notion{quoi}.\n"
-        "Reprends l'explication autrement — la précédente n'a pas suffi. "
-        "Vérifie chaque étape avant de continuer."
-    )
+    else:
+        base = (
+            f"À travailler maintenant : la notion{quoi}.\n"
+            "Reprends l'explication autrement — la précédente n'a pas suffi. "
+            "Vérifie chaque étape avant de continuer."
+        )
+
+    if mode in MODES_AVEC_CAHIER:
+        return f"{base}\n{REGLE_CAHIER}"
+    return base
+
+
+# ── L'alternance ──────────────────────────────────────────────────
+
+#: Combien d'exercices d'affilée sur un même sujet avant de changer.
+#:
+#: L'alternance (« interleaving ») donne un apprentissage qui PARAÎT plus
+#: lent en séance et se révèle nettement meilleur à l'examen : enchaîner
+#: vingt exercices identiques entraîne à reconnaître un patron, pas à choisir
+#: une méthode — or c'est choisir qu'on demande le jour du BAC.
+#:
+#: Trois, et pas deux : il faut laisser le temps d'installer la notion avant
+#: de la mélanger, sinon on empêche l'apprentissage initial au lieu de le
+#: consolider.
+BLOC_MAXIMAL = 3
+
+
+class Alternance:
+    """Décide quand faire changer le tuteur de sujet d'exercice.
+
+    Ne choisit rien d'autre que l'ordre : les sujets viennent des lacunes
+    déjà classées par le moteur. Une rotation, pas une décision pédagogique
+    de plus.
+    """
+
+    def __init__(self, sujet: str = "", alternatives: Optional[list[str]] = None,
+                 bloc_maximal: int = BLOC_MAXIMAL):
+        self.sujet = sujet
+        self._file = [s for s in (alternatives or []) if s and s != sujet]
+        self._bloc_maximal = max(1, int(bloc_maximal))
+        self.consecutifs = 0
+
+    @property
+    def possible(self) -> bool:
+        """Sans second sujet, il n'y a rien à alterner — et proposer un
+        changement vers rien ferait inventer un chapitre au modèle."""
+        return bool(self._file)
+
+    def enregistrer(self) -> Optional[str]:
+        """Compte un exercice, renvoie le sujet vers lequel basculer ou None."""
+        self.consecutifs += 1
+        if self.consecutifs < self._bloc_maximal or not self.possible:
+            return None
+
+        suivant = self._file.pop(0)
+        # L'ancien sujet retourne dans la file : alterner, ce n'est pas
+        # abandonner. Il reviendra, et cet espacement est précisément ce qui
+        # consolide.
+        if self.sujet:
+            self._file.append(self.sujet)
+        self.sujet = suivant
+        self.consecutifs = 0
+        return suivant
 
 
 async def pour_eleve(
@@ -297,7 +400,11 @@ async def pour_eleve(
         _log.warning("[Scenario] moteur indisponible pour %s : %s", student_id, exc)
         return VIDE
 
-    directive = composer(decision, budget=budget)
+    directive = composer(
+        decision,
+        budget=budget,
+        lacunes=(resume_proficiency or {}).get("lacunes"),
+    )
     if directive:
         _log.info(
             "[Scenario] %s → mode %s (%s)",
