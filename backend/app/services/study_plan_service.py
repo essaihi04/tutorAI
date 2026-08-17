@@ -978,7 +978,7 @@ class StudyPlanService:
     #  ADAPTIVE COACHING ENGINE — Powered by Proficiency Agent
     # ══════════════════════════════════════════════════════════════
 
-    async def get_adaptive_next_session(self, student_id: str) -> dict:
+    async def get_adaptive_next_session(self, student_id: str, summary: Optional[dict] = None) -> dict:
         """
         Determine the BEST thing for this student to study RIGHT NOW,
         using live proficiency data + pedagogical principles.
@@ -1006,12 +1006,16 @@ class StudyPlanService:
             "zpd_strategy": "Explication guidée avec exemples simples",
         }
         """
-        try:
-            from app.services.student_proficiency_service import proficiency_service
-            summary = await proficiency_service.get_proficiency_summary(student_id)
-        except Exception as e:
-            _log.error(f"[AdaptiveCoach] Proficiency fetch failed: {e}")
-            summary = {"total_answers": 0, "lacunes": [], "subjects": {}, "strengths": []}
+        # `summary` prêté par l'appelant : l'ouverture d'une session veut ce
+        # même objet pour le briefing ET pour la décision, et il coûte une
+        # lecture de 500 réponses.
+        if summary is None:
+            try:
+                from app.services.student_proficiency_service import proficiency_service
+                summary = await proficiency_service.get_proficiency_summary(student_id)
+            except Exception as e:
+                _log.error(f"[AdaptiveCoach] Proficiency fetch failed: {e}")
+                summary = {"total_answers": 0, "lacunes": [], "subjects": {}, "strengths": []}
 
         # Get subject map for chapter lookup
         subjects_result = self.supabase.table('subjects').select('id, name_fr').execute()

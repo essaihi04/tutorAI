@@ -800,6 +800,7 @@ Difficultés connues: {struggles}
 Sujets maîtrisés: {mastered}
 {adaptation_hints}
 {briefing}
+{scenario}
 
 {ui_control}
 
@@ -1266,6 +1267,25 @@ PHASE_RULES = {
 }
 
 
+def _bloc_scenario(scenario: str) -> str:
+    """Ce que le tuteur doit FAIRE maintenant, décidé côté serveur.
+
+    Le ton est impératif à dessein : ce bloc n'est pas une suggestion parmi
+    d'autres, c'est le plan de séance. Le modèle enseigne, il ne choisit pas
+    le programme — sinon deux élèves identiques reçoivent deux parcours
+    différents, et rien n'est reproductible.
+    """
+    scenario = (scenario or "").strip()
+    if not scenario:
+        return ""
+    return (
+        "\n[SCENARIO — décidé pour cet élève, à suivre]\n"
+        f"{scenario}\n"
+        "Annonce ce que vous allez faire et pourquoi, en une phrase, avant de "
+        "commencer. Un changement non annoncé est vécu comme un bug."
+    )
+
+
 def _bloc_briefing(briefing: str) -> str:
     """Encadre le briefing élève, ou disparaît complètement.
 
@@ -1337,6 +1357,7 @@ Tu dois TOUJOURS:
 Nom: {student_name}
 Niveau: {proficiency}
 {briefing}
+{scenario}
 
 {rag_context}
 
@@ -2168,6 +2189,7 @@ class LLMService:
         user_query: str = "",
         allowed_subjects: Optional[list[str]] = None,
         briefing: str = "",
+        scenario: str = "",
     ) -> str:
         # RAG prêt ? Sinon on construit le prompt SANS lui — l'indexation
         # appartient au thread de démarrage et ne doit jamais bloquer ici.
@@ -2294,6 +2316,7 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
             student_name=student_name,
             proficiency=proficiency,
             briefing=_bloc_briefing(briefing),
+            scenario=_bloc_scenario(scenario),
             allowed_subjects=allowed_subjects_label,
             rag_context=rag_section,
             ui_control=UI_CONTROL_PROMPT,
@@ -2490,6 +2513,7 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
         user_query: str = "",  # For RAG context
         adaptation_hints: str = "",
         briefing: str = "",
+        scenario: str = "",
     ) -> str:
         phase_rules = PHASE_RULES.get(phase, "")
         
@@ -2622,6 +2646,7 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
             mastered=mastered,
             adaptation_hints=f"\nAdaptation: {adaptation_hints}" if adaptation_hints else "",
             briefing=_bloc_briefing(briefing),
+            scenario=_bloc_scenario(scenario),
             teaching_mode=teaching_mode,
             phase_rules=phase_rules,
             ui_control=UI_CONTROL_PROMPT,

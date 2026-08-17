@@ -17,7 +17,7 @@ import LessonProgressBar from '../components/session/LessonProgressBar';
 import PhaseProgress from '../components/session/PhaseProgress';
 import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
-import SessionModeBar from '../components/session/SessionModeBar';
+import SessionModeBanner from '../components/session/SessionModeBanner';
 import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
 
 /* ------------------------------------------------------------------ */
@@ -241,11 +241,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [modeReason, setModeReason] = useState<string>('');
   const isLibre = activeMode === 'question' || activeMode === 'examen';
 
-  const demanderMode = useCallback((cible: TutorMode) => {
-    // On PROPOSE. Le serveur tranche et répond `mode_changed` ; l'affichage
-    // attend cette confirmation (cf. SessionModeBar).
-    wsService.sendJson({ type: 'set_mode', mode: cible });
-  }, []);
   const navigate = useNavigate();
   const { token, student } = useAuthStore();
   const learningContext = useLearningContextStore((state) => state.context);
@@ -1826,17 +1821,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         </div>
       </header>
 
-      {/* Ce que l'élève fait maintenant — toujours visible, jamais dans un
-          menu. C'est ce qui remplace les trois anciennes routes. */}
-      <div className="shrink-0 border-b border-white/5 bg-[#0c0c1d]/60 px-2 py-1.5 sm:px-3">
-        <div className="mx-auto max-w-3xl">
-          <SessionModeBar
-            mode={activeMode}
-            reason={modeReason}
-            onSelect={demanderMode}
-            disabled={!connected}
-          />
-        </div>
+      {/* Ce que le tuteur fait maintenant — affiché, jamais demandé. Il n'y
+          a plus rien à choisir : l'élève parle, le tuteur décide. */}
+      <div className="shrink-0 border-b border-white/5 bg-[#0c0c1d]/60 px-3 py-1.5">
+        <SessionModeBanner mode={activeMode} reason={modeReason} />
       </div>
 
       {/* TTS Error Banner */}

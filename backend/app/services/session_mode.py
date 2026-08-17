@@ -63,6 +63,34 @@ LEGACY: dict[str, str] = {
     "question": "libre",
 }
 
+#: Le vocabulaire du PLAN d'études (`session_type` dans study_plan_service et
+#: dans la table des séances), traduit en modes. C'est la troisième et
+#: dernière liste de mots de ce domaine ; elle vit ici pour que toutes les
+#: traductions de mode soient au même endroit, et pas disséminées dans le
+#: moteur de décision.
+#:
+#: `revision` donne un cours, pas un exercice : réviser, c'est réexpliquer
+#: puis vérifier — l'élève qui a oublié n'a pas besoin qu'on le teste
+#: d'abord.
+MODE_PAR_TYPE_DE_SEANCE: dict[str, str] = {
+    "cours": "cours",
+    "revision": "cours",
+    "lacunes": "cours",
+    "exercices": "exercice",
+    "exercice": "exercice",
+    "examen_blanc": "examen",
+    "examen": "examen",
+}
+
+
+def mode_pour_seance(session_type: Any) -> str:
+    """Le mode qu'un type de séance appelle. `cours` par défaut : c'est le
+    mode le moins risqué quand on ne sait pas — on explique."""
+    if isinstance(session_type, str):
+        return MODE_PAR_TYPE_DE_SEANCE.get(session_type.strip().lower(), "cours")
+    return "cours"
+
+
 #: Ce que le modèle écrit VRAIMENT quand on lui demande un mode. Refuser une
 #: quasi-bonne réponse laisserait l'élève coincé dans le mauvais écran, ce qui
 #: est pire que d'accepter une orthographe approximative.

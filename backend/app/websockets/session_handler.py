@@ -715,6 +715,10 @@ class SessionHandler:
         # les recalculer à chaque tour rachèterait des requêtes déjà payées
         # (cf. briefing_service).
         self.briefing: str = ""
+        # Le plan de séance décidé côté serveur. Le modèle l'exécute, il ne
+        # le choisit pas — sinon deux élèves identiques reçoivent deux
+        # parcours différents.
+        self.scenario: str = ""
         self._resume_proficiency: Optional[dict] = None
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
@@ -1404,6 +1408,7 @@ class SessionHandler:
                 user_query=user_query,
                 allowed_subjects=self.allowed_subject_names,
                 briefing=self.briefing,
+                scenario=self.scenario,
             )
 
             # ── EXPLAIN MODE: persist exam-question scenario (official correction
@@ -1431,6 +1436,7 @@ class SessionHandler:
             teaching_mode=ctx.get("teaching_mode", "Socratique"),
             user_query=user_query,  # Pass user_query for RAG context
             briefing=self.briefing,
+            scenario=self.scenario,
         )
 
     async def handle_connection(self):
@@ -2660,6 +2666,29 @@ RÈGLES:
             _safe_log(f"[Session Init] Briefing indisponible: {exc}")
             self.briefing = ""
 
+        # ── CE QUE LE TUTEUR DOIT FAIRE ──
+        # Le moteur de décision existait déjà (`get_adaptive_next_session`) ;
+        # son résultat n'allait qu'à une page. Il pilote maintenant la séance.
+        self.scenario = ""
+        try:
+            from app.services.scenario_service import pour_eleve as scenario_pour_eleve
+
+            directive = await scenario_pour_eleve(
+                self.student_id, resume_proficiency=self._resume_proficiency
+            )
+            self.scenario = directive.texte
+
+            # Le moteur choisit le mode UNIQUEMENT quand l'élève n'a rien
+            # demandé de précis. S'il a ouvert un chapitre, c'est son choix
+            # qui commande : lui imposer autre chose serait le pire des
+            # tuteurs autonomes — celui qui n'écoute pas.
+            if directive and not message.get("chapter_id") and not message.get("lesson_id"):
+                self._mode.demander(directive.mode, par="tuteur")
+                _safe_log(f"[Session Init] Scénario impose le mode {self._mode.courant}")
+        except Exception as exc:
+            _safe_log(f"[Session Init] Scénario indisponible: {exc}")
+            self.scenario = ""
+
         # Nouvelle session : on repart d'un état neuf plutôt que de corriger
         # l'ancien. Le mode libre n'a pas de progression — « libre » est un
         # état à part entière, pas la première phase d'un cours.
@@ -2867,6 +2896,8 @@ RÈGLES:
                     teaching_mode=ctx.get("teaching_mode", "Socratique"),
                     user_query=ctx.get("chapter_title", ""),  # Use chapter for initial RAG context
                     adaptation_hints=_init_prof.get("adaptation_hints", "") if _init_prof else "",
+                    briefing=self.briefing,
+                    scenario=self.scenario,
                 )
 
             # Build opening prompt based on whether this is a resumed session
