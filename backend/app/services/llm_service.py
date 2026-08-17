@@ -48,6 +48,32 @@ Tout ce qui est structuré (tableaux, listes, formules, titres) va dans <ui>.
 Format prioritaire: <ui>{"actions":[...]}</ui>
 Le bloc <ui> contient uniquement du JSON valide. Le texte parlé reste en dehors du bloc.
 
+🧭 CHANGER CE QUE L'ÉLÈVE FAIT — balise <mode>
+L'élève ne change plus d'écran : c'est TOI qui décides de ce qui se passe,
+sans qu'il ait à chercher un menu. Quatre modes, et un seul mot à écrire :
+
+  • "cours"    → tu expliques, tu écris au tableau (mode par défaut)
+  • "exercice" → il cherche, tu donnes un indice, tu corriges sa méthode
+  • "examen"   → sujet complet, chronomètre, note sur 20, aucun indice
+  • "question" → il demande ce qu'il veut, tu réponds, puis tu reviens
+
+Format : <mode>{"mode":"exercice","raison":"Tu as compris, on s'entraîne."}</mode>
+La « raison » est affichée à l'élève : un changement de mode ne doit jamais
+être une surprise.
+
+QUAND l'émettre — seulement si le mode doit RÉELLEMENT changer :
+  ✅ « teste-moi », « donne-moi un exercice » → "exercice"
+  ✅ « je veux passer un examen blanc » → "examen"
+  ✅ l'élève a maîtrisé le point : tu proposes de passer à la pratique
+  ✅ il pose une question hors sujet en plein cours → "question", puis
+     "cours" quand c'est répondu — sa leçon l'attend exactement où elle en
+     était, tu n'as rien à reprendre depuis le début.
+  ❌ PAS à chaque réponse. Sans balise, le mode ne bouge pas : c'est le cas
+     NORMAL. Une réponse sur dix en contient une, pas plus.
+  ❌ PAS pour sortir d'un "examen" : une épreuve commencée a un chronomètre
+     et une note. Seul l'élève l'interrompt, ou la fin de l'épreuve. Ta
+     demande serait ignorée.
+
 🚨 RÈGLE #1 - TABLEAU OBLIGATOIRE DANS CHAQUE RÉPONSE:
 Quand tu expliques un concept, une formule, un exercice, une liste ou un programme:
 → Tu DOIS inclure un bloc <ui> DANS LA MÊME RÉPONSE
@@ -773,6 +799,7 @@ Niveau: {proficiency}
 Difficultés connues: {struggles}
 Sujets maîtrisés: {mastered}
 {adaptation_hints}
+{briefing}
 
 {ui_control}
 
@@ -1239,6 +1266,22 @@ PHASE_RULES = {
 }
 
 
+def _bloc_briefing(briefing: str) -> str:
+    """Encadre le briefing élève, ou disparaît complètement.
+
+    Un en-tête vide ferait croire au modèle qu'il connaît l'élève alors qu'il
+    n'a rien reçu — il inventerait un prénom et un score. Pas de faits, pas de
+    section.
+    """
+    briefing = (briefing or "").strip()
+    if not briefing:
+        return ""
+    return (
+        "\n[BRIEFING_ELEVE — faits vérifiés, ne rien inventer au-delà]\n"
+        f"{briefing}"
+    )
+
+
 LIBRE_MODE_PROMPT = """[ROLE]
 Tu es un EXPERT DU BACCALAURÉAT MAROCAIN (2ème BAC Sciences Physiques BIOF).
 Tu connais parfaitement les cadres de référence officiels, les poids de chaque domaine à l'examen, et les stratégies pour réussir.
@@ -1293,6 +1336,7 @@ Tu dois TOUJOURS:
 [PROFIL_ETUDIANT]
 Nom: {student_name}
 Niveau: {proficiency}
+{briefing}
 
 {rag_context}
 
@@ -2123,6 +2167,7 @@ class LLMService:
         proficiency: str = "intermédiaire",
         user_query: str = "",
         allowed_subjects: Optional[list[str]] = None,
+        briefing: str = "",
     ) -> str:
         # RAG prêt ? Sinon on construit le prompt SANS lui — l'indexation
         # appartient au thread de démarrage et ne doit jamais bloquer ici.
@@ -2248,6 +2293,7 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
             language=language,
             student_name=student_name,
             proficiency=proficiency,
+            briefing=_bloc_briefing(briefing),
             allowed_subjects=allowed_subjects_label,
             rag_context=rag_section,
             ui_control=UI_CONTROL_PROMPT,
@@ -2443,6 +2489,7 @@ RÈGLE ADDITIONNELLE: Ne donne PAS d'informations du programme français ou d'au
         teaching_mode: str = "Socratique",
         user_query: str = "",  # For RAG context
         adaptation_hints: str = "",
+        briefing: str = "",
     ) -> str:
         phase_rules = PHASE_RULES.get(phase, "")
         
@@ -2574,6 +2621,7 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
             struggles=struggles,
             mastered=mastered,
             adaptation_hints=f"\nAdaptation: {adaptation_hints}" if adaptation_hints else "",
+            briefing=_bloc_briefing(briefing),
             teaching_mode=teaching_mode,
             phase_rules=phase_rules,
             ui_control=UI_CONTROL_PROMPT,

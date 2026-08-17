@@ -42,6 +42,13 @@ BALISES: tuple[str, ...] = (
     "live",
     "exam_exercise",
     "suggestions",
+    # `mode` ne dessine rien : il dit ce que l'élève est en train de FAIRE
+    # (cours, exercice, examen, question). Il est ici parce que la propriété
+    # qui compte est la même que pour les autres — une commande adressée au
+    # système, qui doit disparaître de la prose lue et entendue par l'élève,
+    # et surtout de l'historique, sinon le modèle se met à l'imiter. Ce qu'il
+    # signifie appartient à `session_mode`, seul juge des transitions.
+    "mode",
 )
 
 #: Sous-types rencontrés dans le JSON d'un ``<ui>``. Ce sont eux qui disent

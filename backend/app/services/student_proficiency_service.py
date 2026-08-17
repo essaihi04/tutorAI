@@ -782,10 +782,15 @@ class StudentProficiencyService:
     #  3. GENERATE LLM CONTEXT
     # ──────────────────────────────────────────────
 
-    async def get_llm_context(self, student_id: str) -> dict:
+    async def get_llm_context(self, student_id: str, summary: Optional[dict] = None) -> dict:
         """
         Generate rich pedagogical context for LLM personalization.
         Uses Zone Proximale de Développement (Vygotsky) to guide teaching strategy.
+
+        `summary` : un résumé déjà calculé, prêté par l'appelant. À l'ouverture
+        d'une session le briefing et ce contexte veulent tous les deux le même
+        objet, et `get_proficiency_summary` lit 500 réponses — le calculer deux
+        fois retarderait le premier son pour rien.
 
         ZPD Principle:
         - Score < 15%: BELOW ZPD → needs prerequisite remediation first
@@ -793,9 +798,10 @@ class StudentProficiencyService:
         - Score 55-75%: ABOVE ZPD → consolidation, can work more independently
         - Score > 75%: MASTERED → ready for enrichment and deeper challenges
         """
-        summary = await self.get_proficiency_summary(student_id)
+        if summary is None:
+            summary = await self.get_proficiency_summary(student_id)
 
-        if summary["total_answers"] == 0:
+        if summary.get("total_answers", 0) == 0:
             return {
                 "proficiency": "inconnu (pas encore de données)",
                 "struggles": "aucune identifiée",

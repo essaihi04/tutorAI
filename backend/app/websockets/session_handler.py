@@ -17,6 +17,8 @@ from app.services.prompt_builder import prompt_builder
 from app.services.exercise_evaluator import exercise_evaluator
 from app.services.session_progress_service import session_progress_service
 from app.services.lesson_phase import PhaseLesson
+from app.services import session_mode as mode_session
+from app.services.session_mode import ModeSession
 from app.services import tag_decoder
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
@@ -700,9 +702,20 @@ class SessionHandler:
         # `current_phase` reste lisible et assignable comme avant — la
         # propriété plus bas valide chaque écriture au passage.
         self._phase = PhaseLesson()
-        self.session_mode: str = "coaching"  # 'coaching' or 'libre'
+        # Le mode n'est plus une route choisie par l'élève : c'est un état que
+        # le tuteur demande avec `<mode>` et que `ModeSession` arbitre. Les
+        # ~30 lectures de `session_mode` continuent de voir 'coaching' /
+        # 'libre' / 'explain' — la propriété plus bas traduit dans les deux
+        # sens (voir session_mode.py).
+        self._mode = ModeSession()
         self.allowed_subject_names: list[str] = []
         self.allowed_subject_keys: set[str] = set()
+        # Ce que le tuteur sait de l'élève avant qu'il ait parlé. Calculé UNE
+        # fois à l'ouverture : ces faits ne bougent pas pendant une séance, et
+        # les recalculer à chaque tour rachèterait des requêtes déjà payées
+        # (cf. briefing_service).
+        self.briefing: str = ""
+        self._resume_proficiency: Optional[dict] = None
         # Darija par défaut : c'est la langue d'enseignement, et la seule que
         # notre modèle vocal sait réellement dire. Le front envoie de toute
         # façon `set_language` à l'ouverture, mais si ce message se perd, mieux
@@ -718,6 +731,23 @@ class SessionHandler:
         # Used to inject accurate exam metadata into the LLM system prompt
         # so the model never hallucinates the wrong year/session/exercise/question.
         self.current_exam_view: dict | None = None
+
+    @property
+    def session_mode(self) -> str:
+        """La valeur historique ('coaching' / 'libre' / 'explain')."""
+        return self._mode.legacy
+
+    @session_mode.setter
+    def session_mode(self, valeur: str) -> None:
+        """Écriture validée, comme pour la phase.
+
+        Le navigateur envoie encore le mode à l'ouverture ; s'il désigne déjà
+        le mode courant, on ne bouge pas — « coaching » ne doit pas ramener à
+        « cours » un élève que le tuteur vient de mettre en « exercice ».
+        """
+        if valeur == self._mode.legacy:
+            return
+        self._mode.demander(valeur, par="eleve")
 
     @property
     def current_phase(self) -> str:
@@ -1373,6 +1403,7 @@ class SessionHandler:
                 proficiency=prof_ctx["proficiency"] if prof_ctx else ctx.get("proficiency", "intermédiaire"),
                 user_query=user_query,
                 allowed_subjects=self.allowed_subject_names,
+                briefing=self.briefing,
             )
 
             # ── EXPLAIN MODE: persist exam-question scenario (official correction
@@ -1399,6 +1430,7 @@ class SessionHandler:
             mastered=prof_ctx["mastered"] if prof_ctx else ctx.get("mastered", "aucun"),
             teaching_mode=ctx.get("teaching_mode", "Socratique"),
             user_query=user_query,  # Pass user_query for RAG context
+            briefing=self.briefing,
         )
 
     async def handle_connection(self):
@@ -1532,6 +1564,24 @@ class SessionHandler:
                 })
             else:
                 _safe_log(f"[Phase] change_phase refusé: {demandee!r}")
+        elif msg_type == "set_mode":
+            # Jarvis obéit aussi. L'élève passe toujours devant le tuteur —
+            # y compris pour quitter un examen, que le tuteur ne peut pas
+            # interrompre lui-même. Sans cette porte, un modèle qui choisit
+            # mal enferme l'élève, et un lycéen ferme l'application.
+            demande = message.get("mode", "")
+            precedent = self._mode.courant
+            nouveau = self._mode.demander(demande, par="eleve")
+            if nouveau:
+                await self.websocket.send_json({
+                    "type": "mode_changed",
+                    "mode": nouveau,
+                    "previous": precedent,
+                    "reason": "",
+                    "phase": self.current_phase,
+                })
+            else:
+                _safe_log(f"[Mode] set_mode refusé: {demande!r}")
         elif msg_type == "set_language":
             self.language = message.get("language", "mixed")
 
@@ -2548,6 +2598,7 @@ RÈGLES:
     async def _init_session(self, message: dict):
         """Initialize session context from lesson data."""
         _safe_log(f"[Session Init] _init_session called with message keys: {list(message.keys())}")
+        access_context: Optional[dict] = None
         try:
             from app.services.subject_access_service import canonical_subject_key, subject_access_service
 
@@ -2562,8 +2613,12 @@ RÈGLES:
             _safe_log(f"[Session Init] Subject access context unavailable: {exc}")
             self.allowed_subject_names = []
             self.allowed_subject_keys = set()
-        self.session_mode = message.get("mode", "coaching")
-        _safe_log(f"[Session Init] Mode: {self.session_mode}")
+        # Nouvelle session : remise à zéro franche, comme pour la phase plus
+        # bas. La propriété `session_mode` protège les écritures en COURS de
+        # séance ; ici l'élève ouvre autre chose, et garder le mode de la
+        # session précédente le ferait démarrer dans le mauvais écran.
+        self._mode = ModeSession(message.get("mode", "coaching"))
+        _safe_log(f"[Session Init] Mode: {self._mode.courant} ({self.session_mode})")
         self.session_context = {
             "subject": message.get("subject", "Physique"),
             "chapter_title": message.get("chapter_title", ""),
@@ -2576,6 +2631,35 @@ RÈGLES:
             "mastered": message.get("mastered", ""),
             "teaching_mode": message.get("teaching_mode", "Socratique"),
         }
+
+        # ── CE QUE LE TUTEUR SAIT DE L'ÉLÈVE ──
+        # Le profil de compétences est réutilisé par `get_llm_context` plus
+        # bas : il est lu ICI une seule fois et prêté aux deux.
+        self._resume_proficiency = None
+        try:
+            from app.services.briefing_service import pour_eleve
+            from app.services.student_proficiency_service import proficiency_service
+
+            self._resume_proficiency = await proficiency_service.get_proficiency_summary(
+                self.student_id
+            )
+            briefing = await pour_eleve(
+                self.student_id,
+                nom_complet=self.session_context.get("student_name", ""),
+                acces=access_context,
+                resume_proficiency=self._resume_proficiency,
+            )
+            self.briefing = briefing.texte
+            _safe_log(
+                f"[Session Init] Briefing: {len(self.briefing)} car., "
+                f"{len(briefing.sections)} section(s)"
+            )
+        except Exception as exc:
+            # Un tuteur sans briefing reste un tuteur ; un tuteur qui ne
+            # démarre pas n'est rien.
+            _safe_log(f"[Session Init] Briefing indisponible: {exc}")
+            self.briefing = ""
+
         # Nouvelle session : on repart d'un état neuf plutôt que de corriger
         # l'ancien. Le mode libre n'a pas de progression — « libre » est un
         # état à part entière, pas la première phase d'un cours.
@@ -2759,7 +2843,9 @@ RÈGLES:
             _init_prof = None
             try:
                 from app.services.student_proficiency_service import proficiency_service
-                _init_prof = await proficiency_service.get_llm_context(self.student_id)
+                _init_prof = await proficiency_service.get_llm_context(
+                    self.student_id, summary=getattr(self, "_resume_proficiency", None)
+                )
             except Exception:
                 pass
 
@@ -3408,11 +3494,64 @@ RÈGLES :
             titre = "Cours en direct"
         return titre, normalized
 
+    async def _appliquer_mode_demande(self, ai_response: str) -> Optional[str]:
+        """Exécute le ``<mode>`` de la réponse, s'il y en a un de valide.
+
+        Le DERNIER bloc gagne : si le modèle se ravise dans la même réponse,
+        c'est sa conclusion qui compte, pas son premier réflexe.
+
+        Renvoie le nouveau mode, ou None si rien n'a bougé — auquel cas le
+        navigateur n'est pas prévenu. Annoncer un changement refusé (mot
+        inconnu, sortie d'examen tentée par le tuteur) ferait basculer
+        l'écran sans que la session ait suivi.
+        """
+        if "<mode>" not in ai_response:
+            return None
+
+        demande = None
+        motif = ""
+        for bloc in tag_decoder.extraire(ai_response):
+            if bloc.balise != "mode":
+                continue
+            lu = mode_session.lire_demande(bloc.donnees)
+            if lu:
+                demande, motif = lu, mode_session.raison(bloc.donnees)
+
+        if not demande:
+            _safe_log("[Mode] balise <mode> illisible, mode inchangé")
+            return None
+
+        precedent = self._mode.courant
+        nouveau = self._mode.demander(demande, par="tuteur")
+        if not nouveau:
+            _safe_log(f"[Mode] refusé: {precedent} → {demande}")
+            return None
+
+        _safe_log(f"[Mode] {precedent} → {nouveau} ({motif or 'sans raison donnée'})")
+        try:
+            await self.websocket.send_json({
+                "type": "mode_changed",
+                "mode": nouveau,
+                "previous": precedent,
+                "reason": motif,
+                # La phase est INCHANGÉE et repart avec : c'est ce qui permet
+                # de revenir au cours là où il s'était arrêté.
+                "phase": self.current_phase,
+            })
+        except Exception as exc:
+            _safe_log(f"[Mode] notification impossible: {exc}")
+        return nouveau
+
     async def _execute_ai_commands(self, ai_response: str, suppress_draw: bool = False, suppress_media: bool = False, force_schema: bool = False, student_text: str = "", suppress_whiteboard: bool = False, exam_context: bool = False, force_exam_panel: bool = False):
         """Detect and execute commands in AI response (media, phase transitions, exercises)."""
         
         _safe_log(f"[AI Commands] Checking AI response for commands... (force_schema={force_schema})")
         _safe_log(f"[AI Commands] Response preview: {ai_response[:200]}...")
+
+        # Le tuteur décide de ce que l'élève fait maintenant. Traité en
+        # PREMIER : les commandes qui suivent (tableau, panneau d'examen)
+        # doivent s'exécuter dans le mode que cette réponse vient d'établir.
+        await self._appliquer_mode_demande(ai_response)
         # PERF: build system_prompt lazily — it's only needed inside rare retry
         # branches (placeholder / malformed UI JSON). Eager build was causing a
         # duplicate RAG load on EVERY response (visible in logs as a second

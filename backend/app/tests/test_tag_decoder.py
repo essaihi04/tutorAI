@@ -50,9 +50,19 @@ def test_identique_a_l_ancienne_liste(texte):
 
 
 def test_le_vocabulaire_est_complet():
-    """Les sept balises du protocole, ni plus ni moins."""
+    """Les balises du protocole, ni plus ni moins.
+
+    Sept balises d'affichage, plus `mode` — qui ne dessine rien mais partage
+    la propriété qui compte : une commande adressée au système, à retirer de
+    la prose ET de l'historique avant que le modèle ne se mette à l'imiter.
+
+    Cette liste se met à jour à la main, volontairement : ajouter une balise
+    change ce que le modèle peut faire de l'écran de l'élève, et doit donc
+    être un geste explicite.
+    """
     assert set(BALISES) == {
         "ui", "board", "draw", "schema", "live", "exam_exercise", "suggestions",
+        "mode",
     }
 
 
