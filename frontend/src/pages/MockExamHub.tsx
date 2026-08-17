@@ -232,7 +232,7 @@ export default function MockExamHub() {
         />
       )}
 
-      <MobileBottomNav active="mock" />
+      <MobileBottomNav active="tutor" />
     </div>
   );
 }

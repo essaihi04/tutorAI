@@ -578,7 +578,7 @@ export default function ExamHub() {
           onClose={() => setShareOpen(false)}
         />
       )}
-      <MobileBottomNav active="exam" />
+      <MobileBottomNav active="tutor" />
     </div>
   );
 }

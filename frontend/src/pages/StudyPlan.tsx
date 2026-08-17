@@ -835,7 +835,7 @@ export default function StudyPlan() {
           </div>
         </div>
       )}
-      <MobileBottomNav active="coaching" />
+      <MobileBottomNav active="tutor" />
     </div>
   );
 }
