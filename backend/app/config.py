@@ -1,5 +1,14 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+# Le fichier vit a cote du paquet, pas dans le repertoire d'ou on lance.
+# Avec un chemin relatif, `uvicorn --app-dir backend` demarre depuis la
+# racine du depot, ne trouve rien, et l'application meurt sur
+# « supabase_url is required » — une erreur qui ne dit pas qu'il s'agit
+# d'un probleme de repertoire courant.
+_FICHIER_ENV = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -115,7 +124,7 @@ class Settings(BaseSettings):
     rag_disabled: int = 0
 
     class Config:
-        env_file = ".env"
+        env_file = _FICHIER_ENV
         case_sensitive = False
         extra = "ignore"
 
