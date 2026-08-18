@@ -291,7 +291,8 @@ def _normalize_sentence_spacing(text: str) -> str:
     # on ne lui ajoute donc pas d'espace artificiel.
     text = re.sub(r"([.!?;،؛。！？])(?=\S)", r"\1 ", text)
     text = re.sub(r"\s+([,;:،؛])", r"\1", text)
-    return re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text
 
 
 def _replace_latex(text: str) -> str:

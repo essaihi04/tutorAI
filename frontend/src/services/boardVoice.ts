@@ -26,9 +26,9 @@ export interface BoardSpeakHandle {
 type Lang = 'fr' | 'ar' | 'mixed';
 
 const CACHE_MAX = 40;
-// Lecture volontairement un peu plus lente pour que les mots darija et les
-// unités scientifiques restent distincts, surtout sur les phrases mixtes.
-const TTS_PLAYBACK_RATE = 0.88;
+// Ne pas modifier la hauteur de la voix Academy côté navigateur. Les pauses
+// viennent de la ponctuation envoyée au serveur, pas d'un ralentissement WAV.
+const TTS_PLAYBACK_RATE = 1.0;
 
 class BoardVoiceService {
   /** Fragments déjà synthétisés (clé = langue + texte) → URL d'objet. */

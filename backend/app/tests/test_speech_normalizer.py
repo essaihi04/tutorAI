@@ -80,6 +80,10 @@ class SpeechNormalizerTests(unittest.TestCase):
         spoken = normalize_for_speech("La relation est N = 1/T.", "fr")
         self.assertIn("la fréquence est égale à un sur la période", spoken)
 
+    def test_tts_copie_ferme_la_derniere_phrase(self):
+        self.assertEqual(tts_service._ensure_terminal_period("Une phrase"), "Une phrase.")
+        self.assertEqual(tts_service._ensure_terminal_period("Une question ?"), "Une question ?")
+
 
 class TTSIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_academy_receives_spoken_copy_and_caption_keeps_original(self):

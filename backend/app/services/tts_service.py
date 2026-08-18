@@ -72,6 +72,14 @@ _MULTINEWLINE_RE = re.compile(r"\n{3,}")
 _VOICE_MARKER_RE = re.compile(r"\[(?:pause|hes|breath|laugh)\]", re.IGNORECASE)
 
 
+def _ensure_terminal_period(text: str) -> str:
+    """Give the final spoken sentence a natural falling intonation."""
+    stripped = (text or "").rstrip()
+    if stripped and stripped[-1] not in ".!?؟؛。！？…":
+        return stripped + "."
+    return stripped
+
+
 def strip_voice_markers(text: str) -> str:
     """Retire les marqueurs de diction — pour tout moteur SAUF Academy."""
     if not text:
@@ -645,7 +653,7 @@ async def stream_academy_pcm(text: str, lang: str):
     # chemin /tts passait par normalize_for_speech. Cela faisait lire à
     # Academy les chiffres, les unités et « N = 1/T » caractère par caractère.
     # Les deux chemins doivent envoyer exactement la même copie prononçable.
-    text = normalize_for_speech(text, lang)
+    text = _ensure_terminal_period(normalize_for_speech(text, lang))
     if not text.strip():
         return
     if len(text) > _ACADEMY_MAX_CHARS:
@@ -1218,7 +1226,7 @@ async def _synthesize_one_segment(
     display_text = clean_for_tts(text)
     if not display_text:
         return None
-    spoken_text = normalize_for_speech(display_text, language)
+    spoken_text = _ensure_terminal_period(normalize_for_speech(display_text, language))
     if not spoken_text:
         return None
     cache_text = _normalize_for_cache(spoken_text)
@@ -1379,7 +1387,7 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     display_text = clean_for_tts(text)
     if not display_text:
         return TTSResult(audio_b64=None, mime="", provider="empty", use_browser=False)
-    spoken_text = normalize_for_speech(display_text, language)
+    spoken_text = _ensure_terminal_period(normalize_for_speech(display_text, language))
     if not spoken_text:
         return TTSResult(audio_b64=None, mime="", provider="empty", use_browser=False)
 
@@ -1715,7 +1723,7 @@ async def warmup_cache() -> dict[str, int]:
 
         # Fast path: cache hit → no API call, no delay needed
         cleaned = clean_for_tts(phrase)
-        spoken_text = normalize_for_speech(cleaned, lang)
+        spoken_text = _ensure_terminal_period(normalize_for_speech(cleaned, lang))
         cache_text = _normalize_for_cache(spoken_text)
         provider, voice, ext = _route(lang, spoken_text)
         cache = _get_cache()

@@ -20,10 +20,10 @@ import type { QuickAction } from '../components/session/QuickActions';
 import SessionModeBanner from '../components/session/SessionModeBanner';
 import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
 
-// Academy prononce la darija plus naturellement quand on lui laisse un peu
-// d'espace entre les mots. Cette vitesse modérée s'applique aux deux chemins
-// audio (flux PCM et segments WAV), sans toucher au texte affiché.
-const TTS_PLAYBACK_RATE = 0.88;
+// On conserve la vitesse native d'Academy. Ralentir un WAV avec
+// `playbackRate` change aussi sa hauteur et donne une voix artificielle ; les
+// pauses doivent venir de la ponctuation et des frontières de phrases.
+const TTS_PLAYBACK_RATE = 1.0;
 
 /* ------------------------------------------------------------------ */
 /*  Raccourcis — adaptés au mode Coaching et au mode Libre/Explain     */
@@ -749,9 +749,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     const maintenant = ctx.currentTime;
     const depart = Math.max(maintenant + AVANCE_S, prochainDepartRef.current);
     source.start(depart);
-    // playbackRate ralentit aussi la durée réelle du bloc ; le prochain bloc
-    // doit être planifié après cette durée étendue, sinon les mots se
-    // chevaucheraient et la diction deviendrait incompréhensible.
     prochainDepartRef.current = depart + buffer.duration / TTS_PLAYBACK_RATE;
 
     sourcesPcmRef.current.push(source);

@@ -1214,8 +1214,10 @@ Comme tu peux le voir, il y a 2 phases principales."
     comme il est écrit par Academy). Le texte parlé doit ressembler à la parole
     d'un professeur, pas à une fiche de règles :
     • Chaque idée est une phrase complète avec un sujet, un verbe et un
-      complément. Utilise des virgules pour les petites pauses et un point à la
-      fin de chaque idée. Fais des phrases courtes, calmes et explicites.
+      complément. Une phrase = un point final obligatoire. Utilise des
+      virgules pour les petites pauses, puis mets un point après CHAQUE phrase,
+      jamais plusieurs phrases collées sans ponctuation. Fais des phrases
+      courtes, calmes et explicites.
     • INTERDIT dans le texte parlé : règles télégraphiques, étiquettes, listes,
       deux-points suivis d'une formule, ou relations écrites avec des symboles.
       N'écris jamais « N = 1/T », « v = λ × N », « 25 % », « 4 Hz », « a → b »
