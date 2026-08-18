@@ -13,6 +13,8 @@
  *    génère l'audio.
  */
 
+import { audioUnlock } from './audioUnlock';
+
 export interface BoardSpeakHandle {
   /** Résolue à la fin de la lecture. `true` si la voix a réellement parlé. */
   done: Promise<boolean>;
@@ -186,17 +188,34 @@ class BoardVoiceService {
         el.onended = () => settle(true);
         el.onerror = () => settle(false);
 
-        el.play()
-          .then(() => {
+        const lancer = () =>
+          el.play().then(() => {
             // Le tableau a pu demander la pause avant le début effectif.
             if (wantPaused) el.pause();
-          })
-          .catch((err) => {
-            // Autoplay refusé (pas d'interaction utilisateur récente) :
-            // le tableau retombera sur son écriture minutée.
+          });
+
+        lancer().catch(async (err) => {
+          // Autoplay refusé (pas d'interaction utilisateur récente). Plutôt
+          // que d'écrire en silence tout le reste du cours, on attend le
+          // déblocage — il vient du premier clic n'importe où dans
+          // l'application — et on réessaie une fois.
+          if (err?.name !== 'NotAllowedError') {
             console.warn('[BoardVoice] Lecture refusée par le navigateur:', err);
             settle(false);
+            return;
+          }
+          const debloque = await audioUnlock.attendreDeblocage(5000);
+          if (stopped || finished) return;
+          if (!debloque) {
+            console.warn('[BoardVoice] Son toujours bloqué — écriture silencieuse');
+            settle(false);
+            return;
+          }
+          lancer().catch((err2) => {
+            console.warn('[BoardVoice] Relance refusée:', err2);
+            settle(false);
           });
+        });
       });
     })();
 

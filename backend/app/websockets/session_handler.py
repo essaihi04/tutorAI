@@ -2548,7 +2548,18 @@ RÈGLES:
 
         # Progressive streaming: each segment is launched in parallel server-side
         # and forwarded to the client as soon as it is ready, in reading order.
-        any_sent = False
+        #
+        # `chunk_index` NUMEROTE CE QUI PART, pas le segment d'origine.
+        # `stream_synthesize_segments` saute les segments dont la synthese a
+        # echoue, en conservant leur indice de depart : le navigateur recevait
+        # donc une file trouee, et il attend forcement le morceau n avant de
+        # jouer le n+1.
+        #   - segment 0 en echec  -> le morceau d'indice 0 n'arrivait jamais et
+        #     la lecture ne demarrait PAS DU TOUT : tour entierement muet ;
+        #   - segment du milieu en echec -> la voix s'arretait la et le
+        #     navigateur patientait 90 s pour rien.
+        # Une numerotation contigue supprime les deux cas.
+        envoyes = 0
         try:
             async for i, total, seg in tts_service.stream_synthesize_segments(
                 ai_response, language=lang
@@ -2556,7 +2567,7 @@ RÈGLES:
                 try:
                     await self.websocket.send_json({
                         "type": "audio_chunk",
-                        "chunk_index": i,
+                        "chunk_index": envoyes,
                         "total_chunks": total,
                         "audio": seg.audio_b64,
                         "format": seg.mime,
@@ -2565,20 +2576,35 @@ RÈGLES:
                         "language": seg.language,
                         "text": seg.text,
                     })
-                    any_sent = True
+                    envoyes += 1
                 except Exception as e:
                     _safe_log(f"[TTS] Failed to send audio_chunk {i}/{total}: {e}")
                     return
         except Exception as e:
             _safe_log(f"[TTS] stream_synthesize_segments() failed: {e}")
-            return
 
-        if not any_sent:
+        # Le nombre annonce dans `total_chunks` est une PREVISION : si un
+        # segment echoue, il ne sera jamais atteint. Ce message dit combien de
+        # morceaux existent reellement, pour que le navigateur sache qu'il a
+        # tout entendu au lieu d'attendre un morceau qui ne viendra pas.
+        try:
+            await self.websocket.send_json({
+                "type": "audio_chunks_end",
+                "total_chunks": envoyes,
+            })
+        except Exception:
+            pass
+
+        if not envoyes:
             _safe_log("[TTS] No segments produced (empty or all failed)")
 
     # Longueurs de l'ouverture prononcée pendant que le LLM écrit encore.
     # En dessous de 30 caractères la phrase ne porte aucun sens ; au-delà de
     # 240 on repaie en synthèse ce qu'on gagne en réactivité.
+    #
+    # Le blanc qu'on entendait à la couture ouverture / suite ne se corrige PAS
+    # en allongeant l'ouverture : il venait du lecteur, qui n'avait que 60 ms
+    # d'avance sur le serveur (voir le tampon de gigue dans LearningSession).
     _OUVERTURE_MIN = 30
     _OUVERTURE_MAX = 240
 

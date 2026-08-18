@@ -6,6 +6,7 @@ import { useSessionStore, type SessionLanguage } from '../stores/sessionStore';
 import { wsService } from '../services/websocket';
 import { getLessons, getAllLessonProgress, startSession, endSession } from '../services/api';
 import { speechService } from '../services/speechService';
+import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
 import AIAvatar from '../components/session/AIAvatar';
 import ChatHistory from '../components/session/ChatHistory';
@@ -24,6 +25,12 @@ import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionM
 // `playbackRate` change aussi sa hauteur et donne une voix artificielle ; les
 // pauses doivent venir de la ponctuation et des frontières de phrases.
 const TTS_PLAYBACK_RATE = 1.0;
+
+// Avance de lecture visée par le lecteur de flux PCM, en secondes (le tampon
+// de gigue — voir le commentaire du lecteur, plus bas). Basse au départ pour
+// que le prof réponde vite, relevée dès la première coupure constatée.
+const AVANCE_MIN_S = 0.35;
+const AVANCE_MAX_S = 2.5;
 
 /* ------------------------------------------------------------------ */
 /*  Raccourcis — adaptés au mode Coaching et au mode Libre/Explain     */
@@ -445,12 +452,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       audioChunksRef.current = [];
       isPlayingChunksRef.current = false;
       expectedChunksRef.current = 0;
+      totalChunksFinalRef.current = 0;
       relanceAudioRef.current = null;
       arreterFluxPcm();
-      if (audioCtxRef.current) {
-        void audioCtxRef.current.close().catch(() => {});
-        audioCtxRef.current = null;
-      }
+      // Le contexte audio appartient à l'application, pas à cette page : le
+      // fermer ici obligeait la session suivante à en recréer un, né
+      // « suspended », et donc à redemander l'autorisation du son.
       streamingTextRef.current = '';
       streamingMsgIdRef.current = null;
       if (streamingRafRef.current) cancelAnimationFrame(streamingRafRef.current);
@@ -632,6 +639,13 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const audioChunksRef = useRef<Array<{index: number, audio: string, format: string}>>([]);
   const isPlayingChunksRef = useRef(false);
   const expectedChunksRef = useRef<number>(0);
+  /**
+   * Nombre de morceaux RÉELLEMENT produits, connu seulement quand le serveur
+   * ferme la file (`audio_chunks_end`). `expectedChunksRef`, lui, n'est qu'une
+   * prévision : un segment dont la synthèse échoue ne sera jamais envoyé, et
+   * l'attendre bloquait la voix pour tout le reste du tour.
+   */
+  const totalChunksFinalRef = useRef<number>(0);
   const streamingTextRef = useRef<string>('');
   const streamingMsgIdRef = useRef<string | null>(null);
   const streamingRafRef = useRef<number | null>(null);
@@ -646,59 +660,60 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const relanceAudioRef = useRef<(() => void) | null>(null);
   const [audioBloque, setAudioBloque] = useState(false);
 
-  const debloquerAudio = () => {
-    if (audioDebloqueRef.current) return;
+  const appliquerDeblocage = () => {
     audioDebloqueRef.current = true;
     setAudioBloque(false);
-    // Safari n'accorde l'autorisation qu'à un `play()` lancé DANS le geste :
-    // un son muet suffit à l'obtenir pour le reste de la session.
-    try {
-      const muet = new Audio(
-        'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=',
-      );
-      muet.volume = 0;
-      void muet.play().catch(() => {});
-    } catch {
-      /* pas de son muet possible : le geste suffit sur Chrome */
-    }
     const relance = relanceAudioRef.current;
     relanceAudioRef.current = null;
     relance?.();
   };
 
+  const debloquerAudio = () => {
+    void audioUnlock.ensureRunning().then((ok) => {
+      if (ok) appliquerDeblocage();
+    });
+  };
+
+  // Le déblocage est géré pour TOUTE l'application par `audioUnlock`, installé
+  // au démarrage : le clic de connexion ou celui sur la leçon suffit donc, et
+  // le professeur parle dès l'ouverture sans rien demander à l'élève. Ici on
+  // se contente d'en être averti pour relancer un morceau resté en attente.
   useEffect(() => {
-    const gestes: Array<keyof DocumentEventMap> = ['pointerdown', 'keydown', 'touchstart'];
-    const onGeste = () => debloquerAudio();
-    gestes.forEach((g) => document.addEventListener(g, onGeste, { once: true }));
-    return () => gestes.forEach((g) => document.removeEventListener(g, onGeste));
+    if (audioUnlock.pret) appliquerDeblocage();
+    return audioUnlock.onUnlock(() => {
+      if (audioUnlock.pret) appliquerDeblocage();
+    });
   }, []);
 
   // ── Lecteur de flux PCM ───────────────────────────────────────
   //
   // Web Audio plutôt qu'un élément <audio> : on peut planifier un bloc à un
   // instant précis, donc coller les blocs bout à bout sans le petit silence
-  // qu'imposait l'enchaînement d'éléments. Chaque bloc est joué à la fin
-  // exacte du précédent ; si le réseau prend du retard, on repart de
-  // `currentTime` plutôt que de planifier dans le passé (ce qui jouerait tout
-  // d'un coup et hacherait la voix).
-  const audioCtxRef = useRef<AudioContext | null>(null);
+  // qu'imposait l'enchaînement d'éléments.
+  //
+  // C'EST ICI que se jouaient les coupures entendues au milieu des réponses.
+  // Le premier bloc était planifié 60 ms plus tard seulement : le lecteur
+  // n'avait donc aucune avance sur le serveur. Or le GPU synthétise à peine
+  // plus vite que le temps réel et chaque bloc ne porte que ~170 ms de son —
+  // au moindre hoquet (gigue WebSocket, GPU chargé, passage de l'ouverture à
+  // la suite de la réponse) le bloc suivant arrivait APRÈS la fin du
+  // précédent, et l'élève entendait un blanc. Pas une fois par phrase : à
+  // chaque bloc, soit toutes les 170 ms.
+  //
+  // On garde donc une avance de lecture — un tampon de gigue. Le son part une
+  // fraction de seconde plus tard, mais il ne se coupe plus. Et si un blanc
+  // survient malgré tout, l'avance visée AUGMENTE : le lecteur s'adapte à la
+  // machine et au réseau de l'élève au lieu de hacher toute la séance.
   const prochainDepartRef = useRef(0);
   const sourcesPcmRef = useRef<AudioBufferSourceNode[]>([]);
   const fluxSampleRateRef = useRef(24000);
   const fluxTermineRef = useRef(false);
+  const premierBlocRef = useRef(true);
 
-  // Marge d'avance : le premier bloc est planifié 60 ms plus tard pour
-  // absorber la gigue du WebSocket. Au-delà on n'entend plus le délai, en
-  // deçà un bloc en retard produit un trou.
-  const AVANCE_S = 0.06;
+  const avanceRef = useRef(AVANCE_MIN_S);
 
-  const contexteAudio = (): AudioContext | null => {
-    if (audioCtxRef.current) return audioCtxRef.current;
-    const Ctor = window.AudioContext || (window as any).webkitAudioContext;
-    if (!Ctor) return null;
-    audioCtxRef.current = new Ctor();
-    return audioCtxRef.current;
-  };
+  /** Le contexte audio de l'application — partagé, jamais recréé ici. */
+  const contexteAudio = (): AudioContext | null => audioUnlock.context();
 
   const demarrerFluxPcm = (sampleRate: number) => {
     const ctx = contexteAudio();
@@ -709,7 +724,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // suite ensuite. Le second flux doit se COLLER au bout du premier — on ne
     // remet donc l'horloge à zéro que si plus rien n'est en attente, sinon
     // les deux moitiés de la phrase se joueraient l'une par-dessus l'autre.
-    if (sourcesPcmRef.current.length === 0) prochainDepartRef.current = 0;
+    if (prochainDepartRef.current <= ctx.currentTime) {
+      prochainDepartRef.current = 0;
+      // Reprise à froid : le silence qui précède n'est pas une coupure, il ne
+      // doit donc pas gonfler l'avance visée.
+      premierBlocRef.current = true;
+    }
     setSpeaking(true);
     revealPendingMedia();
 
@@ -717,12 +737,20 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // naît « suspended » tant que l'élève n'a pas touché la page. Les blocs
     // planifiés ne sont PAS perdus — l'horloge du contexte est gelée, donc
     // tout repart dans l'ordre au premier geste.
-    if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {});
-      if (!audioDebloqueRef.current) {
+    //
+    // La bannière ne s'affiche que si la reprise a RÉELLEMENT échoué. Elle
+    // apparaissait à tort : on la déclenchait sur l'état « suspended » sans
+    // attendre le résultat de resume(), alors que le clic de connexion avait
+    // déjà tout autorisé (voir services/audioUnlock.ts).
+    if (ctx.state !== 'running') {
+      void audioUnlock.ensureRunning().then((ok) => {
+        if (ok) {
+          setAudioBloque(false);
+          return;
+        }
         setAudioBloque(true);
-        relanceAudioRef.current = () => { void ctx.resume().catch(() => {}); };
-      }
+        relanceAudioRef.current = () => { void audioUnlock.ensureRunning(); };
+      });
     }
   };
 
@@ -747,7 +775,27 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     source.connect(ctx.destination);
 
     const maintenant = ctx.currentTime;
-    const depart = Math.max(maintenant + AVANCE_S, prochainDepartRef.current);
+    let depart: number;
+    if (prochainDepartRef.current > maintenant) {
+      // Il reste du son en réserve : on colle le bloc au bout, sans trou.
+      depart = prochainDepartRef.current;
+    } else {
+      // Réserve épuisée. Si ce n'est pas le premier bloc du flux, l'élève
+      // vient d'entendre un blanc : on relève l'avance visée pour que ça ne
+      // se reproduise pas au bloc suivant.
+      if (!premierBlocRef.current) {
+        // Croissance franche : viser juste au-dessus du manque d'un coup, pour
+        // ne pas infliger à l'élève une deuxième pause quelques secondes plus
+        // tard. L'avance survit au tour suivant — les réponses d'après partent
+        // donc avec la bonne réserve et ne se coupent plus du tout.
+        avanceRef.current = Math.min(AVANCE_MAX_S, avanceRef.current * 2.5 + 0.3);
+        console.warn(
+          `[Audio] Réserve épuisée — avance portée à ${avanceRef.current.toFixed(2)} s`,
+        );
+      }
+      depart = maintenant + avanceRef.current;
+    }
+    premierBlocRef.current = false;
     source.start(depart);
     prochainDepartRef.current = depart + buffer.duration / TTS_PLAYBACK_RATE;
 
@@ -775,6 +823,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     sourcesPcmRef.current = [];
     prochainDepartRef.current = 0;
     fluxTermineRef.current = false;
+    premierBlocRef.current = true;
   };
 
   const revealPendingMedia = () => {
@@ -892,6 +941,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
       console.log(`[Audio Chunk] Received chunk ${data.chunk_index + 1}/${data.total_chunks}`);
       
+      // Nouveau tour : la file du tour précédent doit disparaître. Sans ça les
+      // morceaux se mélangeaient — les indices repartent de zéro à chaque
+      // réponse — et le lecteur rejouait un fragment de la réponse d'avant, ou
+      // se croyait déjà au bout et se taisait.
+      if (data.chunk_index === 0 && !isPlayingChunksRef.current) {
+        audioChunksRef.current = [];
+        totalChunksFinalRef.current = 0;
+      }
+
       audioChunksRef.current.push({
         index: data.chunk_index,
         audio: data.audio,
@@ -899,10 +957,22 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       });
       audioChunksRef.current.sort((a, b) => a.index - b.index);
       expectedChunksRef.current = data.total_chunks;
-      
+
       // Start playing as soon as chunk 0 is available
       if (!isPlayingChunksRef.current && audioChunksRef.current[0]?.index === 0) {
         playAudioChunks();
+      }
+    });
+
+    // Le serveur a fini d'envoyer les morceaux et annonce combien il en a
+    // réellement produits. C'est ce nombre qui dit au lecteur qu'il a tout
+    // entendu : le `total_chunks` porté par chaque morceau n'est qu'une
+    // prévision, jamais atteinte si un segment a échoué en cours de route.
+    wsService.on('audio_chunks_end', (data) => {
+      const total = typeof data?.total_chunks === 'number' ? data.total_chunks : 0;
+      totalChunksFinalRef.current = total;
+      if (total === 0 && !isPlayingChunksRef.current) {
+        setSpeaking(false);
       }
     });
 
@@ -1299,21 +1369,29 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     
     isPlayingChunksRef.current = true;
     let nextIndex = 0;
-    
+
+    const terminerFile = (raison: string) => {
+      console.log(`[Audio] ${raison}`);
+      isPlayingChunksRef.current = false;
+      audioChunksRef.current = [];
+      expectedChunksRef.current = 0;
+      totalChunksFinalRef.current = 0;
+      setSpeaking(false);
+    };
+
+    /** Tout est joué : le serveur a clos la file et on est arrivé au bout. */
+    const fileEpuisee = () =>
+      totalChunksFinalRef.current > 0 && nextIndex >= totalChunksFinalRef.current;
+
     const playNext = () => {
       const chunk = audioChunksRef.current.find(c => c.index === nextIndex);
       if (chunk) {
-        const total = expectedChunksRef.current;
+        const total = totalChunksFinalRef.current || expectedChunksRef.current;
         console.log(`[Audio] Playing chunk ${nextIndex + 1}/${total}`);
         playAudioChunk(chunk.audio, chunk.format, () => {
           nextIndex++;
-          if (total > 0 && nextIndex >= total) {
-            // All chunks played
-            console.log('[Audio] All chunks played');
-            isPlayingChunksRef.current = false;
-            audioChunksRef.current = [];
-            expectedChunksRef.current = 0;
-            setSpeaking(false);
+          if (fileEpuisee()) {
+            terminerFile('All chunks played');
           } else {
             playNext();
           }
@@ -1336,19 +1414,22 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         const poll = setInterval(() => {
           waited += 200;
           const c = audioChunksRef.current.find(c => c.index === nextIndex);
+          // Le serveur a clos la file et on est arrivé au bout : on s'arrête
+          // TOUT DE SUITE, sans attendre les 90 s. C'est ce test qui évite de
+          // rester suspendu sur un morceau que la synthèse n'a jamais produit.
+          if (fileEpuisee()) {
+            clearInterval(poll);
+            terminerFile('Done');
+            return;
+          }
           const enAttendDautres = expectedChunksRef.current > 0
             && nextIndex < expectedChunksRef.current;
           if (c) {
             clearInterval(poll);
             playNext();
-          } else if (waited > (enAttendDautres ? ATTENTE_MAX_MS : 3000)
-                     || (expectedChunksRef.current > 0 && nextIndex >= expectedChunksRef.current)) {
+          } else if (waited > (enAttendDautres ? ATTENTE_MAX_MS : 3000)) {
             clearInterval(poll);
-            console.log('[Audio] Done');
-            isPlayingChunksRef.current = false;
-            audioChunksRef.current = [];
-            expectedChunksRef.current = 0;
-            setSpeaking(false);
+            terminerFile('Done (attente dépassée)');
           }
         }, 200);
       }
