@@ -6,6 +6,7 @@ d'échantillon. Se tromper d'un octet décale tout le reste du flux et le
 transforme en bruit blanc — d'où ces cas volontairement hostiles.
 """
 import asyncio
+import json
 import struct
 import time
 
@@ -125,6 +126,39 @@ def test_reponse_non_audio_ignoree(monkeypatch):
     _, morceaux = asyncio.run(_collecter())
 
     assert morceaux == []
+
+
+def test_flux_envoie_la_copie_prononcable_a_academy(monkeypatch):
+    """Le flux rapide ne doit pas contourner le normaliseur de parole."""
+    entete, pcm = _entete(), _pcm(100)
+    payloads = []
+
+    async def flux():
+        yield entete + pcm
+
+    def handler(request):
+        payloads.append(json.loads(request.content.decode("utf-8")))
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "audio/wav"},
+            content=flux(),
+        )
+
+    transport = httpx.MockTransport(handler)
+    vrai = httpx.AsyncClient
+    monkeypatch.setattr(
+        tts.httpx,
+        "AsyncClient",
+        lambda *a, **kw: vrai(transport=transport, timeout=5.0),
+    )
+
+    asyncio.run(_collecter("La relation est N = 1/T et vaut 25% en 4 Hz."))
+
+    assert payloads
+    texte = payloads[0]["texte"]
+    assert "la fréquence est égale à un sur la période" in texte
+    assert "vingt-cinq pour cent" in texte
+    assert "quatre Hertz" not in texte
 
 
 def test_abandon_si_le_premier_son_tarde_trop(monkeypatch):

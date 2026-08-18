@@ -20,6 +20,11 @@ import type { QuickAction } from '../components/session/QuickActions';
 import SessionModeBanner from '../components/session/SessionModeBanner';
 import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
 
+// Academy prononce la darija plus naturellement quand on lui laisse un peu
+// d'espace entre les mots. Cette vitesse modérée s'applique aux deux chemins
+// audio (flux PCM et segments WAV), sans toucher au texte affiché.
+const TTS_PLAYBACK_RATE = 0.88;
+
 /* ------------------------------------------------------------------ */
 /*  Raccourcis — adaptés au mode Coaching et au mode Libre/Explain     */
 /* ------------------------------------------------------------------ */
@@ -738,12 +743,16 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     const source = ctx.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = TTS_PLAYBACK_RATE;
     source.connect(ctx.destination);
 
     const maintenant = ctx.currentTime;
     const depart = Math.max(maintenant + AVANCE_S, prochainDepartRef.current);
     source.start(depart);
-    prochainDepartRef.current = depart + buffer.duration;
+    // playbackRate ralentit aussi la durée réelle du bloc ; le prochain bloc
+    // doit être planifié après cette durée étendue, sinon les mots se
+    // chevaucheraient et la diction deviendrait incompréhensible.
+    prochainDepartRef.current = depart + buffer.duration / TTS_PLAYBACK_RATE;
 
     sourcesPcmRef.current.push(source);
     source.onended = () => {
@@ -1361,6 +1370,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     const audioBlob = new Blob([byteArray], { type: mimeType || 'audio/wav' });
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
+    audio.playbackRate = TTS_PLAYBACK_RATE;
+    audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
     
     audio.onplay = () => {
       setSpeaking(true);
@@ -1439,6 +1450,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     const audioUrl = URL.createObjectURL(audioBlob);
     audioUrlRef.current = audioUrl;
     const audio = new Audio(audioUrl);
+    audio.playbackRate = TTS_PLAYBACK_RATE;
+    audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
     audioRef.current = audio;
     audio.onplay = () => {
       revealPendingMedia();

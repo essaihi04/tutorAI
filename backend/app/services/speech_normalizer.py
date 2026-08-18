@@ -55,6 +55,24 @@ _AR_MONTHS = (
 )
 _SUPERSCRIPT_TRANSLATION = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺", "0123456789-+")
 
+# Le modèle Academy lit caractère par caractère. Un article arabe placé juste
+# devant un mot français ("الـ motif", "الـ Hertz") devient donc "al motif"
+# et casse le code-switching. Cette sécurité retire uniquement ce préfixe
+# devant les mots latins dans la copie envoyée au TTS, jamais dans le texte UI.
+_ARABIC_ARTICLE_BEFORE_LATIN_RE = re.compile(
+    r"(?<![\w\u0600-\u06ff])(?:الـ|ال|لـ|ل)\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])",
+)
+
+# Formules que le modèle laisse parfois passer dans le canal oral malgré les
+# consignes. Elles sont reformulées en phrases, plutôt que de laisser le TTS
+# lire « N égal 1 slash T ».
+_KNOWN_SPOKEN_FORMULAS = (
+    (re.compile(r"(?i)(?<!\w)N\s*=\s*1\s*/\s*T(?!\w)"),
+     "la fréquence est égale à un sur la période"),
+    (re.compile(r"(?i)(?<!\w)v\s*=\s*λ\s*(?:×|x|\*)\s*N(?!\w)"),
+     "la vitesse est égale à la longueur d'onde fois la fréquence"),
+)
+
 # Longest symbols must be matched first.  Values are (singular, plural).
 _UNITS_FR = {
     "mol·L⁻¹": ("mole par litre", "moles par litre"),
@@ -223,6 +241,59 @@ def _replace_lexicon(text: str, lang: str) -> str:
     return text
 
 
+def _replace_oral_formula_fragments(text: str, lang: str) -> str:
+    """Turn common symbolic relations into complete spoken sentences."""
+    for pattern, french_phrase in _KNOWN_SPOKEN_FORMULAS:
+        if lang == "ar":
+            phrase = {
+                "la fréquence est égale à un sur la période":
+                    "la fréquence كتساوي واحد على la période",
+                "la vitesse est égale à la longueur d'onde fois la fréquence":
+                    "la vitesse كتساوي la longueur d'onde ف la fréquence",
+            }.get(french_phrase, french_phrase)
+        else:
+            phrase = french_phrase
+        text = pattern.sub(phrase, text)
+    return text
+
+
+def _replace_standalone_units(text: str, lang: str) -> str:
+    """Expand units written without a number, for example ``(Hz)``."""
+    replacements = {
+        "Hz": "هرتز" if lang == "ar" else "hertz",
+        "Hertz": "هرتز" if lang == "ar" else "hertz",
+        "kHz": "كيلوهرتز" if lang == "ar" else "kilohertz",
+        "MHz": "ميغاهرتز" if lang == "ar" else "mégahertz",
+        "GHz": "غيغاهرتز" if lang == "ar" else "gigahertz",
+    }
+    for source, spoken in replacements.items():
+        text = re.sub(rf"(?<![\w]){re.escape(source)}(?![\w])", spoken, text)
+    return text
+
+
+def _replace_generic_fraction_bar(text: str) -> str:
+    """Make a remaining algebraic slash audible as « sur ».
+
+    Unit expressions such as m/s and mol/L are expanded earlier. This rule is
+    limited to short alphanumeric formula fragments so URLs and ordinary prose
+    are not changed.
+    """
+    return re.sub(
+        r"(?<![\w/])([A-Za-zα-ωΑ-Ω0-9]+)\s*/\s*([A-Za-zα-ωΑ-Ω0-9]+)(?![\w/])",
+        r"\1 sur \2",
+        text,
+    )
+
+
+def _normalize_sentence_spacing(text: str) -> str:
+    """Give the acoustic model visible pauses after punctuation."""
+    # Le deux-points sert souvent dans un ratio (1:2) ou une heure (14:30) ;
+    # on ne lui ajoute donc pas d'espace artificiel.
+    text = re.sub(r"([.!?;،؛。！？])(?=\S)", r"\1 ", text)
+    text = re.sub(r"\s+([,;:،؛])", r"\1", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
 def _replace_latex(text: str) -> str:
     text = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"\1/\2", text)
     text = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r" racine carrée de \1 ", text)
@@ -368,20 +439,26 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     text = unicodedata.normalize("NFC", text)
     lang = _speech_language(language, text)
     text = _replace_latex(text)
+    text = _replace_oral_formula_fragments(text, lang)
+    # Ne jamais laisser l'article arabe « al » s'accrocher à un terme
+    # scientifique français : « la période », pas « الـ période ».
+    text = _ARABIC_ARTICLE_BEFORE_LATIN_RE.sub("", text)
     text = _replace_lexicon(text, lang)
     text = _replace_dates(text, lang)
     text = _replace_times(text, lang)
     text = _replace_scientific_notation(text, lang)
     text = _replace_units(text, lang)
+    text = _replace_standalone_units(text, lang)
     text = _replace_powers(text, lang)
     text = _replace_percentages_and_fractions(text, lang)
     text = _replace_ordinals(text, lang)
     text = _replace_remaining_numbers(text, lang)
     text = _replace_math_symbols(text, lang)
+    text = _replace_generic_fraction_bar(text)
     # Braces and stray TeX commands are not meaningful after the known math
     # constructs above have been expanded.
     text = re.sub(r"\\[A-Za-z]+", " ", text)
     text = text.translate(str.maketrans({"{": " ", "}": " ", "_": " "}))
-    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = _normalize_sentence_spacing(text)
     text = re.sub(r"\s+([,.;:!?،])", r"\1", text)
     return text.strip()

@@ -65,6 +65,21 @@ class SpeechNormalizerTests(unittest.TestCase):
         self.assertNotIn("ne pas lire", cleaned)
         self.assertIn("$E=mc^2$", cleaned)
 
+    def test_mixed_darija_does_not_attach_arabic_article_to_french_terms(self):
+        spoken = normalize_for_speech(
+            "مرات اللي كيعاود فيها الـ motif نفسو فـ ثانية وحدة. "
+            "وحدتها الـ Hertz (Hz). والعلاقة بينها وبين la période هي: N = 1/T.",
+            "mixed",
+        )
+        self.assertNotIn("الـ motif", spoken)
+        self.assertNotIn("الـ Hertz", spoken)
+        self.assertIn("la fréquence كتساوي واحد على la période", spoken)
+        self.assertNotIn("N يساوي", spoken)
+
+    def test_generic_formula_slash_is_spoken_as_a_fraction(self):
+        spoken = normalize_for_speech("La relation est N = 1/T.", "fr")
+        self.assertIn("la fréquence est égale à un sur la période", spoken)
+
 
 class TTSIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_academy_receives_spoken_copy_and_caption_keeps_original(self):

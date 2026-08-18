@@ -641,6 +641,11 @@ async def stream_academy_pcm(text: str, lang: str):
         return
 
     text = strip_voice_markers(text)
+    # Le flux PCM rapide recevait auparavant le texte brut, alors que le
+    # chemin /tts passait par normalize_for_speech. Cela faisait lire à
+    # Academy les chiffres, les unités et « N = 1/T » caractère par caractère.
+    # Les deux chemins doivent envoyer exactement la même copie prononçable.
+    text = normalize_for_speech(text, lang)
     if not text.strip():
         return
     if len(text) > _ACADEMY_MAX_CHARS:

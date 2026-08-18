@@ -26,6 +26,9 @@ export interface BoardSpeakHandle {
 type Lang = 'fr' | 'ar' | 'mixed';
 
 const CACHE_MAX = 40;
+// Lecture volontairement un peu plus lente pour que les mots darija et les
+// unités scientifiques restent distincts, surtout sur les phrases mixtes.
+const TTS_PLAYBACK_RATE = 0.88;
 
 class BoardVoiceService {
   /** Fragments déjà synthétisés (clé = langue + texte) → URL d'objet. */
@@ -158,6 +161,8 @@ class BoardVoiceService {
       if (stopped || !url) return false;
 
       audio = new Audio(url);
+      audio.playbackRate = TTS_PLAYBACK_RATE;
+      audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
       this.current = audio;
 
       return await new Promise<boolean>((resolve) => {
