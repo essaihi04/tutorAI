@@ -63,6 +63,46 @@ _ARABIC_ARTICLE_BEFORE_LATIN_RE = re.compile(
     r"(?<![\w\u0600-\u06ff])(?:الـ|ال|لـ|ل)\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])",
 )
 
+# ── Frontières d'écriture ────────────────────────────────────────
+#
+# Le tuteur parle en code-switching : darija en alphabet arabe, termes
+# scientifiques en français. Trois accidents d'écriture cassent le TTS à cet
+# endroit précis, et tous les trois sont invisibles à l'œil.
+
+# 1. La TATWEEL (U+0640), ce trait d'étirement typographique que le modèle
+#    colle aux prépositions courtes : « فـ le noyau », « بـ la méthode ». Ce
+#    n'est pas une lettre — c'est une décoration. Le TTS, lui, la traite
+#    comme un caractère et la prononce, ce qui donne un raclement au milieu
+#    du mot. On la retire partout : « فـ » redevient « ف ».
+_TATWEEL = "ـ"
+
+# 2. Le collage arabe/latin sans espace : « وla protéine », « فle cytoplasme ».
+#    Le moteur voit un seul token hybride qu'il ne sait lire dans aucune des
+#    deux langues. Un espace suffit à lui rendre deux mots prononçables ;
+#    il ne change rien au sens, et le texte affiché à l'élève n'est pas touché.
+_FRONTIERE_ECRITURES = re.compile(
+    "(?<=[؀-ۿ])(?=[A-Za-zÀ-ÖØ-öø-ÿ])"
+    "|"
+    "(?<=[A-Za-zÀ-ÖØ-öø-ÿ])(?=[؀-ۿ])"
+)
+
+
+def _separer_ecritures(text: str) -> str:
+    """Rend lisible la frontière entre les deux alphabets."""
+    return _FRONTIERE_ECRITURES.sub(" ", text.replace(_TATWEEL, ""))
+
+
+def _ouvrir_pause_apres_deux_points(text: str) -> str:
+    """Le deux-points d'annonce mérite une respiration, pas celui d'un ratio.
+
+    Appliqué TÔT, tant que les chiffres sont encore des chiffres : plus loin
+    dans la chaîne, « 1:2 » est déjà devenu « un:deux » et le garde-fou
+    numérique ne voit plus rien à protéger. Une heure (« 14:30 ») doit elle
+    aussi rester intacte, sinon `_replace_times` ne la reconnaît plus.
+    """
+    return re.sub(r"(?<!\d):(?!\d)(?=\S)", ": ", text)
+
+
 # Formules que le modèle laisse parfois passer dans le canal oral malgré les
 # consignes. Elles sont reformulées en phrases, plutôt que de laisser le TTS
 # lire « N égal 1 slash T ».
@@ -286,10 +326,20 @@ def _replace_generic_fraction_bar(text: str) -> str:
 
 
 def _normalize_sentence_spacing(text: str) -> str:
-    """Give the acoustic model visible pauses after punctuation."""
-    # Le deux-points sert souvent dans un ratio (1:2) ou une heure (14:30) ;
-    # on ne lui ajoute donc pas d'espace artificiel.
+    """Give the acoustic model visible pauses after punctuation.
+
+    Le modèle acoustique ne respire que là où il voit une ponctuation. Un
+    tuteur qui explique enchaîne naturellement des propositions longues ;
+    sans marque, elles sortent d'un seul souffle et deviennent
+    incompréhensibles pour un élève qui découvre la notion.
+    """
     text = re.sub(r"([.!?;،؛。！？])(?=\S)", r"\1 ", text)
+
+    # Une énumération dictée à l'oral est écrite par le modèle avec des
+    # retours à la ligne et sans ponctuation finale. Sans point, les éléments
+    # se collent : « la période la fréquence la longueur d'onde ».
+    text = re.sub(r"([^\s.!?:;،؛])\s*\n+\s*(?=\S)", r"\1. ", text)
+
     text = re.sub(r"\s+([,;:،؛])", r"\1", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     return text
@@ -439,6 +489,11 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     # them into ambiguous plain characters before we can identify a power.
     text = unicodedata.normalize("NFC", text)
     lang = _speech_language(language, text)
+    # En premier : les règles suivantes reconnaissent des MOTS (unités,
+    # abréviations, nombres). Une tatweel ou un collage d'alphabets les fait
+    # toutes échouer silencieusement.
+    text = _separer_ecritures(text)
+    text = _ouvrir_pause_apres_deux_points(text)
     text = _replace_latex(text)
     text = _replace_oral_formula_fragments(text, lang)
     # Ne jamais laisser l'article arabe « al » s'accrocher à un terme

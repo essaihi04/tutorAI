@@ -80,7 +80,8 @@ class Settings(BaseSettings):
     academy_tts_normaliser: int = 1      # applique l'orthographe darija (ال → ل)
     academy_tts_exaggeration: float = 0.45   # > 0.6 dérive sur les phrases longues
     academy_tts_temperature: float = 0.7     # 0.3 = quasi déterministe, plus plat
-    academy_tts_cfg_weight: float = 0.5      # 0.7 colle davantage au texte
+    academy_tts_cfg_weight: float = 0.3      # bas = debit plus lent et pose ;
+    #                                        0.7 colle au texte mais accelere
     # Flux continu (/tts/stream) : premier son ~5x plus tôt (2,9 s au lieu de
     # 14,5 s, mesuré). ⚠️ Tant que le serveur n'est pas corrigé, il PERD ~0,7 s
     # à la fin de chaque énoncé (le dernier mot est coupé). Mettre à 0 pour

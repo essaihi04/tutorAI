@@ -323,7 +323,10 @@ async def _synthesize_google_cloud(text: str, lang: str) -> Optional[bytes]:
     payload = {
         "input": {"text": text},
         "voice": {"languageCode": lang_code, "name": voice_name},
-        "audioConfig": {"audioEncoding": "MP3", "speakingRate": 1.0},
+        # 0.9 : un eleve qui decouvre la notion a besoin du temps de la
+        # comprendre pendant qu'elle est dite. En dessous de 0.85 la voix
+        # devient trainante et l'attention decroche.
+        "audioConfig": {"audioEncoding": "MP3", "speakingRate": 0.9},
     }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

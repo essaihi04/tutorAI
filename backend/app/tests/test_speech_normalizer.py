@@ -108,3 +108,54 @@ class TTSIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ── Frontieres d'ecriture (code-switching darija / francais) ──────
+
+def test_la_tatweel_ne_se_prononce_pas():
+    """« فـ le noyau » : ce trait est une decoration typographique, pas une
+    lettre. Le TTS la traite comme un caractere et racle au milieu du mot."""
+    parle = normalize_for_speech("كاينة فـ le noyau", "mixed")
+    assert "ـ" not in parle
+    assert "ف le noyau" in parle
+
+
+def test_un_mot_latin_colle_a_l_arabe_est_detache():
+    """« وla proteine » est un token hybride que le moteur ne sait lire
+    dans aucune des deux langues."""
+    assert normalize_for_speech("وla proteine", "mixed").startswith("و la")
+
+
+def test_le_detachement_ne_perd_aucune_lettre():
+    """Le premier correctif ecrivait un caractere de controle a la place de
+    la lettre capturee : elle disparaissait du texte parle."""
+    parle = normalize_for_speech("الطبق، وla proteine", "mixed")
+    assert "و" in parle
+    assert not [c for c in parle if ord(c) < 32]
+
+
+def test_les_sigles_composes_sont_epeles():
+    """« ARN » ne peut pas attraper « ARNm » : la frontiere de mot du lexique
+    s'arrete avant le suffixe."""
+    assert "ARNm" not in normalize_for_speech("le ARNm sort du noyau", "fr")
+
+
+# ── Respiration ──────────────────────────────────────────────────
+
+def test_le_deux_points_d_annonce_ouvre_une_pause():
+    assert ": transcription" in normalize_for_speech("les etapes:transcription", "fr")
+
+
+def test_le_deux_points_d_un_ratio_reste_colle():
+    """Applique tot, tant que les chiffres sont encore des chiffres."""
+    assert "un:deux" in normalize_for_speech("le rapport 1:2", "fr")
+
+
+def test_une_heure_survit_a_la_regle_du_deux_points():
+    assert "heures" in normalize_for_speech("il est 14:30", "fr")
+
+
+def test_une_enumeration_en_lignes_recoit_ses_points():
+    """Sans point, les elements se collent et sortent d'un seul souffle."""
+    parle = normalize_for_speech("la periode\nla frequence\nla longueur", "fr")
+    assert parle.count(".") >= 2
