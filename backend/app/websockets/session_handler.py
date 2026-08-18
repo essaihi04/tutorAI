@@ -878,12 +878,15 @@ class SessionHandler:
                 "(أ ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي ء آ ة), "
                 "SAUF pour les termes techniques/scientifiques qui RESTENT EN FRANÇAIS écrits en lettres latines "
                 "(ex : la vitesse, l'accélération, la force, l'énergie cinétique, la dérivée, la fonction, "
-                "le vecteur, la molécule, la mitose, le pH, l'équation). "
+                "le vecteur, la molécule, la mitose, l'équation). Les abréviations doivent être séparées et "
+                "écrites phonétiquement en arabe pour le TTS : pH devient بي آش, ADN devient آ دي إن, "
+                "SVT devient إس ڤي تي et QCM devient كيو سي إم. "
                 "N'utilise JAMAIS la traduction arabe classique de ces termes (السرعة، التسارع، القوة…). "
                 "La phrase est TOUJOURS un MÉLANGE naturel darija + français (code-switching de prof "
                 "marocain) : jamais une phrase 100 % arabe, jamais d'arabe classique (MSA). "
-                "Le PRÉNOM de l'élève s'écrit TOUJOURS en caractères latins avec son orthographe "
-                "française (« Ferdaous », jamais فرداوس). "
+                "Le PRÉNOM de l'élève s'écrit en alphabet arabe dans la phrase parlée destinée au TTS. "
+                "Transcris-le phonétiquement (« Zouhair » devient زهير, « Ferdaous » devient فردوس) "
+                "et ne laisse jamais sa forme latine dans le texte audible. "
                 "Exemples corrects :\n"
                 "  « واخا! دابا غادي نشوفو la vitesse initiale. واش عرفتي شنو هي la force؟ »\n"
                 "  « مزيان خويا، la dérivée ديال هاد la fonction كتساوي 2x. »\n"
@@ -3063,7 +3066,7 @@ RÈGLES STRICTES:
                 lesson_plan_opening = f"""Démarre la séance « {_lesson_topic} » en MODE VISUEL.
 
 RÈGLES OBLIGATOIRES :
-1. Salue {_first_name} en UNE phrase de 15 mots maximum.
+1. Salue l'élève par son prénom en alphabet arabe, en le transcrivant depuis le profil ({_first_name}), en UNE phrase de 15 mots maximum. Ne recopie pas la forme latine.
 2. Écris immédiatement OUVRIR_IMAGE afin d'afficher la ressource d'activation.
 3. Ne donne encore aucun paragraphe de cours et n'affiche pas de plan textuel.
 4. Pose UNE question d'observation très courte sur ce que l'élève voit.
@@ -3077,12 +3080,12 @@ But : l'élève observe et agit avant de lire l'explication."""
                     "activation": lesson_plan_opening,
                     "exploration": lesson_plan_opening,
                     "explanation": lesson_plan_opening,
-                    "application": f"Salue {_first_name} en une phrase, écris OUVRIR_SIMULATION et laisse-le agir avant toute explication.",
-                    "consolidation": f"Félicite {_first_name} en une phrase, écris OUVRIR_SIMULATION puis demande une synthèse très courte.",
+                    "application": f"Salue l'élève par son prénom en alphabet arabe, transcrit depuis le profil ({_first_name}), en une phrase, écris OUVRIR_SIMULATION et laisse-le agir avant toute explication. Ne recopie pas la forme latine.",
+                    "consolidation": f"Félicite l'élève par son prénom en alphabet arabe, transcrit depuis le profil ({_first_name}), en une phrase, écris OUVRIR_SIMULATION puis demande une synthèse très courte. Ne recopie pas la forme latine.",
                     "libre": (
-                        f"Salue l'étudiant PAR SON PRÉNOM ({_first_name}) "
+                        f"Salue l'étudiant par son prénom en alphabet arabe, transcrit depuis le profil ({_first_name}), "
                         "et dis-lui qu'il peut poser n'importe quelle question sur les matières du BAC "
-                        "(Math, Physique, Chimie, SVT). Sois bref, 1-2 phrases max, chaleureux et encourageant."
+                        "(Math, Physique, Chimie, SVT). Ne recopie pas la forme latine. Sois bref, 1-2 phrases max, chaleureux et encourageant."
                     ),
                 }
                 opening_user_msg = opening_prompt.get(self.current_phase, lesson_plan_opening)

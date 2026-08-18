@@ -58,6 +58,19 @@ class SpeechNormalizerTests(unittest.TestCase):
         self.assertEqual(normalize_for_speech("2,5", "mixed"), "deux virgule cinq")
         self.assertIn("جوج فاصلة خمسة", normalize_for_speech("القيمة 2,5", "mixed"))
 
+    def test_ph_is_spelled_out_for_academy(self):
+        spoken = normalize_for_speech("الـ 7 هو pH محايد.", "mixed")
+        self.assertIn("بي آش", spoken)
+        self.assertNotIn("pH", spoken)
+
+    def test_student_names_are_spoken_in_arabic(self):
+        self.assertEqual(
+            normalize_for_speech(
+                "سلام Zouhair، مرحبا Ferdaous و Yassine.", "mixed"
+            ),
+            "سلام زهير، مرحبا فردوس و ياسين.",
+        )
+
     def test_markup_is_removed_but_math_is_preserved_for_next_stage(self):
         cleaned = tts_service.clean_for_tts(
             "<board>ne pas lire 25%</board> Résultat : $E=mc^2$."
