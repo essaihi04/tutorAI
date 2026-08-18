@@ -1,13 +1,16 @@
 """
 TTS Service with language-aware router and filesystem cache.
 
-Routing strategy (server-side only, no browser Web Speech API):
-  - `fr`      → Google Cloud TTS Standard (fr-FR)  ~$4 / 1M chars
-  - `ar`      → Google Cloud TTS Standard (ar-XA)  ~$4 / 1M chars
-  - `mixed`   → Hybrid Darija:
-                  * short / key phrases  → Gemini 2.5 Flash TTS (authentic voice)
-                  * long explanations    → Google Cloud TTS ar-XA (MSA fallback)
-                  * Gemini failure       → auto-fallback to Google Cloud ar-XA
+Chaîne de synthèse, du meilleur au dernier recours :
+  1. Academy  — notre modèle darija fine-tuné, la voix du produit
+  2. Gradio   — le même modèle servi par Colab/Gradio
+  3. Google Cloud TTS Standard — fr-FR ou ar-XA selon la langue
+
+Gemini a été RETIRÉ. Son quota s'épuisait en production, et il occupait la
+place de dernier recours sans pouvoir la tenir : quand Academy saturait, la
+chaîne descendait jusqu'à lui et s'arrêtait là, sans jamais essayer Google
+Cloud. Résultat mesuré côté élève : plus aucun son, alors qu'un fournisseur
+disponible attendait derrière.
 
 A shared filesystem cache keyed by md5(provider|voice|lang|text) avoids
 re-synthesising recurring phrases (openings, transitions, QCM feedback …).
@@ -63,6 +66,18 @@ _TAG_PATTERNS = [
     re.compile(r"[📚📝📊📈📉✏️✅❌⚠️💡🎯🔥⭐️✨🚀👍👎💬🧠📖📘📙❓❗️]"),
 ]
 
+# Les modèles peuvent aussi renvoyer des emojis qui ne figurent pas dans la
+# liste ci-dessus, ainsi que des émoticônes ASCII. Ils sont destinés à l'UI,
+# jamais à la voix : les remplacer par un espace évite qu'un symbole isolé ne
+# soit prononcé ou ne colle les deux mots voisins.
+_EMOJI_RE = re.compile(
+    r"[\U0001F000-\U0001FAFF\u2600-\u26FF\u2700-\u27BF\uFE0F\u200D]"
+)
+_ASCII_EMOTICON_RE = re.compile(
+    r"(?<!\w)(?:[:;=8][-^']?[)(DPpOo/\\|]|<3|[xX][dD]|-_-|\^_\^)(?!\w)",
+    re.IGNORECASE,
+)
+
 _MULTISPACE_RE = re.compile(r"[ \t]{2,}")
 _MULTINEWLINE_RE = re.compile(r"\n{3,}")
 
@@ -100,6 +115,8 @@ def clean_for_tts(text: str) -> str:
     out = out.replace("**", "").replace("__", "").replace("~~", "")
     out = re.sub(r"(?<!\w)[*_~](?=\w)|(?<=\w)[*_~](?!\w)", "", out)
     out = re.sub(r"^\s*\|.*\|\s*$", "", out, flags=re.MULTILINE)
+    out = _EMOJI_RE.sub(" ", out)
+    out = _ASCII_EMOTICON_RE.sub(" ", out)
     out = _MULTISPACE_RE.sub(" ", out)
     out = _MULTINEWLINE_RE.sub("\n\n", out)
     return out.strip()
@@ -111,7 +128,7 @@ def clean_for_tts(text: str) -> str:
 class TTSResult:
     audio_b64: Optional[str]   # base64-encoded audio (None if use_browser)
     mime: str                  # "audio/mpeg" or "audio/wav"
-    provider: str              # "browser" | "gemini" | "google_cloud"
+    provider: str              # "academy" | "gradio" | "google_cloud"
     use_browser: bool = False  # True → frontend should call Web Speech API
     cached: bool = False
 
@@ -183,120 +200,16 @@ def _get_cache() -> Optional[_TTSCache]:
     return _cache
 
 
-# ─── Provider: Gemini 2.5 Flash Native Audio ─────────────────────────
-# Used for Darija (mixed). Returns 16-bit PCM at 24 kHz → we wrap in WAV.
+def _voix_gcloud(lang: str) -> str:
+    """La voix Google Cloud correspondant à la langue.
 
-_GEMINI_TTS_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "{model}:generateContent?key={key}"
-)
-
-
-def _pcm_to_wav(pcm: bytes, sample_rate: int = 24000, channels: int = 1, bits: int = 16) -> bytes:
-    """Wrap raw PCM bytes in a minimal WAV header."""
-    byte_rate = sample_rate * channels * bits // 8
-    block_align = channels * bits // 8
-    data_size = len(pcm)
-    return (
-        b"RIFF"
-        + struct.pack("<I", 36 + data_size)
-        + b"WAVE"
-        + b"fmt "
-        + struct.pack("<IHHIIHH", 16, 1, channels, sample_rate, byte_rate, block_align, bits)
-        + b"data"
-        + struct.pack("<I", data_size)
-        + pcm
-    )
-
-
-_GEMINI_STYLE = (
-    "You are a warm, pedagogical Moroccan BAC teacher. "
-    "Read the text naturally in darija marocaine when in Arabic script. "
-    "Pronounce Latin-script scientific terms (la vitesse, la dérivée, "
-    "la force, etc.) with a standard French accent, without translating them. "
-    "Keep a clear, calm, encouraging delivery."
-)
-
-
-# Circuit breaker: when Gemini is over quota we must stop hitting it for a
-# while, otherwise every 429 still counts against the quota and every segment
-# wastes ~1s of latency waiting for the error. While the breaker is open,
-# _route_with_breaker() sends mixed traffic to Google Cloud ar-XA.
-_GEMINI_COOLDOWN_UNTIL: float = 0.0
-_GEMINI_COOLDOWN_SECONDS = 60.0
-
-
-def _gemini_is_available() -> bool:
-    return time.time() >= _GEMINI_COOLDOWN_UNTIL
-
-
-def _trip_gemini_breaker(reason: str):
-    global _GEMINI_COOLDOWN_UNTIL
-    _GEMINI_COOLDOWN_UNTIL = time.time() + _GEMINI_COOLDOWN_SECONDS
-    _safe_log(
-        f"[TTS] Gemini circuit breaker OPEN for {_GEMINI_COOLDOWN_SECONDS:.0f}s "
-        f"(reason: {reason}) — routing to Google Cloud ar-XA"
-    )
-
-
-async def _synthesize_gemini(text: str, lang: str) -> Optional[bytes]:
-    """Call Gemini 2.5 Flash TTS. Returns WAV bytes or None on error."""
-    text = strip_voice_markers(text)
-    key = settings.gemini_tts_api_key
-    if not key:
-        _safe_log("[TTS] Gemini TTS skipped: no API key")
-        return None
-
-    if not _gemini_is_available():
-        # Breaker is open — don't waste a call
-        return None
-
-    url = _GEMINI_TTS_URL.format(model=settings.gemini_tts_model, key=key)
-
-    # Gemini 2.5 Flash preview TTS expects an inline style prefix like
-    # "Say warmly: <text>" (not systemInstruction). Keep the prefix short.
-    styled_text = f"Dis chaleureusement: {text}"
-
-    payload = {
-        "contents": [{"parts": [{"text": styled_text}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {"voiceName": settings.gemini_tts_voice}
-                }
-            },
-        },
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
-        if resp.status_code != 200:
-            _safe_log(f"[TTS][Gemini] HTTP {resp.status_code}: {resp.text[:200]}")
-            if resp.status_code == 429:
-                _trip_gemini_breaker("HTTP 429 quota exceeded")
-            return None
-        data = resp.json()
-        parts = (
-            data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [])
-        )
-        for part in parts:
-            inline = part.get("inlineData") or part.get("inline_data")
-            if inline and inline.get("data"):
-                pcm = base64.b64decode(inline["data"])
-                return _pcm_to_wav(pcm)
-        _safe_log(f"[TTS][Gemini] No audio in response: {str(data)[:200]}")
-        return None
-    except Exception as e:
-        _safe_log(f"[TTS][Gemini] Exception: {e}")
-        return None
+    Même règle que le routeur : le français a sa voix, tout le reste part sur
+    l'arabe standard. Extraite ici parce que les replis en ont besoin autant
+    que le routeur, et qu'une divergence entre les deux se traduirait par un
+    prof qui change de voix au milieu d'une réponse.
+    """
+    return (settings.google_cloud_tts_voice_fr if lang == "fr"
+            else settings.google_cloud_tts_voice_ar)
 
 
 # ─── Provider: Google Cloud TTS Standard ─────────────────────────────
@@ -307,7 +220,7 @@ _GCLOUD_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize?key={k
 async def _synthesize_google_cloud(text: str, lang: str) -> Optional[bytes]:
     """Call Google Cloud TTS Standard. Returns MP3 bytes or None."""
     text = strip_voice_markers(text)
-    key = settings.google_cloud_tts_api_key or settings.gemini_tts_api_key
+    key = settings.google_cloud_tts_api_key
     if not key:
         _safe_log("[TTS] Google Cloud TTS skipped: no API key")
         return None
@@ -1023,13 +936,10 @@ def _route(lang: str, text: str = "") -> tuple[str, str, str]:
     # French → also try Gradio first (the model can handle French too)
     if _gradio_is_available():
         return ("gradio", "darija", "wav")
-    # Fallback to Gemini
-    if _gemini_is_available():
-        return ("gemini", settings.gemini_tts_voice, "wav")
-    # Last resort: Google Cloud
+    # Dernier recours : Google Cloud
     if lang == "fr":
-        return ("google_cloud", settings.google_cloud_tts_voice_fr, "mp3")
-    return ("google_cloud", settings.google_cloud_tts_voice_ar, "mp3")
+        return ("google_cloud", _voix_gcloud("fr"), "mp3")
+    return ("google_cloud", _voix_gcloud(lang), "mp3")
 
 
 # ─── Intelligent hybrid pipeline ─────────────────────────────────────
@@ -1251,24 +1161,22 @@ async def _synthesize_one_segment(
         audio_bytes = await _synthesize_academy(spoken_text, language)
         if not audio_bytes:
             # Colab tombé → on redescend la chaîne de secours pour ce segment
-            _safe_log("[TTS][seg] Academy fail → Gradio/Gemini fallback")
+            _safe_log("[TTS][seg] Academy fail → repli Gradio puis Google Cloud")
             audio_bytes = await _synthesize_gradio(spoken_text, language)
             if audio_bytes:
                 provider, voice, ext = "gradio", "darija", "wav"
             else:
-                audio_bytes = await _synthesize_gemini(spoken_text, language)
+                audio_bytes = await _synthesize_google_cloud(spoken_text, language)
                 if audio_bytes:
-                    provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
+                    provider, voice, ext = "google_cloud", _voix_gcloud(language), "mp3"
     elif provider == "gradio":
         audio_bytes = await _synthesize_gradio(spoken_text, language)
         if not audio_bytes:
-            # Gradio failed → try Gemini as fallback for this segment
-            _safe_log("[TTS][seg] Gradio fail → Gemini fallback")
-            audio_bytes = await _synthesize_gemini(spoken_text, language)
+            # Gradio en échec → dernier recours Google Cloud
+            _safe_log("[TTS][seg] Gradio fail → repli Google Cloud")
+            audio_bytes = await _synthesize_google_cloud(spoken_text, language)
             if audio_bytes:
-                provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
-    elif provider == "gemini":
-        audio_bytes = await _synthesize_gemini(spoken_text, language)
+                provider, voice, ext = "google_cloud", _voix_gcloud(language), "mp3"
     elif provider == "google_cloud":
         audio_bytes = await _synthesize_google_cloud(spoken_text, language)
 
@@ -1340,7 +1248,7 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
         for seg in segments
     ]
 
-    stats = {"academy": 0, "gradio": 0, "gemini": 0, "google_cloud": 0, "cached": 0, "failed": 0}
+    stats = {"academy": 0, "gradio": 0, "google_cloud": 0, "cached": 0, "failed": 0}
     first_ms: Optional[int] = None
 
     try:
@@ -1374,7 +1282,7 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
             f"[TTS][stream] lang={language} segs={total} "
             f"first={first_ms}ms total={elapsed_ms}ms "
             f"cached={stats['cached']} academy={stats.get('academy', 0)} "
-            f"gradio={stats.get('gradio', 0)} gemini={stats.get('gemini', 0)} "
+            f"gradio={stats.get('gradio', 0)} "
             f"gcloud={stats.get('google_cloud', 0)} failed={stats['failed']}"
         )
 
@@ -1382,7 +1290,7 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
 async def synthesize(text: str, language: str = "fr") -> TTSResult:
     """
     Main entry point. Always returns server-synthesized audio bytes
-    (Gemini 2.5 or Google Cloud TTS) — never defers to the browser.
+    (Academy, Gradio ou Google Cloud) — jamais la synthèse du navigateur.
     """
     if settings.tts_disabled:
         return TTSResult(audio_b64=None, mime="", provider="disabled", use_browser=False)
@@ -1417,7 +1325,7 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
                 mime=mime, provider=provider, use_browser=False, cached=True,
             )
 
-    # Miss → synthesize (Gradio first, then Gemini, then GCloud)
+    # Miss → synthèse : Academy, puis Gradio, puis Google Cloud
     t0 = time.time()
     audio_bytes: Optional[bytes] = None
     if provider == "academy":
@@ -1427,17 +1335,15 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
             if audio_bytes:
                 provider, voice, ext = "gradio", "darija", "wav"
             else:
-                audio_bytes = await _synthesize_gemini(spoken_text, language)
+                audio_bytes = await _synthesize_google_cloud(spoken_text, language)
                 if audio_bytes:
-                    provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
+                    provider, voice, ext = "google_cloud", _voix_gcloud(language), "mp3"
     elif provider == "gradio":
         audio_bytes = await _synthesize_gradio(spoken_text, language)
         if not audio_bytes:
-            audio_bytes = await _synthesize_gemini(spoken_text, language)
+            audio_bytes = await _synthesize_google_cloud(spoken_text, language)
             if audio_bytes:
-                provider, voice, ext = "gemini", settings.gemini_tts_voice, "wav"
-    elif provider == "gemini":
-        audio_bytes = await _synthesize_gemini(spoken_text, language)
+                provider, voice, ext = "google_cloud", _voix_gcloud(language), "mp3"
     elif provider == "google_cloud":
         audio_bytes = await _synthesize_google_cloud(spoken_text, language)
 
