@@ -863,6 +863,84 @@ class SessionHandler:
         if len(self.conversation_history) > 20:
             self.conversation_history = self.conversation_history[-20:]
 
+    @staticmethod
+    def _build_turn_guidance(student_text: str) -> str:
+        """Give the LLM a small deterministic hint about short user turns.
+
+        The full conversation remains available to the model, but short voice
+        transcripts such as « passe » or « 7 » are easy to misread when the
+        previous answer contains several questions. This block tells the
+        model how to handle the intent without copying the student's text into
+        the system prompt.
+        """
+        raw = (student_text or "").strip()
+        if not raw:
+            return ""
+        folded = unicodedata.normalize("NFKD", raw)
+        folded = "".join(char for char in folded if unicodedata.category(char) != "Mn")
+        compact = re.sub(r"\s+", " ", folded.lower()).strip()
+        words = compact.split()
+        guidance: list[str] = []
+
+        progress_words = {
+            "passe", "passer", "continue", "continuer", "suivant", "suivante",
+            "next", "دوز", "كمل", "كملي", "نكمل", "التالية", "صافي",
+        }
+        acknowledge_words = {
+            "ok", "okay", "daccord", "oui", "yes", "واخا", "تمام", "مزيان",
+        }
+        if compact in progress_words or (len(words) <= 3 and any(w in progress_words for w in words)):
+            guidance.append(
+                "L'élève demande de passer à la suite. Continue exactement au point courant; "
+                "ne répète pas la définition ni la question précédente."
+            )
+        elif compact in acknowledge_words:
+            guidance.append(
+                "L'élève confirme brièvement. Accuse réception en une phrase et avance d'un seul pas; "
+                "ne relance pas tout le cours."
+            )
+
+        if any(phrase in compact for phrase in (
+            "je ne sais pas", "je sais pas", "sais pas", "pas compris", "j'ai pas compris",
+            "لا ما عرفتهاش", "ما عرفتش", "ماعرفتش", "ما فهمتش", "مافهمتش",
+        )):
+            guidance.append(
+                "L'élève ne connaît pas la réponse. Explique la plus petite notion manquante, "
+                "donne un exemple concret, puis pose une seule question simple."
+            )
+
+        if any(phrase in compact for phrase in (
+            "tu l'as deja ecrit", "tu as deja ecrit", "deja au tableau", "deja ecrit",
+            "راك كتبتيها", "راه كتبتيها", "باينه فاللوح", "باينة فاللوح",
+        )):
+            guidance.append(
+                "L'élève signale que la réponse est déjà écrite. Reconnais-le et explique directement; "
+                "ne lui demande pas de recopier une seconde fois."
+            )
+
+        direct_question = (
+            "?" in raw
+            or compact.startswith(("شنو ", "علاش ", "كيفاش ", "اشنو ", "why ", "how ", "comment "))
+        )
+        if direct_question:
+            guidance.append(
+                "Il y a une question directe. Réponds d'abord à cette question, puis ajoute au maximum "
+                "une vérification courte."
+            )
+        elif len(words) <= 4 and not guidance:
+            guidance.append(
+                "La réponse est très courte. Compare-la à la dernière question posée; si elle est ambiguë, "
+                "demande à quoi l'élève répond au lieu d'inventer un contexte."
+            )
+
+        if not guidance:
+            return ""
+        return (
+            "\n\n[GUIDAGE DÉTERMINISTE DU DERNIER MESSAGE]\n- "
+            + "\n- ".join(guidance)
+            + "\n"
+        )
+
     def _speech_language(self) -> str:
         """Language code for STT & TTS. Darija is Arabic-based."""
         if self.language == "mixed":
@@ -879,7 +957,7 @@ class SessionHandler:
                 "SAUF pour les termes techniques/scientifiques qui RESTENT EN FRANÇAIS écrits en lettres latines "
                 "(ex : la vitesse, l'accélération, la force, l'énergie cinétique, la dérivée, la fonction, "
                 "le vecteur, la molécule, la mitose, l'équation). Les abréviations doivent être séparées et "
-                "écrites phonétiquement en arabe pour le TTS : pH devient بي آش, ADN devient آ دي إن, "
+                "séparées pour le TTS en français pour pH : pH devient P H, tandis que ADN devient آ دي إن, "
                 "SVT devient إس ڤي تي et QCM devient كيو سي إم. "
                 "N'utilise JAMAIS la traduction arabe classique de ces termes (السرعة، التسارع، القوة…). "
                 "La phrase est TOUJOURS un MÉLANGE naturel darija + français (code-switching de prof "
@@ -2361,6 +2439,12 @@ RÈGLES:
 - Une seule commande de manipulation par réponse, avec une courte consigne d'observation.
 - Ne déduis pas un résultat absent: invite l'élève à lancer run_trial après avoir formulé sa prédiction.
 """
+
+        # Les réponses vocales très courtes (« passe », « ok », « 7 ») sont
+        # faciles à rattacher au mauvais sujet quand le tour précédent
+        # contenait plusieurs explications. Donner au modèle une indication
+        # déterministe du dernier tour évite les répétitions et les inventions.
+        system_prompt += self._build_turn_guidance(student_text)
 
         decision = resource_decision_service.decide(
             phase=self.current_phase,

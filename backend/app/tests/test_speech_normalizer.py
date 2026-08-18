@@ -34,6 +34,29 @@ class SpeechNormalizerTests(unittest.TestCase):
             "Calculer un virgule cinq fois dix puissance moins trois et H deux O.",
         )
 
+    def test_emojis_and_ascii_emoticons_are_removed_from_tts_copy(self):
+        cleaned = tts_service.clean_for_tts("مزيان 😊 ! Bravo ✅ :) <3")
+        self.assertNotIn("😊", cleaned)
+        self.assertNotIn("✅", cleaned)
+        self.assertNotIn(":)", cleaned)
+        self.assertNotIn("<3", cleaned)
+        self.assertIn("مزيان", cleaned)
+        self.assertIn("Bravo", cleaned)
+
+    def test_arabic_article_is_separated_from_nouns(self):
+        spoken = normalize_for_speech(
+            "ركزو مع التمرين الأول اللي جا ف الامتحان الوطني.", "mixed"
+        )
+        self.assertIn("ال تمرين", spoken)
+        self.assertIn("ال امتحان", spoken)
+        self.assertIn("اللي", spoken)
+        self.assertNotIn("التمرين", spoken)
+
+    def test_lexical_arabic_forms_are_not_broken(self):
+        spoken = normalize_for_speech("الله كيعلم، والذي نجح.", "mixed")
+        self.assertIn("الله", spoken)
+        self.assertIn("الذي", spoken)
+
     def test_ratio_is_not_mistaken_for_a_time(self):
         self.assertEqual(normalize_for_speech("Le rapport est 1:2.", "fr"), "Le rapport est un:deux.")
 
@@ -46,7 +69,7 @@ class SpeechNormalizerTests(unittest.TestCase):
         """
         self.assertEqual(
             normalize_for_speech("SVT, ADN, pH, H2O et Newton", "fr"),
-            "ès vé té, a dé enne, pé ache, H deux O et Nioutonne",
+            "ès vé té, a dé enne, P H, H deux O et Nioutonne",
         )
 
     def test_date_time_and_ordinal(self):
@@ -66,7 +89,7 @@ class SpeechNormalizerTests(unittest.TestCase):
 
     def test_ph_is_spelled_out_for_academy(self):
         spoken = normalize_for_speech("الـ 7 هو pH محايد.", "mixed")
-        self.assertIn("بي آش", spoken)
+        self.assertIn("P H", spoken)
         self.assertNotIn("pH", spoken)
 
     def test_frequency_and_basic_si_units_are_not_misread_as_time(self):
@@ -354,7 +377,7 @@ def test_un_tiret_de_ponctuation_nest_pas_une_charge():
 
 def test_le_lexique_survit_a_un_mot_compose():
     """La garde anti-charge ne doit pas couper « pH-mètre » du lexique."""
-    assert "pé ache" in normalize_for_speech("le pH-mètre", "fr")
+    assert "P H" in normalize_for_speech("le pH-mètre", "fr")
     assert "a dé enne" in normalize_for_speech("ADN-polymérase", "fr")
 
 

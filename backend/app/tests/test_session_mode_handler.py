@@ -50,6 +50,26 @@ def _modes_annonces(handler) -> list[str]:
     return [m["mode"] for m in handler.websocket.envoyes if m["type"] == "mode_changed"]
 
 
+# ── Lecture humaine des tours courts ──────────────────────────────
+
+def test_un_commande_passe_fait_avancer_sans_recommencer():
+    guidance = SessionHandler._build_turn_guidance("passe")
+    assert "passer à la suite" in guidance
+    assert "ne répète pas" in guidance
+
+
+def test_un_eleve_qui_signale_le_tableau_n_est_plus_reinvite_a_ecrire():
+    guidance = SessionHandler._build_turn_guidance("راك كتبتيها")
+    assert "déjà écrite" in guidance
+    assert "ne lui demande pas de recopier" in guidance
+
+
+def test_une_question_directe_passe_avant_le_quiz():
+    guidance = SessionHandler._build_turn_guidance("شنو هو H3O+؟")
+    assert "question directe" in guidance
+    assert "Réponds d'abord" in guidance
+
+
 # ── La traduction vers le code existant ───────────────────────────
 
 def test_les_lectures_historiques_voient_toujours_leurs_valeurs():

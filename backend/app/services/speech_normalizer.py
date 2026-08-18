@@ -134,6 +134,38 @@ _ARABIC_ARTICLE_BEFORE_LATIN_RE = re.compile(
     r"(?<![\w\u0600-\u06ff])(?:الـ|ال|لـ|ل)\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])",
 )
 
+# Academy lit mieux l'article arabe quand il est son propre token :
+# « التمرين » devient « ال تمرين ». On traite aussi les préfixes usuels
+# (« والتمرين » → « و ال تمرين »), mais on laisse intacts les mots-outils et
+# les formes lexicalisées qui commencent par « ال » (« الله », « الذي », …).
+_ARABIC_WORD_RE = re.compile(r"[\u0600-\u06ff]+")
+_ARABIC_ARTICLE_EXCEPTIONS = frozenset({
+    "الله", "اللهم", "الذي", "التي", "اللذان", "اللذين", "اللتان",
+    "اللائي", "اللاتي", "الآن", "اللي",
+})
+_ARABIC_PREFIXES = frozenset("وفبكل")
+
+
+def _separer_article_arabe(text: str) -> str:
+    """Sépare « ال » du nom arabe dans la copie destinée au TTS."""
+
+    def split_word(match: re.Match[str]) -> str:
+        word = match.group(0)
+        if word in _ARABIC_ARTICLE_EXCEPTIONS:
+            return word
+        if word.startswith("ال") and len(word) > 2:
+            return "ال " + word[2:]
+        if (
+            len(word) > 3
+            and word[0] in _ARABIC_PREFIXES
+            and word[1:3] == "ال"
+            and word[1:] not in _ARABIC_ARTICLE_EXCEPTIONS
+        ):
+            return word[0] + " ال " + word[3:]
+        return word
+
+    return _ARABIC_WORD_RE.sub(split_word, text)
+
 # ── Frontières d'écriture ────────────────────────────────────────
 #
 # Le tuteur parle en code-switching : darija en alphabet arabe, termes
@@ -785,6 +817,7 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     # abréviations, nombres). Une tatweel ou un collage d'alphabets les fait
     # toutes échouer silencieusement.
     text = _separer_ecritures(text)
+    text = _separer_article_arabe(text)
     text = _ouvrir_pause_apres_deux_points(text)
     text = _replace_latex(text)
     text = _replace_oral_formula_fragments(text, lang)
