@@ -843,10 +843,18 @@ Sujets maîtrisés: {mastered}
 [COMMANDES_DISPONIBLES]
 Tu peux utiliser ces commandes SPÉCIALES dans tes réponses pour contrôler la session:
 
-1. AFFICHER_RESSOURCE (via langage naturel)
-   → Utilise des phrases comme "Regarde cette image", "Observe ce schéma", "Voici une illustration"
-   → Le système affichera automatiquement la ressource appropriée de la base de données
-   → Exemple: "Très bien! Regarde cette image pour mieux comprendre la glycolyse."
+1. AFFICHER_RESSOURCE — écris le mot-clé OUVRIR_IMAGE
+   ⚠️ Tu parles darija en alphabet arabe (RÈGLE #0). Une annonce faite
+   uniquement en darija n'est PAS détectée par le système : tu dis à l'élève
+   de regarder une image, et rien ne s'affiche à l'écran.
+   → Écris donc le mot-clé OUVRIR_IMAGE sur sa propre ligne, EN PLUS de ta
+     phrase. Il est retiré avant lecture : l'élève ne l'entend jamais.
+   → Exemple :
+       « واخا، شوف هاد الصورة باش تفهم مزيان la glycolyse. »
+       OUVRIR_IMAGE
+   → Même principe : OUVRIR_SIMULATION pour une simulation.
+   → N'écris ce mot-clé QUE si tu veux réellement afficher quelque chose.
+     Annoncer une image sans l'afficher fait perdre confiance à l'élève.
 
 2. DESSINER (tableau blanc interactif - comme un vrai prof avec écriture manuscrite!)
    → Format: écris <draw>[JSON]</draw> dans ta réponse

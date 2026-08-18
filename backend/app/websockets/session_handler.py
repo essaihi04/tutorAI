@@ -4,6 +4,7 @@ Orchestrates the real-time voice pipeline: STT -> LLM -> TTS
 """
 import json
 import re
+import unicodedata
 import base64
 import asyncio
 import sys
@@ -97,6 +98,52 @@ _MD_SEP_RE = re.compile(r'(?<!-)[-*_]{3,}(?!-)')
 _MD_HEADING_RE = re.compile(r'#{1,6}\s*')
 _MD_BULLET_RE = re.compile(r'^\s{0,3}[-*+]\s+')
 _MD_UNDERLINE_RE = re.compile(r'(?<!\w)__([^_\n]+)__(?!\w)')
+
+
+# Le tuteur annonce une image, mais rien ne s'affiche : c'est que la
+# détection cherchait CINQ phrases françaises littérales — « regarde cette
+# image », « observe ce schéma »… — alors que la règle #0 du prompt lui
+# impose de parler darija en alphabet arabe. Les deux consignes se
+# contredisaient, et le modèle obéissait à la plus visible des deux.
+#
+# La parade tient en deux temps. D'abord la commande explicite
+# `OUVRIR_IMAGE`, qui ne dépend d'aucune langue : c'est elle que le prompt
+# demande désormais. Ensuite ces amorces, en français ET en darija, comme
+# filet — un professeur annonce une image en parlant, pas en émettant un
+# mot-clé, et il ne faut pas que l'élève paie cette spontanéité.
+_AMORCES_IMAGE = (
+    # français
+    "regarde cette image", "regarde ce schéma", "regarde le schéma",
+    "observe cette image", "observe ce schéma", "observe le diagramme",
+    "voici une illustration", "voici le schéma", "voici l'image",
+    # darija / arabe — « شوف » (regarde), « تأمل » (observe), « ها » (voici)
+    "شوف هاد الصورة", "شوف هاد الرسم", "شوف هاد الشكل", "شوف هاد التصميم",
+    "شوفي هاد الصورة", "شوفو هاد الصورة",
+    "تأمل هاد الصورة", "تأمل هاد الرسم",
+    "ها هي الصورة", "ها هو الرسم", "ها هو الشكل",
+    "هاد الصورة كتبين", "هاد الرسم كيبين", "هاد الشكل كيبين",
+)
+
+
+def _sans_diacritiques(text: str) -> str:
+    """Une clé de comparaison stable pour les deux alphabets.
+
+    Le modèle écrit « schéma » ou « schema » selon les jours, et pose ou non
+    les signes de voyelle arabes. Comparer sur la forme décomposée, signes
+    retirés, évite d'aligner une liste d'orthographes à la main — et la même
+    transformation est appliquée aux deux côtés, donc rien ne se perd.
+    """
+    decompose = unicodedata.normalize("NFD", text or "")
+    return "".join(c for c in decompose if not unicodedata.combining(c)).lower()
+
+
+_AMORCES_IMAGE_COMPAREES = tuple(_sans_diacritiques(a) for a in _AMORCES_IMAGE)
+
+
+def _annonce_une_image(reponse: str) -> bool:
+    """Le tuteur vient-il de dire à l'élève de regarder quelque chose ?"""
+    comparable = _sans_diacritiques(reponse)
+    return any(amorce in comparable for amorce in _AMORCES_IMAGE_COMPAREES)
 
 
 def _strip_markdown_inline(text: str) -> str:
@@ -5159,10 +5206,7 @@ RÈGLES :
                     _safe_log(f"[AI Commands] Auto-match score too low ({auto_score}), skipping")
 
         # ── 4. Natural language media triggers ──
-        media_triggers = ["regarde ce schéma", "observe cette image", "voici une illustration", 
-                         "regarde cette image", "observe le diagramme"]
-        
-        if not draw_data_match and not schema_handled and any(trigger in lower_response for trigger in media_triggers):
+        if not draw_data_match and not schema_handled and _annonce_une_image(lower_response):
             if suppress_media:
                 _safe_log(f"[AI Commands] Media trigger detected but suppressed (already sent explicit media)")
             else:
