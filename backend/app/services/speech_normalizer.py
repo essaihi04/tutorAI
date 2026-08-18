@@ -54,6 +54,77 @@ _AR_MONTHS = (
     "غشت", "شتنبر", "أكتوبر", "نونبر", "دجنبر",
 )
 _SUPERSCRIPT_TRANSLATION = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺", "0123456789-+")
+_SUBSCRIPT_TRANSLATION = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+
+# ── Formules, sigles et charges : la convention du corpus d'entraînement ──
+#
+# Le modèle Academy a appris ses prononciations sur les transcriptions
+# normalisées par `scripts/normalize_combined_dataset.py` (dépôt DARIJA TTS).
+# Ce corpus est donc la RÉFÉRENCE : quand on lui envoie une forme écrite qu'il
+# n'a jamais vue à l'entraînement, il improvise, et c'est là que naissent les
+# mots mal dits. Les trois tables et les deux fonctions qui suivent
+# reproduisent `ELEMENTS`, `ACRONYMES_MOTS`, `epeler()` et
+# `developper_formule()` de ce script.
+#
+# Convention retenue, celle du corpus : lettres latines en capitales (le modèle
+# a appris à dire « ache » en voyant « H »), chiffres et signes en FRANÇAIS
+# même au milieu d'une phrase en darija. « H3O+ » se dit donc « H trois O
+# plus », dans les deux langues.
+
+# Noms des éléments, pour les IONS MONOATOMIQUES seulement : « Ca²⁺ » se dit
+# « calcium deux plus » en classe, pas « cé a deux plus ». Épeler un symbole de
+# deux lettres ne s'entend pas — le corpus le fait, mais c'est le seul endroit
+# où on s'en écarte volontairement, et l'écart est décidé.
+#
+# Deux limites, tenues exprès :
+#  • les symboles d'UNE lettre n'y sont pas. « H plus », « O deux moins » sont
+#    ce que dit le professeur, et une lettre seule ne s'entend jamais de
+#    travers ;
+#  • rien ne s'applique aux formules à plusieurs éléments. « H3O+ » reste
+#    « H trois O plus » : personne ne dit « hydrogène trois oxygène plus ».
+_NOMS_ELEMENTS = {
+    "He": "hélium", "Li": "lithium", "Be": "béryllium", "Ne": "néon",
+    "Na": "sodium", "Mg": "magnésium", "Al": "aluminium", "Si": "silicium",
+    "Cl": "chlore", "Ar": "argon", "Ca": "calcium", "Sc": "scandium",
+    "Ti": "titane", "Cr": "chrome", "Mn": "manganèse", "Fe": "fer",
+    "Co": "cobalt", "Ni": "nickel", "Cu": "cuivre", "Zn": "zinc",
+    "Ga": "gallium", "Ge": "germanium", "As": "arsenic", "Se": "sélénium",
+    "Br": "brome", "Kr": "krypton", "Rb": "rubidium", "Sr": "strontium",
+    "Zr": "zirconium", "Nb": "niobium", "Mo": "molybdène", "Ag": "argent",
+    "Cd": "cadmium", "In": "indium", "Sn": "étain", "Sb": "antimoine",
+    "Te": "tellure", "Xe": "xénon", "Cs": "césium", "Ba": "baryum",
+    "Pt": "platine", "Au": "or", "Hg": "mercure", "Pb": "plomb",
+    "Bi": "bismuth", "Ra": "radium", "Ac": "actinium", "Th": "thorium",
+    "Pa": "protactinium",
+}
+
+# Les symboles reconnus dans une formule, dérivés de la table ci-dessus pour
+# qu'il n'y ait rien à tenir à jour deux fois.
+#
+# La liste est volontairement incomplète : « Ce », « Or », « Ni » sont aussi des
+# mots français ou de la darija translittérée. Y ajouter un symbole ambigu
+# abîmerait des phrases entières — la contrepartie étant qu'un élément rare
+# repart en lettres, ce qui ne s'entend pas.
+_ELEMENTS_DEUX_LETTRES = frozenset(_NOMS_ELEMENTS)
+
+# Chiffres romains, qui ont la forme d'un sigle sans en être un. Le cours de
+# SVT en est plein — « Prophase I », « Anaphase II », « Méiose II » — et les
+# épeler donnait « Anaphase I I ». Liste explicite plutôt que règle générale :
+# elle ne peut pas se tromper sur un vrai sigle.
+_CHIFFRES_ROMAINS = {
+    "II": 2, "III": 3, "IV": 4, "VI": 6, "VII": 7, "VIII": 8, "IX": 9,
+    "XI": 11, "XII": 12, "XIII": 13, "XIV": 14, "XV": 15, "XVI": 16,
+    "XVII": 17, "XVIII": 18, "XIX": 19, "XX": 20,
+}
+
+# Sigles qui se disent comme un mot, jamais lettre par lettre.
+# Reprise EXACTE de `ACRONYMES_MOTS` du corpus. Ne rien y ajouter au jugé :
+# mesuré sur les 9 997 transcriptions du corpus, y mettre « PIB » faisait dire
+# « Pib » 183 fois, alors que le professeur épelle « P I B ».
+_SIGLES_LUS_COMME_MOTS = frozenset({
+    "MASI", "SIDA", "OPEP", "OTAN", "ONU", "UNESCO", "OCDE", "SMIG", "SMAG",
+    "OPCVM", "ADEME", "AMO", "RAMED",
+})
 
 # Le modèle Academy lit caractère par caractère. Un article arabe placé juste
 # devant un mot français ("الـ motif", "الـ Hertz") devient donc "al motif"
@@ -160,6 +231,13 @@ _UNITS_AR = {
         "mm": ("مليمتر", "مليمترات"), "kg": ("كيلوغرام", "كيلوغرامات"),
         "mg": ("ميليغرام", "ميليغرامات"), "mL": ("ميليلتر", "ميليلترات"),
         "Hz": ("هرتز", "هرتز"), "mol": ("مول", "مولات"),
+        "kHz": ("كيلوهرتز", "كيلوهرتز"), "MHz": ("ميغاهرتز", "ميغاهرتز"),
+        "GHz": ("غيغاهرتز", "غيغاهرتز"), "hPa": ("هيكتوباسكال", "هيكتوباسكالات"),
+        "nm": ("نانومتر", "نانومترات"), "µm": ("ميكرومتر", "ميكرومترات"),
+        "μm": ("ميكرومتر", "ميكرومترات"), "kJ": ("كيلوجول", "كيلوجولات"),
+        "kW": ("كيلوواط", "كيلوواطات"), "mV": ("ميليفولت", "ميليفولتات"),
+        "mA": ("ميلي أمبير", "ميلي أمبيرات"), "Pa": ("باسكال", "باسكالات"),
+        "°F": ("درجة فهرنهايت", "درجات فهرنهايت"),
         "m": ("متر", "أمتار"), "s": ("ثانية", "ثواني"),
         "L": ("لتر", "لترات"), "g": ("غرام", "غرامات"),
         "J": ("جول", "جولات"), "W": ("واط", "واطات"),
@@ -280,7 +358,15 @@ def _replace_lexicon(text: str, lang: str) -> str:
             entries.extend((str(k), str(v)) for k, v in values.items() if k and v)
     for source, spoken in sorted(entries, key=lambda item: len(item[0]), reverse=True):
         flags = re.IGNORECASE if source in section.get("names", {}) else 0
-        pattern = rf"(?<![\w]){re.escape(source)}(?![\w])"
+        # Une charge COLLÉE appartient à l'espèce chimique, pas au voisinage :
+        # l'entrée « O2 » du lexique avalait « O2-» et laissait le tiret
+        # orphelin (« o deux-»). Mais le signe ne compte comme charge que s'il
+        # n'ouvre pas un mot : « pH-mètre » et « ADN-polymérase » doivent
+        # continuer de passer par le lexique.
+        pattern = (
+            rf"(?<![\w]){re.escape(source)}"
+            rf"(?![\w])(?![+-](?![A-Za-zÀ-ÖØ-öø-ÿ]))"
+        )
         text = re.sub(pattern, lambda _m, replacement=spoken: replacement, text, flags=flags)
     return text
 
@@ -304,7 +390,17 @@ def _replace_oral_formula_fragments(text: str, lang: str) -> str:
 
 
 def _replace_standalone_units(text: str, lang: str) -> str:
-    """Expand units written without a number, for example ``(Hz)``."""
+    """Expand units written without a number, for example ``(Hz)``.
+
+    Les unités COMPOSÉES y passent aussi. « la concentration est en mol/L » n'a
+    pas de nombre devant, donc `_replace_units` ne la voyait pas et le repli
+    générique la lisait « mol sur L ». Le corpus d'entraînement, lui, développe
+    ces unités sans condition — d'où l'alignement.
+
+    Restreint aux symboles composés (une barre ou un point médian) : un « m »
+    ou un « L » seul est le plus souvent une grandeur ou une variable, pas une
+    unité, et l'étendre casserait les formules.
+    """
     replacements = {
         "Hz": "هرتز" if lang == "ar" else "hertz",
         "Hertz": "هرتز" if lang == "ar" else "hertz",
@@ -314,7 +410,169 @@ def _replace_standalone_units(text: str, lang: str) -> str:
     }
     for source, spoken in replacements.items():
         text = re.sub(rf"(?<![\w]){re.escape(source)}(?![\w])", spoken, text)
+
+    units = _UNITS_AR if lang == "ar" else _UNITS_FR
+    composees = [symbole for symbole in units if any(c in symbole for c in "/·.")]
+    for symbole in sorted(composees, key=len, reverse=True):
+        text = re.sub(
+            rf"(?<![\w]){re.escape(symbole)}(?![\w])", units[symbole][1], text
+        )
     return text
+
+
+def _epeler_code(code: str) -> str:
+    """« ADN » → « A D N ». Copie de `epeler()` du corpus d'entraînement."""
+    morceaux: list[str] = []
+    for caractere in code:
+        if caractere.isdigit():
+            morceaux.append(num2words(int(caractere), lang="fr"))
+        elif caractere.isalpha():
+            morceaux.append(caractere.upper())
+    return " ".join(morceaux)
+
+
+def _developper_formule(code: str) -> str:
+    """« H3O » → « H trois O » ; « C6H12O6 » → « C six H douze O six ».
+
+    Copie de `developper_formule()` du corpus d'entraînement. Les chiffres
+    consécutifs forment un seul nombre — « H12 » se dit « H douze », pas
+    « H un deux ».
+    """
+    morceaux: list[str] = []
+    i = 0
+    while i < len(code):
+        caractere = code[i]
+        if caractere.isalpha():
+            duo = code[i:i + 2]
+            if duo in _ELEMENTS_DEUX_LETTRES:
+                morceaux.append(_epeler_code(duo))
+                i += 2
+                continue
+            morceaux.append(caractere.upper())
+            i += 1
+        elif caractere.isdigit():
+            j = i
+            while j < len(code) and code[j].isdigit():
+                j += 1
+            morceaux.append(num2words(int(code[i:j]), lang="fr"))
+            i = j
+        else:
+            i += 1
+    return " ".join(morceaux)
+
+
+def _suite_d_elements(code: str) -> str | None:
+    """« NaCl » → « N A C L ». `None` si ce n'est pas une suite de symboles.
+
+    Le refus est essentiel : « Newton » commence par « Ne », qui EST un
+    élément. Un mot ordinaire finit toujours par une minuscule que la boucle
+    ne sait pas consommer, et c'est ce qui le protège de l'épellation.
+    """
+    morceaux: list[str] = []
+    i = 0
+    while i < len(code):
+        if code[i:i + 2] in _ELEMENTS_DEUX_LETTRES:
+            morceaux.append(_epeler_code(code[i:i + 2]))
+            i += 2
+        elif code[i].isupper():
+            morceaux.append(code[i].upper())
+            i += 1
+        else:
+            return None
+    return " ".join(morceaux) if len(morceaux) >= 2 else None
+
+
+# Un jeton candidat : un mot latin, suivi d'une charge ionique éventuelle. Le
+# motif attrape TOUS les mots ; c'est `_epeler_formules_et_sigles` qui décide,
+# en Python, lesquels sont des formules — une condition lisible valant mieux
+# ici qu'une expression rationnelle que personne ne saura relire.
+#
+# La charge s'écrit de deux façons, et de deux seulement : collée au symbole
+# (« Cl-», « Fe3+ ») ou détachée avec son compte (« SO4 2-»). Accepter une
+# espace SANS compte suffirait à prendre un tiret de ponctuation pour une
+# charge : « Ne - regarde » devenait « néon moins regarde ».
+_JETON_LATIN = re.compile(
+    r"(?<![\w])([A-Za-z][A-Za-z0-9]*)"        # 1 : le code
+    r"(?:\s*(\d+)\s*([+-])|([+-]))?"          # 2,3 : charge comptée · 4 : collée
+    r"(?![\w])"
+)
+
+# Charge écrite en exposant : « Ca²⁺ », « SO₄²⁻ ». Ramenée en ASCII AVANT
+# `_replace_powers`, sans quoi « Ca²⁺ » se disait « Ca au carré » suivi d'un
+# « ⁺ » muet : une charge n'est pas une puissance.
+#
+# Ce qui distingue les deux, c'est la POSITION du signe. Dans une charge il
+# termine l'exposant (« ²⁺ ») ; dans une puissance négative il l'ouvre
+# (« 10⁻³ »). Sans le garde-fou de fin, « 10⁻³ » devenait « dix-³ » — un
+# exposant perdu au milieu d'un calcul de concentration.
+#
+# L'espace devant la charge est nécessaire elle aussi : sans elle, le chiffre
+# de la charge se collait à celui de la formule et « SO₄²⁻ » devenait
+# « SO42- », prononcé « S O quarante-deux moins ».
+_CHARGE_EXPOSANT = re.compile(
+    r"(?<=[A-Za-z0-9])([⁰¹²³⁴⁵⁶⁷⁸⁹]*)([⁺⁻])(?![⁰¹²³⁴⁵⁶⁷⁸⁹])"
+)
+
+
+def _ramener_charges_en_ascii(text: str) -> str:
+    text = text.translate(_SUBSCRIPT_TRANSLATION)
+    return _CHARGE_EXPOSANT.sub(
+        lambda m: (" " if m.group(1) else "")
+        + m.group(1).translate(_SUPERSCRIPT_TRANSLATION)
+        + ("+" if m.group(2) == "⁺" else "-"),
+        text,
+    )
+
+
+def _epeler_formules_et_sigles(text: str) -> str:
+    """Dit les formules chimiques et les sigles inconnus, à la façon du corpus.
+
+    Ce qui n'est reconnu ni comme formule, ni comme suite d'éléments, ni comme
+    sigle repart intact : un mot français ou darija ne doit jamais être épelé.
+    """
+    def traiter(match: re.Match[str]) -> str:
+        code, nombre = match.group(1), match.group(2)
+        signe = match.group(3) or match.group(4)
+
+        # « Fe3+ » : le chiffre collé au signe compte les CHARGES, il n'est pas
+        # un indice de formule. On le détache quand ce qui reste est un symbole
+        # d'élément — « H3O+ » ne finit pas par un chiffre, il n'est donc pas
+        # concerné, et « SO4-» non plus puisque « SO » n'est pas un symbole.
+        if signe is not None and not nombre:
+            tronc = code.rstrip("0123456789")
+            if tronc != code and tronc in _NOMS_ELEMENTS:
+                code, nombre = tronc, code[len(tronc):]
+
+        # Une charge signe une espèce chimique : « Cl⁻ », « Na⁺ » n'ont qu'un
+        # symbole, et sans cette exception ils repartaient bruts alors que le
+        # même symbole dans « NaCl » était bien dit.
+        espece_chargee = signe is not None and re.fullmatch(r"(?:[A-Z][a-z]?)+", code)
+
+        if code in _CHIFFRES_ROMAINS and not espece_chargee:
+            dit = num2words(_CHIFFRES_ROMAINS[code], lang="fr")
+        elif re.fullmatch(r"[A-Z]{2,5}", code) and not espece_chargee:
+            dit = code.capitalize() if code in _SIGLES_LUS_COMME_MOTS else _epeler_code(code)
+        elif espece_chargee and code in _NOMS_ELEMENTS:
+            # Un ion monoatomique se nomme, il ne s'épelle pas.
+            dit = _NOMS_ELEMENTS[code]
+        elif re.search(r"\d", code) and code[0].isupper():
+            dit = _developper_formule(code)
+        elif espece_chargee:
+            dit = _developper_formule(code)
+        else:
+            dit = _suite_d_elements(code) if re.fullmatch(r"(?:[A-Z][a-z]?){2,5}", code) else None
+
+        if dit is None:
+            return match.group(0)
+        if signe is None:
+            return dit
+        # La charge se dit après le symbole : « calcium deux plus ».
+        charge = "plus" if signe == "+" else "moins"
+        if nombre:
+            charge = f"{num2words(int(nombre), lang='fr')} {charge}"
+        return f"{dit} {charge}"
+
+    return _JETON_LATIN.sub(traiter, text)
 
 
 def _replace_generic_fraction_bar(text: str) -> str:
@@ -478,10 +736,38 @@ def _replace_remaining_numbers(text: str, lang: str) -> str:
 
 
 def _replace_math_symbols(text: str, lang: str) -> str:
+    # Table complétée d'après `SYMBOLES` du corpus d'entraînement : tout ce qui
+    # restait ici passait brut au modèle, qui inventait alors une lecture.
     if lang == "ar":
-        replacements = {"≈": " تقريبا يساوي ", "≠": " لا يساوي ", "≤": " أصغر أو يساوي ", "≥": " أكبر أو يساوي ", "=": " يساوي ", "+": " زائد ", "×": " في ", "*": " في ", "÷": " على ", "→": " يعطي ", "Δ": " دلتا ", "λ": " لامبدا ", "α": " ألفا ", "β": " بيتا ", "γ": " غاما ", "ω": " أوميغا "}
+        replacements = {
+            "≈": " تقريبا يساوي ", "≠": " لا يساوي ", "≤": " أصغر أو يساوي ",
+            "≥": " أكبر أو يساوي ", "=": " يساوي ", "+": " زائد ", "×": " في ",
+            "*": " في ", "÷": " على ", "→": " يعطي ", "⇒": " يستلزم ",
+            "↔": " يكافئ ", "∈": " ينتمي إلى ", "∉": " لا ينتمي إلى ",
+            "⊂": " مشمول في ", "∞": " ما لا نهاية ", "√": " الجذر المربع ل ",
+            "∑": " مجموع ", "Σ": " مجموع ", "∫": " تكامل ", "±": " زائد أو ناقص ",
+            "‰": " فالألف ", "°C": " درجة سيلزيوس ", "°": " درجة ",
+            "Δ": " دلتا ", "∆": " دلتا ", "λ": " لامبدا ",
+            "π": " پي ", "µ": " ميكرو ", "α": " ألفا ", "β": " بيتا ",
+            "γ": " غاما ", "θ": " تيتا ", "ρ": " رو ", "σ": " سيغما ",
+            "ω": " أوميغا ", "Ω": " أوم ",
+        }
     else:
-        replacements = {"≈": " environ égal à ", "≠": " différent de ", "≤": " inférieur ou égal à ", "≥": " supérieur ou égal à ", "=": " égal ", "+": " plus ", "×": " fois ", "*": " fois ", "÷": " divisé par ", "→": " donne ", "Δ": " delta ", "λ": " lambda ", "α": " alpha ", "β": " bêta ", "γ": " gamma ", "ω": " oméga "}
+        replacements = {
+            "≈": " environ égal à ", "≠": " différent de ",
+            "≤": " inférieur ou égal à ", "≥": " supérieur ou égal à ",
+            "=": " égal ", "+": " plus ", "×": " fois ", "*": " fois ",
+            "÷": " divisé par ", "→": " donne ", "⇒": " implique ",
+            "↔": " équivaut à ", "∈": " appartient à ",
+            "∉": " n'appartient pas à ", "⊂": " inclus dans ",
+            "∞": " l'infini ", "√": " racine carrée de ", "∑": " somme de ",
+            "Σ": " somme de ", "∫": " intégrale de ", "±": " plus ou moins ",
+            "‰": " pour mille ", "°C": " degrés Celsius ", "°": " degrés ",
+            "Δ": " delta ", "∆": " delta ",
+            "λ": " lambda ", "π": " pi ", "µ": " micro ", "α": " alpha ",
+            "β": " bêta ", "γ": " gamma ", "θ": " thêta ", "ρ": " rho ",
+            "σ": " sigma ", "ω": " oméga ", "Ω": " ohm ",
+        }
     for symbol, spoken in replacements.items():
         text = text.replace(symbol, spoken)
     return text
@@ -511,9 +797,15 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     text = _replace_scientific_notation(text, lang)
     text = _replace_units(text, lang)
     text = _replace_standalone_units(text, lang)
+    # Avant les puissances : « Ca²⁺ » est une charge, pas un carré.
+    text = _ramener_charges_en_ascii(text)
     text = _replace_powers(text, lang)
     text = _replace_percentages_and_fractions(text, lang)
     text = _replace_ordinals(text, lang)
+    # Avant les nombres nus : dans « SO4 2- » le « 2 » est le compte de la
+    # charge, pas un nombre du discours. Converti trop tôt, il devenait
+    # « deux » et la charge repartait sans son compte.
+    text = _epeler_formules_et_sigles(text)
     text = _replace_remaining_numbers(text, lang)
     text = _replace_math_symbols(text, lang)
     text = _replace_generic_fraction_bar(text)

@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services import tts_service
-from app.services.speech_normalizer import normalize_for_speech
+from app.services.speech_normalizer import _LATIN_RE, normalize_for_speech
 
 
 class SpeechNormalizerTests(unittest.TestCase):
@@ -31,16 +31,22 @@ class SpeechNormalizerTests(unittest.TestCase):
         self.assertIn("H_2O", cleaned)
         self.assertEqual(
             normalize_for_speech(cleaned, "fr"),
-            "Calculer un virgule cinq fois dix puissance moins trois et ache deux o.",
+            "Calculer un virgule cinq fois dix puissance moins trois et H deux O.",
         )
 
     def test_ratio_is_not_mistaken_for_a_time(self):
         self.assertEqual(normalize_for_speech("Le rapport est 1:2.", "fr"), "Le rapport est un:deux.")
 
     def test_school_abbreviations_formulas_and_name_lexicon(self):
+        """Les sigles et les noms viennent du lexique, les formules de la règle.
+
+        `formulas` est vide dans les deux langues : une formule a UNE seule
+        écriture parlée, celle du corpus d'entraînement, et elle ne dépend plus
+        d'une entrée à tenir à jour.
+        """
         self.assertEqual(
             normalize_for_speech("SVT, ADN, pH, H2O et Newton", "fr"),
-            "ès vé té, a dé enne, pé ache, ache deux o et Nioutonne",
+            "ès vé té, a dé enne, pé ache, H deux O et Nioutonne",
         )
 
     def test_date_time_and_ordinal(self):
@@ -198,3 +204,170 @@ def test_une_enumeration_en_lignes_recoit_ses_points():
     """Sans point, les elements se collent et sortent d'un seul souffle."""
     parle = normalize_for_speech("la periode\nla frequence\nla longueur", "fr")
     assert parle.count(".") >= 2
+
+
+# ── Formules, sigles et charges : la convention du corpus ─────────
+#
+# Le modele Academy a appris ses prononciations sur les transcriptions
+# normalisees par `scripts/normalize_combined_dataset.py` (depot DARIJA TTS).
+# Une forme ecrite qu'il n'a jamais vue a l'entrainement le fait improviser :
+# ces tests verrouillent l'alignement sur ce corpus, chiffres et signes dits
+# en francais dans les deux langues.
+
+def test_formule_chimique_inconnue_du_lexique_est_dite():
+    """« CH4 » repartait brut : rien ne l'epelait hors du lexique."""
+    assert normalize_for_speech("CH4", "fr") == "C H quatre"
+    assert normalize_for_speech("C6H12O6", "fr") == "C six H douze O six"
+
+
+def test_les_chiffres_dune_formule_forment_un_nombre():
+    """« H12 » se dit « H douze », jamais « H un deux »."""
+    assert "douze" in normalize_for_speech("C6H12O6", "fr")
+
+
+def test_la_charge_ionique_est_dite_en_francais():
+    """Le « + » et le « - » d'un ion, dans les deux langues."""
+    assert normalize_for_speech("H3O+", "fr") == "H trois O plus"
+    assert normalize_for_speech("H3O+", "ar") == "H trois O plus"
+
+
+def test_la_charge_en_exposant_vaut_la_charge_ecrite_a_plat():
+    """« Ca²⁺ » disait « Ca au carre » : une charge n'est pas une puissance.
+
+    Le nom de l'element vient de `_NOMS_ELEMENTS` ; ce que ce test verrouille,
+    c'est que les deux ecritures de la charge donnent la meme phrase.
+    """
+    assert normalize_for_speech("Ca²⁺", "fr") == "calcium deux plus"
+    assert normalize_for_speech("Ca2+", "fr") == "calcium deux plus"
+
+
+def test_le_compte_de_charge_survit_a_lespace():
+    """« SO4 2- » : le « 2 » appartient a la charge, pas au discours."""
+    assert normalize_for_speech("SO4 2-", "fr") == "S O quatre deux moins"
+    assert normalize_for_speech("SO₄²⁻", "fr") == "S O quatre deux moins"
+
+
+def test_une_puissance_negative_nest_pas_prise_pour_une_charge():
+    """Garde-fou du meme correctif : « 10⁻³ » reste une puissance."""
+    assert "puissance moins trois" in normalize_for_speech("10⁻³ mol/L", "fr")
+
+
+def test_un_sigle_inconnu_est_epele():
+    """Hors lexique, un sigle repartait brut vers le modele."""
+    assert normalize_for_speech("le TGV", "fr") == "le T G V"
+
+
+def test_un_sigle_lu_comme_un_mot_nest_pas_epele():
+    assert normalize_for_speech("SIDA", "fr") == "Sida"
+
+
+def test_la_liste_des_sigles_lus_comme_des_mots_reste_celle_du_corpus():
+    """Mesure sur les 9 997 transcriptions : le professeur epelle « P I B ».
+
+    Y ajouter un sigle au juge se paie immediatement — « PIB » y avait ete mis
+    et faisait dire « Pib » 183 fois.
+    """
+    assert normalize_for_speech("le PIB", "fr") == "le P I B"
+    assert normalize_for_speech("la TVA", "fr") == "la T V A"
+
+
+def test_un_mot_ordinaire_nest_jamais_epele():
+    """« Ne », « Si », « As », « In » sont des symboles ET des mots courants.
+
+    C'est le risque de cette etape : elle voit tous les mots latins et doit
+    n'en toucher aucun qui ne soit pas une formule.
+    """
+    for phrase in ("Ne bouge pas", "Si tu veux", "As-tu compris", "In fine",
+                   "Bonjour les eleves", "Newton a explique"):
+        parle = normalize_for_speech(phrase, "fr")
+        assert parle.split()[0] not in {"N", "S", "A", "I", "B"}, phrase
+
+
+def test_les_chiffres_romains_ne_sont_pas_des_sigles():
+    """Le cours de SVT en est plein : « Anaphase II », pas « Anaphase I I »."""
+    assert normalize_for_speech("Anaphase II", "fr") == "Anaphase deux"
+    assert normalize_for_speech("division IV", "fr") == "division quatre"
+
+
+def test_les_symboles_mathematiques_du_corpus_sont_tous_dits():
+    """Ce qui restait brut ici, le modele l'inventait."""
+    attendus = {
+        "A ⇒ B": "implique", "x ∈ E": "appartient à", "√2": "racine carrée de",
+        "3 ± 1": "plus ou moins", "∑ f": "somme de", "∫ f": "intégrale de",
+        "π": "pi", "θ": "thêta", "ρ": "rho", "σ": "sigma", "∞": "l'infini",
+        "30 °": "degrés",
+    }
+    for source, attendu in attendus.items():
+        assert attendu in normalize_for_speech(source, "fr"), source
+
+
+def test_une_unite_composee_se_dit_sans_nombre_devant():
+    """« la concentration en mol/L » se lisait « mol sur L »."""
+    assert normalize_for_speech("en mol/L", "fr") == "en moles par litre"
+    assert normalize_for_speech("en m/s", "fr") == "en mètres par seconde"
+
+
+def test_la_table_darija_connait_les_memes_unites_que_la_francaise():
+    """Douze unites manquaient cote darija : elles repartaient en symboles."""
+    for source in ("5 µm", "3 kJ", "1013 hPa", "2 mA"):
+        parle = normalize_for_speech(source, "ar")
+        assert not _LATIN_RE.search(parle), f"{source} -> {parle}"
+
+
+# ── Ions monoatomiques : le nom de l'élément, pas ses lettres ─────
+
+def test_un_ion_monoatomique_porte_le_nom_de_son_element():
+    """« Ca²⁺ » se dit « calcium deux plus » en classe, pas « cé a deux plus »."""
+    assert normalize_for_speech("Ca²⁺", "fr") == "calcium deux plus"
+    assert normalize_for_speech("Fe3+", "fr") == "fer trois plus"
+    assert normalize_for_speech("Cl-", "fr") == "chlore moins"
+    assert normalize_for_speech("Zn2+", "ar") == "zinc deux plus"
+
+
+def test_le_chiffre_colle_au_signe_compte_les_charges():
+    """« Fe3+ » : le 3 est un nombre de charges, pas un indice de formule."""
+    assert normalize_for_speech("Fe3+", "fr") == normalize_for_speech("Fe³⁺", "fr")
+    assert normalize_for_speech("Ca2+", "fr") == normalize_for_speech("Ca²⁺", "fr")
+
+
+def test_une_formule_a_plusieurs_elements_garde_ses_symboles():
+    """Personne ne dit « hydrogène trois oxygène plus »."""
+    assert normalize_for_speech("H3O+", "fr") == "H trois O plus"
+    assert normalize_for_speech("SO4 2-", "fr") == "S O quatre deux moins"
+
+
+def test_un_symbole_dune_seule_lettre_nest_pas_nomme():
+    """« H plus », « O deux moins » sont ce que dit le professeur."""
+    assert normalize_for_speech("H+", "fr") == "H plus"
+    assert normalize_for_speech("O2-", "fr") == "O deux moins"
+
+
+def test_un_tiret_de_ponctuation_nest_pas_une_charge():
+    """« Ne », « Si », « Te » sont des symboles ET des mots courants.
+
+    Accepter une espace devant un signe sans compte suffisait à faire dire
+    « néon moins regarde ».
+    """
+    for phrase in ("Ne - regarde", "Si - alors", "Te - rappelles-tu"):
+        assert normalize_for_speech(phrase, "fr") == phrase
+
+
+def test_le_lexique_survit_a_un_mot_compose():
+    """La garde anti-charge ne doit pas couper « pH-mètre » du lexique."""
+    assert "pé ache" in normalize_for_speech("le pH-mètre", "fr")
+    assert "a dé enne" in normalize_for_speech("ADN-polymérase", "fr")
+
+
+def test_toutes_les_formules_ont_la_meme_ecriture_dans_les_deux_langues():
+    """`formulas` vidé des deux côtés : plus aucun doublon avec la règle.
+
+    Le lexique donnait « ache deux o » en français et « آش جوج أو » en darija
+    pour la même molécule. Le modèle a appris « H deux O » — c'est cette
+    écriture, et elle seule, qui doit lui parvenir.
+    """
+    for langue in ("fr", "ar"):
+        assert normalize_for_speech("H2O", langue) == "H deux O"
+        assert normalize_for_speech("CO2", langue) == "C O deux"
+        assert normalize_for_speech("NaCl", langue) == "N A C L"
+        assert normalize_for_speech("HCl", langue) == "H C L"
+        assert normalize_for_speech("O2", langue) == "O deux"
