@@ -107,10 +107,12 @@ def _ouvrir_pause_apres_deux_points(text: str) -> str:
 # consignes. Elles sont reformulées en phrases, plutôt que de laisser le TTS
 # lire « N égal 1 slash T ».
 _KNOWN_SPOKEN_FORMULAS = (
-    (re.compile(r"(?i)(?<!\w)N\s*=\s*1\s*/\s*T(?!\w)"),
+    (re.compile(r"(?i)(?<!\w)(?:la\s+fréquence\s+est\s+)?N\s*=\s*1\s*/\s*T(?!\w)"),
      "la fréquence est égale à un sur la période"),
-    (re.compile(r"(?i)(?<!\w)v\s*=\s*λ\s*(?:×|x|\*)\s*N(?!\w)"),
+    (re.compile(r"(?i)(?<!\w)(?:la\s+vitesse\s+est\s+)?v\s*=\s*λ\s*(?:×|x|\*)\s*N(?!\w)"),
      "la vitesse est égale à la longueur d'onde fois la fréquence"),
+    (re.compile(r"(?i)(?<!\w)(?:la\s+tension\s+est\s+)?U\s*=\s*R\s*(?:×|x|\*)\s*I(?!\w)"),
+     "la tension est égale à la résistance fois l'intensité"),
 )
 
 # Longest symbols must be matched first.  Values are (singular, plural).
@@ -136,6 +138,7 @@ _UNITS_FR = {
     "kW": ("kilowatt", "kilowatts"), "mV": ("millivolt", "millivolts"),
     "mA": ("milliampère", "milliampères"), "Hz": ("hertz", "hertz"),
     "Pa": ("pascal", "pascals"), "mol": ("mole", "moles"),
+    "m": ("mètre", "mètres"), "s": ("seconde", "secondes"),
     "L": ("litre", "litres"), "g": ("gramme", "grammes"),
     "J": ("joule", "joules"), "W": ("watt", "watts"),
     "V": ("volt", "volts"), "A": ("ampère", "ampères"),
@@ -157,6 +160,7 @@ _UNITS_AR = {
         "mm": ("مليمتر", "مليمترات"), "kg": ("كيلوغرام", "كيلوغرامات"),
         "mg": ("ميليغرام", "ميليغرامات"), "mL": ("ميليلتر", "ميليلترات"),
         "Hz": ("هرتز", "هرتز"), "mol": ("مول", "مولات"),
+        "m": ("متر", "أمتار"), "s": ("ثانية", "ثواني"),
         "L": ("لتر", "لترات"), "g": ("غرام", "غرامات"),
         "J": ("جول", "جولات"), "W": ("واط", "واطات"),
         "V": ("فولت", "فولتات"), "A": ("أمبير", "أمبيرات"),
@@ -290,6 +294,8 @@ def _replace_oral_formula_fragments(text: str, lang: str) -> str:
                     "la fréquence كتساوي واحد على la période",
                 "la vitesse est égale à la longueur d'onde fois la fréquence":
                     "la vitesse كتساوي la longueur d'onde ف la fréquence",
+                "la tension est égale à la résistance fois l'intensité":
+                    "la tension كتساوي la résistance ف l'intensité",
             }.get(french_phrase, french_phrase)
         else:
             phrase = french_phrase
@@ -381,7 +387,7 @@ def _replace_times(text: str, lang: str) -> str:
         return f"{hour_word} heures {minute_word}" if lang == "fr" else f"{hour_word} ساعة و {minute_word} دقيقة"
 
     return re.sub(
-        r"(?<!\w)([01]?\d|2[0-3])(?:\s*[hH]\s*([0-5]\d)?|:([0-5]\d))(?!\d)",
+        r"(?<!\w)([01]?\d|2[0-3])(?:\s*[hH](?:\s*([0-5]\d))?(?![A-Za-z])|:([0-5]\d))(?!\d)",
         repl,
         text,
     )

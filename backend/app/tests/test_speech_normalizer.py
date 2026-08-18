@@ -63,6 +63,16 @@ class SpeechNormalizerTests(unittest.TestCase):
         self.assertIn("بي آش", spoken)
         self.assertNotIn("pH", spoken)
 
+    def test_frequency_and_basic_si_units_are_not_misread_as_time(self):
+        spoken = normalize_for_speech(
+            "La fréquence est 4 Hz, la distance est 6,0 m et la durée est 0,5 s.",
+            "fr",
+        )
+        self.assertIn("quatre hertz", spoken)
+        self.assertNotIn("heuresz", spoken)
+        self.assertIn("six virgule zéro mètres", spoken)
+        self.assertIn("zéro virgule cinq secondes", spoken)
+
     def test_student_names_are_spoken_in_arabic(self):
         self.assertEqual(
             normalize_for_speech(
@@ -92,6 +102,22 @@ class SpeechNormalizerTests(unittest.TestCase):
     def test_generic_formula_slash_is_spoken_as_a_fraction(self):
         spoken = normalize_for_speech("La relation est N = 1/T.", "fr")
         self.assertIn("la fréquence est égale à un sur la période", spoken)
+
+    def test_known_formula_does_not_repeat_its_subject(self):
+        spoken = normalize_for_speech(
+            "La vitesse est v = λ × N, avec une fréquence de 4 Hz.", "fr"
+        )
+        self.assertEqual(
+            spoken,
+            "la vitesse est égale à la longueur d'onde fois la fréquence, "
+            "avec une fréquence de quatre hertz.",
+        )
+
+    def test_ohm_law_is_spoken_as_words(self):
+        self.assertEqual(
+            normalize_for_speech("U = R × I", "fr"),
+            "la tension est égale à la résistance fois l'intensité",
+        )
 
     def test_tts_copie_ferme_la_derniere_phrase(self):
         self.assertEqual(tts_service._ensure_terminal_period("Une phrase"), "Une phrase.")

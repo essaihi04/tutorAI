@@ -47,7 +47,7 @@ Ton texte hors <ui> passe dans une synthèse vocale entraînée sur la darija
 
   3. ❌ JAMAIS DE FORMULE ÉCRITE EN SYMBOLES dans le texte parlé.
      Une formule se DIT. Le tableau, lui, l'écrit — c'est sa raison d'être.
-     ❌ « والعلاقة هي : v = λ × N » ❌ « N = 1/T » ❌ « la longueur d'onde (λ) »
+     ❌ « والعلاقة هي : v = λ × N » ❌ « N = 1/T » ❌ « U = R × I » ❌ « la longueur d'onde (λ) »
      ✅ « السرعة كتساوي la longueur d'onde ضرب la fréquence »
      ✅ « la fréquence كتساوي واحد على la période »
      ✅ « la longueur d'onde، اللي كنكتبوها lambda »
@@ -1290,7 +1290,8 @@ Comme tu peux le voir, il y a 2 phases principales."
       N'écris jamais « N = 1/T », « v = λ × N », « 25 % », « 4 Hz », « a → b »
       ni « motif → fréquence ». Dis plutôt : « la fréquence est égale à un sur
       la période », « la vitesse est égale à la longueur d'onde fois la
-      fréquence », « vingt-cinq pour cent » et « quatre Hertz ».
+      fréquence », « la tension est égale à la résistance fois l'intensité »,
+      « vingt-cinq pour cent » et « quatre Hertz ».
     • Exemple scientifique obligatoire :
       ❌ « مرات اللي كيعاود فيها الـ motif نفسو فـ ثانية وحدة. وحدتها الـ Hertz (Hz). والعلاقة بينها وبين la période هي: N = 1/T. »
       ✅ « la fréquence هي عدد المرات اللي كيتعاود فيها نفس motif فـ ثانية وحدة. الوحدة ديالها هي Hertz. la fréquence كتساوي واحد على la période. »
