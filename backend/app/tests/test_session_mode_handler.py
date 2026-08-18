@@ -70,6 +70,49 @@ def test_une_question_directe_passe_avant_le_quiz():
     assert "Réponds d'abord" in guidance
 
 
+# ── Une demande nommée n'est pas un « continue » ───────────────────
+
+
+def test_une_demande_d_exercices_est_une_commande_pas_une_relance():
+    """« دوز التمارين » contient « دوز » : traité comme « continue », il
+    renvoyait le tuteur à son plan de cours et l'élève repartait sans
+    exercice. Ce qui est nommé prime sur le verbe."""
+    guidance = SessionHandler._build_turn_guidance("دوز التمارين")
+
+    assert "des exercices" in guidance
+    assert "DANS CETTE RÉPONSE" in guidance
+    assert "passer à la suite" not in guidance
+
+
+def test_une_demande_sans_verbe_reste_une_demande():
+    """« تمرين اللي كايدار في الباك » ne commande rien grammaticalement, et
+    demande pourtant un exercice de BAC."""
+    guidance = SessionHandler._build_turn_guidance("تمرين اللي كايدار في الباك")
+
+    assert "des exercices" in guidance
+
+
+def test_la_deuxieme_demande_identique_devient_un_ordre():
+    historique = [
+        {"role": "user", "content": "تمرين اللي كايدار في الباك"},
+        {"role": "assistant", "content": "قبل ما نبداو، شنو هي الصيغة؟"},
+        {"role": "user", "content": "دوز التمارين"},
+    ]
+    guidance = SessionHandler._build_turn_guidance("دوز التمارين", historique)
+
+    assert "DEUXIÈME FOIS" in guidance
+    assert "Aucune question de prérequis" in guidance
+
+
+def test_un_aveu_de_blocage_n_est_pas_une_commande():
+    """« ما فهمتش التمرين » nomme un exercice sans en réclamer un : lui en
+    envoyer un laisserait l'élève exactement où il est."""
+    guidance = SessionHandler._build_turn_guidance("ما فهمتش التمرين")
+
+    assert "des exercices" not in guidance
+    assert "ne connaît pas la réponse" in guidance
+
+
 # ── La traduction vers le code existant ───────────────────────────
 
 def test_les_lectures_historiques_voient_toujours_leurs_valeurs():

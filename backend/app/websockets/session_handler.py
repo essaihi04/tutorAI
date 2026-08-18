@@ -22,6 +22,7 @@ from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
 from app.services.scenario_service import Alternance, Progression
 from app.services.teaching_tactics import BanditTactiques, marquer_source
+from app.services import humanisation
 from app.services import tag_decoder
 from app.websockets.connection_manager import manager
 from app.supabase_client import get_supabase
@@ -191,7 +192,7 @@ class _StreamTagFilter:
     à la fin du flux.
     """
 
-    __slots__ = ('_pos', '_open', '_pending', '_md_buf')
+    __slots__ = ('_pos', '_open', '_pending', '_md_buf', '_emojis_restants')
 
     # Longueur de la plus longue balise : au-delà, un « < » est du vrai texte.
     _MAX_TAG_LEN = max(len(f'</{t}>') for t in _STREAM_TAG_NAMES)
@@ -210,6 +211,9 @@ class _StreamTagFilter:
         # Ligne en cours de constitution : un tableau markdown ne peut être
         # reconnu qu'une fois la ligne complète.
         self._md_buf = ''
+        # Le quota de pictogrammes de CETTE réponse, partagé par tous les
+        # morceaux du flux : sinon chaque chunk aurait droit au sien.
+        self._emojis_restants = _EMOJIS_PAR_REPONSE
 
     def _hold(self, buf: str) -> str:
         """Émet ``buf`` en retenant un éventuel ``**`` de fin (sort indécis)."""
@@ -245,6 +249,10 @@ class _StreamTagFilter:
             # deux tokens (« ** » puis « BB »).
             head, self._md_buf = self._md_buf[:-8], self._md_buf[-8:]
             out += _strip_markdown_inline(head)
+        if out:
+            out, self._emojis_restants = humanisation.limiter_emojis(
+                out, self._emojis_restants
+            )
         return out
 
     def _feed_tags(self, acc: str) -> str:
@@ -738,6 +746,51 @@ def _sanitize_genetics_cells(lines):
     return lines
 
 
+# ── Ce que l'élève RÉCLAME, par opposition à ce qu'il répond ──────────
+#
+# Un élève qui écrit « دوز التمارين » ne demande pas à continuer le cours :
+# il demande des exercices, tout de suite. La nuance décide du tour entier —
+# sans elle, le tuteur repart sur « قبل ما نبداو, واش عرفتي… » et l'élève
+# redemande la même chose trois messages plus loin. C'est exactement ce qui
+# s'est passé le 18 août : les exercices ont été réclamés deux fois avant
+# d'arriver.
+_DEMANDES_CIBLEES = {
+    "des exercices": (
+        "تمرين", "تمارين", "التمارين", "تطبيق", "مسالة", "مسائل", "exercice",
+        "exercices", "الباك", "امتحان", "الامتحان", "national", "bac",
+    ),
+    "une correction": ("تصحيح", "صحح", "الحل", "correction", "corrige", "corriger"),
+    "la formule": ("صيغة", "الصيغة", "القانون", "العلاقة", "formule"),
+    "une définition": ("تعريف", "التعريف", "معنى", "definition"),
+    "un exemple": ("مثال", "امثلة", "أمثلة", "exemple", "exemples"),
+    "un schéma": ("رسم", "خطاطة", "schema", "dessin", "figure"),
+    "un résumé": ("ملخص", "خلاصة", "resume", "synthese"),
+}
+#: Les verbes qui transforment un mot-clé en commande. Ils ne sont PAS
+#: obligatoires — « تمرين اللي كايدار في الباك » est déjà une demande — mais
+#: leur présence lève tout doute.
+_VERBES_DE_DEMANDE = (
+    "دوز", "عطيني", "عطني", "وريني", "بغيت", "بغينا", "خصني", "اعطيني",
+    "donne", "montre", "explique", "fais", "veux", "passe", "vas",
+)
+#: Ce qui n'est PAS une demande, même si un mot-clé y figure : l'élève
+#: raconte une difficulté, il ne commande rien.
+_AVEUX_DE_BLOCAGE = (
+    "ما فهمت", "مافهمت", "ما عرفت", "ماعرفت", "صعيب", "je ne comprends",
+    "j'ai pas compris", "compris",
+)
+
+#: Un pictogramme par réponse, pas un par phrase.
+#:
+#: Le prompt les interdit déjà dans le texte parlé ; l'échange du 18 août en
+#: portait un à chaque tour, toujours au même endroit — « 🎉 » pour féliciter,
+#: « ✍️ » pour conclure. C'est cette RÉGULARITÉ qui s'entend comme une
+#: machine, plus que le pictogramme lui-même. Une consigne de style ne l'a pas
+#: tenue ; le budget, si. Le tableau (<ui>) garde les siens : ils y sont
+#: demandés, et ce filtre ne voit jamais son contenu.
+_EMOJIS_PAR_REPONSE = 1
+
+
 class SessionHandler:
     """Handles a single tutoring session's voice pipeline."""
 
@@ -864,7 +917,44 @@ class SessionHandler:
             self.conversation_history = self.conversation_history[-20:]
 
     @staticmethod
-    def _build_turn_guidance(student_text: str) -> str:
+    def _replier(texte: str) -> str:
+        """Forme comparable d'un message : sans diacritiques, sans casse."""
+        decompose = unicodedata.normalize("NFKD", (texte or "").strip())
+        decompose = "".join(c for c in decompose if unicodedata.category(c) != "Mn")
+        return re.sub(r"\s+", " ", decompose.lower()).strip()
+
+    @staticmethod
+    def _categorie_demandee(compact: str) -> Optional[str]:
+        """Ce que l'élève RÉCLAME nommément, ou None s'il ne réclame rien.
+
+        On écarte d'abord les aveux de blocage : « ما فهمتش التمرين » contient
+        « تمرين » sans être une commande, et le traiter comme telle enverrait
+        un exercice à un élève qui vient de dire qu'il est perdu.
+        """
+        if any(aveu in compact for aveu in _AVEUX_DE_BLOCAGE):
+            return None
+        for libelle, mots in _DEMANDES_CIBLEES.items():
+            if any(mot in compact for mot in mots):
+                return libelle
+        return None
+
+    @classmethod
+    def _demande_deja_faite(cls, historique, categorie: str, tours: int = 8) -> bool:
+        """L'élève a-t-il déjà réclamé la même chose plus tôt dans la séance ?
+
+        Le dernier message utilisateur est exclu : c'est celui qu'on est en
+        train de traiter, il compterait toujours pour un doublon.
+        """
+        if not historique or not categorie:
+            return False
+        anciens = [m for m in historique if m.get("role") == "user"][:-1]
+        return any(
+            cls._categorie_demandee(cls._replier(str(m.get("content") or ""))) == categorie
+            for m in anciens[-tours:]
+        )
+
+    @classmethod
+    def _build_turn_guidance(cls, student_text: str, historique=None) -> str:
         """Give the LLM a small deterministic hint about short user turns.
 
         The full conversation remains available to the model, but short voice
@@ -876,11 +966,38 @@ class SessionHandler:
         raw = (student_text or "").strip()
         if not raw:
             return ""
-        folded = unicodedata.normalize("NFKD", raw)
-        folded = "".join(char for char in folded if unicodedata.category(char) != "Mn")
-        compact = re.sub(r"\s+", " ", folded.lower()).strip()
+        compact = cls._replier(raw)
         words = compact.split()
         guidance: list[str] = []
+
+        # ── Une demande nommée passe avant tout le reste ──────────────
+        #
+        # Elle est traitée en premier ET en exclusivité : dire au modèle
+        # « livre les exercices » puis « reprends où tu en étais » dans le
+        # même bloc, c'est lui laisser le choix — et il reprend le cours.
+        categorie = cls._categorie_demandee(compact)
+        if categorie and (
+            len(words) <= 8
+            or any(verbe in compact for verbe in _VERBES_DE_DEMANDE)
+        ):
+            if cls._demande_deja_faite(historique, categorie):
+                guidance.append(
+                    f"L'élève réclame {categorie} POUR LA DEUXIÈME FOIS. Il ne l'a pas obtenu "
+                    "au tour précédent. Livre-le maintenant, en entier, dès ta première phrase. "
+                    "Aucune question de prérequis, aucun « قبل ما نبداو » : redemander une "
+                    "troisième fois est le moment où un élève ferme l'application."
+                )
+            else:
+                guidance.append(
+                    f"L'élève demande {categorie}. Donne-le DANS CETTE RÉPONSE. Tu vérifies ce "
+                    "qu'il sait PENDANT, à travers ce qu'il fait — pas avant, à sa place. Un "
+                    "quiz de prérequis posé en barrage se lit comme un refus."
+                )
+            return (
+                "\n\n[GUIDAGE DÉTERMINISTE DU DERNIER MESSAGE]\n- "
+                + "\n- ".join(guidance)
+                + "\n"
+            )
 
         progress_words = {
             "passe", "passer", "continue", "continuer", "suivant", "suivante",
@@ -1257,6 +1374,10 @@ class SessionHandler:
         # Même nettoyage que le flux streamé (fonctions partagées), ligne par
         # ligne pour que les tableaux markdown soient reconnus.
         text = '\n'.join(_strip_markdown_line(line) for line in text.split('\n'))
+
+        # Même quota de pictogrammes que le chemin streamé : les deux
+        # aboutissent à la même bulle de chat, ils doivent se ressembler.
+        text, _ = humanisation.limiter_emojis(text, _EMOJIS_PAR_REPONSE)
 
         text = re.sub(r'[ \t]+\n', '\n', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
@@ -2444,7 +2565,11 @@ RÈGLES:
         # faciles à rattacher au mauvais sujet quand le tour précédent
         # contenait plusieurs explications. Donner au modèle une indication
         # déterministe du dernier tour évite les répétitions et les inventions.
-        system_prompt += self._build_turn_guidance(student_text)
+        system_prompt += self._build_turn_guidance(student_text, self.conversation_history)
+        # Et le miroir de ses propres tours : sans lui, le modèle recopie sa
+        # dernière réponse parce qu'elle est le seul exemple de « ce que je
+        # dis » qu'il ait sous les yeux (cf. humanisation.py).
+        system_prompt += humanisation.bloc_memoire(self.conversation_history)
 
         decision = resource_decision_service.decide(
             phase=self.current_phase,
