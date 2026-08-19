@@ -133,6 +133,70 @@ def test_le_texte_sans_pictogramme_ressort_intact():
     assert restant == 1
 
 
+# ── L'accord entre ce qui se dit et ce qui s'écrit ────────────────
+
+_TABLEAU = (
+    '<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":'
+    '{"title":"Le pH","lines":[{"type":"math","content":"pH = -\\\\log[H_3O^+]"}]}}]}</ui>'
+)
+
+
+def test_une_question_seule_ne_doit_rien_ecrire_au_tableau():
+    """En coaching, `force_schema` est vrai à chaque tour : sans ce constat,
+    une question de deux phrases finissait recopiée sur le tableau."""
+    reponse = "واخا. دابا جرب تكتب la formule اللي كتربط بي آش بالتركيز. شنو غادي تكتب؟"
+
+    assert humanisation.tour_purement_socratique(reponse)
+
+
+def test_un_tour_qui_ecrit_n_est_pas_une_simple_question():
+    """Le modèle a produit un tableau : l'exigence garde tout son sens."""
+    reponse = "شوف اللوح، كتبت ليك la formule. واش واضحة؟ " + _TABLEAU
+
+    assert not humanisation.tour_purement_socratique(reponse)
+
+
+def test_une_explication_longue_n_est_pas_une_simple_question():
+    """Un cours qui se termine par une question reste un cours."""
+    reponse = "خلينا نبداو من الصفر. " * 30 + "واش فهمتي؟"
+
+    assert not humanisation.tour_purement_socratique(reponse)
+
+
+def test_une_affirmation_n_est_pas_une_question():
+    reponse = "الليمون حمضي، والصابون قاعدي."
+
+    assert not humanisation.tour_purement_socratique(reponse)
+
+
+def test_un_tableau_jamais_annonce_est_signale():
+    """La plainte telle quelle : des données au tableau que rien n'explique."""
+    reponse = "واش عرفتي شنو هي العلاقة بين بي آش و التركيز؟ " + _TABLEAU
+
+    assert humanisation.tableau_non_annonce(reponse)
+    assert "MUET" in humanisation.defaut_d_accord(reponse)
+
+
+def test_un_tableau_annonce_ne_declenche_rien():
+    reponse = "شوف اللوح. هاد le log كيقلب القيمة، ملي التركيز كيزيد بي آش كينقص. " + _TABLEAU
+
+    assert not humanisation.tableau_non_annonce(reponse)
+    assert humanisation.defaut_d_accord(reponse) == ""
+
+
+def test_un_tour_sans_tableau_n_a_rien_a_accorder():
+    assert not humanisation.tableau_non_annonce("واخا، نكملو.")
+    assert humanisation.defaut_d_accord("واخا، نكملو.") == ""
+
+
+def test_le_texte_parle_exclut_le_contenu_du_tableau():
+    """Ce que l'élève ENTEND ne contient rien du JSON d'affichage."""
+    parle = humanisation.texte_parle("شوف اللوح. " + _TABLEAU)
+
+    assert "show_board" not in parle
+    assert "شوف اللوح" in parle
+
+
 def test_le_budget_est_partage_par_tous_les_morceaux_du_flux():
     """La coupure entre deux tokens ne doit pas rouvrir un quota.
 

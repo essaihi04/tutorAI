@@ -847,6 +847,9 @@ class SessionHandler:
         # Used to inject accurate exam metadata into the LLM system prompt
         # so the model never hallucinates the wrong year/session/exercise/question.
         self.current_exam_view: dict | None = None
+        #: Défaut d'accord oral/tableau constaté au tour précédent. La voix du
+        #: tour fautif est déjà partie ; ce rappel corrige le tour suivant.
+        self._defaut_accord: str = ""
 
     @property
     def session_mode(self) -> str:
@@ -1057,6 +1060,13 @@ class SessionHandler:
             + "\n- ".join(guidance)
             + "\n"
         )
+
+    def _rappel_accord(self) -> str:
+        """Sert UNE fois le défaut d'accord relevé au tour précédent."""
+        defaut, self._defaut_accord = self._defaut_accord, ""
+        if not defaut:
+            return ""
+        return f"\n\n[ACCORD ORAL ↔ TABLEAU — À RÉPARER MAINTENANT]\n{defaut}\n"
 
     def _speech_language(self) -> str:
         """Language code for STT & TTS. Darija is Arabic-based."""
@@ -2570,6 +2580,7 @@ RÈGLES:
         # dernière réponse parce qu'elle est le seul exemple de « ce que je
         # dis » qu'il ait sous les yeux (cf. humanisation.py).
         system_prompt += humanisation.bloc_memoire(self.conversation_history)
+        system_prompt += self._rappel_accord()
 
         decision = resource_decision_service.decide(
             phase=self.current_phase,
@@ -2703,6 +2714,25 @@ RÈGLES:
             await self.websocket.send_json({"type": "hide_whiteboard"})
             await self._auto_suggest_resource(preferred_resource_type=resource_type_for_suggestion)
             media_already_sent = True
+
+        # ── Un tour qui n'est QU'UNE question ne s'écrit pas au tableau ──
+        #
+        # `force_schema` est vrai à CHAQUE tour de coaching. Une question
+        # socratique de deux phrases ne contient donc pas le bloc <ui> exigé :
+        # trois relances partaient, puis le repli auto-board recopiait la
+        # prose du chat sur le tableau. L'élève voyait s'afficher la question
+        # qu'on venait de lui poser — et, quand le modèle cédait à la
+        # relance, la réponse avec. Ici on constate ce que le tour est
+        # VRAIMENT, une fois la réponse écrite, et on lève l'exigence.
+        if should_force_schema and humanisation.tour_purement_socratique(ai_response):
+            _safe_log("[AI Commands] Tour purement socratique : aucun tableau forcé")
+            should_force_schema = False
+
+        # Ce que l'oral et le tableau se sont dit — ou pas. Le tour est déjà
+        # parti ; le constat sert de rappel au suivant (cf. humanisation.py).
+        self._defaut_accord = humanisation.defaut_d_accord(ai_response)
+        if self._defaut_accord:
+            _safe_log("[AI Commands] Tableau affiché sans annonce orale")
 
         # ── Execute UI commands (board/schema/draw/exam) ──
         # Text already streamed above, just process the commands.

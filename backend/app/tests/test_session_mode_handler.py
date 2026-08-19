@@ -104,6 +104,20 @@ def test_la_deuxieme_demande_identique_devient_un_ordre():
     assert "Aucune question de prérequis" in guidance
 
 
+def test_le_rappel_d_accord_ne_sert_qu_une_fois():
+    """Le tour fautif est déjà parti ; le rappel corrige le suivant, puis se
+    tait. Le laisser en place le ferait ressortir à chaque tour de la séance,
+    y compris quand le tuteur a corrigé le tir."""
+    handler = _handler()
+    handler._defaut_accord = "Tu as affiché un tableau sans en dire un mot."
+
+    premier = handler._rappel_accord()
+
+    assert "ACCORD ORAL" in premier
+    assert "sans en dire un mot" in premier
+    assert handler._rappel_accord() == ""
+
+
 def test_un_aveu_de_blocage_n_est_pas_une_commande():
     """« ما فهمتش التمرين » nomme un exercice sans en réclamer un : lui en
     envoyer un laisserait l'élève exactement où il est."""

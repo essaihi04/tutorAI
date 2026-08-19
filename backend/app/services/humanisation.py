@@ -251,6 +251,98 @@ def question_ouverte(historique) -> str:
     return _condenser(questions[-1]) if questions else ""
 
 
+# ── L'accord entre ce qui se dit et ce qui s'écrit ────────────────
+#
+# Le tuteur a deux canaux : sa voix, et le tableau. Le prompt leur interdit
+# de se DOUBLER — et le modèle lit cette règle au pied de la lettre : il
+# écrit au tableau ce qu'il ne dit pas, donc l'élève reçoit des lignes que
+# personne ne lui a expliquées. L'autre bord du même défaut : il pose une
+# question à l'oral pendant que le tableau en affiche la réponse.
+#
+# Les deux se repèrent sur la réponse complète, avant qu'elle ne parte.
+
+_BALISES_AFFICHAGE = ("ui", "board", "draw", "schema", "live", "exam_exercise")
+_BLOC_AFFICHAGE = re.compile(
+    r"<(" + "|".join(_BALISES_AFFICHAGE) + r")>.*?(?:</\1>|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+_OUVERTURE_AFFICHAGE = re.compile(
+    r"<(?:" + "|".join(_BALISES_AFFICHAGE) + r")>", re.IGNORECASE
+)
+#: Une réponse plus longue que ça porte un cours, pas une simple question.
+_LONGUEUR_PURE_QUESTION = 400
+
+#: Comment un professeur renvoie à ce qu'il vient d'écrire. Le pendant, pour
+#: le tableau, de `_AMORCES_IMAGE` côté session_handler : sans annonce, le
+#: tableau s'allume en silence et l'élève recopie sans savoir pourquoi.
+_AMORCES_TABLEAU = (
+    # français
+    "tableau", "je t'écris", "j'écris", "je note", "regarde ce que",
+    "voici ce que", "comme tu le vois", "comme tu vois", "ci-dessous",
+    # darija / arabe
+    "اللوح", "كتبت ليك", "كتبتها", "غادي نكتب", "كنكتب", "نكتب ليك",
+    "شوف معايا", "شوف هاد", "شوف اللي", "ها هي", "ها هو",
+)
+
+
+def texte_parle(reponse: str) -> str:
+    """La réponse privée de ses blocs d'affichage : ce que l'élève ENTEND."""
+    return _BLOC_AFFICHAGE.sub(" ", reponse or "").strip()
+
+
+def _finit_sur_une_question(texte: str) -> bool:
+    """La dernière chose dite est-elle une question posée à l'élève ?"""
+    nettoye = retirer_emojis(texte).rstrip()
+    # Le modèle referme parfois sur un mot-clé de commande, jamais prononcé.
+    nettoye = re.sub(r"[A-Z_]{6,}\s*$", "", nettoye).rstrip()
+    return nettoye.endswith(("؟", "?"))
+
+
+def tour_purement_socratique(reponse: str) -> bool:
+    """Ce tour est-il une question à l'élève, et rien d'autre ?
+
+    Un tel tour n'a RIEN à écrire au tableau : la réponse, c'est l'élève qui
+    doit la chercher. Forcer un tableau ici revient à la lui montrer.
+    """
+    if not reponse or _OUVERTURE_AFFICHAGE.search(reponse):
+        return False
+    parle = texte_parle(reponse)
+    return bool(parle) and len(parle) <= _LONGUEUR_PURE_QUESTION and _finit_sur_une_question(parle)
+
+
+def tableau_non_annonce(reponse: str) -> bool:
+    """Un tableau s'affiche sans que l'oral n'en dise un mot.
+
+    Le tableau est muet. Une ligne écrite que le professeur ne commente pas
+    est une ligne que l'élève recopie sans la comprendre — et c'est bien ce
+    qu'on lui reproche : « des données au tableau qu'il n'explique pas ».
+    """
+    if not reponse or "show_board" not in reponse:
+        return False
+    parle = retirer_emojis(texte_parle(reponse)).lower()
+    if not parle:
+        return True
+    return not any(amorce in parle for amorce in _AMORCES_TABLEAU)
+
+
+def defaut_d_accord(reponse: str) -> str:
+    """Le rappel à servir au tour SUIVANT, ou "" si les canaux s'accordent.
+
+    On ne peut plus rien pour le tour qui vient de partir — la voix est déjà
+    dite. Mais le défaut nommé au tour d'après se corrige, exactement comme
+    les répétitions se corrigent par le miroir.
+    """
+    if tableau_non_annonce(reponse):
+        return (
+            "Au tour précédent, tu as affiché un tableau sans en dire un mot à "
+            "l'oral. Le tableau est MUET : l'élève a recopié des lignes que "
+            "personne ne lui a expliquées. Cette fois, annonce ce que tu écris "
+            "(« شوف اللوح », « كتبت ليك… ») et commente-le en une phrase au "
+            "moins, avec tes mots."
+        )
+    return ""
+
+
 def bloc_memoire(historique) -> str:
     """Le miroir à coller au prompt système. Vide tant qu'il n'a rien à dire."""
     ouvertures = ouvertures_recentes(historique)
