@@ -247,9 +247,17 @@ class _StreamTagFilter:
         elif len(self._md_buf) >= self._MD_FLUSH_AT:
             # On retient une courte queue : un marqueur peut être à cheval sur
             # deux tokens (« ** » puis « BB »).
-            head, self._md_buf = self._md_buf[:-8], self._md_buf[-8:]
+            # La queue retenue doit couvrir la plus longue commande : coupée
+            # entre deux tokens, « OUVRIR_SIMULATION » repartirait en deux
+            # moitiés qu'aucun motif ne reconnaît.
+            garde = max(8, tag_decoder.LONGUEUR_MOT_CLE_MAX)
+            head, self._md_buf = self._md_buf[:-garde], self._md_buf[-garde:]
             out += _strip_markdown_inline(head)
         if out:
+            # Les commandes (« OUVRIR_IMAGE ») pilotent l'écran ; l'élève ne
+            # doit ni les lire ni les entendre. `texte_parle` alimente aussi
+            # la synthèse vocale, donc le nettoyage doit tomber ICI.
+            out = tag_decoder.retirer_commandes(out)
             out, self._emojis_restants = humanisation.limiter_emojis(
                 out, self._emojis_restants
             )
@@ -1364,14 +1372,10 @@ class SessionHandler:
         # dans la bulle de chat lue par l'élève.
         text = re.sub(r'\[(?:pause|hes|breath|laugh)\]', ' ', text, flags=re.IGNORECASE)
 
-        command_keywords = [
-            "FERMER_TABLEAU", "OUVRIR_IMAGE", "FERMER_IMAGE", "CACHER_MEDIA",
-            "OUVRIR_SIMULATION", "FERMER_SIMULATION", "OUVRIR_EXERCICE",
-            "FERMER_EXERCICE", "TOUT_FERMER", "PHASE_SUIVANTE",
-            "DESSINER_SCHEMA:", "EXERCICE:"
-        ]
-        for cmd in command_keywords:
-            text = text.replace(cmd, "")
+        # Même vocabulaire que le flux streamé et que la voix : une seule
+        # liste, dans `tag_decoder`, sinon les trois sorties divergent — et
+        # c'est exactement ce qui laissait « OUVRIR_IMAGE » dans le chat.
+        text = tag_decoder.retirer_commandes(text)
 
         # ── Markdown résiduel ──
         # Le prompt l'interdit dans le texte parlé, mais le modèle en produit

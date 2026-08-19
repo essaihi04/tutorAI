@@ -135,9 +135,15 @@ def test_roles_ui_ne_leve_jamais(valeur):
 # ── La prose ──────────────────────────────────────────────────────
 
 def test_texte_parle_ne_garde_que_la_prose():
+    """Le trou laissé par une balise se referme.
+
+    Ce texte part dans la bulle de chat ET dans la synthèse vocale : l'espace
+    double que laissait le retrait de la balise était un résidu, pas une
+    respiration voulue.
+    """
     texte = ('Salam Zouhair ! <ui>{"type":"show_live"}</ui> '
              'On commence. <suggestions>["oui"]</suggestions>')
-    assert texte_parle(texte) == "Salam Zouhair !  On commence."
+    assert texte_parle(texte) == "Salam Zouhair ! On commence."
 
 
 def test_texte_parle_sur_une_reponse_vide():
@@ -153,4 +159,4 @@ def test_cas_reel_deux_ui_un_tableau_un_qcm():
 
     roles = [roles_ui(b.donnees) for b in extraire(texte) if b.balise == "ui"]
     assert roles == [{"tableau"}, {"tableau", "exercice"}]
-    assert texte_parle(texte) == "Explication.  Question :"
+    assert texte_parle(texte) == "Explication. Question :"

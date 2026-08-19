@@ -51,6 +51,41 @@ BALISES: tuple[str, ...] = (
     "mode",
 )
 
+#: Les commandes écrites EN CLAIR, sans chevrons. Le prompt les demande ainsi
+#: exprès : une annonce faite en darija n'est reconnue par aucun détecteur, et
+#: `OUVRIR_IMAGE` ne dépend d'aucune langue.
+#:
+#: Mais elles voyagent dans la prose, et elles n'étaient retirées qu'à UN seul
+#: endroit — `_extract_display_text`, c'est-à-dire le chemin NON streamé. Le
+#: chat est streamé : l'élève lisait « شوف هاد الصورة. OUVRIR_IMAGE دابا ڭولي
+#: ليا… » et la synthèse vocale, qui ne les connaît pas davantage, les
+#: prononçait. Elles vivent donc ici, avec les balises, pour la même raison :
+#: ce sont des ordres adressés au système, jamais au lycéen.
+#:
+#: Triées par longueur décroissante : « FERMER_EXERCICE » doit disparaître
+#: avant qu'on ne cherche « EXERCICE: ».
+MOTS_CLES: tuple[str, ...] = tuple(sorted(
+    (
+        "OUVRIR_IMAGE", "FERMER_IMAGE", "CACHER_MEDIA",
+        "OUVRIR_SIMULATION", "FERMER_SIMULATION",
+        "OUVRIR_EXERCICE", "FERMER_EXERCICE",
+        "OUVRIR_TABLEAU", "FERMER_TABLEAU", "EFFACER_TABLEAU", "RESET_TABLEAU",
+        "TOUT_FERMER", "PHASE_SUIVANTE",
+        "DESSINER_SCHEMA:", "EXERCICE:",
+    ),
+    key=len,
+    reverse=True,
+))
+
+_MOTIF_COMMANDES = re.compile(
+    "|".join(re.escape(mot) for mot in MOTS_CLES)
+)
+_ESPACES_EN_TROP = re.compile(r"[ \t]{2,}")
+
+#: La plus longue commande : une queue plus courte que ça, retenue en fin de
+#: flux, laisserait passer un mot-clé coupé entre deux tokens.
+LONGUEUR_MOT_CLE_MAX = max(len(mot) for mot in MOTS_CLES)
+
 #: Sous-types rencontrés dans le JSON d'un ``<ui>``. Ce sont eux qui disent
 #: ce que le bloc FAIT réellement — un ``<ui>`` n'est pas forcément un
 #: exercice, et c'est le piège de tout ce protocole.
@@ -164,6 +199,18 @@ def roles_ui(donnees: Any) -> frozenset[str]:
     return frozenset(roles)
 
 
+def retirer_commandes(texte: str) -> str:
+    """Retire les commandes en clair, sans toucher aux balises.
+
+    Séparée de `retirer_balises` parce que les deux ne s'appliquent pas
+    toujours ensemble : l'historique garde les commandes (le modèle doit
+    continuer à savoir qu'elles existent), la bulle de chat et la voix, non.
+    """
+    if not texte:
+        return ""
+    return _ESPACES_EN_TROP.sub(" ", _MOTIF_COMMANDES.sub("", texte))
+
+
 def texte_parle(texte: str) -> str:
     """Ce que l'élève doit LIRE et ENTENDRE : la prose, sans les commandes."""
-    return retirer_balises(texte).strip()
+    return retirer_commandes(retirer_balises(texte)).strip()

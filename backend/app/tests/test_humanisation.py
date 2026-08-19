@@ -5,7 +5,8 @@ ouvertes par « مزيان بزاف زهير », la même question sur le pH du 
 à sept minutes d'intervalle, et un pictogramme à chaque tour toujours au même
 endroit. Ce sont ces trois-là que les tests tiennent.
 """
-from app.services import humanisation
+from app.services import humanisation, tag_decoder
+from app.services.tts_service import clean_for_tts
 from app.websockets.session_handler import _StreamTagFilter
 
 
@@ -131,6 +132,69 @@ def test_le_texte_sans_pictogramme_ressort_intact():
 
     assert texte == "واخا، نكملو مع la formule."
     assert restant == 1
+
+
+# ── Les commandes ne sont ni lues ni entendues ────────────────────
+#
+# Séance du 19 août : l'élève a lu « شوف هاد الصورة باش تفهم مزيان الفرق.
+# OUVRIR_IMAGE دابا ڭولي ليا… » dans sa bulle de chat. Le mot-clé n'était
+# retiré qu'au point de sortie NON streamé — or le chat est streamé, et la
+# voix partage le même texte.
+
+_TOUR_AVEC_COMMANDE = "شوف هاد الصورة باش تفهم مزيان الفرق.\nOUVRIR_IMAGE\nدابا ڭولي ليا، واش فهمتي؟"
+
+
+def test_le_flux_du_chat_ne_laisse_pas_passer_une_commande():
+    filtre = _StreamTagFilter()
+    accumule = ""
+    sortie = ""
+    for token in ("شوف هاد الصورة.\n", "OUVRIR_IMAGE\n", "دابا ڭولي ليا، واش فهمتي؟\n"):
+        accumule += token
+        sortie += filtre.feed(accumule)
+    sortie += filtre.flush(accumule)
+
+    assert "OUVRIR_IMAGE" not in sortie
+    assert "شوف هاد الصورة" in sortie
+    assert "واش فهمتي؟" in sortie
+
+
+def test_la_voix_ne_prononce_pas_la_commande():
+    """C'était le plus grave : le tuteur DISAIT « OUVRIR IMAGE » à haute voix."""
+    dit = clean_for_tts(_TOUR_AVEC_COMMANDE)
+
+    assert "OUVRIR_IMAGE" not in dit
+    assert "OUVRIR" not in dit
+    assert "شوف هاد الصورة" in dit
+
+
+def test_une_commande_collee_en_pleine_phrase_disparait_aussi():
+    """À la répétition du 19 août, le mot-clé s'est retrouvé au milieu du
+    paragraphe, plus sur sa propre ligne."""
+    colle = "شوف هاد الصورة. OUVRIR_IMAGE دابا ڭولي ليا."
+
+    assert "OUVRIR_IMAGE" not in tag_decoder.retirer_commandes(colle)
+    assert "OUVRIR_IMAGE" not in clean_for_tts(colle)
+
+
+def test_la_commande_la_plus_longue_ne_survit_pas_a_une_coupure():
+    """La queue retenue en fin de flux doit couvrir le plus long mot-clé."""
+    assert tag_decoder.LONGUEUR_MOT_CLE_MAX >= len("OUVRIR_SIMULATION")
+
+
+def test_une_commande_composee_ne_laisse_pas_de_moignon():
+    """« FERMER_EXERCICE » doit partir en entier, pas se réduire à
+    « FERMER_ » parce que « EXERCICE: » aurait été traité d'abord."""
+    propre = tag_decoder.retirer_commandes("واخا FERMER_EXERCICE صافي")
+
+    assert "FERMER" not in propre
+    assert "EXERCICE" not in propre
+    assert "واخا" in propre and "صافي" in propre
+
+
+def test_le_texte_ordinaire_traverse_sans_dommage():
+    phrase = "الـ méiose كتعطي أربع خلايا، كل وحدة فيها la moitié ديال les chromosomes."
+
+    assert tag_decoder.retirer_commandes(phrase) == phrase
 
 
 # ── L'accord entre ce qui se dit et ce qui s'écrit ────────────────

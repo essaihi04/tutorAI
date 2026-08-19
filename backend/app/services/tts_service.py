@@ -34,6 +34,7 @@ import asyncio
 import httpx
 
 from app.config import get_settings
+from app.services import tag_decoder
 from app.services.speech_normalizer import normalize_for_speech
 
 
@@ -109,6 +110,10 @@ def clean_for_tts(text: str) -> str:
     out = text
     for pat in _TAG_PATTERNS:
         out = pat.sub(" ", out)
+    # Les commandes en clair (« OUVRIR_IMAGE ») n'ont pas de chevrons : aucun
+    # motif ci-dessus ne les voit, et la voix les PRONONÇAIT au milieu de la
+    # phrase. Le vocabulaire vit dans `tag_decoder`, avec les balises.
+    out = tag_decoder.retirer_commandes(out)
     # Markdown headings/emphasis. Preserve mathematical `*` and `_` when they
     # are not paired formatting markers (1.5 * 10^-3, H_2O).
     out = re.sub(r"(?m)^\s*#{1,6}\s*", "", out)

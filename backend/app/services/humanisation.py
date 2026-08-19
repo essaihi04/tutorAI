@@ -353,6 +353,19 @@ def bloc_memoire(historique) -> str:
 
     lignes: list[str] = []
     if ouvertures:
+        # Le renvoi mot pour mot du tour précédent est le pire des cas : il
+        # est arrivé sur un message tronqué par la reconnaissance vocale
+        # (« كتوقع في »), que le modèle n'a pas su lire — alors il a rejoué
+        # sa réponse. L'élève l'avait déjà lue.
+        lignes.append(
+            "• Ta réponse précédente a déjà été lue par l'élève. Ne la renvoie "
+            "JAMAIS à l'identique, même partiellement.\n"
+            "  → si son message est incompréhensible ou coupé en plein milieu "
+            "(la reconnaissance vocale tronque souvent), dis-le-lui et demande-"
+            "lui de répéter. Recevoir deux fois le même paragraphe lui apprend "
+            "que personne ne l'écoute."
+        )
+    if ouvertures:
         citees = " | ".join(f"« {o} »" for o in ouvertures)
         lignes.append(
             f"• Tes dernières ouvertures : {citees}\n"
