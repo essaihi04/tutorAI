@@ -88,13 +88,23 @@ class Settings(BaseSettings):
     academy_tts_voice: str = ""          # vide = première voix du serveur
     academy_tts_normaliser: int = 1      # applique l'orthographe darija (ال → ل)
     academy_tts_exaggeration: float = 0.45   # > 0.6 dérive sur les phrases longues
-    academy_tts_temperature: float = 0.7     # 0.3 = quasi déterministe, plus plat
+    # 0.7 → 0.5 le 2026-08-19. Le serveur tire chaque jeton de parole au sort ;
+    # plus la température est haute, plus la queue de la distribution pèse — et
+    # c'est là que se logent les prononciations fautives. Un nom sortait juste
+    # une fois sur deux. Le serveur pose désormais une graine dérivée du texte
+    # (cf. `_fixer_graine`, dépôt DARIJA TTS), donc le rendu est reproductible ;
+    # baisser la température réduit en plus la probabilité de tomber sur le
+    # mauvais chemin. 0.3 = quasi déterministe mais prosodie plate. Réglable
+    # par variable d'environnement, sans redéploiement.
+    academy_tts_temperature: float = 0.5
     academy_tts_cfg_weight: float = 0.3      # bas = debit plus lent et pose ;
     #                                        0.7 colle au texte mais accelere
     # Flux continu (/tts/stream) : premier son ~5x plus tôt (2,9 s au lieu de
-    # 14,5 s, mesuré). ⚠️ Tant que le serveur n'est pas corrigé, il PERD ~0,7 s
-    # à la fin de chaque énoncé (le dernier mot est coupé). Mettre à 0 pour
-    # revenir au chemin par segments complets, sans redéploiement de code.
+    # 14,5 s, mesuré). La perte de ~0,7 s en fin d'énoncé est corrigée côté
+    # serveur depuis le 2026-08-19 (rognage du cache de phase HiFiGAN, présent
+    # dans `academy_api_colab.ipynb`) — à condition que le Colab tourne bien sur
+    # cette version. Mettre à 0 pour revenir au chemin par segments complets,
+    # sans redéploiement de code.
     academy_tts_stream: int = 1
 
     # TTS cache (filesystem)
