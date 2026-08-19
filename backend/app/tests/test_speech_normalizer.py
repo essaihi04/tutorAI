@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services import tts_service
-from app.services.speech_normalizer import _LATIN_RE, normalize_for_speech
+from app.services.speech_normalizer import normalize_for_speech
 
 
 class SpeechNormalizerTests(unittest.TestCase):
@@ -79,13 +79,13 @@ class SpeechNormalizerTests(unittest.TestCase):
             "chapitre deuxième.",
         )
 
-    def test_darija_mixed_uses_arabic_spoken_forms(self):
+    def test_darija_mixed_uses_french_spoken_numbers_and_units(self):
         result = normalize_for_speech("النسبة هي 25% والسرعة 5 km/h و ADN", "mixed")
-        self.assertIn("خمسة وعشرين فالمية", result)
-        self.assertIn("خمسة كيلومترات فالساعة", result)
+        self.assertIn("vingt-cinq pour cent", result)
+        self.assertIn("cinq kilomètres par heure", result)
         self.assertIn("آ دي إن", result)
         self.assertEqual(normalize_for_speech("2,5", "mixed"), "deux virgule cinq")
-        self.assertIn("جوج فاصلة خمسة", normalize_for_speech("القيمة 2,5", "mixed"))
+        self.assertIn("deux virgule cinq", normalize_for_speech("القيمة 2,5", "mixed"))
 
     def test_ph_is_spelled_out_for_academy(self):
         spoken = normalize_for_speech("الـ 7 هو pH محايد.", "mixed")
@@ -125,7 +125,7 @@ class SpeechNormalizerTests(unittest.TestCase):
         )
         self.assertNotIn("الـ motif", spoken)
         self.assertNotIn("الـ Hertz", spoken)
-        self.assertIn("la fréquence كتساوي واحد على la période", spoken)
+        self.assertIn("la fréquence est égale à un sur la période", spoken)
         self.assertNotIn("N يساوي", spoken)
 
     def test_generic_formula_slash_is_spoken_as_a_fraction(self):
@@ -331,10 +331,15 @@ def test_une_unite_composee_se_dit_sans_nombre_devant():
 
 
 def test_la_table_darija_connait_les_memes_unites_que_la_francaise():
-    """Douze unites manquaient cote darija : elles repartaient en symboles."""
-    for source in ("5 µm", "3 kJ", "1013 hPa", "2 mA"):
-        parle = normalize_for_speech(source, "ar")
-        assert not _LATIN_RE.search(parle), f"{source} -> {parle}"
+    """Les nombres et unités restent en français même dans une phrase arabe."""
+    expected = {
+        "5 µm": "cinq micromètres",
+        "3 kJ": "trois kilojoules",
+        "1013 hPa": "mille treize hectopascals",
+        "2 mA": "deux milliampères",
+    }
+    for source, french in expected.items():
+        assert french in normalize_for_speech(source, "ar")
 
 
 # ── Ions monoatomiques : le nom de l'élément, pas ses lettres ─────

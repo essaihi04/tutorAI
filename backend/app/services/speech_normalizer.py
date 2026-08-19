@@ -813,6 +813,10 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     # them into ambiguous plain characters before we can identify a power.
     text = unicodedata.normalize("NFC", text)
     lang = _speech_language(language, text)
+    # The Arabic/Darija voice can be unreliable for school numbers, units and
+    # symbolic rules. Keep surrounding Arabic words when needed, but make
+    # numeric and methodological elements French for a stable pronunciation.
+    numeric_lang = "fr" if lang == "ar" else lang
     # En premier : les règles suivantes reconnaissent des MOTS (unités,
     # abréviations, nombres). Une tatweel ou un collage d'alphabets les fait
     # toutes échouer silencieusement.
@@ -820,27 +824,27 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     text = _separer_article_arabe(text)
     text = _ouvrir_pause_apres_deux_points(text)
     text = _replace_latex(text)
-    text = _replace_oral_formula_fragments(text, lang)
+    text = _replace_oral_formula_fragments(text, numeric_lang)
     # Ne jamais laisser l'article arabe « al » s'accrocher à un terme
     # scientifique français : « la période », pas « الـ période ».
     text = _ARABIC_ARTICLE_BEFORE_LATIN_RE.sub("", text)
     text = _replace_lexicon(text, lang)
-    text = _replace_dates(text, lang)
-    text = _replace_times(text, lang)
-    text = _replace_scientific_notation(text, lang)
-    text = _replace_units(text, lang)
-    text = _replace_standalone_units(text, lang)
+    text = _replace_dates(text, numeric_lang)
+    text = _replace_times(text, numeric_lang)
+    text = _replace_scientific_notation(text, numeric_lang)
+    text = _replace_units(text, numeric_lang)
+    text = _replace_standalone_units(text, numeric_lang)
     # Avant les puissances : « Ca²⁺ » est une charge, pas un carré.
     text = _ramener_charges_en_ascii(text)
-    text = _replace_powers(text, lang)
-    text = _replace_percentages_and_fractions(text, lang)
-    text = _replace_ordinals(text, lang)
+    text = _replace_powers(text, numeric_lang)
+    text = _replace_percentages_and_fractions(text, numeric_lang)
+    text = _replace_ordinals(text, numeric_lang)
     # Avant les nombres nus : dans « SO4 2- » le « 2 » est le compte de la
     # charge, pas un nombre du discours. Converti trop tôt, il devenait
     # « deux » et la charge repartait sans son compte.
     text = _epeler_formules_et_sigles(text)
-    text = _replace_remaining_numbers(text, lang)
-    text = _replace_math_symbols(text, lang)
+    text = _replace_remaining_numbers(text, numeric_lang)
+    text = _replace_math_symbols(text, numeric_lang)
     text = _replace_generic_fraction_bar(text)
     # Braces and stray TeX commands are not meaningful after the known math
     # constructs above have been expanded.
