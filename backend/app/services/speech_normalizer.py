@@ -27,6 +27,7 @@ _FR_DIGITS = {
     "0": "zéro", "1": "un", "2": "deux", "3": "trois", "4": "quatre",
     "5": "cinq", "6": "six", "7": "sept", "8": "huit", "9": "neuf",
 }
+_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 _AR_DIGITS = {
     "0": "صفر", "1": "واحد", "2": "جوج", "3": "ثلاثة", "4": "ربعة",
     "5": "خمسة", "6": "ستة", "7": "سبعة", "8": "ثمانية", "9": "تسعود",
@@ -130,41 +131,43 @@ _SIGLES_LUS_COMME_MOTS = frozenset({
 # devant un mot français ("الـ motif", "الـ Hertz") devient donc "al motif"
 # et casse le code-switching. Cette sécurité retire uniquement ce préfixe
 # devant les mots latins dans la copie envoyée au TTS, jamais dans le texte UI.
+#
+# « ل » n'y est PLUS : ce n'est pas l'article, c'est la préposition « à, pour »,
+# et le professeur du corpus l'emploie couramment devant un mot français —
+# 418 occurrences de « ل » suivi d'un mot latin (« نردو البال لـ la banque
+# centrale »). L'effacer ne corrigeait aucune prononciation : il retirait un
+# mot de la phrase, et « ندوزو لـ le tétanos » devenait « ندوزو le tétanos ».
 _ARABIC_ARTICLE_BEFORE_LATIN_RE = re.compile(
-    r"(?<![\w\u0600-\u06ff])(?:الـ|ال|لـ|ل)\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])",
+    r"(?<![\w\u0600-\u06ff])(?:الـ|ال)\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])",
 )
 
-# Academy lit mieux l'article arabe quand il est son propre token :
-# « التمرين » devient « ال تمرين ». On traite aussi les préfixes usuels
-# (« والتمرين » → « و ال تمرين »), mais on laisse intacts les mots-outils et
-# les formes lexicalisées qui commencent par « ال » (« الله », « الذي », …).
-_ARABIC_WORD_RE = re.compile(r"[\u0600-\u06ff]+")
-_ARABIC_ARTICLE_EXCEPTIONS = frozenset({
-    "الله", "اللهم", "الذي", "التي", "اللذان", "اللذين", "اللتان",
-    "اللائي", "اللاتي", "الآن", "اللي",
-})
-_ARABIC_PREFIXES = frozenset("وفبكل")
+# « للـ » devant un mot français, c'est « ل » (à, pour) fondu avec
+# l'article. On garde la préposition et on retire l'article, comme au-dessus :
+# le corpus écrit « ل la banque centrale » 418 fois et n'a QU'UNE
+# occurrence de « لل » isolé. « لل relâchement » partait donc au TTS
+# sous une forme que le modèle n'a jamais entendue.
+_ARABIC_LL_BEFORE_LATIN_RE = re.compile(
+    r"(?<![\w\u0600-\u06ff])للـ?\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])",
+)
 
-
-def _separer_article_arabe(text: str) -> str:
-    """Sépare « ال » du nom arabe dans la copie destinée au TTS."""
-
-    def split_word(match: re.Match[str]) -> str:
-        word = match.group(0)
-        if word in _ARABIC_ARTICLE_EXCEPTIONS:
-            return word
-        if word.startswith("ال") and len(word) > 2:
-            return "ال " + word[2:]
-        if (
-            len(word) > 3
-            and word[0] in _ARABIC_PREFIXES
-            and word[1:3] == "ال"
-            and word[1:] not in _ARABIC_ARTICLE_EXCEPTIONS
-        ):
-            return word[0] + " ال " + word[3:]
-        return word
-
-    return _ARABIC_WORD_RE.sub(split_word, text)
+# ── L'article arabe reste COLLÉ à son nom ────────────────────
+#
+# Le normaliseur détachait « ال » de chaque nom défini (« التمرين » → « ال
+# تمرين »), en pariant qu'Academy lit mieux l'article quand il est son propre
+# token. Le corpus d'entraînement dit l'inverse, et c'est lui la référence :
+# sur les 9 997 transcriptions de `combined_training_recent`, 12 528 mots
+# commencent par un « ال » COLLÉ, contre 72 « ال » isolés (mesure du 20 août
+# 2026). Le professeur ne détache jamais l'article ; le modèle n'a donc appris
+# à dire que la forme collée.
+#
+# Détacher, c'était sortir de la distribution d'entraînement sur CHAQUE nom
+# défini de CHAQUE phrase. C'est le défaut le plus étendu qu'ait connu la
+# chaîne vocale, et le plus discret : aucun mot n'est franchement faux, ils
+# sont tous un peu de travers — exactement ce que décrit « la voix ne dit pas
+# correctement les phrases ».
+#
+# Seule exception, juste au-dessus : l'article devant un mot FRANÇAIS, qui
+# n'appartient à aucune des deux langues et se retire.
 
 # ── Frontières d'écriture ────────────────────────────────────────
 #
@@ -241,17 +244,42 @@ _LIENS_ARABES = {
 }
 
 
+#: Les clitiques qui font d'un nom nu un ADVERBE, pas un complément.
+#:
+#: « ب », « ف », « ل », « ك » collés à un nom SANS article forment en darija
+#: une locution dont le sens n'a plus rien du nom : « بسرعة » veut dire
+#: « vite », pas « avec la vitesse » ; « بطريقة » veut dire « d'une manière »,
+#: « كمثال » veut dire « par exemple », « لهنا » veut dire « jusqu'ici »,
+#: « بإذن الله » veut dire « si Dieu le veut ». Traduire le nom là-dedans
+#: casse la phrase — mesuré sur le corpus : 13 « بطريقة », 8 « كمثال »,
+#: 64 « لهنا », 10 « بإذن ».
+#:
+#: Avec l'article, l'ambiguïté disparaît : « بالطريقة » EST « avec la
+#: méthode ». Et « و » n'est pas concerné — c'est une conjonction, elle ne
+#: forme aucune locution : « وهنا » est bien « et ici » (186 occurrences).
+_CLITIQUES_ADVERBIAUX = frozenset({"ب", "ف", "ل", "ك"})
+
+
 @lru_cache(maxsize=1)
-def _termes_en_francais() -> tuple[re.Pattern[str], dict[str, str]]:
+def _termes_en_francais() -> tuple[re.Pattern[str], dict[str, str], frozenset[str]]:
     """Le motif unique qui reconnaît toute la table, article compris."""
-    from app.data.termes_dits_en_francais import TERMES_DITS_EN_FRANCAIS
+    from app.data.termes_dits_en_francais import (
+        TERMES_DITS_EN_FRANCAIS,
+        TOLERENT_LA_FORME_NUE,
+    )
 
     noyaux: dict[str, str] = {}
+    nues: set[str] = set()
     for arabe, francais in TERMES_DITS_EN_FRANCAIS.items():
-        # L'article se traite avec les autres clitiques : « الأكسجين » et
-        # « أكسجين » sont le même mot pour la voix.
-        noyau = arabe[2:] if arabe.startswith("ال") else arabe
-        noyaux.setdefault(noyau, francais)
+        noyaux.setdefault(arabe, francais)
+        if arabe.startswith("ال") and arabe in TOLERENT_LA_FORME_NUE:
+            # La terminologie scientifique seule perd son article sans perdre
+            # son sens : « الأكسجين » et « أكسجين » sont le même mot pour la
+            # voix. Ailleurs, le nom nu est un mot courant de la darija et
+            # c'est lui qu'on remplaçait par erreur (cf. la table).
+            noyaux.setdefault(arabe[2:], francais)
+        if not arabe.startswith("ال"):
+            nues.add(arabe)
     # Le plus long d'abord : « الانقسام الاختزالي الأول » avant
     # « الانقسام الاختزالي », sinon la division réductionnelle devient
     # « la méiose الأول ».
@@ -270,17 +298,21 @@ def _termes_en_francais() -> tuple[re.Pattern[str], dict[str, str]]:
         rf"(?P<terme>{alternance})"
         rf"(?![{_LETTRE_ARABE}])"
     )
-    return motif, noyaux
+    return motif, noyaux, frozenset(nues)
 
 
 def _dire_les_termes_en_francais(text: str) -> str:
     """Remplace la terminologie scientifique arabe par son nom français."""
     if not _ARABIC_RE.search(text):
         return text
-    motif, noyaux = _termes_en_francais()
+    motif, noyaux, formes_nues = _termes_en_francais()
 
     def remplacer(m: re.Match[str]) -> str:
-        return _LIENS_ARABES[m.group("lien") or ""] + noyaux[m.group("terme")]
+        lien = m.group("lien") or ""
+        terme = m.group("terme")
+        if lien in _CLITIQUES_ADVERBIAUX and terme in formes_nues:
+            return m.group(0)
+        return _LIENS_ARABES[lien] + noyaux[terme]
 
     return motif.sub(remplacer, text)
 
@@ -331,10 +363,31 @@ _UNITS_FR = {
     "kW": ("kilowatt", "kilowatts"), "mV": ("millivolt", "millivolts"),
     "mA": ("milliampère", "milliampères"), "Hz": ("hertz", "hertz"),
     "Pa": ("pascal", "pascals"), "mol": ("mole", "moles"),
+    # ── Électricité : le dipôle RC, le RL, le RLC ──
+    # Manquaient toutes, et le tableau les écrit à chaque exercice de
+    # physique : « τ = 1 ms » sortait « tau égal un M S ». Un symbole n'est
+    # remplacé qu'APRÈS un nombre (cf. `_replace_units`), donc « C = 1 µF »
+    # ne touche pas au « C » du condensateur.
+    "ms": ("milliseconde", "millisecondes"),
+    "µs": ("microseconde", "microsecondes"),
+    "μs": ("microseconde", "microsecondes"),
+    "ns": ("nanoseconde", "nanosecondes"),
+    "kΩ": ("kilohm", "kilohms"), "MΩ": ("mégohm", "mégohms"),
+    "mF": ("millifarad", "millifarads"),
+    "µF": ("microfarad", "microfarads"),
+    "μF": ("microfarad", "microfarads"),
+    "nF": ("nanofarad", "nanofarads"),
+    "pF": ("picofarad", "picofarads"),
+    "mH": ("millihenry", "millihenrys"),
+    "µA": ("microampère", "microampères"),
+    "μA": ("microampère", "microampères"),
+    "kV": ("kilovolt", "kilovolts"), "kN": ("kilonewton", "kilonewtons"),
     "m": ("mètre", "mètres"), "s": ("seconde", "secondes"),
     "L": ("litre", "litres"), "g": ("gramme", "grammes"),
     "J": ("joule", "joules"), "W": ("watt", "watts"),
     "V": ("volt", "volts"), "A": ("ampère", "ampères"),
+    "F": ("farad", "farads"), "H": ("henry", "henrys"),
+    "N": ("newton", "newtons"),
     "Ω": ("ohm", "ohms"),
 }
 _UNITS_AR = {
@@ -509,6 +562,129 @@ def _replace_oral_formula_fragments(text: str, lang: str) -> str:
             phrase = french_phrase
         text = pattern.sub(phrase, text)
     return text
+
+
+# ── Notation génétique : la casse porte un sens à l'oral ─────────
+#
+# Dans un génotype, « Aa » et « aa » ne sont pas deux mots à lire tels quels :
+# la majuscule indique l'allèle dominant et la minuscule l'allèle récessif.
+# Academy peut prononcer les deux formes presque pareil (« a a »), ce qui
+# efface précisément la distinction que l'élève doit apprendre.
+#
+# Cette règle est volontairement CONTEXTUELLE. Une lettre seule reste une
+# variable de mathématiques dans « f(x) » et un mot courant comme « le » ne
+# doit jamais être transformé simplement parce qu'un autre mot du paragraphe
+# parle de génétique.
+_GENETIQUE_CONTEXTE_RE = re.compile(
+    r"(?i)(?:"
+    r"\b(?:g[eèé]ne(?:s)?|g[eèé]n[eèé]tique(?:s)?|g[eèé]notype(?:s)?|"
+    r"ph[eèé]notype(?:s)?|all[eè]le(?:s)?|gam[eè]te(?:s)?|zygote(?:s)?|"
+    r"croisement(?:s)?|h[eè]r[eè]dit[eè](?:s)?|dominant(?:e|s)?|"
+    r"r[eè]cessif(?:ve|s)?|parents?|p[eè]re|m[eè]re|Mendel)\b|"
+    r"\b(?:ADN|F[12])\b|"
+    r"(?:مورثة|حليل|النمط الوراثي|النمط الظاهري|الأمشاج|اللاقحة|"
+    r"سائد|متنحي|التزاوج|الوراثة)"
+    r")"
+)
+_GENETIQUE_PAIRE_RE = re.compile(
+    r"(?<!\w)([A-Za-z])([A-Za-z])(?!\w)"
+)
+_GENETIQUE_PAIRE_SEPAREE_RE = re.compile(
+    r"(?<!\w)([A-Za-z])\s*(?P<separator>//|/|\|)\s*([A-Za-z])(?!\w)"
+)
+_GENETIQUE_LETTRES_LIEES_RE = re.compile(
+    r"(?<![\w'’])([A-Za-z])\s+(?P<liaison>et|ou)\s+([A-Za-z])(?![\w'’])",
+    flags=re.IGNORECASE,
+)
+_GENETIQUE_ALLELE_SEULE_RE = re.compile(
+    r"(?P<prefix>\b(?:all[eè]le(?:s)?|gam[eè]te(?:s)?|"
+    r"g[eè]notype(?:s)?|ph[eè]notype(?:s)?)\s+)"
+    r"(?P<lettre>[A-Za-z])\b",
+    flags=re.IGNORECASE,
+)
+
+# Deux lettres minuscules peuvent aussi être un petit mot français. Ces mots
+# ne sont jamais des génotypes ; les paires « aa », « Bb », « ab », etc. ne
+# sont pas concernées par cette liste.
+_GENETIQUE_PAIRES_QUI_SONT_DES_MOTS = frozenset({
+    "au", "ce", "de", "do", "du", "en", "et", "il", "je", "la", "le",
+    "ma", "me", "ne", "no", "on", "or", "ou", "sa", "se", "si", "te",
+    "tu", "un", "va", "as", "in",
+})
+
+
+def _contexte_genetique(text: str, start: int, end: int) -> bool:
+    """Return whether a notation is close enough to a genetics cue."""
+    fenetre = text[max(0, start - 140):min(len(text), end + 140)]
+    return _GENETIQUE_CONTEXTE_RE.search(fenetre) is not None
+
+
+def _dire_une_allele(lettre: str) -> str:
+    """Make the case of one genetic allele explicit to the speech model."""
+    if lettre.isupper():
+        return f"{lettre.upper()} majuscule"
+    return f"{lettre.lower()} minuscule"
+
+
+def _dire_une_paire_d_alleles(premiere: str, seconde: str) -> str:
+    """Speak a two-letter genotype without losing upper/lower case."""
+    if premiere == seconde and premiere.isupper():
+        return f"deux {premiere} majuscules"
+    if premiere == seconde and premiere.islower():
+        return f"deux {premiere} minuscules"
+    return f"{_dire_une_allele(premiere)} et {_dire_une_allele(seconde)}"
+
+
+def _remplacer_notation_genetique(text: str) -> str:
+    """Turn raw allele notation into an unambiguous spoken explanation.
+
+    The visible board keeps the scientific notation. This function only runs
+    on the copy sent to TTS, so the student still sees ``Aa`` and ``aa`` while
+    hearing « A majuscule et a minuscule » and « deux a minuscules ».
+    """
+    if not _GENETIQUE_CONTEXTE_RE.search(text):
+        return text
+
+    def paire_separee(match: re.Match[str]) -> str:
+        if not _contexte_genetique(text, match.start(), match.end()):
+            return match.group(0)
+        return (
+            f"{_dire_une_allele(match.group(1))} sur "
+            f"{_dire_une_allele(match.group(3))}"
+        )
+
+    # A/a and A//a are common ways of writing the two alleles on a chromosome.
+    text = _GENETIQUE_PAIRE_SEPAREE_RE.sub(paire_separee, text)
+
+    def lettres_liees(match: re.Match[str]) -> str:
+        if not _contexte_genetique(text, match.start(), match.end()):
+            return match.group(0)
+        return (
+            f"{_dire_une_allele(match.group(1))} {match.group('liaison')} "
+            f"{_dire_une_allele(match.group(3))}"
+        )
+
+    # « A et a » / « A ou a » often appear when the teacher lists gametes.
+    text = _GENETIQUE_LETTRES_LIEES_RE.sub(lettres_liees, text)
+
+    def paire_collee(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if (
+            token.lower() in _GENETIQUE_PAIRES_QUI_SONT_DES_MOTS
+            or not _contexte_genetique(text, match.start(), match.end())
+        ):
+            return token
+        return _dire_une_paire_d_alleles(match.group(1), match.group(2))
+
+    # Handles Aa, aa, AA, Bb, AB, ab, XY, XX, etc., but only near genetics
+    # vocabulary and never for ordinary two-letter words.
+    text = _GENETIQUE_PAIRE_RE.sub(paire_collee, text)
+
+    def allele_seule(match: re.Match[str]) -> str:
+        return f"{match.group('prefix')}{_dire_une_allele(match.group('lettre'))}"
+
+    # « l'allèle A », « l'allèle a », « les gamètes B » …
+    return _GENETIQUE_ALLELE_SEULE_RE.sub(allele_seule, text)
 
 
 def _replace_standalone_units(text: str, lang: str) -> str:
@@ -773,6 +949,16 @@ def _replace_times(text: str, lang: str) -> str:
     )
 
 
+#: « 1 s » se dit « une seconde », pas « un seconde ». L'accord se joue sur le
+#: nom de l'unité, pas sur son symbole : « ms », « µs » et « s » sont toutes
+#: féminines et se reconnaissent à leur singulier.
+_UNITES_FEMININES = frozenset({
+    "seconde", "milliseconde", "microseconde", "nanoseconde",
+    "minute", "heure", "mole", "mole par litre", "tonne",
+    "calorie", "kilocalorie",
+})
+
+
 def _replace_units(text: str, lang: str) -> str:
     units = _UNITS_AR if lang == "ar" else _UNITS_FR
     for symbol, (singular, plural) in sorted(units.items(), key=lambda item: len(item[0]), reverse=True):
@@ -780,7 +966,12 @@ def _replace_units(text: str, lang: str) -> str:
 
         def repl(match: re.Match[str], one=singular, many=plural) -> str:
             raw = match.group(1)
-            return f"{_number_words(raw, lang)} {one if _is_one(raw) else many}"
+            if not _is_one(raw):
+                return f"{_number_words(raw, lang)} {many}"
+            nombre = _number_words(raw, lang)
+            if lang != "ar" and one in _UNITES_FEMININES and nombre == "un":
+                nombre = "une"
+            return f"{nombre} {one}"
 
         text = re.sub(pattern, repl, text)
     return text
@@ -836,6 +1027,29 @@ def _replace_percentages_and_fractions(text: str, lang: str) -> str:
     )
 
 
+_ARABIC_PERCENTAGE_RE = re.compile(
+    r"(?<![\w\u0600-\u06ff])"
+    r"(?P<number>[0-9٠-٩]+(?:[,.٫][0-9٠-٩]+)?)\s*"
+    r"(?:في\s+المائة|في\s+المئة|بالمائة|بالمئة|"
+    r"في\s+المائه|بالمائه)"
+    r"(?![\w\u0600-\u06ff])"
+)
+
+
+def _replace_arabic_percentages(text: str) -> str:
+    """Say numeric Arabic percentage phrases in French.
+
+    The LLM is instructed to write « cinquante pour cent », but it can still
+    emit « 50 في المائة » or Arabic-Indic digits. Normalize both forms before
+    the generic number pass so no Arabic percentage reaches the TTS engine.
+    """
+    def repl(match: re.Match[str]) -> str:
+        raw = match.group("number").translate(_ARABIC_INDIC_DIGITS).replace("٫", ".")
+        return f"{_number_words(raw, 'fr')} pour cent"
+
+    return _ARABIC_PERCENTAGE_RE.sub(repl, text)
+
+
 def _replace_ordinals(text: str, lang: str) -> str:
     if lang != "fr":
         return text
@@ -870,9 +1084,11 @@ def _replace_math_symbols(text: str, lang: str) -> str:
             "∑": " مجموع ", "Σ": " مجموع ", "∫": " تكامل ", "±": " زائد أو ناقص ",
             "‰": " فالألف ", "°C": " درجة سيلزيوس ", "°": " درجة ",
             "Δ": " دلتا ", "∆": " دلتا ", "λ": " لامبدا ",
-            "π": " پي ", "µ": " ميكرو ", "α": " ألفا ", "β": " بيتا ",
-            "γ": " غاما ", "θ": " تيتا ", "ρ": " رو ", "σ": " سيغما ",
-            "ω": " أوميغا ", "Ω": " أوم ",
+            "π": " پي ", "µ": " ميكرو ", "μ": " ميكرو ", "α": " ألفا ",
+            "β": " بيتا ", "γ": " غاما ", "θ": " تيتا ", "ρ": " رو ",
+            "σ": " سيغما ", "ω": " أوميغا ", "Ω": " أوم ",
+            "τ": " تاو ", "φ": " في ", "Φ": " في ", "ε": " إبسيلون ",
+            "η": " إيتا ", "ν": " نو ", "δ": " دلتا ",
         }
     else:
         replacements = {
@@ -886,9 +1102,13 @@ def _replace_math_symbols(text: str, lang: str) -> str:
             "Σ": " somme de ", "∫": " intégrale de ", "±": " plus ou moins ",
             "‰": " pour mille ", "°C": " degrés Celsius ", "°": " degrés ",
             "Δ": " delta ", "∆": " delta ",
-            "λ": " lambda ", "π": " pi ", "µ": " micro ", "α": " alpha ",
-            "β": " bêta ", "γ": " gamma ", "θ": " thêta ", "ρ": " rho ",
-            "σ": " sigma ", "ω": " oméga ", "Ω": " ohm ",
+            "λ": " lambda ", "π": " pi ", "µ": " micro ", "μ": " micro ",
+            "α": " alpha ", "β": " bêta ", "γ": " gamma ", "θ": " thêta ",
+            "ρ": " rho ", "σ": " sigma ", "ω": " oméga ", "Ω": " ohm ",
+            # Le dipôle RC écrit « τ » à chaque ligne ; sans entrée ici, la
+            # lettre partait telle quelle au TTS, qui l'a passée sous silence.
+            "τ": " tau ", "φ": " phi ", "Φ": " phi ", "ε": " epsilon ",
+            "η": " êta ", "ν": " nu ", "δ": " delta ",
         }
     for symbol, spoken in replacements.items():
         text = text.replace(symbol, spoken)
@@ -915,14 +1135,20 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     # Avant que l'article ne soit détaché : la table connaît « الأكسجين »,
     # pas « ال أكسجين ».
     text = _dire_les_termes_en_francais(text)
-    text = _separer_article_arabe(text)
     text = _ouvrir_pause_apres_deux_points(text)
     text = _replace_latex(text)
     text = _replace_oral_formula_fragments(text, numeric_lang)
     # Ne jamais laisser l'article arabe « al » s'accrocher à un terme
     # scientifique français : « la période », pas « الـ période ».
     text = _ARABIC_ARTICLE_BEFORE_LATIN_RE.sub("", text)
+    text = _ARABIC_LL_BEFORE_LATIN_RE.sub("ل ", text)
     text = _replace_lexicon(text, lang)
+    # « 50 في المائة » and « خمسين في المائة » must both reach the voice as
+    # « cinquante pour cent », never as an Arabic percentage expression.
+    text = _replace_arabic_percentages(text)
+    # In genetics, the case of an allele is meaningful: « Aa » and « aa »
+    # must not arrive at the voice as two opaque letter tokens.
+    text = _remplacer_notation_genetique(text)
     text = _replace_dates(text, numeric_lang)
     text = _replace_times(text, numeric_lang)
     text = _replace_scientific_notation(text, numeric_lang)

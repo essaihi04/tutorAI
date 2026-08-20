@@ -43,14 +43,38 @@ class SpeechNormalizerTests(unittest.TestCase):
         self.assertIn("مزيان", cleaned)
         self.assertIn("Bravo", cleaned)
 
-    def test_mot_de_classe_est_traduit_et_article_reste_separe(self):
+    def test_mot_de_classe_est_traduit_article_colle(self):
         spoken = normalize_for_speech(
             "ركزو مع التمرين الأول اللي جا ف الامتحان الوطني.", "mixed"
         )
         self.assertIn("l'exercice", spoken)
-        self.assertIn("ال امتحان", spoken)
+        # L'article reste COLLÉ : c'est la seule forme que le corpus
+        # d'entraînement emploie (12 528 mots en « ال » collé contre 72 isolés).
+        self.assertIn("الامتحان", spoken)
+        self.assertNotIn("ال امتحان", spoken)
         self.assertIn("اللي", spoken)
         self.assertNotIn("التمرين", spoken)
+
+    def test_nom_nu_apres_preposition_reste_en_darija(self):
+        """« بسرعة » veut dire « vite », pas « avec la vitesse »."""
+        spoken = normalize_for_speech(
+            "كنجيو excitations متتالية بسرعة بزاف.", "mixed"
+        )
+        self.assertIn("بسرعة", spoken)
+        self.assertIn("متتالية", spoken)
+        self.assertNotIn("la vitesse", spoken)
+        self.assertNotIn("la suite", spoken)
+
+    def test_grandeur_avec_article_reste_traduite(self):
+        """La restriction ne doit pas désarmer la table là où elle a raison."""
+        spoken = normalize_for_speech("شوف السرعة ديال le mobile.", "mixed")
+        self.assertIn("la vitesse", spoken)
+
+    def test_preposition_pour_devant_un_mot_francais_reste(self):
+        """« لـ » est « à, pour » : l'effacer retirait un mot de la phrase."""
+        spoken = normalize_for_speech("غادي ندوزو لـ le tétanos.", "mixed")
+        self.assertIn("ل", spoken)
+        self.assertIn("tétanos", spoken)
 
     def test_lexical_arabic_forms_are_not_broken(self):
         spoken = normalize_for_speech("الله كيعلم، والذي نجح.", "mixed")
@@ -494,6 +518,74 @@ def test_le_lexique_simple_couvre_le_materiel_les_fractions_et_les_nombres():
         "un", "le dénominateur", "trois",
     ):
         assert attendu in parle, (attendu, parle)
+
+
+def test_les_pourcentages_arabes_sont_dits_en_francais():
+    parle = normalize_for_speech(
+        "النصف، يعني خمسين في المائة. On peut aussi écrire 50 في المائة ou ٥٠ بالمئة.",
+        "mixed",
+    )
+
+    assert parle.count("cinquante pour cent") == 3
+    assert "la moitié" in parle
+    assert "خمسين في المائة" not in parle
+    assert "50 في المائة" not in parle
+    assert "بالمئة" not in parle
+
+
+def test_le_chargement_du_condensateur_se_dit_recharge():
+    parle = normalize_for_speech(
+        "المكثف كيتشحن تدريجيا. هادي هي عملية الشحن، وكتتراكم فيه الشحنة الكهربائية.",
+        "mixed",
+    )
+
+    assert "le condensateur se recharge" in parle
+    assert "la recharge" in parle
+    assert "la charge électrique" in parle
+    for arabe in ("المكثف", "كيتشحن", "الشحن", "الشحنة الكهربائية"):
+        assert arabe not in parle, (arabe, parle)
+
+
+def test_la_casse_des_alleles_est_explicitement_dite():
+    parle = normalize_for_speech(
+        "Le gène porte le génotype Aa. La mère porte aa. "
+        "L'allèle A et l'allèle a sont différents.",
+        "fr",
+    )
+
+    assert "A majuscule et a minuscule" in parle
+    assert "deux a minuscules" in parle
+    assert "allèle A majuscule" in parle
+    assert "allèle a minuscule" in parle
+    assert " Aa " not in f" {parle} "
+    assert " aa " not in f" {parle} "
+
+
+def test_les_autres_notations_de_croisement_sont_dites_sans_ambiguite():
+    parle = normalize_for_speech(
+        "Dans le croisement, on trouve AA, Bb, AB, ab, A/a et XY.",
+        "fr",
+    )
+
+    for attendu in (
+        "deux A majuscules",
+        "B majuscule et b minuscule",
+        "A majuscule et B majuscule",
+        "a minuscule et b minuscule",
+        "A majuscule sur a minuscule",
+        "X majuscule et Y majuscule",
+    ):
+        assert attendu in parle, (attendu, parle)
+
+
+def test_une_variable_de_math_ne_devient_pas_un_allele():
+    parle = normalize_for_speech(
+        "En mathématiques, a et b sont des variables dans f(x).",
+        "fr",
+    )
+
+    assert "a et b" in parle
+    assert "a minuscule" not in parle
 
 
 def test_les_lois_portent_leur_nom_francais():

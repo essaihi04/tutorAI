@@ -1068,6 +1068,20 @@ class SessionHandler:
                 "donne un exemple concret, puis pose une seule question simple."
             )
 
+        # L'élève dit que le tableau est vide. C'est LUI qui voit l'écran :
+        # le fait n'est pas discutable, et la réponse attendue n'est pas une
+        # excuse. Au 20 août 2026 le tuteur a répondu « عندك الحق، سامحني »
+        # puis a REFAIT exactement la même chose — annoncer un tableau sans
+        # jamais l'envoyer — trois tours de suite.
+        if humanisation.signale_un_ecran_vide(raw):
+            guidance.append(
+                "L'élève voit un écran VIDE : ta réponse précédente a promis un "
+                "tableau qu'elle n'a pas envoyé. Ne t'excuse pas et ne redis pas "
+                "la même explication — il l'a déjà lue. Cette réponse contient "
+                "un bloc <ui> RÉEL, complet, avec le schéma annoncé. Une phrase "
+                "courte à l'oral, le tableau fait le reste."
+            )
+
         if any(phrase in compact for phrase in (
             "tu l'as deja ecrit", "tu as deja ecrit", "deja au tableau", "deja ecrit",
             "راك كتبتيها", "راه كتبتيها", "باينه فاللوح", "باينة فاللوح",
@@ -1150,6 +1164,17 @@ class SessionHandler:
                 "Utilise aussi feuille, stylo, idée, problème, règle, résultat, calcul, donnée, valeur, "
                 "nombre, fraction, numérateur, dénominateur, ici, maintenant, donc et étape par étape; "
                 "dis zéro, un, deux, trois et quatre en français. "
+                "Dans un circuit RC, dis la recharge et le condensateur se recharge; ne dis jamais "
+                "شحن, الشحن, كيتشحن ou كيشحن dans le texte pédagogique. "
+                "Pour les probabilités, dis toujours les pourcentages en français : cinq pour cent, "
+                "vingt-cinq pour cent, cinquante pour cent. Ne dis jamais خمسين في المائة, خمسون بالمائة "
+                "ou 50 في المائة; dis cinquante pour cent. Traduis النصف par la moitié. "
+                "En génétique, ne laisse jamais Aa, aa, AA, Bb, A/a ou Xx bruts dans le texte parlé : "
+                "dis Aa comme A majuscule et a minuscule, aa comme deux a minuscules, AA comme deux A "
+                "majuscules, Bb comme B majuscule et b minuscule, A/a comme A majuscule sur a minuscule, "
+                "et allèle A/allèle a comme allèle A majuscule/allèle a minuscule. "
+                "Le tableau peut garder la notation Aa, aa ou AA pour que l'élève la recopie; seule la "
+                "phrase audible doit expliciter la casse. "
                 "Le PRÉNOM de l'élève s'écrit en alphabet arabe dans la phrase parlée destinée au TTS. "
                 "Transcris-le phonétiquement (« Zouhair » devient زهير, « Ferdaous » devient فردوس) "
                 "et ne laisse jamais sa forme latine dans le texte audible. "
@@ -5788,6 +5813,33 @@ RÈGLES :
             or "FERMER_TABLEAU" in ai_response
             or "TOUT_FERMER" in ai_response
         )
+        # ── « شوف le tableau » alors que rien n'est parti ──
+        #
+        # Le tuteur renvoie l'élève à un tableau qu'il n'a pas envoyé. Sans
+        # ce constat, le tour finissait dans le repli « réponse
+        # conversationnelle » un peu plus bas — écarté parce que court, ou
+        # abandonné parce qu'écrit en darija — et l'élève regardait un écran
+        # vide en ayant entendu qu'on venait de lui écrire quelque chose.
+        # C'est ce qu'il a signalé en séance : « rien n'est affiché ».
+        #
+        # La promesse EST la preuve d'intention : le modèle voulait un
+        # tableau, il a simplement omis le bloc. On le lui redemande, quelle
+        # que soit la longueur de la réponse.
+        promesse_de_tableau = (
+            not has_any_visual
+            and not question_sans_reponse
+            and not (suppress_whiteboard and not exam_context)
+            and humanisation.promesse_de_tableau_non_tenue(ai_response)
+        )
+        if promesse_de_tableau:
+            _safe_log(
+                "[AI Commands] Tableau ANNONCÉ à l'oral mais aucun bloc <ui> — "
+                "relance structurée forcée"
+            )
+            # Servi au tour SUIVANT si la relance échoue elle aussi. Levé dès
+            # qu'un tableau part réellement, juste en dessous : la promesse
+            # aura été tenue, avec un tour de retard mais tenue.
+            self._defaut_accord = humanisation.RAPPEL_PROMESSE_TABLEAU
         if question_sans_reponse:
             # Le seul cas où « aucun visuel » est le bon résultat : recopier
             # la question au tableau ne l'explique pas, et la relance
@@ -5841,7 +5893,7 @@ RÈGLES :
                 ])
                 or len(clean_text) > 600
             )
-            if is_conversational and not has_educational_content and not force_schema:
+            if is_conversational and not has_educational_content and not force_schema and not promesse_de_tableau:
                 _safe_log(f"[AI Commands] Skipping auto-board fallback (conversational response, {len(clean_text)} chars)")
                 return
 
@@ -5853,7 +5905,7 @@ RÈGLES :
                 # qu'une étape. On relance désormais dès que la réponse a un
                 # contenu réellement pédagogique — le bavardage, lui, a déjà
                 # été écarté plus haut et ne déclenche aucune relance.
-                if force_schema or has_educational_content:
+                if force_schema or has_educational_content or promesse_de_tableau:
                     retry_count = getattr(self, '_structured_board_retry_count', 0)
                     max_retries = 3  # Increased from 1 to 3 retries
                     if retry_count < max_retries:
@@ -5904,6 +5956,10 @@ RÈGLES :
                             has_valid_ui = bool(re.search(r'<ui>\s*\{.*"actions".*"whiteboard".*"payload".*\}\s*</ui>', retried_response, re.DOTALL))
                             
                             if has_valid_ui:
+                                # La promesse est tenue : le tableau part. Le
+                                # rappel n'a plus lieu d'être.
+                                if promesse_de_tableau:
+                                    self._defaut_accord = ""
                                 # Retry: first attempt failed to display (suppressed whiteboard + exam fallback failed).
                                 # Allow whiteboard through and disable exam fallback to avoid infinite loop.
                                 await self._execute_ai_commands(

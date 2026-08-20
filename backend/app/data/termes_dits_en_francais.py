@@ -346,6 +346,17 @@ _LOIS_ET_EXPRESSIONS: dict[str, str] = {
 #:          sujet au passage.
 #: Un mot mal prononcé se rattrape ; une phrase qui dit le contraire de ce
 #: qu'elle veut dire, non.
+#:
+#: Deux autres sont tombées le 20 août 2026, à la même mesure — le corpus
+#: repassé dans le normaliseur, le diff relu :
+#:   النسبة → « la proportion » : 252 occurrences dans le corpus, dont 250
+#:            dans « بالنسبة ل », qui veut dire « en ce qui concerne ».
+#:            « avec la proportion ل le marché » ne veut rien dire.
+#:   الحساب → « le calcul » : 17 occurrences, plus 47 « على حساب » (« aux
+#:            dépens de ») et « الحساب البنكي » (le compte en banque). Le
+#:            sens « calcul » est le plus rare des trois.
+#: Les deux notions gardent un nom français ailleurs : « le pourcentage » et
+#: « calcule » (احسب) sont dans la table et ne sont pas concernés.
 _MOTS_SIMPLES_DU_CHAT: dict[str, str] = {
     "الكراس": "le cahier",
     "كراس": "le cahier",
@@ -387,20 +398,51 @@ _MOTS_SIMPLES_DU_CHAT: dict[str, str] = {
     "القواعد": "les règles",
     "النتيجة": "le résultat",
     "النتائج": "les résultats",
-    "الحساب": "le calcul",
     "المعطى": "la donnée",
     "المعطيات": "les données",
     "القيمة": "la valeur",
     "القيم": "les valeurs",
     "العدد": "le nombre",
     "الأعداد": "les nombres",
-    "النسبة": "la proportion",
     "الكسر": "la fraction",
     "الكسور": "les fractions",
+    # Le pluriel nu se dit tel quel en classe (« عندنا كسور ») et il est
+    # absent du corpus, donc sans collision. Le singulier nu, lui, n'est PAS
+    # ici : « كسر » est d'abord le verbe « il a cassé ».
+    "كسور": "les fractions",
     "البسط": "le numérateur",
     "المقام": "le dénominateur",
     "المتغير": "la variable",
     "المجهول": "l'inconnue",
+    # Circuit RC : la voix doit entendre « recharge », jamais « شحن ».
+    "المكثف": "le condensateur",
+    "مكثف": "le condensateur",
+    "شحن المكثف": "la recharge du condensateur",
+    "شحن": "la recharge",
+    "الشحن": "la recharge",
+    "الشحن الكهربائي": "la recharge électrique",
+    "شحن الكهربائي": "la recharge électrique",
+    "شحنة كهربائية": "une charge électrique",
+    "الشحنة الكهربائية": "la charge électrique",
+    "كيتشحن": "se recharge",
+    "كيشحن": "se recharge",
+    "تشحن": "se recharge",
+    "الاحتمال": "la probabilité",
+    "احتمال": "la probabilité",
+    "الاحتمالات": "les probabilités",
+    "احتمالات": "les probabilités",
+    "النصف": "la moitié",
+    "نصف": "la moitié",
+    # Pourcentages écrits en toutes lettres : ils doivent suivre la même
+    # règle que « 50 % », même quand le LLM a produit « خمسين في المائة ».
+    "خمسين في المائة": "cinquante pour cent",
+    "خمسون في المائة": "cinquante pour cent",
+    "خمسين في المئة": "cinquante pour cent",
+    "خمسون في المئة": "cinquante pour cent",
+    "خمسين بالمائة": "cinquante pour cent",
+    "خمسون بالمائة": "cinquante pour cent",
+    "خمسين بالمئة": "cinquante pour cent",
+    "خمسون بالمئة": "cinquante pour cent",
     # Transitions et nombres très fréquents dans les explications orales.
     "هنا": "ici",
     "الآن": "maintenant",
@@ -429,3 +471,20 @@ TERMES_DITS_EN_FRANCAIS: dict[str, str] = {
     **_LOIS_ET_EXPRESSIONS,
     **_MOTS_SIMPLES_DU_CHAT,
 }
+
+#: Les SEULES formes que le normaliseur a le droit de reconnaître SANS leur
+#: article — « الأكتين » se dit aussi « أكتين », et les deux doivent partir en
+#: français.
+#:
+#: Ce droit s'arrête ici, et la raison est mesurée. Le motif retirait l'article
+#: de TOUTES les clés, y compris celles des deux tables du dessous : le nom nu
+#: d'un terme scolaire est presque toujours un mot courant de la darija, et
+#: c'est lui qui se faisait remplacer.
+#:   « متتالية » (« successives ») devenait « la suite », par « المتتالية » —
+#:     et « excitations متتالية بسرعة » sortait en « excitations la suite avec
+#:     la vitesse ». Relevé le 20 août 2026 sur une séance réelle.
+#:   « بسرعة » (« vite ») devenait « avec la vitesse », par « السرعة ».
+#: Les formes nues VOULUES restent écrites en toutes lettres dans les tables
+#: (« تمرين » à côté de « التمرين », « مثال » à côté de « المثال »…) : ce qui
+#: est décidé s'y lit, rien ne s'invente au passage.
+TOLERENT_LA_FORME_NUE: frozenset[str] = frozenset(_ABSENTS_DU_CORPUS)
