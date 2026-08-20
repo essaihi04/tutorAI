@@ -57,7 +57,7 @@ from __future__ import annotations
 #: Forme arabe → ce que la voix doit dire à la place. L'article français est
 #: inclus : « الأكسجين كيدخل » se dit « l'oxygène kaydkhol », pas « oxygène
 #: kaydkhol ».
-TERMES_DITS_EN_FRANCAIS: dict[str, str] = {
+_ABSENTS_DU_CORPUS: dict[str, str] = {
     # ── Consommation de la matière organique et flux d'énergie ──
     "تدفق الطاقة": "le flux d'énergie",
     "الهيولى": "le cytoplasme",
@@ -251,4 +251,95 @@ TERMES_DITS_EN_FRANCAIS: dict[str, str] = {
     "الميغماتيت": "la migmatite",
     "التمايز الصهاري": "la différenciation magmatique",
     "التبلور": "la cristallisation",
+}
+
+
+#: Deuxième table, SECOND CRITÈRE — à ne pas confondre avec la première.
+#:
+#: Ici ce n'est plus « la voix ne sait pas le dire », c'est « l'élève doit
+#: l'entendre en français » : demandé le 20 août 2026, et c'est aussi ce que
+#: dit le prompt depuis toujours (« PAS de السرعة، التسارع، القوة »). Une loi,
+#: une grandeur, une relation portent au BAC un nom français — c'est celui
+#: qu'il écrira sur sa copie, donc celui qu'il doit entendre.
+#:
+#: La mesure va d'ailleurs dans le même sens : le professeur du corpus ne
+#: nomme JAMAIS une loi en arabe. « قانون نيوتن », « قانون أوم »,
+#: « قانون مندل », « مبدأ القصور », « انحفاظ الطاقة », « اللوح » — zéro
+#: occurrence sur 9 997 transcriptions. Les grandeurs qui, elles, sont
+#: attestées (« العلاقة » 97 fois, « السرعة » 9 fois) passent quand même en
+#: français : c'est le choix pédagogique, assumé.
+#:
+#: La frontière tenue : ce qui NOMME une loi, une grandeur, un objet
+#: mathématique ou une relation. Les mots de la classe restent en darija —
+#: « التمرين » (92 fois), « المثال » (74), « التعريف », « الوحدة » : le
+#: professeur les dit, le modèle les prononce, et les franciser rendrait la
+#: phrase artificielle sans rien apprendre à personne.
+#:
+#: Cinq écartées malgré le critère, leur sens courant l'emportant de trop
+#: loin sur le sens scientifique. Les trois premières se voyaient à l'œil,
+#: les deux dernières seulement à la mesure — les 9 997 transcriptions
+#: repassées dans le normaliseur, avant et après, puis le diff relu :
+#:   النهاية — « la limite » en maths, mais « فالنهاية » veut dire « à la fin »
+#:   الشدة   — « بشدة » veut dire « fortement » ; seul « شدة التيار » est gardé
+#:   الحل    — « la solution » d'un exercice : mot de la classe, pas grandeur
+#:   العلاقة — 97 déclenchements, presque tous sur « عندهم علاقة ب », qui veut
+#:             dire « en rapport avec ». « عندهم la relation ب » ne se dit pas.
+#:   المجموعة — 13 déclenchements, tous au sens courant de « somme, groupe ».
+#:
+#: C'est la mesure qui décide, pas l'intuition : faire passer le corpus dans
+#: le normaliseur avant/après et LIRE le diff est le seul test qui ait attrapé
+#: ces deux-là.
+_LOIS_ET_EXPRESSIONS: dict[str, str] = {
+    # ── Le tableau ──
+    "اللوح": "le tableau",
+    "السبورة": "le tableau",
+
+    # ── Lois, principes, théorèmes ──
+    "القانون الأول لنيوتن": "la première loi de Newton",
+    "القانون الثاني لنيوتن": "la deuxième loi de Newton",
+    "القانون الثالث لنيوتن": "la troisième loi de Newton",
+    "قوانين نيوتن": "les lois de Newton",
+    "قانون نيوتن": "la loi de Newton",
+    "قانون أوم": "la loi d'Ohm",
+    "قوانين مندل": "les lois de Mendel",
+    "قانون مندل": "la loi de Mendel",
+    "مبدأ انحفاظ الطاقة": "le principe de conservation de l'énergie",
+    "انحفاظ الطاقة": "la conservation de l'énergie",
+    "مبدأ القصور": "le principe d'inertie",
+    "مبرهنة فيثاغورس": "le théorème de Pythagore",
+    "المبرهنة": "le théorème",
+    "القانون": "la loi",
+    "القوانين": "les lois",
+    "المبدأ": "le principe",
+    "النظرية": "la théorie",
+
+    # ── Grandeurs, relations, objets mathématiques ──
+    "المعادلات": "les équations",
+    "المعادلة": "l'équation",
+    "الصيغة": "la formule",
+    "الدالة": "la fonction",
+    "المشتقة": "la dérivée",
+    "المتتالية": "la suite",
+    "البرهان": "la démonstration",
+    "الخاصية": "la propriété",
+    "الطاقة الحركية": "l'énergie cinétique",
+    "السرعة": "la vitesse",
+    "التسارع": "l'accélération",
+    "القوة": "la force",
+    "شدة التيار": "l'intensité du courant",
+    "التيار": "le courant",
+    "التوتر": "la tension",
+    "المقاومة": "la résistance",
+    "الكتلة": "la masse",
+    "الحجم": "le volume",
+    "التركيز": "la concentration",
+    "درجة الحرارة": "la température",
+}
+
+#: Ce que lit `speech_normalizer`. Les deux critères se rejoignent ici, mais
+#: restent séparés au-dessus : on n'ajoute pas une entrée dans la première
+#: table sans l'avoir mesurée absente du corpus.
+TERMES_DITS_EN_FRANCAIS: dict[str, str] = {
+    **_ABSENTS_DU_CORPUS,
+    **_LOIS_ET_EXPRESSIONS,
 }

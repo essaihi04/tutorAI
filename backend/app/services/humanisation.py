@@ -25,6 +25,7 @@ jour, donc rien qui puisse se désynchroniser de ce que le modèle voit.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter
 
 #: Pictogrammes SEULS. Les flèches (« → ») et les signes mathématiques
@@ -145,6 +146,53 @@ def _signature(phrase: str) -> tuple[str, ...]:
 
 def _phrases(texte: str) -> list[str]:
     return [bout.strip() for bout in _FIN_DE_PHRASE.split(texte.strip()) if bout.strip()]
+
+
+#: Ce qu'un élève répond quand il n'a RIEN à donner. Les trois écritures
+#: coexistent dans une même séance : « non », « ma3aeftch » en arabizi (que
+#: la reconnaissance vocale produit telle quelle) et « ماعرفتش ».
+_MOTS_DE_REFUS = frozenset({
+    "non", "nn", "no", "nan", "nope", "rien", "walo", "والو",
+    "لا", "لالا", "معرفتش", "ماعرفتش", "عرفتش", "ماعرفتهاش", "مافهمتش",
+    "ma3aeftch", "ma3reftch", "ma3rftch", "makanerefch", "mafhemtch",
+    "machi", "ماشي",
+})
+_AVEUX_D_IGNORANCE = (
+    "je ne sais pas", "je sais pas", "sais pas", "aucune idee", "pas compris",
+    "ne comprends pas", "ما عرفتش", "ما عرفتهاش", "ما فهمتش", "ماعرفتش",
+)
+
+
+def _sans_accents(texte: str) -> str:
+    decompose = unicodedata.normalize("NFKD", texte or "")
+    return "".join(c for c in decompose if unicodedata.category(c) != "Mn").lower()
+
+
+def sans_contenu(message: str) -> bool:
+    """Ce tour d'élève apporte-t-il quelque chose, ou seulement un refus ?
+
+    « 7 » ou « 1 » sont des réponses COURTES mais pleines — elles répondent.
+    Seul ce qui ne contient que du refus compte ici.
+    """
+    replie = _sans_accents(message)
+    if any(aveu in replie for aveu in _AVEUX_D_IGNORANCE):
+        return True
+    mots = _MOT.findall(replie)
+    return bool(mots) and len(mots) <= 3 and all(m in _MOTS_DE_REFUS for m in mots)
+
+
+def aveux_consecutifs(historique, maxi: int = 6) -> int:
+    """Combien de fois D'AFFILÉE l'élève vient de dire qu'il ne sait pas."""
+    compte = 0
+    for message in reversed(historique or []):
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        if not sans_contenu(str(message.get("content") or "")):
+            break
+        compte += 1
+        if compte >= maxi:
+            break
+    return compte
 
 
 def _est_question(phrase: str) -> bool:
@@ -319,6 +367,14 @@ _QUESTIONS_DE_CONTROLE = (
     "فهمتي", "واضح", "صافي", "نكملو", "كملو", "باقي معايا", "بغيتي نعاود",
 )
 
+#: « Réponds sans regarder le tableau. » Le tuteur a écrit la réponse et
+#: demande à l'élève de ne pas la lire — c'est l'aveu le plus net qu'on
+#: puisse mesurer, et il arrive mot pour mot en séance.
+_SANS_REGARDER_LE_TABLEAU = (
+    "بلا ما تشوف", "بلا ما تقرا", "ما تشوفش", "متشوفش", "بلا ما تبص",
+    "sans regarder", "sans lire", "ne regarde pas", "ne lis pas",
+)
+
 #: Le texte qui s'affiche au tableau, quel que soit le chemin — `<board>`
 #: comme `<ui>` : les deux passent par le même JSON, où chaque ligne écrite
 #: porte son texte dans "content", "text" ou "title".
@@ -347,7 +403,16 @@ def _finit_sur_une_question(texte: str) -> bool:
     nettoye = retirer_emojis(texte).rstrip()
     # Le modèle referme parfois sur un mot-clé de commande, jamais prononcé.
     nettoye = re.sub(r"[A-Z_]{6,}\s*$", "", nettoye).rstrip()
-    return nettoye.endswith(("؟", "?"))
+    if nettoye.endswith(("؟", "?")):
+        return True
+    # Une consigne COURTE peut suivre la question sans l'annuler : « …؟
+    # جاوبني بلا ما تفكر بزاف. » Le tuteur attend toujours une réponse, et
+    # exiger le point d'interrogation en tout dernier caractère laissait
+    # passer ces tours-là — ils sont fréquents.
+    phrases = _phrases(nettoye)
+    if len(phrases) >= 2 and len(phrases[-1]) <= 60:
+        return phrases[-2].rstrip().endswith(("؟", "?"))
+    return False
 
 
 def tour_purement_socratique(reponse: str) -> bool:
@@ -406,11 +471,19 @@ def tableau_qui_donne_la_reponse(reponse: str) -> bool:
     if not _TABLEAU_STATIQUE.search(reponse):
         return False
     parle = texte_parle(reponse)
-    if not parle or len(parle) > _LONGUEUR_PURE_QUESTION:
+    if not parle:
+        return False
+    minuscules = retirer_emojis(parle).lower()
+    # L'aveu se suffit à lui-même, avant même de regarder la forme du tour :
+    # « جاوبني بلا ما تشوف اللوح » n'est pas une annonce, c'est le tuteur qui
+    # reconnaît que la réponse est affichée. Demander à un élève de ne pas
+    # lire ce qu'il a sous les yeux n'a jamais marché — il l'a déjà lu.
+    if any(aveu in minuscules for aveu in _SANS_REGARDER_LE_TABLEAU):
+        return True
+    if len(parle) > _LONGUEUR_PURE_QUESTION:
         return False
     if not _finit_sur_une_question(parle):
         return False
-    minuscules = retirer_emojis(parle).lower()
     phrases = _phrases(minuscules)
     derniere = phrases[-1] if phrases else minuscules
     if any(controle in derniere for controle in _QUESTIONS_DE_CONTROLE):
@@ -494,6 +567,7 @@ def bloc_memoire(historique) -> str:
     formules = formules_rabachees(historique)
     posees = questions_deja_posees(historique)
     ouverte = question_ouverte(historique)
+    aveux = aveux_consecutifs(historique)
 
     lignes: list[str] = []
     if ouvertures:
@@ -537,6 +611,19 @@ def bloc_memoire(historique) -> str:
             "• Questions déjà posées :\n"
             + "\n".join(f"    – {q}" for q in posees)
             + "\n  → l'élève y a déjà répondu. Ne les repose pas : avance."
+        )
+    if aveux >= 2:
+        lignes.append(
+            f"• L'élève vient de dire {aveux} fois DE SUITE qu'il ne sait pas.\n"
+            "  → ARRÊTE D'INTERROGER. Chaque question de plus creuse le même "
+            "trou : tu descends d'un prérequis à l'autre, et il n'a toujours "
+            "rien reçu. Un élève qui répond « non » trois fois n'apprend pas, "
+            "il constate qu'il ne sait rien.\n"
+            "  → cette réponse ENSEIGNE : la notion, puis un exemple traité "
+            "EN ENTIER jusqu'au résultat, écrit au tableau. Tu ne reposeras "
+            "une question qu'APRÈS lui avoir donné quelque chose à comprendre "
+            "— et elle portera sur ce que tu viens d'expliquer, pas sur un "
+            "prérequis encore plus ancien."
         )
     if ouverte:
         lignes.append(

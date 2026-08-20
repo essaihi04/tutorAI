@@ -536,3 +536,29 @@ def test_un_bouton_qui_ne_recopie_rien_survit_au_filtre():
     asyncio.run(handler._extract_and_send_suggestions(tour, sans_la_reponse=True))
 
     assert [b["label"] for b in _boutons(handler)] == ["L'allèle est le lieu"]
+
+
+def test_un_cours_demande_est_un_cours_livre():
+    """« Fais-moi un cours complet sur le math » ne réclamait RIEN aux yeux du
+    code : aucune consigne de livraison ne partait, et le tuteur repartait sur
+    « واش عرفتي… ? » pendant huit tours."""
+    for demande in (
+        "Fais-moi un cours complet sur le math",
+        "بغيت درس كامل على les maths",
+        "شرح ليا هاد الدرس",
+    ):
+        guidance = SessionHandler._build_turn_guidance(demande)
+        assert "un cours" in guidance, demande
+        assert "DANS CETTE RÉPONSE" in guidance
+
+
+def test_un_parcours_n_est_pas_un_cours():
+    """« cours » vit aussi dans « parcours » et « discours »."""
+    assert SessionHandler._build_turn_guidance("mon parcours scolaire est difficile") == ""
+
+
+def test_les_trois_ecritures_du_refus_sont_reconnues():
+    """« nn », « non ma3aeftch » et « ماعرفتش » sortent toutes du micro."""
+    for refus in ("non", "nn", "non ma3aeftch", "ماعرفتش", "je sais pas"):
+        guidance = SessionHandler._build_turn_guidance(refus)
+        assert "ne connaît pas la réponse" in guidance, refus

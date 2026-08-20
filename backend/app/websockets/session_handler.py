@@ -773,6 +773,19 @@ _DEMANDES_CIBLEES = {
     "un exemple": ("مثال", "امثلة", "أمثلة", "exemple", "exemples"),
     "un schéma": ("رسم", "خطاطة", "schema", "dessin", "figure"),
     "un résumé": ("ملخص", "خلاصة", "resume", "synthese"),
+    # En DERNIER : la catégorie la plus large. « corrige cet exercice du
+    # cours » est une correction, pas une demande de cours — les libellés
+    # précis passent avant.
+    #
+    # Elle manquait, et c'est ce qui a coûté le plus cher : « Fais-moi un
+    # cours complet sur le math » ne réclamait RIEN aux yeux du code. Sans
+    # consigne de livraison, le modèle est reparti sur son réflexe socratique
+    # — « واش عرفتي… ? » — puis sur le prérequis du prérequis. Huit tours plus
+    # tard, l'élève avait répondu « non » trois fois et n'avait pas reçu une
+    # ligne de cours.
+    "un cours": (
+        "درس", "الدرس", "دروس", "شرح", "اشرح", "cours", "lecon", "chapitre",
+    ),
 }
 #: Les verbes qui transforment un mot-clé en commande. Ils ne sont PAS
 #: obligatoires — « تمرين اللي كايدار في الباك » est déjà une demande — mais
@@ -781,6 +794,23 @@ _VERBES_DE_DEMANDE = (
     "دوز", "عطيني", "عطني", "وريني", "بغيت", "بغينا", "خصني", "اعطيني",
     "donne", "montre", "explique", "fais", "veux", "passe", "vas",
 )
+_DEBUT_DE_MOT_LATIN = re.compile(r"^[a-z]")
+
+
+def _contient_demande(compact: str, mot: str) -> bool:
+    """Le message contient-il ce mot-clé, au DÉBUT d'un mot ?
+
+    La fin reste libre : « exercice » doit reconnaître « exercices ». Mais le
+    début ne l'est pas — sans quoi « cours » se retrouve dans « parcours » et
+    « discours », et une phrase sur le parcours scolaire de l'élève déclenche
+    la livraison d'un cours. Les mots arabes gardent la comparaison brute :
+    leurs préfixes collés (ال، و، ب) rendraient toute frontière fausse.
+    """
+    if not _DEBUT_DE_MOT_LATIN.match(mot):
+        return mot in compact
+    return re.search(rf"(?<![a-z]){re.escape(mot)}", compact) is not None
+
+
 #: Ce qui n'est PAS une demande, même si un mot-clé y figure : l'élève
 #: raconte une difficulté, il ne commande rien.
 _AVEUX_DE_BLOCAGE = (
@@ -945,7 +975,7 @@ class SessionHandler:
         if any(aveu in compact for aveu in _AVEUX_DE_BLOCAGE):
             return None
         for libelle, mots in _DEMANDES_CIBLEES.items():
-            if any(mot in compact for mot in mots):
+            if any(_contient_demande(compact, mot) for mot in mots):
                 return libelle
         return None
 
@@ -1028,10 +1058,11 @@ class SessionHandler:
                 "ne relance pas tout le cours."
             )
 
-        if any(phrase in compact for phrase in (
-            "je ne sais pas", "je sais pas", "sais pas", "pas compris", "j'ai pas compris",
-            "لا ما عرفتهاش", "ما عرفتش", "ماعرفتش", "ما فهمتش", "مافهمتش",
-        )):
+        # « non », « nn », « ma3aeftch » : la reconnaissance vocale rend l'aveu
+        # dans les trois écritures, et aucune des trois ne figurait ici. Une
+        # liste de plus aurait manqué la suivante — `humanisation` en tient
+        # UNE, celle qui sert aussi à compter les refus d'affilée.
+        if humanisation.sans_contenu(raw):
             guidance.append(
                 "L'élève ne connaît pas la réponse. Explique la plus petite notion manquante, "
                 "donne un exemple concret, puis pose une seule question simple."
@@ -1103,6 +1134,13 @@ class SessionHandler:
                 "en français, seul, sans l'arabe à côté ni parenthèses (pas de « مُعَادِل (équivalent) », "
                 "mais « équivalent »). L'arabe est réservé à la darija courante, qui se lit sans "
                 "voyelles (واش، شوف، دابا، مزيان، فهمتي). "
+                "SE DISENT TOUJOURS EN FRANÇAIS, sans exception : toute LOI, tout PRINCIPE, tout "
+                "THÉORÈME (« la loi de Newton », « la loi d'Ohm », « les lois de Mendel », « le "
+                "principe d'inertie » — jamais قانون نيوتن ni مبدأ القصور) ; toute GRANDEUR (la "
+                "vitesse, l'accélération, la force, la masse, la tension, l'intensité du courant, "
+                "la résistance, la concentration, la température) ; tout OBJET MATHÉMATIQUE (la "
+                "fonction, la dérivée, l'équation, la formule, la suite, la propriété) ; et le "
+                "TABLEAU lui-même (« شوف le tableau », jamais « شوف اللوح »). "
                 "Les mots simples, explications, consignes, nombres, unités, méthodes et "
                 "règles pédagogiques doivent être en français simple. Pour les nombres scolaires, "
                 "écris-les en toutes lettres françaises (3 → trois, 25 % → vingt-cinq pour cent). "

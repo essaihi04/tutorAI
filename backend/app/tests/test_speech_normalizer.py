@@ -457,3 +457,49 @@ def test_un_terme_en_fin_de_phrase_est_reconnu():
     """« ؟ » et « ، » appartiennent au bloc arabe sans être des lettres."""
     assert "le gène" in normalize_for_speech("شنو هي مورثة؟", "mixed")
     assert "l'oxygène" in normalize_for_speech("الأكسجين، و بعد؟", "mixed")
+
+
+# ── Les lois et le tableau se disent en français ─────────────────
+#
+# Demandé le 20 août 2026, et le corpus dit la même chose : le professeur ne
+# nomme JAMAIS une loi en arabe. « قانون نيوتن », « قانون أوم », « قانون
+# مندل », « مبدأ القصور », « اللوح » — zéro occurrence sur 9 997.
+
+
+def test_le_tableau_se_dit_le_tableau():
+    assert "le tableau" in normalize_for_speech("شوف اللوح، كتبت ليك التعريف", "mixed")
+    assert "اللوح" not in normalize_for_speech("شوف اللوح", "mixed")
+
+
+def test_les_lois_portent_leur_nom_francais():
+    """Le NOM de la loi passe en français. Celui du savant, lui, garde son
+    écriture de prononciation — « Newton » devient « نيوتن » par le lexique
+    des noms propres, qui existe pour ça : c'est ainsi que la voix le dit
+    juste, ce n'est pas un retour à l'arabe."""
+    for arabe, attendu in (
+        ("قانون أوم", "la loi d'Ohm"),
+        ("مبدأ القصور", "le principe d'inertie"),
+        ("قوانين مندل", "les lois de"),
+        ("القانون الثاني لنيوتن", "la deuxième loi de"),
+    ):
+        parle = normalize_for_speech(f"دابا غادي نطبقو {arabe}.", "mixed")
+        assert attendu in parle, (arabe, parle)
+        assert "قانون" not in parle and "مبدأ" not in parle
+
+
+def test_les_grandeurs_se_disent_en_francais():
+    parle = normalize_for_speech("العلاقة بين السرعة و التسارع و القوة", "mixed")
+
+    assert "la vitesse" in parle
+    assert "l'accélération" in parle
+    assert "la force" in parle
+
+
+def test_une_locution_courante_n_est_pas_une_grandeur():
+    """Mesuré sur le corpus : « عندهم علاقة ب » (« en rapport avec ») a 97
+    déclenchements. « عندهم la relation ب » ne se dit pas — le mot est resté
+    dehors, et « فالنهاية » (« à la fin ») avec lui."""
+    for phrase in ("عندهم علاقة ب les agrégats", "فالنهاية، صافي"):
+        parle = normalize_for_speech(phrase, "mixed")
+        assert "la relation" not in parle
+        assert "la limite" not in parle

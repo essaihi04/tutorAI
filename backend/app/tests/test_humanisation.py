@@ -386,3 +386,87 @@ def test_le_mot_question_dans_l_amorce_n_exempte_rien():
     )
 
     assert humanisation.tableau_qui_donne_la_reponse(reponse)
+
+
+# ── L'interrogatoire : trois « non » et toujours pas de cours ──────
+#
+# Séance du 20 août 2026. « Fais-moi un cours complet sur le math » →
+# « واش عرفتي شنو هي la fonction exponentielle؟ » → non → « واش عرفتي كيفاش
+# كتحسب la dérivée؟ » → non → « واش واضح؟ » → non. Huit tours, zéro ligne de
+# cours : le tuteur descendait d'un prérequis à l'autre.
+
+
+def _eleve_qui_ne_sait_pas() -> list[dict]:
+    return [
+        {"role": "user", "content": "Fais-moi un cours complet sur le math"},
+        {"role": "assistant", "content": "واش عرفتي شنو هي la fonction exponentielle؟"},
+        {"role": "user", "content": "nn"},
+        {"role": "assistant", "content": "واش عرفتي كيفاش كتحسب la dérivée؟"},
+        {"role": "user", "content": "non ma3aeftch"},
+        {"role": "assistant", "content": "واش واضح هاد المثال؟"},
+        {"role": "user", "content": "non"},
+    ]
+
+
+def test_les_refus_de_suite_sont_comptes():
+    assert humanisation.aveux_consecutifs(_eleve_qui_ne_sait_pas()) == 3
+
+
+def test_une_reponse_courte_mais_pleine_n_est_pas_un_refus():
+    """« 7 » et « 1 » répondent : ils ne signalent aucun blocage."""
+    echange = [
+        {"role": "user", "content": "1"},
+        {"role": "assistant", "content": "واش عرفتي؟"},
+        {"role": "user", "content": "7"},
+    ]
+
+    assert humanisation.aveux_consecutifs(echange) == 0
+
+
+def test_un_seul_refus_ne_declenche_pas_l_alarme():
+    """Un « non » isolé est le cours normal : on explique et on avance."""
+    echange = [
+        {"role": "user", "content": "واخا"},
+        {"role": "assistant", "content": "واش عرفتي؟"},
+        {"role": "user", "content": "non"},
+    ]
+
+    assert humanisation.aveux_consecutifs(echange) == 1
+    assert "ARRÊTE D'INTERROGER" not in humanisation.bloc_memoire(echange)
+
+
+def test_le_miroir_ordonne_d_enseigner_apres_deux_refus():
+    bloc = humanisation.bloc_memoire(_eleve_qui_ne_sait_pas())
+
+    assert "ARRÊTE D'INTERROGER" in bloc
+    assert "3 fois DE SUITE" in bloc
+
+
+def test_repondre_sans_regarder_le_tableau_est_un_aveu():
+    """« جاوبني بلا ما تشوف اللوح » : la réponse EST au tableau, et le tuteur
+    le dit lui-même. L'ancienne lecture y voyait une annonce et laissait
+    passer le tableau."""
+    reponse = (
+        "واش عرفتي شنو هي la fonction exponentielle؟ جاوبني بلا ما تشوف اللوح. "
+        + _TABLEAU_GENETIQUE
+    )
+
+    assert humanisation.tableau_qui_donne_la_reponse(reponse)
+
+
+def test_une_consigne_courte_ne_fait_pas_oublier_la_question():
+    """« …؟ جاوبني بلا ما تفكر بزاف. » attend toujours une réponse."""
+    reponse = "واش عرفتي الفرق بين un gène و un allèle؟ جاوبني بلا ما تفكر بزاف."
+
+    assert humanisation.tour_purement_socratique(reponse)
+    assert humanisation.tableau_qui_donne_la_reponse(reponse + _TABLEAU_GENETIQUE)
+
+
+def test_une_phrase_finale_longue_referme_bien_le_tour():
+    """Une question suivie d'un vrai paragraphe n'attend plus rien."""
+    reponse = (
+        "واش عرفتي هادشي؟ صافي، غادي نشرح ليك دابا كيفاش كتخدم هاد la méthode "
+        "من الأول للآخر، خطوة بخطوة، بلا ما نقفزو على حتى مرحلة."
+    )
+
+    assert not humanisation.tour_purement_socratique(reponse)
