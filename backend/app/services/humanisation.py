@@ -533,6 +533,108 @@ def suggestion_donne_la_reponse(bouton: str, reponse: str) -> bool:
     return False
 
 
+#: « Regarde le tableau », dit alors que RIEN n'a été envoyé au tableau.
+#:
+#: C'est le défaut le plus coûteux de la séance du 20 août 2026 : sept
+#: réponses d'affilée annoncent « شوف le tableau، كتبت ليك… », aucune ne porte
+#: de bloc <ui>, et l'élève finit par écrire « rien n'est affiché ». Le tuteur
+#: s'excuse — puis recommence au tour suivant, exactement pareil.
+#:
+#: Plus étroit que `_AMORCES_TABLEAU`, et volontairement : cette liste-là sert
+#: à constater qu'un tableau parti n'a pas été annoncé, où le mot « tableau »
+#: seul suffit. Ici on déclenche une RELANCE du modèle, donc il faut une
+#: promesse explicite — « le tableau de variation » n'en est pas une.
+_PROMESSES_DE_TABLEAU = (
+    # français
+    "je t'écris", "j'écris", "je note", "regarde ce que", "voici ce que",
+    "au tableau", "sur le tableau", "dans le tableau", "je te dessine",
+    "je dessine", "j'ai écrit", "je t'ai écrit",
+    # darija / arabe — l'annonce telle qu'elle sort en séance
+    "كتبت ليك", "كتبتها", "غادي نكتب", "كنكتب", "نكتب ليك", "غادي نرسم",
+    "كنرسم", "رسمت ليك", "شوف le tableau", "شوف اللوح", "ف le tableau",
+    "فـ le tableau", "شوف معايا", "ها هي", "ها هو",
+)
+
+
+def annonce_un_tableau(reponse: str) -> bool:
+    """L'oral promet-il à l'élève quelque chose d'écrit ou de dessiné ?"""
+    parle = retirer_emojis(texte_parle(reponse)).lower()
+    return any(promesse in parle for promesse in _PROMESSES_DE_TABLEAU)
+
+
+def promesse_de_tableau_non_tenue(reponse: str) -> bool:
+    """Le tuteur renvoie l'élève à un tableau qu'il n'a pas envoyé.
+
+    Rien ne s'affiche, et l'élève ne peut pas savoir si c'est lui, l'écran ou
+    le professeur. C'est la seule faute de la séance qu'il ait signalée
+    lui-même.
+    """
+    return bool(reponse) and not _OUVERTURE_AFFICHAGE.search(reponse) and annonce_un_tableau(reponse)
+
+
+RAPPEL_PROMESSE_TABLEAU = (
+    "Au tour précédent, tu as dit à l'élève de regarder le tableau — et tu "
+    "n'as envoyé AUCUN bloc <ui>. Il a regardé un écran vide. Une phrase "
+    "comme « شوف le tableau » ou « كتبت ليك » est une PROMESSE : elle n'a le "
+    "droit d'exister que dans une réponse qui contient réellement le bloc "
+    "<ui> correspondant. Cette fois : soit tu envoies le tableau, soit tu "
+    "n'en parles pas."
+)
+
+
+def _phrase_est_un_controle(phrase: str) -> bool:
+    """« واش واضح؟ », « c'est clair ? » — une question qui attend un oui."""
+    return any(controle in phrase for controle in _QUESTIONS_DE_CONTROLE)
+
+
+def questions_du_tour(reponse: str) -> list[str]:
+    """Les questions réellement POSÉES à l'élève dans ce tour."""
+    return [phrase for phrase in _phrases(texte_parle(reponse)) if _est_question(phrase)]
+
+
+def controles_consecutifs(historique, tours: int = 4) -> int:
+    """Combien de réponses d'affilée se terminent sur un contrôle de compréhension.
+
+    « دابا، واش واضحة؟ ولا بغيتي نعطيك شي حاجة أخرى؟ » revient à l'identique
+    en fin de six réponses sur sept dans la séance du 20 août 2026. Ce n'est
+    plus une vérification : c'est une signature de fin de message, et l'élève
+    répond « ok » sans lire.
+    """
+    compte = 0
+    for message in reversed(_tours(historique, "assistant", tours)):
+        posees = questions_du_tour(message)
+        if not posees or not _phrase_est_un_controle(retirer_emojis(posees[-1]).lower()):
+            break
+        compte += 1
+    return compte
+
+
+#: Ce que l'élève écrit quand l'écran ne montre pas ce qu'on lui a promis.
+_SIGNALEMENTS_D_ECRAN = (
+    "rien n'est affich", "rien n est affich", "rien ne s'affiche",
+    "rien ne s affiche", "rien n'apparait", "rien n apparait", "rien du tout",
+    "je ne vois rien", "je vois rien", "ca ne marche pas", "ca marche pas",
+    "y a rien", "il n'y a rien", "il y a rien", "l'ecran est vide",
+    "ماكاين والو", "ما كاين والو", "ما كاين حتى حاجة", "ماكيبانش",
+    "ما كيبانش", "ماشفت والو", "ما شفت والو", "اللوح خاوي", "ما تبان",
+    # La reconnaissance vocale rend souvent la darija en lettres latines.
+    # « walo » seul n'est PAS ici : il veut aussi dire « je ne sais rien »,
+    # et `sans_contenu` s'en occupe déjà.
+    "ma kayn walo", "makayn walo", "ma kayn walou", "makaynch",
+    "ma kaynch", "ma chft walo", "machft walo", "ma tban", "matbanch",
+    "lou7 khawi", "l7ou khawi",
+)
+
+
+def signale_un_ecran_vide(message: str) -> bool:
+    """L'élève dit que rien ne s'affiche.
+
+    À traiter comme un fait, pas comme un doute : c'est LUI qui voit l'écran.
+    """
+    replie = _sans_accents(message)
+    return any(signal in replie for signal in _SIGNALEMENTS_D_ECRAN)
+
+
 def defaut_d_accord(reponse: str) -> str:
     """Le rappel à servir au tour SUIVANT, ou "" si les canaux s'accordent.
 
@@ -557,6 +659,18 @@ def defaut_d_accord(reponse: str) -> str:
             "(« شوف اللوح », « كتبت ليك… ») et commente-le en une phrase au "
             "moins, avec tes mots."
         )
+    posees = questions_du_tour(reponse)
+    if len(posees) >= 2:
+        citees = " ".join(f"« {_condenser(q, 70)} »" for q in posees[-2:])
+        return (
+            f"Au tour précédent, tu as posé {len(posees)} questions dans le "
+            f"même message : {citees}. L'élève n'en lit qu'une, répond « ok », "
+            "et les autres sont perdues — c'est ce qui est arrivé. UNE seule "
+            "question par réponse, celle qui fait avancer, et tu t'arrêtes "
+            "après. La deuxième (« ولا بغيتي… ») n'est pas une question, c'est "
+            "une porte de sortie : elle rend à l'élève le travail de décider "
+            "ce qu'on fait — c'est le tien."
+        )
     return ""
 
 
@@ -568,6 +682,7 @@ def bloc_memoire(historique) -> str:
     posees = questions_deja_posees(historique)
     ouverte = question_ouverte(historique)
     aveux = aveux_consecutifs(historique)
+    controles = controles_consecutifs(historique)
 
     lignes: list[str] = []
     if ouvertures:
@@ -595,7 +710,11 @@ def bloc_memoire(historique) -> str:
             + ", ".join(f"« {mot} »" for mot in tics[:4])
             + "\n  → aucun d'eux dans tes cinq premiers mots. Le prénom de "
             "l'élève compris : on ne s'adresse pas à quelqu'un par son prénom "
-            "trois phrases de suite."
+            "trois phrases de suite.\n"
+            "  → et n'accuse pas réception avant de parler. « واخا », "
+            "« d'accord », « très bien » posés en tête ne disent rien à "
+            "personne : un professeur entre directement dans ce qu'il a à "
+            "dire. Ta première phrase porte déjà du contenu."
         )
     if formules:
         lignes.append(
@@ -624,6 +743,18 @@ def bloc_memoire(historique) -> str:
             "une question qu'APRÈS lui avoir donné quelque chose à comprendre "
             "— et elle portera sur ce que tu viens d'expliquer, pas sur un "
             "prérequis encore plus ancien."
+        )
+    if controles >= 2:
+        lignes.append(
+            f"• Tes {controles} dernières réponses se terminent TOUTES par un "
+            "contrôle de compréhension (« واش واضح؟ », « c'est clair ? », "
+            "« ولا بغيتي… ? »).\n"
+            "  → ce n'est plus une vérification, c'est ta signature de fin de "
+            "message : l'élève répond « ok » sans avoir rien vérifié du tout.\n"
+            "  → CETTE réponse ne se termine PAS par une question. Tu "
+            "expliques, et tu enchaînes toi-même sur la suite — c'est toi qui "
+            "mènes le cours. Quand tu voudras vraiment vérifier, ce sera une "
+            "question sur le CONTENU, à laquelle « oui » ne peut pas répondre."
         )
     if ouverte:
         lignes.append(

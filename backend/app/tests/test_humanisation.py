@@ -470,3 +470,67 @@ def test_une_phrase_finale_longue_referme_bien_le_tour():
     )
 
     assert not humanisation.tour_purement_socratique(reponse)
+
+
+# ── La promesse de tableau ────────────────────────────────────────
+#
+# Séance du 20 août 2026 : sept réponses annoncent « شوف le tableau، كتبت
+# ليك… », aucune ne porte de bloc <ui>, et l'élève finit par écrire « rien
+# n'est affiché ».
+
+_PROMESSE = (
+    "شوف le tableau، كتبت ليك الفرق بين les trois. "
+    "دابا، واش واضحة؟ ولا بغيتي نعطيك شي حاجة أخرى؟"
+)
+
+
+def test_annoncer_un_tableau_sans_lenvoyer_est_detecte():
+    assert humanisation.promesse_de_tableau_non_tenue(_PROMESSE)
+
+
+def test_la_meme_annonce_avec_le_tableau_ne_declenche_rien():
+    assert not humanisation.promesse_de_tableau_non_tenue(_PROMESSE + _TABLEAU_GENETIQUE)
+
+
+def test_parler_du_tableau_de_variation_nest_pas_une_promesse():
+    """Le mot « tableau » seul ne promet rien — il faut l'annonce."""
+    reponse = "نديرو le tableau de variation ديال la fonction، وغادي نشوفو le signe."
+
+    assert not humanisation.promesse_de_tableau_non_tenue(reponse)
+
+
+def test_lecran_vide_signale_par_leleve_est_reconnu():
+    for message in ("rien n est afficher", "ma kayn walo", "ماكاين والو", "je ne vois rien"):
+        assert humanisation.signale_un_ecran_vide(message), message
+    assert not humanisation.signale_un_ecran_vide("واخا، فهمت")
+
+
+# ── Les questions ─────────────────────────────────────────────────
+
+
+def test_deux_questions_dans_un_tour_valent_un_rappel():
+    rappel = humanisation.defaut_d_accord(_PROMESSE + _TABLEAU_GENETIQUE)
+
+    assert "UNE seule" in rappel
+    assert "porte de sortie" in rappel
+
+
+def test_le_controle_de_comprehension_rabache_est_compte():
+    tour = "شرحت ليك la secousse. دابا، واش واضح؟"
+    echange = [
+        {"role": "assistant", "content": tour},
+        {"role": "user", "content": "ok"},
+        {"role": "assistant", "content": tour},
+    ]
+
+    assert humanisation.controles_consecutifs(echange) == 2
+    assert "signature de fin de message" in humanisation.bloc_memoire(echange)
+
+
+def test_une_question_de_contenu_nest_pas_un_controle():
+    echange = [
+        {"role": "assistant", "content": "شنو كيوقع لـ la contraction إلى ما كانش relâchement؟"},
+        {"role": "assistant", "content": "شنو هي la période de latence؟"},
+    ]
+
+    assert humanisation.controles_consecutifs(echange) == 0

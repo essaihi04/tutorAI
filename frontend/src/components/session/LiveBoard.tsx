@@ -26,6 +26,18 @@ interface LiveLine {
   color?: string;
 }
 
+/**
+ * La langue de ce qui est ÉCRIT au tableau — toujours le français.
+ *
+ * Ce n'est pas un choix de rendu, c'est un fait : `_send_board_or_live` côté
+ * serveur rejette toute ligne en arabe avant de l'envoyer, parce que l'élève
+ * recopie le tableau et compose le BAC en français. Ce qui est écrit en
+ * français doit donc être LU en français — « R en ohms », « C en farads »,
+ * « tau égale R fois C ». La langue de la séance ne vaut que pour ce que le
+ * professeur DIT autour : l'explication, la question, la narration.
+ */
+const LANGUE_DU_TABLEAU = 'fr' as const;
+
 interface DrawPoint { x: number; y: number }
 
 interface LiveDrawElement {
@@ -245,19 +257,28 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   /**
    * Texte réellement prononcé pour un step — `say` s'il existe, sinon la
    * ligne écrite (transcrite) ou la narration.
+   *
+   * Chaque fragment part avec SA langue. Ce qui est ÉCRIT au tableau est en
+   * français — le backend rejette les lignes en arabe avant l'envoi — donc il
+   * se lit en français : « R en ohms », pas « R فـ أوم ». L'explication, elle,
+   * garde la langue de la séance. Sans cette distinction, une ligne courte et
+   * pleine de symboles (« τ = R × C ») pouvait basculer côté darija et les
+   * unités sortaient en arabe.
    */
-  const spokenTextOf = useCallback((step: LiveStep): string[] => {
+  const spokenTextOf = useCallback((step: LiveStep): { texte: string; langue: 'fr' | 'ar' | 'mixed' }[] => {
     if (!step) return [];
-    const fragments: string[] = [];
+    const fragments: { texte: string; langue: 'fr' | 'ar' | 'mixed' }[] = [];
     if (step.action === 'write' && typeof step.line?.content === 'string') {
       // La ligne d'abord — c'est elle qu'on lit en l'écrivant — puis son
       // explication. Les deux passent par le TTS : les deux se préchargent.
-      fragments.push(step.line.content);
+      fragments.push({ texte: step.line.content, langue: LANGUE_DU_TABLEAU });
     } else if ((step.action === 'narrate' || step.action === 'ask') && typeof step.text === 'string') {
-      fragments.push(step.text);
+      fragments.push({ texte: step.text, langue: langRef.current });
     }
-    if (typeof step.say === 'string' && step.say.trim()) fragments.push(step.say.trim());
-    return fragments.filter(f => f && f.trim());
+    if (typeof step.say === 'string' && step.say.trim()) {
+      fragments.push({ texte: step.say.trim(), langue: langRef.current });
+    }
+    return fragments.filter(f => f.texte && f.texte.trim());
   }, []);
 
   /**
@@ -275,9 +296,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     let queued = 0;
     for (let j = fromIndex; j < steps.length && queued < 2; j++) {
       for (const fragment of spokenTextOf(steps[j])) {
-        const t = toSpokenText(fragment);
+        const t = toSpokenText(fragment.texte);
         if (!t) continue;
-        boardVoice.prefetch(t, langRef.current);
+        boardVoice.prefetch(t, fragment.langue);
         queued += 1;
         if (queued >= 2) break;
       }
@@ -352,7 +373,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
    * Retourne true si la parole a porté l'animation, false s'il faut retomber
    * sur l'animation minutée (son coupé, serveur indisponible, ligne muette).
    */
-  const speakAndReveal = useCallback(async (raw: string, runId: number): Promise<boolean> => {
+  const speakAndReveal = useCallback(async (
+    raw: string,
+    runId: number,
+    langue: 'fr' | 'ar' | 'mixed' = langRef.current,
+  ): Promise<boolean> => {
     if (!soundOnRef.current) return false;
     const spoken = toSpokenText(raw);
     if (!spoken) return false;
@@ -385,7 +410,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       }
     }, 50);
 
-    const handle = boardVoice.speak(spoken, langRef.current, (ratio) => {
+    const handle = boardVoice.speak(spoken, langue, (ratio) => {
       // ratio >= 1 est le signal de FIN : s'y recaler ferait sauter la ligne
       // à 99 % d'un coup — la rampe de rattrapage s'en charge en douceur.
       if (runId !== runIdRef.current || ratio <= 0 || ratio >= 1) return;
@@ -499,7 +524,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             // Temps 1 — il lit ce qu'il écrit. C'est CETTE ligne (et aucune
             // autre) que la voix révèle, lettre après lettre.
             setVoiceKey(entry.key);
-            const spoke = await speakAndReveal(line.content, runId);
+            // En FRANÇAIS : c'est la langue de ce qui est écrit. Les unités
+            // (« ohms », « farads », « secondes ») et les relations se disent
+            // donc telles que l'élève les lira le jour du BAC.
+            const spoke = await speakAndReveal(line.content, runId, LANGUE_DU_TABLEAU);
             if (runId !== runIdRef.current) return;
             setVoiceKey(null);
             if (!spoke) {

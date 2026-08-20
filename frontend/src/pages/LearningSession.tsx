@@ -309,11 +309,26 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   // l'écrit, l'EXPLIQUE, et seulement après passe à la suivante. C'est le
   // rythme d'un prof en live, et il exige une seule voix.
   //
-  // Sans `say`, rien ne change : le squelette reste muet et le chat parle.
+  // ── Ce qui est écrit est LU, avec ou sans `say` ──
+  //
+  // La condition a longtemps exigé un `say` : sans explication attachée, le
+  // tableau restait muet. Elle laissait dehors TOUS les tableaux convertis
+  // depuis un `show_board` — `_board_lines_to_live_steps` ne produit pas de
+  // `say` — c'est-à-dire la moitié des tableaux de la séance. Résultat vu le
+  // 20 août 2026 : la relation « τ = R × C », les unités « R en ohms, C en
+  // farads » et la fonction « u_C(t) = E(1 − e^(−t/τ)) » s'écrivaient sans
+  // qu'un mot ne soit prononcé, pendant que le chat parlait d'autre chose.
+  //
+  // Une ligne écrite au tableau est une ligne à lire : c'est le geste de base
+  // du professeur. Le `say`, lui, reste ce qui l'EXPLIQUE en plus — quand le
+  // script en porte un.
+  //
+  // La règle « une seule voix à la fois » ne bouge pas : le tableau attend que
+  // la voix du chat se taise avant de commencer (cf. `attendreLeSilence`).
   const liveBoardVoice = useMemo(
     () => Array.isArray(liveScript?.steps) && liveScript.steps.some(
-      (s: any) => s?.action === 'write'
-        && typeof s?.say === 'string' && s.say.trim().length > 0,
+      (s: any) => s?.action === 'write' && typeof s?.line?.content === 'string'
+        && s.line.content.trim().length > 0,
     ),
     [liveScript],
   );

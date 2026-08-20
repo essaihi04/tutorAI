@@ -620,3 +620,28 @@ def test_une_locution_courante_n_est_pas_une_grandeur():
         parle = normalize_for_speech(phrase, "mixed")
         assert "la relation" not in parle
         assert "la limite" not in parle
+
+
+def test_les_unites_du_dipole_rc_se_disent_en_francais():
+    """Le tableau de physique écrit « τ = 1 ms » ; la voix lit la ligne."""
+    parle = normalize_for_speech("τ = R × C = 1 ms, avec R = 1000 Ω et C = 1 µF", "fr")
+
+    assert "tau" in parle
+    assert "une milliseconde" in parle
+    assert "mille ohms" in parle
+    assert "un microfarad" in parle
+    assert "τ" not in parle
+    assert "Ω" not in parle
+
+
+def test_une_unite_feminine_saccorde_au_singulier():
+    assert "une seconde" in normalize_for_speech("t = 1 s", "fr")
+    assert "un volt" in normalize_for_speech("U = 1 V", "fr")
+
+
+def test_un_symbole_dunite_seul_nest_pas_traduit():
+    """« C » est le condensateur, pas un coulomb : sans nombre, on ne touche à rien."""
+    parle = normalize_for_speech("C = R × F", "fr")
+
+    assert "farad" not in parle
+    assert "newton" not in parle
