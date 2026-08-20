@@ -195,6 +195,96 @@ def _separer_ecritures(text: str) -> str:
     return _FRONTIERE_ECRITURES.sub(" ", text.replace(_TATWEEL, ""))
 
 
+# ── Le tachkil, et ce qu'il cachait ──────────────────────────────
+#
+# Voyelles courtes, tanwin, shadda, sukun. Le réflexe devant un mot mal
+# prononcé est de les ajouter ; ici elles AGGRAVENT. Le modèle Academy n'a
+# jamais vu une seule haraka à l'entraînement (0 sur les 9 997 transcriptions
+# de `combined_training_recent`), et son vocabulaire les accepte quand même —
+# il énumère tout le bloc arabe Unicode. Elles ne deviennent donc pas
+# `[UNK]` : elles deviennent des tokens dont l'embedding n'a jamais été
+# ajusté, et le modèle part hors distribution sans que rien ne le signale.
+#
+# U+0653 (madda) et U+0654 (hamza) ne sont PAS ici : ils composent أ إ آ ؤ ئ,
+# que le modèle voit en permanence. Les retirer changerait des lettres.
+_TACHKIL = re.compile("[ً-ْٰ]")
+
+
+def _retirer_tachkil(text: str) -> str:
+    """La graphie sans voyelles : celle que le corpus emploie."""
+    return _TACHKIL.sub("", text)
+
+
+# ── Les termes que la voix ne sait pas dire en arabe ─────────────
+#
+# Enlever le tachkil rend au mot sa graphie d'entraînement — encore faut-il
+# que le modèle l'ait entendue. Pour la terminologie scientifique arabe, il ne
+# l'a pas : 198 des 226 formes du glossaire officiel sont ABSENTES du corpus
+# (mesure du 19 août 2026, cf. `app/data/termes_dits_en_francais.py`). Le
+# professeur du corpus nomme ces notions en français ; le tuteur les dit donc
+# en français lui aussi. L'affichage, lui, garde ce que le tuteur a écrit.
+#
+#: Les LETTRES arabes — sans la ponctuation (« ؟ », « ، ») ni les marques,
+#: qui appartiennent pourtant au même bloc Unicode.
+_LETTRE_ARABE = "ء-غف-يٮ-ۓ"
+
+# Les clitiques collés (و ف ب ك ل + article) sont TRADUITS plutôt que perdus :
+# une lettre arabe restée seule devant un mot français se prononce comme un
+# NOM de lettre (« ba l'oxygène »), ce que le prompt interdit par ailleurs.
+_LIENS_ARABES = {
+    "": "", "ال": "",
+    "و": "et ", "وال": "et ",
+    "ف": "dans ", "فال": "dans ",
+    "ب": "avec ", "بال": "avec ",
+    "ك": "comme ", "كال": "comme ",
+    "ل": "pour ", "لل": "pour ",
+}
+
+
+@lru_cache(maxsize=1)
+def _termes_en_francais() -> tuple[re.Pattern[str], dict[str, str]]:
+    """Le motif unique qui reconnaît toute la table, article compris."""
+    from app.data.termes_dits_en_francais import TERMES_DITS_EN_FRANCAIS
+
+    noyaux: dict[str, str] = {}
+    for arabe, francais in TERMES_DITS_EN_FRANCAIS.items():
+        # L'article se traite avec les autres clitiques : « الأكسجين » et
+        # « أكسجين » sont le même mot pour la voix.
+        noyau = arabe[2:] if arabe.startswith("ال") else arabe
+        noyaux.setdefault(noyau, francais)
+    # Le plus long d'abord : « الانقسام الاختزالي الأول » avant
+    # « الانقسام الاختزالي », sinon la division réductionnelle devient
+    # « la méiose الأول ».
+    alternance = "|".join(
+        re.escape(n) for n in sorted(noyaux, key=len, reverse=True)
+    )
+    liens = "|".join(
+        re.escape(l) for l in sorted(_LIENS_ARABES, key=len, reverse=True) if l
+    )
+    # La frontière est faite de LETTRES, pas du bloc arabe entier : « ؟ » et
+    # « ، » en font partie, et les prendre pour des lettres suffisait à ne
+    # jamais reconnaître un terme en fin de phrase — « شنو هي مورثة؟ » restait
+    # arabe, alors que « شنو هي مورثة » était traduit.
+    motif = re.compile(
+        rf"(?<![{_LETTRE_ARABE}])(?P<lien>{liens})?"
+        rf"(?P<terme>{alternance})"
+        rf"(?![{_LETTRE_ARABE}])"
+    )
+    return motif, noyaux
+
+
+def _dire_les_termes_en_francais(text: str) -> str:
+    """Remplace la terminologie scientifique arabe par son nom français."""
+    if not _ARABIC_RE.search(text):
+        return text
+    motif, noyaux = _termes_en_francais()
+
+    def remplacer(m: re.Match[str]) -> str:
+        return _LIENS_ARABES[m.group("lien") or ""] + noyaux[m.group("terme")]
+
+    return motif.sub(remplacer, text)
+
+
 def _ouvrir_pause_apres_deux_points(text: str) -> str:
     """Le deux-points d'annonce mérite une respiration, pas celui d'un ratio.
 
@@ -820,7 +910,11 @@ def normalize_for_speech(text: str, language: str = "fr") -> str:
     # En premier : les règles suivantes reconnaissent des MOTS (unités,
     # abréviations, nombres). Une tatweel ou un collage d'alphabets les fait
     # toutes échouer silencieusement.
+    text = _retirer_tachkil(text)
     text = _separer_ecritures(text)
+    # Avant que l'article ne soit détaché : la table connaît « الأكسجين »,
+    # pas « ال أكسجين ».
+    text = _dire_les_termes_en_francais(text)
     text = _separer_article_arabe(text)
     text = _ouvrir_pause_apres_deux_points(text)
     text = _replace_latex(text)

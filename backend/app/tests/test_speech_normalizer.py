@@ -399,3 +399,61 @@ def test_toutes_les_formules_ont_la_meme_ecriture_dans_les_deux_langues():
         assert normalize_for_speech("NaCl", langue) == "N A C L"
         assert normalize_for_speech("HCl", langue) == "H C L"
         assert normalize_for_speech("O2", langue) == "O deux"
+
+
+# ── Le tachkil, et les mots que la voix ne sait pas dire ─────────
+#
+# Mesuré le 19 août 2026 sur `combined_training_recent` : 0 haraka dans les
+# 9 997 transcriptions d'entraînement, et 198 des 226 termes arabes du
+# glossaire officiel totalement absents. Vocaliser ne corrige donc rien —
+# c'est le mot lui-même qui doit changer de langue.
+
+
+def test_le_tachkil_ne_part_jamais_a_la_voix():
+    """Le vocaliser le mettait hors distribution, pas dans le droit chemin."""
+    parle = normalize_for_speech("شوف مُعَادِل ديال هاد الحاجة", "mixed")
+
+    assert "مُعَادِل" not in parle
+    assert "معادل" in parle
+
+
+def test_une_lettre_composee_survit_au_nettoyage():
+    """أ إ آ ؤ ئ portent une hamza, pas une voyelle : on n'y touche pas."""
+    for lettre in ("أ", "إ", "آ", "ؤ", "ئ"):
+        assert lettre in normalize_for_speech(f"{lettre}كتب", "mixed")
+
+
+def test_un_terme_absent_du_corpus_se_dit_en_francais():
+    parle = normalize_for_speech("التنفس الخلوي كيوقع فالميتوكوندري.", "mixed")
+
+    assert "la respiration cellulaire" in parle
+    assert "la mitochondrie" in parle
+    assert "التنفس" not in parle
+
+
+def test_un_terme_que_le_corpus_connait_reste_en_arabe():
+    """« الطاقة » revient 54 fois à l'entraînement : le modèle sait le dire."""
+    parle = normalize_for_speech("الطاقة و الخلية و الحرارة", "mixed")
+
+    assert "énergie" not in parle
+    assert "cellule" not in parle
+
+
+def test_le_clitique_colle_est_traduit_pas_perdu():
+    """Une lettre arabe seule devant un mot français se dit « ba », « fa »."""
+    assert "dans la mitochondrie" in normalize_for_speech("فالميتوكوندري", "mixed")
+    assert "avec l'oxygène" in normalize_for_speech("بالأكسجين", "mixed")
+    assert "et l'oxygène" in normalize_for_speech("والأكسجين", "mixed")
+
+
+def test_le_terme_le_plus_long_gagne():
+    """Sinon « la division réductionnelle » devient « la méiose الأول »."""
+    parle = normalize_for_speech("الانقسام الاختزالي الأول", "mixed")
+
+    assert parle == "la division réductionnelle"
+
+
+def test_un_terme_en_fin_de_phrase_est_reconnu():
+    """« ؟ » et « ، » appartiennent au bloc arabe sans être des lettres."""
+    assert "le gène" in normalize_for_speech("شنو هي مورثة؟", "mixed")
+    assert "l'oxygène" in normalize_for_speech("الأكسجين، و بعد؟", "mixed")

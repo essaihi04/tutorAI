@@ -235,7 +235,7 @@ def test_une_affirmation_n_est_pas_une_question():
 
 def test_un_tableau_jamais_annonce_est_signale():
     """La plainte telle quelle : des données au tableau que rien n'explique."""
-    reponse = "واش عرفتي شنو هي العلاقة بين بي آش و التركيز؟ " + _TABLEAU
+    reponse = "بي آش كينقص ملي التركيز كيزيد. " + _TABLEAU
 
     assert humanisation.tableau_non_annonce(reponse)
     assert "MUET" in humanisation.defaut_d_accord(reponse)
@@ -246,6 +246,100 @@ def test_un_tableau_annonce_ne_declenche_rien():
 
     assert not humanisation.tableau_non_annonce(reponse)
     assert humanisation.defaut_d_accord(reponse) == ""
+
+
+# ── La question dont la réponse est déjà à l'écran ────────────────
+#
+# Le tour de la capture d'écran du 19 août 2026 : le chat demande la
+# différence entre un gène et un allèle, le tableau l'écrit, et le bouton de
+# réponse la rend toute rédigée.
+
+_TABLEAU_GENETIQUE = (
+    '<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":'
+    '{"title":"Génétique","lines":['
+    '{"type":"box","content":"Un gène = segment d\'ADN qui code pour un caractère héréditaire"},'
+    '{"type":"box","content":"Un allèle = version différente d\'un même gène"}]}}]}</ui>'
+)
+_QUESTION_GENETIQUE = (
+    "قبل ما نبداو، عندي سؤال صغير: واش عرفتي الفرق بين un gène و un allèle؟ "
+)
+
+
+def test_le_tableau_qui_repond_a_la_question_posee_est_repere():
+    reponse = _QUESTION_GENETIQUE + _TABLEAU_GENETIQUE
+
+    assert humanisation.tableau_qui_donne_la_reponse(reponse)
+    assert "RETIRÉ" in humanisation.defaut_d_accord(reponse)
+
+
+def test_le_bloc_suggestions_ne_masque_plus_le_point_d_interrogation():
+    """Le prompt EXIGE des <suggestions> après chaque question.
+
+    Tant qu'elles comptaient comme de la prose, la réponse ne « finissait »
+    plus sur « ؟ » et aucun garde-fou ne se déclenchait — donc jamais en
+    production, où le bloc est toujours là.
+    """
+    reponse = (
+        _QUESTION_GENETIQUE
+        + _TABLEAU_GENETIQUE
+        + '<suggestions>[{"label":"Je ne sais pas","prompt":"Je ne sais pas"}]</suggestions>'
+    )
+
+    assert humanisation.tableau_qui_donne_la_reponse(reponse)
+    assert humanisation.tour_purement_socratique(_QUESTION_GENETIQUE + "<mode>libre</mode>")
+
+
+def test_un_controle_de_comprehension_garde_son_recapitulatif():
+    """« واش فهمتي؟ » ne cache aucune réponse : le tableau récapitule."""
+    reponse = (
+        "la mitose كتعطي جوج cellules identiques. واش فهمتي؟ " + _TABLEAU_GENETIQUE
+    )
+
+    assert not humanisation.tableau_qui_donne_la_reponse(reponse)
+
+
+def test_une_question_sur_ce_qui_est_affiche_garde_son_tableau():
+    """Quand l'oral ANNONCE le tableau, l'afficher est le sujet même."""
+    reponse = "شوف اللوح. واش عرفتي شنو كيمثل هاد le schéma؟ " + _TABLEAU_GENETIQUE
+
+    assert not humanisation.tableau_qui_donne_la_reponse(reponse)
+
+
+def test_un_script_en_direct_n_est_jamais_retenu():
+    """Un show_live EST le cours ; ses `ask` font partie du déroulé."""
+    reponse = (
+        "واش عرفتي الفرق بين un gène و un allèle؟ "
+        '<ui>{"actions":[{"type":"whiteboard","action":"show_live","payload":{"steps":[]}}]}</ui>'
+    )
+
+    assert not humanisation.tableau_qui_donne_la_reponse(reponse)
+
+
+def test_une_explication_suivie_de_son_tableau_reste_intacte():
+    """Au-delà d'une question courte, le tour porte un cours."""
+    reponse = "خلينا نشوفو هاد الحاجة بشوية. " * 20 + "شنو كتلاحظ؟ " + _TABLEAU_GENETIQUE
+
+    assert not humanisation.tableau_qui_donne_la_reponse(reponse)
+
+
+def test_le_bouton_qui_recopie_le_tableau_est_repere():
+    reponse = _QUESTION_GENETIQUE + _TABLEAU_GENETIQUE
+
+    assert humanisation.suggestion_donne_la_reponse(
+        "Un gène = segment d'ADN, un allèle = une version", reponse
+    )
+    assert not humanisation.suggestion_donne_la_reponse("Je ne sais pas", reponse)
+    assert not humanisation.suggestion_donne_la_reponse("Le gène est le lieu", reponse)
+
+
+def test_retenir_le_tableau_laisse_passer_le_reste():
+    """Les commandes en clair et le mode ne dépendent pas du tableau."""
+    reponse = _QUESTION_GENETIQUE + "OUVRIR_IMAGE " + _TABLEAU_GENETIQUE + "<mode>cours</mode>"
+    reste = humanisation.sans_les_affichages(reponse)
+
+    assert "show_board" not in reste
+    assert "OUVRIR_IMAGE" in reste
+    assert "<mode>cours</mode>" in reste
 
 
 def test_un_tour_sans_tableau_n_a_rien_a_accorder():
@@ -279,3 +373,16 @@ def test_le_budget_est_partage_par_tous_les_morceaux_du_flux():
     assert "✍" not in sortie
     assert "🤔" not in sortie
     assert "واش فهمتي؟" in sortie
+
+
+def test_le_mot_question_dans_l_amorce_n_exempte_rien():
+    """« J'ai une question pour toi : … » n'est pas un contrôle de
+    compréhension. Chercher les marqueurs partout, plutôt que dans la seule
+    phrase interrogative, aurait laissé passer le tour de la capture traduit
+    en français."""
+    reponse = (
+        "J'ai une petite question pour toi. "
+        "Quelle est la différence entre un gène et un allèle ? " + _TABLEAU_GENETIQUE
+    )
+
+    assert humanisation.tableau_qui_donne_la_reponse(reponse)

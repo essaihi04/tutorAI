@@ -1097,10 +1097,13 @@ class SessionHandler:
                 "SVT devient إس ڤي تي et QCM devient كيو سي إم. "
                 "N'utilise JAMAIS la traduction arabe classique de ces termes (السرعة، التسارع، القوة…). "
                 "Ne transforme jamais une règle, une définition ou une méthode en phrase arabe. "
-                "La synthèse vocale peut mal prononcer certains mots arabes : si un mot nécessite le "
-                "tashkīl, écris-le vocalisé puis ajoute immédiatement sa traduction française entre "
-                "parenthèses (ex : مُعَادِل (équivalent)); s'il reste ambigu, utilise uniquement le "
-                "français. Les mots simples, explications, consignes, nombres, unités, méthodes et "
+                "N'écris JAMAIS de tashkīl (voyelles courtes) : la voix n'en a jamais vu à "
+                "l'entraînement et les ajouter dégrade la prononciation au lieu de la corriger. "
+                "Un mot arabe qu'il faudrait vocaliser pour qu'il soit bien dit s'écrit DIRECTEMENT "
+                "en français, seul, sans l'arabe à côté ni parenthèses (pas de « مُعَادِل (équivalent) », "
+                "mais « équivalent »). L'arabe est réservé à la darija courante, qui se lit sans "
+                "voyelles (واش، شوف، دابا، مزيان، فهمتي). "
+                "Les mots simples, explications, consignes, nombres, unités, méthodes et "
                 "règles pédagogiques doivent être en français simple. Pour les nombres scolaires, "
                 "écris-les en toutes lettres françaises (3 → trois, 25 % → vingt-cinq pour cent). "
                 "Le PRÉNOM de l'élève s'écrit en alphabet arabe dans la phrase parlée destinée au TTS. "
@@ -1404,10 +1407,18 @@ class SessionHandler:
         text = re.sub(r'[ \t]{2,}', ' ', text)
         return text.strip()
 
-    async def _extract_and_send_suggestions(self, ai_response: str) -> None:
+    async def _extract_and_send_suggestions(
+        self, ai_response: str, sans_la_reponse: bool = False
+    ) -> None:
         """Parse <suggestions>[{"label":"...","prompt":"..."}]</suggestions>
         from the AI response and send the list to the frontend as contextual
-        quick-reply buttons aligned on the question the AI just asked."""
+        quick-reply buttons aligned on the question the AI just asked.
+
+        ``sans_la_reponse`` : le tour posait une question et son tableau y
+        répondait (cf. `humanisation.tableau_qui_donne_la_reponse`). Le
+        tableau a été retenu ; les boutons qui recopiaient ses lignes le sont
+        aussi, sans quoi la réponse repasse simplement par l'autre porte.
+        """
         if not ai_response or "<suggestions>" not in ai_response:
             return
         m = re.search(r'<suggestions>\s*(\[[\s\S]*?\])\s*</suggestions>', ai_response, re.DOTALL)
@@ -1442,6 +1453,12 @@ class SessionHandler:
             label = str(item.get("label", "")).strip()
             prompt = str(item.get("prompt") or item.get("text") or label).strip()
             if not label or not prompt:
+                continue
+            if sans_la_reponse and (
+                humanisation.suggestion_donne_la_reponse(label, ai_response)
+                or humanisation.suggestion_donne_la_reponse(prompt, ai_response)
+            ):
+                _safe_log(f"[AI Commands] Bouton retiré, il recopiait le tableau : {label[:40]}")
                 continue
             if len(label) > 40:
                 label = label[:37] + "…"
@@ -2696,8 +2713,20 @@ RÈGLES:
                 ai_response = "Laisse-moi réfléchir un instant... Peux-tu reformuler ta question ?"
                 await self._send_ai_response_text(ai_response)
 
+        # ── Une question dont la réponse est déjà affichée n'en est plus une ──
+        #
+        # Constaté en séance : le chat demande « واش عرفتي الفرق بين un gène
+        # و un allèle؟ » et le tableau affiche les deux définitions, le
+        # bouton de réponse avec. Le tableau part APRÈS le texte (plus bas,
+        # `_execute_ai_commands`) : il est encore temps de le retenir.
+        tableau_vend_la_meche = humanisation.tableau_qui_donne_la_reponse(ai_response)
+        if tableau_vend_la_meche:
+            _safe_log("[AI Commands] Le tableau donnait la réponse à la question posée : retiré")
+
         # Contextual quick-reply buttons aligned on what the AI just asked
-        asyncio.create_task(self._extract_and_send_suggestions(ai_response))
+        asyncio.create_task(self._extract_and_send_suggestions(
+            ai_response, sans_la_reponse=tableau_vend_la_meche
+        ))
 
         # La voix : soit elle a déjà commencé (première phrase prononcée
         # pendant la rédaction) et il ne reste que la suite à livrer, soit
@@ -2734,7 +2763,9 @@ RÈGLES:
         # qu'on venait de lui poser — et, quand le modèle cédait à la
         # relance, la réponse avec. Ici on constate ce que le tour est
         # VRAIMENT, une fois la réponse écrite, et on lève l'exigence.
-        if should_force_schema and humanisation.tour_purement_socratique(ai_response):
+        if should_force_schema and (
+            humanisation.tour_purement_socratique(ai_response) or tableau_vend_la_meche
+        ):
             _safe_log("[AI Commands] Tour purement socratique : aucun tableau forcé")
             should_force_schema = False
 
@@ -2746,9 +2777,12 @@ RÈGLES:
 
         # ── Execute UI commands (board/schema/draw/exam) ──
         # Text already streamed above, just process the commands.
+        # Le tableau qui répondait à la question ne va pas plus loin ; les
+        # commandes en clair et le mode de la réponse, eux, continuent.
         self._last_system_prompt = system_prompt
         await self._execute_ai_commands(
-            ai_response,
+            humanisation.sans_les_affichages(ai_response)
+            if tableau_vend_la_meche else ai_response,
             suppress_draw=not needs_drawing,
             suppress_media=media_already_sent,
             force_schema=should_force_schema,
@@ -2756,6 +2790,7 @@ RÈGLES:
             suppress_whiteboard=exam_sent,
             exam_context=exam_context,
             force_exam_panel=(decision.get("primary_mode") == "exam" or resource_type_for_suggestion == "exam"),
+            question_sans_reponse=tableau_vend_la_meche,
         )
 
     async def _tts_and_send(self, text: str, index: int):
@@ -4133,8 +4168,14 @@ RÈGLES :
             _safe_log(f"[Mode] notification impossible: {exc}")
         return nouveau
 
-    async def _execute_ai_commands(self, ai_response: str, suppress_draw: bool = False, suppress_media: bool = False, force_schema: bool = False, student_text: str = "", suppress_whiteboard: bool = False, exam_context: bool = False, force_exam_panel: bool = False):
-        """Detect and execute commands in AI response (media, phase transitions, exercises)."""
+    async def _execute_ai_commands(self, ai_response: str, suppress_draw: bool = False, suppress_media: bool = False, force_schema: bool = False, student_text: str = "", suppress_whiteboard: bool = False, exam_context: bool = False, force_exam_panel: bool = False, question_sans_reponse: bool = False):
+        """Detect and execute commands in AI response (media, phase transitions, exercises).
+
+        ``question_sans_reponse`` : ce tour attend la réponse de l'élève, et
+        son tableau la donnait — il a été retiré en amont. L'absence de
+        tableau est donc VOULUE ici, et le repli automatique ne doit surtout
+        pas en fabriquer un (cf. `humanisation.tableau_qui_donne_la_reponse`).
+        """
         
         _safe_log(f"[AI Commands] Checking AI response for commands... (force_schema={force_schema})")
         _safe_log(f"[AI Commands] Response preview: {ai_response[:200]}...")
@@ -5703,7 +5744,13 @@ RÈGLES :
             or "FERMER_TABLEAU" in ai_response
             or "TOUT_FERMER" in ai_response
         )
-        if not has_any_visual:
+        if question_sans_reponse:
+            # Le seul cas où « aucun visuel » est le bon résultat : recopier
+            # la question au tableau ne l'explique pas, et la relance
+            # structurée redemanderait au modèle le tableau qu'on vient de
+            # lui retirer.
+            _safe_log("[AI Commands] Tour en attente de réponse : aucun repli tableau")
+        elif not has_any_visual:
             # Strip command tags but PRESERVE newlines for paragraph splitting.
             # Important: also strip <suggestions> and <exam_exercise> — otherwise
             # their raw JSON body ends up rendered as board lines.

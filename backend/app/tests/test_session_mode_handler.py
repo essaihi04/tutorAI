@@ -481,3 +481,58 @@ def test_la_tactique_voyage_avec_la_reponse_enregistree():
 
     marquee = marquer_source("chat_coaching", "analogie")
     assert lire_tactique(marquee) == "analogie"
+
+
+# ── Les boutons qui rendaient la réponse toute rédigée ─────────────
+
+def _boutons(handler) -> list[dict]:
+    return [
+        m for msg in handler.websocket.envoyes
+        if msg["type"] == "quick_suggestions"
+        for m in msg["suggestions"]
+    ]
+
+
+_TOUR_QUI_VEND_LA_MECHE = (
+    "واش عرفتي الفرق بين un gène و un allèle؟ "
+    '<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":'
+    '{"lines":[{"type":"box","content":"Un gène = segment d\'ADN qui code pour '
+    'un caractère héréditaire"}]}}]}</ui>'
+    '<suggestions>['
+    '{"label":"Un gène = segment d\'ADN","prompt":"Un gène est un segment d\'ADN qui code"},'
+    '{"label":"Je ne sais pas","prompt":"Je ne sais pas"}]</suggestions>'
+)
+
+
+def test_le_bouton_qui_rendait_la_reponse_ne_part_plus():
+    handler = _handler()
+
+    asyncio.run(handler._extract_and_send_suggestions(
+        _TOUR_QUI_VEND_LA_MECHE, sans_la_reponse=True
+    ))
+
+    labels = [b["label"] for b in _boutons(handler)]
+    assert labels == ["Je ne sais pas"]
+
+
+def test_les_boutons_d_un_tour_ordinaire_partent_tous():
+    """Le filtre ne s'applique QU'au tour dont le tableau a été retenu."""
+    handler = _handler()
+
+    asyncio.run(handler._extract_and_send_suggestions(_TOUR_QUI_VEND_LA_MECHE))
+
+    assert len(_boutons(handler)) == 2
+
+
+def test_un_bouton_qui_ne_recopie_rien_survit_au_filtre():
+    """Chaque bouton figure dans la réponse : le comparer aux lignes de
+    l'écran, et à elles seules, évite qu'il se reconnaisse lui-même."""
+    handler = _handler()
+    tour = _TOUR_QUI_VEND_LA_MECHE.replace(
+        '{"label":"Je ne sais pas","prompt":"Je ne sais pas"}',
+        '{"label":"L\'allèle est le lieu","prompt":"L\'allèle est le lieu du caractère"}',
+    )
+
+    asyncio.run(handler._extract_and_send_suggestions(tour, sans_la_reponse=True))
+
+    assert [b["label"] for b in _boutons(handler)] == ["L'allèle est le lieu"]

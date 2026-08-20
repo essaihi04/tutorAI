@@ -262,7 +262,19 @@ def question_ouverte(historique) -> str:
 # Les deux se repèrent sur la réponse complète, avant qu'elle ne parte.
 
 _BALISES_AFFICHAGE = ("ui", "board", "draw", "schema", "live", "exam_exercise")
+#: Ce que l'élève N'ENTEND PAS. `suggestions` et `mode` ne dessinent rien —
+#: donc elles ne comptent pas comme un affichage — mais elles ne se
+#: prononcent pas davantage, et les OUBLIER se payait cher : la réponse se
+#: terminant par « …؟ <suggestions>[…]</suggestions> », `_finit_sur_une_
+#: question` ne voyait plus le point d'interrogation. Or le prompt EXIGE un
+#: bloc <suggestions> après chaque question — `tour_purement_socratique`
+#: était donc faux à chaque fois qu'il aurait dû être vrai.
+_BALISES_MUETTES = _BALISES_AFFICHAGE + ("suggestions", "mode")
 _BLOC_AFFICHAGE = re.compile(
+    r"<(" + "|".join(_BALISES_MUETTES) + r")>.*?(?:</\1>|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+_BLOC_A_L_ECRAN = re.compile(
     r"<(" + "|".join(_BALISES_AFFICHAGE) + r")>.*?(?:</\1>|$)",
     re.DOTALL | re.IGNORECASE,
 )
@@ -284,10 +296,50 @@ _AMORCES_TABLEAU = (
     "شوف معايا", "شوف هاد", "شوف اللي", "ها هي", "ها هو",
 )
 
+#: Le tableau STATIQUE — celui qui affiche un résultat déjà rédigé. Le
+#: `show_live`, lui, se déroule étape par étape sous les yeux de l'élève :
+#: c'est le cours en train de se faire, pas un corrigé posé d'avance.
+_TABLEAU_STATIQUE = re.compile(r"<board>|show_board", re.IGNORECASE)
+_TABLEAU_VIVANT = re.compile(r"<live>|show_live", re.IGNORECASE)
+
+#: « Est-ce que tu as compris ? » n'attend pas un savoir, elle attend un oui.
+#: Rien à cacher derrière : le tableau qui l'accompagne récapitule ce qui
+#: vient d'être expliqué.
+#:
+#: Cherchés dans la DERNIÈRE phrase seulement. « J'ai une question pour toi :
+#: quelle est la différence entre un gène et un allèle ? » contient
+#: « une question » sans en être une de contrôle — le tour de la capture,
+#: mot pour mot, se serait exempté tout seul.
+_QUESTIONS_DE_CONTROLE = (
+    # français
+    "c'est clair", "est-ce clair", "tu as compris", "as-tu compris",
+    "tu me suis", "on continue", "je continue", "ça va", "d'accord",
+    "des questions", "on avance", "je continue",
+    # darija / arabe
+    "فهمتي", "واضح", "صافي", "نكملو", "كملو", "باقي معايا", "بغيتي نعاود",
+)
+
+#: Le texte qui s'affiche au tableau, quel que soit le chemin — `<board>`
+#: comme `<ui>` : les deux passent par le même JSON, où chaque ligne écrite
+#: porte son texte dans "content", "text" ou "title".
+_CONTENU_ECRIT = re.compile(
+    r'"(?:content|text|title|label)"\s*:\s*"((?:[^"\\]|\\.)*)"'
+)
+
 
 def texte_parle(reponse: str) -> str:
     """La réponse privée de ses blocs d'affichage : ce que l'élève ENTEND."""
     return _BLOC_AFFICHAGE.sub(" ", reponse or "").strip()
+
+
+def sans_les_affichages(reponse: str) -> str:
+    """La réponse sans ce qui va à l'écran, mais avec tout le reste.
+
+    Pour retenir un tableau sans rien casser d'autre : les commandes en clair
+    (``OUVRIR_IMAGE``, ``<mode>``) et le bloc ``<suggestions>`` continuent
+    leur chemin, seuls les blocs qui DESSINENT disparaissent.
+    """
+    return _BLOC_A_L_ECRAN.sub(" ", reponse or "")
 
 
 def _finit_sur_une_question(texte: str) -> bool:
@@ -325,6 +377,89 @@ def tableau_non_annonce(reponse: str) -> bool:
     return not any(amorce in parle for amorce in _AMORCES_TABLEAU)
 
 
+def tableau_qui_donne_la_reponse(reponse: str) -> bool:
+    """Le tuteur pose une question à l'élève — et le tableau y répond.
+
+    C'est le défaut vu en séance : le chat demande « واش عرفتي الفرق بين un
+    gène و un allèle؟ » pendant que le tableau affiche « Un gène = segment
+    d'ADN… / Un allèle = version différente d'un même gène ». L'élève n'a
+    plus rien à chercher ; il lit.
+
+    La cause est mécanique et elle est dans le prompt : « TABLEAU OBLIGATOIRE
+    À CHAQUE RÉPONSE ». Un tour qui n'est QU'une question n'a rien à écrire —
+    alors le modèle écrit la seule chose qu'il ait sous la main, la réponse.
+
+    Quatre conditions, et il faut les quatre — chacune écarte un tour
+    légitime :
+
+      • un tableau STATIQUE. Un script `show_live` EST le cours, ses `ask`
+        font partie du déroulé ; on n'y touche pas.
+      • un oral court qui se termine sur une question. Au-delà, le tour porte
+        une explication, et le tableau la récapitule : c'est son métier.
+      • la question n'est pas un simple contrôle de compréhension. « واش
+        فهمتي؟ » après une explication n'a pas de réponse à cacher.
+      • l'oral n'annonce pas le tableau. « شوف اللوح، شنو كيمثل هاد
+        le schéma؟ » porte sur ce qui est affiché : l'afficher est le sujet.
+    """
+    if not reponse or _TABLEAU_VIVANT.search(reponse):
+        return False
+    if not _TABLEAU_STATIQUE.search(reponse):
+        return False
+    parle = texte_parle(reponse)
+    if not parle or len(parle) > _LONGUEUR_PURE_QUESTION:
+        return False
+    if not _finit_sur_une_question(parle):
+        return False
+    minuscules = retirer_emojis(parle).lower()
+    phrases = _phrases(minuscules)
+    derniere = phrases[-1] if phrases else minuscules
+    if any(controle in derniere for controle in _QUESTIONS_DE_CONTROLE):
+        return False
+    # L'annonce du tableau, elle, peut venir n'importe où dans le tour.
+    return not any(amorce in minuscules for amorce in _AMORCES_TABLEAU)
+
+
+def _mots_porteurs(texte: str) -> set[str]:
+    """Les mots d'un texte qui disent quelque chose, tous alphabets confondus."""
+    return {
+        mot for mot in _MOT.findall((texte or "").lower())
+        if len(mot) >= 3 and mot not in _MOTS_VIDES
+    }
+
+
+def _lignes_du_tableau(reponse: str) -> list[str]:
+    """Les phrases ÉCRITES au tableau, telles qu'elles s'affichent.
+
+    Les blocs de l'ÉCRAN seulement. Prendre toutes les balises muettes y
+    aurait inclus `<suggestions>` — chaque bouton se serait alors comparé à
+    sa propre copie, et tous auraient été jugés recopiés.
+    """
+    ecrit = "\n".join(m.group(0) for m in _BLOC_A_L_ECRAN.finditer(reponse or ""))
+    return [m.group(1) for m in _CONTENU_ECRIT.finditer(ecrit)]
+
+
+def suggestion_donne_la_reponse(bouton: str, reponse: str) -> bool:
+    """Ce bouton recopie-t-il une ligne du tableau ?
+
+    L'autre moitié du même défaut : le tableau montre la réponse, et le
+    bouton la remet à l'élève toute rédigée — « Un gène = segment d'ADN, un
+    allèle = … ». Cliquer n'est plus répondre.
+
+    On compare aux lignes du tableau plutôt qu'à une idée de « bonne
+    réponse » : un bouton qui recopie ce qui est écrit ne fait pas réfléchir,
+    quelle que soit sa justesse. Deux mots porteurs partagés au minimum, pour
+    qu'« Oui » ou « Je ne sais pas » ne déclenchent jamais rien.
+    """
+    mots = _mots_porteurs(bouton)
+    if len(mots) < 2:
+        return False
+    for ligne in _lignes_du_tableau(reponse):
+        communs = mots & _mots_porteurs(ligne)
+        if len(communs) >= 2 and len(communs) / len(mots) >= 0.5:
+            return True
+    return False
+
+
 def defaut_d_accord(reponse: str) -> str:
     """Le rappel à servir au tour SUIVANT, ou "" si les canaux s'accordent.
 
@@ -332,6 +467,15 @@ def defaut_d_accord(reponse: str) -> str:
     dite. Mais le défaut nommé au tour d'après se corrige, exactement comme
     les répétitions se corrigent par le miroir.
     """
+    if tableau_qui_donne_la_reponse(reponse):
+        return (
+            "Au tour précédent, tu as posé une question à l'élève ET affiché "
+            "la réponse au tableau. Le tableau a été RETIRÉ avant d'arriver à "
+            "l'écran : une question dont la réponse est déjà écrite n'apprend "
+            "rien. Tant que tu attends une réponse, le tableau ne dit rien de "
+            "plus que la question elle-même — tu écris ce qu'il faut retenir "
+            "APRÈS que l'élève a répondu."
+        )
     if tableau_non_annonce(reponse):
         return (
             "Au tour précédent, tu as affiché un tableau sans en dire un mot à "
