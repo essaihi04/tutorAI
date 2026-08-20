@@ -43,11 +43,11 @@ class SpeechNormalizerTests(unittest.TestCase):
         self.assertIn("مزيان", cleaned)
         self.assertIn("Bravo", cleaned)
 
-    def test_arabic_article_is_separated_from_nouns(self):
+    def test_mot_de_classe_est_traduit_et_article_reste_separe(self):
         spoken = normalize_for_speech(
             "ركزو مع التمرين الأول اللي جا ف الامتحان الوطني.", "mixed"
         )
-        self.assertIn("ال تمرين", spoken)
+        self.assertIn("l'exercice", spoken)
         self.assertIn("ال امتحان", spoken)
         self.assertIn("اللي", spoken)
         self.assertNotIn("التمرين", spoken)
@@ -469,6 +469,18 @@ def test_un_terme_en_fin_de_phrase_est_reconnu():
 def test_le_tableau_se_dit_le_tableau():
     assert "le tableau" in normalize_for_speech("شوف اللوح، كتبت ليك التعريف", "mixed")
     assert "اللوح" not in normalize_for_speech("شوف اللوح", "mixed")
+
+
+def test_les_mots_simples_du_chat_se_disent_en_francais():
+    parle = normalize_for_speech(
+        "كتب الجواب على الكراس، احسب التمرين ومن بعد اكتب المثال.",
+        "mixed",
+    )
+
+    for attendu in ("écris", "la réponse", "le cahier", "calcule", "l'exercice", "ensuite", "l'exemple"):
+        assert attendu in parle, (attendu, parle)
+    for arabe in ("الجواب", "الكراس", "التمرين", "من بعد"):
+        assert arabe not in parle, (arabe, parle)
 
 
 def test_les_lois_portent_leur_nom_francais():

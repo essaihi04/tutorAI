@@ -269,11 +269,10 @@ _ABSENTS_DU_CORPUS: dict[str, str] = {
 #: attestées (« العلاقة » 97 fois, « السرعة » 9 fois) passent quand même en
 #: français : c'est le choix pédagogique, assumé.
 #:
-#: La frontière tenue : ce qui NOMME une loi, une grandeur, un objet
-#: mathématique ou une relation. Les mots de la classe restent en darija —
-#: « التمرين » (92 fois), « المثال » (74), « التعريف », « الوحدة » : le
-#: professeur les dit, le modèle les prononce, et les franciser rendrait la
-#: phrase artificielle sans rien apprendre à personne.
+#: La demande du 20 août 2026 élargit volontairement la frontière : les mots
+#: simples de la classe doivent aussi être en français dans le chat LLM et dans
+#: la copie envoyée à la voix. « الكراس » devient donc « le cahier », et non
+#: une translittération arabe approximative (« korass »).
 #:
 #: Cinq écartées malgré le critère, leur sens courant l'emportant de trop
 #: loin sur le sens scientifique. Les trois premières se voyaient à l'œil,
@@ -336,10 +335,40 @@ _LOIS_ET_EXPRESSIONS: dict[str, str] = {
     "درجة الحرارة": "la température",
 }
 
+#: Mots courants explicitement demandés en français dans le chat LLM.
+_MOTS_SIMPLES_DU_CHAT: dict[str, str] = {
+    "الكراس": "le cahier",
+    "كراس": "le cahier",
+    "كناش": "le cahier",
+    "كوراس": "le cahier",
+    "التمرين": "l'exercice",
+    "تمرين": "l'exercice",
+    "المثال": "l'exemple",
+    "مثال": "l'exemple",
+    "التعريف": "la définition",
+    "تعريف": "la définition",
+    "الجواب": "la réponse",
+    "جواب": "la réponse",
+    "الإجابة": "la réponse",
+    "إجابة": "la réponse",
+    "السؤال": "la question",
+    "سؤال": "la question",
+    "الطريقة": "la méthode",
+    "طريقة": "la méthode",
+    "الخطوة": "l'étape",
+    "خطوة": "l'étape",
+    "احسب": "calcule",
+    "اكتب": "écris",
+    "كتب": "écris",
+    "كتبت": "j'ai écrit",
+    "من بعد": "ensuite",
+}
+
 #: Ce que lit `speech_normalizer`. Les deux critères se rejoignent ici, mais
 #: restent séparés au-dessus : on n'ajoute pas une entrée dans la première
 #: table sans l'avoir mesurée absente du corpus.
 TERMES_DITS_EN_FRANCAIS: dict[str, str] = {
     **_ABSENTS_DU_CORPUS,
     **_LOIS_ET_EXPRESSIONS,
+    **_MOTS_SIMPLES_DU_CHAT,
 }

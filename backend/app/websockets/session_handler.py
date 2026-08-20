@@ -1116,10 +1116,10 @@ class SessionHandler:
     def _prompt_language(self) -> str:
         if self.language == "mixed":
             return (
-                "français simple pour les explications scientifiques, les mots simples, les consignes, "
-                "les nombres, les unités, les méthodes et les règles. En session mixte, quelques mots de "
-                "darija marocaine peuvent être ajoutés en alphabet arabe pour une transition, un encouragement "
-                "ou une question courte (pas de lettres latines, pas d'Arabizi type '3la' ou 'ghadi'). "
+                "français simple pour le chat LLM : les explications scientifiques, les mots simples, les "
+                "consignes, les nombres, les unités, les méthodes et les règles. N'emploie pas de mots arabes "
+                "courants dans le chat pour le matériel ou les étapes de classe (pas de lettres latines, pas "
+                "d'Arabizi type '3la' ou 'ghadi'). "
                 "Le contenu pédagogique DOIT rester en français, avec les termes techniques/scientifiques "
                 "écrits en lettres latines "
                 "(ex : la vitesse, l'accélération, la force, l'énergie cinétique, la dérivée, la fonction, "
@@ -1144,13 +1144,16 @@ class SessionHandler:
                 "Les mots simples, explications, consignes, nombres, unités, méthodes et "
                 "règles pédagogiques doivent être en français simple. Pour les nombres scolaires, "
                 "écris-les en toutes lettres françaises (3 → trois, 25 % → vingt-cinq pour cent). "
+                "Traduis systématiquement الكراس, كناش et كوراس par cahier; اللوح et السبورة par tableau; "
+                "التمرين par exercice; المثال par exemple; التعريف par définition; الجواب par réponse; "
+                "احسب par calcule; كتب par écris; et من بعد par ensuite. "
                 "Le PRÉNOM de l'élève s'écrit en alphabet arabe dans la phrase parlée destinée au TTS. "
                 "Transcris-le phonétiquement (« Zouhair » devient زهير, « Ferdaous » devient فردوس) "
                 "et ne laisse jamais sa forme latine dans le texte audible. "
-                "Exemples corrects :\n"
-                "  « واخا! دابا غادي نشوفو la vitesse initiale. واش عرفتي شنو هي la force؟ »\n"
-                "  « مزيان خويا، la dérivée ديال هاد la fonction كتساوي 2x. »\n"
-                "  « صافي، خلينا نحسبو l'énergie cinétique ديال هاد l'objet. »"
+                "Exemples corrects dans le chat :\n"
+                "  « Très bien, Zouhair. Maintenant, nous allons étudier la vitesse initiale. »\n"
+                "  « Regarde le tableau : la dérivée de cette fonction est égale à deux x. »\n"
+                "  « Écris la réponse dans ton cahier, puis calcule la limite suivante. »"
             )
         return "français" if self.language == "fr" else "arabe"
 
