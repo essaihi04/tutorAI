@@ -28,6 +28,10 @@ export interface BoardSpeakHandle {
 type Lang = 'fr' | 'ar' | 'mixed';
 
 const CACHE_MAX = 40;
+/** Au-delà, on considère que le serveur ne répondra pas. */
+const REQUETE_MAX_MS = 25_000;
+/** Marge accordée à la lecture d'un WAV avant de la déclarer bloquée. */
+const LECTURE_MARGE_MS = 8_000;
 // Ne pas modifier la hauteur de la voix Academy côté navigateur. Les pauses
 // viennent de la ponctuation envoyée au serveur, pas d'un ralentissement WAV.
 const TTS_PLAYBACK_RATE = 1.0;
@@ -83,11 +87,25 @@ class BoardVoiceService {
       const fresh = this.cache.get(k);
       if (fresh) return fresh;
       try {
-        const resp = await fetch('/api/v1/tts/speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, language: lang }),
-        });
+        // ⏱️ Délai maximal. Les requêtes sont SÉRIALISÉES (cf. `queue`) : une
+        // seule qui ne revient jamais — GPU bloqué, tunnel Colab coupé en
+        // pleine réponse — et TOUTES les lignes suivantes attendent derrière
+        // elle. Le tableau se fige alors sans erreur ni message, ce qui est
+        // exactement le « blocage » signalé en séance. `fetch` n'a aucun
+        // délai par défaut : il faut le poser.
+        const minuteur = new AbortController();
+        const couperCourt = window.setTimeout(() => minuteur.abort(), REQUETE_MAX_MS);
+        let resp: Response;
+        try {
+          resp = await fetch('/api/v1/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, language: lang }),
+            signal: minuteur.signal,
+          });
+        } finally {
+          clearTimeout(couperCourt);
+        }
         if (!resp.ok) {
           // 503 = aucun moteur disponible côté serveur (TTS_DISABLED, tunnel
           // Colab éteint…). Inutile de retenter à chaque ligne du cours.
@@ -170,10 +188,15 @@ class BoardVoiceService {
       return await new Promise<boolean>((resolve) => {
         const el = audio as HTMLAudioElement;
         let finished = false;
+        // Déclaré AVANT `settle`, qui l'annule : une const assignée plus bas
+        // serait dans sa zone morte si l'audio échouait tout de suite.
+        let chienDeGarde = 0;
         const settle = (spoke: boolean) => {
           if (finished) return;
           finished = true;
           clearInterval(timer);
+          clearInterval(chienDeGarde);
+          try { el.pause(); } catch { /* ignore */ }
           if (this.current === el) this.current = null;
           onProgress?.(1);
           resolve(spoke);
@@ -187,6 +210,30 @@ class BoardVoiceService {
 
         el.onended = () => settle(true);
         el.onerror = () => settle(false);
+
+        // 🐕 Chien de garde. `done` n'est résolue QUE par 'ended' ou 'error' :
+        // un WAV qui cale — flux tronqué, onglet suspendu au mauvais moment,
+        // média jamais démarré — ne déclenche ni l'un ni l'autre, et le
+        // tableau attend cette promesse pour toujours. On surveille la
+        // progression réelle : tant qu'elle avance, on laisse faire ; dès
+        // qu'elle est figée au-delà de la marge, on rend la main et le cours
+        // continue en silence plutôt que de s'arrêter là.
+        let dernierePosition = -1;
+        let fige = 0;
+        chienDeGarde = window.setInterval(() => {
+          if (finished) return;
+          if (wantPaused) { fige = 0; return; }   // la pause n'est pas un gel
+          if (el.currentTime !== dernierePosition) {
+            dernierePosition = el.currentTime;
+            fige = 0;
+            return;
+          }
+          fige += 500;
+          if (fige >= LECTURE_MARGE_MS) {
+            console.warn('[BoardVoice] Lecture figée — on passe à la suite');
+            settle(false);
+          }
+        }, 500);
 
         const lancer = () =>
           el.play().then(() => {

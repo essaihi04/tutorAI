@@ -336,6 +336,16 @@ _LOIS_ET_EXPRESSIONS: dict[str, str] = {
 }
 
 #: Mots courants explicitement demandés en français dans le chat LLM.
+#:
+#: Deux entrées ont été retirées après mesure sur le corpus — elles ne
+#: prononçaient pas mal, elles disaient FAUX :
+#:   كتب  → « écris » : 14 déclenchements, 12 au passé (« كتب ليا » = « il
+#:          m'a écrit »). L'imperatif « اكتب », lui, est bien gardé.
+#:   كتبت → « j'ai écrit » : « شكون كتبت؟ » (« qui a écrit ? ») devenait
+#:          « شكون j'ai écrit ? », et « القاعدة اللي كتبت فوق » changeait de
+#:          sujet au passage.
+#: Un mot mal prononcé se rattrape ; une phrase qui dit le contraire de ce
+#: qu'elle veut dire, non.
 _MOTS_SIMPLES_DU_CHAT: dict[str, str] = {
     "الكراس": "le cahier",
     "كراس": "le cahier",
@@ -359,9 +369,56 @@ _MOTS_SIMPLES_DU_CHAT: dict[str, str] = {
     "خطوة": "l'étape",
     "احسب": "calcule",
     "اكتب": "écris",
-    "كتب": "écris",
-    "كتبت": "j'ai écrit",
     "من بعد": "ensuite",
+    # Matériel et vocabulaire de classe.
+    "الورقة": "la feuille",
+    "ورقة": "la feuille",
+    "الدفتر": "le cahier",
+    "دفتر": "le cahier",
+    "القلم": "le stylo",
+    "قلم": "le stylo",
+    "الفكرة": "l'idée",
+    "فكرة": "l'idée",
+    "المشكل": "le problème",
+    "المشكلة": "le problème",
+    "المعلومة": "l'information",
+    "المعلومات": "les informations",
+    "القاعدة": "la règle",
+    "القواعد": "les règles",
+    "النتيجة": "le résultat",
+    "النتائج": "les résultats",
+    "الحساب": "le calcul",
+    "المعطى": "la donnée",
+    "المعطيات": "les données",
+    "القيمة": "la valeur",
+    "القيم": "les valeurs",
+    "العدد": "le nombre",
+    "الأعداد": "les nombres",
+    "النسبة": "la proportion",
+    "الكسر": "la fraction",
+    "الكسور": "les fractions",
+    "البسط": "le numérateur",
+    "المقام": "le dénominateur",
+    "المتغير": "la variable",
+    "المجهول": "l'inconnue",
+    # Transitions et nombres très fréquents dans les explications orales.
+    "هنا": "ici",
+    "الآن": "maintenant",
+    "إذن": "donc",
+    "خطوة بخطوة": "étape par étape",
+    "صفر": "zéro",
+    "واحد": "un",
+    "جوج": "deux",
+    "ثلاثة": "trois",
+    "ربعة": "quatre",
+    "خمسة": "cinq",
+    "ستة": "six",
+    "سبعة": "sept",
+    "ثمانية": "huit",
+    "تسعود": "neuf",
+    "عشرة": "dix",
+    "زائد": "plus",
+    "ناقص": "moins",
 }
 
 #: Ce que lit `speech_normalizer`. Les deux critères se rejoignent ici, mais

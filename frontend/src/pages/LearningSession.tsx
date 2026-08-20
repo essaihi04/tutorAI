@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLearningContextStore } from '../stores/learningContextStore';
@@ -296,15 +296,27 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [whiteboardSchemaId, setWhiteboardSchemaId] = useState<string | null>(null);
   const [boardContent, setBoardContent] = useState<any | null>(null);
   const [liveScript, setLiveScript] = useState<any | null>(null);
-  // ⚠️ La voix appartient TOUJOURS au chat, jamais au tableau.
+  // À qui appartient la voix : au chat, ou au tableau ?
   //
-  // Le tableau et le chat ne disent pas la même chose : le tableau écrit des
-  // titres et des formules, le chat porte l'explication. Laisser le tableau
-  // prendre la parole revenait donc à faire lire à l'élève un squelette de
-  // notes pendant que le vrai cours partait à la poubelle.
+  // Elle a longtemps appartenu au chat SANS exception, et pour une bonne
+  // raison : le tableau n'écrit que des titres et des formules, et lui donner
+  // la parole revenait à faire réciter à l'élève un squelette de notes
+  // pendant que le vrai cours, porté par le chat, partait à la poubelle.
   //
-  // Ce drapeau reste pour l'API du composant, mais il ne repasse plus à true.
-  const [liveBoardVoice] = useState(false);
+  // Cette raison tombe quand le script porte lui-même les explications —
+  // c'est-à-dire quand ses `write` ont un `say`. Le tableau devient alors le
+  // cours entier : il écrit une ligne, la LIT en français au moment où il
+  // l'écrit, l'EXPLIQUE, et seulement après passe à la suivante. C'est le
+  // rythme d'un prof en live, et il exige une seule voix.
+  //
+  // Sans `say`, rien ne change : le squelette reste muet et le chat parle.
+  const liveBoardVoice = useMemo(
+    () => Array.isArray(liveScript?.steps) && liveScript.steps.some(
+      (s: any) => s?.action === 'write'
+        && typeof s?.say === 'string' && s.say.trim().length > 0,
+    ),
+    [liveScript],
+  );
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [currentExercise, setCurrentExercise] = useState<any | null>(null);
   const [showExercise, setShowExercise] = useState(false);

@@ -246,12 +246,18 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
    * Texte réellement prononcé pour un step — `say` s'il existe, sinon la
    * ligne écrite (transcrite) ou la narration.
    */
-  const spokenTextOf = useCallback((step: LiveStep): string => {
-    if (!step) return '';
-    if (typeof step.say === 'string' && step.say.trim()) return step.say.trim();
-    if (step.action === 'write' && typeof step.line?.content === 'string') return step.line.content;
-    if ((step.action === 'narrate' || step.action === 'ask') && typeof step.text === 'string') return step.text;
-    return '';
+  const spokenTextOf = useCallback((step: LiveStep): string[] => {
+    if (!step) return [];
+    const fragments: string[] = [];
+    if (step.action === 'write' && typeof step.line?.content === 'string') {
+      // La ligne d'abord — c'est elle qu'on lit en l'écrivant — puis son
+      // explication. Les deux passent par le TTS : les deux se préchargent.
+      fragments.push(step.line.content);
+    } else if ((step.action === 'narrate' || step.action === 'ask') && typeof step.text === 'string') {
+      fragments.push(step.text);
+    }
+    if (typeof step.say === 'string' && step.say.trim()) fragments.push(step.say.trim());
+    return fragments.filter(f => f && f.trim());
   }, []);
 
   /**
@@ -268,10 +274,13 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     if (!soundOnRef.current) return;
     let queued = 0;
     for (let j = fromIndex; j < steps.length && queued < 2; j++) {
-      const t = toSpokenText(spokenTextOf(steps[j]));
-      if (!t) continue;
-      boardVoice.prefetch(t, langRef.current);
-      queued += 1;
+      for (const fragment of spokenTextOf(steps[j])) {
+        const t = toSpokenText(fragment);
+        if (!t) continue;
+        boardVoice.prefetch(t, langRef.current);
+        queued += 1;
+        if (queued >= 2) break;
+      }
     }
   }, [spokenTextOf]);
 
@@ -283,10 +292,37 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
    * sur les refs de synchronisation).
    */
   const mayAdvance = useCallback((): boolean => {
-    if (!voiceEnabled) return true;      // tableau autonome (mode muet assumé)
+    // Le tableau PARLE : il ne peut pas écrire par-dessus la voix du chat,
+    // sinon deux professeurs parlent en même temps. Il attend son tour, puis
+    // déroule à son propre rythme — celui de sa propre voix.
+    //
+    // Le délai est le garde-fou du garde-fou : si le drapeau « ça parle »
+    // restait coincé à true (audio jamais terminé côté chat), le tableau
+    // n'écrirait plus jamais une ligne. Mieux vaut deux voix un instant
+    // qu'un cours gelé.
+    if (voiceEnabled) {
+      return !audioActiveRef.current || performance.now() >= startDeadlineRef.current;
+    }
     if (audioActiveRef.current) return true;   // ça parle → on écrit
     if (audioEndedRef.current) return true;    // ça a parlé et c'est fini → on termine
     return performance.now() >= startDeadlineRef.current;  // la voix n'est jamais venue
+  }, [voiceEnabled]);
+
+  /**
+   * Attend que le chat ait fini de parler avant que le tableau ne commence.
+   *
+   * `wait()` ne suffit pas : il ne garde que les temporisations, pas le
+   * premier `speakAndReveal`. Sans ce sas, le tableau prenait la parole sur
+   * la phrase d'introduction du chat — les deux voix ensemble, inaudibles.
+   */
+  const attendreLeSilence = useCallback(async (runId: number): Promise<boolean> => {
+    if (!voiceEnabled) return true;
+    const limite = performance.now() + 20000;   // le chat n'est jamais venu
+    while (audioActiveRef.current && performance.now() < limite) {
+      await new Promise(r => setTimeout(r, 80));
+      if (runId !== runIdRef.current) return false;
+    }
+    return runId === runIdRef.current;
   }, [voiceEnabled]);
 
   // Attente "consciente" : respecte pause + vitesse + annulation + la voix
@@ -403,8 +439,26 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     return true;
   }, []);
 
+  /**
+   * Dit une phrase SANS rien écrire — le professeur explique ce qui est déjà
+   * au tableau. Retourne false si le script a été annulé entre-temps.
+   */
+  const dire = useCallback(async (raw: string, runId: number): Promise<boolean> => {
+    if (!soundOnRef.current) return runId === runIdRef.current;
+    const spoken = toSpokenText(raw);
+    if (!spoken) return runId === runIdRef.current;
+    const handle = boardVoice.speak(spoken, langRef.current);
+    voiceHandleRef.current = handle;
+    if (!playingRef.current) handle.pause();
+    await handle.done;
+    if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
+    return runId === runIdRef.current;
+  }, []);
+
   // Moteur de lecture séquentielle du script
   const play = useCallback(async (steps: LiveStep[], runId: number) => {
+    // Le chat annonce, le tableau enchaîne. Jamais les deux ensemble.
+    if (!(await attendreLeSilence(runId))) return;
     for (let i = 0; i < steps.length; i++) {
       if (runId !== runIdRef.current) return;
       const step = steps[i];
@@ -420,13 +474,15 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const isStep = (line.type || '') === 'step';
           if (isStep) stepCounterRef.current += 1;
 
-          // Texte à prononcer : le script peut l'imposer via `say`
-          // (le LLM formule alors une phrase de prof), sinon on transcrit
-          // la ligne elle-même en français lisible.
-          const toSay = typeof step.say === 'string' && step.say.trim()
-            ? step.say.trim()
-            : line.content;
-          const willSpeak = soundOnRef.current && !!toSpokenText(toSay);
+          // DEUX temps, comme un prof devant sa caméra : il LIT la ligne en
+          // l'écrivant, puis il l'EXPLIQUE, la ligne entière sous les yeux
+          // de l'élève.
+          //
+          // Avant, `say` REMPLAÇAIT la lecture : ce qui était écrit au
+          // tableau n'était jamais prononcé, et l'élève devait deviner tout
+          // seul le lien entre la ligne française et l'explication en darija.
+          const explication = typeof step.say === 'string' ? step.say.trim() : '';
+          const willSpeak = soundOnRef.current && !!toSpokenText(line.content);
 
           const entry: WrittenEntry = {
             key: ++keyRef.current,
@@ -440,15 +496,19 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           setWritten(prev => [...prev, entry]);
 
           if (willSpeak) {
-            // C'est CETTE ligne (et aucune autre) que la voix révèle.
+            // Temps 1 — il lit ce qu'il écrit. C'est CETTE ligne (et aucune
+            // autre) que la voix révèle, lettre après lettre.
             setVoiceKey(entry.key);
-            const spoke = await speakAndReveal(toSay, runId);
+            const spoke = await speakAndReveal(line.content, runId);
             if (runId !== runIdRef.current) return;
             setVoiceKey(null);
             if (!spoke) {
               // La voix a échoué au dernier moment : on laisse le temps de lire.
-              if (!(await wait(estimateSpeechMs(toSpokenText(toSay)), runId))) return;
+              if (!(await wait(estimateSpeechMs(toSpokenText(line.content)), runId))) return;
             }
+            // Temps 2 — il explique. Rien ne s'écrit pendant ce temps-là :
+            // l'élève regarde la ligne finie et écoute ce qu'elle veut dire.
+            if (explication && !(await dire(explication, runId))) return;
             if (!(await wait(250, runId))) return;
           } else {
             if (!(await wait(entry.revealMs * speedRef.current + 300, runId))) return;

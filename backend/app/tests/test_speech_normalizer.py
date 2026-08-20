@@ -483,6 +483,19 @@ def test_les_mots_simples_du_chat_se_disent_en_francais():
         assert arabe not in parle, (arabe, parle)
 
 
+def test_le_lexique_simple_couvre_le_materiel_les_fractions_et_les_nombres():
+    parle = normalize_for_speech(
+        "ضع العدد في الكراس. هنا عندنا كسور: البسط واحد والمقام ثلاثة.",
+        "mixed",
+    )
+
+    for attendu in (
+        "le nombre", "le cahier", "ici", "fractions", "le numérateur",
+        "un", "le dénominateur", "trois",
+    ):
+        assert attendu in parle, (attendu, parle)
+
+
 def test_les_lois_portent_leur_nom_francais():
     """Le NOM de la loi passe en français. Celui du savant, lui, garde son
     écriture de prononciation — « Newton » devient « نيوتن » par le lexique
