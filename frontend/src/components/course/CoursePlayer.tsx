@@ -21,6 +21,7 @@ interface CoursePlayerProps {
   externalAudioActive?: boolean;
   onSimulationUpdate?: (state: any) => void;
   onComplete?: () => void;
+  onExit?: () => void;
 }
 
 interface FlatSlide {
@@ -43,6 +44,7 @@ export default function CoursePlayer({
   externalAudioActive = false,
   onSimulationUpdate,
   onComplete,
+  onExit,
 }: CoursePlayerProps) {
   const flatSlides = useMemo<FlatSlide[]>(() =>
     deck.activities.flatMap((activity, activityIndex) =>
@@ -80,7 +82,10 @@ export default function CoursePlayer({
   const [waitingTutor, setWaitingTutor] = useState(false);
   const [tutorResponse, setTutorResponse] = useState<string | null>(null);
   const [simulationStatus, setSimulationStatus] = useState<string>('idle');
+  const [simulationExpanded, setSimulationExpanded] = useState(false);
+  const [browserFullscreen, setBrowserFullscreen] = useState(false);
 
+  const playerRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const revealTimerRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
@@ -93,6 +98,21 @@ export default function CoursePlayer({
   useEffect(() => {
     completedSlideIdsRef.current = completedSlideIds;
   }, [completedSlideIds]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setBrowserFullscreen(document.fullscreenElement === playerRef.current);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!simulationExpanded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSimulationExpanded(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [simulationExpanded]);
 
   const clearTimers = useCallback(() => {
     if (revealTimerRef.current !== null) clearTimeout(revealTimerRef.current);
@@ -170,6 +190,7 @@ export default function CoursePlayer({
     setQuestionAnswer('');
     setFeedback(null);
     setSimulationStatus('idle');
+    setSimulationExpanded(false);
 
     if (currentAudio?.url) {
       const audio = new Audio(currentAudio.url);
@@ -342,6 +363,32 @@ export default function CoursePlayer({
     onSimulationUpdate?.(state);
   };
 
+  const toggleBrowserFullscreen = async () => {
+    try {
+      if (document.fullscreenElement === playerRef.current) {
+        await document.exitFullscreen();
+      } else {
+        await playerRef.current?.requestFullscreen();
+      }
+    } catch {
+      // Le mode CSS occupe déjà 100 % du viewport lorsque l'API navigateur
+      // est refusée (iOS, iframe ou politique d'entreprise).
+    }
+  };
+
+  const startCourse = () => {
+    setStarted(true);
+    void toggleBrowserFullscreen();
+  };
+
+  const exitCourse = () => {
+    if (document.fullscreenElement === playerRef.current) {
+      void document.exitFullscreen().finally(() => onExit?.());
+      return;
+    }
+    onExit?.();
+  };
+
   if (!current) {
     return <div className="h-full grid place-items-center text-white/60">Ce cours ne contient aucune diapositive.</div>;
   }
@@ -352,7 +399,7 @@ export default function CoursePlayer({
   const schema = visual.kind === 'schema' && visual.schema_id ? getSchemaById(visual.schema_id) : undefined;
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#07101f] text-white flex flex-col">
+    <div ref={playerRef} className="relative h-[100dvh] w-screen overflow-hidden bg-[#07101f] text-white flex flex-col">
       <div className="shrink-0 border-b border-white/10 bg-[#0b1628] px-3 py-2">
         <div className="flex items-center gap-2 text-xs">
           <span className="rounded-full bg-cyan-500/15 border border-cyan-400/25 px-2 py-1 text-cyan-200">
@@ -361,6 +408,10 @@ export default function CoursePlayer({
           <span className="truncate text-white/80 font-medium">{current.activity.title}</span>
           <span className="ml-auto tabular-nums text-white/50">Diapo {current.slideIndex + 1}/{activitySlideCount}</span>
           <span className="tabular-nums text-cyan-300">{totalProgress}%</span>
+          <button onClick={() => void toggleBrowserFullscreen()} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-white/65 hover:bg-white/10 hover:text-white" title={browserFullscreen ? 'Quitter le plein écran' : 'Afficher le cours en plein écran'}>
+            {browserFullscreen ? '⤢ Réduire' : '⛶ Plein écran'}
+          </button>
+          {onExit && <button onClick={exitCourse} className="rounded-lg border border-rose-400/20 bg-rose-500/10 px-2 py-1 text-rose-200 hover:bg-rose-500/20">✕ Quitter</button>}
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 transition-all" style={{ width: `${totalProgress}%` }} />
@@ -375,7 +426,9 @@ export default function CoursePlayer({
             {current.slide.screen_content?.lead && <p className="mt-1 text-sm text-white/65">{current.slide.screen_content.lead}</p>}
           </div>
 
-          <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-white/[0.04] overflow-hidden relative">
+          <div className={simulationExpanded
+            ? 'fixed inset-0 z-[100] overflow-hidden border-0 bg-[#07101f] p-3 pt-14'
+            : 'relative flex-1 min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]'}>
             {visual.kind === 'image' && visual.url && (
               <div className="h-full w-full flex flex-col p-3">
                 <img src={visual.url} alt={visual.alt || current.slide.screen_content?.alt || current.slide.title} className="flex-1 min-h-0 w-full object-contain rounded-xl" />
@@ -384,7 +437,16 @@ export default function CoursePlayer({
             )}
             {visual.kind === 'schema' && schema && <SVGSchemaViewer schema={schema} autoAnimate className="p-2" />}
             {visual.kind === 'simulation' && visual.url && (
-              <SessionMediaDisplay media={{ type: 'simulation', url: visual.url, caption: visual.caption }} isVisible onSimulationUpdate={handleSimulation} />
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSimulationExpanded(value => !value)}
+                  className="absolute right-4 top-3 z-20 rounded-xl border border-cyan-300/30 bg-[#07101f]/90 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-lg backdrop-blur hover:bg-cyan-500/20"
+                >
+                  {simulationExpanded ? '⤢ Revenir au cours' : '⛶ Agrandir la simulation'}
+                </button>
+                <SessionMediaDisplay media={{ type: 'simulation', url: visual.url, caption: visual.caption }} isVisible onSimulationUpdate={handleSimulation} />
+              </>
             )}
             {(visual.kind === 'none' || !visual.kind || (visual.kind === 'schema' && !schema)) && (
               <div className="h-full grid place-items-center p-8 text-center">
@@ -434,7 +496,7 @@ export default function CoursePlayer({
 
       {!started && (
         <div className="absolute inset-0 z-30 grid place-items-center bg-[#050b14]/90 backdrop-blur-sm p-6">
-          <div className="max-w-md text-center"><div className="text-5xl">🎓</div><h2 className="mt-4 text-2xl font-semibold">{deck.title}</h2><p className="mt-2 text-sm text-white/60">Le premier clic autorise le son. Les audios validés seront ensuite lus sans aucune régénération.</p><button onClick={() => setStarted(true)} className="mt-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20">Commencer l’activité</button></div>
+          <div className="max-w-md text-center"><div className="text-5xl">🎓</div><h2 className="mt-4 text-2xl font-semibold">{deck.title}</h2><p className="mt-2 text-sm text-white/60">Le premier clic ouvre le cours en plein écran et autorise le son. Les audios validés seront ensuite lus sans aucune régénération.</p><button onClick={startCourse} className="mt-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20">Commencer en plein écran</button></div>
         </div>
       )}
 
