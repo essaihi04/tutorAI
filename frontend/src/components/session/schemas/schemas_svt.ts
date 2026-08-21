@@ -207,7 +207,7 @@ export const svt_fermentation: ScientificSchema = {
   ],
 };
 
-const svt_muscle_sarcomere: ScientificSchema = {
+export const svt_muscle_sarcomere: ScientificSchema = {
   id: 'svt_muscle_sarcomere',
   title: 'Structure du sarcomère',
   subject: 'svt',
@@ -277,7 +277,7 @@ const svt_muscle_sarcomere: ScientificSchema = {
 // SVT — Ch2: Information génétique
 // ═══════════════════════════════════════════════════════════════
 
-const svt_adn_structure: ScientificSchema = {
+export const svt_adn_structure: ScientificSchema = {
   id: 'svt_adn_structure',
   title: 'Structure de l\'ADN — Double hélice',
   subject: 'svt',
@@ -554,7 +554,7 @@ export const svt_subduction: ScientificSchema = {
 // SVT — Ch1: Schémas détaillés manquants
 // ═══════════════════════════════════════════════════════════════
 
-const svt_mitochondrie_structure: ScientificSchema = {
+export const svt_mitochondrie_structure: ScientificSchema = {
   id: 'svt_mitochondrie_structure',
   title: 'Structure de la Mitochondrie — Ultrastructure',
   subject: 'svt',
@@ -884,7 +884,7 @@ export const svt_cycle_krebs: ScientificSchema = {
   ],
 };
 
-const svt_fibre_musculaire: ScientificSchema = {
+export const svt_fibre_musculaire: ScientificSchema = {
   id: 'svt_fibre_musculaire',
   title: 'Ultrastructure de la fibre musculaire striée',
   subject: 'svt',
@@ -1046,16 +1046,18 @@ export const svt_bilan_energetique: ScientificSchema = {
   ],
 };
 
-void [svt_muscle_sarcomere, svt_adn_structure, svt_mitochondrie_structure, svt_fibre_musculaire];
-
 export const SVT_SCHEMAS = [
   svt_glycolyse,
   svt_respiration_cellulaire,
   svt_fermentation,
+  svt_muscle_sarcomere,
+  svt_adn_structure,
   svt_transcription_traduction,
   svt_mitose,
   svt_subduction,
+  svt_mitochondrie_structure,
   svt_chaine_respiratoire,
   svt_cycle_krebs,
+  svt_fibre_musculaire,
   svt_bilan_energetique,
 ];
