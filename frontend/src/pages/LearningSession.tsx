@@ -1788,30 +1788,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     );
   }
 
-  // Un deck scénarisé possède son propre en-tête, ses contrôles et son espace
-  // de questions. Il remplace donc toute la coque de session afin que le chat,
-  // la barre de phase et l'en-tête général ne réduisent pas la simulation.
-  if (courseDeck && !isLibreConnexion) {
-    return (
-      <CoursePlayer
-        key={courseDeck.id}
-        deck={courseDeck}
-        progress={courseProgress}
-        language={language}
-        onStudentQuestion={handleCourseQuestion}
-        onResumeCourse={() => wsService.sendJson({ type: 'set_mode', mode: 'cours' })}
-        assistantReply={
-          [...conversation].reverse().find(message => message.speaker === 'ai')?.text ?? null
-        }
-        tutorBusy={isProcessing}
-        externalAudioActive={isSpeaking}
-        onSimulationUpdate={handleSimulationUpdate}
-        onComplete={() => setLessonCompleted(true)}
-        onExit={handleEndSession}
-      />
-    );
-  }
-
   return (
     <div className="h-[100dvh] flex flex-col bg-[#080816] text-white overflow-hidden">
       {/* Custom CSS for animations */}
@@ -2116,15 +2092,17 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 title="💡 Réponses suggérées"
               />
             )}
-            <QuickActions
-              actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
-              onInject={handleQuickInject}
-              onSend={handleQuickSend}
-              disabled={!connected || isProcessing}
-              theme="dark"
-              title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
-              collapsible
-            />
+            {!courseDeck && (
+              <QuickActions
+                actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
+                onInject={handleQuickInject}
+                onSend={handleQuickSend}
+                disabled={!connected || isProcessing}
+                theme="dark"
+                title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
+                collapsible
+              />
+            )}
             <VoiceInput
               onTextSend={handleSendText}
               disabled={!connected}
@@ -2345,6 +2323,26 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 </div>
               </div>
             </>
+          ) : courseDeck && !isLibreConnexion ? (
+            <div className="flex-1 min-h-0 p-0 md:p-2 animate-[fadeSlideIn_0.4s_ease-out]">
+              <div className="h-full w-full overflow-hidden rounded-none border-0 md:rounded-2xl md:border md:border-white/10 shadow-2xl shadow-black/40">
+                <CoursePlayer
+                  key={courseDeck.id}
+                  deck={courseDeck}
+                  progress={courseProgress}
+                  language={language}
+                  onStudentQuestion={handleCourseQuestion}
+                  onResumeCourse={() => wsService.sendJson({ type: 'set_mode', mode: 'cours' })}
+                  assistantReply={
+                    [...conversation].reverse().find(message => message.speaker === 'ai')?.text ?? null
+                  }
+                  tutorBusy={isProcessing}
+                  externalAudioActive={isSpeaking}
+                  onSimulationUpdate={handleSimulationUpdate}
+                  onComplete={() => setLessonCompleted(true)}
+                />
+              </div>
+            </div>
           ) : (
             <>
               {/* No media: avatar centered as main element */}
@@ -2386,18 +2384,20 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           )}
 
           {/* Voice input when chat is hidden */}
-          {!showChat && !courseDeck && (
+          {!showChat && (
             <div className="shrink-0 w-full max-w-3xl mx-auto px-3 sm:px-6 pb-3 sm:pb-4">
-              <QuickActions
-                actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
-                onInject={handleQuickInject}
-                onSend={handleQuickSend}
-                disabled={!connected || isProcessing}
-                theme="dark"
-                title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
-                collapsible
-                defaultCollapsed={showWhiteboard || showExercise || showMedia || showExamPanel}
-              />
+              {!courseDeck && (
+                <QuickActions
+                  actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
+                  onInject={handleQuickInject}
+                  onSend={handleQuickSend}
+                  disabled={!connected || isProcessing}
+                  theme="dark"
+                  title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
+                  collapsible
+                  defaultCollapsed={showWhiteboard || showExercise || showMedia || showExamPanel}
+                />
+              )}
               <VoiceInput
                 onTextSend={handleSendText}
                 disabled={!connected}
