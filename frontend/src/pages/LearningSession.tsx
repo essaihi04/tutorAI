@@ -4,7 +4,15 @@ import { useAuthStore } from '../stores/authStore';
 import { useLearningContextStore } from '../stores/learningContextStore';
 import { useSessionStore, type SessionLanguage } from '../stores/sessionStore';
 import { wsService } from '../services/websocket';
-import { getLessons, getAllLessonProgress, startSession, endSession } from '../services/api';
+import {
+  getLessons,
+  getAllLessonProgress,
+  getCourseDeck,
+  resolveCourseIntent,
+  startSession,
+  endSession,
+  type CourseIntentResolution,
+} from '../services/api';
 import { speechService } from '../services/speechService';
 import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
@@ -19,12 +27,22 @@ import PhaseProgress from '../components/session/PhaseProgress';
 import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
 import SessionModeBanner from '../components/session/SessionModeBanner';
+import CoursePlayer from '../components/course/CoursePlayer';
+import type { CourseDeck, CourseProgressSnapshot } from '../components/course/types';
 import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
 
 // On conserve la vitesse native d'Academy. Ralentir un WAV avec
 // `playbackRate` change aussi sa hauteur et donne une voix artificielle ; les
 // pauses doivent venir de la ponctuation et des frontières de phrases.
 const TTS_PLAYBACK_RATE = 1.0;
+
+const looksLikeCourseRequest = (text: string) => {
+  const normalised = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return /\b(cours|cour|curs|lecon|chapitre|apprendre|etudier|reviser|revision|commencer|demarrer|lancer|suivre)\b/.test(normalised);
+};
 
 // Avance de lecture visée par le lecteur de flux PCM, en secondes (le tampon
 // de gigue — voir le commentaire du lecteur, plus bas). Basse au départ pour
@@ -271,6 +289,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [lessonInfo, setLessonInfo] = useState<LessonSummary | null>(null);
   const [lessonPosition, setLessonPosition] = useState({ current: 1, total: 1 });
   const [nextLesson, setNextLesson] = useState<LessonSummary | null>(null);
+  const [courseDeck, setCourseDeck] = useState<CourseDeck | null>(null);
+  const [courseProgress, setCourseProgress] = useState<CourseProgressSnapshot | null>(null);
   const [currentMedia, setCurrentMedia] = useState<any>(null);
   const [showMedia, setShowMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -372,6 +392,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const audioUrlRef = useRef<string | null>(null);
   const handlersRegisteredRef = useRef(false);
   const showExamPanelRef = useRef(false);
+  const courseIntentRoutingRef = useRef(false);
 
   // Keep ref in sync so WS handlers always read current value
   useEffect(() => { showExamPanelRef.current = showExamPanel; }, [showExamPanel]);
@@ -598,6 +619,22 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           : null
       );
 
+      // The authored deck is the default course surface. A 404 simply means
+      // that this lesson still uses the legacy AI-led session.
+      let loadedCourseDeck: CourseDeck | null = null;
+      try {
+        const courseRes = await getCourseDeck(lesson.id);
+        loadedCourseDeck = courseRes.data?.deck || null;
+        setCourseDeck(loadedCourseDeck);
+        setCourseProgress(courseRes.data?.progress || null);
+      } catch (courseError: any) {
+        setCourseDeck(null);
+        setCourseProgress(null);
+        if (courseError?.response?.status !== 404) {
+          console.warn('[Session] Unable to load authored course deck', courseError);
+        }
+      }
+
       // Create session in DB
       try {
         const sessionRes = await startSession(lesson.id, isReview);
@@ -637,6 +674,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         student_name: student?.full_name || 'l\'étudiant',
         language: preferredLanguage,
         teaching_mode: 'Socratique',
+        course_player_enabled: Boolean(loadedCourseDeck),
       });
       console.log('[Session] init_session sent');
 
@@ -862,6 +900,37 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     }
   };
 
+  const launchResolvedCourse = useCallback((
+    resolution: CourseIntentResolution,
+    requestedCourse?: string,
+  ) => {
+    if (
+      courseIntentRoutingRef.current
+      || !resolution.matched
+      || !resolution.chapter_id
+      || !resolution.lesson_id
+    ) return false;
+
+    courseIntentRoutingRef.current = true;
+    speechService.stop();
+    addMessage(
+      'ai',
+      `J'ouvre le parcours « ${resolution.deck_title || resolution.lesson_title || 'Cours'} ».`,
+    );
+    setIsLoading(true);
+    navigate(
+      `/session/${encodeURIComponent(resolution.chapter_id)}/${encodeURIComponent(resolution.lesson_id)}`,
+      {
+        state: {
+          launchedFromTutor: true,
+          requestedCourse,
+          deckTitle: resolution.deck_title,
+        },
+      },
+    );
+    return true;
+  }, [addMessage, navigate]);
+
 
   const setupWSHandlers = () => {
     if (handlersRegisteredRef.current) return;
@@ -951,6 +1020,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     wsService.on('transcription', (data) => {
       addMessage('student', data.text);
+    });
+
+    // Chemin vocal de repli : lorsque le navigateur ne possède pas sa propre
+    // reconnaissance vocale, le backend résout le transcript avant le LLM.
+    wsService.on('course_intent_resolved', (data) => {
+      launchResolvedCourse(data as CourseIntentResolution, data.request_text);
     });
 
     wsService.on('audio_response', (data) => {
@@ -1590,17 +1665,42 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
   const handleCloseWhiteboard = useCallback(() => setShowWhiteboard(false), []);
 
-  const handleSendText = (text: string) => {
+  const handleSendText = async (text: string) => {
     if (!text.trim()) return;
     setContextSuggestions([]);
     addMessage('student', text);
+
+    // Depuis le tuteur libre, une demande explicite de cours ouvre le deck
+    // scénarisé correspondant. Les questions ordinaires restent dans le chat.
+    if (isLibreConnexion && looksLikeCourseRequest(text) && !courseIntentRoutingRef.current) {
+      try {
+        const resolution = (await resolveCourseIntent(text)).data;
+        if (launchResolvedCourse(resolution, text)) return;
+      } catch (intentError) {
+        console.warn('[CoursePlayer] Unable to resolve natural-language course request', intentError);
+      }
+    }
+
     wsService.sendJson({ type: 'text_input', text });
   };
 
   /** Quick-action: envoie directement le prompt. */
   const handleQuickSend = (text: string) => {
     if (!connected || isProcessing) return;
-    handleSendText(text);
+    void handleSendText(text);
+  };
+
+  /** Interruption du lecteur : réponse dans la bulle, sans remplacer la diapo. */
+  const handleCourseQuestion = (text: string) => {
+    if (!connected || isProcessing || !text.trim()) return;
+    setContextSuggestions([]);
+    addMessage('student', text);
+    wsService.sendJson({ type: 'set_mode', mode: 'question' });
+    wsService.sendJson({
+      type: 'text_input',
+      text,
+      course_player_question: true,
+    });
   };
 
   /** Quick-action: injecte le prompt dans le champ texte du VoiceInput. */
@@ -2221,6 +2321,26 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 </div>
               </div>
             </>
+          ) : courseDeck && !isLibreConnexion ? (
+            <div className="flex-1 min-h-0 p-0 md:p-2 animate-[fadeSlideIn_0.4s_ease-out]">
+              <div className="h-full w-full overflow-hidden rounded-none border-0 md:rounded-2xl md:border md:border-white/10 shadow-2xl shadow-black/40">
+                <CoursePlayer
+                  key={courseDeck.id}
+                  deck={courseDeck}
+                  progress={courseProgress}
+                  language={language}
+                  onStudentQuestion={handleCourseQuestion}
+                  onResumeCourse={() => wsService.sendJson({ type: 'set_mode', mode: 'cours' })}
+                  assistantReply={
+                    [...conversation].reverse().find(message => message.speaker === 'ai')?.text ?? null
+                  }
+                  tutorBusy={isProcessing}
+                  externalAudioActive={isSpeaking}
+                  onSimulationUpdate={handleSimulationUpdate}
+                  onComplete={() => setLessonCompleted(true)}
+                />
+              </div>
+            </div>
           ) : (
             <>
               {/* No media: avatar centered as main element */}
@@ -2262,7 +2382,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           )}
 
           {/* Voice input when chat is hidden */}
-          {!showChat && (
+          {!showChat && !courseDeck && (
             <div className="shrink-0 w-full max-w-3xl mx-auto px-3 sm:px-6 pb-3 sm:pb-4">
               <QuickActions
                 actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}

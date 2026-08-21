@@ -1,21 +1,58 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contraction musculaire</title>
-  <style>body{font-family:Arial,sans-serif;padding:24px;background:#f8fafc}.track{width:100%;max-width:700px;height:80px;background:#dbeafe;border-radius:40px;position:relative;overflow:hidden}.bar{position:absolute;left:0;top:10px;height:60px;width:60%;background:#2563eb;border-radius:30px;transition:width .5s ease}</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Cycle actine–myosine</title>
+  <style>
+    *{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#120b1c;color:#f4edff}body{display:flex;flex-direction:column;background:radial-gradient(circle at 45% 20%,#40235f 0,#120b1c 60%)}
+    header{height:9vh;min-height:52px;padding:0 18px;display:flex;align-items:center;gap:10px;background:#1a1027;border-bottom:1px solid #573877}h1{font-size:clamp(15px,2.1vw,24px);margin:0}.badge{font-size:12px;color:#e9d5ff;background:#3b1d58;border:1px solid #8153aa;border-radius:999px;padding:4px 9px}
+    main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(205px,28%) 1fr;gap:12px;padding:12px}aside,.stage{border:1px solid #573877;background:rgba(27,14,42,.94);border-radius:18px;box-shadow:0 18px 55px #0006}aside{padding:14px;display:flex;flex-direction:column;gap:10px}.objective{font-size:13px;line-height:1.45;color:#d6c3e8;margin:0}.condition{display:grid;grid-template-columns:1fr 1fr;background:#2a173d;border-radius:12px;padding:4px}.condition button{border:0;border-radius:9px;background:transparent;color:#c7b3da;padding:8px;font-weight:800;cursor:pointer}.condition button.active{background:#7c3aed;color:white}.buttons{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px}.buttons button{border:0;border-radius:11px;padding:10px;font-weight:900;cursor:pointer}.run{background:#22c55e;color:#06230f}.reset{background:#475569;color:white}
+    .stage{display:flex;flex-direction:column;overflow:hidden}.canvas{flex:1;min-height:0;padding:8px;display:grid;place-items:center}svg{width:100%;height:100%;max-height:62vh}.zline{stroke:#e9d5ff;stroke-width:8}.actin{stroke:#fb7185;stroke-width:14;stroke-linecap:round;transition:transform .9s ease}.myosin{stroke:#60a5fa;stroke-width:18;stroke-linecap:round}.head{fill:none;stroke:#93c5fd;stroke-width:7;transform-origin:center;transition:transform .5s ease}.head.bound{stroke:#fde047}.head.stroke{transform:rotate(28deg)}.calcium{opacity:.28}.calcium circle{fill:#22d3ee;stroke:#a5f3fc;stroke-width:2}.calcium text{fill:#082f49;font-size:13px;font-weight:900}.enabled .calcium{animation:calcium 1.1s ease infinite alternate}.sarcomere.contract .actin.left{transform:translateX(75px)}.sarcomere.contract .actin.right{transform:translateX(-75px)}.sarcomere.contract .zleft{transform:translateX(45px)}.sarcomere.contract .zright{transform:translateX(-45px)}.zleft,.zright{transition:transform .9s ease}.atpBadge{opacity:.2}.with-atp .atpBadge{opacity:1}.caption{min-height:92px;padding:10px 17px;border-top:1px solid #573877;background:#1d102b}.caption strong{color:#e9d5ff}.caption p{margin:5px 0;color:#dbcbe9;font-size:14px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.step{font-size:11px;padding:5px 7px;border-radius:8px;background:#2c1940;color:#bda6d2}.step.active{background:#6d28d9;color:white}.warning{color:#fda4af}
+    @keyframes calcium{to{opacity:1;transform:translateY(10px)}}
+    @media(max-width:720px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px}.objective{grid-column:1/-1}.buttons{grid-column:1/-1;margin:0}.caption{min-height:78px;padding:7px 10px}.steps{gap:3px}.step{font-size:9px;padding:4px}}
+    @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+  </style>
 </head>
 <body>
-  <h1>Animation de la contraction musculaire</h1>
-  <p>Clique pour simuler le glissement des filaments.</p>
-  <button onclick="contract()">Contracter</button>
-  <button onclick="relax()">Relâcher</button>
-  <div class="track"><div id="bar" class="bar"></div></div>
-  <p id="info">Le sarcomère est au repos.</p>
+  <header><h1>Contraction : cycle des ponts actine–myosine</h1><span class="badge" id="status">Prêt</span></header>
+  <main>
+    <aside>
+      <p class="objective">Objectif : tester les rôles complémentaires de Ca²⁺ et de l’ATP dans le glissement des filaments.</p>
+      <div class="condition"><button id="caOn" class="active">Ca²⁺ présent</button><button id="caOff">Ca²⁺ absent</button></div>
+      <div class="condition"><button id="atpOn" class="active">ATP présent</button><button id="atpOff">ATP absent</button></div>
+      <div class="buttons"><button class="run" id="run">▶ Lancer le cycle</button><button class="reset" id="reset">↻ Recommencer</button></div>
+    </aside>
+    <section class="stage">
+      <div class="canvas"><svg id="scene" class="sarcomere enabled with-atp" viewBox="0 0 900 430" role="img" aria-label="Sarcomère avec filaments d’actine, myosine, calcium et ATP">
+        <g class="zleft"><line x1="80" y1="90" x2="80" y2="330" class="zline"/><text x="80" y="366" text-anchor="middle" fill="#e9d5ff" font-size="17">Strie Z</text></g><g class="zright"><line x1="820" y1="90" x2="820" y2="330" class="zline"/><text x="820" y="366" text-anchor="middle" fill="#e9d5ff" font-size="17">Strie Z</text></g>
+        <g class="actin left"><line x1="85" y1="155" x2="430" y2="155" class="actin"/><line x1="85" y1="275" x2="430" y2="275" class="actin"/></g><g class="actin right"><line x1="815" y1="155" x2="470" y2="155" class="actin"/><line x1="815" y1="275" x2="470" y2="275" class="actin"/></g>
+        <line x1="300" y1="215" x2="600" y2="215" class="myosin"/><text x="450" y="405" text-anchor="middle" fill="#93c5fd" font-size="17">Filament de myosine — longueur constante</text>
+        <g><path d="M350 215 Q330 180 355 160" class="head"/><path d="M420 215 Q400 250 425 270" class="head"/><path d="M500 215 Q520 180 495 160" class="head"/><path d="M570 215 Q590 250 565 270" class="head"/></g>
+        <g class="calcium"><circle cx="250" cy="112" r="15"/><text x="250" y="117" text-anchor="middle">Ca</text></g><g class="calcium"><circle cx="650" cy="315" r="15"/><text x="650" y="320" text-anchor="middle">Ca</text></g>
+        <g class="atpBadge"><rect x="355" y="65" width="190" height="46" rx="16" fill="#22c55e"/><text x="450" y="95" text-anchor="middle" fill="#06230f" font-size="20" font-weight="900">ATP → ADP + Pᵢ</text></g>
+      </svg></div>
+      <div class="caption"><strong id="title">Conditions favorables</strong><p id="text">Ca²⁺ libère les sites de liaison de l’actine. L’hydrolyse de l’ATP arme la tête de myosine et le cycle provoque le glissement.</p><div class="steps"><span class="step" id="s1">1. Sites libérés</span><span class="step" id="s2">2. Pont formé</span><span class="step" id="s3">3. Coup de force</span><span class="step" id="s4">4. Détachement</span></div></div>
+    </section>
+  </main>
   <script>
-    function contract(){document.getElementById('bar').style.width='35%';document.getElementById('info').textContent='Contraction : glissement actine-myosine avec consommation d\'ATP.'}
-    function relax(){document.getElementById('bar').style.width='60%';document.getElementById('info').textContent='Relâchement du sarcomère.'}
+    const CONFIG={id:'svt_ch1_contraction_actine_myosine',variants:[{id:'ca_atp',label:'Ca²⁺ et ATP présents'},{id:'sans_ca',label:'Ca²⁺ absent'},{id:'sans_atp',label:'ATP absent'}],objectives:['Déduire le rôle de Ca²⁺ dans l’exposition des sites de liaison et celui de l’ATP dans le cycle des ponts actine–myosine.'],commands:['start','set_variant','set_parameters','reset','replay']};window.SIMULATION_CONFIG=CONFIG;
+    const S={calcium:true,atp:true,simulationStatus:'idle',step:0,variantsCompleted:[],actions:[],timer:null};const $=id=>document.getElementById(id);
+    function variant(){return S.calcium?(S.atp?'ca_atp':'sans_atp'):'sans_ca'}
+    function render(){const scene=$('scene');scene.classList.toggle('enabled',S.calcium);scene.classList.toggle('with-atp',S.atp);$('caOn').classList.toggle('active',S.calcium);$('caOff').classList.toggle('active',!S.calcium);$('atpOn').classList.toggle('active',S.atp);$('atpOff').classList.toggle('active',!S.atp);let title,text;if(!S.calcium){title='Ca²⁺ absent';text='Les sites de liaison de l’actine restent masqués : aucun pont actine–myosine ne se forme.'}else if(!S.atp){title='ATP absent';text='Le pont peut rester fixé, mais sans nouvel ATP la tête de myosine ne se détache pas : le cycle se bloque.'}else{title='Conditions favorables';text='Ca²⁺ libère les sites de liaison de l’actine. L’hydrolyse de l’ATP arme la tête de myosine et le cycle provoque le glissement.'}$('title').textContent=title;$('text').textContent=text;$('text').classList.toggle('warning',!S.calcium||!S.atp)}
+    function setParameters(p,report=true){if(typeof p.calcium_present==='boolean')S.calcium=p.calcium_present;if(typeof p.atp_present==='boolean')S.atp=p.atp_present;stopTimer();S.simulationStatus='idle';S.step=0;resetVisual();render();if(report){S.actions.push({action:'set_parameters',calcium_present:S.calcium,atp_present:S.atp});emit()}}
+    function setVariant(id){if(id==='ca_atp')setParameters({calcium_present:true,atp_present:true});else if(id==='sans_ca')setParameters({calcium_present:false,atp_present:true});else if(id==='sans_atp')setParameters({calcium_present:true,atp_present:false})}
+    function resetVisual(){$('scene').classList.remove('contract');document.querySelectorAll('.head').forEach(h=>h.classList.remove('bound','stroke'));document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));$('status').textContent='Prêt'}
+    function showStep(n){S.step=n;document.querySelectorAll('.step').forEach((s,i)=>s.classList.toggle('active',i===n-1));const heads=[...document.querySelectorAll('.head')];if(n===1){heads.forEach(h=>h.classList.remove('bound','stroke'))}if(n===2){heads.forEach(h=>h.classList.add('bound'))}if(n===3){heads.forEach(h=>h.classList.add('stroke'));$('scene').classList.add('contract')}if(n===4){heads.forEach(h=>h.classList.remove('bound','stroke'))}}
+    function start(){stopTimer();resetVisual();S.simulationStatus='running';$('status').textContent='Cycle en cours';S.actions.push({action:'start',variant:variant()});emit();if(!S.calcium){showStep(1);setTimeout(finish,1500);return}if(!S.atp){showStep(2);setTimeout(finish,1800);return}let n=1;showStep(n);S.timer=setInterval(()=>{n++;if(n>4){stopTimer();finish();return}showStep(n)},850)}
+    function finish(){stopTimer();S.simulationStatus='finished';const v=variant();if(!S.variantsCompleted.includes(v))S.variantsCompleted.push(v);$('status').textContent='Terminé';S.actions.push({action:'finish',variant:v,step:S.step});emit()}
+    function stopTimer(){if(S.timer){clearInterval(S.timer);S.timer=null}}
+    function reset(){stopTimer();S.calcium=true;S.atp=true;S.simulationStatus='idle';S.step=0;S.actions.push({action:'reset'});resetVisual();render();emit()}
+    function interpretation(){if(!S.calcium)return'Ca²⁺ absent : les sites de l’actine restent masqués et les ponts ne se forment pas.';if(!S.atp)return'ATP absent : le détachement et le réarmement des têtes sont bloqués.';return'Ca²⁺ et ATP permettent un cycle complet des ponts et le glissement des filaments; les filaments eux-mêmes ne raccourcissent pas.'}
+    function emit(){window.parent.postMessage({type:'simulation_state',simulation_id:CONFIG.id,student_actions:S.actions.slice(-12),current_state:{simulation_status:S.simulationStatus,current_variant:variant(),variants_completed:S.variantsCompleted,calcium_present:S.calcium,atp_present:S.atp,cycle_step:S.step,sarcomere_shortening:S.calcium&&S.atp&&S.step>=3,scientific_interpretation:interpretation()},objective_progress:S.variantsCompleted.length/CONFIG.variants.length,timestamp:Date.now()},'*')}
+    function manifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:CONFIG.id,capabilities:{commands:CONFIG.commands,config:CONFIG,controls:{calcium_present:{type:'boolean'},atp_present:{type:'boolean'}},state_schema:{cycle_step:'0..4',sarcomere_shortening:'boolean',scientific_interpretation:'conclusion'}}},page_text:'Simulation du cycle actine myosine avec Ca²⁺ et ATP présents ou absents.'},'*')}
+    $('caOn').onclick=()=>setParameters({calcium_present:true});$('caOff').onclick=()=>setParameters({calcium_present:false});$('atpOn').onclick=()=>setParameters({atp_present:true});$('atpOff').onclick=()=>setParameters({atp_present:false});$('run').onclick=start;$('reset').onclick=reset;
+    window.executeAICommand=(c,p={})=>{if(c==='start'||c==='replay')start();else if(c==='reset')reset();else if(c==='set_variant')setVariant(p.variant_id||p.variant);else if(c==='set_parameters')setParameters(p)};window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='simulation_control'&&(!d.simulation_id||d.simulation_id===CONFIG.id))window.executeAICommand(d.command,d.parameters||{})});render();setTimeout(manifest,250);
   </script>
 </body>
 </html>

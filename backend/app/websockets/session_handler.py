@@ -26,7 +26,7 @@ from app.services.teaching_tactics import BanditTactiques, marquer_source
 from app.services import humanisation
 from app.services import tag_decoder
 from app.websockets.connection_manager import manager
-from app.supabase_client import get_supabase
+from app.supabase_client import get_supabase, get_supabase_admin
 
 
 def _safe_log(*parts):
@@ -1860,6 +1860,7 @@ class SessionHandler:
             # the frontend sets suppress_whiteboard=True so the correction stays
             # in the chat/panel instead of opening the whiteboard.
             suppress_whiteboard_flag = bool(message.get("suppress_whiteboard", False))
+            course_player_question = bool(message.get("course_player_question", False))
             student_image = message.get("student_image")
             # If a drawing/photo was attached, run it through the vision service
             # so the LLM can "see" and correct what the student drew.
@@ -1901,6 +1902,7 @@ class SessionHandler:
                 force_suppress_whiteboard=suppress_whiteboard_flag,
                 exam_question_number=exam_question_number,
                 exam_total_questions=exam_total_questions,
+                course_player_question=course_player_question,
             )
         elif msg_type == "exam_answer":
             await self._handle_exam_answer(message)
@@ -2365,10 +2367,35 @@ class SessionHandler:
             "text": transcript
         })
 
+        # Le chemin vocal MediaRecorder ne repasse pas par le champ texte du
+        # frontend. Résoudre ici évite que le LLM commence une réponse libre
+        # alors que l'élève a explicitement demandé d'ouvrir un cours.
+        if self.session_mode == "libre":
+            try:
+                from app.services.course_player_service import course_player_service
+
+                student_result = get_supabase_admin().table("students").select("*").eq(
+                    "id", self.student_id
+                ).limit(1).execute()
+                student = student_result.data[0] if student_result.data else None
+                if student:
+                    resolution = await course_player_service.resolve_course_intent(
+                        transcript, student
+                    )
+                    if resolution.get("matched"):
+                        await self.websocket.send_json({
+                            "type": "course_intent_resolved",
+                            "request_text": transcript,
+                            **resolution,
+                        })
+                        return
+            except Exception as exc:
+                _safe_log(f"[CoursePlayer] Spoken intent resolution failed: {exc}")
+
         # Step 2: Process through LLM
         await self._process_student_input(transcript)
 
-    async def _process_student_input(self, student_text: str, exam_context: bool = False, force_suppress_whiteboard: bool = False, exam_question_number: int = None, exam_total_questions: int = None):
+    async def _process_student_input(self, student_text: str, exam_context: bool = False, force_suppress_whiteboard: bool = False, exam_question_number: int = None, exam_total_questions: int = None, course_player_question: bool = False):
         """Process student text through streaming LLM and return TTS audio."""
         if self.session_mode == "libre" and self.allowed_subject_keys:
             from app.services.subject_access_service import canonical_subject_key
@@ -2854,12 +2881,12 @@ RÈGLES:
             humanisation.sans_les_affichages(ai_response)
             if tableau_vend_la_meche else ai_response,
             suppress_draw=not needs_drawing,
-            suppress_media=media_already_sent,
-            force_schema=should_force_schema,
+            suppress_media=media_already_sent or course_player_question,
+            force_schema=should_force_schema and not course_player_question,
             student_text=student_text,
-            suppress_whiteboard=exam_sent,
+            suppress_whiteboard=exam_sent or course_player_question,
             exam_context=exam_context,
-            force_exam_panel=(decision.get("primary_mode") == "exam" or resource_type_for_suggestion == "exam"),
+            force_exam_panel=(not course_player_question and (decision.get("primary_mode") == "exam" or resource_type_for_suggestion == "exam")),
             question_sans_reponse=tableau_vend_la_meche,
         )
 
@@ -3095,7 +3122,9 @@ RÈGLES:
             "struggles": message.get("struggles", ""),
             "mastered": message.get("mastered", ""),
             "teaching_mode": message.get("teaching_mode", "Socratique"),
+            "course_player_enabled": bool(message.get("course_player_enabled", False)),
         }
+        self.course_player_enabled = self.session_context["course_player_enabled"]
 
         # ── CE QUE LE TUTEUR SAIT DE L'ÉLÈVE ──
         # Le profil de compétences est réutilisé par `get_llm_context` plus
@@ -3348,6 +3377,13 @@ RÈGLES:
         }
         await self.websocket.send_json(init_message)
         _safe_log(f"[Session Init] session_initialized sent")
+
+        # An authored deck owns the lesson opening, pacing and persistent
+        # narration. Keep the socket ready for student interruptions, but do
+        # not generate a competing AI introduction or a second TTS stream.
+        if self.course_player_enabled:
+            _safe_log("[Session Init] Authored course player active; AI opening suppressed")
+            return
 
         # Stream opening message with tag filtering, single TTS at end
         _safe_log(f"[Session Init] Streaming opening message for phase: {self.current_phase}")

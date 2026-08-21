@@ -111,6 +111,43 @@ export const getLessons = (chapterId: string) =>
 export const getExercises = (lessonId: string) =>
   api.get(`/content/lessons/${lessonId}/exercises`);
 
+// Published course player
+export const getCourseDeck = (lessonId: string) =>
+  api.get(`/course-player/lessons/${lessonId}`);
+export interface CourseIntentResolution {
+  matched: boolean;
+  reason: string;
+  chapter_id?: string;
+  lesson_id?: string;
+  lesson_title?: string;
+  chapter_title?: string;
+  subject_name?: string;
+  deck_id?: string;
+  deck_title?: string;
+  requested_course?: string;
+}
+export const resolveCourseIntent = (text: string) =>
+  api.post<CourseIntentResolution>('/course-player/resolve', { text });
+export const saveCourseProgress = (data: {
+  deck_id: string;
+  lesson_id: string;
+  activity_id?: string;
+  slide_id?: string;
+  audio_position_ms?: number;
+  slide_state?: Record<string, unknown>;
+  completed_slide_ids?: string[];
+  status?: 'not_started' | 'in_progress' | 'completed';
+}) => api.post('/course-player/progress', data);
+export const saveSlideAttempt = (data: {
+  deck_id: string;
+  lesson_id: string;
+  slide_id: string;
+  answer?: unknown;
+  outcome?: 'answered' | 'skipped_timeout' | 'skipped_manual' | 'interrupted';
+  response_time_ms?: number;
+  confidence?: number;
+}) => api.post('/course-player/attempts', data);
+
 // Sessions
 export const startSession = (lessonId: string, isReview = false) =>
   api.post('/sessions/start', { lesson_id: lessonId, is_review: isReview });
