@@ -5,6 +5,7 @@ import { speechService } from '../../services/speechService';
 import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
 import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
+import RoughShape from './scientific/RoughShape';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -1728,10 +1729,9 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
     case 'path': {
       const pts = el.points || [];
       if (pts.length < 2) return null;
-      const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
       return (
         <g>
-          <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" pathLength={100} style={strokeAnim} />
+          <RoughShape kind="linearPath" points={pts} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
           {el.label && <text x={pts[0].x} y={pts[0].y - 8} fill={color} fontSize={13} style={labelStyle}>{el.label}</text>}
         </g>
       );
@@ -1747,8 +1747,8 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
       const midX = (from.x + to.x) / 2, midY = (from.y + to.y) / 2;
       return (
         <g>
-          <path d={`M${from.x},${from.y} L${to.x},${to.y}`} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" pathLength={100} style={strokeAnim} />
-          <polygon points={`${to.x},${to.y} ${h1.x},${h1.y} ${h2.x},${h2.y}`} fill={color} style={fadeAnim} />
+          <RoughShape kind="line" points={[from, to]} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
+          <RoughShape kind="polygon" points={[to, h1, h2]} stroke={color} strokeWidth={1} fill={color} seed={entry.key + 101} style={fadeAnim} />
           {el.label && <text x={midX} y={midY - 7} fill={color} fontSize={12} textAnchor="middle" style={labelStyle}>{el.label}</text>}
         </g>
       );
@@ -1757,7 +1757,7 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
       const x = el.x || 0, y = el.y || 0, w = el.width || 100, h = el.height || 60;
       return (
         <g>
-          <rect x={x} y={y} width={w} height={h} rx={6} fill="none" stroke={color} strokeWidth={sw} pathLength={100} style={strokeAnim} />
+          <RoughShape kind="rectangle" x={x} y={y} width={w} height={h} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
           {el.label && (
             <text x={x + w / 2} y={y + h / 2 + 5} fill={color} fontSize={Math.min(14, (w / Math.max(el.label.length, 1)) * 1.7)} textAnchor="middle" style={labelStyle}>
               {el.label}
@@ -1770,7 +1770,7 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
       const cx = el.x || 0, cy = el.y || 0, r = el.radius || 35;
       return (
         <g>
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw} pathLength={100} style={strokeAnim} />
+          <RoughShape kind="circle" x={cx} y={cy} radius={r} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
           {el.label && <text x={cx} y={cy + 4} fill={color} fontSize={Math.min(13, r * 0.55)} textAnchor="middle" style={labelStyle}>{el.label}</text>}
         </g>
       );

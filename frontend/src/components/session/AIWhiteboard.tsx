@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import SVGSchemaViewer from './schemas/SVGSchemaViewer';
 import { getSchemaById } from './schemas';
 import MathBoard from './MathBoard';
+import type { ScientificVisualSpec } from './scientific/types';
 import LiveBoard, { type LiveScript } from './LiveBoard';
 
 // Load handwritten fonts
@@ -54,10 +55,11 @@ interface DrawStep {
 interface BoardContent {
   title?: string;
   lines: Array<{
-    type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'table' | 'graph' | 'diagram' | 'qcm' | 'vrai_faux' | 'association';
+    type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'table' | 'graph' | 'diagram' | 'qcm' | 'vrai_faux' | 'association' | 'scientific';
     content: string;
     color?: string;
     label?: string;
+    scientific?: ScientificVisualSpec;
     // Interactive exercise data
     choices?: string[];
     correct?: number | number[] | boolean;

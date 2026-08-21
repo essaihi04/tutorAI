@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
+from app.services.scientific_visual_skill import normalize_scientific_visual
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
 from app.services.prompt_builder import prompt_builder
@@ -4637,6 +4638,12 @@ RÈGLES :
                     elif "content" not in normalized:
                         normalized["content"] = ""
                     line_type = str(normalized.get("type", "text")).lower().strip()
+                    if line_type == "scientific":
+                        scientific = normalize_scientific_visual(normalized.get("scientific"))
+                        if scientific is None:
+                            _safe_log("[AI Commands][WARN] Invalid scientific visual line ignored")
+                            continue
+                        normalized["scientific"] = scientific
                     normalized["content"] = sanitize_board_text(
                         normalized.get("content", ""),
                         inline_math=line_type not in {"title", "subtitle"},

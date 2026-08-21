@@ -8,6 +8,7 @@ from typing import AsyncGenerator, Optional
 from app.config import get_settings
 from app.data.svt_terminology_ar import get_glossary_for_prompt, SVT_GLOSSARY
 from app.services.rag_service import get_rag_service
+from app.services.scientific_visual_skill import SCIENTIFIC_VISUAL_PROMPT
 from app.services.token_tracking_service import token_tracker
 
 settings = get_settings()
@@ -388,7 +389,7 @@ Quand tu expliques un concept, une formule, un exercice, une liste ou un program
 🚨 RÈGLE #1-BIS - STRUCTURE MINIMALE DU TABLEAU (OBLIGATOIRE):
 CHAQUE `show_board` DOIT contenir AU MINIMUM :
   1. Une ligne "title" en tête (titre clair du tableau)
-  2. AU MOINS 2 lignes substantielles parmi : text, step, box, math, note, warning, tip, table, graph, mindmap, qcm
+  2. AU MOINS 2 lignes substantielles parmi : text, step, box, math, note, warning, tip, table, graph, mindmap, scientific, qcm
   3. Si le sujet est CONCRET (organisme, dispositif, molécule, solution) :
      → AJOUTE une ligne "illustration" avec un emoji représentatif OU un champ "icon" sur le titre.
 → INTERDIT : un `show_board` avec seulement {"type":"text", ...} comme unique ligne (pas structuré).
@@ -997,6 +998,8 @@ Plusieurs ordres possibles → un sous-tableau par cas (1er / 2e / 3e cas).
 ⛔ JAMAIS génotypes et phénotypes fusionnés sur la même ligne `math`
    (sauf cellule d'échiquier où ils cohabitent par convention).
 """
+
+UI_CONTROL_PROMPT = f"{UI_CONTROL_PROMPT}\n\n{SCIENTIFIC_VISUAL_PROMPT}"
 
 
 SYSTEM_PROMPT_TEMPLATE = """[ROLE]
@@ -1901,8 +1904,10 @@ CHOIX DE L'ACTION — RÈGLE STRICTE :
    nouvelle mini-étape. Un cours = une succession de petits scripts
    show_live validés par l'élève, PAS un mur de texte.
    ❌ INTERDIT d'utiliser show_board pour dérouler un cours ou une explication.
-2. **Simple récapitulatif statique** (fiche de révision, bilan, plan du
-   chapitre, tableau de données, échiquier génétique, mindmap) →
+2. **Simple récapitulatif statique OU visuel scientifique spécialisé**
+   (fiche de révision, bilan, plan du chapitre, tableau de données, échiquier
+   génétique, mindmap, figure de forces/fonction, réseau SVT, mini-simulation
+   mécanique 2D impossible à rendre proprement avec les primitives live) →
    action "show_board" avec la structure canonique ci-dessous — et même là,
    AJOUTE une ligne "illustration" ou un mindmap dès que possible.
 Format show_board: <ui>{{"actions":[{{"type":"whiteboard","action":"show_board","payload":{{"title":"...","lines":[...]}}}}]}}</ui>
@@ -2040,6 +2045,9 @@ ENCOURAGE EXPLICITEMENT l'élève à prendre des notes en lui disant:
    • Calcul / formule : ➗ ou ✏️   • Graphique / courbe : 📈
    → Si le sujet est CONCRET (organisme, objet, dispositif), AJOUTE soit une ligne
      "illustration" en début de tableau, soit un champ "icon" sur le titre.
+   → "scientific": figure spécialisée déclarative. Propriété OBLIGATOIRE:
+     "scientific" avec un moteur autorisé et son objet structuré. Suis exactement
+     la section [SKILL VISUELS SCIENTIFIQUES] ; jamais de JavaScript libre.
    → "mindmap": carte mentale interactive avec branches et sous-branches
      Propriétés OBLIGATOIRES: "content" (titre), "centerNode" (id du noeud central), "mindmapNodes" (tableau de noeuds)
      Chaque noeud: {{"id":"...", "label":"...(court, max 6 mots)", "level":0-3, "parent":"id_parent"}}

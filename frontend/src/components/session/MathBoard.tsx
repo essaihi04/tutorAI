@@ -2,6 +2,8 @@ import { useEffect, useState, useRef, memo } from 'react';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
 import MindMap from './MindMap';
+import ScientificVisual from './scientific/ScientificVisual';
+import type { ScientificVisualSpec } from './scientific/types';
 import { printBoard, downloadAsPDF } from '../../utils/pdfExport';
 
 interface MindMapNode {
@@ -14,7 +16,7 @@ interface MindMapNode {
 }
 
 interface BoardLine {
-  type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association' | 'illustration';
+  type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association' | 'illustration' | 'scientific';
   content: string;
   color?: string;
   label?: string;
@@ -39,6 +41,8 @@ interface BoardLine {
   // Diagram data
   nodes?: { id: string; label: string; x?: number; y?: number; color?: string }[];
   edges?: { from: string; to: string; label?: string }[];
+  // Specialized, lazy-loaded scientific renderer (SVT / physics / chemistry)
+  scientific?: ScientificVisualSpec;
   // Interactive exercise data
   choices?: string[];
   correct?: number | number[] | boolean;
@@ -1616,6 +1620,11 @@ function renderLine(line: BoardLine) {
 
     case 'diagram':
       return <AnimatedDiagram line={line} />;
+
+    case 'scientific':
+      return line.scientific
+        ? <ScientificVisual spec={line.scientific} />
+        : <p className="text-red-400">Erreur : spécification scientifique manquante</p>;
 
     case 'mindmap':
       if (!line.mindmapNodes || !line.centerNode) {
