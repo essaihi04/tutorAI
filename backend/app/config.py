@@ -110,6 +110,12 @@ class Settings(BaseSettings):
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1
     tts_cache_dir: str = "data/tts_cache"
+    # Grain de sel du cache. La clé inclut désormais les réglages de
+    # génération, mais elle ne peut PAS voir quel checkpoint le Colab sert
+    # sous un nom de voix donné. Quand tu changes le modèle servi, incrémente
+    # cette valeur : tout le cache devient inatteignable d'un coup, sans rien
+    # supprimer, et les anciens fichiers s'effacent d'eux-mêmes par LRU.
+    tts_cache_salt: str = ""
     tts_cache_max_bytes: int = 500 * 1024 * 1024  # 500 MB cap
     # Global kill-switch: set to 1 to disable all server-side TTS (costs $0)
     tts_disabled: int = 1

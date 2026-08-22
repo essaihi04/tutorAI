@@ -114,6 +114,41 @@ export const getExercises = (lessonId: string) =>
 // Published course player
 export const getCourseDeck = (lessonId: string) =>
   api.get(`/course-player/lessons/${lessonId}`);
+export interface CourseCatalogCourse {
+  stable_id: string;
+  deck_id: string;
+  title: string;
+  summary: string;
+  cover_image?: string;
+  cover_alt: string;
+  essential_topics: string[];
+  chapter_id: string;
+  chapter_title: string;
+  lesson_id: string;
+  lesson_title: string;
+  activity_count: number;
+  slide_count: number;
+  estimated_minutes: number;
+  progress_status: 'not_started' | 'in_progress' | 'completed';
+  progress_percent: number;
+  tutor_request: string;
+}
+export interface CourseCatalogSubject {
+  id: string;
+  name_fr: string;
+  name_ar?: string;
+  icon?: string | null;
+  color?: string | null;
+  catalog_key: string;
+  course_count: number;
+  courses: CourseCatalogCourse[];
+}
+export interface CourseCatalog {
+  subjects: CourseCatalogSubject[];
+  total_courses: number;
+}
+export const getCourseCatalog = () =>
+  api.get<CourseCatalog>('/course-player/catalog');
 export interface CourseIntentResolution {
   matched: boolean;
   reason: string;

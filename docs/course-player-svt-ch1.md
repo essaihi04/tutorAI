@@ -55,6 +55,19 @@ Les fichiers sont versionnés dans `frontend/public/media/audio/courses/`. Un te
 ```powershell
 python -m scripts.generate_course_audio verify --deck svt_ch1_energy --language fr --reviewer <UUID_RELECTEUR>
 python -m scripts.generate_course_audio verify --deck svt_ch1_muscle --language fr --reviewer <UUID_RELECTEUR>
+
+## Audio progressif pendant le cours
+
+Le batch ci-dessus reste réservé à la préparation et à la validation éditoriale.
+Il n'est pas nécessaire pour démarrer un parcours : si une diapositive ne possède
+pas encore d'audio publié, le lecteur demande uniquement le speech de la
+diapositive active à `/api/v1/tts/speak`. La langue du cours est `mixed`
+(darija) par défaut.
+
+Le lecteur ne précharge pas les diapositives suivantes. Les appels sont
+sérialisés pour laisser un seul travail au générateur TTS, et le résultat est
+stocké dans le cache disque du backend. Revenir sur une diapositive ou rouvrir
+le cours réutilise donc l'audio existant sans régénération.
 ```
 
 Le lecteur n'accepte qu'un audio au statut `published` dont l'empreinte correspond au texte actuellement publié. Une correction du speech invalide donc automatiquement l'ancien audio sans l'effacer.

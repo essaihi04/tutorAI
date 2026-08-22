@@ -6182,11 +6182,15 @@ RÈGLES :
         Returns (schema_id, score) tuple. Callers decide the minimum threshold."""
         SCHEMA_KEYWORDS = {
             "svt_glycolyse": ["glycolyse", "glucose", "pyruvate", "تحلل سكري"],
+            "svt_cellule_mitochondrie": ["cellule", "cellule eucaryote", "cytoplasme", "organite", "خلية"],
+            "svt_mitochondrie_structure": ["mitochondrie", "matrice mitochondriale", "membrane interne", "crêtes mitochondriales", "الميتوكندري"],
             "svt_respiration_cellulaire": ["respiration cellulaire", "krebs", "chaîne respiratoire", "تنفس خلوي"],
             "svt_fermentation": ["fermentation", "anaérobie", "lactique", "alcoolique", "تخمر"],
             "svt_chaine_respiratoire": ["chaîne respiratoire", "phosphorylation oxydative", "atp synthase", "complexe respiratoire", "nadh", "fadh2", "gradient", "السلسلة التنفسية", "الفسفرة التأكسدية"],
             "svt_cycle_krebs": ["cycle de krebs", "acétyl-coa", "citrate", "oxaloacétate", "acide citrique", "حلقة كريبس", "دورة كريبس"],
             "svt_bilan_energetique": ["bilan énergétique", "rendement", "comparaison respiration fermentation", "36 atp", "حصيلة طاقية", "مقارنة"],
+            "svt_fibre_musculaire": ["muscle strié", "fibre musculaire", "myofibrille", "faisceau musculaire", "عضلة"],
+            "svt_muscle_sarcomere": ["sarcomère", "actine", "myosine", "contraction musculaire", "strie z", "قطعة عضلية"],
             "svt_transcription_traduction": ["transcription", "traduction", "arn", "ribosome", "استنساخ", "ترجمة"],
             "svt_mitose": ["mitose", "division cellulaire", "prophase", "métaphase", "انقسام"],
             "svt_subduction": ["subduction", "plaque", "tectonique", "اندساس"],

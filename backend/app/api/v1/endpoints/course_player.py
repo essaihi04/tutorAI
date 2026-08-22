@@ -42,6 +42,12 @@ async def resolve_course_intent(
     return await course_player_service.resolve_course_intent(body.text, student)
 
 
+@router.get("/catalog")
+async def get_course_catalog(student: dict = Depends(get_current_student)):
+    """Matières accessibles et cours scénarisés ouvrables avec Moalim."""
+    return await course_player_service.get_catalog(student)
+
+
 @router.get("/lessons/{lesson_id}")
 async def get_lesson_deck(lesson_id: str, student: dict = Depends(get_current_student)):
     if not subject_access_service.is_lesson_allowed(student, lesson_id):

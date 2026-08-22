@@ -169,6 +169,7 @@ class BoardVoiceService {
     text: string,
     lang: Lang,
     onProgress?: (ratio: number) => void,
+    onStart?: () => void,
   ): BoardSpeakHandle {
     const clean = (text || '').trim();
     let audio: HTMLAudioElement | null = null;
@@ -237,6 +238,7 @@ class BoardVoiceService {
 
         const lancer = () =>
           el.play().then(() => {
+            onStart?.();
             // Le tableau a pu demander la pause avant le début effectif.
             if (wantPaused) el.pause();
           });

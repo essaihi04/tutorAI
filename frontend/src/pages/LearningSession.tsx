@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLearningContextStore } from '../stores/learningContextStore';
 import { useSessionStore, type SessionLanguage } from '../stores/sessionStore';
@@ -270,6 +270,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const isLibre = activeMode === 'question' || activeMode === 'examen';
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { token, student } = useAuthStore();
   const learningContext = useLearningContextStore((state) => state.context);
   const allowedSubjectNames = learningContext?.subject_names || [];
@@ -391,6 +392,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const handlersRegisteredRef = useRef(false);
   const showExamPanelRef = useRef(false);
   const courseIntentRoutingRef = useRef(false);
+  const libraryCourseRequestRef = useRef(false);
 
   // Keep ref in sync so WS handlers always read current value
   useEffect(() => { showExamPanelRef.current = showExamPanel; }, [showExamPanel]);
@@ -1691,6 +1693,25 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     wsService.sendJson({ type: 'text_input', text });
   };
 
+  // Depuis la bibliothèque, « Demander à Moalim » ouvre le tuteur puis lui
+  // transmet la demande une seule fois. Le tuteur résout ensuite le cours avec
+  // le même catalogue que les dossiers affichés à l'élève.
+  useEffect(() => {
+    const state = location.state as { courseRequest?: string } | null;
+    const courseRequest = state?.courseRequest?.trim();
+    if (
+      !connected
+      || isProcessing
+      || !isLibreConnexion
+      || !courseRequest
+      || libraryCourseRequestRef.current
+    ) return;
+
+    libraryCourseRequestRef.current = true;
+    navigate(location.pathname, { replace: true, state: null });
+    void handleSendText(courseRequest);
+  }, [connected, isLibreConnexion, isProcessing, location.pathname, location.state, navigate]);
+
   /** Quick-action: envoie directement le prompt. */
   const handleQuickSend = (text: string) => {
     if (!connected || isProcessing) return;
@@ -2341,6 +2362,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   externalAudioActive={isSpeaking}
                   onSimulationUpdate={handleSimulationUpdate}
                   onComplete={() => setLessonCompleted(true)}
+                  onRestart={() => setLessonCompleted(false)}
                 />
               </div>
             </div>

@@ -1,3 +1,5 @@
+import type { ScientificVisualSpec } from '../session/scientific/types';
+
 export type CourseSlideType =
   | 'diagnostic'
   | 'situation'
@@ -18,9 +20,16 @@ export interface CourseQuestion {
 }
 
 export interface CourseVisual {
-  kind?: 'none' | 'image' | 'schema' | 'simulation';
+  /**
+   * `scientific` couvre les figures que personne n'a dessinées à l'avance :
+   * géométrie et courbes (JSXGraph), chaînes et réseaux (Cytoscape), petite
+   * mécanique 2D (Matter). Mêmes moteurs que le tableau du tuteur — une
+   * diapositive n'a donc plus à choisir entre une image figée et rien.
+   */
+  kind?: 'none' | 'image' | 'schema' | 'simulation' | 'scientific';
   url?: string;
   schema_id?: string;
+  scientific?: ScientificVisualSpec;
   caption?: string;
   alt?: string;
   required_interaction?: boolean;

@@ -12,6 +12,7 @@ import RegisterInterest from './pages/RegisterInterest';
 // ── Lazy-loaded (code-split into separate chunks) ──
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Progress = lazy(() => import('./pages/Progress'));
+const CourseLibrary = lazy(() => import('./pages/CourseLibrary'));
 const LearningSession = lazy(() => import('./pages/LearningSession'));
 const AdminResources = lazy(() => import('./pages/AdminResources'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -85,6 +86,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <LearningSession mode="libre" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/courses"
+            element={
+              <ProtectedRoute>
+                <CourseLibrary />
               </ProtectedRoute>
             }
           />

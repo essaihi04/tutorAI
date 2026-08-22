@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.supabase_client import get_supabase_admin
+from app.services.schema_catalog import SCHEMA_IDS
+from app.services.scientific_visual_skill import normalize_scientific_visual
 from app.services.subject_access_service import subject_access_service
 
 
@@ -116,6 +118,151 @@ class CoursePlayerService:
             return chapter[0] if chapter else {}
         return chapter
 
+    @staticmethod
+    def _subject_from_chapter(chapter: dict) -> dict:
+        subject = chapter.get("subjects") or {}
+        if isinstance(subject, list):
+            return subject[0] if subject else {}
+        return subject
+
+    @staticmethod
+    def _manifest_matches_lesson(manifest: dict, lesson: dict) -> bool:
+        chapter = CoursePlayerService._chapter_from_lesson(lesson)
+        title_blob = _search_normalise(" ".join([
+            str(lesson.get("title_fr") or ""),
+            str(chapter.get("title_fr") or ""),
+        ]))
+        return any(
+            token and token in title_blob
+            for token in (
+                _search_normalise(value)
+                for value in manifest.get("lesson_match") or []
+            )
+        )
+
+    async def get_catalog(self, student: dict) -> dict:
+        """Return the student's subject folders and their authored courses.
+
+        The catalogue and natural-language tutor routing intentionally read the
+        same manifests. A card can therefore never advertise a different
+        course than the one Moalim opens for the corresponding request.
+        """
+        context = subject_access_service.get_context(student)
+        subjects = [
+            {
+                "id": str(subject.get("id") or ""),
+                "name_fr": subject.get("name_fr") or "Matière",
+                "name_ar": subject.get("name_ar") or "",
+                "icon": subject.get("icon"),
+                "color": subject.get("color"),
+                "catalog_key": subject.get("catalog_key") or "",
+                "course_count": 0,
+                "courses": [],
+            }
+            for subject in context.get("subjects") or []
+        ]
+        folders_by_id = {folder["id"]: folder for folder in subjects}
+
+        try:
+            admin = get_supabase_admin()
+            lessons = admin.table("lessons").select(
+                "id,title_fr,chapter_id,chapters(id,title_fr,subject_id,subjects(id,name_fr,name_ar))"
+            ).execute().data or []
+        except Exception as exc:
+            _log.warning("[CoursePlayer] Course library unavailable: %s", exc)
+            return {"subjects": subjects, "total_courses": 0}
+
+        allowed_lessons = [
+            lesson for lesson in lessons
+            if str(self._chapter_from_lesson(lesson).get("subject_id") or "") in folders_by_id
+        ]
+
+        try:
+            deck_rows = admin.table("course_decks").select(
+                "id,lesson_id,status,version,metadata"
+            ).execute().data or []
+        except Exception as exc:
+            _log.info("[CoursePlayer] Course deck metadata unavailable for library: %s", exc)
+            deck_rows = []
+
+        for manifest in self._load_local_manifests():
+            stable_id = manifest.get("stable_id") or manifest.get("id")
+            linked_rows = [
+                row for row in deck_rows
+                if (row.get("metadata") or {}).get("stable_id") == stable_id
+            ]
+            linked_rows.sort(
+                key=lambda row: (row.get("status") == "published", int(row.get("version") or 0)),
+                reverse=True,
+            )
+
+            lesson = None
+            deck_row = None
+            for row in linked_rows:
+                candidate = next(
+                    (item for item in allowed_lessons if str(item.get("id")) == str(row.get("lesson_id"))),
+                    None,
+                )
+                if candidate:
+                    lesson = candidate
+                    deck_row = row
+                    break
+            if lesson is None:
+                lesson = next(
+                    (item for item in allowed_lessons if self._manifest_matches_lesson(manifest, item)),
+                    None,
+                )
+            if lesson is None:
+                continue
+
+            chapter = self._chapter_from_lesson(lesson)
+            subject_id = str(chapter.get("subject_id") or "")
+            folder = folders_by_id.get(subject_id)
+            if not folder:
+                continue
+
+            activity_count = len(manifest.get("activities") or [])
+            slide_count = sum(
+                len(activity.get("slides") or [])
+                for activity in manifest.get("activities") or []
+            )
+            catalog = manifest.get("catalog") or {}
+            deck_id = str((deck_row or {}).get("id") or manifest.get("id") or "")
+            progress = await self.get_progress(str(student.get("id") or ""), deck_id)
+            completed_slide_ids = (progress or {}).get("completed_slide_ids") or []
+            progress_percent = (
+                min(100, round(len(completed_slide_ids) * 100 / slide_count))
+                if slide_count else 0
+            )
+
+            folder["courses"].append({
+                "stable_id": stable_id,
+                "deck_id": deck_id,
+                "title": manifest.get("title") or lesson.get("title_fr") or "Cours",
+                "summary": catalog.get("summary") or "Parcours interactif guidé par Moalim.",
+                "cover_image": catalog.get("cover_image"),
+                "cover_alt": catalog.get("cover_alt") or manifest.get("title") or "Illustration du cours",
+                "essential_topics": catalog.get("essential_topics") or [],
+                "chapter_id": str(lesson.get("chapter_id") or chapter.get("id") or ""),
+                "chapter_title": chapter.get("title_fr") or "",
+                "lesson_id": str(lesson.get("id") or ""),
+                "lesson_title": lesson.get("title_fr") or "",
+                "activity_count": activity_count,
+                "slide_count": slide_count,
+                "estimated_minutes": int(manifest.get("estimated_minutes") or 0),
+                "progress_status": (progress or {}).get("status") or "not_started",
+                "progress_percent": progress_percent,
+                "tutor_request": f"Je veux commencer le cours sur {manifest.get('title') or lesson.get('title_fr') or 'ce thème'}",
+            })
+
+        for folder in subjects:
+            folder["courses"].sort(key=lambda course: course["title"])
+            folder["course_count"] = len(folder["courses"])
+        return {
+            "subjects": subjects,
+            "total_courses": sum(folder["course_count"] for folder in subjects),
+        }
+
     async def resolve_course_intent(self, text: str, student: dict) -> dict:
         """Résout une demande naturelle vers une route de cours autorisée."""
         manifest = self.match_manifest_intent(text)
@@ -199,9 +346,7 @@ class CoursePlayerService:
             }
 
         chapter = self._chapter_from_lesson(lesson)
-        subject = chapter.get("subjects") or {}
-        if isinstance(subject, list):
-            subject = subject[0] if subject else {}
+        subject = self._subject_from_chapter(chapter)
         return {
             "matched": True,
             "reason": "matched",
@@ -215,8 +360,35 @@ class CoursePlayerService:
         }
 
     @staticmethod
+    def _public_visual(visual: Any) -> Any:
+        """Le visuel tel que le navigateur a le droit de le recevoir.
+
+        Une figure `scientific` traverse le MÊME normaliseur que celles du
+        tableau du tuteur : bornes, moteurs et expressions autorisés y sont
+        déjà décidés une fois pour toutes. Un deck mal formé — ou trafiqué —
+        n'envoie donc pas au navigateur une spec que les moteurs n'attendent
+        pas ; il perd simplement sa figure, et la diapositive retombe sur son
+        texte essentiel.
+
+        Un `schema_id` absent de la bibliothèque est signalé ici plutôt que
+        découvert par l'élève devant un cadre vide.
+        """
+        if not isinstance(visual, dict):
+            return visual
+        kind = visual.get("kind")
+        if kind == "scientific":
+            visual["scientific"] = normalize_scientific_visual(visual.get("scientific"))
+            if visual["scientific"] is None:
+                _log.warning("Slide visual 'scientific' rejected by the normaliser")
+        elif kind == "schema" and visual.get("schema_id") not in SCHEMA_IDS:
+            _log.warning("Slide visual references unknown schema_id=%r", visual.get("schema_id"))
+        return visual
+
+    @staticmethod
     def _public_slide(slide: dict, audio_assets: list[dict]) -> dict:
         public = copy.deepcopy(slide)
+        if public.get("visual") is not None:
+            public["visual"] = CoursePlayerService._public_visual(public["visual"])
         question = public.get("question") or {}
         for secret in ("answer_key", "accepted_answers", "evaluation_regex"):
             question.pop(secret, None)

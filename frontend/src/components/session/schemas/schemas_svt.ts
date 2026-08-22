@@ -554,6 +554,87 @@ export const svt_subduction: ScientificSchema = {
 // SVT — Ch1: Schémas détaillés manquants
 // ═══════════════════════════════════════════════════════════════
 
+export const svt_cellule_mitochondrie: ScientificSchema = {
+  id: 'svt_cellule_mitochondrie',
+  title: 'De la cellule à la mitochondrie',
+  subject: 'svt',
+  keywords: ['cellule', 'cellule eucaryote', 'cytoplasme', 'noyau', 'mitochondrie', 'respiration cellulaire', 'خلية', 'الميتوكندري'],
+  category: 'structure',
+  viewBox: '0 0 960 620',
+  backgroundColor: '#fffdf5',
+  layers: [
+    { id: 'title', label: 'Titre', delay: 0, svgContent: `
+      <text x="480" y="42" text-anchor="middle" font-size="27" font-weight="bold" fill="#172554" font-family="system-ui">DE LA CELLULE À LA MITOCHONDRIE</text>
+      <text x="480" y="68" text-anchor="middle" font-size="13" fill="#475569" font-family="system-ui">Localiser les étapes de la respiration cellulaire</text>
+    `},
+    { id: 'cellule', label: 'Cellule', delay: 250, svgContent: `
+      <path d="M 72 315 C 70 188, 150 108, 288 105 C 423 102, 510 180, 512 310 C 514 447, 421 520, 282 518 C 145 516, 75 444, 72 315 Z" fill="#dbeafe" stroke="#2563eb" stroke-width="5"/>
+      <path d="M 87 314 C 88 198, 158 124, 286 122 C 406 120, 492 192, 495 310 C 498 430, 412 501, 282 500 C 157 499, 89 430, 87 314 Z" fill="#eff6ff" stroke="#60a5fa" stroke-width="2" stroke-dasharray="7,5"/>
+      <text x="285" y="548" text-anchor="middle" font-size="17" font-weight="bold" fill="#1d4ed8" font-family="system-ui">Cellule eucaryote</text>
+      <text x="285" y="570" text-anchor="middle" font-size="12" fill="#475569" font-family="system-ui">La respiration libère l'énergie de la matière organique</text>
+    `},
+    { id: 'noyau', label: 'Noyau', delay: 500, svgContent: `
+      <circle cx="222" cy="303" r="78" fill="#ddd6fe" stroke="#7c3aed" stroke-width="4"/>
+      <circle cx="222" cy="303" r="62" fill="#ede9fe" stroke="#a78bfa" stroke-width="2" stroke-dasharray="5,4"/>
+      <circle cx="242" cy="285" r="17" fill="#c4b5fd" stroke="#7c3aed" stroke-width="2"/>
+      <path d="M 174 324 Q 207 280, 270 331 M 178 284 Q 221 344, 268 276" fill="none" stroke="#8b5cf6" stroke-width="2" opacity="0.6"/>
+      <path d="M 142 258 L 78 210" fill="none" stroke="#7c3aed" stroke-width="2"/>
+      <text x="65" y="201" font-size="15" font-weight="bold" fill="#6d28d9" font-family="system-ui">Noyau</text>
+    `},
+    { id: 'organites', label: 'Organites', delay: 750, svgContent: `
+      <ellipse cx="376" cy="196" rx="53" ry="24" transform="rotate(-18 376 196)" fill="#fed7aa" stroke="#ea580c" stroke-width="3"/>
+      <path d="M 333 199 Q 351 175, 369 198 T 413 192" fill="none" stroke="#c2410c" stroke-width="2.5"/>
+      <ellipse cx="385" cy="365" rx="62" ry="29" transform="rotate(14 385 365)" fill="#fdba74" stroke="#ea580c" stroke-width="4"/>
+      <path d="M 331 357 Q 352 387, 370 354 T 405 374 T 437 357" fill="none" stroke="#c2410c" stroke-width="3"/>
+      <ellipse cx="305" cy="445" rx="46" ry="21" transform="rotate(-12 305 445)" fill="#fed7aa" stroke="#ea580c" stroke-width="3"/>
+      <path d="M 266 446 Q 282 426, 299 448 T 339 441" fill="none" stroke="#c2410c" stroke-width="2.5"/>
+      <circle cx="140" cy="395" r="10" fill="#bfdbfe" stroke="#0284c7" stroke-width="2"/>
+      <circle cx="335" cy="265" r="8" fill="#bfdbfe" stroke="#0284c7" stroke-width="2"/>
+      <circle cx="430" cy="270" r="11" fill="#bfdbfe" stroke="#0284c7" stroke-width="2"/>
+      <path d="M 110 445 L 78 478" fill="none" stroke="#2563eb" stroke-width="2"/>
+      <text x="60" y="497" font-size="14" font-weight="bold" fill="#1d4ed8" font-family="system-ui">Cytoplasme</text>
+      <text x="105" y="516" font-size="11" fill="#475569" font-family="system-ui">Glycolyse</text>
+    `},
+    { id: 'zoom', label: 'Zoom mitochondrie', delay: 1050, svgContent: `
+      <circle cx="385" cy="365" r="48" fill="none" stroke="#f97316" stroke-width="3" stroke-dasharray="8,5"/>
+      <path d="M 430 337 C 505 250, 535 205, 585 190" fill="none" stroke="#f97316" stroke-width="2.5" stroke-dasharray="7,5"/>
+      <path d="M 430 393 C 505 440, 540 455, 590 448" fill="none" stroke="#f97316" stroke-width="2.5" stroke-dasharray="7,5"/>
+      <text x="530" y="326" text-anchor="middle" font-size="14" font-weight="bold" fill="#c2410c" font-family="system-ui">ZOOM</text>
+      <path d="M 586 315 C 586 218, 662 165, 774 172 C 878 179, 917 237, 909 322 C 901 407, 832 455, 724 451 C 629 448, 586 403, 586 315 Z" fill="#ffedd5" stroke="#ea580c" stroke-width="5"/>
+      <path d="M 607 315 C 607 235, 671 193, 767 196 C 850 199, 887 244, 884 319 C 881 385, 827 424, 735 425 C 651 426, 607 389, 607 315 Z" fill="#fff7ed" stroke="#fb923c" stroke-width="3"/>
+      <path d="M 629 253 C 664 216, 691 218, 713 255 C 735 291, 760 292, 784 250 C 807 211, 841 225, 866 259 M 626 333 C 657 293, 688 302, 713 341 C 738 380, 764 384, 791 340 C 819 295, 848 302, 870 337" fill="none" stroke="#ea580c" stroke-width="4"/>
+      <text x="748" y="318" text-anchor="middle" font-size="15" font-weight="bold" fill="#9a3412" font-family="system-ui">Matrice</text>
+      <text x="748" y="365" text-anchor="middle" font-size="12" fill="#15803d" font-family="system-ui">Cycle de Krebs</text>
+    `},
+    { id: 'legendes', label: 'Légendes', delay: 1350, svgContent: `
+      <path d="M 608 236 L 557 139" fill="none" stroke="#ea580c" stroke-width="2"/>
+      <text x="548" y="128" text-anchor="end" font-size="14" font-weight="bold" fill="#c2410c" font-family="system-ui">Membrane externe</text>
+      <path d="M 629 253 L 648 127" fill="none" stroke="#f97316" stroke-width="2"/>
+      <text x="650" y="116" font-size="14" font-weight="bold" fill="#c2410c" font-family="system-ui">Membrane interne</text>
+      <text x="650" y="136" font-size="11" fill="#475569" font-family="system-ui">Chaîne respiratoire + ATP synthase</text>
+      <path d="M 850 300 L 928 252" fill="none" stroke="#ea580c" stroke-width="2"/>
+      <text x="928" y="241" text-anchor="end" font-size="14" font-weight="bold" fill="#c2410c" font-family="system-ui">Crêtes</text>
+      <path d="M 901 347 L 933 396" fill="none" stroke="#fb923c" stroke-width="2"/>
+      <text x="935" y="414" text-anchor="end" font-size="13" font-weight="bold" fill="#c2410c" font-family="system-ui">Espace intermembranaire</text>
+    `},
+    { id: 'bilan', label: 'Bilan', delay: 1650, svgContent: `
+      <rect x="557" y="500" width="365" height="82" rx="15" fill="#ecfdf5" stroke="#16a34a" stroke-width="2.5"/>
+      <text x="740" y="526" text-anchor="middle" font-size="15" font-weight="bold" fill="#166534" font-family="system-ui">Organisation fonctionnelle</text>
+      <text x="740" y="550" text-anchor="middle" font-size="12" fill="#166534" font-family="system-ui">Matrice : cycle de Krebs</text>
+      <text x="740" y="570" text-anchor="middle" font-size="12" fill="#166534" font-family="system-ui">Membrane interne : gradient H⁺ et synthèse d'ATP</text>
+    `},
+  ],
+  annotations: [
+    { id: 'cell', x: 72, y: 105, width: 440, height: 413, label: 'Cellule eucaryote', description: 'La glycolyse se déroule dans le cytoplasme. Les étapes suivantes de la respiration ont lieu dans la mitochondrie.', color: '#2563eb' },
+    { id: 'nucleus', x: 144, y: 225, width: 156, height: 156, label: 'Noyau', description: 'Compartiment contenant l’information génétique. Il ne réalise pas la respiration cellulaire.', color: '#7c3aed' },
+    { id: 'mito', x: 586, y: 172, width: 323, height: 279, label: 'Mitochondrie', description: 'La matrice accueille le cycle de Krebs ; la membrane interne porte la chaîne respiratoire et l’ATP synthase.', color: '#ea580c' },
+  ],
+  highlights: [
+    { id: 'h1', cx: 385, cy: 365, radius: 52, label: 'Mitochondrie cellulaire' },
+    { id: 'h2', cx: 748, cy: 315, radius: 155, label: 'Zoom mitochondrie' },
+  ],
+};
+
 export const svt_mitochondrie_structure: ScientificSchema = {
   id: 'svt_mitochondrie_structure',
   title: 'Structure de la Mitochondrie — Ultrastructure',
@@ -1055,6 +1136,7 @@ export const SVT_SCHEMAS = [
   svt_transcription_traduction,
   svt_mitose,
   svt_subduction,
+  svt_cellule_mitochondrie,
   svt_mitochondrie_structure,
   svt_chaine_respiratoire,
   svt_cycle_krebs,

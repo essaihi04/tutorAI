@@ -1,9 +1,10 @@
-import { BarChart3, Home, MessageCircle } from 'lucide-react';
+import { BarChart3, BookOpen, Home, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { StudentNavKey } from './StudentNavigation';
 
 const ITEMS = [
   { key: 'today' as const, icon: Home, label: "Aujourd'hui", path: '/dashboard' },
+  { key: 'courses' as const, icon: BookOpen, label: 'Cours', path: '/courses' },
   { key: 'tutor' as const, icon: MessageCircle, label: 'Mon tuteur', path: '/tutor' },
   { key: 'progress' as const, icon: BarChart3, label: 'Mes progrès', path: '/progress' },
 ];
@@ -17,7 +18,7 @@ export default function MobileBottomNav({ active }: { active: StudentNavKey }) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Navigation principale"
     >
-      <div className="mx-auto grid max-w-md grid-cols-3 px-2 py-1.5">
+      <div className="mx-auto grid max-w-md grid-cols-4 px-2 py-1.5">
         {ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = item.key === active;

@@ -6,6 +6,7 @@ interface SVGSchemaViewerProps {
   schema: ScientificSchema;
   activeHighlights?: string[];
   autoAnimate?: boolean;
+  handDrawn?: boolean;
   onAnnotationClick?: (annotation: SchemaAnnotation) => void;
   className?: string;
 }
@@ -14,6 +15,7 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
   schema,
   activeHighlights = [],
   autoAnimate = true,
+  handDrawn = false,
   onAnnotationClick,
   className = '',
 }) => {
@@ -98,15 +100,42 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
       style="animation: schemaPulse 1.5s ease-in-out infinite 0.3s"/>`)
     .join('\n');
 
-  const fullSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${schema.viewBox}" 
+  const handDrawnDefs = handDrawn ? `
+    <filter id="schemaHandDrawn" x="-4%" y="-4%" width="108%" height="108%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="1" seed="23" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.15" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <pattern id="schemaNotebookGrid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#38bdf8" stroke-width="0.65" opacity="0.22"/>
+    </pattern>
+  ` : '';
+
+  const fullSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${schema.viewBox}" class="${handDrawn ? 'schema-hand-drawn' : ''}"
     style="width:100%;height:100%;font-family:system-ui,sans-serif">
     <style>
       @keyframes schemaFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes schemaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.06); } }
       .annotation-zone rect:hover { opacity: 0.22 !important; stroke-width: 2.5 !important; }
+      .schema-hand-drawn .schema-layer path,
+      .schema-hand-drawn .schema-layer line,
+      .schema-hand-drawn .schema-layer polyline,
+      .schema-hand-drawn .schema-layer polygon,
+      .schema-hand-drawn .schema-layer rect,
+      .schema-hand-drawn .schema-layer circle,
+      .schema-hand-drawn .schema-layer ellipse {
+        filter: url(#schemaHandDrawn);
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .schema-hand-drawn text {
+        font-family: "Segoe Print", "Comic Sans MS", cursive !important;
+        letter-spacing: 0.15px;
+      }
     </style>
     ${SVG_DEFS}
+    ${handDrawnDefs}
     ${schema.backgroundColor ? `<rect width="100%" height="100%" fill="${schema.backgroundColor}" rx="12"/>` : ''}
+    ${handDrawn ? '<rect width="100%" height="100%" fill="url(#schemaNotebookGrid)" rx="12" pointer-events="none"/>' : ''}
     ${svgContent}
     ${annotationOverlays}
     ${highlightOverlays}

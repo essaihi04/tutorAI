@@ -8,6 +8,7 @@ from typing import AsyncGenerator, Optional
 from app.config import get_settings
 from app.data.svt_terminology_ar import get_glossary_for_prompt, SVT_GLOSSARY
 from app.services.rag_service import get_rag_service
+from app.services.schema_catalog import SCHEMA_CATALOG_PROMPT
 from app.services.scientific_visual_skill import SCIENTIFIC_VISUAL_PROMPT
 from app.services.token_tracking_service import token_tracker
 
@@ -999,7 +1000,14 @@ Plusieurs ordres possibles → un sous-tableau par cas (1er / 2e / 3e cas).
    (sauf cellule d'échiquier où ils cohabitent par convention).
 """
 
-UI_CONTROL_PROMPT = f"{UI_CONTROL_PROMPT}\n\n{SCIENTIFIC_VISUAL_PROMPT}"
+# Le bloc d'affichage part dans TOUS les modes — cours, exercice, examen et
+# question libre passent tous par `{ui_control}`. Les deux compétences
+# visuelles y sont donc attachées ici, à la source : le choix du moteur
+# (SCIENTIFIC_VISUAL_PROMPT) et la liste réelle des schémas déjà dessinés
+# (SCHEMA_CATALOG_PROMPT, généré depuis la bibliothèque du navigateur).
+UI_CONTROL_PROMPT = (
+    f"{UI_CONTROL_PROMPT}\n\n{SCIENTIFIC_VISUAL_PROMPT}\n\n{SCHEMA_CATALOG_PROMPT}"
+)
 
 
 SYSTEM_PROMPT_TEMPLATE = """[ROLE]
@@ -1352,40 +1360,9 @@ Tu peux utiliser ces commandes SPÉCIALES dans tes réponses pour contrôler la 
    → Format: écris <schema>schema_id</schema> dans ta réponse
    → Ces schémas sont des SVG professionnels avec animations et annotations interactives
    → UTILISE EN PRIORITÉ un schéma pré-construit s'il existe pour le sujet!
-   → IDs disponibles par matière:
-   
-   SVT:
-     svt_glycolyse — Glycolyse (dégradation du glucose)
-     svt_respiration_cellulaire — Respiration cellulaire aérobie (vue d'ensemble)
-     svt_fermentation — Fermentation alcoolique/lactique
-     svt_chaine_respiratoire — Chaîne respiratoire et phosphorylation oxydative (complexes I-IV, ATP synthase)
-     svt_cycle_krebs — Cycle de Krebs détaillé (8 molécules, produits par étape)
-     svt_bilan_energetique — Bilan énergétique comparé (respiration 36 ATP vs fermentation 2 ATP)
-     svt_transcription_traduction — Transcription et traduction (synthèse protéique)
-     svt_mitose — Mitose (division cellulaire)
-     svt_subduction — Subduction (tectonique des plaques)
-   
-   PHYSIQUE:
-     phys_ondes_mecaniques — Ondes mécaniques (λ, T, v, diffraction)
-     phys_dipole_rc — Dipôle RC (charge/décharge condensateur)
-     phys_rlc — Oscillations RLC série
-     phys_newton — Les 3 lois de Newton + applications
-   
-   CHIMIE:
-     chem_cinetique — Cinétique chimique (vitesse, t½, facteurs)
-     chem_radioactivite — Radioactivité (décroissance, α, β, γ)
-     chem_acides_bases — Acides-bases, pH, titrage
-     chem_piles_electrolyse — Piles et électrolyse
-     chem_esterification — Estérification et hydrolyse
-   
-   MATH:
-     math_limites — Limites de fonctions
-     math_derivation — Dérivation et étude de fonctions
-     math_exp_ln — Fonctions exp et ln
-     math_suites — Suites arithmétiques et géométriques
-     math_integrales — Intégration et primitives
-     math_probabilites — Probabilités et loi binomiale
-   
+   → Les identifiants EXISTANTS sont listés dans le bloc
+     [SCHÉMAS SVG DISPONIBLES] plus haut — n'en invente aucun autre.
+
    → EXEMPLE: Pour expliquer la glycolyse, écris:
    "La glycolyse est la première étape de la dégradation du glucose. Voici le processus détaillé:
    <schema>svt_glycolyse</schema>
@@ -2117,11 +2094,8 @@ ENCOURAGE EXPLICITEMENT l'élève à prendre des notes en lui disant:
    
    OUVRIR avec schéma SVG pré-construit:
    → Format: <schema>schema_id</schema>
-   → IDs: svt_glycolyse, svt_respiration_cellulaire, svt_fermentation, svt_chaine_respiratoire,
-          svt_cycle_krebs, svt_bilan_energetique, svt_transcription_traduction, svt_mitose, svt_subduction,
-          phys_ondes_mecaniques, phys_dipole_rc, phys_rlc, phys_newton,
-          chem_cinetique, chem_radioactivite, chem_acides_bases, chem_piles_electrolyse, chem_esterification,
-          math_limites, math_derivation, math_exp_ln, math_suites, math_integrales, math_probabilites
+   → Identifiants : voir le bloc [SCHÉMAS SVG DISPONIBLES] plus haut.
+     N'écris JAMAIS un identifiant absent de cette liste.
 
    OUVRIR avec dessin libre:
    → Format: <draw>[JSON]</draw>

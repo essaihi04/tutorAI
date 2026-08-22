@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSchemaById } from '../session/schemas';
 import SVGSchemaViewer from '../session/schemas/SVGSchemaViewer';
+import ScientificVisual from '../session/scientific/ScientificVisual';
 import { SessionMediaDisplay } from '../session/MediaViewer';
 import { saveCourseProgress, saveSlideAttempt } from '../../services/api';
+import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
 import type {
   CourseActivity,
   CourseDeck,
@@ -21,6 +23,7 @@ interface CoursePlayerProps {
   externalAudioActive?: boolean;
   onSimulationUpdate?: (state: any) => void;
   onComplete?: () => void;
+  onRestart?: () => void;
 }
 
 interface FlatSlide {
@@ -43,6 +46,7 @@ export default function CoursePlayer({
   externalAudioActive = false,
   onSimulationUpdate,
   onComplete,
+  onRestart,
 }: CoursePlayerProps) {
   const flatSlides = useMemo<FlatSlide[]>(() =>
     deck.activities.flatMap((activity, activityIndex) =>
@@ -51,6 +55,9 @@ export default function CoursePlayer({
 
   const storageKey = `course-player:${deck.id}`;
   const initialIndex = useMemo(() => {
+    // Un cours déjà validé reste acquis, mais une nouvelle ouverture doit
+    // proposer une révision complète depuis la première diapositive.
+    if (progress?.status === 'completed') return 0;
     const targetId = progress?.current_slide_id;
     if (targetId) {
       const found = flatSlides.findIndex(item => item.slide.id === targetId || item.slide.stable_id === targetId);
@@ -62,7 +69,7 @@ export default function CoursePlayer({
     } catch {
       return 0;
     }
-  }, [flatSlides, progress?.current_slide_id, storageKey]);
+  }, [flatSlides, progress?.current_slide_id, progress?.status, storageKey]);
 
   const [index, setIndex] = useState(initialIndex);
   const [started, setStarted] = useState(false);
@@ -81,8 +88,11 @@ export default function CoursePlayer({
   const [tutorResponse, setTutorResponse] = useState<string | null>(null);
   const [simulationStatus, setSimulationStatus] = useState<string>('idle');
   const [simulationExpanded, setSimulationExpanded] = useState(false);
+  const [courseCompleted, setCourseCompleted] = useState(false);
+  const [onDemandAudioStatus, setOnDemandAudioStatus] = useState<'idle' | 'generating' | 'playing' | 'paused' | 'unavailable'>('idle');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const onDemandVoiceRef = useRef<BoardSpeakHandle | null>(null);
   const revealTimerRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const questionIntervalRef = useRef<number | null>(null);
@@ -114,6 +124,9 @@ export default function CoursePlayer({
   }, []);
 
   const stopAudio = useCallback(() => {
+    const onDemandVoice = onDemandVoiceRef.current;
+    onDemandVoiceRef.current = null;
+    onDemandVoice?.stop();
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
@@ -121,6 +134,7 @@ export default function CoursePlayer({
     }
     audioRef.current = null;
     setPlaying(false);
+    setOnDemandAudioStatus('idle');
   }, []);
 
   const persist = useCallback((
@@ -149,6 +163,26 @@ export default function CoursePlayer({
     const audio = current?.slide.audio || {};
     return audio[language] || audio.mixed || audio.fr || Object.values(audio)[0];
   }, [current?.slide.audio, language]);
+
+  const restartFromBeginning = useCallback(() => {
+    clearTimers();
+    stopAudio();
+    completedSlideIdsRef.current = [];
+    setCompletedSlideIds([]);
+    setQuestionVisible(false);
+    setQuestionAnswer('');
+    setFeedback(null);
+    setQuestionPanelOpen(false);
+    setTutorResponse(null);
+    setWaitingTutor(false);
+    setSimulationStatus('idle');
+    setSimulationExpanded(false);
+    setCourseCompleted(false);
+    setIndex(0);
+    setStarted(true);
+    persist(0, 0, 'in_progress', []);
+    onRestart?.();
+  }, [clearTimers, onRestart, persist, stopAudio]);
 
   const transcript = useMemo(() => {
     const speech = current?.slide.speech_text || {};
@@ -200,11 +234,43 @@ export default function CoursePlayer({
         setPlaying(false);
         revealTimerRef.current = window.setTimeout(showQuestion, 1800);
       });
+    } else if (transcript.trim()) {
+      // Aucun batch audio : la voix de cette seule diapo est produite au
+      // moment où l'élève l'atteint. `boardVoice` sérialise les requêtes et le
+      // backend conserve le WAV dans son cache disque ; une relecture ne
+      // sollicite donc pas à nouveau le générateur TTS. On ne précharge jamais
+      // les diapositives suivantes pour ne pas bloquer le GPU.
+      setOnDemandAudioStatus('generating');
+      const handle: BoardSpeakHandle = boardVoice.speak(
+        transcript,
+        language,
+        undefined,
+        () => {
+          if (onDemandVoiceRef.current === handle) {
+            setOnDemandAudioStatus('playing');
+            setPlaying(true);
+          }
+        },
+      );
+      onDemandVoiceRef.current = handle;
+      void handle.done.then((spoke) => {
+        if (onDemandVoiceRef.current !== handle) return;
+        onDemandVoiceRef.current = null;
+        setPlaying(false);
+        setOnDemandAudioStatus(spoke ? 'idle' : 'unavailable');
+        if (spoke) {
+          showQuestion();
+        } else {
+          const seconds = current.slide.timing?.reading_seconds
+            ?? clamp(Math.ceil(transcript.length / 22), 6, 18);
+          revealTimerRef.current = window.setTimeout(showQuestion, seconds * 1000);
+        }
+      });
     } else {
       const seconds = current.slide.timing?.reading_seconds ?? clamp(Math.ceil(transcript.length / 22), 6, 18);
       revealTimerRef.current = window.setTimeout(showQuestion, seconds * 1000);
     }
-  }, [clearTimers, current, currentAudio?.url, index, initialIndex, muted, persist, progress?.audio_position_ms, showQuestion, speed, started, stopAudio, transcript.length]);
+  }, [clearTimers, current, currentAudio?.url, index, initialIndex, language, muted, persist, progress?.audio_position_ms, showQuestion, speed, started, stopAudio, transcript]);
 
   useEffect(() => {
     beginSlide();
@@ -231,6 +297,7 @@ export default function CoursePlayer({
     setCompletedSlideIds(nextCompleted);
     if (index >= flatSlides.length - 1) {
       persist(index, 0, 'completed', nextCompleted);
+      setCourseCompleted(true);
       onComplete?.();
       return;
     }
@@ -238,6 +305,18 @@ export default function CoursePlayer({
     persist(next, 0, 'in_progress', nextCompleted);
     setIndex(next);
   }, [completedSlideIds, current, flatSlides.length, index, onComplete, persist]);
+
+  const goToPrevious = useCallback(() => {
+    if (index <= 0) return;
+    clearTimers();
+    stopAudio();
+    const previous = index - 1;
+    setCourseCompleted(false);
+    setQuestionVisible(false);
+    setFeedback(null);
+    setIndex(previous);
+    persist(previous, 0, 'in_progress');
+  }, [clearTimers, index, persist, stopAudio]);
 
   const submitAttempt = useCallback(async (
     outcome: 'answered' | 'skipped_timeout' | 'skipped_manual',
@@ -291,6 +370,19 @@ export default function CoursePlayer({
   }, []);
 
   const togglePlayback = () => {
+    const onDemandVoice = onDemandVoiceRef.current;
+    if (onDemandVoice) {
+      if (onDemandAudioStatus === 'playing') {
+        onDemandVoice.pause();
+        setOnDemandAudioStatus('paused');
+        setPlaying(false);
+      } else if (onDemandAudioStatus === 'paused') {
+        onDemandVoice.resume();
+        setOnDemandAudioStatus('playing');
+        setPlaying(true);
+      }
+      return;
+    }
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) void audio.play().then(() => setPlaying(true));
@@ -298,6 +390,11 @@ export default function CoursePlayer({
   };
 
   const openTutorQuestion = () => {
+    if (onDemandVoiceRef.current) {
+      onDemandVoiceRef.current.pause();
+      setOnDemandAudioStatus('paused');
+      setPlaying(false);
+    }
     const audio = audioRef.current;
     if (audio) {
       pausedAudioPositionRef.current = audio.currentTime;
@@ -324,6 +421,12 @@ export default function CoursePlayer({
     setStudentQuestion('');
     setTutorResponse(null);
     setWaitingTutor(false);
+    if (onDemandVoiceRef.current && onDemandAudioStatus === 'paused') {
+      onDemandVoiceRef.current.resume();
+      setOnDemandAudioStatus('playing');
+      setPlaying(true);
+      return;
+    }
     const audio = audioRef.current;
     if (audio && audio.duration && pausedAudioPositionRef.current < audio.duration) {
       audio.currentTime = Math.max(0, pausedAudioPositionRef.current - 1.5);
@@ -338,6 +441,12 @@ export default function CoursePlayer({
     setStudentQuestion('');
     setTutorResponse(null);
     setWaitingTutor(false);
+    if (onDemandVoiceRef.current && onDemandAudioStatus === 'paused') {
+      onDemandVoiceRef.current.resume();
+      setOnDemandAudioStatus('playing');
+      setPlaying(true);
+      return;
+    }
     const audio = audioRef.current;
     if (audio && audio.duration && pausedAudioPositionRef.current < audio.duration) {
       audio.currentTime = pausedAudioPositionRef.current;
@@ -395,7 +504,15 @@ export default function CoursePlayer({
                 {(visual.caption || current.slide.screen_content?.caption) && <p className="shrink-0 pt-2 text-center text-xs text-white/55">{visual.caption || current.slide.screen_content?.caption}</p>}
               </div>
             )}
-            {visual.kind === 'schema' && schema && <SVGSchemaViewer schema={schema} autoAnimate className="p-2" />}
+            {visual.kind === 'schema' && schema && <SVGSchemaViewer schema={schema} autoAnimate handDrawn className="p-2" />}
+            {visual.kind === 'scientific' && visual.scientific && (
+              <div className="h-full w-full overflow-auto p-3">
+                <ScientificVisual spec={visual.scientific} />
+                {(visual.caption || current.slide.screen_content?.caption) && (
+                  <p className="pt-2 text-center text-xs text-white/55">{visual.caption || current.slide.screen_content?.caption}</p>
+                )}
+              </div>
+            )}
             {visual.kind === 'simulation' && visual.url && (
               <>
                 <button
@@ -408,7 +525,12 @@ export default function CoursePlayer({
                 <SessionMediaDisplay media={{ type: 'simulation', url: visual.url, caption: visual.caption }} isVisible onSimulationUpdate={handleSimulation} />
               </>
             )}
-            {(visual.kind === 'none' || !visual.kind || (visual.kind === 'schema' && !schema)) && (
+            {/* Un visuel annoncé mais introuvable (id de schéma inconnu, spec
+                refusée par le serveur) retombe sur le texte essentiel : la
+                diapositive reste lisible au lieu de laisser un cadre vide. */}
+            {(visual.kind === 'none' || !visual.kind
+              || (visual.kind === 'schema' && !schema)
+              || (visual.kind === 'scientific' && !visual.scientific)) && (
               <div className="h-full grid place-items-center p-8 text-center">
                 <div className="max-w-2xl">
                   <p className="text-xl lg:text-3xl font-semibold text-cyan-100">{current.slide.screen_content?.essential_text || current.slide.screen_content?.lead || current.slide.title}</p>
@@ -421,7 +543,14 @@ export default function CoursePlayer({
 
         <aside className="min-h-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-[#0a1424] p-3 flex flex-col gap-3 overflow-y-auto">
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <div className="flex items-center gap-2 text-xs text-white/45 mb-2"><span>🎧</span><span>Transcription du professeur</span>{!currentAudio?.url && <span className="ml-auto text-amber-300/80">audio à valider</span>}</div>
+            <div className="flex items-center gap-2 text-xs text-white/45 mb-2">
+              <span>🎧</span><span>Transcription du professeur</span>
+              {!currentAudio?.url && (
+                <span className="ml-auto text-amber-300/80">
+                  {onDemandAudioStatus === 'generating' ? 'génération de cette diapo…' : onDemandAudioStatus === 'unavailable' ? 'lecture silencieuse' : 'audio à la demande'}
+                </span>
+              )}
+            </div>
             <p className="text-sm leading-relaxed text-white/80">{transcript || 'Le speech de cette diapositive est en préparation.'}</p>
           </div>
 
@@ -443,12 +572,13 @@ export default function CoursePlayer({
           )}
 
           <div className="mt-auto flex flex-wrap items-center gap-2">
-            <button onClick={() => { persist(Math.max(0, index - 1)); setIndex(Math.max(0, index - 1)); }} disabled={index === 0} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs disabled:opacity-30">← Retour</button>
-            {currentAudio?.url && <button onClick={togglePlayback} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">{playing ? '⏸ Pause' : '▶ Reprendre'}</button>}
+            <button onClick={goToPrevious} disabled={index === 0} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs disabled:opacity-30">← Précédent</button>
+            <button onClick={restartFromBeginning} className="rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">↺ Recommencer</button>
+            {(currentAudio?.url || onDemandAudioStatus === 'playing' || onDemandAudioStatus === 'paused') && <button onClick={togglePlayback} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">{playing ? '⏸ Pause' : '▶ Reprendre'}</button>}
             <button onClick={() => setMuted(value => { const next = !value; if (audioRef.current) audioRef.current.muted = next; return next; })} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">{muted ? '🔇' : '🔊'}</button>
             <select value={speed} onChange={e => { const next = Number(e.target.value); setSpeed(next); if (audioRef.current) audioRef.current.playbackRate = next; }} className="rounded-lg border border-white/10 bg-[#111c2e] px-2 py-2 text-xs"><option value={0.85}>0,85×</option><option value={1}>1×</option><option value={1.15}>1,15×</option><option value={1.3}>1,3×</option></select>
             <button onClick={openTutorQuestion} className="rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs text-violet-100">✋ Question</button>
-            <button onClick={() => questionVisible && !feedback ? void submitAttempt('skipped_manual') : goToNext()} className="ml-auto rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold">Suivant →</button>
+            <button onClick={() => questionVisible && !feedback ? void submitAttempt('skipped_manual') : goToNext()} className="ml-auto rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold">{index >= flatSlides.length - 1 ? 'Terminer ✓' : 'Suivant →'}</button>
           </div>
           {visual.kind === 'simulation' && <p className="text-[10px] text-white/35">État de la simulation : {simulationStatus}</p>}
         </aside>
@@ -456,7 +586,21 @@ export default function CoursePlayer({
 
       {!started && (
         <div className="absolute inset-0 z-30 grid place-items-center bg-[#050b14]/90 backdrop-blur-sm p-6">
-          <div className="max-w-md text-center"><div className="text-5xl">🎓</div><h2 className="mt-4 text-2xl font-semibold">{deck.title}</h2><p className="mt-2 text-sm text-white/60">Le premier clic autorise le son. Les audios validés seront ensuite lus sans aucune régénération.</p><button onClick={() => setStarted(true)} className="mt-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20">Commencer l’activité</button></div>
+          <div className="max-w-md text-center"><div className="text-5xl">🎓</div><h2 className="mt-4 text-2xl font-semibold">{deck.title}</h2><p className="mt-2 text-sm text-white/60">{progress?.status === 'completed' ? 'Ce cours est déjà validé. Tu peux le refaire entièrement sans perdre ta réussite.' : "Le son est généré seulement pour la diapo en cours, puis conservé pour les prochaines lectures. Le générateur n'est jamais occupé par tout le cours à l'avance."}</p><button onClick={progress?.status === 'completed' ? restartFromBeginning : () => setStarted(true)} className="mt-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20">{progress?.status === 'completed' ? '↺ Recommencer depuis le début' : initialIndex > 0 ? 'Reprendre le cours' : 'Commencer le cours'}</button></div>
+        </div>
+      )}
+
+      {courseCompleted && (
+        <div className="absolute inset-0 z-30 grid place-items-center bg-[#050b14]/92 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-emerald-400/25 bg-[#0d1c29] p-6 text-center shadow-2xl shadow-emerald-500/10">
+            <div className="text-5xl">🎉</div>
+            <h2 className="mt-4 text-2xl font-semibold text-emerald-100">Cours terminé</h2>
+            <p className="mt-2 text-sm leading-relaxed text-white/60">Ta réussite reste enregistrée. Tu peux recommencer immédiatement pour consolider les schémas, les questions et les simulations.</p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button onClick={() => { setCourseCompleted(false); goToPrevious(); }} disabled={index === 0} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm disabled:opacity-30">← Revoir la diapo précédente</button>
+              <button onClick={restartFromBeginning} className="rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-5 py-3 text-sm font-semibold text-white">↺ Recommencer depuis le début</button>
+            </div>
+          </div>
         </div>
       )}
 

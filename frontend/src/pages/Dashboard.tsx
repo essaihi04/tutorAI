@@ -158,7 +158,7 @@ export default function Dashboard() {
       icon: BookOpen,
       title: 'Apprendre un cours',
       description: 'Explication pas à pas avec ton tuteur.',
-      path: hasPlan ? '/coaching/plan' : '/coaching/diagnostic',
+      path: '/courses',
       color: 'from-indigo-500 to-violet-500',
     },
     {

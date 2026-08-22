@@ -1,14 +1,15 @@
-import { BarChart3, Home, LogOut, MessageCircle } from 'lucide-react';
+import { BarChart3, BookOpen, Home, LogOut, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLearningContextStore } from '../stores/learningContextStore';
 import type { LearningSubject } from '../stores/learningContextStore';
 import { MoalimLogo } from './MoalimShell';
 
-export type StudentNavKey = 'today' | 'tutor' | 'progress';
+export type StudentNavKey = 'today' | 'courses' | 'tutor' | 'progress';
 
 const NAV_ITEMS = [
   { key: 'today' as const, label: "Aujourd'hui", icon: Home, path: '/dashboard' },
+  { key: 'courses' as const, label: 'Mes cours', icon: BookOpen, path: '/courses' },
   { key: 'tutor' as const, label: 'Mon tuteur', icon: MessageCircle, path: '/tutor' },
   { key: 'progress' as const, label: 'Mes progrès', icon: BarChart3, path: '/progress' },
 ];

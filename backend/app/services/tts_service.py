@@ -138,6 +138,30 @@ class TTSResult:
     cached: bool = False
 
 
+def _reglages_signature(provider: str) -> str:
+    """Ce qui, en dehors du texte, change le son produit.
+
+    Seul le fournisseur Academy est paramétrable de notre côté ; les autres
+    n'ont pas de réglage exposé, et leur signature reste vide pour ne pas
+    invalider leur cache sans raison.
+
+    `tts_cache_salt` est la porte de sortie manuelle : rien ici ne peut
+    détecter qu'un AUTRE checkpoint est servi sur le Colab sous le même nom
+    de voix. Quand tu changes le modèle servi, incrémente `TTS_CACHE_SALT`
+    dans `.env` — c'est plus sûr et plus rapide que de vider le dossier.
+    """
+    sel = str(getattr(settings, "tts_cache_salt", "") or "")
+    if provider != "academy":
+        return sel
+    return "|".join((
+        sel,
+        f"e{settings.academy_tts_exaggeration:.3f}",
+        f"t{settings.academy_tts_temperature:.3f}",
+        f"c{settings.academy_tts_cfg_weight:.3f}",
+        f"n{int(settings.academy_tts_normaliser)}",
+    ))
+
+
 class _TTSCache:
     def __init__(self, root: Path, max_bytes: int):
         self.root = root
@@ -146,7 +170,17 @@ class _TTSCache:
 
     @staticmethod
     def _key(provider: str, voice: str, lang: str, text: str) -> str:
-        h = hashlib.md5(f"{provider}|{voice}|{lang}|{text}".encode("utf-8")).hexdigest()
+        # Les réglages de génération font partie de l'identité de l'audio.
+        # Sans eux, changer la température ou le cfg_weight ne changeait rien :
+        # l'app resservait le WAV d'avant sans jamais rappeler le Colab. Mesuré
+        # le 2026-08-22 : 552 des 584 entrées dataient d'avant le passage de la
+        # température de 0.7 à 0.5 du 19/08 et étaient toujours servies.
+        # Le serveur Colab, lui, avait la bonne clé depuis le début
+        # (`Cache.cle`, serveur_tts.py) — c'est ici que le compte était faux.
+        h = hashlib.md5(
+            f"{provider}|{voice}|{lang}|{_reglages_signature(provider)}|{text}"
+            .encode("utf-8")
+        ).hexdigest()
         return h
 
     def _path(self, provider: str, voice: str, lang: str, text: str, ext: str) -> Path:
