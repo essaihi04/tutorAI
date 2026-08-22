@@ -40,11 +40,12 @@ SCHEMA_CATALOG: list[dict[str, str]] = [
     {"id": 'svt_cycle_krebs', "title": 'Cycle de Krebs — Détail des réactions', "subject": 'svt'},
     {"id": 'svt_fibre_musculaire', "title": 'Ultrastructure de la fibre musculaire striée', "subject": 'svt'},
     {"id": 'svt_bilan_energetique', "title": 'Bilan énergétique — Respiration vs Fermentation', "subject": 'svt'},
+    {"id": 'svt_dorsale_accretion', "title": 'Dorsale océanique — Accrétion et expansion océanique', "subject": 'svt'},
 ]
 
 SCHEMA_IDS: frozenset[str] = frozenset(entry["id"] for entry in SCHEMA_CATALOG)
 
-SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — 29 identifiants]
+SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — 30 identifiants]
 Ces schémas sont déjà dessinés, animés et annotés. Les afficher coûte moins
 cher et rend mieux qu'un dessin improvisé : si l'un d'eux couvre la notion,
 c'est LUI qu'on affiche, dans TOUS les modes (cours, exercice, examen,
@@ -68,6 +69,7 @@ pas, et l'élève ne voit rien.
     svt_cycle_krebs — Cycle de Krebs — Détail des réactions
     svt_fibre_musculaire — Ultrastructure de la fibre musculaire striée
     svt_bilan_energetique — Bilan énergétique — Respiration vs Fermentation
+    svt_dorsale_accretion — Dorsale océanique — Accrétion et expansion océanique
   PHYSIQUE :
     phys_ondes_mecaniques — Ondes mécaniques — Caractéristiques
     phys_dipole_rc — Dipôle RC — Charge et décharge

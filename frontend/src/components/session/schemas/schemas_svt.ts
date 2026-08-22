@@ -1085,7 +1085,131 @@ export const svt_bilan_energetique: ScientificSchema = {
   ],
 };
 
+/**
+ * Dorsale océanique — dessinée à la main, et c'est un choix.
+ *
+ * Une coupe de géologie est faite de couches et de flèches : des formes
+ * régulières, que le tracé manuel rend mieux et plus vite qu'une illustration
+ * importée. C'est l'inverse exact de la mitochondrie, dont les replis
+ * organiques justifiaient l'import.
+ *
+ * Trois points du programme commandent la composition : l'accrétion est
+ * SYMÉTRIQUE par rapport à l'axe, les sédiments s'épaississent en s'éloignant
+ * de l'axe, et les anomalies magnétiques se lisent en bandes symétriques. Le
+ * profil magnétique est donc placé au-dessus de la coupe, à la verticale des
+ * bandes qu'il enregistre — un élève doit pouvoir suivre la colonne du regard.
+ */
+export const svt_dorsale_accretion: ScientificSchema = {
+  id: 'svt_dorsale_accretion',
+  title: 'Dorsale océanique — Accrétion et expansion océanique',
+  subject: 'svt',
+  keywords: ['dorsale', 'accrétion', 'expansion océanique', 'rift', 'basalte', 'gabbro',
+    'chambre magmatique', 'anomalies magnétiques', 'asthénosphère', 'الظهرة المحيطية', 'التوسع المحيطي'],
+  category: 'process',
+  viewBox: '0 0 920 620',
+  backgroundColor: '#f8fafc',
+  layers: [
+    { id: 'title', label: 'Titre', delay: 0, svgContent: `
+      <text x="460" y="34" text-anchor="middle" font-size="27" font-weight="bold" fill="#0f172a" font-family="system-ui">La dorsale océanique — accrétion</text>
+      <text x="460" y="58" text-anchor="middle" font-size="15" fill="#475569" font-family="system-ui">الظهرة المحيطية — تشكل قشرة محيطية جديدة وتوسع المحيط</text>
+    `},
+    { id: 'anomalies', label: 'Anomalies magnétiques', delay: 300, svgContent: `
+      <text x="24" y="84" font-size="14" font-weight="700" fill="#1e293b" font-family="system-ui">Profil magnétique — bandes symétriques de part et d'autre de l'axe</text>
+      <rect x="24" y="92" width="872" height="26" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+      <rect x="24" y="92" width="70" height="26" fill="#1e293b"/>
+      <rect x="164" y="92" width="66" height="26" fill="#1e293b"/>
+      <rect x="298" y="92" width="58" height="26" fill="#1e293b"/>
+      <rect x="418" y="92" width="84" height="26" fill="#1e293b"/>
+      <rect x="564" y="92" width="58" height="26" fill="#1e293b"/>
+      <rect x="690" y="92" width="66" height="26" fill="#1e293b"/>
+      <rect x="826" y="92" width="70" height="26" fill="#1e293b"/>
+      <line x1="460" y1="86" x2="460" y2="128" stroke="#dc2626" stroke-width="2" stroke-dasharray="5,4"/>
+      <text x="470" y="134" font-size="13" font-weight="700" fill="#dc2626" font-family="system-ui">axe de la dorsale</text>
+    `},
+    { id: 'ocean', label: 'Océan', delay: 500, svgContent: `
+      <rect x="24" y="146" width="872" height="52" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+      <text x="40" y="176" font-size="15" font-weight="700" fill="#1d4ed8" font-family="system-ui">Océan — المحيط</text>
+      <line x1="300" y1="186" x2="196" y2="186" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+      <line x1="620" y1="186" x2="724" y2="186" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+      <text x="248" y="180" text-anchor="middle" font-size="13" font-weight="700" fill="#1d4ed8" font-family="system-ui">≈ 2 cm/an</text>
+      <text x="672" y="180" text-anchor="middle" font-size="13" font-weight="700" fill="#1d4ed8" font-family="system-ui">≈ 2 cm/an</text>
+    `},
+    { id: 'croute', label: 'Croûte océanique', delay: 800, svgContent: `
+      <!-- Basaltes en coussins : la surface se relève vers l'axe, échancrée par le rift -->
+      <path d="M 24 246 Q 240 226 436 200 L 444 224 L 476 224 L 484 200 Q 680 226 896 246
+               L 896 280 Q 680 260 484 234 L 476 258 L 444 258 L 436 234 Q 240 260 24 280 Z"
+            fill="#475569" stroke="#0f172a" stroke-width="1.5"/>
+      <!-- Gabbros -->
+      <path d="M 24 280 Q 240 260 436 234 L 444 258 L 476 258 L 484 234 Q 680 260 896 280
+               L 896 322 Q 680 302 484 276 L 476 300 L 444 300 L 436 276 Q 240 302 24 322 Z"
+            fill="#94a3b8" stroke="#475569" stroke-width="1.5"/>
+      <!-- Manteau lithosphérique : mince à l'axe, épais en s'éloignant -->
+      <path d="M 24 322 Q 240 302 436 276 L 444 300 L 476 300 L 484 276 Q 680 302 896 322
+               L 896 424 Q 680 392 484 330 L 476 330 L 444 330 L 436 330 Q 240 392 24 424 Z"
+            fill="#4d7c0f" stroke="#365314" stroke-width="1.5"/>
+      <!-- Les noms de couche se posent à DROITE, où les bandes sont les plus
+           épaisses : au centre elles se pincent vers l'axe et un mot déborde
+           sur la bande voisine — l'élève lirait « gabbros » sur du basalte.
+           Les ordonnées sont relevées sur le rendu, pas estimées. -->
+      <text x="700" y="260" font-size="14" font-weight="700" fill="#f8fafc" font-family="system-ui">Basaltes en coussins</text>
+      <text x="700" y="296" font-size="14" font-weight="700" fill="#1e293b" font-family="system-ui">Gabbros</text>
+      <text x="700" y="356" font-size="14" font-weight="700" fill="#f0fdf4" font-family="system-ui">Manteau lithosphérique</text>
+    `},
+    { id: 'sediments', label: 'Sédiments', delay: 1000, svgContent: `
+      <!-- Ils s'épaississent en s'éloignant de l'axe : la croûte y est plus vieille -->
+      <path d="M 24 248 L 24 216 Q 200 210 344 212 Q 240 230 24 248 Z" fill="#fde68a" stroke="#ca8a04" stroke-width="1.5"/>
+      <path d="M 896 248 L 896 216 Q 720 210 576 212 Q 680 230 896 248 Z" fill="#fde68a" stroke="#ca8a04" stroke-width="1.5"/>
+      <line x1="150" y1="228" x2="150" y2="208" stroke="#a16207" stroke-width="1.5"/>
+      <text x="150" y="204" text-anchor="middle" font-size="13" font-weight="700" fill="#a16207" font-family="system-ui">Sédiments</text>
+    `},
+    { id: 'asthenosphere', label: 'Asthénosphère', delay: 1200, svgContent: `
+      <path d="M 24 424 Q 240 392 436 330 L 476 330 Q 680 392 896 424 L 896 470 L 24 470 Z"
+            fill="#fb923c" stroke="#ea580c" stroke-width="1.5"/>
+      <path d="M 250 452 Q 330 420 400 400" fill="none" stroke="#7c2d12" stroke-width="2.5" marker-end="url(#arrowRed)"/>
+      <path d="M 670 452 Q 590 420 520 400" fill="none" stroke="#7c2d12" stroke-width="2.5" marker-end="url(#arrowRed)"/>
+      <text x="460" y="462" text-anchor="middle" font-size="14" font-weight="700" fill="#7c2d12" font-family="system-ui">Asthénosphère — remontée de matériel chaud</text>
+    `},
+    { id: 'magma', label: 'Chambre magmatique', delay: 1400, svgContent: `
+      <ellipse cx="460" cy="330" rx="86" ry="36" fill="#dc2626" stroke="#7f1d1d" stroke-width="2"/>
+      <path d="M 460 296 L 460 262" stroke="#dc2626" stroke-width="6" stroke-linecap="round"/>
+      <path d="M 460 268 L 452 282 L 468 282 Z" fill="#dc2626"/>
+      <text x="460" y="322" text-anchor="middle" font-size="14" font-weight="700" fill="#fff5f5" font-family="system-ui">Chambre magmatique</text>
+      <!-- Le nom du rift ne tient pas dans l'échancrure : il se lit dans l'eau,
+           relié au fossé par un trait. -->
+      <line x1="528" y1="180" x2="468" y2="202" stroke="#dc2626" stroke-width="1.8"/>
+      <text x="566" y="176" text-anchor="middle" font-size="15" font-weight="800" fill="#dc2626" font-family="system-ui">Rift axial</text>
+    `},
+    { id: 'bilan', label: 'À retenir', delay: 1600, svgContent: `
+      <rect x="24" y="490" width="872" height="112" rx="14" fill="#ffffff" stroke="#38bdf8" stroke-width="2"/>
+      <text x="44" y="516" font-size="16" font-weight="800" fill="#0369a1" font-family="system-ui">À retenir — ما يجب حفظه</text>
+      <text x="44" y="542" font-size="14" fill="#334155" font-family="system-ui">• Le magma remonte à l'axe et forme une croûte océanique NEUVE : basaltes en coussins puis gabbros.</text>
+      <text x="44" y="566" font-size="14" fill="#334155" font-family="system-ui">• Tout est SYMÉTRIQUE de part et d'autre de l'axe : âge, épaisseur des sédiments, anomalies magnétiques.</text>
+      <text x="44" y="590" font-size="14" fill="#334155" font-family="system-ui">• En s'éloignant, la lithosphère refroidit, s'épaissit et s'enfonce → l'océan s'élargit d'environ 2 cm par an.</text>
+    `},
+  ],
+  annotations: [
+    { id: 'a_rift', x: 414, y: 196, width: 92, height: 46, label: 'Rift axial', color: '#dc2626',
+      description: "Fossé d'effondrement à l'aplomb de l'axe : c'est là que la croûte neuve se met en place et que les deux plaques se séparent." },
+    { id: 'a_magma', x: 374, y: 294, width: 172, height: 72, label: 'Chambre magmatique', color: '#7f1d1d',
+      description: "Réservoir de magma issu de la fusion partielle de l'asthénosphère par décompression. Il alimente basaltes et gabbros." },
+    { id: 'a_sediments', x: 30, y: 214, width: 180, height: 34, label: 'Sédiments', color: '#a16207',
+      description: "Leur épaisseur augmente en s'éloignant de l'axe : plus la croûte est ancienne, plus elle a eu le temps d'en accumuler." },
+    { id: 'a_anomalies', x: 24, y: 92, width: 240, height: 26, label: 'Anomalies magnétiques', color: '#1e293b',
+      description: "Les basaltes enregistrent le champ magnétique au moment de leur refroidissement. Les bandes symétriques prouvent l'expansion océanique." },
+    { id: 'a_asthenosphere', x: 360, y: 428, width: 200, height: 40, label: 'Asthénosphère', color: '#7c2d12',
+      description: "Manteau ductile et chaud. Sa remontée sous l'axe provoque la fusion partielle par décompression." },
+  ],
+  highlights: [
+    { id: 'h_rift', cx: 460, cy: 216, radius: 46, label: 'Rift axial' },
+    { id: 'h_magma', cx: 460, cy: 330, radius: 60, label: 'Chambre magmatique' },
+    { id: 'h_sediments', cx: 120, cy: 232, radius: 44, label: 'Sédiments' },
+    { id: 'h_anomalies', cx: 200, cy: 105, radius: 52, label: 'Anomalies magnétiques' },
+    { id: 'h_asthenosphere', cx: 460, cy: 448, radius: 56, label: 'Asthénosphère' },
+  ],
+};
+
 export const SVT_SCHEMAS = [
+  svt_dorsale_accretion,
   svt_glycolyse,
   svt_respiration_cellulaire,
   svt_fermentation,

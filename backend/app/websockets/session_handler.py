@@ -2749,7 +2749,14 @@ RÈGLES:
             f"reason={decision.get('reason_code')} confidence={decision.get('confidence')} max_tokens={max_tokens}"
         )
 
-        should_force_schema = needs_drawing or self.session_mode == "coaching"
+        # La question libre est le mode où l'élève apprend le plus souvent seul,
+        # et c'était le seul où le tableau restait facultatif : le tuteur y
+        # répondait en prose, et toute la bibliothèque de schémas ne servait à
+        # rien. Il y est désormais exigé comme en coaching. Le garde-fou reste
+        # le même deux cents lignes plus bas : un tour PUREMENT socratique — une
+        # question posée à l'élève, sans contenu — lève l'exigence, sinon on
+        # recopierait la question au tableau.
+        should_force_schema = needs_drawing or self.session_mode in ("coaching", "libre")
         expected_structured_response = should_force_schema or preferred_resource_type in {"whiteboard", "image", "simulation", "exam"}
 
         # ── STREAMING RESPONSE (FAST UX) ──
