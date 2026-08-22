@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import math
 import re
+import unicodedata
 from typing import Any
 
 
@@ -34,6 +35,9 @@ MOTEURS AUTORISÉS dans `line.scientific` :
 Format JSXGraph :
 {"type":"scientific","content":"Figure","scientific":{"engine":"jsxgraph","title":"Bilan des forces","boundingBox":[-5,5,5,-5],"axis":true,"grid":false,"elements":[{"type":"point","points":[{"x":0,"y":0}],"label":"S","color":"cyan"},{"type":"arrow","points":[{"x":0,"y":0},{"x":0,"y":-3}],"label":"Poids","color":"red"}]}}
 Types d'éléments : `point`, `segment`, `line`, `arrow`, `circle`, `function`.
+Un cercle se donne par `"center":{"x":..,"y":..}` et `"radius":..`.
+Il n'existe NI polygone NI texte libre : un triangle se trace en `segment`,
+une légende se met dans le `label` de l'élément concerné.
 Une fonction utilise `expression` avec x, nombres et seulement sin, cos, tan,
 sqrt, abs, exp, ln, log, pi, e. Écris toujours la multiplication avec `*` :
 `2*x`, jamais `2x`.
@@ -44,6 +48,9 @@ Layouts : `breadthfirst`, `circle`, `grid`, `cose`.
 
 Format Matter :
 {"type":"scientific","content":"Manipulation","scientific":{"engine":"matter","title":"Chute verticale","width":600,"height":320,"gravity":{"x":0,"y":1},"autoplay":true,"bodies":[{"id":"sol","shape":"rectangle","x":300,"y":305,"width":580,"height":20,"isStatic":true,"label":"Sol"},{"id":"balle","shape":"circle","x":300,"y":60,"radius":22,"label":"Balle","color":"orange","restitution":0.5}]}}
+
+Un corps Matter accepte `"angle"` en RADIANS : c'est ce qui incline un plan
+(`"angle":0.52` pour 30°). Sans lui, le plan est horizontal.
 
 RÈGLES DE QUALITÉ :
 - Toutes les légendes sont courtes et en français.
@@ -96,6 +103,26 @@ def _identifier(value: Any, fallback: str) -> str:
     return fallback
 
 
+def _slug(value: Any) -> str:
+    """Un identifiant de nœud écrit en français, ramené au jeu autorisé.
+
+    Un modèle qui parle français nomme ses nœuds `acétyl_coa` ou
+    `ADN nucléaire` : accents et espaces, donc identifiant refusé. Le nœud
+    survivait sous un nom de repli (`n0`) mais les flèches, elles, citaient
+    toujours l'ancien nom et disparaissaient TOUTES — l'élève recevait un
+    processus sans une seule flèche, c'est-à-dire un schéma faux.
+
+    On translittère au lieu de renommer, et la même fonction sert aux nœuds
+    et aux extrémités des flèches : les deux retombent sur le même mot.
+    """
+    if not isinstance(value, str):
+        return ""
+    folded = unicodedata.normalize("NFKD", value.strip())
+    folded = "".join(char for char in folded if not unicodedata.combining(char))
+    folded = re.sub(r"[^A-Za-z0-9_.-]+", "_", folded).strip("_")
+    return folded[:48]
+
+
 def _point(value: Any, *, minimum: float = -10000, maximum: float = 10000) -> dict[str, float] | None:
     if not isinstance(value, dict):
         return None
@@ -105,9 +132,31 @@ def _point(value: Any, *, minimum: float = -10000, maximum: float = 10000) -> di
     }
 
 
+_IMPLICIT_NUMBER_NAME = re.compile(r"(\d)\s*(?=[A-Za-z(])")
+_IMPLICIT_CLOSING = re.compile(r"\)\s*(?=[A-Za-z0-9(])")
+
+
+def _rewrite_expression(expression: str) -> str:
+    """Les deux façons dont un modèle écrit juste, sans écrire notre syntaxe.
+
+    Le navigateur ne connaît qu'une notation : `^` pour la puissance et un `*`
+    explicite. Un modèle écrit pourtant `x**2` (réflexe Python) et `2x + 1`
+    (réflexe de copie manuscrite) — deux formes MATHÉMATIQUEMENT justes que
+    l'ancien filtre refusait en bloc. La figure disparaissait alors sans un
+    mot, souvent après que le tuteur l'ait annoncée à l'oral.
+
+    On réécrit donc au lieu de refuser. La réécriture est purement
+    syntaxique : elle n'ajoute ni nom ni appel, et le contrôle AST juste
+    après reste seul juge de ce qui est autorisé.
+    """
+    expression = expression.replace("**", "^")
+    expression = _IMPLICIT_NUMBER_NAME.sub(r"\1*", expression)  # 2x → 2*x, 3(x+1) → 3*(x+1)
+    return _IMPLICIT_CLOSING.sub(")*", expression)  # (x+1)(x-1) → (x+1)*(x-1)
+
+
 def _expression(value: Any) -> str | None:
-    expression = _text(value, 100)
-    if not expression or "**" in expression or not _EXPRESSION_CHARS.fullmatch(expression):
+    expression = _rewrite_expression(_text(value, 100))
+    if not expression or not _EXPRESSION_CHARS.fullmatch(expression):
         return None
     names = re.findall(r"[A-Za-z]+", expression)
     if any(name.lower() not in _EXPRESSION_NAMES for name in names):
@@ -158,10 +207,18 @@ def _normalize_jsxgraph(value: dict[str, Any]) -> dict[str, Any] | None:
 
     elements: list[dict[str, Any]] = []
     allowed = {"point", "segment", "line", "arrow", "circle", "function"}
+    # Les mots que le modèle emploie pour une même figure. Un vecteur EST une
+    # flèche : refuser le mot faisait disparaître tout un bilan des forces.
+    synonymes = {
+        "vector": "arrow", "vecteur": "arrow", "fleche": "arrow", "flèche": "arrow",
+        "segment_droite": "segment", "droite": "line", "cercle": "circle",
+        "courbe": "function", "graph": "function", "curve": "function", "fonction": "function",
+    }
     for index, raw in enumerate(raw_elements[:40]):
         if not isinstance(raw, dict):
             continue
         element_type = str(raw.get("type", "")).strip().lower()
+        element_type = synonymes.get(element_type, element_type)
         if element_type not in allowed:
             continue
         element: dict[str, Any] = {"type": element_type}
@@ -184,9 +241,23 @@ def _normalize_jsxgraph(value: dict[str, Any]) -> dict[str, Any] | None:
             element["points"] = points[:2]
         elif element_type == "circle":
             center = _point(raw.get("center"))
+            if center is None and points:
+                # Cercle écrit comme les autres éléments : centre en premier
+                # point, un point du bord en second. C'est la forme que le
+                # modèle produit spontanément, tous les autres types prenant
+                # `points`.
+                center = points[0]
             if center:
                 element["center"] = center
-                element["radius"] = _number(raw.get("radius"), 1, 0.01, 10000)
+                if raw.get("radius") is not None:
+                    element["radius"] = _number(raw.get("radius"), 1, 0.01, 10000)
+                elif len(points) >= 2:
+                    element["radius"] = _number(
+                        math.dist((center["x"], center["y"]), (points[1]["x"], points[1]["y"])),
+                        1, 0.01, 10000,
+                    )
+                else:
+                    element["radius"] = 1.0
             else:
                 continue
         elif element_type == "function":
@@ -227,13 +298,18 @@ def _normalize_cytoscape(value: dict[str, Any]) -> dict[str, Any] | None:
 
     nodes: list[dict[str, Any]] = []
     node_ids: set[str] = set()
+    # Le nom d'origine reste la clé de lecture des flèches : elles citent ce
+    # que le modèle a écrit, pas ce qu'on en a fait.
+    id_par_source: dict[str, str] = {}
     for index, raw in enumerate(raw_nodes[:40]):
         if not isinstance(raw, dict):
             continue
-        node_id = _identifier(raw.get("id"), f"n{index}")
+        node_id = _slug(raw.get("id")) or _identifier(raw.get("id"), f"n{index}")
         if node_id in node_ids:
             continue
         node_ids.add(node_id)
+        if isinstance(raw.get("id"), str):
+            id_par_source[raw["id"].strip()] = node_id
         node = {"id": node_id, "label": _text(raw.get("label"), 60) or node_id}
         if color := _color(raw.get("color")):
             node["color"] = color
@@ -243,8 +319,17 @@ def _normalize_cytoscape(value: dict[str, Any]) -> dict[str, Any] | None:
     for raw in raw_edges[:60]:
         if not isinstance(raw, dict):
             continue
-        source = str(raw.get("from", "")).strip()
-        target = str(raw.get("to", "")).strip()
+
+        def extremite(*cles: str) -> str:
+            """`from`/`to`, ou `source`/`target` — les deux vocabulaires courants."""
+            for cle in cles:
+                brut = str(raw.get(cle, "")).strip()
+                if brut:
+                    return id_par_source.get(brut) or _slug(brut)
+            return ""
+
+        source = extremite("from", "source")
+        target = extremite("to", "target")
         if source not in node_ids or target not in node_ids:
             continue
         edge = {"from": source, "to": target}
@@ -299,6 +384,10 @@ def _normalize_matter(value: dict[str, Any]) -> dict[str, Any] | None:
         else:
             body["width"] = _number(raw.get("width"), 80, 8, width * 1.5)
             body["height"] = _number(raw.get("height"), 36, 8, height * 1.5)
+        # Sans l'angle, un plan incliné se dessinait HORIZONTAL et la caisse
+        # tombait tout droit : la simulation contredisait la leçon.
+        if raw.get("angle") is not None:
+            body["angle"] = _number(raw.get("angle"), 0, -math.pi, math.pi)
         if label := _text(raw.get("label"), 32):
             body["label"] = label
         if color := _color(raw.get("color")):

@@ -40,6 +40,7 @@ function createBody(body: MatterBodySpec): Matter.Body {
     ? Matter.Bodies.circle(body.x, body.y, body.radius || 24, options)
     : Matter.Bodies.rectangle(body.x, body.y, body.width || 80, body.height || 36, options);
 
+  if (typeof body.angle === 'number' && body.angle !== 0) Matter.Body.setAngle(created, body.angle);
   if (body.velocity) Matter.Body.setVelocity(created, body.velocity);
   return created;
 }

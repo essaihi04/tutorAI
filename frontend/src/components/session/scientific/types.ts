@@ -55,6 +55,8 @@ export interface MatterBodySpec {
   radius?: number;
   label?: string;
   color?: string;
+  /** Inclinaison en radians — indispensable au plan incliné. */
+  angle?: number;
   isStatic?: boolean;
   restitution?: number;
   friction?: number;

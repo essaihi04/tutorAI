@@ -28,6 +28,9 @@ const Orientation = lazy(() => import('./pages/Orientation'));
 const DiagnosticBac = lazy(() => import('./pages/DiagnosticBac'));
 const DiagnosticBacResults = lazy(() => import('./pages/DiagnosticBacResults'));
 
+// Planche de contrôle des visuels — jamais servie en production.
+const VisualAudit = lazy(() => import('./dev/VisualAudit'));
+
 function PageLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#070718]">
@@ -61,6 +64,7 @@ export default function App() {
         <Routes>
           {/* Eagerly loaded — no Suspense needed */}
           <Route path="/" element={<Landing />} />
+          {import.meta.env.DEV && <Route path="/dev/visual-audit" element={<VisualAudit />} />}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />

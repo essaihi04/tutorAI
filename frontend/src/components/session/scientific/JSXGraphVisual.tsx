@@ -32,6 +32,11 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
   const color = resolveColor(element.color);
   const attributes = {
     name: element.label || '',
+    // JSXGraph n'affiche le nom d'un segment, d'une droite, d'une flèche ou
+    // d'une courbe QUE si on le demande — seul un point le montre par défaut.
+    // Sans cette ligne, « P » et « R » disparaissaient d'un bilan des forces :
+    // l'élève voyait deux flèches opposées sans savoir laquelle est le poids.
+    withLabel: Boolean(element.label),
     strokeColor: color,
     fillColor: color,
     fixed: element.draggable !== true,
