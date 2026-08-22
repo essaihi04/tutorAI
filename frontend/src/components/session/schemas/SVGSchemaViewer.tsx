@@ -196,6 +196,14 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
         </div>
       )}
 
+      {/* Attribution du dessin importé — exigée par la licence CC BY, donc
+          affichée avec le schéma et non reléguée dans le code. */}
+      {schema.credit && (
+        <div className="absolute bottom-1 right-2 text-[9px] leading-tight text-gray-400/90 max-w-[60%] text-right pointer-events-none">
+          {schema.credit}
+        </div>
+      )}
+
       {/* Layer legend (small) */}
       {animationDone && schema.layers.length > 2 && (
         <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[60%]">

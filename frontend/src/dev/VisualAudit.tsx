@@ -68,7 +68,13 @@ function inspect(schema: ScientificSchema): Verdict[] {
 
   // Comparaison au TEXTE des defs, pas au DOM : au premier rendu le SVG du
   // schéma n'est pas encore monté, et tout marqueur passerait pour absent.
-  const declaredMarkers = new Set(Array.from(SVG_DEFS.matchAll(/id="([^"]+)"/g)).map(match => match[1]));
+  // Un schéma peut apporter ses propres defs (un `clipPath` livré avec un
+  // dessin importé, par exemple) : les siennes comptent autant que les
+  // partagées, sinon on signale une absence qui n'existe pas.
+  const declaredMarkers = new Set([
+    ...Array.from(SVG_DEFS.matchAll(/id="([^"]+)"/g)).map(match => match[1]),
+    ...Array.from(svg.matchAll(/id="([^"]+)"/g)).map(match => match[1]),
+  ]);
   const usedMarkers = new Set(Array.from(svg.matchAll(/url\(#([^)]+)\)/g)).map(match => match[1]));
   const missingMarkers = [...usedMarkers].filter(id => !declaredMarkers.has(id));
   if (missingMarkers.length) {

@@ -33,6 +33,15 @@ export interface ScientificSchema {
   id: string;
   title: string;
   subject: 'svt' | 'physics' | 'chemistry' | 'math';
+  /**
+   * Attribution du dessin, quand il vient d'une bibliothèque externe.
+   *
+   * Ce n'est pas une politesse : les illustrations importées sont sous CC BY,
+   * qui exige que le crédit accompagne l'œuvre partout où elle est affichée.
+   * Le viewer l'affiche donc à l'écran — un crédit resté dans un commentaire
+   * de code ne remplit pas la condition de la licence.
+   */
+  credit?: string;
   keywords: string[];
   category: 'process' | 'structure' | 'cycle' | 'diagram' | 'graph' | 'comparison';
   viewBox: string;
