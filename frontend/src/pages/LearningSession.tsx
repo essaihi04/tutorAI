@@ -26,7 +26,6 @@ import LessonProgressBar from '../components/session/LessonProgressBar';
 import PhaseProgress from '../components/session/PhaseProgress';
 import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
-import SessionModeBanner from '../components/session/SessionModeBanner';
 import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck, CourseProgressSnapshot } from '../components/course/types';
 import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
@@ -268,7 +267,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   // anciennes routes étaient déjà ce même composant, seule l'URL différait.
   const isLibreConnexion = mode === 'libre' || mode === 'explain';
   const [activeMode, setActiveMode] = useState<TutorMode>(() => modeDepuisRoute(mode));
-  const [modeReason, setModeReason] = useState<string>('');
   const isLibre = activeMode === 'question' || activeMode === 'examen';
 
   const navigate = useNavigate();
@@ -406,6 +404,16 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     mq.addEventListener?.('change', onChange as any);
     return () => mq.removeEventListener?.('change', onChange as any);
   }, []);
+
+  // Les parcours scénarisés sont narrés en darija par défaut. L'élève peut
+  // toujours choisir FR ou عربي ensuite depuis l'en-tête de la session.
+  useEffect(() => {
+    if (!courseDeck) return;
+    setLanguage('mixed');
+    if (connected) {
+      wsService.sendJson({ type: 'set_language', language: 'mixed' });
+    }
+  }, [connected, courseDeck, setLanguage]);
 
   // ── Auto-collapse chat on mobile when a content panel takes the stage ──
   useEffect(() => {
@@ -1136,7 +1144,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     wsService.on('mode_changed', (data) => {
       if (!estUnMode(data?.mode)) return;
       setActiveMode(data.mode);
-      setModeReason(typeof data.reason === 'string' ? data.reason : '');
       if (typeof data.phase === 'string' && data.phase) setPhase(data.phase);
     });
 
@@ -2038,12 +2045,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           </div>
         </div>
       </header>
-
-      {/* Ce que le tuteur fait maintenant — affiché, jamais demandé. Il n'y
-          a plus rien à choisir : l'élève parle, le tuteur décide. */}
-      <div className="shrink-0 border-b border-white/5 bg-[#0c0c1d]/60 px-3 py-1.5">
-        <SessionModeBanner mode={activeMode} reason={modeReason} />
-      </div>
 
       {/* TTS Error Banner */}
       {ttsErrorMessage && (
