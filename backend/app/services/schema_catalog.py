@@ -15,18 +15,18 @@ import unicodedata
 from functools import lru_cache
 
 SCHEMA_CATALOG: list[dict] = [
-    {"id": 'chem_cinetique', "title": 'Cinétique chimique — Vitesse de réaction', "subject": 'chemistry', "keywords": ['cinétique', 'vitesse', 'réaction', 'concentration', 'temps demi-réaction', 'avancement', 'سرعة التفاعل', 'حركية كيميائية', 'facteurs cinétiques']},
+    {"id": 'chem_cinetique', "title": 'Transformations lentes et rapides — facteurs cinétiques', "subject": 'chemistry', "keywords": ['cinétique', 'vitesse', 'réaction', 'concentration', 'temps demi-réaction', 'avancement', 'سرعة التفاعل', 'حركية كيميائية', 'facteurs cinétiques']},
     {"id": 'chem_radioactivite', "title": 'Radioactivité — Décroissance radioactive', "subject": 'chemistry', "keywords": ['radioactivité', 'décroissance', 'demi-vie', 'alpha', 'beta', 'gamma', 'noyau', 'نشاط إشعاعي', 'عمر النصف', 'تفكك']},
     {"id": 'chem_acides_bases', "title": 'Acides et bases — Équilibres en solution aqueuse', "subject": 'chemistry', "keywords": ['acide', 'base', 'pH', 'Ka', 'pKa', 'tampon', 'titrage', 'dosage', 'حمض', 'قاعدة', 'معايرة', 'équilibre']},
     {"id": 'chem_piles_electrolyse', "title": 'Piles électrochimiques et électrolyse', "subject": 'chemistry', "keywords": ['pile', 'électrolyse', 'anode', 'cathode', 'oxydation', 'réduction', 'fem', 'galvani', 'عمود كهروكيميائي', 'تحليل كهربائي', 'قطب']},
     {"id": 'chem_esterification', "title": 'Estérification et hydrolyse', "subject": 'chemistry', "keywords": ['ester', 'estérification', 'hydrolyse', 'acide carboxylique', 'alcool', 'rendement', 'catalyse', 'أسترة', 'حلمأة', 'كيمياء عضوية']},
-    {"id": 'math_limites', "title": 'Limites de fonctions — Cas fondamentaux', "subject": 'math', "keywords": ['limite', 'continuité', 'asymptote', 'infini', 'indétermination', 'théorème', 'نهاية', 'دالة', 'استمرارية']},
+    {"id": 'math_limites', "title": 'Limites et continuité — méthodes du BAC', "subject": 'math', "keywords": ['limite', 'continuité', 'asymptote', 'infini', 'indétermination', 'théorème', 'نهاية', 'دالة', 'استمرارية']},
     {"id": 'math_derivation', "title": 'Dérivation — Tableau de dérivées et applications', "subject": 'math', "keywords": ['dérivée', 'dérivation', 'tangente', 'variation', 'tableau', 'extremum', 'مشتقة', 'اشتقاق', 'دراسة دالة']},
     {"id": 'math_exp_ln', "title": 'Fonctions exponentielle et logarithme', "subject": 'math', "keywords": ['exponentielle', 'logarithme', 'ln', 'exp', 'croissance', 'décroissance', 'أسية', 'لوغاريتم']},
     {"id": 'math_suites', "title": 'Suites numériques — Arithmétiques et géométriques', "subject": 'math', "keywords": ['suite', 'arithmétique', 'géométrique', 'convergence', 'raison', 'terme général', 'somme', 'متتالية', 'حسابية', 'هندسية']},
     {"id": 'math_integrales', "title": "Intégration — Primitives et calcul d'aires", "subject": 'math', "keywords": ['intégrale', 'primitive', 'aire', 'intégration', 'parties', 'تكامل', 'مساحة', 'دالة أصلية']},
     {"id": 'math_probabilites', "title": 'Probabilités — Lois et dénombrement', "subject": 'math', "keywords": ['probabilité', 'dénombrement', 'combinaison', 'arrangement', 'bernoulli', 'binomiale', 'variable aléatoire', 'espérance', 'احتمال', 'توزيع', 'ثنائي الحدين']},
-    {"id": 'phys_ondes_mecaniques', "title": 'Ondes mécaniques — Caractéristiques', "subject": 'physics', "keywords": ['onde', 'mécanique', 'transversale', 'longitudinale', 'période', 'longueur onde', 'amplitude', 'fréquence', 'célérité', 'موجة', 'progressive']},
+    {"id": 'phys_ondes_mecaniques', "title": 'Ondes mécaniques progressives — propagation et retard', "subject": 'physics', "keywords": ['onde', 'mécanique', 'progressive', 'perturbation', 'propagation', 'retard', 'célérité', 'transversale', 'longitudinale', 'موجة', 'انتشار']},
     {"id": 'phys_dipole_rc', "title": 'Dipôle RC — Charge et décharge', "subject": 'physics', "keywords": ['rc', 'condensateur', 'charge', 'décharge', 'constante temps', 'tau', 'exponentielle', 'مكثف', 'ثنائي القطب']},
     {"id": 'phys_rlc', "title": 'Oscillations RLC série', "subject": 'physics', "keywords": ['rlc', 'oscillations', 'libres', 'amorties', 'pseudo-période', 'résonance', 'énergie', 'تذبذبات', 'حرة', 'رنين']},
     {"id": 'phys_newton', "title": 'Les trois lois de Newton', "subject": 'physics', "keywords": ['newton', 'lois', 'inertie', 'accélération', 'action réaction', 'force', 'قوانين نيوتن', 'مركز القصور']},
@@ -134,18 +134,18 @@ pas, et l'élève ne voit rien.
     svt_bilan_energetique — Bilan énergétique — Respiration vs Fermentation
     svt_dorsale_accretion — Dorsale océanique — Accrétion et expansion océanique
   PHYSIQUE :
-    phys_ondes_mecaniques — Ondes mécaniques — Caractéristiques
+    phys_ondes_mecaniques — Ondes mécaniques progressives — propagation et retard
     phys_dipole_rc — Dipôle RC — Charge et décharge
     phys_rlc — Oscillations RLC série
     phys_newton — Les trois lois de Newton
   CHIMIE :
-    chem_cinetique — Cinétique chimique — Vitesse de réaction
+    chem_cinetique — Transformations lentes et rapides — facteurs cinétiques
     chem_radioactivite — Radioactivité — Décroissance radioactive
     chem_acides_bases — Acides et bases — Équilibres en solution aqueuse
     chem_piles_electrolyse — Piles électrochimiques et électrolyse
     chem_esterification — Estérification et hydrolyse
   MATHS :
-    math_limites — Limites de fonctions — Cas fondamentaux
+    math_limites — Limites et continuité — méthodes du BAC
     math_derivation — Dérivation — Tableau de dérivées et applications
     math_exp_ln — Fonctions exponentielle et logarithme
     math_suites — Suites numériques — Arithmétiques et géométriques

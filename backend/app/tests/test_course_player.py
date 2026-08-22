@@ -12,19 +12,20 @@ from app.services.course_player_service import CoursePlayerService
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = BACKEND_ROOT.parent
 COURSE_DIR = BACKEND_ROOT / "data" / "courses"
-MANIFEST_PATHS = (
+SVT_MANIFEST_PATHS = (
     COURSE_DIR / "svt_ch1_energy_course_v1.json",
     COURSE_DIR / "svt_ch1_muscle_course_v1.json",
 )
-SVT_SCHEMA_REGISTRY = PROJECT_ROOT / "frontend/src/components/session/schemas/schemas_svt.ts"
+MANIFEST_PATHS = tuple(sorted(COURSE_DIR.glob("*_course_v1.json")))
+SCHEMA_REGISTRY_DIR = PROJECT_ROOT / "frontend/src/components/session/schemas"
 
 
-def _manifests():
-    return [json.loads(path.read_text(encoding="utf-8")) for path in MANIFEST_PATHS]
+def _manifests(paths=MANIFEST_PATHS):
+    return [json.loads(path.read_text(encoding="utf-8")) for path in paths]
 
 
 def test_full_chapter_has_sixteen_timed_activities_and_microquestions():
-    manifests = _manifests()
+    manifests = _manifests(SVT_MANIFEST_PATHS)
     activities = [activity for manifest in manifests for activity in manifest["activities"]]
 
     assert len(activities) == 16
@@ -47,7 +48,8 @@ def test_all_manifest_file_visuals_exist_in_frontend_public():
                 visual = slide.get("visual") or {}
                 url = visual.get("url")
                 if url and url.startswith("/media/"):
-                    assert (PROJECT_ROOT / "frontend" / "public" / url.lstrip("/")).exists(), url
+                    media_path = url.split("?", 1)[0]
+                    assert (PROJECT_ROOT / "frontend" / "public" / media_path.lstrip("/")).exists(), url
 
 
 def test_each_course_has_a_complete_catalog_cover():
@@ -62,8 +64,9 @@ def test_each_course_has_a_complete_catalog_cover():
 
 
 def test_all_manifest_schema_visuals_exist_in_validated_registry():
-    schema_source = SVT_SCHEMA_REGISTRY.read_text(encoding="utf-8")
-    declared_ids = set(re.findall(r"\bid:\s*'([^']+)'", schema_source))
+    declared_ids = set()
+    for path in SCHEMA_REGISTRY_DIR.glob("schemas_*.ts"):
+        declared_ids |= set(re.findall(r"\bid:\s*'([^']+)'", path.read_text(encoding="utf-8")))
     referenced_ids = {
         slide["visual"]["schema_id"]
         for manifest in _manifests()
@@ -79,6 +82,48 @@ def test_all_manifest_schema_visuals_exist_in_validated_registry():
         "svt_muscle_sarcomere",
     }.issubset(declared_ids)
     assert referenced_ids <= declared_ids
+
+
+def test_first_physics_chemistry_and_math_courses_are_complete_and_timed():
+    expected = {"phys_ch1_waves", "chem_ch1_kinetics", "math_ch1_limits"}
+    manifests = [manifest for manifest in _manifests() if manifest.get("stable_id") in expected]
+
+    assert {manifest["stable_id"] for manifest in manifests} == expected
+    assert sum(len(manifest["activities"]) for manifest in manifests) == 14
+    assert sum(len(activity["slides"]) for manifest in manifests for activity in manifest["activities"]) == 28
+    for manifest in manifests:
+        assert manifest["status"] == "draft"
+        assert manifest["lesson_match"]
+        assert manifest["intent_aliases"]
+        for activity in manifest["activities"]:
+            assert 15 <= activity["duration_minutes"] <= 20
+            assert activity["objective_ids"]
+            assert len(activity["slides"]) >= 2
+            for slide in activity["slides"]:
+                assert slide["speech_text"]["fr"].strip()
+                assert slide["speech_text"]["mixed"].strip()
+                assert slide["question"]["prompt"].strip()
+                assert slide["question"]["advance_on_timeout"] is True
+                assert 10 <= slide["question"]["timeout_seconds"] <= 30
+
+
+def test_all_declarative_course_visuals_pass_the_server_normaliser():
+    from app.services.scientific_visual_skill import normalize_scientific_visual
+
+    for manifest in _manifests():
+        for activity in manifest["activities"]:
+            for slide in activity["slides"]:
+                visual = slide.get("visual") or {}
+                if visual.get("kind") == "scientific":
+                    assert normalize_scientific_visual(visual.get("scientific")) is not None, slide["id"]
+
+
+def test_limit_course_does_not_teach_lhopital_outside_the_reference_methods():
+    math_manifest = COURSE_DIR / "math_ch1_limits_course_v1.json"
+    math_schema = SCHEMA_REGISTRY_DIR / "schemas_math.ts"
+    content = math_manifest.read_text(encoding="utf-8") + math_schema.read_text(encoding="utf-8")
+
+    assert "hospital" not in content.casefold()
 
 
 def test_answer_keys_are_removed_from_student_payload():
@@ -146,10 +191,16 @@ def test_explicit_natural_language_requests_resolve_to_the_expected_course():
         "Donne-moi un curs sur la consomation de la matière organique"
     )
     muscle = service.match_manifest_intent("Je veux réviser la contraction musculaire")
+    waves = service.match_manifest_intent("Je veux commencer le cours sur les ondes mécaniques progressives")
+    kinetics = service.match_manifest_intent("Donne-moi un cours sur les facteurs cinétiques")
+    limits = service.match_manifest_intent("Je veux réviser le cours sur les limites et continuité")
 
     assert energy and energy["stable_id"] == "svt_ch1_energy"
     assert typo_energy and typo_energy["stable_id"] == "svt_ch1_energy"
     assert muscle and muscle["stable_id"] == "svt_ch1_muscle"
+    assert waves and waves["stable_id"] == "phys_ch1_waves"
+    assert kinetics and kinetics["stable_id"] == "chem_ch1_kinetics"
+    assert limits and limits["stable_id"] == "math_ch1_limits"
 
 
 def test_ordinary_topic_question_does_not_open_the_full_course():
@@ -226,14 +277,75 @@ def test_catalog_cards_and_tutor_requests_use_the_same_manifests(monkeypatch):
         assert matched and matched["stable_id"] == course["stable_id"]
 
 
-def test_new_simulations_expose_platform_bridge_contract():
-    simulation_paths = (
-        PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/atp-adp/index.html",
-        PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/chimiosmose/index.html",
-        PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/muscle/contraction/index.html",
+def test_first_courses_are_sorted_into_their_subject_folders(monkeypatch):
+    subjects = [
+        {"id": "subject-physics", "name_fr": "Physique", "catalog_key": "physique"},
+        {"id": "subject-chemistry", "name_fr": "Chimie", "catalog_key": "chimie"},
+        {"id": "subject-math", "name_fr": "Mathématiques", "catalog_key": "mathematiques"},
+    ]
+    lessons = [
+        {
+            "id": "lesson-waves", "title_fr": "Laboratoire guidé — Ondes mécaniques progressives",
+            "chapters": {"id": "chapter-waves", "title_fr": "Ondes mécaniques progressives", "subject_id": "subject-physics", "subjects": subjects[0]},
+        },
+        {
+            "id": "lesson-kinetics", "title_fr": "Transformations lentes et transformations rapides",
+            "chapters": {"id": "chapter-kinetics", "title_fr": "Transformations lentes et rapides", "subject_id": "subject-chemistry", "subjects": subjects[1]},
+        },
+        {
+            "id": "lesson-limits", "title_fr": "Limites et continuite",
+            "chapters": {"id": "chapter-limits", "title_fr": "Limites et continuite", "subject_id": "subject-math", "subjects": subjects[2]},
+        },
+    ]
+
+    class FakeQuery:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def select(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=self.rows)
+
+    class FakeAdmin:
+        def table(self, name):
+            return FakeQuery(lessons if name == "lessons" else [])
+
+    monkeypatch.setattr(course_player_module, "get_supabase_admin", lambda: FakeAdmin())
+    monkeypatch.setattr(
+        course_player_module.subject_access_service,
+        "get_context",
+        lambda _student: {"subjects": subjects},
     )
-    for path in simulation_paths:
-        source = path.read_text(encoding="utf-8")
+
+    catalog = asyncio.run(CoursePlayerService().get_catalog({"id": "student"}))
+    courses_by_subject = {
+        folder["catalog_key"]: {course["stable_id"] for course in folder["courses"]}
+        for folder in catalog["subjects"]
+    }
+
+    assert catalog["total_courses"] == 3
+    assert courses_by_subject == {
+        "physique": {"phys_ch1_waves"},
+        "chimie": {"chem_ch1_kinetics"},
+        "mathematiques": {"math_ch1_limits"},
+    }
+
+
+def test_new_simulations_expose_platform_bridge_contract():
+    simulation_sources = [
+        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/atp-adp/index.html").read_text(encoding="utf-8"),
+        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/chimiosmose/index.html").read_text(encoding="utf-8"),
+        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/muscle/contraction/index.html").read_text(encoding="utf-8"),
+        (PROJECT_ROOT / "frontend/public/media/simulations/physics/advanced/waves/index.html").read_text(encoding="utf-8"),
+        (
+            PROJECT_ROOT / "frontend/public/media/simulations/chimie/labs/cinetique/index.html"
+        ).read_text(encoding="utf-8") + (
+            PROJECT_ROOT / "frontend/public/media/simulations/chimie/shared/chem-lab.js"
+        ).read_text(encoding="utf-8"),
+    ]
+    for source in simulation_sources:
         assert "simulation_manifest" in source
         assert "simulation_state" in source
         assert "postMessage" in source

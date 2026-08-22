@@ -222,7 +222,7 @@ export default function VisualAudit() {
                 ))}
               </ul>
               <div className="h-[360px] overflow-hidden rounded-lg bg-white">
-                <SVGSchemaViewer schema={schema} autoAnimate={false} />
+                <SVGSchemaViewer schema={schema} autoAnimate={false} handDrawn />
               </div>
             </section>
           );

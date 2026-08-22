@@ -24,7 +24,7 @@ from app.supabase_client import get_supabase_admin  # noqa: E402
 
 
 COURSE_DIR = BACKEND_ROOT / "data" / "courses"
-MANIFESTS = sorted(COURSE_DIR.glob("svt_ch1_*_course_v1.json"))
+MANIFESTS = sorted(COURSE_DIR.glob("*_course_v1.json"))
 
 
 def normalise(value: str) -> str:

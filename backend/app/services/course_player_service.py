@@ -26,10 +26,7 @@ from app.services.subject_access_service import subject_access_service
 
 _log = logging.getLogger(__name__)
 _DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "courses"
-_LOCAL_MANIFESTS = (
-    _DATA_DIR / "svt_ch1_energy_course_v1.json",
-    _DATA_DIR / "svt_ch1_muscle_course_v1.json",
-)
+_LOCAL_MANIFESTS = tuple(sorted(_DATA_DIR.glob("*_course_v1.json")))
 
 
 def _is_uuid(value: Any) -> bool:
