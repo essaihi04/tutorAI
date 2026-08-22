@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
+from app.services.schema_catalog import match_schema, schema_title
 from app.services.scientific_visual_skill import normalize_scientific_visual
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
@@ -1732,6 +1733,32 @@ class SessionHandler:
         lines.append("- La rédaction texte (« On constate que… », « On en déduit que… ») COEXISTE avec l'échiquier <ui> ; elle ne le remplace pas.")
         return "\n".join(lines)
 
+    def _bloc_schema_disponible(self) -> str:
+        """Nommer le schéma validé de la séance AVANT que le tuteur ne dessine.
+
+        Le catalogue complet est déjà dans le prompt, mais trente
+        identifiants au milieu de mille lignes se noient : le modèle
+        continuait d'esquisser à main levée un muscle strié dont le schéma
+        existait. On lui met donc le bon identifiant sous les yeux, en haut,
+        pour CETTE leçon.
+
+        Le rapprochement ne s'impose qu'au-dessus de 2 mots-clés : au-dessous,
+        c'est une coïncidence de vocabulaire, et proposer le mauvais schéma
+        serait pire que de laisser dessiner.
+        """
+        schema_id, score = self._auto_match_schema()
+        if not schema_id or score < 2:
+            return ""
+        titre = schema_title(schema_id)
+        return (
+            "[SCHÉMA VALIDÉ DISPONIBLE POUR CETTE SÉANCE]\n"
+            f"Un schéma de la bibliothèque couvre le sujet : `{schema_id}` — {titre}.\n"
+            "AFFICHE-LE (`show_schema`) plutôt que de le redessiner : il est déjà\n"
+            "légendé en français et en arabe, aux conventions du BAC. Tes propres\n"
+            "croquis servent alors au RAISONNEMENT (ce qui varie, ce qu'on compare),\n"
+            "pas à refaire l'anatomie que ce schéma montre déjà mieux."
+        )
+
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
         ctx = self.session_context
         if self.session_mode in ("libre", "explain"):
@@ -1789,8 +1816,11 @@ class SessionHandler:
                 scenario_block = self._build_explain_scenario_block()
                 if scenario_block:
                     base_prompt = scenario_block + "\n\n" + base_prompt
+            bloc_schema = self._bloc_schema_disponible()
+            if bloc_schema:
+                base_prompt = bloc_schema + "\n\n" + base_prompt
             return base_prompt
-        return llm_service.build_system_prompt(
+        prompt = llm_service.build_system_prompt(
             subject=ctx.get("subject", "Physique"),
             language=self._prompt_language(),
             chapter_title=ctx.get("chapter_title", ""),
@@ -1806,6 +1836,8 @@ class SessionHandler:
             briefing=self.briefing,
             scenario=self.scenario,
         )
+        bloc_schema = self._bloc_schema_disponible()
+        return f"{bloc_schema}\n\n{prompt}" if bloc_schema else prompt
 
     async def handle_connection(self):
         """Main WebSocket handler loop."""
@@ -6184,75 +6216,44 @@ RÈGLES :
         if len(self.recent_resource_modes) > 5:
             self.recent_resource_modes = self.recent_resource_modes[-5:]
 
-    def _auto_match_schema(self) -> tuple[str | None, int]:
-        """Auto-match a pre-built SVG schema based on current lesson context.
-        Returns (schema_id, score) tuple. Callers decide the minimum threshold."""
-        SCHEMA_KEYWORDS = {
-            "svt_glycolyse": ["glycolyse", "glucose", "pyruvate", "تحلل سكري"],
-            "svt_cellule_mitochondrie": ["cellule", "cellule eucaryote", "cytoplasme", "organite", "خلية"],
-            "svt_mitochondrie_structure": ["mitochondrie", "matrice mitochondriale", "membrane interne", "crêtes mitochondriales", "الميتوكندري"],
-            "svt_respiration_cellulaire": ["respiration cellulaire", "krebs", "chaîne respiratoire", "تنفس خلوي"],
-            "svt_fermentation": ["fermentation", "anaérobie", "lactique", "alcoolique", "تخمر"],
-            "svt_chaine_respiratoire": ["chaîne respiratoire", "phosphorylation oxydative", "atp synthase", "complexe respiratoire", "nadh", "fadh2", "gradient", "السلسلة التنفسية", "الفسفرة التأكسدية"],
-            "svt_cycle_krebs": ["cycle de krebs", "acétyl-coa", "citrate", "oxaloacétate", "acide citrique", "حلقة كريبس", "دورة كريبس"],
-            "svt_bilan_energetique": ["bilan énergétique", "rendement", "comparaison respiration fermentation", "36 atp", "حصيلة طاقية", "مقارنة"],
-            "svt_fibre_musculaire": ["muscle strié", "fibre musculaire", "myofibrille", "faisceau musculaire", "عضلة"],
-            "svt_muscle_sarcomere": ["sarcomère", "actine", "myosine", "contraction musculaire", "strie z", "قطعة عضلية"],
-            "svt_transcription_traduction": ["transcription", "traduction", "arn", "ribosome", "استنساخ", "ترجمة"],
-            "svt_mitose": ["mitose", "division cellulaire", "prophase", "métaphase", "انقسام"],
-            "svt_subduction": ["subduction", "plaque", "tectonique", "اندساس"],
-            "phys_ondes_mecaniques": ["onde", "longueur d'onde", "fréquence", "diffraction", "موجة"],
-            "phys_dipole_rc": ["dipôle rc", "condensateur", "charge", "décharge", "مكثف"],
-            "phys_rlc": ["rlc", "oscillation", "résonance", "تذبذب"],
-            "phys_newton": ["newton", "force", "inertie", "accélération", "قوة", "نيوتن"],
-            "chem_cinetique": ["cinétique", "vitesse de réaction", "catalyseur", "حركية"],
-            "chem_radioactivite": ["radioactivité", "décroissance", "demi-vie", "نشاط إشعاعي"],
-            "chem_acides_bases": ["acide", "base", "ph", "titrage", "حمض", "قاعدة"],
-            "chem_piles_electrolyse": ["pile", "électrolyse", "anode", "cathode", "عمود كهربائي"],
-            "chem_esterification": ["ester", "estérification", "hydrolyse", "أسترة"],
-            "math_limites": ["limite", "asymptote", "نهاية"],
-            "math_derivation": ["dérivée", "dérivation", "tangente", "اشتقاق"],
-            "math_exp_ln": ["exponentielle", "logarithme", "ln", "exp", "أسية"],
-            "math_suites": ["suite", "arithmétique", "géométrique", "متتالية"],
-            "math_integrales": ["intégrale", "primitive", "aire", "تكامل"],
-            "math_probabilites": ["probabilité", "binomiale", "dénombrement", "احتمال"],
-        }
-        
-        # Build context string from lesson info + recent conversation
-        context_parts = []
+    def _contexte_de_rapprochement(self) -> str:
+        """Ce sur quoi porte la séance, vu des mots employés.
+
+        Leçon, chapitre, matière, objectif, et les seuls messages de l'ÉLÈVE :
+        les réponses du tuteur énumèrent des dizaines de notions et feraient
+        gagner n'importe quel schéma.
+        """
         ctx = self.session_context or {}
-        if ctx.get("lesson_title"):
-            context_parts.append(ctx["lesson_title"].lower())
-        if ctx.get("chapter_title"):
-            context_parts.append(ctx["chapter_title"].lower())
-        if ctx.get("subject") or ctx.get("subject_name"):
-            context_parts.append((ctx.get("subject") or ctx.get("subject_name", "")).lower())
-        if ctx.get("objective"):
-            context_parts.append(ctx["objective"].lower())
-        # Include only STUDENT messages (not AI responses which list many topics)
-        for msg in self.conversation_history[-6:]:
-            if isinstance(msg, dict) and msg.get('role') == 'user':
-                content = msg.get('content', '')
-                context_parts.append(content.lower())
-        
-        context = ' '.join(context_parts)
-        _safe_log(f"[AutoMatch] Context string (first 300 chars): {context[:300]}")
-        if not context.strip():
-            _safe_log(f"[AutoMatch] Empty context — cannot match")
-            return None
-        
-        best_id = None
-        best_score = 0
-        for schema_id, keywords in SCHEMA_KEYWORDS.items():
-            score = sum(1 for kw in keywords if kw.lower() in context)
-            if score > 0:
-                _safe_log(f"[AutoMatch] {schema_id}: score={score} (matched: {[kw for kw in keywords if kw.lower() in context]})")
-            if score > best_score:
-                best_score = score
-                best_id = schema_id
-        
-        _safe_log(f"[AutoMatch] Best match: {best_id} (score={best_score})")
-        return (best_id, best_score) if best_score >= 1 else (None, 0)
+        morceaux = [
+            ctx.get("lesson_title") or "",
+            ctx.get("chapter_title") or "",
+            ctx.get("subject") or ctx.get("subject_name") or "",
+            ctx.get("objective") or "",
+        ]
+        for message in self.conversation_history[-6:]:
+            if isinstance(message, dict) and message.get("role") == "user":
+                morceaux.append(message.get("content", ""))
+        return " ".join(m for m in morceaux if m).lower()
+
+    def _auto_match_schema(self) -> tuple[str | None, int]:
+        """Le schéma de la bibliothèque qui colle à la séance, et son score.
+
+        Les mots-clés viennent du catalogue GÉNÉRÉ depuis la bibliothèque du
+        navigateur. Ils étaient auparavant recopiés à la main ici : la liste
+        avait déjà pris du retard, et un schéma ajouté restait donc
+        introuvable par ce chemin — c'est ainsi qu'un cours sur le muscle
+        strié se faisait croquer à main levée alors que
+        `svt_fibre_musculaire` existait.
+        """
+        contexte = self._contexte_de_rapprochement()
+        if not contexte.strip():
+            # Un tuple, TOUJOURS : les deux appelants dépaquettent le retour.
+            _safe_log("[AutoMatch] Contexte vide — aucun rapprochement")
+            return (None, 0)
+
+        schema_id, score = match_schema(contexte)
+        _safe_log(f"[AutoMatch] {schema_id or 'aucun'} (score={score}) sur « {contexte[:120]} »")
+        return (schema_id, score)
 
     async def _load_all_resources(self):
         """Load ALL resources from lesson_resources table (for libre mode)."""

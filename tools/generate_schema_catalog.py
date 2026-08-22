@@ -32,12 +32,17 @@ SUBJECT_LABELS = {
 }
 SUBJECT_ORDER = ["svt", "physics", "chemistry", "math"]
 
-# Un schéma déclare toujours ces trois champs d'affilée, dans cet ordre.
+# Un schéma déclare toujours ces quatre champs dans cet ordre — mais un
+# commentaire peut s'intercaler, et un schéma qui échappe à cette lecture
+# disparaît SILENCIEUSEMENT du catalogue : le tuteur cesse de le connaître.
+COMMENTAIRE = r"(?:\s*//[^\n]*)*\s*"
 ENTRY = re.compile(
-    r"id:\s*'(?P<id>[^']+)',\s*"
-    r"title:\s*'(?P<title>(?:[^'\\]|\\.)*)',\s*"
-    r"subject:\s*'(?P<subject>[^']+)'",
+    r"id:\s*'(?P<id>[^']+)'," + COMMENTAIRE +
+    r"title:\s*'(?P<title>(?:[^'\\]|\\.)*)'," + COMMENTAIRE +
+    r"subject:\s*'(?P<subject>[^']+)'," + COMMENTAIRE +
+    r"keywords:\s*\[(?P<keywords>[^\]]*)\]",
 )
+MOT = re.compile(r"'((?:[^'\\]|\\.)*)'")
 
 
 def collect() -> list[dict[str, str]]:
@@ -54,11 +59,79 @@ def collect() -> list[dict[str, str]]:
                 "id": schema_id,
                 "title": match.group("title").replace("\\'", "'"),
                 "subject": match.group("subject"),
+                # Les mots-clés servent au rapprochement automatique côté
+                # serveur. Les recopier à la main dans le handler, c'était la
+                # même dérive que pour les identifiants : un schéma ajouté
+                # restait introuvable.
+                "keywords": [
+                    mot.replace("\\'", "'")
+                    for mot in MOT.findall(match.group("keywords"))
+                ],
             })
     return found
 
 
-def render(entries: list[dict[str, str]]) -> str:
+HELPERS = r'''@lru_cache(maxsize=None)
+def _motif(mot: str) -> re.Pattern:
+    """Un mot-clé ne compte que s'il est un MOT, pas une suite de lettres.
+
+    Cherché en simple sous-chaîne, `exp` se trouve dans « expansion » et `ln`
+    dans une dizaine de mots : un cours sur la dorsale océanique se voyait
+    proposer le schéma des fonctions exponentielles. Les bornes règlent le
+    problème pour le français comme pour l'arabe, les bornes de mot étant
+    unicode.
+
+    Le pluriel reste admis (`s` ou `x` final) : un cours parle des
+    « myofibrilles » et des « crêtes », le mot-clé est au singulier, et
+    l'exiger à la lettre faisait manquer le bon schéma.
+    """
+    return re.compile(rf"(?<!\w){re.escape(_sans_accents(mot))}[sx]?(?!\w)", re.UNICODE)
+
+
+def _sans_accents(texte: str) -> str:
+    """Un eleve tape « accretion » : le mot-cle accentue doit quand meme repondre."""
+    plie = unicodedata.normalize("NFKD", texte.lower())
+    return "".join(c for c in plie if not unicodedata.combining(c))
+
+
+def match_schema(context: str) -> tuple[str | None, int]:
+    """Le schéma de la bibliothèque qui colle le mieux au contexte, et son score.
+
+    Un mot-clé en PLUSIEURS mots pèse double : « fibre musculaire » désigne un
+    schéma, « muscle » désigne un chapitre entier. Sans cette pondération, un
+    cours sur la fibre musculaire se voyait proposer le sarcomère, les deux
+    étant à égalité sur des mots génériques.
+
+    Les appelants décident du seuil : rapprocher n'est pas afficher.
+    """
+    contexte = _sans_accents(context or "")
+    if not contexte.strip():
+        return None, 0
+
+    meilleur_id, meilleur_score, meilleur_precision = None, 0, 0
+    for entry in SCHEMA_CATALOG:
+        trouves = [mot for mot in entry["keywords"] if _motif(mot).search(contexte)]
+        if not trouves:
+            continue
+        score = sum(2 if " " in mot.strip() else 1 for mot in trouves)
+        # À score égal, le mot-clé le plus long tranche : « fibre musculaire »
+        # l'emporte sur « muscle », qui désigne le chapitre et non la figure.
+        precision = max(len(mot) for mot in trouves)
+        if (score, precision) > (meilleur_score, meilleur_precision):
+            meilleur_id, meilleur_score, meilleur_precision = entry["id"], score, precision
+    return (meilleur_id, meilleur_score) if meilleur_score else (None, 0)
+
+
+def schema_title(schema_id: str) -> str:
+    for entry in SCHEMA_CATALOG:
+        if entry["id"] == schema_id:
+            return entry["title"]
+    return ""
+
+'''
+
+
+def render(entries: list[dict]) -> str:
     by_subject: dict[str, list[dict[str, str]]] = {}
     for entry in entries:
         by_subject.setdefault(entry["subject"], []).append(entry)
@@ -75,12 +148,14 @@ def render(entries: list[dict[str, str]]) -> str:
 
     items = "\n".join(
         "    {"
-        f"\"id\": {entry['id']!r}, \"title\": {entry['title']!r}, \"subject\": {entry['subject']!r}"
+        f"\"id\": {entry['id']!r}, \"title\": {entry['title']!r}, "
+        f"\"subject\": {entry['subject']!r}, \"keywords\": {entry['keywords']!r}"
         "},"
         for entry in entries
     )
 
     count = len(entries)
+    helpers = HELPERS
 
     return f'''"""Les schémas SVG disponibles, vus depuis le serveur — FICHIER GÉNÉRÉ.
 
@@ -94,12 +169,18 @@ modèle, et un schéma que personne ne nomme ne s'affiche jamais.
 
 from __future__ import annotations
 
-SCHEMA_CATALOG: list[dict[str, str]] = [
+import re
+import unicodedata
+from functools import lru_cache
+
+SCHEMA_CATALOG: list[dict] = [
 {items}
 ]
 
 SCHEMA_IDS: frozenset[str] = frozenset(entry["id"] for entry in SCHEMA_CATALOG)
 
+
+{helpers}
 SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — {count} identifiants]
 Ces schémas sont déjà dessinés, animés et annotés. Les afficher coûte moins
 cher et rend mieux qu'un dessin improvisé : si l'un d'eux couvre la notion,

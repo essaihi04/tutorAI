@@ -1709,6 +1709,36 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
 
 // ── Élément dessiné avec animation de tracé SVG ────────────────────
 
+/**
+ * Où écrire le nom d'une forme, et à quelle taille.
+ *
+ * L'ancienne règle rétrécissait la police jusqu'à faire tenir le mot dans la
+ * forme : « sarcomère » dans une case de 50 px tombait à 9 px, illisible sur
+ * un tableau qu'on regarde de loin. Un professeur ne rapetisse pas son
+ * écriture — il écrit à côté.
+ *
+ * En dessous de 11 px, le nom sort donc de la forme et se pose AU-DESSUS.
+ * Rien n'est jamais rendu plus petit que ce plancher.
+ */
+const TAILLE_LABEL_MIN = 11;
+const TAILLE_LABEL_MAX = 14;
+
+function poserLabel(
+  label: string | undefined,
+  cx: number,
+  cy: number,
+  largeur: number,
+  hautDeLaForme: number,
+): { x: number; y: number; fontSize: number } | null {
+  if (!label) return null;
+  // ~0,55 em par caractère pour une cursive : suffisant pour décider si ça tient.
+  const tenteDedans = Math.min(TAILLE_LABEL_MAX, (largeur * 0.9) / (label.length * 0.55));
+  if (tenteDedans >= TAILLE_LABEL_MIN) {
+    return { x: cx, y: cy, fontSize: Math.round(tenteDedans) };
+  }
+  return { x: cx, y: Math.max(TAILLE_LABEL_MIN, hautDeLaForme - 6), fontSize: TAILLE_LABEL_MIN };
+}
+
 function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
   const { el, delayMs, drawMs } = entry;
   const color = chalk(el.color || 'white');
@@ -1755,11 +1785,12 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
     }
     case 'rect': {
       const x = el.x || 0, y = el.y || 0, w = el.width || 100, h = el.height || 60;
+      const pose = poserLabel(el.label, x + w / 2, y + h / 2 + 5, w, y);
       return (
         <g>
           <RoughShape kind="rectangle" x={x} y={y} width={w} height={h} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
-          {el.label && (
-            <text x={x + w / 2} y={y + h / 2 + 5} fill={color} fontSize={Math.min(14, (w / Math.max(el.label.length, 1)) * 1.7)} textAnchor="middle" style={labelStyle}>
+          {pose && (
+            <text x={pose.x} y={pose.y} fill={color} fontSize={pose.fontSize} textAnchor="middle" style={labelStyle}>
               {el.label}
             </text>
           )}
@@ -1768,10 +1799,15 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
     }
     case 'circle': {
       const cx = el.x || 0, cy = el.y || 0, r = el.radius || 35;
+      const pose = poserLabel(el.label, cx, cy + 4, r * 2, cy - r);
       return (
         <g>
           <RoughShape kind="circle" x={cx} y={cy} radius={r} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
-          {el.label && <text x={cx} y={cy + 4} fill={color} fontSize={Math.min(13, r * 0.55)} textAnchor="middle" style={labelStyle}>{el.label}</text>}
+          {pose && (
+            <text x={pose.x} y={pose.y} fill={color} fontSize={pose.fontSize} textAnchor="middle" style={labelStyle}>
+              {el.label}
+            </text>
+          )}
         </g>
       );
     }
