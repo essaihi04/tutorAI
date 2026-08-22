@@ -492,70 +492,120 @@ export const svt_mitose: ScientificSchema = {
 // SVT — Ch4: Géologie
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Subduction — le plongement se VOIT, il ne se devine pas.
+ *
+ * L'ancienne version représentait la plaque plongeante par une ligne
+ * pointillée : rien n'y descendait, et la fusion partielle flottait au milieu
+ * du dessin sans relier le slab aux volcans. Ici la plaque est une BANDE
+ * épaisse qui s'incurve, l'eau qu'elle libère remonte dans le coin de manteau,
+ * la zone de fusion s'y trouve, et le magma monte jusqu'à l'arc volcanique :
+ * la chaîne de causes se suit du doigt, de gauche à droite.
+ *
+ * Les pastilles de métamorphisme reprennent les couleurs de
+ * `svt_metamorphisme` — un élève qui a vu l'un reconnaît l'autre.
+ */
 export const svt_subduction: ScientificSchema = {
   id: 'svt_subduction',
   title: 'Subduction — Plongement d\'une plaque océanique',
   subject: 'svt',
-  // `océanique` seul répondait à TOUT sujet marin — la dorsale y compris.
-  // Les mots-clés doivent désigner CE schéma, pas son décor.
   keywords: ['subduction', 'plaque plongeante', 'plaque océanique', 'fosse', 'volcanisme',
-    'arc volcanique', 'métamorphisme', 'الغوص', 'صفيحة'],
+    'arc volcanique', 'fusion partielle', 'déshydratation', 'métamorphisme', 'الغوص', 'صفيحة'],
   category: 'process',
-  viewBox: '0 0 900 500',
-  backgroundColor: '#f0f9ff',
+  viewBox: '0 0 920 620',
+  backgroundColor: '#f8fafc',
   layers: [
     { id: 'title', label: 'Titre', delay: 0, svgContent: `
-      <text x="450" y="38" text-anchor="middle" font-size="22" font-weight="bold" fill="#0f172a" font-family="system-ui">ZONE DE SUBDUCTION</text>
-      <text x="450" y="58" text-anchor="middle" font-size="13" fill="#64748b" font-family="system-ui">Plongement d'une plaque océanique sous une autre plaque — الغوص</text>
+      <text x="460" y="34" text-anchor="middle" font-size="27" font-weight="bold" fill="#0f172a" font-family="system-ui">La zone de subduction</text>
+      <text x="460" y="60" text-anchor="middle" font-size="15" fill="#475569" font-family="system-ui">الغوص — انغراز صفيحة محيطية تحت صفيحة أخرى</text>
     `},
-    { id: 'surface', label: 'Surface', delay: 200, svgContent: `
-      <line x1="0" y1="200" x2="900" y2="200" stroke="#0284c7" stroke-width="2"/>
-      <rect x="0" y="200" width="420" height="20" fill="#0ea5e9" opacity="0.3"/>
-      <text x="200" y="190" text-anchor="middle" font-size="13" font-weight="600" fill="#0369a1" font-family="system-ui">Océan</text>
-      <rect x="500" y="160" width="400" height="40" rx="4" fill="#a3e635" opacity="0.3"/>
-      <text x="700" y="185" text-anchor="middle" font-size="13" font-weight="600" fill="#4d7c0f" font-family="system-ui">Continent</text>
+    { id: 'asthenosphere', label: 'Asthénosphère', delay: 300, svgContent: `
+      <rect x="24" y="188" width="872" height="316" fill="#fed7aa" stroke="#ea580c" stroke-width="1.5"/>
+      <text x="250" y="470" font-size="15" font-weight="700" fill="#7c2d12" font-family="system-ui">Asthénosphère — manteau ductile</text>
     `},
-    { id: 'plaques', label: 'Plaques', delay: 500, svgContent: `
-      <rect x="0" y="220" width="450" height="30" fill="#60a5fa" stroke="#2563eb" stroke-width="2"/>
-      <text x="200" y="242" text-anchor="middle" font-size="12" font-weight="600" fill="white" font-family="system-ui">Lithosphère océanique</text>
-      <rect x="480" y="200" width="420" height="50" fill="#fbbf24" stroke="#d97706" stroke-width="2"/>
-      <text x="690" y="230" text-anchor="middle" font-size="12" font-weight="600" fill="#92400e" font-family="system-ui">Lithosphère continentale</text>
-      <polygon points="420,250 480,200 480,250" fill="#60a5fa" stroke="#2563eb" stroke-width="2"/>
-      <path d="M 350 250 L 250 350 L 200 430 L 180 480" stroke="#2563eb" stroke-width="3" fill="none" stroke-dasharray="8,4"/>
-      <text x="230" y="370" font-size="12" font-weight="600" fill="#1d4ed8" font-family="system-ui" transform="rotate(50,230,370)">Plaque plongeante</text>
+    { id: 'ocean', label: 'Océan', delay: 500, svgContent: `
+      <path d="M 24 96 L 404 96 L 404 150 L 24 150 Z" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+      <text x="130" y="128" font-size="15" font-weight="700" fill="#1d4ed8" font-family="system-ui">Océan — المحيط</text>
     `},
-    { id: 'fosse', label: 'Fosse', delay: 800, svgContent: `
-      <path d="M 400 200 L 440 270 L 480 200" fill="#1e3a5f" opacity="0.4"/>
-      <text x="440" y="195" text-anchor="middle" font-size="12" font-weight="bold" fill="#dc2626" font-family="system-ui">Fosse océanique</text>
+    { id: 'plaque_oceanique', label: 'Plaque plongeante', delay: 800, svgContent: `
+      <path d="M 24 150 L 396 150 Q 520 196 596 300 Q 648 372 672 452
+               L 616 470 Q 592 392 546 326 Q 476 228 366 196 L 24 196 Z"
+            fill="#475569" stroke="#0f172a" stroke-width="2"/>
+      <text x="120" y="178" font-size="14" font-weight="700" fill="#f8fafc" font-family="system-ui">Lithosphère océanique</text>
+      <!-- Le nom se lit SUR la bande, pas au-dela : il en sortait par le bas. -->
+      <text x="548" y="318" font-size="15" font-weight="800" fill="#f8fafc" font-family="system-ui" transform="rotate(57 548 318)">plaque plongeante</text>
     `},
-    { id: 'volcans', label: 'Volcans', delay: 1100, svgContent: `
-      <polygon points="600,160 620,100 640,160" fill="#ef4444" stroke="#dc2626" stroke-width="2"/>
-      <text x="620" y="90" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626" font-family="system-ui">Volcans</text>
-      <circle cx="615" cy="85" r="8" fill="#fbbf24" opacity="0.6"/>
-      <circle cx="625" cy="80" r="6" fill="#fbbf24" opacity="0.4"/>
-      <polygon points="670,160 685,115 700,160" fill="#ef4444" stroke="#dc2626" stroke-width="1.5"/>
+    { id: 'fosse', label: 'Fosse océanique', delay: 1000, svgContent: `
+      <path d="M 372 150 L 404 150 L 396 176 Z" fill="#1e293b"/>
+      <line x1="388" y1="150" x2="322" y2="112" stroke="#b91c1c" stroke-width="1.8"/>
+      <text x="316" y="106" text-anchor="end" font-size="15" font-weight="800" fill="#b91c1c" font-family="system-ui">Fosse océanique</text>
+      <text x="316" y="126" text-anchor="end" font-size="13" fill="#b91c1c" font-family="system-ui">الخندق المحيطي</text>
     `},
-    { id: 'manteau', label: 'Manteau', delay: 1300, svgContent: `
-      <rect x="0" y="250" width="900" height="250" fill="#ea580c" opacity="0.15"/>
-      <text x="700" y="400" text-anchor="middle" font-size="16" font-weight="600" fill="#c2410c" font-family="system-ui">ASTHÉNOSPHÈRE</text>
-      <text x="700" y="420" text-anchor="middle" font-size="12" fill="#ea580c" font-family="system-ui">(manteau ductile)</text>
-      <text x="350" y="460" font-size="11" fill="#dc2626" font-family="system-ui">Métamorphisme HP-BT (schiste bleu → éclogite)</text>
-      <path d="M 300 430 L 250 460" stroke="#0891b2" stroke-width="2" marker-end="url(#arrowCyan)"/>
-      <text x="220" y="475" font-size="10" fill="#0891b2" font-family="system-ui">Déshydratation</text>
-      <path d="M 350 370 Q 400 330, 550 280" stroke="#dc2626" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
-      <text x="460" y="310" font-size="10" fill="#dc2626" font-family="system-ui">Fusion partielle → magma</text>
+    { id: 'continent', label: 'Plaque chevauchante', delay: 1200, svgContent: `
+      <!-- Teinte plus soutenue que l'asthenosphere : sinon les deux se
+           confondent et la plaque chevauchante disparait du dessin. -->
+      <path d="M 404 150 L 896 150 L 896 250 L 500 250 Q 440 210 404 150 Z"
+            fill="#e2b183" stroke="#7c2d12" stroke-width="2.5"/>
+      <text x="700" y="212" text-anchor="middle" font-size="15" font-weight="700" fill="#7c2d12" font-family="system-ui">Plaque continentale chevauchante</text>
+    `},
+    { id: 'metamorphisme', label: 'Métamorphisme', delay: 1400, svgContent: `
+      <circle cx="466" cy="204" r="11" fill="#86efac" stroke="#16a34a" stroke-width="2"/>
+      <circle cx="540" cy="272" r="11" fill="#93c5fd" stroke="#2563eb" stroke-width="2"/>
+      <circle cx="606" cy="368" r="11" fill="#fca5a5" stroke="#dc2626" stroke-width="2"/>
+      <text x="60" y="252" font-size="15" font-weight="800" fill="#0f172a" font-family="system-ui">Le long du plongement</text>
+      <circle cx="70" cy="272" r="9" fill="#86efac" stroke="#16a34a" stroke-width="2"/>
+      <text x="88" y="277" font-size="13" fill="#334155" font-family="system-ui">schistes verts</text>
+      <circle cx="70" cy="300" r="9" fill="#93c5fd" stroke="#2563eb" stroke-width="2"/>
+      <text x="88" y="305" font-size="13" fill="#334155" font-family="system-ui">schistes bleus (glaucophane)</text>
+      <circle cx="70" cy="328" r="9" fill="#fca5a5" stroke="#dc2626" stroke-width="2"/>
+      <text x="88" y="333" font-size="13" fill="#334155" font-family="system-ui">éclogites (grenat, jadéite)</text>
+    `},
+    { id: 'eau', label: 'Déshydratation', delay: 1600, svgContent: `
+      <path d="M 486 232 Q 496 208 512 190" fill="none" stroke="#0ea5e9" stroke-width="3" marker-end="url(#arrowCyan)"/>
+      <path d="M 556 296 Q 566 268 582 246" fill="none" stroke="#0ea5e9" stroke-width="3" marker-end="url(#arrowCyan)"/>
+      <path d="M 618 386 Q 632 356 648 330" fill="none" stroke="#0ea5e9" stroke-width="3" marker-end="url(#arrowCyan)"/>
+      <text x="784" y="372" text-anchor="middle" font-size="15" font-weight="800" fill="#0369a1" font-family="system-ui">L'eau libérée monte</text>
+      <text x="784" y="392" text-anchor="middle" font-size="13" fill="#0369a1" font-family="system-ui">déshydratation des roches</text>
+      <line x1="716" y1="366" x2="660" y2="336" stroke="#0369a1" stroke-width="1.8"/>
+    `},
+    { id: 'fusion', label: 'Fusion partielle', delay: 1800, svgContent: `
+      <ellipse cx="640" cy="286" rx="60" ry="30" fill="#f97316" fill-opacity="0.85" stroke="#c2410c" stroke-width="2"/>
+      <text x="640" y="292" text-anchor="middle" font-size="14" font-weight="800" fill="#7c2d12" font-family="system-ui">Fusion partielle</text>
+      <path d="M 640 256 Q 648 208 654 166" fill="none" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/>
+      <path d="M 654 152 L 645 172 L 663 172 Z" fill="#dc2626"/>
+    `},
+    { id: 'volcans', label: 'Arc volcanique', delay: 2000, svgContent: `
+      <path d="M 610 150 L 654 96 L 698 150 Z" fill="#dc2626" stroke="#7f1d1d" stroke-width="2"/>
+      <path d="M 716 150 L 748 112 L 780 150 Z" fill="#dc2626" stroke="#7f1d1d" stroke-width="2"/>
+      <text x="700" y="80" text-anchor="middle" font-size="16" font-weight="800" fill="#7f1d1d" font-family="system-ui">Arc volcanique</text>
+      <text x="700" y="52" text-anchor="middle" font-size="13" fill="#7f1d1d" font-family="system-ui">القوس البركاني</text>
+    `},
+    { id: 'bilan', label: 'À retenir', delay: 2200, svgContent: `
+      <rect x="24" y="516" width="872" height="88" rx="14" fill="#ffffff" stroke="#38bdf8" stroke-width="2"/>
+      <text x="44" y="542" font-size="16" font-weight="800" fill="#0369a1" font-family="system-ui">À retenir — ما يجب حفظه</text>
+      <text x="44" y="566" font-size="14" fill="#334155" font-family="system-ui">• La plaque océanique, vieille, froide et DENSE, plonge sous la plaque voisine : c'est son poids qui l'entraîne.</text>
+      <text x="44" y="590" font-size="14" fill="#334155" font-family="system-ui">• En plongeant elle se déshydrate ; l'eau fait fondre le manteau au-dessus → magma → volcans en arc.</text>
     `},
   ],
   annotations: [
-    { id: 'a1', x: 400, y: 180, width: 80, height: 90, label: 'Fosse', description: 'Zone de convergence: la plaque océanique (dense) plonge sous la plaque continentale (légère). Profondeur: 8-11 km.', color: '#1e40af' },
-    { id: 'a2', x: 600, y: 80, width: 100, height: 80, label: 'Volcans', description: 'Arc volcanique formé par la fusion partielle du manteau (due à la déshydratation de la plaque plongeante).', color: '#dc2626' },
+    { id: 'a_fosse', x: 366, y: 146, width: 46, height: 40, label: 'Fosse océanique', color: '#b91c1c',
+      description: "Point le plus bas du plancher océanique : c'est là que la plaque s'enfonce." },
+    { id: 'a_slab', x: 520, y: 268, width: 110, height: 110, label: 'Plaque plongeante', color: '#0f172a',
+      description: "Elle s'enfonce d'autant plus vite qu'elle est ancienne : en refroidissant elle est devenue plus dense que l'asthénosphère." },
+    { id: 'a_fusion', x: 580, y: 256, width: 120, height: 60, label: 'Fusion partielle', color: '#c2410c',
+      description: "L'eau libérée par le slab abaisse la température de fusion du manteau : il fond partiellement et donne le magma." },
+    { id: 'a_arc', x: 604, y: 90, width: 180, height: 60, label: 'Arc volcanique', color: '#7f1d1d',
+      description: "Les volcans s'alignent à l'aplomb de la zone de fusion, à environ 100 km au-dessus du slab." },
   ],
-  highlights: [],
+  highlights: [
+    { id: 'h_fosse', cx: 392, cy: 160, radius: 40, label: 'Fosse océanique' },
+    { id: 'h_slab', cx: 570, cy: 320, radius: 60, label: 'Plaque plongeante' },
+    { id: 'h_eau', cx: 556, cy: 272, radius: 46, label: 'Déshydratation' },
+    { id: 'h_fusion', cx: 640, cy: 286, radius: 58, label: 'Fusion partielle' },
+    { id: 'h_arc', cx: 690, cy: 124, radius: 62, label: 'Arc volcanique' },
+    { id: 'h_metamorphisme', cx: 540, cy: 272, radius: 40, label: 'Métamorphisme HP-BT' },
+  ],
 };
-
-// ═══════════════════════════════════════════════════════════════
-// SVT — Ch1: Schémas détaillés manquants
-// ═══════════════════════════════════════════════════════════════
 
 export const svt_cellule_mitochondrie: ScientificSchema = {
   id: 'svt_cellule_mitochondrie',
@@ -1214,8 +1264,211 @@ export const svt_dorsale_accretion: ScientificSchema = {
   ],
 };
 
+/**
+ * Métamorphisme — le diagramme pression/température, pas une coupe de plus.
+ *
+ * La subduction a déjà son schéma : refaire une coupe ici n'apprendrait rien.
+ * Ce que l'élève doit lire, c'est POURQUOI la même roche devient schiste vert,
+ * schiste bleu puis éclogite — donc un plan (T, P) où l'on suit un chemin.
+ *
+ * Les deux gradients sont dessinés ensemble parce que le BAC les oppose : la
+ * subduction est FROIDE (pression forte, température basse, le chemin monte
+ * à gauche), la collision est plus chaude (le chemin part vers la droite).
+ * Séparés, on retient deux dessins ; ensemble, on retient la différence.
+ */
+export const svt_metamorphisme: ScientificSchema = {
+  id: 'svt_metamorphisme',
+  title: 'Métamorphisme — Faciès et gradients (subduction / collision)',
+  subject: 'svt',
+  keywords: ['métamorphisme', 'faciès métamorphique', 'schistes verts', 'schistes bleus',
+    'éclogite', 'glaucophane', 'grenat', 'jadéite', 'gradient métamorphique',
+    'pression température', 'التحول', 'التحول الصخري'],
+  category: 'diagram',
+  viewBox: '0 0 920 620',
+  backgroundColor: '#f8fafc',
+  layers: [
+    { id: 'title', label: 'Titre', delay: 0, svgContent: `
+      <text x="460" y="34" text-anchor="middle" font-size="27" font-weight="bold" fill="#0f172a" font-family="system-ui">Le métamorphisme — pression, température, minéraux</text>
+      <text x="460" y="66" text-anchor="middle" font-size="15" fill="#475569" font-family="system-ui">التحول الصخري — نفس الصخرة، ظروف مختلفة، معادن جديدة</text>
+    `},
+    { id: 'axes', label: 'Repère P–T', delay: 300, svgContent: `
+      <line x1="140" y1="470" x2="640" y2="470" stroke="#334155" stroke-width="2.5"/>
+      <line x1="140" y1="470" x2="140" y2="110" stroke="#334155" stroke-width="2.5"/>
+      <text x="390" y="512" text-anchor="middle" font-size="15" font-weight="700" fill="#334155" font-family="system-ui">Température (°C) — درجة الحرارة</text>
+      <!-- Le titre vertical passait sur les graduations : il recule au bord. -->
+      <text x="38" y="290" text-anchor="middle" font-size="15" font-weight="700" fill="#334155" font-family="system-ui" transform="rotate(-90 38 290)">Pression (GPa)</text>
+      <line x1="265" y1="470" x2="265" y2="464" stroke="#334155" stroke-width="2"/>
+      <text x="265" y="488" text-anchor="middle" font-size="13" fill="#475569" font-family="system-ui">200</text>
+      <line x1="390" y1="470" x2="390" y2="464" stroke="#334155" stroke-width="2"/>
+      <text x="390" y="488" text-anchor="middle" font-size="13" fill="#475569" font-family="system-ui">400</text>
+      <line x1="515" y1="470" x2="515" y2="464" stroke="#334155" stroke-width="2"/>
+      <text x="515" y="488" text-anchor="middle" font-size="13" fill="#475569" font-family="system-ui">600</text>
+      <line x1="140" y1="353" x2="146" y2="353" stroke="#334155" stroke-width="2"/>
+      <text x="130" y="358" text-anchor="end" font-size="13" fill="#475569" font-family="system-ui">1 — 30 km</text>
+      <line x1="140" y1="237" x2="146" y2="237" stroke="#334155" stroke-width="2"/>
+      <text x="130" y="242" text-anchor="end" font-size="13" fill="#475569" font-family="system-ui">2 — 60 km</text>
+      <line x1="140" y1="120" x2="146" y2="120" stroke="#334155" stroke-width="2"/>
+      <text x="130" y="125" text-anchor="end" font-size="13" fill="#475569" font-family="system-ui">3 — 90 km</text>
+    `},
+    { id: 'facies', label: 'Faciès métamorphiques', delay: 600, svgContent: `
+      <rect x="327" y="377" width="140" height="70" rx="8" fill="#86efac" fill-opacity="0.55" stroke="#16a34a" stroke-width="2"/>
+      <text x="397" y="418" text-anchor="middle" font-size="15" font-weight="700" fill="#14532d" font-family="system-ui">Schistes verts</text>
+      <rect x="252" y="248" width="150" height="120" rx="8" fill="#93c5fd" fill-opacity="0.55" stroke="#2563eb" stroke-width="2"/>
+      <text x="327" y="314" text-anchor="middle" font-size="15" font-weight="700" fill="#1e3a8a" font-family="system-ui">Schistes bleus</text>
+      <rect x="412" y="140" width="165" height="120" rx="8" fill="#fca5a5" fill-opacity="0.55" stroke="#dc2626" stroke-width="2"/>
+      <text x="494" y="206" text-anchor="middle" font-size="15" font-weight="700" fill="#7f1d1d" font-family="system-ui">Éclogites</text>
+    `},
+    { id: 'gradients', label: 'Les deux gradients', delay: 900, svgContent: `
+      <path d="M 150 466 Q 210 400 262 320 Q 320 240 470 176" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowBlue)"/>
+      <text x="196" y="248" font-size="15" font-weight="800" fill="#1d4ed8" font-family="system-ui" transform="rotate(-52 196 248)">Subduction — froid</text>
+      <path d="M 150 466 Q 300 442 420 404 Q 520 372 596 344" fill="none" stroke="#b45309" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowOrange)"/>
+      <text x="470" y="452" font-size="15" font-weight="800" fill="#b45309" font-family="system-ui" transform="rotate(-14 470 452)">Collision — plus chaud</text>
+    `},
+    { id: 'mineraux', label: 'Minéraux repères', delay: 1200, svgContent: `
+      <text x="660" y="132" font-size="16" font-weight="800" fill="#0f172a" font-family="system-ui">Le minéral qui signe le faciès</text>
+      <rect x="660" y="146" width="18" height="18" rx="4" fill="#86efac" stroke="#16a34a" stroke-width="2"/>
+      <text x="688" y="161" font-size="14" font-weight="700" fill="#14532d" font-family="system-ui">Schistes verts</text>
+      <text x="688" y="181" font-size="13" fill="#334155" font-family="system-ui">chlorite, actinote — الكلوريت</text>
+      <rect x="660" y="212" width="18" height="18" rx="4" fill="#93c5fd" stroke="#2563eb" stroke-width="2"/>
+      <text x="688" y="227" font-size="14" font-weight="700" fill="#1e3a8a" font-family="system-ui">Schistes bleus</text>
+      <text x="688" y="247" font-size="13" fill="#334155" font-family="system-ui">GLAUCOPHANE — الغلوكوفان</text>
+      <text x="688" y="266" font-size="12" fill="#64748b" font-family="system-ui">pression forte, température basse</text>
+      <rect x="660" y="292" width="18" height="18" rx="4" fill="#fca5a5" stroke="#dc2626" stroke-width="2"/>
+      <text x="688" y="307" font-size="14" font-weight="700" fill="#7f1d1d" font-family="system-ui">Éclogites</text>
+      <text x="688" y="327" font-size="13" fill="#334155" font-family="system-ui">GRENAT + JADÉITE — الغارنيت</text>
+      <text x="688" y="346" font-size="12" fill="#64748b" font-family="system-ui">le stade le plus profond</text>
+      <rect x="654" y="376" width="252" height="86" rx="12" fill="#eff6ff" stroke="#38bdf8" stroke-width="2"/>
+      <text x="668" y="400" font-size="14" font-weight="800" fill="#0369a1" font-family="system-ui">Chaque transformation</text>
+      <text x="668" y="422" font-size="13" fill="#334155" font-family="system-ui">libère de l'EAU vers le manteau,</text>
+      <text x="668" y="442" font-size="13" fill="#334155" font-family="system-ui">qui fond partiellement → magma.</text>
+    `},
+    { id: 'bilan', label: 'À retenir', delay: 1500, svgContent: `
+      <rect x="24" y="526" width="882" height="78" rx="14" fill="#ffffff" stroke="#38bdf8" stroke-width="2"/>
+      <text x="44" y="550" font-size="16" font-weight="800" fill="#0369a1" font-family="system-ui">À retenir — ما يجب حفظه</text>
+      <text x="44" y="572" font-size="14" fill="#334155" font-family="system-ui">• La roche ne fond PAS : elle change de minéraux à l'état solide. Même chimie, minéraux nouveaux.</text>
+      <text x="44" y="594" font-size="14" fill="#334155" font-family="system-ui">• Le glaucophane signe la subduction (P forte, T basse) ; le grenat et la jadéite, le stade éclogite.</text>
+    `},
+  ],
+  annotations: [
+    { id: 'a_verts', x: 327, y: 377, width: 140, height: 70, label: 'Faciès des schistes verts', color: '#16a34a',
+      description: "Premier stade : chlorite et actinote apparaissent vers 300-500 °C, à faible profondeur." },
+    { id: 'a_bleus', x: 252, y: 248, width: 150, height: 120, label: 'Faciès des schistes bleus', color: '#2563eb',
+      description: "Le glaucophane, bleu, ne se forme qu'à pression forte et température basse : c'est la signature de la subduction." },
+    { id: 'a_eclogites', x: 412, y: 140, width: 165, height: 120, label: 'Faciès des éclogites', color: '#dc2626',
+      description: "Grenat et jadéite, au-delà de 60 km. La roche devient très dense : elle entraîne la plaque vers le bas." },
+    { id: 'a_gradient', x: 168, y: 300, width: 120, height: 90, label: 'Gradient de subduction', color: '#1d4ed8',
+      description: "Chemin froid : la pression augmente vite, la température peu. C'est ce qui distingue la subduction de la collision." },
+  ],
+  highlights: [
+    { id: 'h_verts', cx: 397, cy: 412, radius: 56, label: 'Schistes verts' },
+    { id: 'h_bleus', cx: 327, cy: 308, radius: 60, label: 'Schistes bleus' },
+    { id: 'h_eclogites', cx: 494, cy: 200, radius: 66, label: 'Éclogites' },
+    { id: 'h_subduction', cx: 262, cy: 320, radius: 52, label: 'Gradient de subduction' },
+    { id: 'h_collision', cx: 470, cy: 396, radius: 52, label: 'Gradient de collision' },
+  ],
+};
+
+/**
+ * Chaîne de montagnes — la coupe d'une collision, avec sa racine.
+ *
+ * Le réflexe de l'élève est de croire que la montagne, c'est ce qui dépasse.
+ * La figure est donc construite pour montrer l'inverse : le relief est petit,
+ * la RACINE crustale sous lui est énorme. Le Moho est tracé d'un bout à
+ * l'autre pour qu'on voie le plongeon, et l'échelle verticale des deux côtés
+ * rappelle les ordres de grandeur (5 km de relief, 70 km de croûte).
+ *
+ * Les trois indices de l'océan disparu — ophiolites, suture, métamorphisme —
+ * sont posés au même endroit, parce que c'est ensemble qu'ils font preuve.
+ */
+export const svt_chaine_montagnes: ScientificSchema = {
+  id: 'svt_chaine_montagnes',
+  title: 'Chaîne de montagnes — Collision continentale',
+  subject: 'svt',
+  keywords: ['chaîne de montagnes', 'collision', 'collision continentale', 'orogenèse',
+    'racine crustale', 'nappe de charriage', 'pli', 'faille inverse', 'ophiolite',
+    'suture', 'moho', 'raccourcissement', 'سلسلة جبلية', 'التصادم القاري'],
+  category: 'structure',
+  viewBox: '0 0 920 620',
+  backgroundColor: '#fdfaf5',
+  layers: [
+    { id: 'title', label: 'Titre', delay: 0, svgContent: `
+      <text x="460" y="34" text-anchor="middle" font-size="27" font-weight="bold" fill="#0f172a" font-family="system-ui">La chaîne de montagnes — collision continentale</text>
+      <text x="460" y="62" text-anchor="middle" font-size="15" fill="#475569" font-family="system-ui">السلسلة الجبلية — تصادم قارتين بعد اختفاء المحيط</text>
+    `},
+    { id: 'manteau', label: 'Manteau', delay: 300, svgContent: `
+      <rect x="24" y="300" width="872" height="200" fill="#fdba74" stroke="#ea580c" stroke-width="1.5"/>
+      <text x="820" y="470" text-anchor="middle" font-size="15" font-weight="700" fill="#7c2d12" font-family="system-ui">Manteau</text>
+    `},
+    { id: 'croute', label: 'Croûte continentale', delay: 600, svgContent: `
+      <!-- Le relief est modeste, la racine est immense : c'est TOUT le message. -->
+      <path d="M 24 250 L 300 250 Q 380 246 420 176 Q 460 130 500 176 Q 540 246 620 250 L 896 250
+               L 896 330 Q 700 340 560 366 Q 500 434 460 446 Q 420 434 360 366 Q 220 340 24 330 Z"
+            fill="#f5d0a9" stroke="#92400e" stroke-width="2.5"/>
+      <text x="150" y="300" font-size="15" font-weight="700" fill="#7c2d12" font-family="system-ui">Croûte continentale</text>
+      <text x="150" y="322" font-size="13" fill="#92400e" font-family="system-ui">القشرة القارية</text>
+    `},
+    { id: 'moho', label: 'Moho', delay: 900, svgContent: `
+      <path d="M 24 330 Q 220 340 360 366 Q 420 434 460 446 Q 500 434 560 366 Q 700 340 896 330"
+            fill="none" stroke="#1e293b" stroke-width="3" stroke-dasharray="9,5"/>
+      <text x="700" y="322" font-size="15" font-weight="800" fill="#1e293b" font-family="system-ui">Moho</text>
+      <text x="700" y="300" font-size="12" fill="#334155" font-family="system-ui">limite croûte / manteau</text>
+    `},
+    { id: 'plis', label: 'Plis et failles', delay: 1100, svgContent: `
+      <path d="M 330 244 Q 360 214 392 238 Q 424 208 456 232 Q 488 206 520 230" fill="none" stroke="#92400e" stroke-width="2.5"/>
+      <path d="M 336 258 Q 366 230 398 252 Q 430 224 462 246 Q 494 222 526 244" fill="none" stroke="#92400e" stroke-width="2" opacity="0.7"/>
+      <line x1="300" y1="268" x2="404" y2="212" stroke="#b91c1c" stroke-width="3"/>
+      <path d="M 356 246 L 372 232" stroke="#b91c1c" stroke-width="3" marker-end="url(#arrowRed)"/>
+      <text x="196" y="212" font-size="15" font-weight="700" fill="#b91c1c" font-family="system-ui">Faille inverse</text>
+      <text x="196" y="232" font-size="13" fill="#b91c1c" font-family="system-ui">et nappe de charriage</text>
+      <line x1="296" y1="216" x2="330" y2="240" stroke="#b91c1c" stroke-width="1.8"/>
+      <text x="596" y="186" font-size="15" font-weight="700" fill="#92400e" font-family="system-ui">Plis</text>
+      <text x="596" y="206" font-size="13" fill="#92400e" font-family="system-ui">الطيات</text>
+      <line x1="592" y1="196" x2="528" y2="226" stroke="#92400e" stroke-width="1.8"/>
+    `},
+    { id: 'suture', label: "Indices de l'océan disparu", delay: 1400, svgContent: `
+      <ellipse cx="460" cy="222" rx="26" ry="14" fill="#065f46" stroke="#022c22" stroke-width="2"/>
+      <line x1="460" y1="236" x2="460" y2="286" stroke="#065f46" stroke-width="2.5" stroke-dasharray="6,4"/>
+      <text x="460" y="112" text-anchor="middle" font-size="15" font-weight="800" fill="#065f46" font-family="system-ui">Ophiolites sur la suture</text>
+      <text x="460" y="132" text-anchor="middle" font-size="13" fill="#065f46" font-family="system-ui">restes de l'ancienne croûte océanique</text>
+      <line x1="460" y1="140" x2="460" y2="206" stroke="#065f46" stroke-width="1.8"/>
+    `},
+    { id: 'convergence', label: 'Raccourcissement', delay: 1600, svgContent: `
+      <line x1="150" y1="480" x2="256" y2="480" stroke="#1d4ed8" stroke-width="4" marker-end="url(#arrowBlue)"/>
+      <line x1="770" y1="480" x2="664" y2="480" stroke="#1d4ed8" stroke-width="4" marker-end="url(#arrowBlue)"/>
+      <text x="203" y="470" text-anchor="middle" font-size="14" font-weight="700" fill="#1d4ed8" font-family="system-ui">convergence</text>
+      <text x="717" y="470" text-anchor="middle" font-size="14" font-weight="700" fill="#1d4ed8" font-family="system-ui">convergence</text>
+      <text x="460" y="486" text-anchor="middle" font-size="15" font-weight="800" fill="#1d4ed8" font-family="system-ui">La croûte se raccourcit et s'épaissit</text>
+    `},
+    { id: 'bilan', label: 'À retenir', delay: 1800, svgContent: `
+      <rect x="24" y="512" width="882" height="92" rx="14" fill="#ffffff" stroke="#f59e0b" stroke-width="2"/>
+      <text x="44" y="538" font-size="16" font-weight="800" fill="#b45309" font-family="system-ui">À retenir — ما يجب حفظه</text>
+      <text x="44" y="562" font-size="14" fill="#334155" font-family="system-ui">• Le relief visible (≈ 5 km) est petit devant la RACINE crustale (croûte jusqu'à 70 km) : la montagne « flotte ».</text>
+      <text x="44" y="586" font-size="14" fill="#334155" font-family="system-ui">• Trois preuves de l'océan disparu : ophiolites, suture, roches métamorphiques de haute pression.</text>
+    `},
+  ],
+  annotations: [
+    { id: 'a_racine', x: 380, y: 350, width: 160, height: 90, label: 'Racine crustale', color: '#7c2d12',
+      description: "Sous une chaîne, la croûte s'enfonce jusqu'à 70 km. C'est l'équilibre isostatique : ce qui dépasse en haut est porté par ce qui plonge en bas." },
+    { id: 'a_ophiolites', x: 428, y: 206, width: 64, height: 32, label: 'Ophiolites', color: '#065f46',
+      description: "Fragments de croûte océanique (basaltes, gabbros, péridotites) charriés sur le continent : la preuve qu'un océan existait ici." },
+    { id: 'a_plis', x: 330, y: 206, width: 200, height: 56, label: 'Plis et failles inverses', color: '#92400e',
+      description: "Marqueurs du raccourcissement : les couches se plissent, se chevauchent, et forment des nappes de charriage." },
+    { id: 'a_moho', x: 620, y: 300, width: 170, height: 44, label: 'Moho', color: '#1e293b',
+      description: "La limite croûte/manteau plonge sous la chaîne. Sa profondeur mesure l'épaississement." },
+  ],
+  highlights: [
+    { id: 'h_racine', cx: 460, cy: 400, radius: 70, label: 'Racine crustale' },
+    { id: 'h_ophiolites', cx: 460, cy: 222, radius: 40, label: 'Ophiolites' },
+    { id: 'h_plis', cx: 430, cy: 232, radius: 60, label: 'Plis' },
+    { id: 'h_faille', cx: 352, cy: 240, radius: 48, label: 'Faille inverse' },
+    { id: 'h_moho', cx: 700, cy: 336, radius: 50, label: 'Moho' },
+  ],
+};
+
 export const SVT_SCHEMAS = [
   svt_dorsale_accretion,
+  svt_metamorphisme,
+  svt_chaine_montagnes,
   svt_glycolyse,
   svt_respiration_cellulaire,
   svt_fermentation,

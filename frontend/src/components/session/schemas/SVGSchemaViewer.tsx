@@ -100,8 +100,16 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
       style="animation: schemaPulse 1.5s ease-in-out infinite 0.3s"/>`)
     .join('\n');
 
+  // Le filtre « craie » couvre la SURFACE DU SCHÉMA, pas la boîte de chaque
+  // forme. Un filtre en `objectBoundingBox` sur un trait horizontal ou
+  // vertical a une région de hauteur — ou de largeur — NULLE : la forme
+  // disparaît purement et simplement. C'est ce qui effaçait, en mode craie,
+  // tous les traits de rappel des légendes, les axes des diagrammes et les
+  // flèches de convergence. Seules les obliques survivaient, ce qui rendait
+  // le défaut difficile à voir.
+  const [boxX, boxY, boxW, boxH] = schema.viewBox.split(/\s+/).map(Number);
   const handDrawnDefs = handDrawn ? `
-    <filter id="schemaHandDrawn" x="-4%" y="-4%" width="108%" height="108%">
+    <filter id="schemaHandDrawn" filterUnits="userSpaceOnUse" x="${boxX - 20}" y="${boxY - 20}" width="${boxW + 40}" height="${boxH + 40}">
       <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="1" seed="23" result="noise"/>
       <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.15" xChannelSelector="R" yChannelSelector="G"/>
     </filter>

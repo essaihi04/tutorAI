@@ -37,7 +37,7 @@ SCHEMA_CATALOG: list[dict] = [
     {"id": 'svt_adn_structure', "title": "Structure de l'ADN — Double hélice", "subject": 'svt', "keywords": ['adn', 'double hélice', 'nucléotide', 'base azotée', 'watson', 'crick', 'complémentarité', 'الحمض النووي', 'بنية']},
     {"id": 'svt_transcription_traduction', "title": 'Expression génétique — Transcription et Traduction', "subject": 'svt', "keywords": ['transcription', 'traduction', 'arnm', 'protéine', 'ribosome', 'codon', 'acide aminé', 'استنساخ', 'ترجمة', 'expression']},
     {"id": 'svt_mitose', "title": 'La Mitose — Division cellulaire conservatrice', "subject": 'svt', "keywords": ['mitose', 'division', 'prophase', 'métaphase', 'anaphase', 'télophase', 'chromosome', 'انقسام غير مباشر']},
-    {"id": 'svt_subduction', "title": "Subduction — Plongement d'une plaque océanique", "subject": 'svt', "keywords": ['subduction', 'plaque plongeante', 'plaque océanique', 'fosse', 'volcanisme', 'arc volcanique', 'métamorphisme', 'الغوص', 'صفيحة']},
+    {"id": 'svt_subduction', "title": "Subduction — Plongement d'une plaque océanique", "subject": 'svt', "keywords": ['subduction', 'plaque plongeante', 'plaque océanique', 'fosse', 'volcanisme', 'arc volcanique', 'fusion partielle', 'déshydratation', 'métamorphisme', 'الغوص', 'صفيحة']},
     {"id": 'svt_cellule_mitochondrie', "title": 'De la cellule à la mitochondrie', "subject": 'svt', "keywords": ['cellule', 'cellule eucaryote', 'cytoplasme', 'noyau', 'mitochondrie', 'respiration cellulaire', 'خلية', 'الميتوكندري']},
     {"id": 'svt_mitochondrie_structure', "title": 'Structure de la Mitochondrie — Ultrastructure', "subject": 'svt', "keywords": ['mitochondrie', 'ultrastructure de la mitochondrie', 'crêtes mitochondriales', 'membrane interne', 'membrane externe', 'crêtes', 'matrice', 'espace intermembranaire', 'الميتوكندري', 'بنية الميتوكندري']},
     {"id": 'svt_chaine_respiratoire', "title": 'Chaîne respiratoire et Phosphorylation oxydative', "subject": 'svt', "keywords": ['chaîne respiratoire', 'phosphorylation oxydative', 'atp synthase', 'complexe', 'gradient', 'nadh', 'fadh2', 'السلسلة التنفسية', 'الفسفرة التأكسدية']},
@@ -45,6 +45,8 @@ SCHEMA_CATALOG: list[dict] = [
     {"id": 'svt_fibre_musculaire', "title": 'Ultrastructure de la fibre musculaire striée', "subject": 'svt', "keywords": ['fibre musculaire', 'myofibrille', 'réticulum sarcoplasmique', 'tubule t', 'triade', 'ultrastructure', 'الألياف العضلية', 'بنية العضلة']},
     {"id": 'svt_bilan_energetique', "title": 'Bilan énergétique — Respiration vs Fermentation', "subject": 'svt', "keywords": ['bilan', 'énergétique', 'rendement', 'comparaison', 'respiration', 'fermentation', 'atp', 'حصيلة طاقية', 'مقارنة']},
     {"id": 'svt_dorsale_accretion', "title": 'Dorsale océanique — Accrétion et expansion océanique', "subject": 'svt', "keywords": ['dorsale', 'accrétion', 'expansion océanique', 'expansion des fonds', 'plancher océanique', 'rift', 'basalte', 'gabbro', 'chambre magmatique', 'anomalies magnétiques', 'asthénosphère', 'الظهرة المحيطية', 'التوسع المحيطي']},
+    {"id": 'svt_metamorphisme', "title": 'Métamorphisme — Faciès et gradients (subduction / collision)', "subject": 'svt', "keywords": ['métamorphisme', 'faciès métamorphique', 'schistes verts', 'schistes bleus', 'éclogite', 'glaucophane', 'grenat', 'jadéite', 'gradient métamorphique', 'pression température', 'التحول', 'التحول الصخري']},
+    {"id": 'svt_chaine_montagnes', "title": 'Chaîne de montagnes — Collision continentale', "subject": 'svt', "keywords": ['chaîne de montagnes', 'collision', 'collision continentale', 'orogenèse', 'racine crustale', 'nappe de charriage', 'pli', 'faille inverse', 'ophiolite', 'suture', 'moho', 'raccourcissement', 'سلسلة جبلية', 'التصادم القاري']},
 ]
 
 SCHEMA_IDS: frozenset[str] = frozenset(entry["id"] for entry in SCHEMA_CATALOG)
@@ -108,7 +110,7 @@ def schema_title(schema_id: str) -> str:
     return ""
 
 
-SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — 30 identifiants]
+SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — 32 identifiants]
 Ces schémas sont déjà dessinés, animés et annotés. Les afficher coûte moins
 cher et rend mieux qu'un dessin improvisé : si l'un d'eux couvre la notion,
 c'est LUI qu'on affiche, dans TOUS les modes (cours, exercice, examen,
@@ -133,6 +135,8 @@ pas, et l'élève ne voit rien.
     svt_fibre_musculaire — Ultrastructure de la fibre musculaire striée
     svt_bilan_energetique — Bilan énergétique — Respiration vs Fermentation
     svt_dorsale_accretion — Dorsale océanique — Accrétion et expansion océanique
+    svt_metamorphisme — Métamorphisme — Faciès et gradients (subduction / collision)
+    svt_chaine_montagnes — Chaîne de montagnes — Collision continentale
   PHYSIQUE :
     phys_ondes_mecaniques — Ondes mécaniques progressives — propagation et retard
     phys_dipole_rc — Dipôle RC — Charge et décharge
