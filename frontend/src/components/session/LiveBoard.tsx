@@ -56,7 +56,9 @@ interface DrawPoint { x: number; y: number }
 
 interface LiveDrawElement {
   id?: string;
-  type: 'line' | 'arrow' | 'rect' | 'circle' | 'text' | 'path';
+  type: 'line' | 'arrow' | 'rect' | 'circle' | 'text' | 'path'
+    // Les cinq formes de SVT, tracées à la craie (cf. `FormeBiologique`).
+    | 'mitochondria' | 'cell' | 'nucleus' | 'dna' | 'membrane';
   points?: DrawPoint[];
   x?: number;
   y?: number;
@@ -134,6 +136,16 @@ interface LiveBoardProps {
   /** false = tableau muet (la narration est portée par l'audio du chat). */
   voiceEnabled?: boolean;
   /**
+   * Le tableau passe en plein écran : la page doit replier sa barre latérale.
+   *
+   * Le plein écran se pose en `fixed inset-0 z-[100]` : il recouvre la barre
+   * de discussion ET son bouton, qui vivent en z-40. Sans ce signal, la barre
+   * resterait « ouverte » dans l'état de la page tout en étant invisible et
+   * inatteignable — l'élève cherchant à cliquer un bouton qui n'est plus là.
+   * (Le repli automatique existant est réservé au mobile.)
+   */
+  onFocusChange?: (focus: boolean) => void;
+  /**
    * true tant que la voix du chat parle.
    *
    * C'est LE signal de synchronisation : le tableau n'écrit que pendant que
@@ -182,7 +194,7 @@ interface WrittenEntry {
 }
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
-function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false }: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange}: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   /**
@@ -236,6 +248,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // L'élève peut « lever la main » : le cours se met en pause et il pose sa
   // question au clavier ou à la voix, comme dans une vraie salle de classe.
   const [focus, setFocus] = useState(true);
+  useEffect(() => { onFocusChange?.(focus); }, [focus, onFocusChange]);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [askOpen, setAskOpen] = useState(false);
   const [questionText, setQuestionText] = useState('');
@@ -1994,9 +2007,156 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
         </text>
       );
     }
+
+    // ── Les cinq formes de SVT ───────────────────────────────────
+    //
+    // Elles vivaient sur un canvas à part, dessinées en dégradés radiaux et
+    // en ombres portées — une imitation de photo. Sur une ardoise, ce rendu
+    // détonnait : le reste du tableau est à la craie.
+    //
+    // Elles sont donc RE-dessinées, pas transposées. Un professeur qui trace
+    // une mitochondrie au tableau ne fait pas un dégradé : il pose une
+    // ellipse, une seconde à l'intérieur, et quatre crêtes. Ce qui compte au
+    // BAC — la double membrane, les crêtes, l'appariement des brins — est
+    // gardé ; le vernis ne l'est pas.
+    case 'mitochondria':
+    case 'cell':
+    case 'nucleus':
+    case 'dna':
+    case 'membrane':
+      return <FormeBiologique el={el} color={color} sw={sw} seed={entry.key} anim={strokeAnim} labelStyle={labelStyle} />;
+
     default:
       return null;
   }
+}
+
+/** Une ondulation régulière, telle qu'on trace une crête ou un brin d'ADN. */
+function onde(
+  x: number, y: number, longueur: number, amplitude: number,
+  arches: number, dephasage = 0, vertical = false,
+): DrawPoint[] {
+  const points: DrawPoint[] = [];
+  const pas = Math.max(6, Math.round(longueur / 24));
+  for (let t = 0; t <= longueur; t += pas) {
+    const ecart = Math.sin((t / longueur) * Math.PI * arches + dephasage) * amplitude;
+    points.push(vertical ? { x: x + ecart, y: y + t } : { x: x + t, y: y + ecart });
+  }
+  return points;
+}
+
+function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
+  el: LiveDrawElement;
+  color: string;
+  sw: number;
+  seed: number;
+  anim: React.CSSProperties;
+  labelStyle: React.CSSProperties;
+}) {
+  const x = el.x || 0;
+  const y = el.y || 0;
+  const traits: React.ReactNode[] = [];
+  let labelX = x;
+  let labelY = y;
+
+  const trait = (noeud: React.ReactNode) => traits.push(
+    <g key={traits.length}>{noeud}</g>
+  );
+
+  switch (el.type) {
+    case 'mitochondria': {
+      const w = el.width || 120;
+      const h = el.height || 60;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      // Membrane externe, puis interne : c'est la DOUBLE membrane qu'on
+      // demande de reconnaître, et le seul détail qui distingue une
+      // mitochondrie d'une patate.
+      trait(<RoughShape kind="ellipse" x={cx} y={cy} width={w} height={h} stroke={color} strokeWidth={sw} seed={seed + 1} style={anim} />);
+      trait(<RoughShape kind="ellipse" x={cx} y={cy} width={w * 0.86} height={h * 0.7} stroke={chalk('green')} strokeWidth={Math.max(1.2, sw - 1)} seed={seed + 2} style={anim} />);
+      for (let i = 0; i < 4; i += 1) {
+        const yc = y + h * 0.3 + i * (h * 0.14);
+        trait(<RoughShape kind="linearPath" points={onde(x + w * 0.16, yc, w * 0.68, h * 0.06, 3, i)} stroke={chalk('green')} strokeWidth={1.6} seed={seed + 10 + i} style={anim} />);
+      }
+      labelX = cx;
+      labelY = y + h + 18;
+      break;
+    }
+    case 'cell': {
+      const r = el.radius || 80;
+      trait(<RoughShape kind="circle" x={x} y={y} radius={r} stroke={color} strokeWidth={sw} seed={seed + 1} style={anim} />);
+      trait(<RoughShape kind="circle" x={x} y={y} radius={r - 6} stroke={chalk('cyan')} strokeWidth={Math.max(1.2, sw - 1.3)} seed={seed + 2} style={anim} />);
+      labelX = x;
+      labelY = y + r + 20;
+      break;
+    }
+    case 'nucleus': {
+      const r = el.radius || 40;
+      trait(<RoughShape kind="circle" x={x} y={y} radius={r} stroke={color} strokeWidth={sw} seed={seed + 1} style={anim} />);
+      trait(<RoughShape kind="circle" x={x} y={y} radius={r - 4} stroke={chalk('purple')} strokeWidth={Math.max(1.2, sw - 1.3)} seed={seed + 2} style={anim} />);
+      // La chromatine : des filaments, pas un remplissage. C'est ce qui fait
+      // reconnaître un noyau en interphase.
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2;
+        trait(<RoughShape
+          kind="line"
+          points={[
+            { x: x + Math.cos(a) * r * 0.25, y: y + Math.sin(a) * r * 0.25 },
+            { x: x + Math.cos(a + 0.5) * r * 0.7, y: y + Math.sin(a + 0.5) * r * 0.7 },
+          ]}
+          stroke={chalk('purple')} strokeWidth={1.3} seed={seed + 10 + i} style={anim}
+        />);
+      }
+      trait(<RoughShape kind="circle" x={x + r * 0.18} y={y - r * 0.12} radius={r * 0.2} stroke={chalk('pink')} strokeWidth={1.6} seed={seed + 30} style={anim} />);
+      labelX = x;
+      labelY = y + r + 18;
+      break;
+    }
+    case 'dna': {
+      const h = el.height || 100;
+      const w = el.width || 40;
+      const cx = x + w / 2;
+      // Deux brins en OPPOSITION de phase : c'est l'antiparallélisme, et
+      // deux brins en phase dessineraient une échelle, pas une hélice.
+      trait(<RoughShape kind="linearPath" points={onde(cx, y, h, w / 2, 4, 0, true)} stroke={chalk('blue')} strokeWidth={sw} seed={seed + 1} style={anim} />);
+      trait(<RoughShape kind="linearPath" points={onde(cx, y, h, w / 2, 4, Math.PI, true)} stroke={chalk('red')} strokeWidth={sw} seed={seed + 2} style={anim} />);
+      for (let t = 0; t <= h; t += Math.max(10, Math.round(h / 8))) {
+        const e1 = Math.sin((t / h) * Math.PI * 4) * (w / 2);
+        const e2 = Math.sin((t / h) * Math.PI * 4 + Math.PI) * (w / 2);
+        trait(<RoughShape kind="line" points={[{ x: cx + e1, y: y + t }, { x: cx + e2, y: y + t }]} stroke={chalk('white')} strokeWidth={1.2} seed={seed + 20 + t} style={anim} />);
+      }
+      labelX = cx;
+      labelY = y + h + 16;
+      break;
+    }
+    case 'membrane': {
+      const w = el.width || 150;
+      const h = el.height || 30;
+      const pas = 14;
+      // Têtes hydrophiles vers l'extérieur, queues hydrophobes face à face :
+      // l'orientation EST la leçon de la bicouche.
+      for (let i = 0; i <= w; i += pas) {
+        trait(<RoughShape kind="circle" x={x + i} y={y} radius={4} stroke={chalk('orange')} strokeWidth={1.4} seed={seed + i} style={anim} />);
+        trait(<RoughShape kind="line" points={[{ x: x + i, y: y + 5 }, { x: x + i, y: y + h / 2 - 1 }]} stroke={chalk('cyan')} strokeWidth={1.2} seed={seed + 100 + i} style={anim} />);
+        trait(<RoughShape kind="line" points={[{ x: x + i, y: y + h / 2 + 1 }, { x: x + i, y: y + h - 5 }]} stroke={chalk('cyan')} strokeWidth={1.2} seed={seed + 200 + i} style={anim} />);
+        trait(<RoughShape kind="circle" x={x + i} y={y + h} radius={4} stroke={chalk('orange')} strokeWidth={1.4} seed={seed + 300 + i} style={anim} />);
+      }
+      labelX = x + w / 2;
+      labelY = y + h + 20;
+      break;
+    }
+  }
+
+  return (
+    <g>
+      {traits}
+      {el.label && (
+        <text x={labelX} y={labelY} fill={color} fontSize={el.fontSize || 14} textAnchor="middle" style={labelStyle}>
+          {el.label}
+        </text>
+      )}
+    </g>
+  );
 }
 
 const LiveBoard = memo(LiveBoardInner);

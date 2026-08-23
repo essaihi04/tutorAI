@@ -3981,7 +3981,13 @@ RÈGLES :
         if not isinstance(steps, list) or not steps:
             return None, None
 
-        drawable_types = {"line", "arrow", "rect", "circle", "text", "path"}
+        # Les cinq formes de SVT rejoignent les primitives : le tableau en
+        # direct sait les tracer à la craie depuis qu'elles ont quitté le
+        # canvas. Les refuser ici les aurait laissées sans aucun rendu.
+        drawable_types = {
+            "line", "arrow", "rect", "circle", "text", "path",
+            "mitochondria", "cell", "nucleus", "dna", "membrane",
+        }
         normalized = []
         # Garde-fou superposition : les éléments dessinés s'ACCUMULENT dans la
         # zone de croquis tant qu'aucun erase ne passe. Un script qui enchaîne

@@ -13,7 +13,7 @@ import AIWhiteboard from '../components/session/AIWhiteboard';
 import type { ScientificVisualSpec } from '../components/session/scientific/types';
 
 type Mode = 'cours' | 'schema' | 'dessin' | 'roughsvg' | 'cytoscape' | 'jsxgraph' | 'matter'
-  | 'echiquier' | 'qcm' | 'carte' | 'courbe' | 'bibliotheque' | 'effacer';
+  | 'echiquier' | 'qcm' | 'carte' | 'courbe' | 'bibliotheque' | 'effacer' | 'biologie';
 
 const LIGNES_DE_COURS = [
   { type: 'title' as const, content: 'Le dipôle RC' },
@@ -227,6 +227,26 @@ function scriptAvecBloc(clef: string) {
 }
 
 /**
+ * Les cinq formes de SVT, tracées à la craie.
+ *
+ * Elles vivaient sur un canvas à part, en dégradés radiaux et ombres portées.
+ * Ce qui compte au BAC est gardé — la double membrane et les crêtes, la
+ * bicouche orientée, les brins en opposition de phase — et le vernis, non.
+ */
+const CROQUIS_BIOLOGIE = [
+  {
+    title: 'De la cellule à la mitochondrie',
+    elements: [
+      { id: 'c', type: 'cell' as const, x: 130, y: 130, radius: 95, color: 'cyan', strokeWidth: 3, label: 'Cellule' },
+      { id: 'n', type: 'nucleus' as const, x: 110, y: 120, radius: 38, color: 'purple', strokeWidth: 2.5, label: 'Noyau' },
+      { id: 'm', type: 'mitochondria' as const, x: 280, y: 60, width: 170, height: 80, color: 'orange', strokeWidth: 3, label: 'Mitochondrie' },
+      { id: 'd', type: 'dna' as const, x: 300, y: 200, width: 55, height: 130, color: 'white', strokeWidth: 2.5, label: 'ADN' },
+      { id: 'b', type: 'membrane' as const, x: 60, y: 320, width: 180, height: 34, color: 'orange', strokeWidth: 2, label: 'Bicouche' },
+    ],
+  },
+];
+
+/**
  * Effacer et redessiner — le geste de base du professeur.
  *
  * Il pose un schéma de la bibliothèque, en parle, ESSUIE la zone de dessin,
@@ -324,7 +344,7 @@ export default function BoardAudit() {
         tableau en direct&nbsp;:
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {(['echiquier', 'qcm', 'carte', 'courbe', 'bibliotheque', 'effacer'] as const).map(clef => (
+        {(['echiquier', 'qcm', 'carte', 'courbe', 'bibliotheque', 'effacer', 'biologie'] as const).map(clef => (
           <button
             key={clef}
             onClick={() => setMode(clef)}
@@ -365,7 +385,11 @@ export default function BoardAudit() {
               : null
           }
           schemaId={mode === 'schema' ? 'phys_dipole_rc' : null}
-          drawCommands={mode === 'dessin' ? COMMANDES_DE_DESSIN : null}
+          drawCommands={
+            mode === 'dessin' ? COMMANDES_DE_DESSIN
+              : mode === 'biologie' ? (CROQUIS_BIOLOGIE as any)
+              : null
+          }
           onStudentMessage={recevoirQuestion}
           assistantReply={envoyes.length ? 'τ vaut RC : c’est le temps au bout duquel la charge atteint 63 % de sa valeur finale.' : null}
           busy={busy}

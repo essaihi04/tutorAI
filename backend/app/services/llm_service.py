@@ -524,6 +524,12 @@ Steps disponibles (joués dans l'ordre) :
 - {"action":"draw","elements":[{"type":"arrow|line|rect|circle|text|path","points":[{"x":..,"y":..}],"x":..,"y":..,"width":..,"height":..,"radius":..,"label":"...","color":"cyan"}]}  → dessine un croquis animé dans la zone de dessin (coordonnées 0-500 × 0-400)
   • Les `label` des éléments dessinés sont AFFICHÉS : en français, très courts
     (« P », « Poids », « Support »). Le commentaire du croquis va dans le chat.
+  • Cinq formes de SVT s'ajoutent aux primitives, tracées à la craie avec leur
+    anatomie : `mitochondria` (double membrane + crêtes ; `x`,`y`,`width`,
+    `height`), `cell` et `nucleus` (`x`,`y` = CENTRE, `radius`), `dna` (deux
+    brins en opposition de phase + appariements ; `x`,`y`,`width`,`height`),
+    `membrane` (bicouche, têtes vers l'extérieur ; `x`,`y`,`width`,`height`).
+    Elles portent leur `label` sous la forme.
 - {"action":"figure","scientific":{…}}  → pose une FIGURE DE MOTEUR dans la même
   zone de dessin : courbe graduée (`jsxgraph`), réseau (`cytoscape`), schéma
   légendé (`roughsvg`) ou SIMULATION QUI BOUGE (`matter`). Elle se pose sur

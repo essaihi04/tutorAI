@@ -236,3 +236,49 @@ def test_une_figure_refusee_par_la_porte_de_qualite_ne_part_pas():
 
     assert titre is not None
     assert not any(s["action"] == "figure" for s in steps)
+
+
+# ── Les cinq formes de SVT ────────────────────────────────────────
+
+def test_les_formes_biologiques_traversent_le_script():
+    """Elles vivaient sur un canvas à part, refusé par le script en direct.
+
+    `drawable_types` ne connaissait que les primitives : une mitochondrie
+    posée dans un `show_live` était filtrée en silence, et l'élève voyait un
+    croquis amputé de la seule chose qu'on lui demandait de reconnaître.
+    """
+    handler = SessionHandler.__new__(SessionHandler)
+    _titre, steps = handler._normalize_live_steps({
+        "steps": [
+            {"action": "write", "line": {"type": "title", "content": "La cellule"}},
+            {"action": "draw", "elements": [
+                {"type": "cell", "x": 130, "y": 130, "radius": 95, "label": "Cellule"},
+                {"type": "nucleus", "x": 110, "y": 120, "radius": 38, "label": "Noyau"},
+                {"type": "mitochondria", "x": 280, "y": 60, "width": 170, "height": 80, "label": "Mitochondrie"},
+                {"type": "dna", "x": 300, "y": 200, "width": 55, "height": 130, "label": "ADN"},
+                {"type": "membrane", "x": 60, "y": 320, "width": 180, "height": 34, "label": "Bicouche"},
+            ]},
+        ],
+    })
+
+    dessin = next(s for s in steps if s["action"] == "draw")
+    assert [e["type"] for e in dessin["elements"]] == [
+        "cell", "nucleus", "mitochondria", "dna", "membrane",
+    ]
+
+
+def test_une_forme_inventee_reste_refusee():
+    """Le filtre garde son rôle : un type inconnu n'a aucun rendu."""
+    handler = SessionHandler.__new__(SessionHandler)
+    _titre, steps = handler._normalize_live_steps({
+        "steps": [
+            {"action": "write", "line": {"type": "text", "content": "Observe."}},
+            {"action": "draw", "elements": [
+                {"type": "chloroplaste", "x": 10, "y": 10},
+                {"type": "circle", "x": 50, "y": 50, "radius": 20},
+            ]},
+        ],
+    })
+
+    dessin = next(s for s in steps if s["action"] == "draw")
+    assert [e["type"] for e in dessin["elements"]] == ["circle"]
