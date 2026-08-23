@@ -114,6 +114,40 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
     },
   },
   {
+    // ── Deux axes, deux grandeurs : l'échelle se libère ──
+    // Un pH contre un volume : imposer « 1 mL = 1 unité de pH » étirait le
+    // cadre pour tenir l'échelle, et l'écran affichait jusqu'à pH = −15.
+    // Un pH négatif n'existe pas — l'élève le lisait quand même.
+    title: 'JSXGraph — titrage (axes de grandeurs différentes)',
+    spec: {
+      engine: 'jsxgraph', title: 'Titrage acide fort / base forte',
+      boundingBox: [-2, 14, 26, -1], axis: true, grid: true,
+      xLabel: 'V (mL)', yLabel: 'pH',
+      elements: [
+        { type: 'function', expression: '7-3*ln(abs(10-x)+0.15)/2.3', domain: [0, 9.98], color: 'cyan' },
+        { type: 'function', expression: '7+3*ln(abs(x-10)+0.15)/2.3', domain: [10.02, 24], color: 'cyan', label: 'pH = f(V)' },
+        { type: 'point', points: [{ x: 10, y: 7 }], label: 'E (10 mL ; pH = 7)', color: 'red' },
+        { type: 'segment', points: [{ x: 10, y: 0 }, { x: 10, y: 7 }], dashed: true, color: 'orange' },
+      ],
+    },
+  },
+  {
+    // ── Deux axes, la MÊME grandeur : l'échelle reste verrouillée ──
+    // Le contre-cas de la figure précédente. Une portée et une hauteur sont
+    // toutes deux des longueurs : libérer l'échelle aplatirait la parabole,
+    // et l'élève lirait une trajectoire qui n'est pas celle du mobile.
+    title: 'JSXGraph — projectile (axes de même grandeur)',
+    spec: {
+      engine: 'jsxgraph', title: 'Trajectoire d’un projectile', boundingBox: [-1, 8, 17, -1],
+      axis: true, xLabel: 'x (m)', yLabel: 'y (m)',
+      elements: [
+        { type: 'function', expression: 'x-x*x/12', domain: [0, 12], color: 'orange', label: 'trajectoire' },
+        { type: 'point', points: [{ x: 6, y: 3 }], label: 'sommet', color: 'red' },
+        { type: 'point', points: [{ x: 12, y: 0 }], label: 'portée', color: 'cyan' },
+      ],
+    },
+  },
+  {
     title: 'Cytoscape — respiration cellulaire',
     spec: {
       engine: 'cytoscape', title: 'De la glycolyse à la chaîne respiratoire', layout: 'breadthfirst',

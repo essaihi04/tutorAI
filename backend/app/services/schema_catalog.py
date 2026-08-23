@@ -80,6 +80,12 @@ _MOTS_GENERIQUES = {
     "reaction", "structure", "cycle", "energie", "bilan", "comparaison", "courbe",
     "fonction", "cellule", "muscle", "mouvement", "mecanique", "onde", "oscillation",
     "force", "tableau", "schema", "equilibre", "complexe", "arithmetique", "division",
+    # « variation » est un mot-cle de la DERIVATION, et un mot francais partout
+    # ailleurs. Seul, il valait deux points : « la variation de la pression
+    # arterielle » — une courbe de SVT — se voyait proposer le schema de
+    # derivation. Une vraie lecon de derivation dit « derivee » ou
+    # « derivation », et garde donc son schema.
+    "variation",
 }
 
 

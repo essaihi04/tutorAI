@@ -26,8 +26,26 @@ _EXPLICIT_VISUAL = re.compile(
     re.IGNORECASE,
 )
 
+# Les verbes du mouvement se conjuguent : l'élève écrit « la bille REBONDIT »,
+# « le solide GLISSE », pas l'infinitif du mot-clé. Une terminaison libre
+# rattrape ces formes ; sans elle, `\brebond\b` manquait « rebondit » et la
+# scène partait en dessin figé — or un rebond dessiné ne rebondit pas.
 _DYNAMIC = re.compile(
-    r"\b(simulation|simule|anime|animation|mouvement|tombe|oscille|collision|rebond|trajectoire)\b",
+    r"(?<!\w)(?:simulation|simule\w*|anime\w*|animation|mouvement|tombe\w*|chute"
+    r"|oscill\w*|collision|choc|percussion|rebond\w*|roule\w*|glisse\w*"
+    r"|trajectoire)(?!\w)",
+    re.IGNORECASE,
+)
+
+#: Le second verrou de la simulation : un mot de MÉCANIQUE. « Anime la
+#: photosynthèse » ne part pas vers Matter.js, qui ne connaît que des corps,
+#: des chocs et de la pesanteur. Les mobiles du BAC y figurent nommément —
+#: une bille, un chariot, un palet — sans quoi « deux billes qui se
+#: percutent » retombait sur le dessin à main levée, immobile.
+_MECANIQUE = re.compile(
+    r"(?<!\w)(?:chute|collision|choc|percussion|pendule|ressort|projectile"
+    r"|plan incline|mecanique|bille|chariot|palet|mobile|rebond\w*"
+    r"|glisse\w*)(?!\w)",
     re.IGNORECASE,
 )
 
@@ -42,18 +60,22 @@ def _mots(*mots: str) -> re.Pattern[str]:
     return re.compile(rf"(?<!\w)(?:{'|'.join(mots)})[sx]?(?!\w)", re.IGNORECASE)
 
 
+#: Un échiquier de croisement, un tableau de variations ou un tableau
+#: d'avancement ne sont pas des dessins : les faire dessiner produit une
+#: figure fausse là où deux colonnes disent tout, et cela contredit le
+#: PROTOCOLE GÉNÉTIQUE qui exige déjà `type=table`. Le motif est nommé parce
+#: que le routeur le consulte AVANT tout rapprochement (cf.
+#: `route_scientific_visual`), et pas seulement au moment de choisir un
+#: moteur de dessin.
+_TABLEAU = _mots(
+    "echiquier", "damier", "tableau de variation", "tableau de signe",
+    "tableau d avancement", "tableau descriptif", "table de verite",
+)
+
 # L'ordre décide : le premier motif qui répond emporte le moteur. Les cas les
 # moins ambigus passent donc en tête.
 _ENGINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    (
-        # Un échiquier de croisement, un tableau de variations ou un tableau
-        # d'avancement ne sont pas des dessins : les faire dessiner produit
-        # une figure fausse là où deux colonnes disent tout, et cela
-        # contredit le PROTOCOLE GÉNÉTIQUE qui exige déjà `type=table`.
-        "table",
-        _mots("echiquier", "damier", "tableau de variation", "tableau de signe",
-              "tableau d avancement", "tableau descriptif", "table de verite"),
-    ),
+    ("table", _TABLEAU),
     (
         "jsxgraph",
         _mots("courbe", "fonction", "repere", "coordonnee", "vecteur", "force",
@@ -61,7 +83,12 @@ _ENGINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
               "refraction", "reflexion", "diffraction", "incidence", "image",
               "tangente", "asymptote", "trajectoire", "orbite", "cercle",
               "geometrie", "complexe", "onde periodique", "graphique",
-              "bilan des force", "champ", "pendule simple"),
+              "bilan des force", "champ", "pendule simple",
+              # Un diagramme de prédominance ou de distribution EST un axe
+              # gradué en pH, avec des domaines bornés par le pKa. Dessiné à
+              # main levée, il perd la seule chose qu'il montre : où se situe
+              # la frontière.
+              "predominance", "distribution"),
     ),
     (
         "cytoscape",
@@ -71,7 +98,12 @@ _ENGINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         _mots("chaine", "cycle", "voie", "etape", "processus", "reseau", "bilan",
               "cause", "consequence", "algorithme", "transformation",
               "metabolisme", "reaction en cascade", "arbre phylogenetique",
-              "phylogenie", "arbre de decision"),
+              "phylogenie", "arbre de decision",
+              # Une régulation se lit comme une boucle : capteur → centre →
+              # effecteur, et la flèche de retour qui referme le circuit.
+              # C'est un graphe orienté, pas une coupe anatomique.
+              "regulation", "retroaction", "retrocontrole", "homeostasie",
+              "boucle de regulation"),
     ),
     (
         "roughsvg",
@@ -153,9 +185,7 @@ def match_visual_blueprint(context: str) -> tuple[dict[str, Any] | None, int]:
 
 def recommend_generated_engine(context: str) -> str:
     folded = _fold(context)
-    if _DYNAMIC.search(folded) and re.search(
-        r"\b(chute|collision|pendule|ressort|projectile|plan incline|mecanique)\b", folded,
-    ):
+    if _DYNAMIC.search(folded) and _MECANIQUE.search(folded):
         return "matter"
     for engine, pattern in _ENGINE_PATTERNS:
         if pattern.search(folded):
@@ -163,10 +193,64 @@ def recommend_generated_engine(context: str) -> str:
     return "roughsvg"
 
 
-def route_scientific_visual(context: str) -> dict[str, Any]:
-    """Décide entre schéma validé, blueprint BAC et génération générale."""
+def _fiche_reclame_un_tableau(blueprint: dict[str, Any]) -> bool:
+    """La fiche demande-t-elle elle-même un tableau parmi ses obligations ?
+
+    C'est ce qui distingue une fiche qui SAIT placer le tableau dans une
+    figure plus large — le monohybridisme, qui l'exige avec les chromosomes
+    et les gamètes — d'une fiche qui se trouve simplement là.
+    """
+    return any(
+        _TABLEAU.search(_fold(str(element)))
+        for element in blueprint.get("must_show", [])
+    )
+
+
+def route_scientific_visual(context: str, demande: str | None = None) -> dict[str, Any]:
+    """Décide entre schéma validé, blueprint BAC et génération générale.
+
+    `context` est tout ce qui décrit la séance — titre, chapitre, objectif et
+    les derniers messages de l'élève. `demande`, quand elle est fournie, est
+    la SEULE phrase que l'élève vient d'écrire. Les deux ne servent pas à la
+    même chose : rapprocher un schéma gagne à voir large, mais décider qu'on
+    veut un tableau et non un dessin doit se lire dans la demande elle-même —
+    un objectif de leçon qui dit « dresser le tableau d'avancement » ne doit
+    pas transformer en tableau toutes les figures de la séance.
+    """
     schema_id, schema_score = match_schema(context)
     blueprint, blueprint_score = match_visual_blueprint(context)
+
+    # ── Ce qui n'est pas un dessin ne le devient pas par ressemblance ──
+    #
+    # La route `table` existait déjà, mais elle vivait dans la BRANCHE de
+    # génération : elle n'était atteinte que lorsque rien d'autre ne
+    # répondait. Or « dessine le tableau d'avancement de la réaction »
+    # contient « réaction », mot-clé de `chem_cinetique`, et repartait donc
+    # avec le schéma du CHAPITRE cinétique — une figure juste, mais qui ne
+    # répond pas : l'élève voulait le tableau d'avancement de SA réaction, à
+    # lui, avec ses quantités de matière. Même chose pour « tableau de
+    # variations », que « variation » envoyait vers `math_derivation`.
+    #
+    # La réserve : une fiche qui RÉCLAME elle-même ce tableau garde la main.
+    # Celle du monohybridisme liste « échiquier » parmi ses éléments
+    # obligatoires, mais demande AUSSI les chromosomes et les gamètes autour,
+    # et elle porte déjà la consigne qui laisse l'échiquier lui-même en
+    # `type=table` : la court-circuiter perdrait tout le reste de la figure.
+    # Une fiche qui n'en parle pas, elle, n'a rien à dire sur la question —
+    # « suivi temporel » ne sait rien d'un tableau d'avancement.
+    ou_lire = context if demande is None else demande
+    if _TABLEAU.search(_fold(ou_lire)) and not (
+        blueprint and blueprint_score >= 3 and _fiche_reclame_un_tableau(blueprint)
+    ):
+        return {
+            "source": "generated",
+            "title": "Tableau demandé par l'élève",
+            "engine": "table",
+            "must_show": [],
+            "avoid": [],
+            "score": 0,
+            "explicit": visual_request_is_explicit(context),
+        }
 
     # Un rapprochement fort avec un SVG contrôlé reste toujours prioritaire.
     if schema_id and schema_score >= 3:
@@ -225,9 +309,9 @@ def route_scientific_visual(context: str) -> dict[str, Any]:
     }
 
 
-def build_visual_route_prompt(context: str) -> str:
+def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
     """Instruction compacte injectée avant le prompt général du tuteur."""
-    route = route_scientific_visual(context)
+    route = route_scientific_visual(context, demande)
     if route["source"] == "schema":
         return (
             "[SCHÉMA VALIDÉ DISPONIBLE POUR CETTE SÉANCE]\n"

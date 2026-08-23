@@ -125,3 +125,130 @@ def test_la_fiche_de_genetique_ne_contredit_plus_le_protocole():
     assert "RÉSERVE" in prompt
     assert "`table`" in prompt
     assert "PROTOCOLE GÉNÉTIQUE" in prompt
+
+
+def test_un_tableau_demande_ne_devient_pas_le_schema_du_chapitre():
+    """La route `table` ne servait à rien dès qu'un schéma répondait.
+
+    « Dessine le tableau d'avancement de la réaction » contient « réaction »,
+    mot-clé du schéma de cinétique : l'élève recevait la figure du CHAPITRE
+    cinétique au lieu du tableau d'avancement de SA réaction. Même piège pour
+    « tableau de variations », que « variation » envoyait vers le schéma de
+    dérivation.
+    """
+    for demande in (
+        "dessine le tableau d'avancement de la réaction",
+        "donne-moi le tableau de variations de la fonction f",
+        "fais le tableau de signes de f'(x)",
+    ):
+        route = route_scientific_visual(demande)
+        assert route["engine"] == "table", demande
+        assert "TABLEAU" in build_visual_route_prompt(demande), demande
+
+
+def test_une_fiche_forte_garde_la_main_sur_la_route_tableau():
+    """L'échiquier reste un tableau, mais pas au prix du reste de la figure.
+
+    La fiche du monohybridisme demande AUSSI les chromosomes et les gamètes,
+    et elle porte déjà la réserve qui laisse l'échiquier lui-même en
+    `type=table`. La court-circuiter perdrait tout ce qui l'entoure.
+    """
+    route = route_scientific_visual("l'échiquier de croisement du monohybridisme chez le pois")
+
+    assert route["source"] == "blueprint"
+    assert route["blueprint_id"] == "svt_monohybridisme"
+    assert "RÉSERVE" in build_visual_route_prompt(
+        "l'échiquier de croisement du monohybridisme chez le pois"
+    )
+
+
+def test_un_choc_se_simule_meme_conjugue():
+    """Les verbes du mouvement se conjuguent, les mots-clés non.
+
+    « La bille rebondit » n'était pas attrapé par `\brebond\b`, et « choc »
+    n'existait dans aucune des deux listes : deux billes qui se percutent
+    partaient en dessin figé. Un choc dessiné ne montre aucun choc.
+    """
+    for demande in (
+        "choc élastique entre deux billes",
+        "une bille rebondit sur le sol",
+        "simule un chariot qui glisse et percute un mur",
+    ):
+        assert recommend_generated_engine(demande) == "matter", demande
+
+    # Le second verrou tient toujours : sans mécanique, pas de simulation.
+    assert recommend_generated_engine("anime les étapes de la photosynthèse") != "matter"
+
+
+def test_une_regulation_se_lit_comme_une_boucle():
+    """Capteur → centre → effecteur, et la flèche de retour qui referme.
+
+    C'est un graphe orienté ; une coupe anatomique ne montre pas le retour.
+    """
+    assert recommend_generated_engine("la régulation de la glycémie") == "cytoscape"
+    assert recommend_generated_engine("le rétrocontrôle négatif de la testostérone") == "cytoscape"
+
+
+def test_un_diagramme_de_predominance_est_un_axe_gradue():
+    """Sa frontière est le pKa : dessinée à main levée, elle ne veut rien dire."""
+    assert recommend_generated_engine("diagramme de prédominance du couple acide-base") == "jsxgraph"
+    assert recommend_generated_engine("diagramme de distribution des espèces") == "jsxgraph"
+
+
+def test_l_objectif_d_une_lecon_ne_transforme_pas_tout_en_tableau():
+    """La route `table` lit la DEMANDE, pas la séance entière.
+
+    Le contexte de rapprochement mélange titre, chapitre, objectif et six
+    messages. Un objectif de physique-chimie dit « dresser le tableau
+    d'avancement de la réaction » : sans distinction, la phrase resterait dans
+    le contexte toute la séance et chaque figure demandée ensuite — une
+    courbe, un montage — partirait en tableau.
+    """
+    seance = (
+        "suivi temporel d'une transformation chimique cinetique "
+        "objectif : dresser le tableau d'avancement de la reaction"
+    )
+
+    # L'élève demande une courbe : la séance parle de tableau, pas lui.
+    route = route_scientific_visual(seance, "trace-moi la courbe de la concentration au cours du temps")
+    assert route.get("engine") != "table"
+
+    # L'élève demande le tableau : là, il l'obtient.
+    route = route_scientific_visual(seance, "dresse le tableau d'avancement")
+    assert route["engine"] == "table"
+
+
+def test_sans_demande_le_routeur_lit_le_contexte_comme_avant():
+    """Les appels d'origine ne changent pas de comportement."""
+    assert route_scientific_visual("dessine le tableau de variations de f")["engine"] == "table"
+
+
+def test_seule_une_fiche_qui_reclame_le_tableau_garde_la_main():
+    """La réserve vise les fiches qui SAVENT placer un tableau, pas les voisines.
+
+    Celle du monohybridisme liste « échiquier » parmi ses obligations et sait
+    l'entourer de chromosomes et de gamètes. Celle du suivi temporel n'en dit
+    rien : se trouver là ne lui donne pas voix au chapitre.
+    """
+    from app.services.scientific_visual_router import _fiche_reclame_un_tableau, visual_blueprints
+
+    fiches = {item["id"]: item for item in visual_blueprints()}
+    assert _fiche_reclame_un_tableau(fiches["svt_monohybridisme"]) is True
+    assert _fiche_reclame_un_tableau(fiches["chem_suivi_temporel"]) is False
+
+
+def test_un_mot_de_chapitre_seul_n_impose_pas_le_schema_d_un_autre_chapitre():
+    """« variation » est un mot-clé de la dérivation, et un mot français partout.
+
+    « Trace la courbe de la variation de la pression artérielle » — une courbe
+    de SVT — se voyait proposer le schéma de DÉRIVATION, sur ce seul mot. Une
+    vraie leçon de dérivation dit « dérivée » ou « dérivation », et garde donc
+    son schéma.
+    """
+    route = route_scientific_visual("trace la courbe de la variation de la pression artérielle")
+    assert route["source"] == "generated"
+    assert route["engine"] == "jsxgraph"
+
+    route = route_scientific_visual("la dérivée et la tangente à la courbe")
+    assert route["source"] == "schema"
+    assert route["schema_id"] == "math_derivation"

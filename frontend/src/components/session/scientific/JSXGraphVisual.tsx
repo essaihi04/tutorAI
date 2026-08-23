@@ -167,6 +167,41 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
   }
 }
 
+/** L'unité écrite entre parenthèses — « t (s) » → « s ». Vide si absente. */
+function unite(label?: string): string | null {
+  if (typeof label !== 'string' || !label.trim()) return null;
+  const trouve = label.match(/\(([^)]*)\)/);
+  return (trouve ? trouve[1] : '').trim().toLowerCase();
+}
+
+/**
+ * Faut-il garder une échelle identique sur les deux axes ?
+ *
+ * Une échelle commune est ce qui fait qu'un cercle est rond et qu'une
+ * trajectoire de projectile a la forme qu'elle a vraiment. Mais elle n'a de
+ * SENS que si les deux axes mesurent la même chose : dès qu'on porte un pH
+ * contre un volume, imposer « un millilitre = une unité de pH » n'est pas une
+ * fidélité, c'est une coïncidence.
+ *
+ * Constaté sur une courbe de titrage demandée entre 0 et 24 mL, pH de 0 à 14 :
+ * le cadre s'étirait pour tenir l'échelle et l'écran affichait des graduations
+ * jusqu'à 35 mL et jusqu'à pH = −15. Un pH négatif n'existe pas ; l'élève le
+ * lisait quand même, sur une figure censée lui apprendre la lecture d'un
+ * graphique.
+ *
+ * L'unité écrite dans `xLabel`/`yLabel` tranche, et c'est le contrat que le
+ * skill impose déjà : « t (s) » contre « U (V) » sont deux grandeurs, on
+ * libère ; « x (m) » contre « y (m) » sont la même, on garde. Une figure de
+ * géométrie n'a pas d'axes nommés du tout — elle garde donc l'échelle, comme
+ * avant.
+ */
+function memeEchelleSurLesDeuxAxes(spec: JSXGraphVisualSpec): boolean {
+  const x = unite(spec.xLabel);
+  const y = unite(spec.yLabel);
+  if (x === null && y === null) return true;   // figure de géométrie
+  return x === y;
+}
+
 export default function JSXGraphVisual({ spec }: JSXGraphVisualProps) {
   const reactId = useId();
   const boardId = `science-board-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -210,7 +245,7 @@ export default function JSXGraphVisual({ spec }: JSXGraphVisualProps) {
         },
         showCopyright: false,
         showNavigation: false,
-        keepaspectratio: true,
+        keepaspectratio: memeEchelleSurLesDeuxAxes(spec),
         pan: { enabled: false },
         zoom: { wheel: false },
       });

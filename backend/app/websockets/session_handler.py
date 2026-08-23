@@ -1750,7 +1750,24 @@ class SessionHandler:
             # devant un tableau à la place d'un schéma. Désormais le manque
             # s'écrit, et la liste se lit comme une liste de courses.
             noter_manque(contexte, schema_id, score)
-        return build_visual_route_prompt(contexte)
+        return build_visual_route_prompt(contexte, self._derniere_demande())
+
+    def _derniere_demande(self) -> str:
+        """La dernière phrase écrite par l'ÉLÈVE, seule.
+
+        `_contexte_de_rapprochement` mélange volontairement la séance et six
+        messages : c'est ce qu'il faut pour rapprocher un schéma. Mais pour
+        décider qu'une demande appelle un TABLEAU et non un dessin, le
+        mélange trompe — l'objectif « dresser le tableau d'avancement de la
+        réaction » resterait dans le contexte toute la séance et enverrait au
+        tableau chaque figure demandée ensuite.
+        """
+        for message in reversed(self.conversation_history or []):
+            if isinstance(message, dict) and message.get("role") == "user":
+                contenu = message.get("content")
+                if isinstance(contenu, str) and contenu.strip():
+                    return contenu
+        return ""
 
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
         ctx = self.session_context
@@ -3778,9 +3795,21 @@ RÈGLES :
     # Types de lignes que le tableau live ne sait PAS rejouer progressivement.
     # Leur présence signe un contenu "figé" (données à consulter d'un bloc)
     # qui doit rester sur le tableau statique.
+    #
+    # `scientific` y manquait, et c'était le trou par lequel passaient TOUTES
+    # les figures générées. Un tuteur qui répond « voici le schéma » produit
+    # un tableau ordinaire : un titre, deux phrases, et la ligne `scientific`
+    # qui porte la figure. Or un titre et deux phrases se rejouent très bien
+    # en direct — le tableau partait donc en script live, et
+    # `_board_lines_to_live_steps` jetait en silence la seule ligne qui
+    # comptait. L'élève entendait « regarde le schéma » devant un tableau qui
+    # n'en portait aucun. Aucun des quatre moteurs (JSXGraph, Cytoscape,
+    # Matter.js, Rough.js) ne sait s'écrire craie par craie : une figure
+    # impose le tableau statique, où `MathBoard` la rend vraiment.
     _BOARD_ONLY_LINE_TYPES = {
         "table", "graph", "mindmap", "diagram",
         "qcm", "vrai_faux", "association",
+        "scientific",
     }
 
     @classmethod
