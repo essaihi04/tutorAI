@@ -71,6 +71,32 @@ Format Matter :
 Un corps Matter accepte `"angle"` en RADIANS : c'est ce qui incline un plan
 (`"angle":0.52` pour 30°). Sans lui, le plan est horizontal.
 
+MESURER ET FAIRE VARIER — c'est ce qui distingue une simulation d'une
+animation. Une animation se regarde ; une simulation se lit et se règle.
+`"scale"` : combien de PIXELS valent un mètre (`"scale":100`). Le moteur
+  compte en pixels : SANS cette échelle, aucune grandeur ne peut porter
+  d'unité, et un `"unit":"m/s"` sera retiré. Ne l'invente pas — donne-la.
+  RÉGLAGE MESURÉ : `"scale":100` avec `"gravity":{"x":0,"y":1}` donne
+  exactement g = 10 m/s², la valeur du BAC. Garde ce couple par défaut ;
+  toute autre échelle donne une pesanteur qui n'est celle d'aucune planète.
+`"frictionAir"` vaut 0 par défaut, car les exercices du BAC négligent les
+  frottements. Ne le monte (0,01 à 0,05) que si la leçon PORTE sur la
+  résistance de l'air — sinon la chute tend vers une vitesse limite et la
+  simulation contredit le cours.
+`"measures"` : jusqu'à 6 lectures affichées en direct sous la scène —
+  `{"body":"balle","quantity":"speed","label":"Vitesse","unit":"m/s"}`.
+  Grandeurs : `x`, `y`, `height`, `vx`, `vy`, `speed`, `angle`, `time`.
+  `angle` est en degrés et `time` en secondes : ces deux-là n'ont pas besoin
+  d'échelle. `height` exige `"origin"` — l'ordonnée du SOL en pixels — car
+  l'axe y descend : sans elle, un corps qui tombe « monterait ».
+`"parameters"` : jusqu'à 4 curseurs que l'élève déplace, puis la simulation
+  rejoue depuis le début — `{"target":"plan.angle","label":"Inclinaison",
+  "min":0,"max":1.2,"step":0.05,"value":0.52,"unit":"rad"}`.
+  Cibles : `gravity`, ou `<idDuCorps>.angle` / `.restitution` / `.friction` /
+  `.vx` / `.vy`.
+Ne mets un curseur que si le faire bouger CHANGE la leçon : si la réponse est
+la même à toutes les valeurs, un schéma statique suffisait.
+
 Format RoughSVG :
 {"type":"scientific","content":"Schéma","scientific":{"engine":"roughsvg","title":"Électrolyse","description":"Sens du courant et réactions aux électrodes.","width":800,"height":440,"elements":[{"type":"rect","x":250,"y":110,"width":300,"height":230,"color":"blue"},{"type":"line","points":[{"x":330,"y":90},{"x":330,"y":300}],"color":"gray"},{"type":"text","x":330,"y":80,"text":"Anode (+)","color":"red"},{"type":"arrow","points":[{"x":370,"y":180},{"x":470,"y":180}],"color":"cyan"}],"legend":[{"color":"red","label":"Oxydation"},{"color":"blue","label":"Réduction"}]}}
 Primitives : `line`, `arrow`, `rect`, `circle`, `ellipse`, `polygon`,
@@ -490,6 +516,13 @@ def _normalize_matter(value: dict[str, Any]) -> dict[str, Any] | None:
             "isStatic": raw.get("isStatic") is True,
             "restitution": _number(raw.get("restitution"), 0.2, 0, 1),
             "friction": _number(raw.get("friction"), 0.1, 0, 1),
+            # Matter freine par défaut (`frictionAir` = 0,01) : une chute
+            # libre tendait vers une vitesse LIMITE, et la simulation
+            # contredisait la leçon qu'elle illustrait — mesuré, g tombait de
+            # 9,5 à 7,5 m/s² en une seconde. Les exercices du BAC négligent
+            # les frottements : on part donc de zéro, et le modèle ne remet du
+            # frottement que si la leçon porte dessus.
+            "frictionAir": _number(raw.get("frictionAir"), 0, 0, 0.2),
         }
         if shape == "circle":
             body["radius"] = _number(raw.get("radius"), 24, 4, 160)
@@ -545,7 +578,98 @@ def _normalize_matter(value: dict[str, Any]) -> dict[str, Any] | None:
     }
     if constraints:
         result["constraints"] = constraints
+
+    # Le moteur compte en PIXELS. Sans échelle, aucune grandeur ne peut porter
+    # d'unité : afficher « 12,3 m/s » sous une chute réglée en pixels serait
+    # une valeur inventée, et un nombre faux sous une simulation juste est
+    # pire que pas de nombre du tout.
+    echelle = _number(value.get("scale"), 0, 0, 500) if value.get("scale") is not None else 0
+    if echelle > 0:
+        result["scale"] = echelle
+    if mesures := _mesures_matter(value.get("measures"), body_ids, bool(echelle)):
+        result["measures"] = mesures
+    if parametres := _parametres_matter(value.get("parameters"), body_ids):
+        result["parameters"] = parametres
     return result
+
+
+_QUANTITES = {"x", "y", "height", "vx", "vy", "speed", "angle", "time"}
+
+
+def _mesures_matter(brut: Any, body_ids: set[str], avec_echelle: bool) -> list[dict[str, Any]]:
+    """Les grandeurs lues en direct sous la simulation.
+
+    C'est ce qui sépare une animation d'une expérience : sans lecture, l'élève
+    regarde une bille tomber sans jamais voir sa vitesse augmenter.
+    """
+    if not isinstance(brut, list):
+        return []
+    mesures: list[dict[str, Any]] = []
+    for raw in brut[:6]:
+        if not isinstance(raw, dict):
+            continue
+        quantite = str(raw.get("quantity", "")).strip().lower()
+        if quantite not in _QUANTITES:
+            continue
+        mesure: dict[str, Any] = {"quantity": quantite}
+        corps = str(raw.get("body", "")).strip()
+        if quantite != "time":
+            if corps not in body_ids:
+                continue
+            mesure["body"] = corps
+        mesure["label"] = _text(raw.get("label"), 32) or quantite
+        mesure["decimals"] = int(_number(raw.get("decimals"), 2, 0, 4))
+        # `angle` se lit en degrés et `time` en secondes : ces deux-là ne
+        # dépendent d'aucune échelle. Les autres sont des pixels tant qu'on
+        # n'a pas dit combien de pixels font un mètre.
+        if unite := _text(raw.get("unit"), 12):
+            if quantite in {"angle", "time"} or avec_echelle:
+                mesure["unit"] = unite
+        if quantite == "height":
+            # La hauteur se compte depuis une référence : le sol, choisi par
+            # le modèle. Sans elle, l'axe y de Matter pointe vers le BAS et
+            # une bille qui tombe verrait sa « hauteur » augmenter.
+            mesure["origin"] = _number(raw.get("origin"), 0, -10000, 10000)
+        mesures.append(mesure)
+    return mesures
+
+
+def _parametres_matter(brut: Any, body_ids: set[str]) -> list[dict[str, Any]]:
+    """Les réglages que l'élève peut faire varier avant de relancer.
+
+    La règle du skill dit qu'une simulation doit permettre de faire varier un
+    paramètre ; elle était inapplicable, le contrat n'en offrant aucun.
+    """
+    if not isinstance(brut, list):
+        return []
+    reglables = {"angle", "restitution", "friction", "vx", "vy"}
+    parametres: list[dict[str, Any]] = []
+    vus: set[str] = set()
+    for raw in brut[:4]:
+        if not isinstance(raw, dict):
+            continue
+        cible = str(raw.get("target", "")).strip()
+        if cible not in {"gravity", "gravityX"}:
+            corps, _, champ = cible.partition(".")
+            if corps not in body_ids or champ not in reglables:
+                continue
+        if cible in vus:
+            continue
+        vus.add(cible)
+        minimum = _number(raw.get("min"), 0, -1000, 1000)
+        maximum = _number(raw.get("max"), 1, -1000, 1000)
+        if minimum >= maximum:
+            continue
+        parametres.append({
+            "target": cible,
+            "label": _text(raw.get("label"), 32) or cible,
+            "min": minimum,
+            "max": maximum,
+            "step": _number(raw.get("step"), (maximum - minimum) / 20, 0.0001, maximum - minimum),
+            "value": _number(raw.get("value"), (minimum + maximum) / 2, minimum, maximum),
+            "unit": _text(raw.get("unit"), 12),
+        })
+    return parametres
 
 
 def _normalize_roughsvg(value: dict[str, Any]) -> dict[str, Any] | None:
@@ -760,11 +884,43 @@ def scientific_visual_quality(value: Any) -> dict[str, Any]:
         if labelled == 0:
             score -= 20
             issues.append("Légender les points, vecteurs ou courbes utiles.")
+        # Un graphe dont les axes ne sont pas nommés coûte des points au BAC,
+        # et l'élève qui apprend sur des axes anonymes prend l'habitude de les
+        # oublier. La règle ne vise QUE les figures à courbe : un bilan des
+        # forces se trace sans repère et n'a rien à nommer.
+        trace_une_courbe = any(
+            element["type"] in {"function", "area"} for element in normalized["elements"]
+        )
+        if trace_une_courbe and normalized.get("axis"):
+            manquants = [
+                nom for nom, cle in (("abscisses", "xLabel"), ("ordonnées", "yLabel"))
+                if not normalized.get(cle)
+            ]
+            if manquants:
+                score -= 8 * len(manquants)
+                issues.append(
+                    "Nommer l'axe des " + " et des ".join(manquants)
+                    + " avec son unité — « t (s) », « U (V) »."
+                )
     elif normalized["engine"] == "matter":
         labelled = sum(bool(body.get("label")) for body in normalized["bodies"])
         if labelled < min(2, len(normalized["bodies"])):
             score -= 15
             issues.append("Légender les corps de la simulation.")
+        # Une simulation qu'on ne peut ni lire ni régler est une ANIMATION :
+        # l'élève regarde une bille tomber sans jamais voir sa vitesse
+        # augmenter, et un schéma statique aurait coûté moins cher.
+        if not normalized.get("measures") and not normalized.get("parameters"):
+            score -= 15
+            issues.append(
+                "Ajouter une grandeur lue (`measures`) ou un réglage (`parameters`) : "
+                "sans quoi la scène est une animation, pas une simulation."
+            )
+        if normalized.get("measures") and not normalized.get("scale"):
+            issues.append(
+                "Donner `scale` (pixels par mètre) pour que les mesures portent une unité."
+            )
+            score -= 8
 
     score = max(0, score)
     return {"score": score, "issues": list(dict.fromkeys(issues)), "acceptable": score >= 60}

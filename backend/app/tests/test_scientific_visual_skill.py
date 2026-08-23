@@ -1,5 +1,7 @@
 """Contrat de sécurité des visuels scientifiques produits par le LLM."""
 
+import pytest
+
 from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
 
 
@@ -338,3 +340,173 @@ def test_un_element_jete_est_ecrit_quelque_part(monkeypatch):
     assert [element["type"] for element in visual["elements"]] == ["point"]
     assert notes == [("jsxgraph", ["champ_vectoriel"], "Champ électrostatique")]
     assert callable(visual_gaps.noter_element_refuse)
+
+
+def test_matter_refuse_une_unite_sans_echelle():
+    """Le moteur compte en PIXELS : « m/s » sans échelle est un nombre inventé.
+
+    Un nombre faux sous une simulation juste se retient mieux qu'un nombre
+    absent : c'est la valeur que l'élève recopiera dans sa copie.
+    """
+    sans_echelle = normalize_scientific_visual({
+        "engine": "matter",
+        "bodies": [{"id": "bille", "shape": "circle", "x": 300, "y": 40}],
+        "measures": [
+            {"body": "bille", "quantity": "speed", "label": "Vitesse", "unit": "m/s"},
+            {"body": "bille", "quantity": "angle", "label": "Inclinaison", "unit": "°"},
+            {"quantity": "time", "label": "Durée", "unit": "s"},
+        ],
+    })
+
+    assert sans_echelle is not None
+    assert "scale" not in sans_echelle
+    vitesse, angle, duree = sans_echelle["measures"]
+    # Une longueur en pixels ne porte pas d'unité…
+    assert "unit" not in vitesse
+    # …mais un angle et une durée n'ont jamais dépendu d'une échelle.
+    assert angle["unit"] == "°"
+    assert duree["unit"] == "s"
+    assert "body" not in duree
+
+    avec_echelle = normalize_scientific_visual({
+        "engine": "matter",
+        "scale": 100,
+        "bodies": [{"id": "bille", "shape": "circle", "x": 300, "y": 40}],
+        "measures": [{"body": "bille", "quantity": "speed", "label": "Vitesse", "unit": "m/s"}],
+    })
+
+    assert avec_echelle is not None
+    assert avec_echelle["scale"] == 100
+    assert avec_echelle["measures"][0]["unit"] == "m/s"
+
+
+def test_matter_ecarte_une_mesure_qui_ne_vise_aucun_corps():
+    visual = normalize_scientific_visual({
+        "engine": "matter",
+        "bodies": [{"id": "bille", "shape": "circle", "x": 300, "y": 40}],
+        "measures": [
+            {"body": "fantome", "quantity": "y", "label": "Position"},
+            {"body": "bille", "quantity": "energie_cinetique", "label": "Ec"},
+            {"body": "bille", "quantity": "height", "label": "Hauteur", "origin": 380},
+        ],
+    })
+
+    assert visual is not None
+    assert [mesure["quantity"] for mesure in visual["measures"]] == ["height"]
+    # L'axe y de Matter descend : sans référence de sol, un corps qui tombe
+    # verrait sa hauteur augmenter.
+    assert visual["measures"][0]["origin"] == 380
+
+
+def test_matter_accepte_des_curseurs_bornes():
+    """La règle du skill exige de faire varier un paramètre ; il en fallait un."""
+    visual = normalize_scientific_visual({
+        "engine": "matter",
+        "bodies": [{"id": "plan", "shape": "rectangle", "x": 300, "y": 250, "isStatic": True}],
+        "parameters": [
+            {"target": "plan.angle", "label": "Inclinaison", "min": 0, "max": 1.2,
+             "step": 0.05, "value": 0.52, "unit": "rad"},
+            {"target": "gravity", "label": "Pesanteur", "min": 0.2, "max": 2, "value": 1},
+            {"target": "plan.couleur", "label": "Couleur", "min": 0, "max": 1},
+            {"target": "fantome.angle", "label": "Inconnu", "min": 0, "max": 1},
+            {"target": "plan.friction", "label": "Bornes absurdes", "min": 5, "max": 5},
+        ],
+    })
+
+    assert visual is not None
+    assert [p["target"] for p in visual["parameters"]] == ["plan.angle", "gravity"]
+    inclinaison = visual["parameters"][0]
+    assert inclinaison["value"] == 0.52
+    assert inclinaison["unit"] == "rad"
+    # Un curseur sans pas donné reste utilisable : vingt crans sur la plage.
+    assert visual["parameters"][1]["step"] == pytest.approx((2 - 0.2) / 20)
+
+
+def test_la_qualite_signale_une_animation_deguisee_en_simulation():
+    """Une scène qu'on ne peut ni lire ni régler n'apprend rien de plus.
+
+    L'élève regarde une bille tomber sans jamais voir sa vitesse augmenter :
+    un schéma statique aurait coûté moins cher et dit la même chose.
+    """
+    animation = scientific_visual_quality({
+        "engine": "matter",
+        "title": "Chute libre",
+        "bodies": [
+            {"id": "sol", "shape": "rectangle", "x": 300, "y": 300, "isStatic": True, "label": "Sol"},
+            {"id": "bille", "shape": "circle", "x": 300, "y": 40, "label": "Bille"},
+        ],
+    })
+
+    assert any("animation" in issue for issue in animation["issues"])
+
+    experience = scientific_visual_quality({
+        "engine": "matter",
+        "title": "Chute libre",
+        "scale": 100,
+        "bodies": [
+            {"id": "sol", "shape": "rectangle", "x": 300, "y": 300, "isStatic": True, "label": "Sol"},
+            {"id": "bille", "shape": "circle", "x": 300, "y": 40, "label": "Bille"},
+        ],
+        "measures": [{"body": "bille", "quantity": "speed", "label": "v", "unit": "m/s"}],
+        "parameters": [{"target": "gravity", "label": "g", "min": 0.2, "max": 2, "value": 1}],
+    })
+
+    assert experience["score"] == 100
+    assert experience["acceptable"]
+
+
+def test_la_qualite_exige_des_axes_nommes_sur_une_courbe():
+    """Au BAC, un axe sans nom ni unité coûte des points au correcteur près."""
+    anonyme = scientific_visual_quality({
+        "engine": "jsxgraph",
+        "title": "Décharge du condensateur",
+        "axis": True,
+        "elements": [{"type": "function", "expression": "exp(-x)", "label": "u(t)"}],
+    })
+
+    assert any("Nommer l'axe" in issue for issue in anonyme["issues"])
+
+    nomme = scientific_visual_quality({
+        "engine": "jsxgraph",
+        "title": "Décharge du condensateur",
+        "axis": True,
+        "xLabel": "t (s)",
+        "yLabel": "u (V)",
+        "elements": [{"type": "function", "expression": "exp(-x)", "label": "u(t)"}],
+    })
+
+    assert nomme["score"] == 100
+
+    # Un bilan des forces se trace SANS repère : il n'a pas d'axe à nommer.
+    forces = scientific_visual_quality({
+        "engine": "jsxgraph",
+        "title": "Bilan des forces",
+        "axis": False,
+        "elements": [
+            {"type": "arrow", "points": [{"x": 0, "y": 0}, {"x": 0, "y": -3}], "label": "P"},
+        ],
+    })
+
+    assert forces["score"] == 100
+
+
+def test_matter_ne_freine_pas_une_chute_libre():
+    """Matter amortit par défaut : la chute tendait vers une vitesse limite.
+
+    Mesuré sur une seconde de chute avec le réglage par défaut du moteur,
+    g passait de 9,5 à 7,5 m/s² — la simulation démentait le cours qu'elle
+    devait illustrer. Le frottement de l'air part donc de zéro, comme le
+    « frottements négligés » des énoncés du BAC.
+    """
+    visual = normalize_scientific_visual({
+        "engine": "matter",
+        "bodies": [
+            {"id": "bille", "shape": "circle", "x": 300, "y": 40},
+            {"id": "parachute", "shape": "circle", "x": 100, "y": 40, "frictionAir": 0.05},
+        ],
+    })
+
+    assert visual is not None
+    assert visual["bodies"][0]["frictionAir"] == 0
+    # La leçon qui PORTE sur la résistance de l'air garde son frottement.
+    assert visual["bodies"][1]["frictionAir"] == 0.05

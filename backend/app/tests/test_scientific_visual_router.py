@@ -64,3 +64,64 @@ def test_le_prompt_de_generation_impose_qualite_et_securite():
     assert "Erreurs scientifiques interdites" in prompt
     assert "aucun texte superposé" in prompt
     assert "JavaScript" in prompt
+
+
+def test_un_pluriel_ne_change_pas_de_moteur():
+    """« bilan des FORCES » partait vers un moteur de réseaux.
+
+    Le mot-clé `force` était au singulier et n'attrapait pas « forces » ;
+    `bilan`, lui, appartenait au motif Cytoscape. Trois vecteurs dans un
+    repère se retrouvaient donc dessinés en nœuds et flèches — un bilan des
+    forces qui ne montre plus aucune force.
+    """
+    assert recommend_generated_engine("dessine un bilan des forces sur un plan incliné") == "jsxgraph"
+    assert recommend_generated_engine("bilan énergétique de la respiration") == "cytoscape"
+    assert recommend_generated_engine("les étapes de la glycolyse") == "cytoscape"
+
+
+def test_l_optique_va_dans_un_repere_et_non_en_dessin_libre():
+    """Une lentille se construit avec des rayons, des foyers et une échelle."""
+    for demande in (
+        "montre la lentille convergente et la construction de l'image",
+        "schéma d'un miroir et du rayon réfléchi",
+        "la réfraction et l'angle d'incidence",
+    ):
+        assert recommend_generated_engine(demande) == "jsxgraph", demande
+
+
+def test_un_arbre_genealogique_n_est_pas_un_reseau():
+    """Carrés et ronds rangés par génération : un dessin, pas un graphe.
+
+    Les arbres qui SONT des graphes gardent leur moteur.
+    """
+    assert recommend_generated_engine("l'arbre généalogique de cette famille") == "roughsvg"
+    assert recommend_generated_engine("un arbre phylogénétique des primates") == "cytoscape"
+
+
+def test_un_echiquier_est_un_tableau_pas_un_dessin():
+    """Certaines demandes disent « dessine » sans appeler un dessin.
+
+    Un échiquier dessiné perd l'alignement des gamètes, qui est tout ce qu'un
+    échiquier sert à montrer.
+    """
+    assert recommend_generated_engine("dessine l'échiquier de croisement") == "table"
+    assert recommend_generated_engine("le tableau de variations de f") == "table"
+    assert recommend_generated_engine("dresse le tableau d'avancement") == "table"
+
+    prompt = build_visual_route_prompt("dessine l'échiquier de croisement du test cross")
+    assert "table" in prompt
+    assert "scientific" not in prompt or "RÉSERVE" in prompt
+
+
+def test_la_fiche_de_genetique_ne_contredit_plus_le_protocole():
+    """Deux ordres contraires arrivaient au tuteur dans le même prompt.
+
+    La fiche imposait un moteur graphique et listait « échiquier » parmi les
+    éléments obligatoires ; le PROTOCOLE GÉNÉTIQUE exige `type=table` pour ce
+    même échiquier.
+    """
+    prompt = build_visual_route_prompt("croisement monohybride chez la drosophile")
+
+    assert "RÉSERVE" in prompt
+    assert "`table`" in prompt
+    assert "PROTOCOLE GÉNÉTIQUE" in prompt

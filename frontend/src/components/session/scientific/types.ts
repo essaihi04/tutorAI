@@ -69,6 +69,8 @@ export interface MatterBodySpec {
   isStatic?: boolean;
   restitution?: number;
   friction?: number;
+  /** 0 par défaut : sans quoi une chute libre tend vers une vitesse limite. */
+  frictionAir?: number;
   velocity?: ScientificPoint;
 }
 
@@ -81,6 +83,33 @@ export interface MatterConstraintSpec {
   stiffness?: number;
 }
 
+export type MatterQuantity =
+  | 'x' | 'y' | 'height' | 'vx' | 'vy' | 'speed' | 'angle' | 'time';
+
+/** Une grandeur lue en direct : c'est ce qui fait d'une animation une mesure. */
+export interface MatterMeasureSpec {
+  quantity: MatterQuantity;
+  /** Absent pour `time`, qui n'appartient à aucun corps. */
+  body?: string;
+  label: string;
+  /** Retirée en amont si la scène n'a pas d'échelle : pas d'unité inventée. */
+  unit?: string;
+  decimals: number;
+  /** `height` seulement : ordonnée du sol, l'axe y de Matter descendant. */
+  origin?: number;
+}
+
+/** Un réglage que l'élève déplace ; la scène rejoue alors depuis le début. */
+export interface MatterParameterSpec {
+  target: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  unit?: string;
+}
+
 export interface MatterVisualSpec {
   engine: 'matter';
   title?: string;
@@ -90,6 +119,10 @@ export interface MatterVisualSpec {
   autoplay?: boolean;
   bodies: MatterBodySpec[];
   constraints?: MatterConstraintSpec[];
+  /** Pixels par mètre. Sans elle, aucune mesure ne porte d'unité. */
+  scale?: number;
+  measures?: MatterMeasureSpec[];
+  parameters?: MatterParameterSpec[];
 }
 
 export type RoughSVGElementType =

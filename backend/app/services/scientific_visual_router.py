@@ -31,30 +31,54 @@ _DYNAMIC = re.compile(
     re.IGNORECASE,
 )
 
+def _mots(*mots: str) -> re.Pattern[str]:
+    """Un motif qui admet le pluriel, comme le registre des schémas le fait.
+
+    L'élève écrit « bilan des FORCES ». Le mot-clé, lui, est au singulier :
+    `\\bforce\\b` ne le trouvait pas, `bilan` du motif Cytoscape le trouvait,
+    et un bilan des forces — trois vecteurs dans un repère — partait vers un
+    moteur de RÉSEAUX. Le `s` final valait le mauvais dessin.
+    """
+    return re.compile(rf"(?<!\w)(?:{'|'.join(mots)})[sx]?(?!\w)", re.IGNORECASE)
+
+
+# L'ordre décide : le premier motif qui répond emporte le moteur. Les cas les
+# moins ambigus passent donc en tête.
 _ENGINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
+        # Un échiquier de croisement, un tableau de variations ou un tableau
+        # d'avancement ne sont pas des dessins : les faire dessiner produit
+        # une figure fausse là où deux colonnes disent tout, et cela
+        # contredit le PROTOCOLE GÉNÉTIQUE qui exige déjà `type=table`.
+        "table",
+        _mots("echiquier", "damier", "tableau de variation", "tableau de signe",
+              "tableau d avancement", "tableau descriptif", "table de verite"),
+    ),
+    (
         "jsxgraph",
-        re.compile(
-            r"\b(courbe|fonction|repere|coordonnees|vecteur|force|optique|rayon|tangente|asymptote|"
-            r"trajectoire|orbite|cercle|geometrie|complexe|onde periodique|graphique)\b",
-            re.IGNORECASE,
-        ),
+        _mots("courbe", "fonction", "repere", "coordonnee", "vecteur", "force",
+              "optique", "rayon", "lentille", "miroir", "foyer", "focale",
+              "refraction", "reflexion", "diffraction", "incidence", "image",
+              "tangente", "asymptote", "trajectoire", "orbite", "cercle",
+              "geometrie", "complexe", "onde periodique", "graphique",
+              "bilan des force", "champ", "pendule simple"),
     ),
     (
         "cytoscape",
-        re.compile(
-            r"\b(chaine|cycle|voie|etapes|processus|reseau|bilan|cause|consequence|algorithme|arbre|"
-            r"transformation|metabolisme|reaction en cascade)\b",
-            re.IGNORECASE,
-        ),
+        # « arbre » tout court est retiré : il attirait l'arbre GÉNÉALOGIQUE,
+        # qui se dessine en carrés et ronds rangés par génération et non en
+        # réseau. Les arbres qui SONT des graphes restent nommés en entier.
+        _mots("chaine", "cycle", "voie", "etape", "processus", "reseau", "bilan",
+              "cause", "consequence", "algorithme", "transformation",
+              "metabolisme", "reaction en cascade", "arbre phylogenetique",
+              "phylogenie", "arbre de decision"),
     ),
     (
         "roughsvg",
-        re.compile(
-            r"\b(cellule|organe|organite|structure|ultrastructure|chromosome|appareil|montage|circuit|"
-            r"coupe|roche|plaque|membrane|molecule|arbre genealogique|experience)\b",
-            re.IGNORECASE,
-        ),
+        _mots("cellule", "organe", "organite", "structure", "ultrastructure",
+              "chromosome", "appareil", "montage", "circuit", "coupe", "roche",
+              "plaque", "membrane", "molecule", "arbre genealogique",
+              "genealogie", "experience", "dispositif"),
     ),
 )
 
@@ -211,6 +235,21 @@ def build_visual_route_prompt(context: str) -> str:
             "Ne le redessine pas : il est déjà contrôlé, légendé et reproductible."
         )
 
+    # Certaines demandes portent le mot « dessine » sans appeler un dessin :
+    # un échiquier de croisement, un tableau de variations ou un tableau
+    # d'avancement sont des TABLEAUX. Les envoyer vers un moteur graphique
+    # produit une figure fausse — et pour la génétique, cela contredit le
+    # PROTOCOLE GÉNÉTIQUE, qui impose déjà `type=table` à l'échiquier.
+    if route["engine"] == "table":
+        return (
+            "[CE N'EST PAS UN DESSIN — C'EST UN TABLEAU]\n"
+            f"Sujet : {route['title']}.\n"
+            "Utilise une ligne `table` dans `show_board`, PAS une ligne `scientific` :\n"
+            "un échiquier de croisement, un tableau de variations, de signes ou\n"
+            "d'avancement se lisent en lignes et en colonnes. Aucun moteur\n"
+            "graphique ne les rend mieux, et tous les rendent faux."
+        )
+
     obligation = (
         "L'élève demande explicitement un schéma : tu DOIS produire maintenant une ligne "
         "`scientific` dans `show_board`."
@@ -225,6 +264,18 @@ def build_visual_route_prompt(context: str) -> str:
     ]
     if route.get("must_show"):
         lines.append("Éléments scientifiques obligatoires : " + "; ".join(route["must_show"]) + ".")
+        # Les fiches de génétique demandent l'échiquier PARMI les éléments à
+        # montrer, et imposent par ailleurs un moteur graphique. Sans cette
+        # réserve, le tuteur reçoit deux ordres contraires : le PROTOCOLE
+        # GÉNÉTIQUE exige `type=table` pour l'échiquier, la fiche le fait
+        # dessiner. Un échiquier dessiné à main levée perd l'alignement des
+        # gamètes, qui est tout ce qu'un échiquier sert à montrer.
+        if any("chiquier" in str(item).lower() for item in route["must_show"]):
+            lines.append(
+                "RÉSERVE : l'échiquier lui-même reste une ligne `table` (cf. PROTOCOLE "
+                "GÉNÉTIQUE) — le moteur graphique ne sert qu'au reste (chromosomes, "
+                "position des allèles, gamètes)."
+            )
     if route.get("avoid"):
         lines.append("Erreurs scientifiques interdites : " + "; ".join(route["avoid"]) + ".")
     lines.extend([

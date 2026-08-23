@@ -42,6 +42,12 @@ Use for simple 2D mechanics:
 
 Use it only when motion changes the learner's understanding. A force diagram alone belongs in JSXGraph or a validated schema.
 
+Give every Matter scene something to read (`measures`) or something to adjust (`parameters`); see [board-schema.md](board-schema.md). Without either, a static schema says the same thing for less.
+
+## Not a drawing at all
+
+An échiquier de croisement, a tableau de variations, a tableau de signes and a tableau d'avancement are **tables**. Route them to an ordinary `table` board line, never to a graphics engine: a hand-drawn échiquier loses the alignment of the gametes, which is the only thing an échiquier exists to show. For genetics this also keeps the routing consistent with the PROTOCOLE GÉNÉTIQUE, which already requires `type=table`.
+
 ## Deferred tools
 
 Do not add these by default:

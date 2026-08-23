@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
-import type { MatterBodySpec, MatterVisualSpec } from './types';
+import type { MatterBodySpec, MatterMeasureSpec, MatterVisualSpec } from './types';
 
 interface MatterSimulationProps {
   spec: MatterVisualSpec;
@@ -13,6 +13,40 @@ interface MatterRuntime {
   labelHandler: () => void;
 }
 
+/**
+ * Matter avance d'un pas toutes les 1/60 s : une vitesse sort en pixels par
+ * PAS, pas par seconde. Sans ce facteur, une chute libre afficherait une
+ * vitesse soixante fois trop petite.
+ */
+const STEPS_PER_SECOND = 60;
+
+/**
+ * Convertit une grandeur du moteur vers l'unité affichée.
+ *
+ * Le moteur ne connaît que des pixels. `scale` dit combien en vaut un mètre ;
+ * sans elle, le validateur a déjà retiré l'unité et le nombre reste dans le
+ * repère de la scène. C'est le seul choix honnête : un nombre faux sous une
+ * simulation juste se retient mieux qu'un nombre absent.
+ */
+function readMeasure(measure: MatterMeasureSpec, body: Matter.Body | undefined,
+                     seconds: number, scale: number): number {
+  if (measure.quantity === 'time') return seconds;
+  if (!body) return Number.NaN;
+  switch (measure.quantity) {
+    case 'x': return body.position.x / scale;
+    case 'y': return body.position.y / scale;
+    // L'axe y de Matter descend : la hauteur se compte DEPUIS le sol, sinon
+    // un corps qui tombe verrait son altitude augmenter.
+    case 'height': return ((measure.origin ?? 0) - body.position.y) / scale;
+    case 'vx': return (body.velocity.x * STEPS_PER_SECOND) / scale;
+    case 'vy': return (body.velocity.y * STEPS_PER_SECOND) / scale;
+    case 'speed': return (Matter.Vector.magnitude(body.velocity) * STEPS_PER_SECOND) / scale;
+    // Un angle est un angle : aucune échelle en jeu, seulement des degrés.
+    case 'angle': return (body.angle * 180) / Math.PI;
+    default: return Number.NaN;
+  }
+}
+
 const COLORS: Record<string, string> = {
   red: '#ef4444', blue: '#3b82f6', green: '#22c55e', orange: '#f97316',
   purple: '#a855f7', cyan: '#06b6d4', yellow: '#eab308', white: '#e2e8f0',
@@ -23,11 +57,20 @@ function resolveColor(color?: string): string {
   return COLORS[color] || color;
 }
 
-function createBody(body: MatterBodySpec): Matter.Body {
+type Overrides = Record<string, number>;
+
+function createBody(body: MatterBodySpec, overrides: Overrides): Matter.Body {
+  const tuned = (field: string, fallback: number | undefined, standard: number) =>
+    overrides[`${body.id}.${field}`] ?? fallback ?? standard;
+
   const options: Matter.IChamferableBodyDefinition = {
     isStatic: body.isStatic === true,
-    restitution: body.restitution ?? 0.2,
-    friction: body.friction ?? 0.1,
+    restitution: tuned('restitution', body.restitution, 0.2),
+    friction: tuned('friction', body.friction, 0.1),
+    // Matter freine par défaut (0,01). Les exercices du BAC négligent les
+    // frottements : sans ce zéro, une chute libre atteignait une vitesse
+    // limite et démentait la leçon qu'elle illustre.
+    frictionAir: body.frictionAir ?? 0,
     label: body.id,
     render: {
       fillStyle: resolveColor(body.color),
@@ -40,17 +83,26 @@ function createBody(body: MatterBodySpec): Matter.Body {
     ? Matter.Bodies.circle(body.x, body.y, body.radius || 24, options)
     : Matter.Bodies.rectangle(body.x, body.y, body.width || 80, body.height || 36, options);
 
-  if (typeof body.angle === 'number' && body.angle !== 0) Matter.Body.setAngle(created, body.angle);
-  if (body.velocity) Matter.Body.setVelocity(created, body.velocity);
+  const angle = tuned('angle', body.angle, 0);
+  if (angle !== 0) Matter.Body.setAngle(created, angle);
+
+  const vx = tuned('vx', body.velocity?.x, 0);
+  const vy = tuned('vy', body.velocity?.y, 0);
+  if (vx !== 0 || vy !== 0) Matter.Body.setVelocity(created, { x: vx, y: vy });
   return created;
 }
 
 export default function MatterSimulation({ spec }: MatterSimulationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MatterRuntime | null>(null);
+  // Les mesures changent soixante fois par seconde. Les passer par l'état de
+  // React relancerait tout l'arbre à chaque image : on écrit dans le DOM.
+  const readoutRef = useRef<HTMLDivElement>(null);
   const [revision, setRevision] = useState(0);
   const [running, setRunning] = useState(spec.autoplay !== false);
   const [error, setError] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Overrides>(() =>
+    Object.fromEntries((spec.parameters || []).map(p => [p.target, p.value])));
 
   const stopRuntime = useCallback(() => {
     const runtime = runtimeRef.current;
@@ -82,8 +134,8 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
       const width = spec.width || 600;
       const height = spec.height || 320;
       const engine = Matter.Engine.create();
-      engine.gravity.x = spec.gravity?.x ?? 0;
-      engine.gravity.y = spec.gravity?.y ?? 1;
+      engine.gravity.x = overrides.gravityX ?? spec.gravity?.x ?? 0;
+      engine.gravity.y = overrides.gravity ?? spec.gravity?.y ?? 1;
 
       const render = Matter.Render.create({
         element: container,
@@ -102,7 +154,7 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
 
       const bodyById = new Map<string, Matter.Body>();
       const bodies = spec.bodies.map(bodySpec => {
-        const body = createBody(bodySpec);
+        const body = createBody(bodySpec, overrides);
         bodyById.set(bodySpec.id, body);
         return body;
       });
@@ -123,6 +175,27 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
       }
 
       const labelById = new Map(spec.bodies.map(body => [body.id, body.label || '']));
+      // Le temps se compte depuis le premier pas SIMULÉ, pas depuis l'arrivée
+      // du composant : une pause ne doit pas gonfler la durée de chute.
+      let steps = 0;
+      Matter.Events.on(engine, 'afterUpdate', () => { steps += 1; });
+
+      const measures = spec.measures || [];
+      const scale = spec.scale && spec.scale > 0 ? spec.scale : 1;
+      const cells = measures.map(() => document.createElement('span'));
+      if (measures.length && readoutRef.current) {
+        readoutRef.current.replaceChildren(...measures.map((measure, index) => {
+          const cell = document.createElement('div');
+          cell.className = 'rounded-md bg-slate-900/70 px-2 py-1';
+          const name = document.createElement('span');
+          name.className = 'text-slate-400';
+          name.textContent = `${measure.label} `;
+          cells[index].className = 'font-semibold text-cyan-200 tabular-nums';
+          cell.append(name, cells[index]);
+          return cell;
+        }));
+      }
+
       const labelHandler = () => {
         const context = render.context;
         context.save();
@@ -135,6 +208,16 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
           if (label) context.fillText(label, body.position.x, body.position.y);
         }
         context.restore();
+
+        measures.forEach((measure, index) => {
+          const value = readMeasure(
+            measure, measure.body ? bodyById.get(measure.body) : undefined,
+            steps / STEPS_PER_SECOND, scale,
+          );
+          cells[index].textContent = Number.isFinite(value)
+            ? `${value.toFixed(measure.decimals)}${measure.unit ? ` ${measure.unit}` : ''}`
+            : '—';
+        });
       };
       Matter.Events.on(render, 'afterRender', labelHandler);
 
@@ -153,7 +236,7 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
       active = false;
       stopRuntime();
     };
-  }, [revision, spec, stopRuntime]);
+  }, [revision, spec, stopRuntime, overrides]);
 
   const toggleRunning = () => {
     setRunning(value => {
@@ -185,6 +268,46 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
       </div>
       {error && <p className="px-2 pb-2 text-sm text-red-300">{error}</p>}
       <div ref={containerRef} className="flex w-full justify-center overflow-hidden rounded-lg" />
+
+      {/* Sans lecture, l'élève regarde une bille tomber sans jamais voir sa
+          vitesse augmenter : c'est une animation, pas une expérience. */}
+      <div
+        ref={readoutRef}
+        className="mt-2 flex flex-wrap gap-2 px-2 text-xs"
+        role="status"
+        aria-live="polite"
+        aria-label="Grandeurs mesurées"
+      />
+
+      {/* Déplacer un curseur rejoue la scène depuis le début : c'est la seule
+          façon de comparer deux essais qui ne diffèrent que par ce réglage. */}
+      {(spec.parameters || []).length > 0 && (
+        <div className="mt-2 grid gap-2 px-2 pb-1 sm:grid-cols-2">
+          {(spec.parameters || []).map(parameter => (
+            <label key={parameter.target} className="text-xs text-slate-300">
+              <span className="flex justify-between gap-2">
+                <span>{parameter.label}</span>
+                <span className="font-semibold tabular-nums text-cyan-200">
+                  {(overrides[parameter.target] ?? parameter.value).toFixed(2)}
+                  {parameter.unit ? ` ${parameter.unit}` : ''}
+                </span>
+              </span>
+              <input
+                type="range"
+                className="mt-1 w-full accent-cyan-500"
+                min={parameter.min}
+                max={parameter.max}
+                step={parameter.step}
+                value={overrides[parameter.target] ?? parameter.value}
+                onChange={event => {
+                  const value = Number(event.target.value);
+                  setOverrides(previous => ({ ...previous, [parameter.target]: value }));
+                }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
     </figure>
   );
 }

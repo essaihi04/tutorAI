@@ -57,10 +57,34 @@ const CAS: ScientificVisualSpec[] = [
   },
 ];
 
+/** Une chute libre qui se LIT et se RÈGLE, pas une bille qui tombe. */
+const SIMULATION: ScientificVisualSpec = {
+  engine: 'matter',
+  title: 'Chute libre — mesurer g',
+  width: 600,
+  height: 400,
+  gravity: { x: 0, y: 1 },
+  scale: 100,
+  autoplay: true,
+  bodies: [
+    { id: 'sol', shape: 'rectangle', x: 300, y: 380, width: 560, height: 20, isStatic: true, label: 'Sol' },
+    { id: 'bille', shape: 'circle', x: 300, y: 40, radius: 16, label: 'Bille', color: 'orange', restitution: 0.4 },
+  ],
+  measures: [
+    { body: 'bille', quantity: 'height', label: 'Hauteur', unit: 'm', decimals: 2, origin: 370 },
+    { body: 'bille', quantity: 'speed', label: 'Vitesse', unit: 'm/s', decimals: 2 },
+    { quantity: 'time', label: 'Durée', unit: 's', decimals: 2 },
+  ],
+  parameters: [
+    { target: 'gravity', label: 'Pesanteur', min: 0.2, max: 2, step: 0.1, value: 1 },
+    { target: 'bille.restitution', label: 'Rebond', min: 0, max: 0.9, step: 0.05, value: 0.4 },
+  ],
+};
+
 function Lab() {
   return (
     <div style={{ padding: 16, maxWidth: 820, margin: '0 auto' }}>
-      {CAS.map((spec, index) => (
+      {[...CAS, SIMULATION].map((spec, index) => (
         <div key={index} style={{ marginBottom: 24 }}>
           <ScientificVisual spec={spec} />
         </div>
