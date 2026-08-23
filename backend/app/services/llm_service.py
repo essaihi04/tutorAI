@@ -524,6 +524,19 @@ Steps disponibles (joués dans l'ordre) :
 - {"action":"draw","elements":[{"type":"arrow|line|rect|circle|text|path","points":[{"x":..,"y":..}],"x":..,"y":..,"width":..,"height":..,"radius":..,"label":"...","color":"cyan"}]}  → dessine un croquis animé dans la zone de dessin (coordonnées 0-500 × 0-400)
   • Les `label` des éléments dessinés sont AFFICHÉS : en français, très courts
     (« P », « Poids », « Support »). Le commentaire du croquis va dans le chat.
+- {"action":"figure","scientific":{…}}  → pose une FIGURE DE MOTEUR dans la même
+  zone de dessin : courbe graduée (`jsxgraph`), réseau (`cytoscape`), schéma
+  légendé (`roughsvg`) ou SIMULATION QUI BOUGE (`matter`). Elle se pose sur
+  l'ardoise, sans cadre ni fond.
+  • C'est le SEUL moyen de montrer quelque chose en mouvement au tableau :
+    `draw` ne trace que des traits fixes. Une demande « fais-le bouger »,
+    « simulation », « محاكاة » appelle `figure` avec `matter`.
+  • Une seule figure à la fois : une nouvelle remplace la précédente.
+    `{"action":"erase","zone":"draw"}` la retire.
+  • Le contenu de `scientific` suit EXACTEMENT le format du SKILL VISUELS
+    SCIENTIFIQUES ci-dessus — mêmes moteurs, mêmes champs, mêmes exigences.
+  • `say` est ce que tu PRONONCES en la montrant (darija autorisée ici, à la
+    différence de ce qui s'écrit au tableau).
 - {"action":"narrate","text":"..."}  → bulle affichée au tableau, en français
 - {"action":"pause","duration":1200}  → pause de réflexion (ms)
 - {"action":"erase","zone":"text|draw|all"}  → efface le tableau (comme un prof qui passe à la partie suivante)

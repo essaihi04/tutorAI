@@ -4,6 +4,8 @@ import type { CytoscapeVisualSpec } from './types';
 
 interface CytoscapeVisualProps {
   spec: CytoscapeVisualSpec;
+  /** La figure se pose SUR le tableau : ni cadre, ni fond peint. */
+  transparent?: boolean;
 }
 
 const COLORS: Record<string, string> = {
@@ -21,7 +23,18 @@ function resolveColor(color?: string): string {
   return COLORS[color] || color;
 }
 
-export default function CytoscapeVisual({ spec }: CytoscapeVisualProps) {
+
+/**
+ * Le cadre de la figure. Sur le tableau il n'y en a pas : la figure est
+ * dessinee sur l'ardoise, pas collee dessus.
+ */
+function CADRE_FIGURE(transparent?: boolean): string {
+  return transparent
+    ? 'my-0 h-full w-full p-0'
+    : 'my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2';
+}
+
+export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,7 +132,7 @@ export default function CytoscapeVisual({ spec }: CytoscapeVisualProps) {
   }, [spec]);
 
   return (
-    <figure className="my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2">
+    <figure className={CADRE_FIGURE(transparent)}>
       {spec.title && <figcaption className="px-2 pb-2 text-sm font-medium text-cyan-200">{spec.title}</figcaption>}
       {error && <p className="px-2 pb-2 text-sm text-red-300">{error}</p>}
       <div

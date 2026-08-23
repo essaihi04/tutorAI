@@ -252,3 +252,49 @@ def test_un_mot_de_chapitre_seul_n_impose_pas_le_schema_d_un_autre_chapitre():
     route = route_scientific_visual("la dérivée et la tangente à la courbe")
     assert route["source"] == "schema"
     assert route["schema_id"] == "math_derivation"
+
+
+def test_une_image_fixe_ne_repond_pas_a_fais_la_bouger():
+    """La boucle de la séance du 23 août 2026, en une ligne.
+
+    « dir lya chi simulation de contraction » contient « contraction »,
+    mot-clé de `svt_muscle_sarcomere`. Le tuteur recevait « affiche ce schéma,
+    NE LE REDESSINE PAS » et renvoyait une photo de sarcomère. L'élève
+    redemandait, le tuteur repromettait une simulation qu'il n'avait pas le
+    droit de produire : quatre fois le même paragraphe.
+    """
+    contexte = "sarcomère muscle contraction actine myosine"
+
+    route = route_scientific_visual(contexte, "dir lya chi simulation de contraction")
+    assert route["source"] == "mouvement"
+    # Le schéma validé ne disparaît pas : il accompagne, il ne répond pas.
+    assert route["schema_id"] == "svt_muscle_sarcomere"
+
+    prompt = build_visual_route_prompt(contexte, "dir lya chi simulation de contraction")
+    assert "BOUGER" in prompt
+    assert "OUVRIR_SIMULATION" in prompt
+    assert "matter" in prompt
+    assert "INTERDIT ABSOLU" in prompt          # promettre sans envoyer
+    assert "Ne le redessine pas" not in prompt  # l'ancien ordre a disparu
+
+
+def test_une_demande_ordinaire_garde_le_schema_valide():
+    """Rien ne change pour qui demande simplement le schéma."""
+    prompt = build_visual_route_prompt("sarcomère muscle contraction", "rassam lya sarcomere")
+
+    assert "SCHÉMA VALIDÉ DISPONIBLE" in prompt
+    assert "svt_muscle_sarcomere" in prompt
+
+
+def test_le_nom_d_une_notion_n_est_pas_une_demande_d_animation():
+    """« mouvement circulaire uniforme » se DESSINE : rayon et vecteurs.
+
+    Sans cette réserve, tout le chapitre de mécanique passait pour une
+    demande de simulation.
+    """
+    for demande in (
+        "schéma du mouvement circulaire uniforme",
+        "la quantité de mouvement du système",
+        "étude dynamique du pendule",
+    ):
+        assert route_scientific_visual(demande, demande)["source"] != "mouvement", demande

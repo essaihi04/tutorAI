@@ -147,15 +147,22 @@ const FIGURES: Record<string, { titre: string; phrase: string; spec: ScientificV
   },
 };
 
-/** Le tableau que le serveur enverrait : du texte, PUIS la figure. */
-function tableauAvecFigure(moteur: string) {
+/**
+ * Le script que le serveur envoie : on écrit à gauche, la figure se pose à
+ * droite.
+ *
+ * C'est le chemin réel depuis que `_board_lines_to_live_steps` convertit une
+ * ligne `scientific` en pas `figure`. Le tableau statique ne reçoit plus les
+ * figures — il garde ce qui se lit d'un bloc, tableaux et QCM.
+ */
+function scriptAvecFigure(moteur: string) {
   const figure = FIGURES[moteur];
   return {
     title: figure.titre,
-    lines: [
-      { type: 'title' as const, content: figure.titre },
-      { type: 'text' as const, content: figure.phrase },
-      { type: 'scientific' as const, content: figure.spec.title || 'Figure', scientific: figure.spec },
+    steps: [
+      { action: 'write' as const, line: { type: 'title', content: figure.titre } },
+      { action: 'write' as const, line: { type: 'text', content: figure.phrase } },
+      { action: 'figure' as const, scientific: figure.spec, say: figure.spec.title },
     ],
   };
 }
@@ -195,7 +202,8 @@ export default function BoardAudit() {
       </div>
 
       <p className="mt-4 text-sm text-slate-300">
-        Figures générées — un tableau de cours qui PORTE la figure&nbsp;:
+        Figures générées — le tableau EN DIRECT : on écrit à gauche, la figure
+        se pose à droite, sans cadre ni fond.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {(['roughsvg', 'cytoscape', 'jsxgraph', 'matter'] as const).map(clef => (
@@ -218,11 +226,8 @@ export default function BoardAudit() {
         <AIWhiteboard
           isVisible
           onClose={() => undefined}
-          boardContent={
-            mode === 'cours' ? { title: 'Dipôle RC', lines: LIGNES_DE_COURS }
-              : mode in FIGURES ? tableauAvecFigure(mode)
-              : null
-          }
+          boardContent={mode === 'cours' ? { title: 'Dipôle RC', lines: LIGNES_DE_COURS } : null}
+          liveScript={mode in FIGURES ? (scriptAvecFigure(mode) as any) : null}
           schemaId={mode === 'schema' ? 'phys_dipole_rc' : null}
           drawCommands={mode === 'dessin' ? COMMANDES_DE_DESSIN : null}
           onStudentMessage={recevoirQuestion}

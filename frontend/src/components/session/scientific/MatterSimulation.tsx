@@ -4,6 +4,8 @@ import type { MatterBodySpec, MatterMeasureSpec, MatterVisualSpec } from './type
 
 interface MatterSimulationProps {
   spec: MatterVisualSpec;
+  /** La figure se pose SUR le tableau : ni cadre, ni fond peint. */
+  transparent?: boolean;
 }
 
 interface MatterRuntime {
@@ -92,7 +94,18 @@ function createBody(body: MatterBodySpec, overrides: Overrides): Matter.Body {
   return created;
 }
 
-export default function MatterSimulation({ spec }: MatterSimulationProps) {
+
+/**
+ * Le cadre de la figure. Sur le tableau il n'y en a pas : la figure est
+ * dessinee sur l'ardoise, pas collee dessus.
+ */
+function CADRE_FIGURE(transparent?: boolean): string {
+  return transparent
+    ? 'my-0 h-full w-full p-0'
+    : 'my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2';
+}
+
+export default function MatterSimulation({ spec, transparent }: MatterSimulationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MatterRuntime | null>(null);
   // Les mesures changent soixante fois par seconde. Les passer par l'état de
@@ -144,7 +157,8 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
           width,
           height,
           wireframes: false,
-          background: '#07111f',
+          // Matter peint le fond DANS le canvas : le CSS n'y peut rien.
+          background: transparent ? 'transparent' : '#07111f',
           pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
         },
       });
@@ -254,7 +268,7 @@ export default function MatterSimulation({ spec }: MatterSimulationProps) {
   };
 
   return (
-    <figure className="my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2">
+    <figure className={CADRE_FIGURE(transparent)}>
       <div className="flex items-center justify-between gap-3 px-2 pb-2">
         <figcaption className="text-sm font-medium text-cyan-200">{spec.title || 'Simulation scientifique'}</figcaption>
         <div className="flex gap-2">

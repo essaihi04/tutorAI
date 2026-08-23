@@ -4,6 +4,8 @@ import type { RoughSVGElementSpec, RoughSVGVisualSpec, ScientificPoint } from '.
 
 interface RoughSVGVisualProps {
   spec: RoughSVGVisualSpec;
+  /** La figure se pose SUR le tableau : ni cadre, ni fond peint. */
+  transparent?: boolean;
 }
 
 const COLORS: Record<string, string> = {
@@ -89,18 +91,29 @@ function RenderElement({ element, index }: { element: RoughSVGElementSpec; index
     seed={seed} style={dashStyle} />;
 }
 
-export default function RoughSVGVisual({ spec }: RoughSVGVisualProps) {
+
+/**
+ * Le cadre de la figure. Sur le tableau il n'y en a pas : la figure est
+ * dessinee sur l'ardoise, pas collee dessus.
+ */
+function CADRE_FIGURE(transparent?: boolean): string {
+  return transparent
+    ? 'my-0 h-full w-full p-0'
+    : 'my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2';
+}
+
+export default function RoughSVGVisual({ spec, transparent }: RoughSVGVisualProps) {
   const titleId = `rough-title-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const width = spec.width || 800;
   const height = spec.height || 440;
 
   return (
-    <figure className="my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2">
+    <figure className={CADRE_FIGURE(transparent)}>
       {spec.title && <figcaption id={titleId} className="px-2 pb-2 text-sm font-medium text-cyan-200">{spec.title}</figcaption>}
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="max-h-[440px] w-full rounded-lg"
-        style={{ background: resolveColor(spec.background, '#07111f') }}
+        style={{ background: transparent ? 'transparent' : resolveColor(spec.background, '#07111f') }}
         role="img"
         aria-labelledby={spec.title ? titleId : undefined}
         aria-label={!spec.title ? spec.description || 'Schéma scientifique' : undefined}

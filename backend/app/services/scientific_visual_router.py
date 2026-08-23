@@ -60,6 +60,40 @@ def _mots(*mots: str) -> re.Pattern[str]:
     return re.compile(rf"(?<!\w)(?:{'|'.join(mots)})[sx]?(?!\w)", re.IGNORECASE)
 
 
+#: « Fais-moi voir ça BOUGER ». Ce n'est pas une nuance de style : une image
+#: fixe ne répond pas à la question, et le tuteur qui en envoie une promet
+#: alors un mouvement qu'il n'a pas le droit de produire. L'élève redemande,
+#: le tuteur repromet — la boucle observée en séance du 23 août, où « dir lya
+#: chi simulation de contraction » a rendu quatre fois le même paragraphe et
+#: la même photo de sarcomère.
+#:
+#: La darija compte autant que le français : c'est la langue dans laquelle la
+#: demande a été faite.
+#: « mouvement » tout court en est ABSENT, et c'est délibéré : c'est un nom
+#: de la physique, pas une demande. Le mouvement circulaire uniforme, le
+#: mouvement rectiligne, la quantité de mouvement se DESSINENT — un rayon, un
+#: vecteur vitesse, un vecteur accélération. Seul « EN mouvement » demande à
+#: voir bouger. Même prudence pour « dynamique », qui nomme un chapitre.
+_MOUVEMENT = re.compile(
+    r"(?<!\w)(?:simulation|simule\w*|animation|anime\w*|bouge\w*"
+    r"|en mouvement)(?!\w)"
+    # L'arabizi que la reconnaissance vocale produit telle quelle :
+    # « kaytharrek », « t7arrak », « ytharek » — « ça bouge ».
+    r"|(?<!\w)(?:ka)?[yi]?t[h7]arr?[ae]k\w*(?!\w)"
+    r"|(?:محاكاة|كيتحرك|يتحرك|تتحرك|تحريك|كيبان كيتحرك)",
+    re.IGNORECASE,
+)
+
+
+def demande_du_mouvement(texte: str) -> bool:
+    """L'élève demande-t-il de voir la chose EN MOUVEMENT ?"""
+    if not texte:
+        return False
+    # Le repli sans accents sert le français ; l'arabe est cherché tel quel,
+    # `_fold` ne gardant que les lettres latines et grecques.
+    return bool(_MOUVEMENT.search(_fold(texte)) or _MOUVEMENT.search(texte))
+
+
 #: Un échiquier de croisement, un tableau de variations ou un tableau
 #: d'avancement ne sont pas des dessins : les faire dessiner produit une
 #: figure fausse là où deux colonnes disent tout, et cela contredit le
@@ -252,6 +286,29 @@ def route_scientific_visual(context: str, demande: str | None = None) -> dict[st
             "explicit": visual_request_is_explicit(context),
         }
 
+    # ── Une image fixe ne répond pas à « fais-la bouger » ──
+    #
+    # Le registre SVG passait avant tout. « dir lya chi simulation de
+    # contraction » contient « contraction », mot-clé de `svt_muscle_sarcomere` :
+    # le tuteur recevait l'ordre « affiche ce schéma, NE LE REDESSINE PAS » et
+    # renvoyait une photo de sarcomère. L'élève redemandait, le tuteur
+    # repromettait une simulation qu'il n'avait pas le droit de produire —
+    # quatre fois le même paragraphe, séance du 23 août 2026.
+    #
+    # Le schéma validé ne disparaît pas : il devient l'ACCOMPAGNEMENT, pas la
+    # réponse. Ce qui bouge reste à trouver, et le prompt dit où le chercher.
+    if demande_du_mouvement(ou_lire):
+        return {
+            "source": "mouvement",
+            "schema_id": schema_id if schema_id and schema_score >= 3 else None,
+            "title": schema_title(schema_id) if schema_id else "Phénomène en mouvement",
+            "engine": recommend_generated_engine(context),
+            "must_show": list(blueprint.get("must_show", [])) if blueprint and blueprint_score >= 3 else [],
+            "avoid": list(blueprint.get("avoid", [])) if blueprint and blueprint_score >= 3 else [],
+            "score": schema_score,
+            "explicit": True,
+        }
+
     # Un rapprochement fort avec un SVG contrôlé reste toujours prioritaire.
     if schema_id and schema_score >= 3:
         return {
@@ -312,6 +369,43 @@ def route_scientific_visual(context: str, demande: str | None = None) -> dict[st
 def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
     """Instruction compacte injectée avant le prompt général du tuteur."""
     route = route_scientific_visual(context, demande)
+
+    if route["source"] == "mouvement":
+        lignes = [
+            "[L'ÉLÈVE DEMANDE À VOIR LE PHÉNOMÈNE BOUGER]",
+            f"Sujet : {route['title']}.",
+            "Une image fixe NE RÉPOND PAS à cette demande. Tu as trois moyens, "
+            "dans cet ordre :",
+            "1. `OUVRIR_SIMULATION` si le cours en possède une sur cette notion — "
+            "c'est toujours le meilleur choix, elle est faite pour être manipulée.",
+            "2. Une ligne `scientific` avec le moteur `matter` : le SEUL moteur qui "
+            "anime. Elle exige `measures` (une grandeur lue en direct) ou "
+            "`parameters` (un réglage) — sans quoi c'est une animation, pas une "
+            "simulation, et un dessin aurait suffi.",
+            "3. Si le phénomène ne relève d'aucun des deux — un glissement de "
+            "filaments, une migration, un repliement — dis-le franchement : "
+            "montre l'état AVANT et l'état APRÈS côte à côte dans une figure "
+            f"`{route['engine']}`, et nomme ce qui a changé entre les deux.",
+            "",
+            "INTERDIT ABSOLU : annoncer un mouvement, une simulation ou une "
+            "animation sans qu'il en parte réellement une dans CETTE réponse. "
+            "Une phrase comme « غادي ندير ليك محاكاة » ou « je vais te montrer "
+            "l'animation » est une PROMESSE. Si tu ne peux pas la tenir, ne la "
+            "fais pas : explique avec ce que tu as, et dis à l'élève ce que tu "
+            "lui montres exactement.",
+        ]
+        if route.get("schema_id"):
+            lignes.insert(2, (
+                f"Un schéma validé existe — `{route['schema_id']}` — mais il est FIXE : "
+                "il accompagne ton explication, il ne remplace pas ce que l'élève "
+                "demande."
+            ))
+        if route.get("must_show"):
+            lignes.append("Éléments scientifiques obligatoires : " + "; ".join(route["must_show"]) + ".")
+        if route.get("avoid"):
+            lignes.append("Erreurs scientifiques interdites : " + "; ".join(route["avoid"]) + ".")
+        return "\n".join(lignes)
+
     if route["source"] == "schema":
         return (
             "[SCHÉMA VALIDÉ DISPONIBLE POUR CETTE SÉANCE]\n"

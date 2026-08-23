@@ -3796,20 +3796,19 @@ RÈGLES :
     # Leur présence signe un contenu "figé" (données à consulter d'un bloc)
     # qui doit rester sur le tableau statique.
     #
-    # `scientific` y manquait, et c'était le trou par lequel passaient TOUTES
-    # les figures générées. Un tuteur qui répond « voici le schéma » produit
-    # un tableau ordinaire : un titre, deux phrases, et la ligne `scientific`
-    # qui porte la figure. Or un titre et deux phrases se rejouent très bien
-    # en direct — le tableau partait donc en script live, et
-    # `_board_lines_to_live_steps` jetait en silence la seule ligne qui
-    # comptait. L'élève entendait « regarde le schéma » devant un tableau qui
-    # n'en portait aucun. Aucun des quatre moteurs (JSXGraph, Cytoscape,
-    # Matter.js, Rough.js) ne sait s'écrire craie par craie : une figure
-    # impose le tableau statique, où `MathBoard` la rend vraiment.
+    # `scientific` n'y figure PLUS. Il y a été mis le temps que le tableau en
+    # direct apprenne à porter une figure : il la jetait en silence, et
+    # l'élève entendait « regarde le schéma » devant un tableau vide.
+    #
+    # Le tableau en direct a maintenant deux zones — on écrit à gauche, on
+    # dessine à droite — et sa zone de dessin monte les quatre moteurs, la
+    # simulation Matter comprise, sur fond transparent. C'est le seul endroit
+    # où une figure et l'explication qui l'accompagne arrivent ENSEMBLE, au
+    # rythme de la parole. Une figure n'a donc plus aucune raison d'exiger le
+    # tableau statique, qui l'affichait d'un bloc, sans un mot.
     _BOARD_ONLY_LINE_TYPES = {
         "table", "graph", "mindmap", "diagram",
         "qcm", "vrai_faux", "association",
-        "scientific",
     }
 
     @classmethod
@@ -3908,6 +3907,20 @@ RÈGLES :
             if not isinstance(line, dict):
                 continue
             ltype = str(line.get("type", "text")).lower().strip()
+            # Une figure part dans la ZONE DE DESSIN, à droite, pendant que le
+            # texte s'écrit à gauche. C'est là toute la différence avec le
+            # tableau statique : l'élève voit la figure apparaître au moment
+            # où le professeur en parle, et non un bloc déjà fini.
+            if ltype == "scientific":
+                figure = normalize_scientific_visual(line.get("scientific"))
+                if figure is None:
+                    continue
+                etape = {"action": "figure", "scientific": figure}
+                legende = line.get("content")
+                if isinstance(legende, str) and legende.strip():
+                    etape["say"] = legende.strip()
+                steps.append(etape)
+                continue
             if ltype not in RENDERABLE:
                 continue
             content = line.get("content")
@@ -3930,7 +3943,11 @@ RÈGLES :
             if ltype in ("title", "subtitle"):
                 steps.append({"action": "pause", "duration": 700})
 
-        if not any(s["action"] == "write" for s in steps):
+        # Une figure seule vaut un tableau : elle occupe la zone de dessin et
+        # se commente. Exiger une ligne écrite renverrait au tableau statique
+        # le cas le plus fréquent — « dessine-moi la mitochondrie », sans
+        # autre texte que la légende.
+        if not any(s["action"] in ("write", "figure") for s in steps):
             return []
         return steps
 
@@ -3981,6 +3998,33 @@ RÈGLES :
                 action = "ask"
             elif action in {"focus", "zoom_in", "zoom_out", "dezoom", "unzoom"}:
                 action = "zoom"
+            elif action in {"scientific", "schema", "simulation", "visuel"}:
+                action = "figure"
+
+            if action == "figure":
+                # La figure traverse exactement la même porte que sur le
+                # tableau statique : normalisation déclarative puis contrôle
+                # de qualité. Un moteur ne reçoit jamais autre chose.
+                figure = normalize_scientific_visual(step.get("scientific") or step.get("payload"))
+                if figure is None:
+                    _safe_log("[Live] Figure invalide ignorée")
+                    continue
+                quality = scientific_visual_quality(figure)
+                if not quality["acceptable"]:
+                    _safe_log(
+                        f"[Live] Figure refusée par la porte de qualité "
+                        f"(score={quality['score']}): {quality['issues']}"
+                    )
+                    continue
+                etape = {"action": "figure", "scientific": figure}
+                # `say` est ce que le professeur PRONONCE en montrant la
+                # figure : la darija y est chez elle, contrairement à ce qui
+                # s'écrit au tableau.
+                dit = step.get("say") or step.get("narration")
+                if isinstance(dit, str) and dit.strip():
+                    etape["say"] = dit.strip()
+                normalized.append(etape)
+                continue
 
             if action == "write" or (not action and isinstance(step.get("content"), str)):
                 line = step.get("line") if isinstance(step.get("line"), dict) else None
@@ -4102,7 +4146,7 @@ RÈGLES :
         # ⚠️ Peut désormais échouer parce que TOUTES les lignes étaient en
         # arabe : c'est voulu. Aucun tableau vaut mieux qu'un tableau que
         # l'élève ne peut pas recopier — le chat porte déjà l'explication.
-        if not any(s["action"] in ("write", "draw") for s in normalized):
+        if not any(s["action"] in ("write", "draw", "figure") for s in normalized):
             return None, None
         titre = str(title or "Cours en direct")
         if _ecrit_en_arabe(titre):

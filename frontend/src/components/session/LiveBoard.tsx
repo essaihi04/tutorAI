@@ -6,6 +6,8 @@ import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
 import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
 import RoughShape from './scientific/RoughShape';
+import ScientificVisual from './scientific/ScientificVisual';
+import type { ScientificVisualSpec } from './scientific/types';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -58,9 +60,21 @@ interface LiveDrawElement {
 }
 
 export interface LiveStep {
-  action: 'write' | 'draw' | 'erase' | 'pause' | 'narrate' | 'ask' | 'zoom';
+  action: 'write' | 'draw' | 'erase' | 'pause' | 'narrate' | 'ask' | 'zoom' | 'figure';
   line?: LiveLine;          // write
   elements?: LiveDrawElement[]; // draw
+  /**
+   * `figure` : une figure d'un moteur scientifique posée dans la zone de
+   * dessin, sur fond transparent — elle se pose SUR le tableau, elle ne le
+   * recouvre pas d'un rectangle noir.
+   *
+   * C'est ce qui manquait au tableau en direct : il savait tracer des traits
+   * à la craie, mais pas montrer une courbe graduée, un réseau, ni une
+   * simulation qui bouge. Ces choses partaient donc vers le tableau statique,
+   * qui les affiche d'un bloc — figure finie, sans un mot autour. Ici la
+   * figure arrive pendant que le professeur en parle.
+   */
+  scientific?: ScientificVisualSpec;
   zone?: 'text' | 'draw' | 'all'; // erase
   duration?: number;        // pause (ms)
   text?: string;            // narrate | ask (question posée)
@@ -146,6 +160,15 @@ interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs
 function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
+  /**
+   * La figure posée dans la zone de dessin, s'il y en a une.
+   *
+   * Une seule à la fois, et elle remplace la précédente : deux figures
+   * superposées ne se lisent pas, et la question de l'élève porte toujours
+   * sur la dernière. Le croquis à la craie, lui, continue de s'accumuler —
+   * un professeur ajoute des traits à son dessin, il ne le refait pas.
+   */
+  const [figure, setFigure] = useState<ScientificVisualSpec | null>(null);
   const [narration, setNarration] = useState<string | null>(null);
   const [erasingZone, setErasingZone] = useState<'text' | 'draw' | 'all' | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -251,8 +274,12 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // aucune voix à couper.
   const canSpeak = voiceEnabled;
 
+  // La zone de dessin s'ouvre pour un croquis à la craie COMME pour une
+  // figure de moteur : les deux y vivent, et une figure sans zone où se poser
+  // ne s'afficherait nulle part.
   const hasDrawSteps = Array.isArray(script?.steps) && script.steps.some(
-    s => s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0
+    s => (s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0)
+      || (s?.action === 'figure' && !!s.scientific)
   );
 
   /**
@@ -573,13 +600,37 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           }
           break;
         }
+        case 'figure': {
+          if (!step.scientific) break;
+          setFigure(step.scientific);
+          // Le professeur commente ce qu'il vient de poser. Sans commentaire,
+          // on laisse le temps de la regarder : une figure qui apparaît et
+          // disparaît aussitôt n'apprend rien. Une simulation, elle, tourne
+          // toute seule — on lui laisse le double.
+          const dit = typeof step.say === 'string' ? step.say.trim() : '';
+          const animee = step.scientific.engine === 'matter';
+          if (dit && soundOnRef.current) {
+            const handle = boardVoice.speak(toSpokenText(dit), langRef.current);
+            voiceHandleRef.current = handle;
+            if (!playingRef.current) handle.pause();
+            const [, waited] = await Promise.all([
+              handle.done,
+              wait(animee ? 3500 : 1200, runId),
+            ]);
+            if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
+            if (!waited || runId !== runIdRef.current) return;
+          } else if (!(await wait(animee ? 4500 : 2200, runId))) {
+            return;
+          }
+          break;
+        }
         case 'erase': {
           const zone = step.zone === 'text' || step.zone === 'draw' ? step.zone : 'all';
           setErasingZone(zone);
           if (!(await wait(ERASE_MS, runId))) return;
           if (runId !== runIdRef.current) return;
           if (zone === 'text' || zone === 'all') { setWritten([]); stepCounterRef.current = 0; }
-          if (zone === 'draw' || zone === 'all') setDrawn([]);
+          if (zone === 'draw' || zone === 'all') { setDrawn([]); setFigure(null); }
           setErasingZone(null);
           if (!(await wait(250, runId))) return;
           break;
@@ -680,6 +731,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     const runId = ++runIdRef.current;
     setWritten([]);
     setDrawn([]);
+    setFigure(null);
     setNarration(null);
     setErasingZone(null);
     setFinished(false);
@@ -777,6 +829,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setVoiceReveal(1);
     const finalWritten: WrittenEntry[] = [];
     const finalDrawn: DrawnEntry[] = [];
+    let finalFigure: ScientificVisualSpec | null = null;
     let lastNarration: string | null = null;
     let stepNo = 0;
     (script?.steps || []).forEach(step => {
@@ -787,16 +840,19 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         finalWritten.push({ key: ++keyRef.current, line: step.line, revealMs: 0, stepNumber: isStep ? stepNo : undefined });
       } else if (step.action === 'draw' && Array.isArray(step.elements)) {
         step.elements.forEach(el => el && el.type && finalDrawn.push({ key: ++keyRef.current, el, delayMs: 0, drawMs: 0 }));
+      } else if (step.action === 'figure' && step.scientific) {
+        finalFigure = step.scientific;
       } else if (step.action === 'erase') {
         const zone = step.zone === 'text' || step.zone === 'draw' ? step.zone : 'all';
         if (zone === 'text' || zone === 'all') { finalWritten.length = 0; stepNo = 0; }
-        if (zone === 'draw' || zone === 'all') finalDrawn.length = 0;
+        if (zone === 'draw' || zone === 'all') { finalDrawn.length = 0; finalFigure = null; }
       } else if (step.action === 'narrate' && step.text) {
         lastNarration = step.text;
       }
     });
     setWritten(finalWritten);
     setDrawn(finalDrawn);
+    setFigure(finalFigure);
     setNarration(lastNarration);
     setErasingZone(null);
     setFinished(true);
@@ -820,6 +876,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setVoiceKey(null);
     setWritten([]);
     setDrawn([]);
+    setFigure(null);
     setNarration(null);
     setErasingZone(null);
     setFinished(false);
@@ -1337,11 +1394,30 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
               ...(eraseDraw ? { animation: `liveEraseWipe ${ERASE_MS}ms ease-in forwards` } : {}),
             }}
           >
-            <svg viewBox="0 0 500 400" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-              {drawn.map(entry => (
-                <LiveDrawnElement key={entry.key} entry={entry} />
-              ))}
-            </svg>
+            {/* Le croquis à la craie et la figure d'un moteur partagent la
+                zone. Superposés et non exclusifs : le professeur peut poser
+                une courbe puis l'annoter d'une flèche à main levée. La figure
+                est au-dessus, le croquis reste cliquable au travers grâce au
+                `pointer-events` de chacun. */}
+            <div className="relative w-full h-full">
+              <svg
+                viewBox="0 0 500 400"
+                className="absolute inset-0 w-full h-full"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {drawn.map(entry => (
+                  <LiveDrawnElement key={entry.key} entry={entry} />
+                ))}
+              </svg>
+              {figure && (
+                <div
+                  className="absolute inset-0 overflow-auto live-figure"
+                  style={{ animation: 'liveFadeIn 0.45s ease-out both' }}
+                >
+                  <ScientificVisual spec={figure} transparent />
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

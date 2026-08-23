@@ -6,6 +6,8 @@ import { compileSafeMathExpression } from './safeMathExpression';
 
 interface JSXGraphVisualProps {
   spec: JSXGraphVisualSpec;
+  /** La figure se pose SUR le tableau : ni cadre, ni fond peint. */
+  transparent?: boolean;
 }
 
 const BOARD_COLORS: Record<string, string> = {
@@ -202,7 +204,18 @@ function memeEchelleSurLesDeuxAxes(spec: JSXGraphVisualSpec): boolean {
   return x === y;
 }
 
-export default function JSXGraphVisual({ spec }: JSXGraphVisualProps) {
+
+/**
+ * Le cadre de la figure. Sur le tableau il n'y en a pas : la figure est
+ * dessinee sur l'ardoise, pas collee dessus.
+ */
+function CADRE_FIGURE(transparent?: boolean): string {
+  return transparent
+    ? 'my-0 h-full w-full p-0'
+    : 'my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2';
+}
+
+export default function JSXGraphVisual({ spec, transparent }: JSXGraphVisualProps) {
   const reactId = useId();
   const boardId = `science-board-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -291,7 +304,7 @@ export default function JSXGraphVisual({ spec }: JSXGraphVisualProps) {
   }, [boardId, spec]);
 
   return (
-    <figure className="my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2">
+    <figure className={CADRE_FIGURE(transparent)}>
       {spec.title && <figcaption className="px-2 pb-2 text-sm font-medium text-cyan-200">{spec.title}</figcaption>}
       {error && <p className="px-2 pb-2 text-sm text-red-300">{error}</p>}
       <div

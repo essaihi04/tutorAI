@@ -11,8 +11,10 @@ script live, et la conversion jetait en silence la seule ligne qui comptait.
 L'élève entendait « regarde le schéma » devant un tableau qui n'en portait
 aucun — et concluait, comme toujours, qu'il n'avait pas compris.
 
-Aucun des quatre moteurs ne sait s'écrire craie par craie. Une figure impose
-donc le tableau statique, où `MathBoard` la rend pour de bon.
+La figure n'est plus jetée : elle devient un pas `figure` du script, posé dans
+la ZONE DE DESSIN du tableau en direct pendant que le texte s'écrit à gauche.
+C'est le seul endroit où la figure et l'explication arrivent ensemble, au
+rythme de la parole — le tableau statique, lui, affichait tout d'un bloc.
 """
 import asyncio
 
@@ -30,51 +32,111 @@ class FauxWebSocket:
 
 
 def _figure(engine: str = "roughsvg") -> dict:
-    return {
-        "type": "scientific",
-        "content": "Ultrastructure de la mitochondrie",
-        "scientific": {"engine": engine, "elements": []},
+    """Une figure minimale mais VALIDE pour chaque moteur.
+
+    Le normaliseur refuse une spécification vide : lui en donner une ferait
+    passer les tests pour une raison qui n'a rien à voir avec ce qu'ils
+    vérifient.
+    """
+    specs = {
+        "roughsvg": {
+            "engine": "roughsvg",
+            "title": "Ultrastructure de la mitochondrie",
+            "elements": [
+                {"type": "ellipse", "x": 200, "y": 150, "radiusX": 150, "radiusY": 90, "color": "cyan"},
+                {"type": "text", "x": 200, "y": 40, "text": "Membrane externe", "color": "cyan"},
+            ],
+        },
+        "jsxgraph": {
+            "engine": "jsxgraph",
+            "title": "Bilan des forces",
+            "elements": [
+                {"type": "point", "points": [{"x": 0, "y": 0}], "label": "S"},
+                {"type": "arrow", "points": [{"x": 0, "y": 0}, {"x": 0, "y": -3}], "label": "P"},
+            ],
+        },
+        "cytoscape": {
+            "engine": "cytoscape",
+            "title": "Glycolyse",
+            "nodes": [{"id": "a", "label": "Glucose"}, {"id": "b", "label": "Pyruvate"}],
+            "edges": [{"from": "a", "to": "b", "label": "glycolyse"}],
+        },
+        "matter": {
+            "engine": "matter",
+            "title": "Chute libre",
+            "scale": 100,
+            "bodies": [
+                {"id": "sol", "shape": "rectangle", "x": 300, "y": 380, "width": 600, "height": 20,
+                 "isStatic": True, "label": "Sol"},
+                {"id": "bille", "shape": "circle", "x": 300, "y": 60, "radius": 18, "label": "Bille"},
+            ],
+            "measures": [{"quantity": "time", "label": "t", "unit": "s", "decimals": 2}],
+        },
     }
+    return {"type": "scientific", "content": "Regarde la figure", "scientific": specs[engine]}
 
 
-def _cours_avec_figure() -> list[dict]:
+def _cours_avec_figure(engine: str = "roughsvg") -> list[dict]:
     """Le tableau typique : on annonce, on explique, on montre."""
     return [
         {"type": "title", "content": "La mitochondrie"},
         {"type": "text", "content": "Sa membrane interne porte les crêtes."},
-        _figure(),
+        _figure(engine),
     ]
 
 
-# ── La porte statique / live ──────────────────────────────────────
+# ── La figure survit à la conversion en direct ────────────────────
 
-def test_une_ligne_scientific_interdit_la_conversion_en_direct():
-    assert SessionHandler._board_is_live_renderable(_cours_avec_figure()) is False
+def test_la_figure_devient_un_pas_du_script():
+    steps = SessionHandler._board_lines_to_live_steps(_cours_avec_figure())
+
+    actions = [s["action"] for s in steps]
+    assert "figure" in actions, actions
+    figure = next(s for s in steps if s["action"] == "figure")
+    assert figure["scientific"]["engine"] == "roughsvg"
+    # La légende de la ligne devient ce que le professeur DIT en la montrant.
+    assert figure["say"] == "Regarde la figure"
 
 
-def test_les_quatre_moteurs_sont_concernes():
-    """Le verrou porte sur le TYPE de ligne, donc sur tous les moteurs."""
+def test_les_quatre_moteurs_traversent():
     for engine in ("jsxgraph", "cytoscape", "matter", "roughsvg"):
-        lignes = [{"type": "text", "content": "Observe."}, _figure(engine)]
-        assert SessionHandler._board_is_live_renderable(lignes) is False, engine
+        steps = SessionHandler._board_lines_to_live_steps(_cours_avec_figure(engine))
+        figures = [s for s in steps if s["action"] == "figure"]
+        assert len(figures) == 1, engine
+        assert figures[0]["scientific"]["engine"] == engine
 
 
-def test_un_tableau_sans_figure_se_rejoue_toujours_en_direct():
-    """Le cours ordinaire ne change pas : le live reste le défaut."""
-    lignes = [
-        {"type": "title", "content": "Le dipôle RC"},
-        {"type": "text", "content": "La charge suit une loi exponentielle."},
-    ]
-    assert SessionHandler._board_is_live_renderable(lignes) is True
-
-
-def test_la_conversion_en_direct_ne_sait_pas_rejouer_une_figure():
-    """La preuve du danger : convertir PERD la figure, sans rien signaler."""
+def test_le_texte_continue_de_s_ecrire_a_cote():
+    """La figure ne remplace pas l'explication : les deux zones vivent."""
     steps = SessionHandler._board_lines_to_live_steps(_cours_avec_figure())
 
     ecrits = [s for s in steps if s["action"] == "write"]
-    assert len(ecrits) == 2  # le titre et la phrase — la figure a disparu
-    assert not any("scientific" in str(s) for s in steps)
+    assert [e["line"]["content"] for e in ecrits] == [
+        "La mitochondrie",
+        "Sa membrane interne porte les crêtes.",
+    ]
+
+
+def test_une_figure_seule_vaut_un_tableau():
+    """« Dessine-moi la mitochondrie » n'a pas d'autre texte que sa légende.
+
+    Exiger une ligne écrite renverrait ce cas — le plus fréquent — au tableau
+    statique, qui affiche la figure d'un bloc et sans un mot.
+    """
+    steps = SessionHandler._board_lines_to_live_steps([_figure()])
+
+    assert len(steps) == 1
+    assert steps[0]["action"] == "figure"
+
+
+def test_une_figure_invalide_ne_casse_pas_le_tableau():
+    lignes = [
+        {"type": "title", "content": "La mitochondrie"},
+        {"type": "scientific", "content": "Figure", "scientific": {"engine": "inconnu"}},
+    ]
+    steps = SessionHandler._board_lines_to_live_steps(lignes)
+
+    assert [s["action"] for s in steps] == ["write", "pause"]
 
 
 # ── Ce que l'élève reçoit vraiment ────────────────────────────────
@@ -90,17 +152,51 @@ def _envoi(lignes: list[dict]) -> dict:
 def test_le_tableau_envoye_porte_encore_la_figure():
     envoi = _envoi(_cours_avec_figure())
 
-    assert envoi["type"] == "whiteboard_board"
-    types = [ligne["type"] for ligne in envoi["lines"]]
-    assert "scientific" in types
-    figure = next(l for l in envoi["lines"] if l["type"] == "scientific")
-    assert figure["scientific"]["engine"] == "roughsvg"
+    assert envoi["type"] == "whiteboard_live"
+    figures = [s for s in envoi["steps"] if s["action"] == "figure"]
+    assert len(figures) == 1
+    assert figures[0]["scientific"]["engine"] == "roughsvg"
 
 
-def test_un_cours_sans_figure_part_toujours_en_direct():
+def test_un_tableau_avec_un_echiquier_reste_statique():
+    """Un tableau à lire en lignes et colonnes ne se rejoue pas ligne à ligne."""
     envoi = _envoi([
-        {"type": "title", "content": "Le dipôle RC"},
-        {"type": "text", "content": "La charge suit une loi exponentielle."},
+        {"type": "title", "content": "Monohybridisme"},
+        {"type": "table", "headers": ["", "A", "a"], "rows": [["A", "AA", "Aa"]]},
     ])
 
-    assert envoi["type"] == "whiteboard_live"
+    assert envoi["type"] == "whiteboard_board"
+
+
+# ── Le tuteur peut émettre le pas lui-même ────────────────────────
+
+def test_le_tuteur_peut_poser_une_figure_dans_son_script():
+    handler = SessionHandler.__new__(SessionHandler)
+    titre, steps = handler._normalize_live_steps({
+        "title": "La mitochondrie",
+        "steps": [
+            {"action": "write", "line": {"type": "title", "content": "La mitochondrie"}},
+            {"action": "figure", "scientific": _figure()["scientific"], "say": "شوف الرسم"},
+        ],
+    })
+
+    assert titre == "La mitochondrie"
+    figure = next(s for s in steps if s["action"] == "figure")
+    assert figure["scientific"]["engine"] == "roughsvg"
+    # La darija est chez elle dans ce qui est PRONONCÉ ; seul l'écrit au
+    # tableau reste en français, l'élève le recopiant sur sa copie.
+    assert figure["say"] == "شوف الرسم"
+
+
+def test_une_figure_refusee_par_la_porte_de_qualite_ne_part_pas():
+    """Une figure vide traverserait le normaliseur mais n'apprend rien."""
+    handler = SessionHandler.__new__(SessionHandler)
+    titre, steps = handler._normalize_live_steps({
+        "steps": [
+            {"action": "write", "line": {"type": "text", "content": "Observe."}},
+            {"action": "figure", "scientific": {"engine": "cytoscape", "nodes": [], "edges": []}},
+        ],
+    })
+
+    assert titre is not None
+    assert not any(s["action"] == "figure" for s in steps)
