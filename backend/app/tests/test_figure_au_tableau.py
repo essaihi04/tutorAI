@@ -282,3 +282,67 @@ def test_une_forme_inventee_reste_refusee():
 
     dessin = next(s for s in steps if s["action"] == "draw")
     assert [e["type"] for e in dessin["elements"]] == ["circle"]
+
+
+# ── Le tableau ne s'efface pas dans le vide ───────────────────────
+
+class _HandlerRessource:
+    """Un handler réduit à la question posée : qui efface, et quand."""
+
+    def __init__(self, ressource_trouvee: bool):
+        self.websocket = FauxWebSocket()
+        self._trouve = ressource_trouvee
+        self._defaut_accord = ""
+
+    async def _auto_suggest_resource(self, preferred_resource_type=None):
+        if self._trouve:
+            await self.websocket.send_json({"type": "show_media", "url": "/media/sim.html"})
+        return self._trouve
+
+    _noter_simulation_introuvable = SessionHandler._noter_simulation_introuvable
+
+
+def _ouvrir_simulation(handler) -> list[str]:
+    """Rejoue la branche `simulation/open` de `_execute_ai_commands`."""
+    async def scenario():
+        ouverte = await handler._auto_suggest_resource(preferred_resource_type="simulation")
+        if ouverte:
+            await handler.websocket.send_json({"type": "hide_whiteboard"})
+        else:
+            handler._noter_simulation_introuvable()
+    asyncio.run(scenario())
+    return [m["type"] for m in handler.websocket.envoyes]
+
+
+def test_sans_simulation_disponible_le_tableau_reste():
+    """La séance du 24 août : « peux-tu créer une simulation ? »
+
+    Le tuteur promet, demande au système d'ouvrir, le tableau s'efface — et
+    rien n'arrive. L'élève regarde un panneau vide en l'entendant lui dire de
+    regarder. Le tableau ne s'efface plus tant que rien ne le remplace.
+    """
+    handler = _HandlerRessource(ressource_trouvee=False)
+
+    assert "hide_whiteboard" not in _ouvrir_simulation(handler)
+
+
+def test_le_tuteur_apprend_qu_il_doit_la_dessiner_lui_meme():
+    """Il ne le savait pas : le serveur ne répondait rien quand il ne trouvait pas.
+
+    Il repromettait donc au tour suivant — trois fois le même paragraphe.
+    """
+    handler = _HandlerRessource(ressource_trouvee=False)
+    _ouvrir_simulation(handler)
+
+    rappel = handler._defaut_accord
+    assert "matter" in rappel
+    assert "OUVRIR_SIMULATION" in rappel
+    assert "measures" in rappel
+
+
+def test_avec_une_simulation_disponible_le_tableau_cede_la_place():
+    """Le comportement d'origine ne change pas quand il y a bien quelque chose."""
+    handler = _HandlerRessource(ressource_trouvee=True)
+
+    assert _ouvrir_simulation(handler) == ["show_media", "hide_whiteboard"]
+    assert handler._defaut_accord == ""

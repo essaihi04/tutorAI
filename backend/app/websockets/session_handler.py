@@ -2905,9 +2905,19 @@ RÈGLES:
         resource_type_for_suggestion = decision.get("resource_type_for_suggestion")
         # Skip auto-suggest for exams - use exam panel system instead (exam_exercise WebSocket messages)
         if decision.get("auto_present_resource") and resource_type_for_suggestion and resource_type_for_suggestion != "exam":
-            await self.websocket.send_json({"type": "hide_whiteboard"})
-            await self._auto_suggest_resource(preferred_resource_type=resource_type_for_suggestion)
-            media_already_sent = True
+            # Le tableau ne s'efface QU'UNE FOIS la ressource affichée. Le
+            # faire avant revenait à parier : quand rien ne venait, l'élève
+            # perdait son tableau et ne recevait rien à la place — un panneau
+            # vide, et un professeur qui parle de ce qu'on ne voit pas.
+            media_already_sent = await self._auto_suggest_resource(
+                preferred_resource_type=resource_type_for_suggestion,
+            )
+            if media_already_sent:
+                await self.websocket.send_json({"type": "hide_whiteboard"})
+            else:
+                _safe_log(
+                    "[Auto Suggest] Aucune ressource ouverte : le tableau reste en place"
+                )
 
         # ── Un tour qui n'est QU'UNE question ne s'écrit pas au tableau ──
         #
@@ -5055,11 +5065,18 @@ RÈGLES :
                         if not resource_type:
                             _safe_log(f"[AI Commands][WARN] media action missing resource_type, defaulting to image. action={action!r}")
                         await self.websocket.send_json({"type": "hide_exercise"})
-                        await self.websocket.send_json({"type": "hide_whiteboard"})
-                        if resource_type == "simulation":
-                            await self._auto_suggest_resource(preferred_resource_type="simulation")
-                        else:
-                            await self._auto_suggest_resource(preferred_resource_type="image")
+                        # Même règle qu'au repli automatique : on n'efface pas
+                        # le tableau avant de savoir qu'autre chose le
+                        # remplace. Sinon l'élève le perd pour rien.
+                        ouverte = await self._auto_suggest_resource(
+                            preferred_resource_type=(
+                                "simulation" if resource_type == "simulation" else "image"
+                            ),
+                        )
+                        if ouverte:
+                            await self.websocket.send_json({"type": "hide_whiteboard"})
+                        elif resource_type == "simulation":
+                            self._noter_simulation_introuvable()
                         ui_actions_handled = True
                     elif action_name in {"close", "hide"}:
                         await self.websocket.send_json({"type": "hide_media"})
@@ -5067,8 +5084,13 @@ RÈGLES :
 
                 elif action_type == "simulation":
                     if action_name in {"open", "show"}:
-                        await self.websocket.send_json({"type": "hide_whiteboard"})
-                        await self._auto_suggest_resource(preferred_resource_type="simulation")
+                        ouverte = await self._auto_suggest_resource(
+                            preferred_resource_type="simulation",
+                        )
+                        if ouverte:
+                            await self.websocket.send_json({"type": "hide_whiteboard"})
+                        else:
+                            self._noter_simulation_introuvable()
                         ui_actions_handled = True
                     elif action_name in {"close", "hide"}:
                         await self.websocket.send_json({"type": "hide_media"})
@@ -6651,8 +6673,50 @@ RÈGLES :
             _safe_log(f"[Whiteboard] Error fixing overlaps: {e}")
             return draw_steps
 
-    async def _auto_suggest_resource(self, preferred_resource_type: str = None):
-        """Automatically suggest a resource based on conversation context."""
+    def _noter_simulation_introuvable(self) -> None:
+        """Le tuteur a promis une simulation, et le cours n'en a aucune.
+
+        Il ne le savait pas : `OUVRIR_SIMULATION` demande au serveur de
+        chercher, et le serveur ne répondait rien quand il ne trouvait pas. Le
+        tuteur promettait donc à nouveau au tour suivant, et encore au
+        suivant — trois fois le même paragraphe le 24 août 2026, sur la chute
+        libre, sans qu'une seule simulation ne s'ouvre.
+
+        Le constat part au tour d'après par le canal qui sert déjà aux
+        désaccords entre l'oral et le tableau : cette fois, il devra la
+        DESSINER lui-même.
+        """
+        _safe_log("[Auto Suggest] Aucune simulation dans le cours : le tuteur devra la générer")
+        self._defaut_accord = (
+            "Au tour précédent, tu as annoncé une simulation à l'élève et tu as "
+            "demandé au système de l'ouvrir. Le cours n'en contient AUCUNE sur "
+            "cette notion : rien ne s'est affiché, et l'élève a regardé un écran "
+            "vide en t'entendant lui dire de regarder.\n"
+            "N'utilise PLUS `OUVRIR_SIMULATION` pour cette notion. Produis "
+            "MAINTENANT la simulation toi-même : une ligne `scientific` avec le "
+            "moteur `matter`, dans un `show_board` ou un pas `figure` de "
+            "`show_live`. Elle exige `measures` (une grandeur lue en direct) ou "
+            "`parameters` (un réglage) — sans quoi c'est une animation, pas une "
+            "simulation. Rappel d'échelle : `scale:100` avec `gravity.y:1` donne "
+            "exactement g = 10 m/s², la valeur du BAC.\n"
+            "Si le phénomène ne relève pas de la mécanique 2D, dis-le franchement "
+            "et montre l'état AVANT et l'état APRÈS — mais ne promets plus rien "
+            "que tu n'envoies pas dans la même réponse."
+        )
+
+    async def _auto_suggest_resource(self, preferred_resource_type: str = None) -> bool:
+        """Ouvre la ressource la plus pertinente. Dit si elle en a ouvert une.
+
+        Elle ne le disait pas, et l'appelant masquait le tableau AVANT de
+        l'appeler. Quand aucune ressource ne correspondait — le cas le plus
+        courant en question libre, où la séance n'a pas de leçon rattachée —
+        la fonction sortait en silence par l'un de ses trois `return`, et
+        l'élève se retrouvait devant un panneau VIDE : son tableau venait de
+        disparaître et rien ne l'avait remplacé.
+
+        Constaté le 24 août 2026, chute libre : « peux-tu créer une
+        simulation ? », le tuteur promet, le tableau s'efface, rien n'arrive.
+        """
         try:
             _safe_log(f"[Auto Suggest] Starting resource suggestion...")
             
@@ -6670,7 +6734,7 @@ RÈGLES :
             
             if not self.lesson_resources:
                 _safe_log(f"[Auto Suggest] No resources available for this lesson")
-                return
+                return False
             
             _safe_log(f"[Auto Suggest] Available resources: {len(self.lesson_resources)}")
             
@@ -6710,7 +6774,7 @@ RÈGLES :
             
             if not candidate_resources:
                 _safe_log(f"[Auto Suggest] No valid {target_resource_type} resources found")
-                return
+                return False
             
             # Score resources by concept match
             best_resource = None
@@ -6755,11 +6819,13 @@ RÈGLES :
                 # Fallback: show first resource of the preferred type
                 _safe_log(f"[Auto Suggest] No concept match, showing first {target_resource_type}")
                 await self._display_resource(candidate_resources[0])
-                
+            return True
+
         except Exception as e:
             _safe_log(f"[Auto Suggest] ERROR: {str(e)}")
             import traceback
             traceback.print_exc()
+            return False
 
     async def _display_resource(self, resource: dict):
         """Display a resource to the student."""
