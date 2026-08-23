@@ -13,6 +13,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
 from app.services.schema_catalog import match_schema, schema_title
+from app.services.schema_gaps import noter_manque
 from app.services.scientific_visual_skill import normalize_scientific_visual
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
@@ -1748,6 +1749,11 @@ class SessionHandler:
         """
         schema_id, score = self._auto_match_schema()
         if not schema_id or score < 2:
+            # Le serveur SAIT ici que la bibliothèque ne couvre pas la séance.
+            # Il le notait à personne : c'est l'élève qui découvrait le trou,
+            # devant un tableau à la place d'un schéma. Désormais le manque
+            # s'écrit, et la liste se lit comme une liste de courses.
+            noter_manque(self._contexte_de_rapprochement(), schema_id, score)
             return ""
         titre = schema_title(schema_id)
         return (

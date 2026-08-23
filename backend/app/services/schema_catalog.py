@@ -47,6 +47,7 @@ SCHEMA_CATALOG: list[dict] = [
     {"id": 'svt_dorsale_accretion', "title": 'Dorsale océanique — Accrétion et expansion océanique', "subject": 'svt', "keywords": ['dorsale', 'accrétion', 'expansion océanique', 'expansion des fonds', 'plancher océanique', 'rift', 'basalte', 'gabbro', 'chambre magmatique', 'anomalies magnétiques', 'asthénosphère', 'الظهرة المحيطية', 'التوسع المحيطي']},
     {"id": 'svt_metamorphisme', "title": 'Métamorphisme — Faciès et gradients (subduction / collision)', "subject": 'svt', "keywords": ['métamorphisme', 'faciès métamorphique', 'schistes verts', 'schistes bleus', 'éclogite', 'glaucophane', 'grenat', 'jadéite', 'gradient métamorphique', 'pression température', 'التحول', 'التحول الصخري']},
     {"id": 'svt_chaine_montagnes', "title": 'Chaîne de montagnes — Collision continentale', "subject": 'svt', "keywords": ['chaîne de montagnes', 'collision', 'collision continentale', 'orogenèse', 'racine crustale', 'nappe de charriage', 'pli', 'faille inverse', 'ophiolite', 'suture', 'moho', 'raccourcissement', 'سلسلة جبلية', 'التصادم القاري']},
+    {"id": 'svt_cellule_vegetale', "title": 'La cellule végétale et ses organites', "subject": 'svt', "keywords": ['cellule végétale', 'paroi cellulosique', 'paroi', 'vacuole', 'chloroplaste', 'chlorophylle', 'photosynthèse', 'membrane plasmique', 'cytoplasme', 'organite', 'الخلية النباتية', 'الجدار السليلوزي', 'الفجوة']},
 ]
 
 SCHEMA_IDS: frozenset[str] = frozenset(entry["id"] for entry in SCHEMA_CATALOG)
@@ -110,7 +111,7 @@ def schema_title(schema_id: str) -> str:
     return ""
 
 
-SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — 32 identifiants]
+SCHEMA_CATALOG_PROMPT = """[SCHÉMAS SVG DISPONIBLES — 33 identifiants]
 Ces schémas sont déjà dessinés, animés et annotés. Les afficher coûte moins
 cher et rend mieux qu'un dessin improvisé : si l'un d'eux couvre la notion,
 c'est LUI qu'on affiche, dans TOUS les modes (cours, exercice, examen,
@@ -137,6 +138,7 @@ pas, et l'élève ne voit rien.
     svt_dorsale_accretion — Dorsale océanique — Accrétion et expansion océanique
     svt_metamorphisme — Métamorphisme — Faciès et gradients (subduction / collision)
     svt_chaine_montagnes — Chaîne de montagnes — Collision continentale
+    svt_cellule_vegetale — La cellule végétale et ses organites
   PHYSIQUE :
     phys_ondes_mecaniques — Ondes mécaniques progressives — propagation et retard
     phys_dipole_rc — Dipôle RC — Charge et décharge

@@ -1465,7 +1465,134 @@ export const svt_chaine_montagnes: ScientificSchema = {
   ],
 };
 
+/**
+ * Cellule végétale — le schéma qui manquait, et son absence se voyait.
+ *
+ * Faute de l'avoir, le tuteur répondait « structure de la cellule végétale »
+ * par un TABLEAU organite / rôle. Le tableau était juste, mais on ne peut pas
+ * situer une paroi dans un tableau : l'élève doit voir que la vacuole occupe
+ * presque tout le volume et REPOUSSE le noyau contre la membrane.
+ *
+ * Aucun des moteurs ne pouvait le dessiner — ni repère, ni réseau, ni
+ * mécanique — et rien n'existait à afficher. Le seul remède était de le
+ * dessiner.
+ *
+ * La composition suit les trois questions du BAC : ce qui entoure (paroi puis
+ * membrane, deux traits distincts qu'on confond sans cesse), ce qui occupe
+ * (la vacuole), et ce qui est PROPRE au végétal — rappelé en bas, parce que
+ * c'est la comparaison qui est demandée, pas la liste.
+ */
+export const svt_cellule_vegetale: ScientificSchema = {
+  id: 'svt_cellule_vegetale',
+  title: 'La cellule végétale et ses organites',
+  subject: 'svt',
+  keywords: ['cellule végétale', 'paroi cellulosique', 'paroi', 'vacuole', 'chloroplaste',
+    'chlorophylle', 'photosynthèse', 'membrane plasmique', 'cytoplasme', 'organite',
+    'الخلية النباتية', 'الجدار السليلوزي', 'الفجوة'],
+  category: 'structure',
+  viewBox: '0 0 920 620',
+  backgroundColor: '#f7fee7',
+  layers: [
+    { id: 'title', label: 'Titre', delay: 0, svgContent: `
+      <text x="460" y="34" text-anchor="middle" font-size="27" font-weight="bold" fill="#14532d" font-family="system-ui">La cellule végétale et ses organites</text>
+      <text x="460" y="60" text-anchor="middle" font-size="15" fill="#3f6212" font-family="system-ui">الخلية النباتية ومكوناتها</text>
+    `},
+    { id: 'paroi', label: 'Paroi cellulosique', delay: 300, svgContent: `
+      <rect x="270" y="96" width="430" height="360" rx="24" fill="#fde68a" stroke="#a16207" stroke-width="8"/>
+    `},
+    { id: 'membrane', label: 'Membrane et cytoplasme', delay: 600, svgContent: `
+      <rect x="286" y="112" width="398" height="328" rx="18" fill="#ecfccb" stroke="#4d7c0f" stroke-width="3"/>
+    `},
+    { id: 'vacuole', label: 'Vacuole', delay: 900, svgContent: `
+      <rect x="330" y="160" width="300" height="190" rx="34" fill="#bfdbfe" fill-opacity="0.9" stroke="#2563eb" stroke-width="2.5"/>
+      <text x="480" y="252" text-anchor="middle" font-size="17" font-weight="800" fill="#1e3a8a" font-family="system-ui">Vacuole</text>
+      <text x="480" y="276" text-anchor="middle" font-size="13" fill="#1e40af" font-family="system-ui">elle occupe presque tout le volume</text>
+    `},
+    { id: 'noyau', label: 'Noyau', delay: 1100, svgContent: `
+      <circle cx="345" cy="398" r="28" fill="#f5d0a9" stroke="#92400e" stroke-width="2.5"/>
+      <circle cx="345" cy="398" r="10" fill="#92400e"/>
+    `},
+    { id: 'chloroplastes', label: 'Chloroplastes', delay: 1300, svgContent: `
+      <g fill="#22c55e" stroke="#15803d" stroke-width="2">
+        <ellipse cx="432" cy="398" rx="26" ry="13"/>
+        <ellipse cx="500" cy="400" rx="26" ry="13"/>
+        <ellipse cx="568" cy="396" rx="26" ry="13"/>
+      </g>
+      <g stroke="#14532d" stroke-width="1.5" opacity="0.8">
+        <line x1="418" y1="398" x2="446" y2="398"/>
+        <line x1="486" y1="400" x2="514" y2="400"/>
+        <line x1="554" y1="396" x2="582" y2="396"/>
+      </g>
+    `},
+    { id: 'mitochondries', label: 'Mitochondries', delay: 1450, svgContent: `
+      <g fill="#f97316" stroke="#c2410c" stroke-width="2">
+        <ellipse cx="624" cy="138" rx="16" ry="9"/>
+        <ellipse cx="308" cy="248" rx="16" ry="9"/>
+      </g>
+    `},
+    { id: 'legendes', label: 'Légendes', delay: 1600, svgContent: `
+      <line x1="274" y1="132" x2="248" y2="146" stroke="#a16207" stroke-width="2"/>
+      <text x="242" y="142" text-anchor="end" font-size="16" font-weight="700" fill="#a16207" font-family="system-ui">Paroi cellulosique</text>
+      <text x="242" y="162" text-anchor="end" font-size="13" fill="#a16207" font-family="system-ui">الجدار السليلوزي — rigide</text>
+
+      <line x1="288" y1="196" x2="248" y2="212" stroke="#4d7c0f" stroke-width="2"/>
+      <text x="242" y="208" text-anchor="end" font-size="16" font-weight="700" fill="#3f6212" font-family="system-ui">Membrane plasmique</text>
+      <text x="242" y="228" text-anchor="end" font-size="13" fill="#3f6212" font-family="system-ui">الغشاء السيتوبلازمي</text>
+
+      <line x1="304" y1="290" x2="248" y2="290" stroke="#4d7c0f" stroke-width="2"/>
+      <text x="242" y="286" text-anchor="end" font-size="16" font-weight="700" fill="#3f6212" font-family="system-ui">Cytoplasme</text>
+      <text x="242" y="306" text-anchor="end" font-size="13" fill="#3f6212" font-family="system-ui">السيتوبلازم</text>
+
+      <line x1="317" y1="398" x2="248" y2="382" stroke="#92400e" stroke-width="2"/>
+      <text x="242" y="378" text-anchor="end" font-size="16" font-weight="700" fill="#92400e" font-family="system-ui">Noyau</text>
+      <text x="242" y="398" text-anchor="end" font-size="13" fill="#92400e" font-family="system-ui">النواة — repoussé par la vacuole</text>
+
+      <line x1="640" y1="138" x2="726" y2="126" stroke="#c2410c" stroke-width="2"/>
+      <text x="732" y="122" font-size="16" font-weight="700" fill="#c2410c" font-family="system-ui">Mitochondrie</text>
+      <text x="732" y="142" font-size="13" fill="#c2410c" font-family="system-ui">الميتوكندري — respiration</text>
+
+      <line x1="622" y1="248" x2="726" y2="216" stroke="#1d4ed8" stroke-width="2"/>
+      <text x="732" y="212" font-size="16" font-weight="700" fill="#1d4ed8" font-family="system-ui">Vacuole</text>
+      <text x="732" y="232" font-size="13" fill="#1d4ed8" font-family="system-ui">الفجوة — eau, sels, pigments</text>
+
+      <line x1="594" y1="392" x2="726" y2="330" stroke="#15803d" stroke-width="2"/>
+      <text x="732" y="326" font-size="16" font-weight="700" fill="#15803d" font-family="system-ui">Chloroplaste</text>
+      <text x="732" y="346" font-size="13" fill="#15803d" font-family="system-ui">البلاستيدة الخضراء</text>
+      <text x="732" y="366" font-size="13" fill="#15803d" font-family="system-ui">siège de la photosynthèse</text>
+    `},
+    { id: 'comparaison', label: 'Végétal vs animal', delay: 1900, svgContent: `
+      <rect x="24" y="480" width="872" height="124" rx="14" fill="#ffffff" stroke="#65a30d" stroke-width="2"/>
+      <text x="44" y="508" font-size="17" font-weight="800" fill="#3f6212" font-family="system-ui">Ce que la cellule ANIMALE n'a pas — ما يميز الخلية النباتية</text>
+      <rect x="44" y="522" width="16" height="16" rx="4" fill="#fde68a" stroke="#a16207" stroke-width="2"/>
+      <text x="70" y="536" font-size="14" fill="#334155" font-family="system-ui">la PAROI cellulosique, qui rigidifie et donne sa forme à la cellule ;</text>
+      <rect x="44" y="548" width="16" height="16" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="2"/>
+      <text x="70" y="562" font-size="14" fill="#334155" font-family="system-ui">une GRANDE vacuole, qui stocke l'eau et pousse le reste contre la membrane ;</text>
+      <rect x="44" y="574" width="16" height="16" rx="4" fill="#22c55e" stroke="#15803d" stroke-width="2"/>
+      <text x="70" y="588" font-size="14" fill="#334155" font-family="system-ui">les CHLOROPLASTES, où se fait la photosynthèse. Noyau, cytoplasme et mitochondries, eux, sont communs.</text>
+    `},
+  ],
+  annotations: [
+    { id: 'a_paroi', x: 270, y: 96, width: 430, height: 20, label: 'Paroi cellulosique', color: '#a16207',
+      description: "Enveloppe rigide de cellulose, à l'extérieur de la membrane. Elle donne sa forme à la cellule et l'empêche d'éclater quand elle absorbe l'eau." },
+    { id: 'a_vacuole', x: 330, y: 160, width: 300, height: 190, label: 'Vacuole', color: '#2563eb',
+      description: "Poche remplie de suc cellulaire. Chez une cellule végétale adulte, elle occupe l'essentiel du volume et plaque le cytoplasme contre la membrane." },
+    { id: 'a_chloroplastes', x: 400, y: 378, width: 200, height: 44, label: 'Chloroplastes', color: '#15803d',
+      description: "Organites verts contenant la chlorophylle : ils captent la lumière et réalisent la photosynthèse." },
+    { id: 'a_noyau', x: 313, y: 366, width: 64, height: 64, label: 'Noyau', color: '#92400e',
+      description: "Il contient l'information génétique. Repoussé en périphérie par la vacuole — position typique de la cellule végétale." },
+  ],
+  highlights: [
+    { id: 'h_paroi', cx: 274, cy: 200, radius: 40, label: 'Paroi cellulosique' },
+    { id: 'h_membrane', cx: 288, cy: 300, radius: 34, label: 'Membrane plasmique' },
+    { id: 'h_vacuole', cx: 480, cy: 254, radius: 90, label: 'Vacuole' },
+    { id: 'h_noyau', cx: 345, cy: 398, radius: 42, label: 'Noyau' },
+    { id: 'h_chloroplastes', cx: 500, cy: 398, radius: 60, label: 'Chloroplastes' },
+    { id: 'h_mitochondries', cx: 624, cy: 138, radius: 32, label: 'Mitochondries' },
+  ],
+};
+
 export const SVT_SCHEMAS = [
+  svt_cellule_vegetale,
   svt_dorsale_accretion,
   svt_metamorphisme,
   svt_chaine_montagnes,
