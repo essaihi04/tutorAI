@@ -12,9 +12,10 @@ from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
-from app.services.schema_catalog import match_schema, schema_title
+from app.services.schema_catalog import match_schema
 from app.services.schema_gaps import noter_manque
-from app.services.scientific_visual_skill import normalize_scientific_visual
+from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
+from app.services.scientific_visual_router import build_visual_route_prompt
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
 from app.services.prompt_builder import prompt_builder
@@ -1735,35 +1736,21 @@ class SessionHandler:
         return "\n".join(lines)
 
     def _bloc_schema_disponible(self) -> str:
-        """Nommer le schéma validé de la séance AVANT que le tuteur ne dessine.
+        """Choisir un schéma validé ou préparer sa génération déclarative.
 
-        Le catalogue complet est déjà dans le prompt, mais trente
-        identifiants au milieu de mille lignes se noient : le modèle
-        continuait d'esquisser à main levée un muscle strié dont le schéma
-        existait. On lui met donc le bon identifiant sous les yeux, en haut,
-        pour CETTE leçon.
-
-        Le rapprochement ne s'impose qu'au-dessus de 2 mots-clés : au-dessous,
-        c'est une coïncidence de vocabulaire, et proposer le mauvais schéma
-        serait pire que de laisser dessiner.
+        Une absence dans le registre n'aboutit plus à un tableau textuel par
+        défaut : le routeur choisit JSXGraph, Cytoscape, Matter.js ou Rough.js
+        et injecte les critères scientifiques propres à la notion demandée.
         """
+        contexte = self._contexte_de_rapprochement()
         schema_id, score = self._auto_match_schema()
         if not schema_id or score < 2:
             # Le serveur SAIT ici que la bibliothèque ne couvre pas la séance.
             # Il le notait à personne : c'est l'élève qui découvrait le trou,
             # devant un tableau à la place d'un schéma. Désormais le manque
             # s'écrit, et la liste se lit comme une liste de courses.
-            noter_manque(self._contexte_de_rapprochement(), schema_id, score)
-            return ""
-        titre = schema_title(schema_id)
-        return (
-            "[SCHÉMA VALIDÉ DISPONIBLE POUR CETTE SÉANCE]\n"
-            f"Un schéma de la bibliothèque couvre le sujet : `{schema_id}` — {titre}.\n"
-            "AFFICHE-LE (`show_schema`) plutôt que de le redessiner : il est déjà\n"
-            "légendé en français et en arabe, aux conventions du BAC. Tes propres\n"
-            "croquis servent alors au RAISONNEMENT (ce qui varie, ce qu'on compare),\n"
-            "pas à refaire l'anatomie que ce schéma montre déjà mieux."
-        )
+            noter_manque(contexte, schema_id, score)
+        return build_visual_route_prompt(contexte)
 
     def _build_session_system_prompt(self, user_query: str = "", prof_ctx: dict = None) -> str:
         ctx = self.session_context
@@ -4723,6 +4710,13 @@ RÈGLES :
                         scientific = normalize_scientific_visual(normalized.get("scientific"))
                         if scientific is None:
                             _safe_log("[AI Commands][WARN] Invalid scientific visual line ignored")
+                            continue
+                        quality = scientific_visual_quality(scientific)
+                        if not quality["acceptable"]:
+                            _safe_log(
+                                f"[AI Commands][WARN] Scientific visual rejected by quality gate "
+                                f"(score={quality['score']}): {quality['issues']}"
+                            )
                             continue
                         normalized["scientific"] = scientific
                     normalized["content"] = sanitize_board_text(

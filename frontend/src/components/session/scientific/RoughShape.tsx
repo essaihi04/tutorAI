@@ -9,7 +9,7 @@ interface Point {
 }
 
 interface RoughShapeProps {
-  kind: 'line' | 'rectangle' | 'circle' | 'linearPath' | 'polygon';
+  kind: 'line' | 'rectangle' | 'circle' | 'ellipse' | 'linearPath' | 'polygon';
   x?: number;
   y?: number;
   width?: number;
@@ -46,6 +46,8 @@ export default function RoughShape({
         return generator.toPaths(generator.rectangle(x, y, width, height, options));
       case 'circle':
         return generator.toPaths(generator.circle(x, y, radius * 2, options));
+      case 'ellipse':
+        return generator.toPaths(generator.ellipse(x, y, width, height, options));
       case 'linearPath':
         return tuples.length >= 2 ? generator.toPaths(generator.linearPath(tuples, options)) : [];
       case 'polygon':
@@ -71,4 +73,3 @@ export default function RoughShape({
     </>
   );
 }
-

@@ -8,7 +8,7 @@ export const chem_cinetique: ScientificSchema = {
   id: 'chem_cinetique',
   title: 'Transformations lentes et rapides — facteurs cinétiques',
   subject: 'chemistry',
-  keywords: ['cinétique', 'vitesse', 'réaction', 'concentration', 'temps demi-réaction', 'avancement', 'سرعة التفاعل', 'حركية كيميائية', 'facteurs cinétiques'],
+  keywords: ['cinétique', 'vitesse', 'réaction', 'concentration', 'temps demi-réaction', 'avancement', 'transformations lentes', 'transformations rapides', 'suivi temporel', 'سرعة التفاعل', 'حركية كيميائية', 'facteurs cinétiques'],
   category: 'diagram',
   viewBox: '0 0 850 480',
   layers: [

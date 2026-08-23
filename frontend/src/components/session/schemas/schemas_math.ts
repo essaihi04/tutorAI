@@ -105,7 +105,7 @@ export const math_integrales: ScientificSchema = {
   id: 'math_integrales',
   title: 'Intégration — Primitives et calcul d\'aires',
   subject: 'math',
-  keywords: ['intégrale', 'primitive', 'aire', 'intégration', 'parties', 'تكامل', 'مساحة', 'دالة أصلية'],
+  keywords: ['intégrale', 'calcul intégral', 'primitive', 'aire sous la courbe', 'intégration', 'intégration par parties', 'تكامل', 'مساحة', 'دالة أصلية'],
   category: 'diagram',
   viewBox: '0 0 850 480',
   layers: [

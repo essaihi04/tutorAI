@@ -4,6 +4,7 @@ import type { ScientificVisualSpec } from './types';
 const JSXGraphVisual = lazy(() => import('./JSXGraphVisual'));
 const CytoscapeVisual = lazy(() => import('./CytoscapeVisual'));
 const MatterSimulation = lazy(() => import('./MatterSimulation'));
+const RoughSVGVisual = lazy(() => import('./RoughSVGVisual'));
 
 interface ScientificVisualProps {
   spec: ScientificVisualSpec;
@@ -23,7 +24,7 @@ export default function ScientificVisual({ spec }: ScientificVisualProps) {
       {spec.engine === 'jsxgraph' && <JSXGraphVisual spec={spec} />}
       {spec.engine === 'cytoscape' && <CytoscapeVisual spec={spec} />}
       {spec.engine === 'matter' && <MatterSimulation spec={spec} />}
+      {spec.engine === 'roughsvg' && <RoughSVGVisual spec={spec} />}
     </Suspense>
   );
 }
-

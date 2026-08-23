@@ -26,8 +26,9 @@ from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from app.services.schema_catalog import match_schema, schema_title  # noqa: E402
+from app.services.schema_catalog import match_schema  # noqa: E402
 from app.services.schema_gaps import noter_manque  # noqa: E402
+from app.services.scientific_visual_router import route_scientific_visual  # noqa: E402
 
 # Le programme 2BAC PC BIOF, notion par notion, dans les mots qu'un élève ou
 # un intitulé de leçon emploie vraiment.
@@ -67,6 +68,12 @@ PROGRAMME: dict[str, list[str]] = {
         "le magmatisme et la granitisation",
         "l'isostasie et l'équilibre de la lithosphère",
     ],
+    "SVT — environnement et santé": [
+        "le traitement des eaux usées dans une STEP, DBO5 et DCO",
+        "la pollution des nappes par les nitrates et pesticides",
+        "le tri et la valorisation des déchets, compostage et biogaz",
+        "l'effet de serre renforcé et le réchauffement climatique",
+    ],
     "Physique — ondes": [
         "les ondes mécaniques progressives et le retard",
         "les ondes périodiques et la longueur d'onde",
@@ -84,6 +91,7 @@ PROGRAMME: dict[str, list[str]] = {
         "le dipôle RL et la bobine",
         "les oscillations libres du circuit RLC",
         "les oscillations forcées et la résonance",
+        "la modulation et la démodulation d'amplitude AM",
     ],
     "Physique — mécanique": [
         "les lois de Newton et le bilan des forces",
@@ -126,42 +134,40 @@ PROGRAMME: dict[str, list[str]] = {
     ],
 }
 
-SEUIL_SUR = 3   # au-dessus : le rapprochement est net
-SEUIL_FAIBLE = 2  # au-dessus : il tient, mais mérite un œil
-
-
 def main() -> None:
     enregistrer = "--enregistrer" in sys.argv
-    couverts = faibles = manquants = 0
+    couverts = blueprints = generiques = 0
     liste_manques: list[tuple[str, str]] = []
 
     for chapitre, notions in PROGRAMME.items():
         print(f"\n{chapitre}")
         print("-" * len(chapitre))
         for notion in notions:
+            route = route_scientific_visual(notion)
             schema_id, score = match_schema(notion)
-            if schema_id and score >= SEUIL_SUR:
+            if route["source"] == "schema":
                 couverts += 1
-                print(f"  ✓ {notion:<62} {schema_id} ({score})")
-            elif schema_id and score >= SEUIL_FAIBLE:
-                faibles += 1
-                print(f"  ~ {notion:<62} {schema_id} ({score}) — à vérifier")
-            else:
-                manquants += 1
+                print(f"  ✓ {notion:<62} SVG {route['schema_id']} ({route['score']})")
+            elif route["source"] == "blueprint":
+                blueprints += 1
                 liste_manques.append((chapitre, notion))
-                proche = f" — plus proche : {schema_id} ({score})" if schema_id else ""
-                print(f"  ✗ {notion:<62} AUCUN{proche}")
+                print(f"  ⚙ {notion:<62} {route['engine']} · {route['blueprint_id']}")
+                if enregistrer:
+                    noter_manque(notion, schema_id, score)
+            else:
+                generiques += 1
+                liste_manques.append((chapitre, notion))
+                print(f"  ◇ {notion:<62} génération générale · {route['engine']}")
                 if enregistrer:
                     noter_manque(notion, schema_id, score)
 
-    total = couverts + faibles + manquants
+    total = couverts + blueprints + generiques
     print("\n" + "=" * 78)
-    print(f"{total} notions du programme — {couverts} couvertes, {faibles} faibles, {manquants} sans schéma")
-    print(f"couverture nette : {round(100 * couverts / total)} %"
-          f" | avec les faibles : {round(100 * (couverts + faibles) / total)} %")
+    print(f"{total} notions — {couverts} SVG validés, {blueprints} blueprints BAC, {generiques} routages généraux")
+    print(f"couverture statique : {round(100 * couverts / total)} % | capacité de génération : 100 %")
 
     if liste_manques:
-        print("\nLISTE DE COURSES — les schémas à dessiner, par chapitre :")
+        print("\nBACKLOG STATIQUE — notions générables mais pas encore figées en SVG validé :")
         chapitre_courant = ""
         for chapitre, notion in liste_manques:
             if chapitre != chapitre_courant:

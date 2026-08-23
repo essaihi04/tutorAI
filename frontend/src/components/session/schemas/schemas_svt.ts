@@ -342,7 +342,7 @@ export const svt_transcription_traduction: ScientificSchema = {
   id: 'svt_transcription_traduction',
   title: 'Expression génétique — Transcription et Traduction',
   subject: 'svt',
-  keywords: ['transcription', 'traduction', 'arnm', 'protéine', 'ribosome', 'codon', 'acide aminé', 'استنساخ', 'ترجمة', 'expression'],
+  keywords: ['transcription', 'traduction', 'arnm', 'protéine', 'ribosome', 'codon', 'code génétique', 'codon initiateur', 'codon stop', 'acide aminé', 'استنساخ', 'ترجمة', 'expression'],
   category: 'process',
   viewBox: '0 0 850 550',
   backgroundColor: '#f0fdf4',

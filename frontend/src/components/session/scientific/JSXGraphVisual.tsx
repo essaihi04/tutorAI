@@ -70,7 +70,98 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
       if (element.expression) {
         const fn = compileSafeMathExpression(element.expression);
         if (!fn) break;
-        board.create('functiongraph', [fn], attributes);
+        // Sans bornes, la parabole d'un projectile remonte de l'autre côté de
+        // l'axe et l'élève y lit un rebond qui n'existe pas.
+        board.create('functiongraph', element.domain ? [fn, element.domain[0], element.domain[1]] : [fn], attributes);
+      }
+      break;
+    case 'text':
+      // Le seul moyen d'écrire une phrase SUR la figure : « Fe, le plus
+      // stable » près du creux d'une courbe d'Aston vaut tout un paragraphe.
+      if (points[0] && element.label) {
+        board.create('text', [points[0].x, points[0].y, element.label], {
+          ...attributes,
+          fontSize: 15,
+          color: '#e2e8f0',
+          cssStyle: 'font-weight:600',
+          anchorX: 'middle',
+        });
+      }
+      break;
+    case 'polygon':
+      if (points.length >= 3) {
+        board.create('polygon', points.map(pointTuple), {
+          ...attributes,
+          fillColor: color,
+          fillOpacity: element.filled === false ? 0 : 0.18,
+          borders: { strokeColor: color, strokeWidth: 2.5, highlightStrokeColor: color },
+          // Les sommets d'un plan incliné ne sont pas des points de la leçon :
+          // les afficher ajoute trois croix nommées A, B, C sur une figure de
+          // mécanique où elles ne veulent rien dire.
+          vertices: { visible: false, withLabel: false, fixed: true },
+          hasInnerPoints: false,
+        });
+      }
+      break;
+    case 'angle':
+      // Première branche, sommet, seconde branche : l'ordre de lecture de la
+      // notation scolaire « ASB ».
+      if (points.length >= 3) {
+        board.create('angle', [pointTuple(points[0]), pointTuple(points[1]), pointTuple(points[2])], {
+          ...attributes,
+          radius: 0.8,
+          fillColor: color,
+          fillOpacity: 0.25,
+          orthoType: 'square',
+        });
+      }
+      break;
+    case 'area':
+      // L'aire hachurée sous la courbe : c'est l'intégrale telle qu'elle est
+      // définie au tableau, pas un simple tracé de plus.
+      if (element.expression && element.domain) {
+        const fn = compileSafeMathExpression(element.expression);
+        if (!fn) break;
+        const curve = board.create('functiongraph', [fn, element.domain[0], element.domain[1]], {
+          strokeColor: color,
+          strokeWidth: 2.5,
+          withLabel: false,
+          fixed: true,
+          highlightStrokeColor: color,
+        });
+        // Les quatre poignées de l'intégrale sont faites pour être glissées.
+        // Sur un tableau de cours elles se nomment A, B, C, D et l'élève les
+        // lit comme des points de la leçon : quatre lettres qui n'ont aucun
+        // sens à côté d'une aire.
+        const hidden = { visible: false, withLabel: false, fixed: true };
+        board.create('integral', [element.domain, curve], {
+          ...attributes,
+          fillColor: color,
+          fillOpacity: 0.3,
+          curveLeft: hidden,
+          curveRight: hidden,
+          baseLeft: hidden,
+          baseRight: hidden,
+          // JSXGraph écrit sa propre étiquette « ∫ = 8.2500 » : une valeur
+          // numérique brute, souvent fausse de sens (l'aire d'un travail est
+          // en joules, pas un nombre nu) et qui chasse la légende demandée.
+          withLabel: false,
+          name: '',
+        });
+        // On repose donc la légende du modèle au milieu de l'aire.
+        if (element.label) {
+          const [a, b] = element.domain;
+          const middle = (a + b) / 2;
+          board.create('text', [middle, fn(middle) / 2, element.label], {
+            fontSize: 14,
+            color: '#e2e8f0',
+            cssStyle: 'font-weight:600',
+            fixed: true,
+            anchorX: 'middle',
+            anchorY: 'middle',
+            highlight: false,
+          });
+        }
       }
       break;
   }
@@ -123,6 +214,24 @@ export default function JSXGraphVisual({ spec }: JSXGraphVisualProps) {
         pan: { enabled: false },
         zoom: { wheel: false },
       });
+
+      // Le nom et l'unité des axes font partie de la figure : au BAC, une
+      // courbe dont les axes ne sont pas nommés perd des points, et l'élève
+      // qui apprend sur une figure anonyme prend l'habitude de les oublier.
+      const [xMin, yMax, xMax, yMin] = board.getBoundingBox();
+      const axisLabel = (text: string, x: number, y: number, anchorX: 'left' | 'middle' | 'right') =>
+        board!.create('text', [x, y, text], {
+          fontSize: 14,
+          color: '#93c5fd',
+          cssStyle: 'font-weight:600',
+          fixed: true,
+          anchorX,
+          anchorY: 'middle',
+          highlight: false,
+        });
+      const marge = (value: number, span: number) => value - span * 0.04;
+      if (spec.xLabel) axisLabel(spec.xLabel, marge(xMax, xMax - xMin), marge(0, yMax - yMin), 'right');
+      if (spec.yLabel) axisLabel(spec.yLabel, marge(0, xMax - xMin), marge(yMax, yMax - yMin), 'right');
 
       spec.elements.forEach(element => addElement(board as JXG.Board, element));
       board.fullUpdate();

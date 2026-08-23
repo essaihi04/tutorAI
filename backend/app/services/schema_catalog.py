@@ -15,7 +15,7 @@ import unicodedata
 from functools import lru_cache
 
 SCHEMA_CATALOG: list[dict] = [
-    {"id": 'chem_cinetique', "title": 'Transformations lentes et rapides — facteurs cinétiques', "subject": 'chemistry', "keywords": ['cinétique', 'vitesse', 'réaction', 'concentration', 'temps demi-réaction', 'avancement', 'سرعة التفاعل', 'حركية كيميائية', 'facteurs cinétiques']},
+    {"id": 'chem_cinetique', "title": 'Transformations lentes et rapides — facteurs cinétiques', "subject": 'chemistry', "keywords": ['cinétique', 'vitesse', 'réaction', 'concentration', 'temps demi-réaction', 'avancement', 'transformations lentes', 'transformations rapides', 'suivi temporel', 'سرعة التفاعل', 'حركية كيميائية', 'facteurs cinétiques']},
     {"id": 'chem_radioactivite', "title": 'Radioactivité — Décroissance radioactive', "subject": 'chemistry', "keywords": ['radioactivité', 'décroissance', 'demi-vie', 'alpha', 'beta', 'gamma', 'noyau', 'نشاط إشعاعي', 'عمر النصف', 'تفكك']},
     {"id": 'chem_acides_bases', "title": 'Acides et bases — Équilibres en solution aqueuse', "subject": 'chemistry', "keywords": ['acide', 'base', 'pH', 'Ka', 'pKa', 'tampon', 'titrage', 'dosage', 'حمض', 'قاعدة', 'معايرة', 'équilibre']},
     {"id": 'chem_piles_electrolyse', "title": 'Piles électrochimiques et électrolyse', "subject": 'chemistry', "keywords": ['pile', 'électrolyse', 'anode', 'cathode', 'oxydation', 'réduction', 'fem', 'galvani', 'عمود كهروكيميائي', 'تحليل كهربائي', 'قطب']},
@@ -24,7 +24,7 @@ SCHEMA_CATALOG: list[dict] = [
     {"id": 'math_derivation', "title": 'Dérivation — Tableau de dérivées et applications', "subject": 'math', "keywords": ['dérivée', 'dérivation', 'tangente', 'variation', 'tableau', 'extremum', 'مشتقة', 'اشتقاق', 'دراسة دالة']},
     {"id": 'math_exp_ln', "title": 'Fonctions exponentielle et logarithme', "subject": 'math', "keywords": ['exponentielle', 'logarithme', 'ln', 'exp', 'croissance', 'décroissance', 'أسية', 'لوغاريتم']},
     {"id": 'math_suites', "title": 'Suites numériques — Arithmétiques et géométriques', "subject": 'math', "keywords": ['suite', 'arithmétique', 'géométrique', 'convergence', 'raison', 'terme général', 'somme', 'متتالية', 'حسابية', 'هندسية']},
-    {"id": 'math_integrales', "title": "Intégration — Primitives et calcul d'aires", "subject": 'math', "keywords": ['intégrale', 'primitive', 'aire', 'intégration', 'parties', 'تكامل', 'مساحة', 'دالة أصلية']},
+    {"id": 'math_integrales', "title": "Intégration — Primitives et calcul d'aires", "subject": 'math', "keywords": ['intégrale', 'calcul intégral', 'primitive', 'aire sous la courbe', 'intégration', 'intégration par parties', 'تكامل', 'مساحة', 'دالة أصلية']},
     {"id": 'math_probabilites', "title": 'Probabilités — Lois et dénombrement', "subject": 'math', "keywords": ['probabilité', 'dénombrement', 'combinaison', 'arrangement', 'bernoulli', 'binomiale', 'variable aléatoire', 'espérance', 'احتمال', 'توزيع', 'ثنائي الحدين']},
     {"id": 'phys_ondes_mecaniques', "title": 'Ondes mécaniques progressives — propagation et retard', "subject": 'physics', "keywords": ['onde', 'mécanique', 'progressive', 'perturbation', 'propagation', 'retard', 'célérité', 'transversale', 'longitudinale', 'موجة', 'انتشار']},
     {"id": 'phys_dipole_rc', "title": 'Dipôle RC — Charge et décharge', "subject": 'physics', "keywords": ['rc', 'condensateur', 'charge', 'décharge', 'constante temps', 'tau', 'exponentielle', 'مكثف', 'ثنائي القطب']},
@@ -35,7 +35,7 @@ SCHEMA_CATALOG: list[dict] = [
     {"id": 'svt_fermentation', "title": 'Fermentation — Voies anaérobies', "subject": 'svt', "keywords": ['fermentation', 'anaérobie', 'lactique', 'alcoolique', 'éthanol', 'sans oxygène', 'تخمر', 'comparaison']},
     {"id": 'svt_muscle_sarcomere', "title": 'Structure du sarcomère', "subject": 'svt', "keywords": ['sarcomère', 'sarcomere', 'muscle', 'strié', 'actine', 'myosine', 'contraction', 'عضلة', 'بنية العضلة']},
     {"id": 'svt_adn_structure', "title": "Structure de l'ADN — Double hélice", "subject": 'svt', "keywords": ['adn', 'double hélice', 'nucléotide', 'base azotée', 'watson', 'crick', 'complémentarité', 'الحمض النووي', 'بنية']},
-    {"id": 'svt_transcription_traduction', "title": 'Expression génétique — Transcription et Traduction', "subject": 'svt', "keywords": ['transcription', 'traduction', 'arnm', 'protéine', 'ribosome', 'codon', 'acide aminé', 'استنساخ', 'ترجمة', 'expression']},
+    {"id": 'svt_transcription_traduction', "title": 'Expression génétique — Transcription et Traduction', "subject": 'svt', "keywords": ['transcription', 'traduction', 'arnm', 'protéine', 'ribosome', 'codon', 'code génétique', 'codon initiateur', 'codon stop', 'acide aminé', 'استنساخ', 'ترجمة', 'expression']},
     {"id": 'svt_mitose', "title": 'La Mitose — Division cellulaire conservatrice', "subject": 'svt', "keywords": ['mitose', 'division', 'prophase', 'métaphase', 'anaphase', 'télophase', 'chromosome', 'انقسام غير مباشر']},
     {"id": 'svt_subduction', "title": "Subduction — Plongement d'une plaque océanique", "subject": 'svt', "keywords": ['subduction', 'plaque plongeante', 'plaque océanique', 'fosse', 'volcanisme', 'arc volcanique', 'fusion partielle', 'déshydratation', 'métamorphisme', 'الغوص', 'صفيحة']},
     {"id": 'svt_cellule_mitochondrie', "title": 'De la cellule à la mitochondrie', "subject": 'svt', "keywords": ['cellule', 'cellule eucaryote', 'cytoplasme', 'noyau', 'mitochondrie', 'respiration cellulaire', 'خلية', 'الميتوكندري']},
@@ -76,6 +76,28 @@ def _sans_accents(texte: str) -> str:
     return "".join(c for c in plie if not unicodedata.combining(c))
 
 
+_MOTS_GENERIQUES = {
+    "reaction", "structure", "cycle", "energie", "bilan", "comparaison", "courbe",
+    "fonction", "cellule", "muscle", "mouvement", "mecanique", "onde", "oscillation",
+    "force", "tableau", "schema", "equilibre", "complexe", "arithmetique", "division",
+}
+
+
+def _poids_mot_cle(mot: str) -> int:
+    """Une notion distinctive seule doit suffire, un mot de chapitre non.
+
+    « mitose », « électrolyse » ou « sarcomère » désignent sans ambiguïté une
+    figure et valent deux points. « structure » ou « énergie » restent à un
+    point pour ne jamais imposer un schéma sur une simple coïncidence.
+    """
+    normalise = _sans_accents(mot.strip())
+    if " " in normalise:
+        return 3
+    if len(normalise) >= 6 and normalise not in _MOTS_GENERIQUES:
+        return 2
+    return 1
+
+
 def match_schema(context: str) -> tuple[str | None, int]:
     """Le schéma de la bibliothèque qui colle le mieux au contexte, et son score.
 
@@ -95,7 +117,7 @@ def match_schema(context: str) -> tuple[str | None, int]:
         trouves = [mot for mot in entry["keywords"] if _motif(mot).search(contexte)]
         if not trouves:
             continue
-        score = sum(2 if " " in mot.strip() else 1 for mot in trouves)
+        score = sum(_poids_mot_cle(mot) for mot in trouves)
         # À score égal, le mot-clé le plus long tranche : « fibre musculaire »
         # l'emporte sur « muscle », qui désigne le chapitre et non la figure.
         precision = max(len(mot) for mot in trouves)

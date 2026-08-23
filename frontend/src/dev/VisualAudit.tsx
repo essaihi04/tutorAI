@@ -131,6 +131,33 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
     },
   },
   {
+    title: 'RoughSVG — électrolyse légendée',
+    spec: {
+      engine: 'roughsvg',
+      title: 'Électrolyse : transformation forcée',
+      description: 'Le générateur impose le courant ; oxydation à l’anode positive et réduction à la cathode négative.',
+      width: 800,
+      height: 440,
+      elements: [
+        { type: 'rect', x: 190, y: 125, width: 420, height: 235, color: 'blue', fill: '#0f2744' },
+        { type: 'line', points: [{ x: 300, y: 95 }, { x: 300, y: 320 }], color: 'red', strokeWidth: 4 },
+        { type: 'line', points: [{ x: 500, y: 95 }, { x: 500, y: 320 }], color: 'blue', strokeWidth: 4 },
+        { type: 'rect', x: 335, y: 45, width: 130, height: 55, color: 'yellow', fill: '#3f3210' },
+        { type: 'text', x: 400, y: 79, text: 'Générateur', color: 'yellow', fontSize: 18 },
+        { type: 'text', x: 300, y: 390, text: 'Anode (+) : oxydation', color: 'red', fontSize: 17 },
+        { type: 'text', x: 500, y: 415, text: 'Cathode (−) : réduction', color: 'blue', fontSize: 17 },
+        { type: 'arrow', points: [{ x: 350, y: 250 }, { x: 275, y: 250 }], color: 'orange' },
+        { type: 'arrow', points: [{ x: 450, y: 285 }, { x: 525, y: 285 }], color: 'cyan' },
+        { type: 'text', x: 400, y: 190, text: 'Électrolyte : cations → cathode', color: 'white', fontSize: 16 },
+      ],
+      legend: [
+        { color: 'red', label: 'Oxydation' },
+        { color: 'blue', label: 'Réduction' },
+        { color: 'cyan', label: 'Migration des cations' },
+      ],
+    },
+  },
+  {
     title: 'Matter — plan incliné (angle)',
     spec: {
       engine: 'matter', title: 'Plan incliné à 30°', width: 600, height: 320, gravity: { x: 0, y: 1 },

@@ -94,6 +94,28 @@ def _sans_accents(texte: str) -> str:
     return "".join(c for c in plie if not unicodedata.combining(c))
 
 
+_MOTS_GENERIQUES = {
+    "reaction", "structure", "cycle", "energie", "bilan", "comparaison", "courbe",
+    "fonction", "cellule", "muscle", "mouvement", "mecanique", "onde", "oscillation",
+    "force", "tableau", "schema", "equilibre", "complexe", "arithmetique", "division",
+}
+
+
+def _poids_mot_cle(mot: str) -> int:
+    """Une notion distinctive seule doit suffire, un mot de chapitre non.
+
+    « mitose », « électrolyse » ou « sarcomère » désignent sans ambiguïté une
+    figure et valent deux points. « structure » ou « énergie » restent à un
+    point pour ne jamais imposer un schéma sur une simple coïncidence.
+    """
+    normalise = _sans_accents(mot.strip())
+    if " " in normalise:
+        return 3
+    if len(normalise) >= 6 and normalise not in _MOTS_GENERIQUES:
+        return 2
+    return 1
+
+
 def match_schema(context: str) -> tuple[str | None, int]:
     """Le schéma de la bibliothèque qui colle le mieux au contexte, et son score.
 
@@ -113,7 +135,7 @@ def match_schema(context: str) -> tuple[str | None, int]:
         trouves = [mot for mot in entry["keywords"] if _motif(mot).search(contexte)]
         if not trouves:
             continue
-        score = sum(2 if " " in mot.strip() else 1 for mot in trouves)
+        score = sum(_poids_mot_cle(mot) for mot in trouves)
         # À score égal, le mot-clé le plus long tranche : « fibre musculaire »
         # l'emporte sur « muscle », qui désigne le chapitre et non la figure.
         precision = max(len(mot) for mot in trouves)
