@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import 'katex/dist/katex.min.css';
-import { renderMixedContent, renderDisplayMath, containsArabic } from './MathBoard';
+import {
+  renderMixedContent, renderDisplayMath, containsArabic,
+  renderBoardLine, TYPES_EN_BLOC, type BoardLine,
+} from './boardLines';
+import SVGSchemaViewer from './schemas/SVGSchemaViewer';
+import { getSchemaById } from './schemas';
 import { speechService } from '../../services/speechService';
 import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
 import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
@@ -27,6 +32,12 @@ interface LiveLine {
   type?: string; // title | subtitle | text | math | step | box | note | tip | warning | separator
   content: string;
   color?: string;
+  /**
+   * Les champs des lignes EN BLOC — en-tetes et cellules d'un tableau, choix
+   * d'un QCM, noeuds d'une carte mentale. Le tableau en direct ne les lit pas
+   * lui-meme : il passe la ligne entiere au rendu commun.
+   */
+  [autre: string]: unknown;
 }
 
 /**
@@ -60,7 +71,7 @@ interface LiveDrawElement {
 }
 
 export interface LiveStep {
-  action: 'write' | 'draw' | 'erase' | 'pause' | 'narrate' | 'ask' | 'zoom' | 'figure';
+  action: 'write' | 'draw' | 'erase' | 'pause' | 'narrate' | 'ask' | 'zoom' | 'figure' | 'bloc';
   line?: LiveLine;          // write
   elements?: LiveDrawElement[]; // draw
   /**
@@ -75,6 +86,20 @@ export interface LiveStep {
    * figure arrive pendant que le professeur en parle.
    */
   scientific?: ScientificVisualSpec;
+  /**
+   * `figure` : identifiant d'un schéma de la BIBLIOTHÈQUE — un SVG déjà
+   * dessiné, légendé et animé. Il se pose dans la zone de dessin comme une
+   * figure de moteur : le professeur l'affiche, en parle, puis l'efface.
+   */
+  schema_id?: string;
+  /** `figure` + `schema_id` : les parties que le professeur montre du doigt. */
+  highlights?: string[];
+  /**
+   * `bloc` : une ligne que le tableau n'écrit pas craie par craie — un
+   * tableau à double entrée, une courbe, une carte mentale, un QCM. Elle se
+   * pose telle quelle, dans la zone qui lui convient.
+   */
+  // (le bloc voyage dans `line`, comme pour un `write`)
   zone?: 'text' | 'draw' | 'all'; // erase
   duration?: number;        // pause (ms)
   text?: string;            // narrate | ask (question posée)
@@ -161,14 +186,24 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   /**
-   * La figure posée dans la zone de dessin, s'il y en a une.
+   * Ce qui occupe la zone de dessin, s'il y a quelque chose.
+   *
+   * Trois choses peuvent s'y poser, et c'est ce qui fait de ce tableau le
+   * SEUL de la séance : une figure de moteur (courbe, réseau, simulation qui
+   * bouge), un schéma de la BIBLIOTHÈQUE (déjà dessiné et légendé), ou un
+   * bloc qui ne s'écrit pas craie par craie (courbe simple, carte mentale,
+   * diagramme).
    *
    * Une seule à la fois, et elle remplace la précédente : deux figures
    * superposées ne se lisent pas, et la question de l'élève porte toujours
    * sur la dernière. Le croquis à la craie, lui, continue de s'accumuler —
    * un professeur ajoute des traits à son dessin, il ne le refait pas.
    */
-  const [figure, setFigure] = useState<ScientificVisualSpec | null>(null);
+  type OccupantDuDessin =
+    | { kind: 'scientific'; spec: ScientificVisualSpec }
+    | { kind: 'schema'; id: string; highlights?: string[] }
+    | { kind: 'bloc'; line: BoardLine };
+  const [figure, setFigure] = useState<OccupantDuDessin | null>(null);
   const [narration, setNarration] = useState<string | null>(null);
   const [erasingZone, setErasingZone] = useState<'text' | 'draw' | 'all' | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -279,7 +314,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // ne s'afficherait nulle part.
   const hasDrawSteps = Array.isArray(script?.steps) && script.steps.some(
     s => (s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0)
-      || (s?.action === 'figure' && !!s.scientific)
+      || (s?.action === 'figure' && (!!s.scientific || !!s.schema_id))
+      || (s?.action === 'bloc' && ['graph', 'diagram', 'mindmap'].includes(String(s.line?.type || '')))
   );
 
   /**
@@ -600,15 +636,45 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           }
           break;
         }
+        case 'bloc': {
+          const bloc = step.line as BoardLine | undefined;
+          if (!bloc || !bloc.type) break;
+          // Une courbe, un diagramme, une carte mentale sont des FIGURES :
+          // elles vont à droite. Un tableau, un QCM, une illustration sont du
+          // contenu à lire et à répondre : ils rejoignent la colonne de
+          // gauche, à leur tour, comme une ligne écrite de plus.
+          if (bloc.type === 'graph' || bloc.type === 'diagram' || bloc.type === 'mindmap') {
+            setFigure({ kind: 'bloc', line: bloc });
+          } else {
+            setWritten(prev => [...prev, { key: ++keyRef.current, line: bloc as any, revealMs: 0 }]);
+          }
+          const ditBloc = typeof step.say === 'string' ? step.say.trim() : '';
+          if (ditBloc && soundOnRef.current) {
+            const handle = boardVoice.speak(toSpokenText(ditBloc), langRef.current);
+            voiceHandleRef.current = handle;
+            if (!playingRef.current) handle.pause();
+            const [, waited] = await Promise.all([handle.done, wait(900, runId)]);
+            if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
+            if (!waited || runId !== runIdRef.current) return;
+          } else if (!(await wait(1800, runId))) {
+            return;
+          }
+          break;
+        }
         case 'figure': {
-          if (!step.scientific) break;
-          setFigure(step.scientific);
+          if (step.schema_id) {
+            setFigure({ kind: 'schema', id: step.schema_id, highlights: step.highlights });
+          } else if (step.scientific) {
+            setFigure({ kind: 'scientific', spec: step.scientific });
+          } else {
+            break;
+          }
           // Le professeur commente ce qu'il vient de poser. Sans commentaire,
           // on laisse le temps de la regarder : une figure qui apparaît et
           // disparaît aussitôt n'apprend rien. Une simulation, elle, tourne
           // toute seule — on lui laisse le double.
           const dit = typeof step.say === 'string' ? step.say.trim() : '';
-          const animee = step.scientific.engine === 'matter';
+          const animee = step.scientific?.engine === 'matter';
           if (dit && soundOnRef.current) {
             const handle = boardVoice.speak(toSpokenText(dit), langRef.current);
             voiceHandleRef.current = handle;
@@ -829,7 +895,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setVoiceReveal(1);
     const finalWritten: WrittenEntry[] = [];
     const finalDrawn: DrawnEntry[] = [];
-    let finalFigure: ScientificVisualSpec | null = null;
+    let finalFigure: OccupantDuDessin | null = null;
     let lastNarration: string | null = null;
     let stepNo = 0;
     (script?.steps || []).forEach(step => {
@@ -840,8 +906,17 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         finalWritten.push({ key: ++keyRef.current, line: step.line, revealMs: 0, stepNumber: isStep ? stepNo : undefined });
       } else if (step.action === 'draw' && Array.isArray(step.elements)) {
         step.elements.forEach(el => el && el.type && finalDrawn.push({ key: ++keyRef.current, el, delayMs: 0, drawMs: 0 }));
-      } else if (step.action === 'figure' && step.scientific) {
-        finalFigure = step.scientific;
+      } else if (step.action === 'figure' && (step.scientific || step.schema_id)) {
+        finalFigure = step.schema_id
+          ? { kind: 'schema', id: step.schema_id, highlights: step.highlights }
+          : { kind: 'scientific', spec: step.scientific! };
+      } else if (step.action === 'bloc' && step.line?.type) {
+        const t = step.line.type;
+        if (t === 'graph' || t === 'diagram' || t === 'mindmap') {
+          finalFigure = { kind: 'bloc', line: step.line as BoardLine };
+        } else {
+          finalWritten.push({ key: ++keyRef.current, line: step.line!, revealMs: 0 });
+        }
       } else if (step.action === 'erase') {
         const zone = step.zone === 'text' || step.zone === 'draw' ? step.zone : 'all';
         if (zone === 'text' || zone === 'all') { finalWritten.length = 0; stepNo = 0; }
@@ -1414,7 +1489,20 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                   className="absolute inset-0 overflow-auto live-figure"
                   style={{ animation: 'liveFadeIn 0.45s ease-out both' }}
                 >
-                  <ScientificVisual spec={figure} transparent />
+                  {figure.kind === 'scientific' && (
+                    <ScientificVisual spec={figure.spec} transparent />
+                  )}
+                  {figure.kind === 'bloc' && renderBoardLine(figure.line)}
+                  {figure.kind === 'schema' && (() => {
+                    const schema = getSchemaById(figure.id);
+                    return schema
+                      ? <SVGSchemaViewer schema={schema} autoAnimate handDrawn activeHighlights={figure.highlights || []} className="h-full w-full" />
+                      : (
+                        <p className="p-4 text-sm text-amber-300/80">
+                          Schéma introuvable : {figure.id}
+                        </p>
+                      );
+                  })()}
                 </div>
               )}
             </div>
@@ -1701,6 +1789,18 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
   const type = (line.type || 'text').toLowerCase();
   const color = chalk(line.color);
   const rtl = containsArabic(line.content);
+
+  // Ce qui ne s'écrit pas craie par craie se pose d'un bloc : un tableau à
+  // double entrée, un QCM, une illustration. Le rendu est celui du tableau
+  // structuré — un seul endroit pour un seul rendu — et il apparaît en
+  // fondu, à son tour dans le déroulé, comme une ligne écrite de plus.
+  if (TYPES_EN_BLOC.has(type)) {
+    return (
+      <div className="my-2 live-line live-bloc" style={{ animation: 'liveFadeIn 0.5s ease-out both' }}>
+        {renderBoardLine(line as BoardLine)}
+      </div>
+    );
+  }
 
   if (type === 'separator') {
     return <hr className="my-3 border-white/15" style={{ animation: 'liveFadeIn 0.4s ease-out both' }} />;

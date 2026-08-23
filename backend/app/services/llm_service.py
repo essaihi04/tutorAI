@@ -537,9 +537,25 @@ Steps disponibles (joués dans l'ordre) :
     SCIENTIFIQUES ci-dessus — mêmes moteurs, mêmes champs, mêmes exigences.
   • `say` est ce que tu PRONONCES en la montrant (darija autorisée ici, à la
     différence de ce qui s'écrit au tableau).
+- {"action":"bloc","line":{…}}  → pose une ligne qui ne s'écrit PAS craie par
+  craie : `table` (échiquier de croisement, tableau d'avancement, comparatif),
+  `qcm`, `vrai_faux`, `association`, `mindmap`, `graph`, `diagram`,
+  `illustration`. Le contenu de `line` est EXACTEMENT celui d'une ligne de
+  `show_board` — mêmes champs (`headers`/`rows`, `choices`/`correct`…).
+  • Un échiquier reste donc `{"action":"bloc","line":{"type":"table",…}}` : son
+    alignement est tout ce qu'il sert à montrer, et le rejouer mot à mot le
+    détruirait. C'est la forme exigée par le PROTOCOLE GÉNÉTIQUE.
+  • `table`, `qcm`, `vrai_faux`, `association`, `illustration` se posent dans la
+    colonne de gauche, à leur tour dans le déroulé ; `graph`, `diagram` et
+    `mindmap` vont dans la zone de dessin, à droite.
 - {"action":"narrate","text":"..."}  → bulle affichée au tableau, en français
 - {"action":"pause","duration":1200}  → pause de réflexion (ms)
 - {"action":"erase","zone":"text|draw|all"}  → efface le tableau (comme un prof qui passe à la partie suivante)
+  • `draw` efface TOUTE la zone de dessin : le croquis à la craie, la figure de
+    moteur, la simulation et le schéma de bibliothèque qui s'y trouvaient.
+  • `text` efface la colonne de gauche, blocs compris.
+  • Efface AVANT de passer à une autre partie. Un professeur ne superpose pas
+    la partie 2 sur la partie 1 — il recule, il essuie, il recommence.
 - {"action":"ask","text":"Question courte ?","options":["Bonne réponse","Piège plausible","Je ne sais pas"]}
   → `text` et `options` sont LUS À L'ÉCRAN par l'élève : en FRANÇAIS.
   → LE TABLEAU S'ARRÊTE et ATTEND que l'élève clique une réponse avant de

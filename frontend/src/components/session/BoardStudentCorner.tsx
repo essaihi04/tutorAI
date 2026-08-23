@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import 'katex/dist/katex.min.css';
-import { renderMixedContent, containsArabic } from './MathBoard';
+import { renderMixedContent, containsArabic } from './boardLines';
 import { speechService } from '../../services/speechService';
 import { boardVoice } from '../../services/boardVoice';
 import { useSessionStore } from '../../stores/sessionStore';

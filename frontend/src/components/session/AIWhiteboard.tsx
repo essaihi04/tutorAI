@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
-import SVGSchemaViewer from './schemas/SVGSchemaViewer';
 import { getSchemaById } from './schemas';
-import MathBoard from './MathBoard';
 import type { ScientificVisualSpec } from './scientific/types';
 import LiveBoard, { type LiveScript } from './LiveBoard';
 import BoardFrame from './BoardFrame';
@@ -117,6 +115,63 @@ const COLORS = {
 
 function resolveColor(color: string): string {
   return (COLORS as any)[color] || color || COLORS.black;
+}
+
+/**
+ * Un tableau structuré, rejoué comme un professeur l'écrirait.
+ *
+ * Chaque ligne devient un pas du script : ce qui s'écrit à la craie devient un
+ * `write`, ce qui se lit d'un bloc — tableau à double entrée, courbe, carte
+ * mentale, QCM — devient un `bloc`, et une figure de moteur devient une
+ * `figure` posée dans la zone de dessin.
+ *
+ * Un titre laisse respirer avant la suite, comme un professeur qui marque un
+ * temps après avoir souligné son titre.
+ */
+function scriptDepuisTableau(board: BoardContent): LiveScript {
+  const steps: LiveScript['steps'] = [];
+  for (const line of board.lines || []) {
+    if (!line || typeof line !== 'object') continue;
+    const type = String(line.type || 'text').toLowerCase();
+
+    if (type === 'scientific' && line.scientific) {
+      steps.push({ action: 'figure', scientific: line.scientific, say: line.content || undefined });
+      continue;
+    }
+    if (BOARD_BLOC_TYPES.has(type)) {
+      steps.push({ action: 'bloc', line: line as any });
+      continue;
+    }
+    if (typeof line.content !== 'string' || !line.content.trim()) continue;
+    steps.push({ action: 'write', line: { type, content: line.content, color: line.color } });
+    if (type === 'title' || type === 'subtitle') {
+      steps.push({ action: 'pause', duration: 700 });
+    }
+  }
+  return { title: board.title || 'Cours en direct', steps };
+}
+
+/** Les lignes que la craie ne sait pas écrire : elles se posent d'un bloc. */
+const BOARD_BLOC_TYPES = new Set([
+  'table', 'graph', 'diagram', 'mindmap',
+  'qcm', 'vrai_faux', 'association', 'illustration',
+]);
+
+/**
+ * Un schéma de la BIBLIOTHÈQUE, posé dans la zone de dessin du tableau.
+ *
+ * Il s'affichait auparavant seul, sur un fond BLANC, avec sa propre barre
+ * d'outils — au milieu d'une séance sombre, et sans la colonne de gauche où
+ * le professeur écrit. L'élève voyait la figure sans un mot autour.
+ */
+function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: string[]): LiveScript {
+  return {
+    title: titre,
+    steps: [
+      { action: 'write', line: { type: 'title', content: titre } },
+      { action: 'figure', schema_id: schemaId, highlights: surlignages },
+    ],
+  };
 }
 
   function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange }: AIWhiteboardProps) {
@@ -1040,66 +1095,48 @@ function resolveColor(color: string): string {
 
   const hasActiveDrawCommands = drawCommands && drawCommands.length > 0;
 
-  // ── MathBoard mode: render structured math/text content ──
-  // Only show board if there are NO active draw commands (draw takes priority)
+  // ── UN SEUL TABLEAU ───────────────────────────────────────────
+  //
+  // Ce composant aiguillait vers quatre rendus : le cours structuré, le
+  // schéma de la bibliothèque, le dessin au canvas, et le professeur en
+  // direct. Quatre présentations pour une même chose — un tableau — et
+  // l'élève devait deviner, à chaque affichage, où regarder et ce qu'il
+  // pouvait faire. Le tableau structuré posait tout d'un bloc, sans un mot ;
+  // le schéma s'ouvrait sur un fond BLANC au milieu d'une séance sombre.
+  //
+  // Il n'en reste qu'un. Le cours structuré et le schéma de la bibliothèque
+  // sont CONVERTIS en script « prof en direct » : le texte s'écrit à gauche
+  // au rythme de la parole, la figure se pose à droite. Rien n'est perdu en
+  // route — les tableaux à double entrée, les QCM et les cartes mentales
+  // que seul `MathBoard` savait rendre y sont posés par son propre rendu,
+  // appelé depuis la colonne de gauche.
   if (!hasActiveDrawCommands && boardContent && boardContent.lines && boardContent.lines.length > 0) {
     return (
-      <BoardFrame {...frameProps}>
-        <MathBoard
-          lines={boardContent.lines}
-          title={boardContent.title}
-          isVisible={isVisible}
-          onClose={onClose}
-        />
-      </BoardFrame>
+      <LiveBoard
+        script={scriptDepuisTableau(boardContent)}
+        isVisible={isVisible}
+        onClose={onClose}
+        onStudentMessage={onStudentMessage}
+        assistantReply={assistantReply}
+        busy={busy}
+        voiceEnabled={voiceEnabled}
+        audioActive={audioActive}
+      />
     );
   }
 
-  // ── Schema mode: render SVGSchemaViewer instead of canvas ──
-  // Only show schema if there are NO active draw commands
   if (!hasActiveDrawCommands && activeSchema) {
     return (
-      <BoardFrame {...frameProps}>
-      <div className="w-full h-full flex flex-col bg-white rounded-2xl overflow-hidden shadow-lg">
-        {/* Toolbar */}
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-red-400" />
-              <div className="w-2 h-2 rounded-full bg-yellow-400" />
-              <div className="w-2 h-2 rounded-full bg-green-400" />
-            </div>
-            <span className="text-gray-600 text-xs font-medium">
-              Schéma interactif
-            </span>
-            <span className="text-indigo-500 text-xs truncate max-w-[50vw]">
-              — {activeSchema.title}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 font-medium uppercase">
-              {activeSchema.subject}
-            </span>
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 text-xs px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-        {/* SVG Schema Viewer */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <SVGSchemaViewer
-            schema={activeSchema}
-            activeHighlights={activeHighlights || []}
-            autoAnimate={true}
-          />
-        </div>
-      </div>
-      </BoardFrame>
+      <LiveBoard
+        script={scriptDepuisSchema(activeSchema.id, activeSchema.title, activeHighlights)}
+        isVisible={isVisible}
+        onClose={onClose}
+        onStudentMessage={onStudentMessage}
+        assistantReply={assistantReply}
+        busy={busy}
+        voiceEnabled={voiceEnabled}
+        audioActive={audioActive}
+      />
     );
   }
 

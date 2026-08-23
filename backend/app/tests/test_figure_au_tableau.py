@@ -158,14 +158,50 @@ def test_le_tableau_envoye_porte_encore_la_figure():
     assert figures[0]["scientific"]["engine"] == "roughsvg"
 
 
-def test_un_tableau_avec_un_echiquier_reste_statique():
-    """Un tableau à lire en lignes et colonnes ne se rejoue pas ligne à ligne."""
+def test_un_echiquier_voyage_dans_le_script_sans_se_perdre():
+    """Un tableau à double entrée ne s'écrit pas craie par craie — il se POSE.
+
+    Il retenait pour cela le tableau statique tout entier : le cours qui
+    l'accompagnait s'affichait d'un bloc, sans un mot. Il part désormais dans
+    le script en direct comme un bloc, à son tour dans le déroulé, pendant que
+    le reste s'écrit. L'alignement des gamètes, seule raison d'être d'un
+    échiquier, est intact — c'est le rendu commun qui le pose.
+    """
     envoi = _envoi([
         {"type": "title", "content": "Monohybridisme"},
         {"type": "table", "headers": ["", "A", "a"], "rows": [["A", "AA", "Aa"]]},
     ])
 
-    assert envoi["type"] == "whiteboard_board"
+    assert envoi["type"] == "whiteboard_live"
+    bloc = next(s for s in envoi["steps"] if s["action"] == "bloc")
+    assert bloc["line"]["type"] == "table"
+    assert bloc["line"]["rows"] == [["A", "AA", "Aa"]]
+
+
+def test_le_tuteur_peut_poser_un_echiquier_dans_son_script():
+    handler = SessionHandler.__new__(SessionHandler)
+    _titre, steps = handler._normalize_live_steps({
+        "steps": [
+            {"action": "write", "line": {"type": "title", "content": "Monohybridisme"}},
+            {"action": "bloc", "line": {"type": "table", "headers": ["", "A"], "rows": [["a", "Aa"]]}},
+        ],
+    })
+
+    bloc = next(s for s in steps if s["action"] == "bloc")
+    assert bloc["line"]["headers"] == ["", "A"]
+
+
+def test_un_bloc_de_type_invente_ne_part_pas():
+    """Une ligne dont personne ne sait faire le rendu disparaîtrait à l'écran."""
+    handler = SessionHandler.__new__(SessionHandler)
+    _titre, steps = handler._normalize_live_steps({
+        "steps": [
+            {"action": "write", "line": {"type": "text", "content": "Observe."}},
+            {"action": "bloc", "line": {"type": "hologramme", "content": "?"}},
+        ],
+    })
+
+    assert not any(s["action"] == "bloc" for s in steps)
 
 
 # ── Le tuteur peut émettre le pas lui-même ────────────────────────

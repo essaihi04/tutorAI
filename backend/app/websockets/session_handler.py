@@ -833,6 +833,15 @@ _AVEUX_DE_BLOCAGE = (
 _EMOJIS_PAR_REPONSE = 1
 
 
+#: Ce qui se lit d'un bloc et non craie par craie. Le tableau en direct les
+#: pose tels quels, par le rendu commun des lignes de tableau — un seul rendu,
+#: un seul endroit. La liste est la meme cote navigateur (`TYPES_EN_BLOC`).
+_TYPES_EN_BLOC = frozenset({
+    "table", "graph", "diagram", "mindmap",
+    "qcm", "vrai_faux", "association", "illustration",
+})
+
+
 class SessionHandler:
     """Handles a single tutoring session's voice pipeline."""
 
@@ -3796,20 +3805,22 @@ RÈGLES :
     # Leur présence signe un contenu "figé" (données à consulter d'un bloc)
     # qui doit rester sur le tableau statique.
     #
-    # `scientific` n'y figure PLUS. Il y a été mis le temps que le tableau en
-    # direct apprenne à porter une figure : il la jetait en silence, et
-    # l'élève entendait « regarde le schéma » devant un tableau vide.
+    # ── L'ensemble est VIDE, et c'est l'aboutissement ──────────────
     #
-    # Le tableau en direct a maintenant deux zones — on écrit à gauche, on
-    # dessine à droite — et sa zone de dessin monte les quatre moteurs, la
-    # simulation Matter comprise, sur fond transparent. C'est le seul endroit
-    # où une figure et l'explication qui l'accompagne arrivent ENSEMBLE, au
-    # rythme de la parole. Une figure n'a donc plus aucune raison d'exiger le
-    # tableau statique, qui l'affichait d'un bloc, sans un mot.
-    _BOARD_ONLY_LINE_TYPES = {
-        "table", "graph", "mindmap", "diagram",
-        "qcm", "vrai_faux", "association",
-    }
+    # Il a longtemps retenu au tableau STATIQUE tout ce que le tableau en
+    # direct ne savait pas rejouer : d'abord les tableaux, les courbes, les
+    # cartes mentales et les exercices ; puis, un temps, les figures.
+    #
+    # Le tableau en direct sait maintenant tout poser. Ce qui s'écrit à la
+    # craie s'écrit ; ce qui se lit d'un bloc — un échiquier, un QCM — se
+    # pose d'un bloc dans la colonne de gauche, à son tour dans le déroulé ;
+    # ce qui est une figure va dans la zone de dessin, à droite. Il n'y a
+    # donc plus qu'UN tableau, et cet ensemble n'a plus rien à retenir.
+    #
+    # On le garde vide plutôt que de le supprimer : `_board_is_live_renderable`
+    # nomme encore la question qu'il pose, et un type qui se révélerait
+    # irrejouable se réinscrirait ici en une ligne.
+    _BOARD_ONLY_LINE_TYPES: set[str] = set()
 
     @classmethod
     def _board_is_live_renderable(cls, lines: list) -> bool:
@@ -3921,18 +3932,18 @@ RÈGLES :
                     etape["say"] = legende.strip()
                 steps.append(etape)
                 continue
+            # Un échiquier, une courbe, une carte mentale, un QCM : ces
+            # choses ne s'écrivent pas craie par craie, mais elles ne se
+            # perdent plus pour autant — le tableau en direct les pose telles
+            # quelles, à leur tour dans le déroulé.
+            if ltype in _TYPES_EN_BLOC:
+                steps.append({"action": "bloc", "line": dict(line)})
+                continue
             if ltype not in RENDERABLE:
                 continue
             content = line.get("content")
             if not isinstance(content, str) or not content.strip():
                 continue
-            # 'illustration' has no live equivalent — replay it as a text line
-            # keeping its emoji so the visual cue survives.
-            if ltype == "illustration":
-                icon = line.get("icon") or ""
-                content = f"{icon} {content}".strip()
-                ltype = "text"
-
             clean = {"type": ltype, "content": content.strip()}
             if line.get("color"):
                 clean["color"] = str(line["color"])
@@ -3947,7 +3958,7 @@ RÈGLES :
         # se commente. Exiger une ligne écrite renverrait au tableau statique
         # le cas le plus fréquent — « dessine-moi la mitochondrie », sans
         # autre texte que la légende.
-        if not any(s["action"] in ("write", "figure") for s in steps):
+        if not any(s["action"] in ("write", "figure", "bloc") for s in steps):
             return []
         return steps
 
@@ -4000,6 +4011,27 @@ RÈGLES :
                 action = "zoom"
             elif action in {"scientific", "schema", "simulation", "visuel"}:
                 action = "figure"
+            elif action in {"table", "tableau", "qcm", "mindmap", "graph", "carte"}:
+                action = "bloc"
+
+            if action == "bloc":
+                # Un échiquier, une courbe, un QCM. Le type doit être connu :
+                # une ligne inventée n'aurait aucun rendu et disparaîtrait.
+                ligne = step.get("line") if isinstance(step.get("line"), dict) else None
+                if ligne is None and isinstance(step.get("payload"), dict):
+                    ligne = step["payload"]
+                if not isinstance(ligne, dict):
+                    continue
+                ltype = str(ligne.get("type", "")).lower().strip()
+                if ltype not in _TYPES_EN_BLOC:
+                    _safe_log(f"[Live] Bloc de type inconnu ignoré: {ltype!r}")
+                    continue
+                etape = {"action": "bloc", "line": dict(ligne)}
+                dit = step.get("say") or step.get("narration")
+                if isinstance(dit, str) and dit.strip():
+                    etape["say"] = dit.strip()
+                normalized.append(etape)
+                continue
 
             if action == "figure":
                 # La figure traverse exactement la même porte que sur le
@@ -4146,7 +4178,7 @@ RÈGLES :
         # ⚠️ Peut désormais échouer parce que TOUTES les lignes étaient en
         # arabe : c'est voulu. Aucun tableau vaut mieux qu'un tableau que
         # l'élève ne peut pas recopier — le chat porte déjà l'explication.
-        if not any(s["action"] in ("write", "draw", "figure") for s in normalized):
+        if not any(s["action"] in ("write", "draw", "figure", "bloc") for s in normalized):
             return None, None
         titre = str(title or "Cours en direct")
         if _ecrit_en_arabe(titre):

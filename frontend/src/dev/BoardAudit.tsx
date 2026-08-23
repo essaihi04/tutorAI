@@ -12,7 +12,8 @@ import { useState } from 'react';
 import AIWhiteboard from '../components/session/AIWhiteboard';
 import type { ScientificVisualSpec } from '../components/session/scientific/types';
 
-type Mode = 'cours' | 'schema' | 'dessin' | 'roughsvg' | 'cytoscape' | 'jsxgraph' | 'matter';
+type Mode = 'cours' | 'schema' | 'dessin' | 'roughsvg' | 'cytoscape' | 'jsxgraph' | 'matter'
+  | 'echiquier' | 'qcm' | 'carte' | 'courbe' | 'bibliotheque' | 'effacer';
 
 const LIGNES_DE_COURS = [
   { type: 'title' as const, content: 'Le dipôle RC' },
@@ -148,6 +149,118 @@ const FIGURES: Record<string, { titre: string; phrase: string; spec: ScientificV
 };
 
 /**
+ * Ce que SEUL le tableau structuré savait rendre, désormais posé dans le
+ * tableau en direct.
+ *
+ * L'échiquier est le cas qui décide : c'est l'alignement des gamètes qui fait
+ * un échiquier, et le rejouer ligne à ligne le détruirait. Il se pose donc
+ * d'un bloc, à son tour dans le déroulé, pendant que le reste s'écrit.
+ */
+const BLOCS: Record<string, { titre: string; phrase: string; line: any }> = {
+  echiquier: {
+    titre: 'SVT — Échiquier de croisement',
+    phrase: 'Chaque case croise un gamète du père et un gamète de la mère.',
+    line: {
+      type: 'table',
+      content: 'Échiquier de fécondation',
+      headers: ['♀ \ ♂', '$A$', '$a$'],
+      rows: [
+        ['$A$', '$\\frac{A}{A}$ — lisse', '$\\frac{A}{a}$ — lisse'],
+        ['$a$', '$\\frac{A}{a}$ — lisse', '$\\frac{a}{a}$ — ridé'],
+      ],
+    },
+  },
+  qcm: {
+    titre: 'Physique — Vérification',
+    phrase: 'Réponds, puis je te dis pourquoi.',
+    line: {
+      type: 'qcm',
+      content: 'Quand le sarcomère se raccourcit, la bande A…',
+      choices: ['garde la même longueur', 'se raccourcit aussi', 'disparaît'],
+      correct: 0,
+      explanation: 'La bande A est la longueur des filaments de myosine : elle ne change pas, ce sont les filaments qui glissent.',
+    },
+  },
+  carte: {
+    titre: 'SVT — Carte récapitulative',
+    phrase: 'Voilà tout le chapitre en une image.',
+    line: {
+      type: 'mindmap',
+      content: 'Respiration cellulaire',
+      centerNode: 'Respiration',
+      mindmapNodes: [
+        { id: 'n1', label: 'Glycolyse', level: 1 },
+        { id: 'n2', label: 'Cycle de Krebs', level: 1 },
+        { id: 'n3', label: 'Chaîne respiratoire', level: 1 },
+        { id: 'n4', label: 'Cytoplasme', level: 2, parent: 'n1' },
+        { id: 'n5', label: 'Matrice', level: 2, parent: 'n2' },
+        { id: 'n6', label: 'Crêtes', level: 2, parent: 'n3' },
+      ],
+    },
+  },
+  courbe: {
+    titre: 'Chimie — Suivi temporel',
+    phrase: 'La concentration diminue, de plus en plus lentement.',
+    line: {
+      type: 'graph',
+      content: 'Concentration au cours du temps',
+      xLabel: 't (min)',
+      yLabel: '[A] (mol/L)',
+      xRange: [0, 60],
+      yRange: [0, 1],
+      curves: [{ label: '[A]', fn: 'exp(-x/20)', color: 'cyan' }],
+    },
+  },
+};
+
+/** Un script qui pose un bloc, comme le serveur l'enverrait. */
+function scriptAvecBloc(clef: string) {
+  const b = BLOCS[clef];
+  return {
+    title: b.titre,
+    steps: [
+      { action: 'write' as const, line: { type: 'title', content: b.titre } },
+      { action: 'write' as const, line: { type: 'text', content: b.phrase } },
+      { action: 'bloc' as const, line: b.line },
+    ],
+  };
+}
+
+/**
+ * Effacer et redessiner — le geste de base du professeur.
+ *
+ * Il pose un schéma de la bibliothèque, en parle, ESSUIE la zone de dessin,
+ * puis y trace autre chose. Sans cela les figures s'empileraient : l'élève
+ * verrait la partie 2 par-dessus la partie 1.
+ */
+function scriptEffacerPuisRedessiner() {
+  return {
+    title: 'SVT — Du muscle au mouvement',
+    steps: [
+      { action: 'write' as const, line: { type: 'title', content: 'Partie 1 — La fibre' } },
+      { action: 'figure' as const, schema_id: 'svt_fibre_musculaire' },
+      { action: 'pause' as const, duration: 900 },
+      { action: 'erase' as const, zone: 'all' as const },
+      { action: 'write' as const, line: { type: 'title', content: 'Partie 2 — Le bilan' } },
+      { action: 'write' as const, line: { type: 'text', content: 'La contraction consomme de l’ATP.' } },
+      { action: 'figure' as const, scientific: FIGURES.cytoscape.spec },
+    ],
+  };
+}
+
+/** Un schéma de la BIBLIOTHÈQUE, posé dans la zone de dessin. */
+function scriptAvecSchema() {
+  return {
+    title: 'SVT — Ultrastructure de la fibre musculaire',
+    steps: [
+      { action: 'write' as const, line: { type: 'title', content: 'La fibre musculaire' } },
+      { action: 'write' as const, line: { type: 'text', content: 'Repère la triade : un tubule T entre deux citernes.' } },
+      { action: 'figure' as const, schema_id: 'svt_fibre_musculaire' },
+    ],
+  };
+}
+
+/**
  * Le script que le serveur envoie : on écrit à gauche, la figure se pose à
  * droite.
  *
@@ -205,6 +318,23 @@ export default function BoardAudit() {
         Figures générées — le tableau EN DIRECT : on écrit à gauche, la figure
         se pose à droite, sans cadre ni fond.
       </p>
+
+      <p className="mt-4 text-sm text-slate-300">
+        Ce que seul le tableau structuré savait rendre — désormais dans le
+        tableau en direct&nbsp;:
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(['echiquier', 'qcm', 'carte', 'courbe', 'bibliotheque', 'effacer'] as const).map(clef => (
+          <button
+            key={clef}
+            onClick={() => setMode(clef)}
+            data-mode={clef}
+            className={`rounded-lg px-3 py-1.5 text-sm ${mode === clef ? 'bg-amber-400 text-slate-950' : 'bg-white/10'}`}
+          >
+            {clef}
+          </button>
+        ))}
+      </div>
       <div className="mt-2 flex flex-wrap gap-2">
         {(['roughsvg', 'cytoscape', 'jsxgraph', 'matter'] as const).map(clef => (
           <button
@@ -227,7 +357,13 @@ export default function BoardAudit() {
           isVisible
           onClose={() => undefined}
           boardContent={mode === 'cours' ? { title: 'Dipôle RC', lines: LIGNES_DE_COURS } : null}
-          liveScript={mode in FIGURES ? (scriptAvecFigure(mode) as any) : null}
+          liveScript={
+            mode in FIGURES ? (scriptAvecFigure(mode) as any)
+              : mode in BLOCS ? (scriptAvecBloc(mode) as any)
+              : mode === 'bibliotheque' ? (scriptAvecSchema() as any)
+              : mode === 'effacer' ? (scriptEffacerPuisRedessiner() as any)
+              : null
+          }
           schemaId={mode === 'schema' ? 'phys_dipole_rc' : null}
           drawCommands={mode === 'dessin' ? COMMANDES_DE_DESSIN : null}
           onStudentMessage={recevoirQuestion}

@@ -1,10 +1,23 @@
-import { useEffect, useState, useRef, memo } from 'react';
+/**
+ * Le rendu des lignes de tableau — un seul rendu, un seul endroit.
+ *
+ * C'était un TABLEAU à part entière : `MathBoard`, qui affichait un cours
+ * structuré d'un bloc, à côté du tableau « prof en direct ». Deux tableaux
+ * pour une même chose, et l'élève devait deviner à chaque affichage lequel il
+ * regardait et ce qu'il pouvait y faire.
+ *
+ * Il n'en reste que ce qui servait vraiment : le rendu de chaque type de
+ * ligne. Le tableau en direct l'appelle pour tout ce qui ne s'écrit pas craie
+ * par craie — un échiquier de croisement, une courbe, une carte mentale, un
+ * QCM — et le pose dans la zone qui convient. Rien de ce que ce fichier
+ * savait faire n'a été perdu ; c'est le cadre autour qui a disparu.
+ */
+import { useEffect, useState, useRef } from 'react';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
 import MindMap from './MindMap';
 import ScientificVisual from './scientific/ScientificVisual';
 import type { ScientificVisualSpec } from './scientific/types';
-import { printBoard, downloadAsPDF } from '../../utils/pdfExport';
 
 interface MindMapNode {
   id: string;
@@ -15,7 +28,7 @@ interface MindMapNode {
   parent?: string;
 }
 
-interface BoardLine {
+export interface BoardLine {
   type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association' | 'illustration' | 'scientific';
   content: string;
   color?: string;
@@ -51,13 +64,6 @@ interface BoardLine {
   statements?: { text: string; correct: boolean; explanation?: string }[];
   // Association data
   pairs?: { left: string; right: string }[];
-}
-
-interface MathBoardProps {
-  lines: BoardLine[];
-  title?: string;
-  isVisible: boolean;
-  onClose?: () => void;
 }
 
 // Dark chalkboard color palette — all colors bright for dark background
@@ -221,169 +227,6 @@ export function renderDisplayMath(latex: string): string {
     console.error('[MathBoard] KaTeX display render error:', e);
     return `<pre style="color:#f87171">${escapeHtml(clean)}</pre>`;
   }
-}
-
-function MathBoardInner({ lines, title, isVisible, onClose }: MathBoardProps) {
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [animating, setAnimating] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  // Animate lines appearing one by one
-  useEffect(() => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    setVisibleCount(0);
-    setAnimating(true);
-
-    if (!lines || lines.length === 0) return;
-
-    lines.forEach((_, i) => {
-      const delay = (i + 1) * 350;
-      const t = setTimeout(() => {
-        setVisibleCount(i + 1);
-      }, delay);
-      timersRef.current.push(t);
-    });
-
-    const doneT = setTimeout(() => setAnimating(false), lines.length * 350 + 200);
-    timersRef.current.push(doneT);
-
-    return () => {
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current = [];
-    };
-  }, [lines]);
-
-  // Auto-scroll to bottom as new lines appear
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [visibleCount]);
-
-  if (!isVisible || !lines || !Array.isArray(lines) || lines.length === 0) {
-    return null;
-  }
-
-  const visibleLines = lines.slice(0, visibleCount);
-
-  return (
-    <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden shadow-lg" style={{ background: '#1a2e1a' }}>
-      {/* Toolbar — dark chalkboard frame */}
-      <div className="shrink-0 flex items-center justify-between px-4 py-2" style={{ background: '#122412', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-            <div className="w-2 h-2 rounded-full bg-yellow-500" />
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-          </div>
-          <span className="text-white/70 text-xs font-medium flex items-center gap-1.5">
-            <span>Tableau</span>
-            {animating && (
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-            )}
-          </span>
-          {title && (
-            <span className="text-cyan-300 text-xs font-semibold truncate max-w-[50vw]">
-              — {title}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Print button */}
-          <button
-            onClick={() => printBoard(lines, title)}
-            className="text-[10px] px-2 py-1 rounded font-medium transition-colors flex items-center gap-1"
-            style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}
-            title="Imprimer"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9"></polyline>
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-              <rect x="6" y="14" width="12" height="8"></rect>
-            </svg>
-            <span>Imprimer</span>
-          </button>
-          
-          {/* PDF download button */}
-          <button
-            onClick={() => downloadAsPDF(lines, title)}
-            className="text-[10px] px-2 py-1 rounded font-medium transition-colors flex items-center gap-1"
-            style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}
-            title="Télécharger PDF"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <span>PDF</span>
-          </button>
-          
-          {animating && (
-            <button
-              onClick={() => {
-                timersRef.current.forEach(clearTimeout);
-                setVisibleCount(lines.length);
-                setAnimating(false);
-              }}
-              className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors"
-              style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}
-            >
-              Tout afficher
-            </button>
-          )}
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="text-white/40 hover:text-white/80 text-xs px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
-            >
-              Fermer
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Board content — dark green chalkboard */}
-      <div
-        ref={containerRef}
-        className="flex-1 min-h-0 overflow-y-auto px-6 py-5"
-        style={{
-          fontFamily: "'Caveat', 'Patrick Hand', 'Segoe UI', system-ui, sans-serif",
-          background: 'linear-gradient(135deg, #1a3a2a 0%, #1e3320 40%, #1a2e1a 100%)',
-        }}
-      >
-        {/* Subtle chalk dust texture */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.03]"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
-
-        <div className="relative space-y-3">
-          {visibleLines.map((line, i) => (
-            <div
-              key={i}
-              className="animate-[fadeSlideIn_0.3s_ease-out]"
-              style={{ animationFillMode: 'both' }}
-            >
-              {renderLine(line)}
-            </div>
-          ))}
-
-          {/* Writing cursor — chalk-like */}
-          {animating && (
-            <div className="flex items-center gap-1 mt-2 opacity-60">
-              <div className="w-0.5 h-5 bg-white animate-pulse rounded-full" />
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1425,6 +1268,24 @@ function InteractiveAssociation({ line }: { line: BoardLine }) {
   );
 }
 
+/**
+ * Les types de ligne que le tableau EN DIRECT ne sait pas écrire lui-même.
+ *
+ * Un tableau à double entrée, une courbe, une carte mentale, un QCM : ces
+ * choses se lisent d'un bloc et non craie par craie. Le tableau en direct les
+ * pose donc telles quelles, au lieu de les perdre — c'est ce qui lui manquait
+ * pour être le SEUL tableau de la séance.
+ */
+export const TYPES_EN_BLOC = new Set([
+  'table', 'graph', 'diagram', 'mindmap',
+  'qcm', 'vrai_faux', 'association', 'illustration', 'scientific',
+]);
+
+/** Rend une ligne de tableau — le même rendu partout, un seul endroit. */
+export function renderBoardLine(line: BoardLine) {
+  return renderLine(line);
+}
+
 function renderLine(line: BoardLine) {
   // Defensive checks
   if (!line || typeof line !== 'object') {
@@ -1661,5 +1522,3 @@ function renderLine(line: BoardLine) {
   }
 }
 
-const MathBoard = memo(MathBoardInner);
-export default MathBoard;
