@@ -1674,6 +1674,22 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
   const handleCloseWhiteboard = useCallback(() => setShowWhiteboard(false), []);
 
+  /**
+   * Le tableau passe en plein écran : replier la barre de discussion.
+   *
+   * Le cadre plein écran se pose au-dessus de tout ; la barre latérale et
+   * SON BOUTON se retrouvent dessous. Sans ce repli, elle resterait ouverte
+   * dans l'état de la page tout en étant invisible — l'élève chercherait à
+   * cliquer un bouton qui n'est plus atteignable. Le coin élève du tableau
+   * prend le relais pour poser une question.
+   *
+   * Stable par `useCallback` : une identité qui change à chaque rendu
+   * refermerait la barre en boucle, y compris hors plein écran.
+   */
+  const handleBoardFocusChange = useCallback((focus: boolean) => {
+    if (focus) setShowChat(false);
+  }, []);
+
   const handleSendText = async (text: string) => {
     if (!text.trim()) return;
     setContextSuggestions([]);
@@ -2306,6 +2322,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     // ce lien, le script se déroulait entièrement pendant la
                     // synthèse et l'audio arrivait sur un tableau déjà fini.
                     audioActive={isSpeaking}
+                    onFocusChange={handleBoardFocusChange}
                     assistantReply={
                       [...conversation].reverse().find(m => m.speaker === 'ai')?.text ?? null
                     }

@@ -4,6 +4,7 @@ import { getSchemaById } from './schemas';
 import MathBoard from './MathBoard';
 import type { ScientificVisualSpec } from './scientific/types';
 import LiveBoard, { type LiveScript } from './LiveBoard';
+import BoardFrame from './BoardFrame';
 
 // Load handwritten fonts
 const loadHandwrittenFonts = () => {
@@ -94,6 +95,8 @@ interface AIWhiteboardProps {
   voiceEnabled?: boolean;
   /** true tant que la voix du chat parle — le tableau s'écrit à son rythme. */
   audioActive?: boolean;
+  /** Le tableau passe en plein écran : la page doit replier sa barre latérale. */
+  onFocusChange?: (focus: boolean) => void;
 }
 
 // Chalk-on-dark palette — bright shades legible on the dark green chalkboard.
@@ -116,7 +119,7 @@ function resolveColor(color: string): string {
   return (COLORS as any)[color] || color || COLORS.black;
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -1008,6 +1011,17 @@ function resolveColor(color: string): string {
 
   if (!isVisible || (!drawCommands && !activeSchema && !boardContent && !liveScript)) return null;
 
+  // Ce que tout tableau reçoit pour offrir le plein écran et le coin élève.
+  // LiveBoard fait exception : il porte déjà les deux, et son plein écran
+  // pilote en plus la lecture du script.
+  const frameProps = {
+    onStudentMessage,
+    assistantReply,
+    busy,
+    voiceEnabled,
+    onFocusChange,
+  };
+
   // ── Live mode (priorité maximale) : le professeur écrit/dessine en direct ──
   if (liveScript && liveScript.steps && liveScript.steps.length > 0) {
     return (
@@ -1030,12 +1044,14 @@ function resolveColor(color: string): string {
   // Only show board if there are NO active draw commands (draw takes priority)
   if (!hasActiveDrawCommands && boardContent && boardContent.lines && boardContent.lines.length > 0) {
     return (
-      <MathBoard
-        lines={boardContent.lines}
-        title={boardContent.title}
-        isVisible={isVisible}
-        onClose={onClose}
-      />
+      <BoardFrame {...frameProps}>
+        <MathBoard
+          lines={boardContent.lines}
+          title={boardContent.title}
+          isVisible={isVisible}
+          onClose={onClose}
+        />
+      </BoardFrame>
     );
   }
 
@@ -1043,6 +1059,7 @@ function resolveColor(color: string): string {
   // Only show schema if there are NO active draw commands
   if (!hasActiveDrawCommands && activeSchema) {
     return (
+      <BoardFrame {...frameProps}>
       <div className="w-full h-full flex flex-col bg-white rounded-2xl overflow-hidden shadow-lg">
         {/* Toolbar */}
         <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
@@ -1082,6 +1099,7 @@ function resolveColor(color: string): string {
           />
         </div>
       </div>
+      </BoardFrame>
     );
   }
 
@@ -1089,6 +1107,7 @@ function resolveColor(color: string): string {
   if (!drawCommands) return null;
 
   return (
+    <BoardFrame {...frameProps}>
     <div className="w-full h-full flex flex-col bg-[#0a0a18] rounded-2xl overflow-hidden">
       {/* Toolbar */}
       <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-[#0c0c1d] border-b border-white/10">
@@ -1155,6 +1174,7 @@ function resolveColor(color: string): string {
         )}
       </div>
     </div>
+    </BoardFrame>
   );
 }
 

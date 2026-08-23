@@ -30,6 +30,8 @@ const DiagnosticBacResults = lazy(() => import('./pages/DiagnosticBacResults'));
 
 // Planche de contrôle des visuels — jamais servie en production.
 const VisualAudit = lazy(() => import('./dev/VisualAudit'));
+// Planche de contrôle des tableaux — jamais servie en production.
+const BoardAudit = lazy(() => import('./dev/BoardAudit'));
 
 function PageLoader() {
   return (
@@ -65,6 +67,7 @@ export default function App() {
           {/* Eagerly loaded — no Suspense needed */}
           <Route path="/" element={<Landing />} />
           {import.meta.env.DEV && <Route path="/dev/visual-audit" element={<VisualAudit />} />}
+          {import.meta.env.DEV && <Route path="/dev/board-audit" element={<BoardAudit />} />}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
