@@ -86,12 +86,16 @@ class CoursePlayerService:
 
     def match_manifest_intent(self, text: str) -> Optional[dict]:
         """Associe une demande explicite de cours à un seul manifest local."""
+        return self._rank_course_intent(text, self._load_local_manifests())
+
+    @staticmethod
+    def _rank_course_intent(text: str, candidates: list[dict]) -> Optional[dict]:
         if not _is_explicit_course_request(text):
             return None
         query = f" {_search_normalise(text)} "
         ranked: list[tuple[int, dict]] = []
-        for manifest in self._load_local_manifests():
-            aliases = manifest.get("intent_aliases") or []
+        for candidate in candidates:
+            aliases = candidate.get("intent_aliases") or []
             scores = []
             for alias in aliases:
                 normalised_alias = _search_normalise(alias)
@@ -100,13 +104,42 @@ class CoursePlayerService:
                     # partagé comme ATP ou muscle.
                     scores.append(len(normalised_alias.split()) * 100 + len(normalised_alias))
             if scores:
-                ranked.append((max(scores), manifest))
+                ranked.append((max(scores), candidate))
         if not ranked:
             return None
         ranked.sort(key=lambda item: item[0], reverse=True)
         if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
             return None
         return ranked[0][1]
+
+    def match_course_intent(self, text: str) -> Optional[dict]:
+        """Include courses authored and published from the admin dashboard."""
+        if not _is_explicit_course_request(text):
+            return None
+        candidates_by_stable = {
+            str(item.get("stable_id") or item.get("id")): item
+            for item in self._load_local_manifests()
+        }
+        try:
+            rows = get_supabase_admin().table("course_decks").select(
+                "id,lesson_id,title,status,metadata"
+            ).eq("status", "published").execute().data or []
+            for row in rows:
+                metadata = row.get("metadata") or {}
+                stable_id = str(metadata.get("stable_id") or row.get("id"))
+                candidates_by_stable[stable_id] = {
+                    "id": stable_id,
+                    "stable_id": stable_id,
+                    "title": row.get("title") or "Cours",
+                    "intent_aliases": metadata.get("intent_aliases") or [row.get("title") or ""],
+                    "lesson_match": metadata.get("lesson_match") or [row.get("title") or ""],
+                    "_deck_id": str(row.get("id") or ""),
+                    "_lesson_id": str(row.get("lesson_id") or ""),
+                    "_source": "database",
+                }
+        except Exception as exc:
+            _log.info("[CoursePlayer] Admin-authored intent catalogue unavailable: %s", exc)
+        return self._rank_course_intent(text, list(candidates_by_stable.values()))
 
     @staticmethod
     def _chapter_from_lesson(lesson: dict) -> dict:
@@ -140,9 +173,9 @@ class CoursePlayerService:
     async def get_catalog(self, student: dict) -> dict:
         """Return the student's subject folders and their authored courses.
 
-        The catalogue and natural-language tutor routing intentionally read the
-        same manifests. A card can therefore never advertise a different
-        course than the one Moalim opens for the corresponding request.
+        Published database versions authored from the admin dashboard take
+        precedence over manifests. A manifest remains the deployment fallback
+        until its first database version is published.
         """
         context = subject_access_service.get_context(student)
         subjects = [
@@ -176,16 +209,42 @@ class CoursePlayerService:
 
         try:
             deck_rows = admin.table("course_decks").select(
-                "id,lesson_id,status,version,metadata"
+                "id,lesson_id,title,status,version,estimated_minutes,metadata"
             ).execute().data or []
+            deck_ids = [row["id"] for row in deck_rows]
+            activity_rows = []
+            if deck_ids:
+                activity_rows = admin.table("course_activities").select(
+                    "id,deck_id"
+                ).in_("deck_id", deck_ids).execute().data or []
+            activity_ids = [row["id"] for row in activity_rows]
+            slide_rows = []
+            if activity_ids:
+                slide_rows = admin.table("course_slides").select(
+                    "id,activity_id"
+                ).in_("activity_id", activity_ids).execute().data or []
         except Exception as exc:
             _log.info("[CoursePlayer] Course deck metadata unavailable for library: %s", exc)
             deck_rows = []
+            activity_rows = []
+            slide_rows = []
+
+        activity_ids_by_deck: dict[str, set[str]] = {}
+        for activity in activity_rows:
+            activity_ids_by_deck.setdefault(str(activity.get("deck_id")), set()).add(str(activity.get("id")))
+        slide_count_by_deck: dict[str, int] = {}
+        for deck_id, ids in activity_ids_by_deck.items():
+            slide_count_by_deck[deck_id] = sum(
+                1 for slide in slide_rows if str(slide.get("activity_id")) in ids
+            )
+
+        published_rows = [row for row in deck_rows if row.get("status") == "published"]
+        handled_database_ids: set[str] = set()
 
         for manifest in self._load_local_manifests():
             stable_id = manifest.get("stable_id") or manifest.get("id")
             linked_rows = [
-                row for row in deck_rows
+                row for row in published_rows
                 if (row.get("metadata") or {}).get("stable_id") == stable_id
             ]
             linked_rows.sort(
@@ -203,6 +262,7 @@ class CoursePlayerService:
                 if candidate:
                     lesson = candidate
                     deck_row = row
+                    handled_database_ids.add(str(row.get("id")))
                     break
             if lesson is None:
                 lesson = next(
@@ -218,13 +278,23 @@ class CoursePlayerService:
             if not folder:
                 continue
 
-            activity_count = len(manifest.get("activities") or [])
-            slide_count = sum(
-                len(activity.get("slides") or [])
-                for activity in manifest.get("activities") or []
-            )
-            catalog = manifest.get("catalog") or {}
             deck_id = str((deck_row or {}).get("id") or manifest.get("id") or "")
+            if deck_row:
+                metadata = deck_row.get("metadata") or {}
+                activity_count = len(activity_ids_by_deck.get(deck_id, set()))
+                slide_count = slide_count_by_deck.get(deck_id, 0)
+                catalog = metadata.get("catalog") or manifest.get("catalog") or {}
+                course_title = deck_row.get("title") or manifest.get("title") or lesson.get("title_fr") or "Cours"
+                estimated_minutes = int(deck_row.get("estimated_minutes") or manifest.get("estimated_minutes") or 0)
+            else:
+                activity_count = len(manifest.get("activities") or [])
+                slide_count = sum(
+                    len(activity.get("slides") or [])
+                    for activity in manifest.get("activities") or []
+                )
+                catalog = manifest.get("catalog") or {}
+                course_title = manifest.get("title") or lesson.get("title_fr") or "Cours"
+                estimated_minutes = int(manifest.get("estimated_minutes") or 0)
             progress = await self.get_progress(str(student.get("id") or ""), deck_id)
             completed_slide_ids = (progress or {}).get("completed_slide_ids") or []
             progress_percent = (
@@ -235,10 +305,10 @@ class CoursePlayerService:
             folder["courses"].append({
                 "stable_id": stable_id,
                 "deck_id": deck_id,
-                "title": manifest.get("title") or lesson.get("title_fr") or "Cours",
+                "title": course_title,
                 "summary": catalog.get("summary") or "Parcours interactif guidé par Moalim.",
                 "cover_image": catalog.get("cover_image"),
-                "cover_alt": catalog.get("cover_alt") or manifest.get("title") or "Illustration du cours",
+                "cover_alt": catalog.get("cover_alt") or course_title or "Illustration du cours",
                 "essential_topics": catalog.get("essential_topics") or [],
                 "chapter_id": str(lesson.get("chapter_id") or chapter.get("id") or ""),
                 "chapter_title": chapter.get("title_fr") or "",
@@ -246,10 +316,56 @@ class CoursePlayerService:
                 "lesson_title": lesson.get("title_fr") or "",
                 "activity_count": activity_count,
                 "slide_count": slide_count,
-                "estimated_minutes": int(manifest.get("estimated_minutes") or 0),
+                "estimated_minutes": estimated_minutes,
                 "progress_status": (progress or {}).get("status") or "not_started",
                 "progress_percent": progress_percent,
-                "tutor_request": f"Je veux commencer le cours sur {manifest.get('title') or lesson.get('title_fr') or 'ce thème'}",
+                "tutor_request": f"Je veux commencer le cours sur {course_title}",
+            })
+
+        # Courses created entirely from the admin editor have no local
+        # manifest. They still appear in the same subject folders and use the
+        # aliases stored in deck metadata for tutor routing.
+        for deck_row in published_rows:
+            deck_id = str(deck_row.get("id") or "")
+            if deck_id in handled_database_ids:
+                continue
+            lesson = next(
+                (item for item in allowed_lessons if str(item.get("id")) == str(deck_row.get("lesson_id"))),
+                None,
+            )
+            if not lesson:
+                continue
+            chapter = self._chapter_from_lesson(lesson)
+            folder = folders_by_id.get(str(chapter.get("subject_id") or ""))
+            if not folder:
+                continue
+            metadata = deck_row.get("metadata") or {}
+            stable_id = metadata.get("stable_id") or deck_id
+            catalog = metadata.get("catalog") or {}
+            activity_count = len(activity_ids_by_deck.get(deck_id, set()))
+            slide_count = slide_count_by_deck.get(deck_id, 0)
+            progress = await self.get_progress(str(student.get("id") or ""), deck_id)
+            completed_slide_ids = (progress or {}).get("completed_slide_ids") or []
+            progress_percent = min(100, round(len(completed_slide_ids) * 100 / slide_count)) if slide_count else 0
+            title = deck_row.get("title") or lesson.get("title_fr") or "Cours"
+            folder["courses"].append({
+                "stable_id": stable_id,
+                "deck_id": deck_id,
+                "title": title,
+                "summary": catalog.get("summary") or "Parcours interactif guidé par Moalim.",
+                "cover_image": catalog.get("cover_image"),
+                "cover_alt": catalog.get("cover_alt") or title,
+                "essential_topics": catalog.get("essential_topics") or [],
+                "chapter_id": str(lesson.get("chapter_id") or chapter.get("id") or ""),
+                "chapter_title": chapter.get("title_fr") or "",
+                "lesson_id": str(lesson.get("id") or ""),
+                "lesson_title": lesson.get("title_fr") or "",
+                "activity_count": activity_count,
+                "slide_count": slide_count,
+                "estimated_minutes": int(deck_row.get("estimated_minutes") or 0),
+                "progress_status": (progress or {}).get("status") or "not_started",
+                "progress_percent": progress_percent,
+                "tutor_request": f"Je veux commencer le cours sur {title}",
             })
 
         for folder in subjects:
@@ -262,7 +378,7 @@ class CoursePlayerService:
 
     async def resolve_course_intent(self, text: str, student: dict) -> dict:
         """Résout une demande naturelle vers une route de cours autorisée."""
-        manifest = self.match_manifest_intent(text)
+        manifest = self.match_course_intent(text)
         if not manifest:
             return {"matched": False, "reason": "not_a_known_course_request"}
 
@@ -279,6 +395,20 @@ class CoursePlayerService:
         lesson: Optional[dict] = None
         select = "id,title_fr,chapter_id,chapters(id,title_fr,subject_id,subjects(name_fr))"
 
+        # An admin-authored course already knows its exact lesson. This avoids
+        # relying on fuzzy title matching after an editorial rename.
+        direct_lesson_id = str(manifest.get("_lesson_id") or "")
+        if direct_lesson_id:
+            try:
+                result = admin.table("lessons").select(select).eq(
+                    "id", direct_lesson_id
+                ).limit(1).execute()
+                candidate = result.data[0] if result.data else None
+                if candidate and subject_access_service.is_lesson_allowed(student, candidate["id"]):
+                    lesson = candidate
+            except Exception as exc:
+                _log.info("[CoursePlayer] Direct admin course lesson unavailable: %s", exc)
+
         # Après synchronisation, la métadonnée du deck fournit la liaison la
         # plus fiable, même si le titre éditorial de la leçon change.
         try:
@@ -290,7 +420,7 @@ class CoursePlayerService:
                 if (row.get("metadata") or {}).get("stable_id") == stable_id
             ]
             matching_decks.sort(key=lambda row: row.get("status") == "published", reverse=True)
-            for row in matching_decks:
+            for row in matching_decks if lesson is None else []:
                 result = admin.table("lessons").select(select).eq(
                     "id", row["lesson_id"]
                 ).limit(1).execute()

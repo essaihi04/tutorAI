@@ -3,14 +3,25 @@ Admin API Endpoints
 User management, token usage analytics, online tracking.
 Protected by admin password.
 """
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.services.admin_service import admin_service
+from app.services.admin_course_service import (
+    CourseEditorError,
+    CourseValidationError,
+    admin_course_service,
+)
 from app.services.subject_access_service import subject_access_service
 from app.supabase_client import get_supabase_admin
 from app.schemas.admin import AdminLogin, CreateUser, UpdateUser, ResetPassword, CreatePromoCode, UpdatePromoCode, BulkUserAction
+from app.schemas.admin_course import (
+    AdminCourseAudioStatus,
+    AdminCourseCreate,
+    AdminCourseDuplicate,
+    AdminCourseSave,
+)
 from jose import jwt
 from datetime import datetime, timedelta
 from typing import Optional
@@ -79,6 +90,147 @@ async def get_dashboard(admin: bool = Depends(_verify_admin_token)):
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# VERSIONED COURSE EDITOR
+# ──────────────────────────────────────────────
+
+def _raise_course_editor_error(exc: Exception) -> None:
+    if isinstance(exc, CourseValidationError):
+        raise HTTPException(
+            status_code=422,
+            detail={"message": str(exc), "issues": exc.issues},
+        )
+    if isinstance(exc, CourseEditorError):
+        raise HTTPException(status_code=400, detail=str(exc))
+    logger.exception("Course editor error")
+    raise HTTPException(status_code=500, detail="Erreur interne de l'éditeur de cours")
+
+
+@router.get("/courses")
+async def list_admin_courses(admin: bool = Depends(_verify_admin_token)):
+    """List database versions and manifest fallbacks visible to an author."""
+    try:
+        return admin_course_service.list_courses()
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.get("/courses/options")
+async def get_admin_course_options(admin: bool = Depends(_verify_admin_token)):
+    """Return lessons, validated schemas and persistent media choices."""
+    try:
+        return admin_course_service.editor_options()
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.post("/courses/media")
+async def upload_admin_course_media(
+    file: UploadFile = File(...),
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Persist an image used by a slide or a course cover."""
+    try:
+        content = await file.read(10 * 1024 * 1024 + 1)
+        url = admin_course_service.save_media(
+            file.filename or "visuel.png",
+            file.content_type or "application/octet-stream",
+            content,
+        )
+        return {"url": url}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+    finally:
+        await file.close()
+
+
+@router.post("/courses")
+async def create_admin_course(
+    body: AdminCourseCreate,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Create a new editable draft attached to an existing lesson."""
+    try:
+        return {"course": admin_course_service.create_course(body.model_dump())}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.patch("/courses/audio/{audio_id}")
+async def update_admin_course_audio(
+    audio_id: str,
+    body: AdminCourseAudioStatus,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Verify, publish, reject or explicitly stale a generated audio asset."""
+    try:
+        return {"audio": admin_course_service.set_audio_status(audio_id, body.status)}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.get("/courses/{course_ref}")
+async def get_admin_course(course_ref: str, admin: bool = Depends(_verify_admin_token)):
+    """Load the complete authoring payload, including answer keys and audio state."""
+    try:
+        return {"course": admin_course_service.get_course(course_ref)}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.put("/courses/{course_id}")
+async def save_admin_course(
+    course_id: str,
+    body: AdminCourseSave,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Save a complete draft, including additions, deletions and reordering."""
+    try:
+        return {"course": admin_course_service.save_course(course_id, body.model_dump())}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.post("/courses/{course_ref}/duplicate")
+async def duplicate_admin_course(
+    course_ref: str,
+    body: AdminCourseDuplicate,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Materialize a manifest or clone a locked version into a new draft."""
+    try:
+        return {"course": admin_course_service.duplicate_course(course_ref, body.lesson_id)}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.post("/courses/{course_id}/publish")
+async def publish_admin_course(course_id: str, admin: bool = Depends(_verify_admin_token)):
+    """Validate and publish one version, archiving the previous live version."""
+    try:
+        return {"course": admin_course_service.publish_course(course_id)}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.post("/courses/{course_id}/archive")
+async def archive_admin_course(course_id: str, admin: bool = Depends(_verify_admin_token)):
+    try:
+        return {"course": admin_course_service.archive_course(course_id)}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
+
+
+@router.delete("/courses/{course_id}")
+async def delete_admin_course(course_id: str, admin: bool = Depends(_verify_admin_token)):
+    """Delete a non-published version and its child rows through DB cascades."""
+    try:
+        admin_course_service.delete_course(course_id)
+        return {"ok": True}
+    except Exception as exc:
+        _raise_course_editor_error(exc)
 
 
 # ──────────────────────────────────────────────

@@ -211,6 +211,45 @@ def test_ordinary_topic_question_does_not_open_the_full_course():
     assert service.match_manifest_intent("Aide-moi") is None
 
 
+def test_tutor_recognises_a_course_published_only_from_the_admin_editor(monkeypatch):
+    rows = [{
+        "id": "deck-admin",
+        "lesson_id": "lesson-admin",
+        "title": "Équilibre chimique",
+        "status": "published",
+        "metadata": {
+            "stable_id": "chem_equilibre_admin",
+            "intent_aliases": ["cours sur l'équilibre chimique"],
+            "lesson_match": ["équilibre chimique"],
+        },
+    }]
+
+    class FakeQuery:
+        def select(self, *_args, **_kwargs):
+            return self
+
+        def eq(self, key, value):
+            assert (key, value) == ("status", "published")
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=rows)
+
+    class FakeAdmin:
+        def table(self, name):
+            assert name == "course_decks"
+            return FakeQuery()
+
+    monkeypatch.setattr(course_player_module, "get_supabase_admin", lambda: FakeAdmin())
+
+    matched = CoursePlayerService().match_course_intent(
+        "Je veux commencer le cours sur l'équilibre chimique"
+    )
+
+    assert matched and matched["stable_id"] == "chem_equilibre_admin"
+    assert matched["_lesson_id"] == "lesson-admin"
+
+
 def test_catalog_cards_and_tutor_requests_use_the_same_manifests(monkeypatch):
     subject_id = "subject-svt"
     lessons = [

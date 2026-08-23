@@ -63,6 +63,9 @@ def sync_manifest(admin, manifest_path: Path) -> tuple[int, int]:
             "stable_id": manifest.get("stable_id") or manifest["id"],
             "manifest": manifest_path.name,
             "manifest_hash": manifest_hash,
+            "catalog": manifest.get("catalog") or {},
+            "lesson_match": manifest.get("lesson_match") or [],
+            "intent_aliases": manifest.get("intent_aliases") or [],
             "pedagogy": "investigation-explicitation-retrieval-practice",
         },
     }

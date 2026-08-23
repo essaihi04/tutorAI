@@ -345,6 +345,38 @@ export const updatePromoCode = (id: string, data: { label?: string; is_active?: 
 export const deletePromoCode = (id: string) =>
   adminApi.delete(`/promo-codes/${id}`);
 
+// ─── Versioned course editor ────────────────────────────────────────
+export const listAdminCourses = () => adminApi.get('/courses');
+export const getAdminCourseOptions = () => adminApi.get('/courses/options');
+export const getAdminCourse = (courseRef: string) =>
+  adminApi.get(`/courses/${encodeURIComponent(courseRef)}`);
+export const createAdminCourse = (data: {
+  lesson_id: string;
+  stable_id: string;
+  title: string;
+  language?: string;
+  estimated_minutes?: number;
+}) => adminApi.post('/courses', data);
+export const saveAdminCourse = (courseId: string, data: Record<string, unknown>) =>
+  adminApi.put(`/courses/${courseId}`, data);
+export const duplicateAdminCourse = (courseRef: string, lessonId?: string) =>
+  adminApi.post(`/courses/${encodeURIComponent(courseRef)}/duplicate`, { lesson_id: lessonId || null });
+export const publishAdminCourse = (courseId: string) =>
+  adminApi.post(`/courses/${courseId}/publish`);
+export const archiveAdminCourse = (courseId: string) =>
+  adminApi.post(`/courses/${courseId}/archive`);
+export const deleteAdminCourse = (courseId: string) =>
+  adminApi.delete(`/courses/${courseId}`);
+export const updateAdminCourseAudio = (audioId: string, status: string) =>
+  adminApi.patch(`/courses/audio/${audioId}`, { status });
+export const uploadAdminCourseMedia = (file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return adminApi.post('/courses/media', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 // ─── Registration requests (pre-inscriptions) ──────────────────────
 export interface RegistrationRequestPayload {
   nom: string;

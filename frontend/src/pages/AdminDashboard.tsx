@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff, X, Check,
   Clock, Zap, BarChart3, TrendingUp, Server, AlertCircle,
   UserPlus, Lock, Mail, User, FileUp,
-  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload, ExternalLink, Globe
+  MessageCircle, MapPin, Phone, Inbox, Sparkles, Image, Upload, ExternalLink, Globe, BookOpen
 } from 'lucide-react';
 import {
   adminLogin, getAdminDashboard, getAdminUsers, createAdminUser,
@@ -16,6 +16,7 @@ import {
   generateMockExam, listMockExams, updateMockExamStatus, getMockExamImagePrompts,
   uploadMockExamImage, listMockExamImages, deleteMockExamImage
 } from '../services/api';
+import AdminCourseEditor from '../components/admin/AdminCourseEditor';
 
 // ─── Types ───────────────────────────────────────────────────
 interface DashboardStats {
@@ -351,7 +352,7 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'visits';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visits';
 
 // URL de partage public Umami pour le site Moalim
 // Cette URL est publique par nature (genere via Umami: Settings -> Websites -> Moalim -> Edit -> Enable share URL)
@@ -641,6 +642,7 @@ export default function AdminDashboard() {
     { key: 'promoCodes', label: 'Codes promo', icon: Key },
     { key: 'usage', label: 'Consommation', icon: DollarSign },
     { key: 'requests', label: 'Requêtes récentes', icon: Activity },
+    { key: 'courses', label: 'Cours', icon: BookOpen },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
     { key: 'visits', label: 'Visites', icon: Globe },
   ];
@@ -1355,6 +1357,9 @@ export default function AdminDashboard() {
 
         {/* ──── MOCK EXAMS TAB ──── */}
         {activeTab === 'mockExams' && <MockExamsTab />}
+
+        {/* ──── COURSE EDITOR TAB ──── */}
+        {activeTab === 'courses' && <AdminCourseEditor />}
 
         {/* ──── VISITS / ANALYTICS TAB ──── */}
         {activeTab === 'visits' && <VisitsAnalyticsTab />}
