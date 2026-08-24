@@ -404,11 +404,18 @@ def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
     assert "translation_initiation" in source
     assert "translation_stop" in source
     assert "TAC CTT AAA GGC ATT" in source
-    assert "AUG GAA UUU CCG UAA" in source
+    assert "['AUG','GAA','UUU','CCG','UAA']" in source
     assert "pauseDemo" in source
     assert "nextDemoStep" in source
     assert "previousDemoStep" in source
     assert "getSimulationState" in source
+    assert "photo-dna-layer" in source
+    assert "photo-rna-layer" in source
+    assert "photo-ribosome-layer" in source
+    assert "photo-protein-layer" in source
+    assert 'id="demoStart"' in source
+    assert 'id="demoPause"' in source
+    assert 'id="demoRestart"' in source
 
 
 def test_slide_scientific_visual_is_normalised_before_reaching_the_browser():
