@@ -92,11 +92,11 @@ function inspect(schema: ScientificSchema): Verdict[] {
 
 const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   {
-    title: 'Modèle 3D réaliste — mitochondrie manipulable',
+    title: 'Modèle 3D réaliste — mitochondrie légendée et manipulable',
     spec: {
       engine: 'three', model: 'mitochondrion', title: 'Mitochondrie 3D interactive',
       description: 'Double membrane, crêtes, matrice et ADN mitochondrial circulaire.',
-      autoplay: true, labels: true, focus: 'all',
+      autoplay: true, labels: true, focus: 'cristae',
     },
   },
   {

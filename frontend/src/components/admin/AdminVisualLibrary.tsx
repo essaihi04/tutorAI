@@ -155,6 +155,25 @@ function VisualPreview({ item, full = false }: { item: AdminVisualLibraryItem; f
       />
     );
   }
+  if (!full && preview.kind === 'simulation' && preview.poster_url) {
+    if (!canPreviewUrl(preview.poster_url, 'image') || failedUrl === preview.poster_url) {
+      return <UnavailablePreview height={height} message="La miniature de cette simulation est indisponible." />;
+    }
+    return (
+      <div className={`${height} relative overflow-hidden bg-slate-950`}>
+        <img
+          src={preview.poster_url}
+          alt={item.title}
+          className="h-full w-full object-contain"
+          loading="lazy"
+          onError={() => setFailedUrl(preview.poster_url || '')}
+        />
+        <span className="absolute bottom-3 left-3 rounded-full bg-indigo-600/95 px-3 py-1.5 text-[11px] font-black text-white shadow-lg ring-1 ring-white/30">
+          ▶ Animation pas à pas
+        </span>
+      </div>
+    );
+  }
   if (full && preview.kind === 'video' && preview.url) {
     if (!canPreviewUrl(preview.url, 'video') || failedUrl === preview.url) {
       return <UnavailablePreview height={height} message="La vidéo est absente ou son adresse ne peut pas être chargée." />;

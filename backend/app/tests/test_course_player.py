@@ -377,6 +377,7 @@ def test_new_simulations_expose_platform_bridge_contract():
         (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/atp-adp/index.html").read_text(encoding="utf-8"),
         (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/chimiosmose/index.html").read_text(encoding="utf-8"),
         (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/muscle/contraction/index.html").read_text(encoding="utf-8"),
+        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch2_information_genetique/expression/index.html").read_text(encoding="utf-8"),
         (PROJECT_ROOT / "frontend/public/media/simulations/physics/advanced/waves/index.html").read_text(encoding="utf-8"),
         (
             PROJECT_ROOT / "frontend/public/media/simulations/chimie/labs/cinetique/index.html"
@@ -390,6 +391,24 @@ def test_new_simulations_expose_platform_bridge_contract():
         assert "postMessage" in source
         assert "set_variant" in source
         assert "reset" in source
+
+
+def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
+    source = (
+        PROJECT_ROOT
+        / "frontend/public/media/simulations/svt/ch2_information_genetique/expression/index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "const DEMO_STEPS=" in source
+    assert "transcription_initiation" in source
+    assert "translation_initiation" in source
+    assert "translation_stop" in source
+    assert "TAC CTT AAA GGC ATT" in source
+    assert "AUG GAA UUU CCG UAA" in source
+    assert "pauseDemo" in source
+    assert "nextDemoStep" in source
+    assert "previousDemoStep" in source
+    assert "getSimulationState" in source
 
 
 def test_slide_scientific_visual_is_normalised_before_reaching_the_browser():

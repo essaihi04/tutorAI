@@ -29,6 +29,12 @@ _VISUAL_RESOURCE_TYPES = {"image", "video", "simulation"}
 _STATUSES = {"draft", "validated", "published", "archived"}
 _INLINE_HTML_KEYS = ("html", "content", "simulation_html")
 _MAX_INLINE_HTML_BYTES = 2 * 1024 * 1024
+GENE_EXPRESSION_IMAGE_PATH = (
+    "/media/images/svt/ch2_information_genetique/lesson_2_expression/adn_arnm_proteine.png"
+)
+GENE_EXPRESSION_SIMULATION_PATH = (
+    "/media/simulations/svt/ch2_information_genetique/expression/index.html"
+)
 
 
 class VisualLibraryError(ValueError):
@@ -167,21 +173,33 @@ class AdminVisualLibraryService:
     @staticmethod
     def _resource_item(row: dict[str, Any], lesson: dict[str, Any]) -> dict[str, Any]:
         metadata = _metadata(row.get("metadata"))
+        url = _resource_url(row)
         scientific = normalize_scientific_visual(metadata.get("scientific")) if isinstance(metadata.get("scientific"), dict) else None
         # Compatibilité avec la ressource historique montrée comme une
         # « Mitochondrie 3D » alors qu'elle n'était qu'un PNG. Elle devient
         # interactive dès le déploiement du code, même avant l'application de
         # la migration de données qui inscrit ce même contrat en métadonnées.
-        if scientific is None and _resource_url(row) == MITOCHONDRION_3D_FALLBACK_PATH:
+        if scientific is None and url == MITOCHONDRION_3D_FALLBACK_PATH:
             scientific = normalize_scientific_visual(MITOCHONDRION_3D_SPEC)
-        kind = "scientific" if scientific else str(row.get("resource_type") or "resource")
+        animated_gene_expression = scientific is None and url == GENE_EXPRESSION_IMAGE_PATH
+        kind = (
+            "scientific"
+            if scientific
+            else "simulation"
+            if animated_gene_expression
+            else str(row.get("resource_type") or "resource")
+        )
         status = str(metadata.get("library_status") or "published")
         if status not in _STATUSES:
             status = "published"
         preview: dict[str, Any] = {"kind": kind}
-        url = _resource_url(row)
         if scientific:
             preview["scientific"] = scientific
+        elif animated_gene_expression:
+            # Conserve l'illustration comme miniature, mais ouvre désormais la
+            # démonstration animée et pilotable lorsqu'on clique sur Visualiser.
+            preview["url"] = GENE_EXPRESSION_SIMULATION_PATH
+            preview["poster_url"] = GENE_EXPRESSION_IMAGE_PATH
         elif kind == "simulation" and url == "local:metadata" and _metadata_html(metadata):
             # The HTML can be large and must not be shipped with the complete
             # catalogue. The authenticated preview endpoint fetches it only

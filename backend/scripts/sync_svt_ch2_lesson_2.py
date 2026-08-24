@@ -46,12 +46,12 @@ def resource_rows(lesson_id: str, media: list[dict]) -> list[dict]:
         if item["type"] == "simulation":
             metadata.update({
                 "simulation_id": "svt_gene_expression_advanced_lab",
-                "simulation_version": "2.0",
-                "variants": ["transcription", "translation", "mutations"],
+                "simulation_version": "3.0",
+                "variants": ["demonstration", "transcription", "translation", "mutations"],
                 "llm_readable_state": True,
                 "llm_controllable": True,
                 "commands": [
-                    "start", "set_variant", "reset", "place_codon",
+                    "start", "pause", "next", "previous", "set_variant", "reset", "place_codon",
                     "place_amino_acid", "set_mutation", "check",
                     "reveal_hint", "highlight", "set_speed",
                 ],

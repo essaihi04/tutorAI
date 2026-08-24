@@ -47,6 +47,23 @@ def test_legacy_mitochondrion_png_is_exposed_as_the_interactive_3d_model():
     assert item["preview"]["scientific"]["model"] == "mitochondrion"
 
 
+def test_gene_expression_image_keeps_its_poster_but_opens_the_animated_simulation():
+    poster = "/media/images/svt/ch2_information_genetique/lesson_2_expression/adn_arnm_proteine.png"
+    item = admin_visual_library_service._resource_item({
+        "id": "gene-expression-legacy",
+        "lesson_id": "lesson-svt",
+        "resource_type": "image",
+        "title": "ADN → ARNm → protéine",
+        "file_path": poster,
+        "metadata": {},
+    }, {"subject_name": "SVT"})
+
+    assert item["kind"] == "simulation"
+    assert item["preview"]["kind"] == "simulation"
+    assert item["preview"]["poster_url"] == poster
+    assert item["preview"]["url"].endswith("/expression/index.html")
+
+
 def test_llm_json_extraction_accepts_fence_but_ignores_prose_after_object():
     result = extract_llm_json('```json\n{"title":"Chute","scientific":{"engine":"matter"}}\n```\nExplication')
     assert result["title"] == "Chute"

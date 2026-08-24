@@ -411,6 +411,7 @@ export interface AdminVisualLibraryItem {
     kind: string;
     schema_id?: string;
     url?: string;
+    poster_url?: string;
     inline_html?: boolean;
     available?: boolean;
     reason?: string;
