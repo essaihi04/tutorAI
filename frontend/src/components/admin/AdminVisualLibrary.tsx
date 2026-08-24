@@ -419,7 +419,7 @@ function VisualEditorModal({
                     <option value="jsxgraph">JSXGraph — courbe/forces</option>
                     <option value="cytoscape">Cytoscape — réseau/processus</option>
                     <option value="matter">Matter.js — mécanique</option>
-                    <option value="three">Three.js — mitochondrie 3D</option>
+                    <option value="three">Modèle 3D réaliste — mitochondrie</option>
                   </select>
                   <button onClick={generate} disabled={busy} className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Générer

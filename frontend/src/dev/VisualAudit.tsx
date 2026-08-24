@@ -92,7 +92,7 @@ function inspect(schema: ScientificSchema): Verdict[] {
 
 const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   {
-    title: 'Three.js — mitochondrie manipulable',
+    title: 'Modèle 3D réaliste — mitochondrie manipulable',
     spec: {
       engine: 'three', model: 'mitochondrion', title: 'Mitochondrie 3D interactive',
       description: 'Double membrane, crêtes, matrice et ADN mitochondrial circulaire.',
