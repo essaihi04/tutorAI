@@ -15,6 +15,7 @@ from app.services.resource_decision_service import resource_decision_service
 from app.services.schema_catalog import match_schema
 from app.services.schema_gaps import noter_manque
 from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
+from app.services.scientific_presets import normalize_scientific_control
 from app.services.scientific_visual_router import build_visual_route_prompt
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
@@ -4794,6 +4795,11 @@ RÈGLES :
             # Collect all board payloads to merge them into one combined board
             # This prevents multiple show_board actions from replacing each other
             collected_board_payloads = []
+            # Une commande de scène doit arriver après son affichage. Le LLM
+            # peut demander dans le même bloc « montre puis souligne » ; une
+            # émission immédiate serait annulée par le `clear_whiteboard` qui
+            # précède encore l'ouverture du tableau.
+            collected_scientific_controls = []
 
             def normalize_board_payload(payload):
                 def sanitize_board_text(value, *, inline_math=True):
@@ -5130,6 +5136,19 @@ RÈGLES :
                             )
                             ui_actions_handled = True
 
+                elif action_type == "scientific":
+                    if action_name in {"control", "manipulate", "command"}:
+                        control_source = payload if isinstance(payload, dict) else action
+                        control = normalize_scientific_control(control_source)
+                        if control is None:
+                            _safe_log(
+                                "[AI Commands][WARN] scientific control rejected: "
+                                f"{control_source!r}"
+                            )
+                        else:
+                            collected_scientific_controls.append(control)
+                            ui_actions_handled = True
+
                 elif action_type == "exercise":
                     if action_name in {"open", "show"}:
                         await self.websocket.send_json({"type": "hide_whiteboard"})
@@ -5174,6 +5193,12 @@ RÈGLES :
                 await self.websocket.send_json({"type": "clear_whiteboard"})
 
                 await self._send_board_or_live(merged_title, merged_lines, context="<ui> show_board")
+
+            for control in collected_scientific_controls:
+                await self.websocket.send_json({
+                    "type": "scientific_control",
+                    **control,
+                })
 
             if ui_actions_handled:
                 # ── ALWAYS run exam exercise detection even when UI actions

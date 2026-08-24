@@ -211,6 +211,18 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
       ],
     },
   },
+  ...([
+    ['svt_ch1_cycle_atp', 'cycle_complet'],
+    ['svt_ch1_levures_exao', 'comparaison'],
+    ['svt_ch1_chimiosmose', 'cycle_complet'],
+    ['svt_ch1_carte_metabolique', 'respiration'],
+    ['svt_ch1_myogrammes', 'tetanus_incomplet'],
+    ['svt_ch1_cycle_actomyosine', 'cycle_complet'],
+    ['svt_ch1_filieres_effort', 'effort_prolonge'],
+  ] as const).map(([presetId, variant]) => ({
+    title: `Preset SVT — ${presetId}`,
+    spec: { engine: 'preset' as const, presetId, variant, autoplay: false, step: 99 },
+  })),
 ];
 
 export default function VisualAudit() {

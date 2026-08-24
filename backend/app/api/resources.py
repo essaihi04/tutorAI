@@ -2,13 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import List, Optional
 from pydantic import BaseModel
 import uuid
-from datetime import datetime
-import os
-import shutil
 from pathlib import Path
 
-from app.dependencies import get_current_student
-from app.supabase_client import get_supabase
+from app.admin_auth import verify_admin_token
+from app.supabase_client import get_supabase_admin
 
 router = APIRouter()
 
@@ -47,10 +44,10 @@ class ResourceUpdate(BaseModel):
 async def get_resources(
     type: Optional[str] = None,
     lesson_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Get all resources, optionally filtered by type or lesson."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     
     query = supabase.table("lesson_resources").select("*")
     
@@ -70,10 +67,10 @@ async def get_resources(
 @router.get("/resources/{resource_id}")
 async def get_resource(
     resource_id: str,
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Get a specific resource by ID."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     
     result = supabase.table("lesson_resources").select("*").eq("id", resource_id).execute()
     
@@ -86,10 +83,10 @@ async def get_resource(
 @router.post("/resources")
 async def create_resource(
     resource: ResourceCreate,
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Create a new resource."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     
     resource_data = {
         "lesson_id": resource.lesson_id,
@@ -123,10 +120,10 @@ async def create_resource(
 async def update_resource(
     resource_id: str,
     resource: ResourceUpdate,
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Update an existing resource."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     
     # Build update data excluding None values
     update_data = {k: v for k, v in resource.dict().items() if v is not None}
@@ -145,10 +142,10 @@ async def update_resource(
 @router.delete("/resources/{resource_id}")
 async def delete_resource(
     resource_id: str,
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Delete a resource."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     
     # Get resource to check file path
     resource_result = supabase.table("lesson_resources").select("*").eq("id", resource_id).execute()
@@ -193,7 +190,7 @@ async def upload_file(
     file: UploadFile = File(...),
     type: str = Form(...),
     lesson_id: str = Form(...),
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Upload a file (image or video) to Supabase Storage and return its public URL."""
     
@@ -212,7 +209,7 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=f"Invalid file type for {type}")
     
     # Get lesson info to build path
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     lesson_result = supabase.table("lessons").select("*, chapters(*)").eq("id", lesson_id).execute()
     
     if not lesson_result.data:
@@ -265,10 +262,10 @@ async def upload_file(
 
 @router.get("/lessons")
 async def get_lessons(
-    current_user: dict = Depends(get_current_student)
+    admin: bool = Depends(verify_admin_token)
 ):
     """Get all lessons for dropdown selection."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     
     result = supabase.table("lessons").select("id, title_fr, chapter_id, content, chapters(title_fr)").order("order_index").execute()
     

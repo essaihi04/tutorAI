@@ -14,6 +14,7 @@ import unicodedata
 from typing import Any
 
 from app.services.visual_gaps import noter_element_refuse
+from app.services.scientific_presets import normalize_scientific_preset
 
 
 SCIENTIFIC_VISUAL_PROMPT = r"""
@@ -36,6 +37,27 @@ MOTEURS AUTORISÉS dans `line.scientific` :
 - `roughsvg` : structures spatiales, cellules, chromosomes, appareils de
   chimie, circuits et coupes. C'est le moteur de schéma généraliste ; il ne
   reçoit que des primitives SVG déclaratives, jamais du SVG ou du code brut.
+- `preset` : scène animée validée du catalogue. Le preset réutilise JSXGraph
+  ou Cytoscape ; le LLM ne fournit jamais les objets internes ni du code.
+
+PRESETS DU CHAPITRE SVT « consommation de la matière organique » :
+`svt_ch1_cycle_atp`, `svt_ch1_levures_exao`, `svt_ch1_chimiosmose`,
+`svt_ch1_carte_metabolique`, `svt_ch1_myogrammes`,
+`svt_ch1_cycle_actomyosine`, `svt_ch1_filieres_effort`.
+Variantes exactes :
+- cycle ATP : `cycle_complet`, `hydrolyse`, `phosphorylation`, `couplage` ;
+- levures : `comparaison`, `avec_oxygene`, `sans_oxygene` ;
+- chimiosmose : `cycle_complet`, `transfert_electrons`, `pompage_protons`, `synthese_atp` ;
+- carte métabolique : `vue_ensemble`, `respiration`, `fermentation_lactique`, `fermentation_alcoolique` ;
+- myogrammes : `secousse`, `sommation`, `tetanus_incomplet`, `tetanus_complet` ;
+- actomyosine : `cycle_complet`, `fixation`, `pivotement`, `detachement`, `reactivation` ;
+- filières : `vue_ensemble`, `effort_bref`, `effort_intense`, `effort_prolonge`, `recuperation`.
+Format :
+{"type":"scientific","content":"Cycle ATP–ADP","scientific":{"engine":"preset","presetId":"svt_ch1_cycle_atp","variant":"cycle_complet","autoplay":true}}
+Pour piloter la scène déjà affichée, émets une action séparée :
+{"type":"scientific","action":"control","payload":{"presetId":"svt_ch1_cycle_atp","command":"set_variant","parameters":{"variant":"hydrolyse"}}}
+Commandes : `start`, `pause`, `reset`, `next`, `previous`, `set_variant`,
+`highlight`. N'invente jamais un identifiant ni une variante.
 
 Format JSXGraph :
 {"type":"scientific","content":"Figure","scientific":{"engine":"jsxgraph","title":"Bilan des forces","boundingBox":[-5,5,5,-5],"axis":true,"grid":false,"elements":[{"type":"point","points":[{"x":0,"y":0}],"label":"S","color":"cyan"},{"type":"arrow","points":[{"x":0,"y":0},{"x":0,"y":-3}],"label":"Poids","color":"red"}]}}
@@ -823,7 +845,9 @@ def scientific_visual_quality(value: Any) -> dict[str, Any]:
 
     score = 100
     issues: list[str] = []
-    if not normalized.get("title"):
+    # Un preset porte son titre dans le catalogue versionné du navigateur ;
+    # le répéter dans le payload LLM recréerait deux sources divergentes.
+    if normalized["engine"] != "preset" and not normalized.get("title"):
         score -= 10
         issues.append("Ajouter un titre scientifique court.")
 
@@ -921,6 +945,10 @@ def scientific_visual_quality(value: Any) -> dict[str, Any]:
                 "Donner `scale` (pixels par mètre) pour que les mesures portent une unité."
             )
             score -= 8
+    elif normalized["engine"] == "preset":
+        # Le contenu scientifique est versionné dans le catalogue du client ;
+        # seul l'identifiant et l'état de lecture ont traversé le LLM.
+        pass
 
     score = max(0, score)
     return {"score": score, "issues": list(dict.fromkeys(issues)), "acceptable": score >= 60}
@@ -940,4 +968,6 @@ def normalize_scientific_visual(value: Any) -> dict[str, Any] | None:
         return _normalize_matter(value)
     if engine in {"roughsvg", "rough", "svg"}:
         return _normalize_roughsvg(value)
+    if engine in {"preset", "catalog", "catalogue"}:
+        return normalize_scientific_preset(value)
     return None

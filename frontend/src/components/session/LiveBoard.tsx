@@ -12,7 +12,7 @@ import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
 import RoughShape from './scientific/RoughShape';
 import ScientificVisual from './scientific/ScientificVisual';
-import type { ScientificVisualSpec } from './scientific/types';
+import type { ScientificControlCommand, ScientificVisualSpec } from './scientific/types';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -154,6 +154,8 @@ interface LiveBoardProps {
    * synthèse prend plusieurs secondes.
    */
   audioActive?: boolean;
+  /** Commande LLM adressée à une scène scientifique déjà posée. */
+  scientificControl?: ScientificControlCommand | null;
 }
 
 // ── Palette craie (tableau sombre) ─────────────────────────────────
@@ -194,7 +196,7 @@ interface WrittenEntry {
 }
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
-function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange}: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange, scientificControl }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   /**
@@ -687,7 +689,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           // disparaît aussitôt n'apprend rien. Une simulation, elle, tourne
           // toute seule — on lui laisse le double.
           const dit = typeof step.say === 'string' ? step.say.trim() : '';
-          const animee = step.scientific?.engine === 'matter';
+          const animee = step.scientific?.engine === 'matter' || step.scientific?.engine === 'preset';
           if (dit && soundOnRef.current) {
             const handle = boardVoice.speak(toSpokenText(dit), langRef.current);
             voiceHandleRef.current = handle;
@@ -1503,7 +1505,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                   style={{ animation: 'liveFadeIn 0.45s ease-out both' }}
                 >
                   {figure.kind === 'scientific' && (
-                    <ScientificVisual spec={figure.spec} transparent />
+                    <ScientificVisual spec={figure.spec} transparent control={scientificControl} />
                   )}
                   {figure.kind === 'bloc' && renderBoardLine(figure.line)}
                   {figure.kind === 'schema' && (() => {

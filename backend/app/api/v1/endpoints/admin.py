@@ -4,14 +4,18 @@ User management, token usage analytics, online tracking.
 Protected by admin password.
 """
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
+from app.admin_auth import create_admin_token, verify_admin_token
 from app.config import get_settings
 from app.services.admin_service import admin_service
 from app.services.admin_course_service import (
     CourseEditorError,
     CourseValidationError,
     admin_course_service,
+)
+from app.services.admin_visual_library_service import (
+    VisualLibraryError,
+    admin_visual_library_service,
 )
 from app.services.subject_access_service import subject_access_service
 from app.supabase_client import get_supabase_admin
@@ -22,18 +26,18 @@ from app.schemas.admin_course import (
     AdminCourseDuplicate,
     AdminCourseSave,
 )
-from jose import jwt
-from datetime import datetime, timedelta
+from app.schemas.admin_visual_library import (
+    AdminVisualGenerate,
+    AdminVisualItemCreate,
+    AdminVisualItemUpdate,
+)
+from datetime import datetime
 from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin-dashboard"])
-security = HTTPBearer()
 settings = get_settings()
-
-ADMIN_JWT_SECRET = settings.secret_key + "_admin"
-ADMIN_TOKEN_EXPIRE_HOURS = 24
 
 
 class SubjectAccessUpdate(BaseModel):
@@ -43,25 +47,10 @@ class SubjectAccessUpdate(BaseModel):
     ends_at: Optional[datetime] = None
 
 
-def _create_admin_token() -> str:
-    """Create a JWT token for admin access."""
-    payload = {
-        "sub": "admin",
-        "role": "admin",
-        "exp": datetime.utcnow() + timedelta(hours=ADMIN_TOKEN_EXPIRE_HOURS),
-    }
-    return jwt.encode(payload, ADMIN_JWT_SECRET, algorithm="HS256")
-
-
-def _verify_admin_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
-    """Verify the admin JWT token."""
-    try:
-        payload = jwt.decode(credentials.credentials, ADMIN_JWT_SECRET, algorithms=["HS256"])
-        if payload.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="Not an admin token")
-        return True
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired admin token")
+# Backwards-compatible aliases: several endpoint signatures and tests import
+# these private names from this module.
+_create_admin_token = create_admin_token
+_verify_admin_token = verify_admin_token
 
 
 # ──────────────────────────────────────────────
@@ -90,6 +79,101 @@ async def get_dashboard(admin: bool = Depends(_verify_admin_token)):
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# UNIFIED VISUAL LIBRARY
+# ──────────────────────────────────────────────
+
+def _raise_visual_library_error(exc: Exception) -> None:
+    if isinstance(exc, VisualLibraryError):
+        raise HTTPException(status_code=422, detail=str(exc))
+    logger.exception("Visual library error")
+    raise HTTPException(status_code=500, detail="Erreur interne de la bibliothèque visuelle")
+
+
+@router.get("/visual-library")
+async def get_visual_library(admin: bool = Depends(_verify_admin_token)):
+    """Return code-owned catalogues, persistent media and lesson resources."""
+    try:
+        return admin_visual_library_service.list_library()
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+
+
+@router.post("/visual-library/items")
+async def create_visual_library_item(
+    body: AdminVisualItemCreate,
+    admin: bool = Depends(_verify_admin_token),
+):
+    try:
+        return {"item": admin_visual_library_service.create_item(body)}
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+
+
+@router.put("/visual-library/items/{resource_id}")
+async def update_visual_library_item(
+    resource_id: str,
+    body: AdminVisualItemUpdate,
+    admin: bool = Depends(_verify_admin_token),
+):
+    try:
+        return {"item": admin_visual_library_service.update_item(resource_id, body)}
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+
+
+@router.delete("/visual-library/items/{resource_id}")
+async def delete_visual_library_item(
+    resource_id: str,
+    admin: bool = Depends(_verify_admin_token),
+):
+    try:
+        return admin_visual_library_service.delete_item(resource_id)
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+
+
+@router.post("/visual-library/generate")
+async def generate_visual_library_item(
+    body: AdminVisualGenerate,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Generate a reviewable declarative draft; this endpoint never saves it."""
+    try:
+        return await admin_visual_library_service.generate_visual(
+            prompt=body.prompt,
+            subject=body.subject,
+            title=body.title,
+            engine=body.engine,
+            mode=body.mode,
+            current_spec=body.current_spec,
+        )
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+
+
+@router.post("/visual-library/upload")
+async def upload_visual_library_media(
+    lesson_id: str,
+    kind: str,
+    file: UploadFile = File(...),
+    admin: bool = Depends(_verify_admin_token),
+):
+    try:
+        content = await file.read(25 * 1024 * 1024 + 1)
+        return admin_visual_library_service.save_upload(
+            file.filename or "media",
+            file.content_type or "application/octet-stream",
+            content,
+            kind,
+            lesson_id,
+        )
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+    finally:
+        await file.close()
 
 
 # ──────────────────────────────────────────────

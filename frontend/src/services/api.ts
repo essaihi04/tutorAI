@@ -377,6 +377,110 @@ export const uploadAdminCourseMedia = (file: File) => {
   });
 };
 
+// ─── Unified visual library ───────────────────────────────────────
+export type AdminVisualKind = 'schema' | 'preset' | 'scientific' | 'image' | 'video' | 'simulation';
+export type AdminVisualStatus = 'draft' | 'validated' | 'published' | 'archived';
+
+export interface AdminVisualLibraryItem {
+  id: string;
+  resource_id?: string;
+  catalog_id?: string;
+  kind: AdminVisualKind | string;
+  title: string;
+  description: string;
+  subject: string;
+  subject_key: string;
+  chapter: string;
+  lesson: string;
+  lesson_id: string;
+  section_title?: string;
+  concepts: string[];
+  source: 'core' | 'filesystem' | 'database' | 'admin' | 'admin_llm' | string;
+  status: AdminVisualStatus;
+  editable: boolean;
+  deletable: boolean;
+  file_path?: string | null;
+  external_url?: string | null;
+  trigger_text?: string | null;
+  phase?: string;
+  difficulty_tier?: string;
+  version?: number;
+  variants?: string[];
+  quality?: { score: number; issues: string[]; acceptable: boolean } | null;
+  preview: {
+    kind: string;
+    schema_id?: string;
+    url?: string;
+    scientific?: Record<string, unknown>;
+  };
+}
+
+export interface AdminVisualLesson {
+  id: string;
+  title: string;
+  chapter_id: string;
+  chapter_title: string;
+  subject_id: string;
+  subject_name: string;
+}
+
+export interface AdminVisualLibraryResponse {
+  items: AdminVisualLibraryItem[];
+  lessons: AdminVisualLesson[];
+  stats: { total: number; editable: number; by_kind: Record<string, number> };
+  database_available: boolean;
+  database_error?: string | null;
+}
+
+export interface AdminVisualItemPayload {
+  lesson_id: string;
+  kind: 'image' | 'video' | 'simulation' | 'scientific';
+  title: string;
+  description?: string;
+  section_title?: string;
+  file_path?: string | null;
+  external_url?: string | null;
+  trigger_text?: string | null;
+  phase?: string;
+  difficulty_tier?: string;
+  concepts?: string[];
+  status?: AdminVisualStatus;
+  scientific?: Record<string, unknown>;
+  source?: string;
+}
+
+export const getAdminVisualLibrary = () =>
+  adminApi.get<AdminVisualLibraryResponse>('/visual-library');
+export const createAdminVisualItem = (data: AdminVisualItemPayload) =>
+  adminApi.post<{ item: AdminVisualLibraryItem }>('/visual-library/items', data);
+export const updateAdminVisualItem = (resourceId: string, data: Partial<AdminVisualItemPayload>) =>
+  adminApi.put<{ item: AdminVisualLibraryItem }>(`/visual-library/items/${resourceId}`, data);
+export const deleteAdminVisualItem = (resourceId: string) =>
+  adminApi.delete<{ ok: boolean; file_retained: boolean }>(`/visual-library/items/${resourceId}`);
+export const generateAdminVisual = (data: {
+  prompt: string;
+  subject?: string;
+  lesson_id?: string;
+  title?: string;
+  engine?: 'auto' | 'roughsvg' | 'jsxgraph' | 'cytoscape' | 'matter';
+  mode?: 'create' | 'edit';
+  current_spec?: Record<string, unknown>;
+}) => adminApi.post<{
+  title: string;
+  description: string;
+  scientific: Record<string, unknown>;
+  quality: { score: number; issues: string[]; acceptable: boolean };
+  existing_match?: { kind: 'schema'; id: string; title: string; score: number } | null;
+}>('/visual-library/generate', data);
+export const uploadAdminVisualMedia = (file: File, kind: 'image' | 'video', lessonId: string) => {
+  const form = new FormData();
+  form.append('file', file);
+  return adminApi.post<{ file_path: string; storage_path: string }>('/visual-library/upload', form, {
+    params: { lesson_id: lessonId, kind },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 // ─── Registration requests (pre-inscriptions) ──────────────────────
 export interface RegistrationRequestPayload {
   nom: string;

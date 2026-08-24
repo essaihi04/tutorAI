@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { getSchemaById } from './schemas';
-import type { ScientificVisualSpec } from './scientific/types';
+import type { ScientificControlCommand, ScientificVisualSpec } from './scientific/types';
 import LiveBoard, { type LiveScript } from './LiveBoard';
 
 // Types for drawing elements
@@ -83,6 +83,8 @@ interface AIWhiteboardProps {
   audioActive?: boolean;
   /** Le tableau passe en plein écran : la page doit replier sa barre latérale. */
   onFocusChange?: (focus: boolean) => void;
+  /** Commande LLM pour la scène scientifique actuellement affichée. */
+  scientificControl?: ScientificControlCommand | null;
 }
 
 /**
@@ -170,7 +172,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   };
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange, scientificControl }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -193,6 +195,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         voiceEnabled={voiceEnabled}
         audioActive={audioActive}
         onFocusChange={onFocusChange}
+        scientificControl={scientificControl}
       />
     );
   }
@@ -226,6 +229,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         voiceEnabled={voiceEnabled}
         audioActive={audioActive}
         onFocusChange={onFocusChange}
+        scientificControl={scientificControl}
       />
     );
   }
@@ -242,6 +246,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         voiceEnabled={voiceEnabled}
         audioActive={audioActive}
         onFocusChange={onFocusChange}
+        scientificControl={scientificControl}
       />
     );
   }
@@ -271,6 +276,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         voiceEnabled={voiceEnabled}
         audioActive={audioActive}
         onFocusChange={onFocusChange}
+        scientificControl={scientificControl}
       />
     );
   }

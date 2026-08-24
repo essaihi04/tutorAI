@@ -3,6 +3,7 @@
 import pytest
 
 from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
+from app.services.scientific_presets import normalize_scientific_control
 
 
 def test_jsxgraph_conserve_une_figure_valide_et_ecarte_le_code():
@@ -115,6 +116,49 @@ def test_matter_borne_dimensions_physiques_et_references():
 def test_moteur_non_autorise_est_refuse():
     assert normalize_scientific_visual({"engine": "javascript", "code": "alert(1)"}) is None
     assert normalize_scientific_visual("jsxgraph") is None
+
+
+def test_preset_scientifique_ne_laisse_passer_qu_un_catalogue_valide():
+    visual = normalize_scientific_visual({
+        "engine": "preset",
+        "presetId": "svt_ch1_cycle_atp",
+        "variant": "hydrolyse",
+        "autoplay": True,
+        "javascript": "alert(1)",
+        "url": "https://example.com/track",
+    })
+
+    assert visual == {
+        "engine": "preset",
+        "presetId": "svt_ch1_cycle_atp",
+        "variant": "hydrolyse",
+        "autoplay": True,
+        "step": 0,
+    }
+    assert normalize_scientific_visual({
+        "engine": "preset", "presetId": "scene_inventee",
+    }) is None
+    assert scientific_visual_quality(visual)["score"] == 100
+
+
+def test_commandes_llm_des_presets_sont_bornees():
+    assert normalize_scientific_control({
+        "presetId": "svt_ch1_myogrammes",
+        "command": "set_variant",
+        "parameters": {"variant": "tetanus_complet", "code": "fetch(secret)"},
+    }) == {
+        "presetId": "svt_ch1_myogrammes",
+        "command": "set_variant",
+        "parameters": {"variant": "tetanus_complet"},
+    }
+    assert normalize_scientific_control({
+        "presetId": "svt_ch1_myogrammes", "command": "eval",
+    }) is None
+    assert normalize_scientific_control({
+        "presetId": "svt_ch1_myogrammes",
+        "command": "set_variant",
+        "parameters": {"variant": "inventee"},
+    }) is None
 
 
 def test_roughsvg_ne_laisse_passer_que_des_primitives_declaratives():

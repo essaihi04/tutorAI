@@ -54,7 +54,12 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
         container: containerRef.current,
         elements: [
           ...spec.nodes.map(node => ({
-            data: { id: node.id, label: node.label, color: resolveColor(node.color) },
+            data: {
+              id: node.id,
+              label: node.label,
+              color: resolveColor(node.color),
+              active: node.active === true ? 1 : 0,
+            },
           })),
           ...spec.edges.map((edge, index) => ({
             data: {
@@ -62,6 +67,8 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
               source: edge.from,
               target: edge.to,
               label: edge.label || '',
+              color: resolveColor(edge.color || (edge.active ? 'cyan' : undefined)),
+              active: edge.active === true ? 1 : 0,
             },
           })),
         ],
@@ -77,7 +84,7 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
             style: {
               'background-color': 'data(color)',
               'border-color': '#bfdbfe',
-              'border-width': 2,
+              'border-width': 'mapData(active, 0, 1, 2, 5)',
               color: '#f8fafc',
               label: 'data(label)',
               'font-size': 13,
@@ -94,9 +101,9 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
           {
             selector: 'edge',
             style: {
-              width: 2.5,
-              'line-color': '#94a3b8',
-              'target-arrow-color': '#94a3b8',
+              width: 'mapData(active, 0, 1, 2.5, 5)',
+              'line-color': 'data(color)',
+              'target-arrow-color': 'data(color)',
               'target-arrow-shape': 'triangle',
               'curve-style': 'bezier',
               color: '#e2e8f0',
@@ -108,7 +115,11 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
             },
           },
         ],
-        minZoom: 0.55,
+        // Les processus du chapitre SVT peuvent avoir 7 niveaux (coenzymes
+        // → chaîne → gradient → ATP). À 0,55 le premier et le dernier nœud
+        // sortaient du cadre de 320 px ; `fit()` doit pouvoir descendre un
+        // peu plus tout en gardant les libellés lisibles.
+        minZoom: 0.35,
         maxZoom: 2,
       });
 

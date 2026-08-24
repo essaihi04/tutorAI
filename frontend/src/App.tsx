@@ -14,7 +14,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Progress = lazy(() => import('./pages/Progress'));
 const CourseLibrary = lazy(() => import('./pages/CourseLibrary'));
 const LearningSession = lazy(() => import('./pages/LearningSession'));
-const AdminResources = lazy(() => import('./pages/AdminResources'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ExamExtractor = lazy(() => import('./pages/ExamExtractor'));
 const DiagnosticQuiz = lazy(() => import('./pages/DiagnosticQuiz'));
@@ -32,6 +31,7 @@ const DiagnosticBacResults = lazy(() => import('./pages/DiagnosticBacResults'));
 const VisualAudit = lazy(() => import('./dev/VisualAudit'));
 // Planche de contrôle des tableaux — jamais servie en production.
 const BoardAudit = lazy(() => import('./dev/BoardAudit'));
+const AdminVisualLibraryAudit = lazy(() => import('./dev/AdminVisualLibraryAudit'));
 
 function PageLoader() {
   return (
@@ -68,6 +68,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           {import.meta.env.DEV && <Route path="/dev/visual-audit" element={<VisualAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/board-audit" element={<BoardAudit />} />}
+          {import.meta.env.DEV && <Route path="/dev/admin-visual-library" element={<AdminVisualLibraryAudit />} />}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
@@ -178,11 +179,7 @@ export default function App() {
           />
           <Route
             path="/admin/resources"
-            element={
-              <ProtectedRoute>
-                <AdminResources />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/admin?tab=visuals" replace />}
           />
           <Route
             path="/mock-exam"

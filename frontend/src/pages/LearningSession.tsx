@@ -28,6 +28,7 @@ import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
 import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck, CourseProgressSnapshot } from '../components/course/types';
+import type { ScientificControlCommand, ScientificControlName, ScientificPresetId } from '../components/session/scientific/types';
 import { estUnMode, modeDepuisRoute, type TutorMode } from '../services/sessionMode';
 
 // On conserve la vitesse native d'Academy. Ralentir un WAV avec
@@ -315,6 +316,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [whiteboardSchemaId, setWhiteboardSchemaId] = useState<string | null>(null);
   const [boardContent, setBoardContent] = useState<any | null>(null);
   const [liveScript, setLiveScript] = useState<any | null>(null);
+  const [scientificControl, setScientificControl] = useState<ScientificControlCommand | null>(null);
   // À qui appartient la voix : au chat, ou au tableau ?
   //
   // Elle a longtemps appartenu au chat SANS exception, et pour une bonne
@@ -1269,6 +1271,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setWhiteboardSchemaId(null);
       setBoardContent(null);
       setLiveScript(null);
+      setScientificControl(null);
     });
 
     wsService.on('whiteboard_live', (data) => {
@@ -1300,6 +1303,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setWhiteboardSchemaId(null);
       setBoardContent(null);
       setLiveScript({ title: data.title || '', steps: data.steps });
+      setScientificControl(null);
       setShowWhiteboard(true);
       setShowMedia(false);
       setShowExercise(false);
@@ -1339,6 +1343,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setWhiteboardSchemaId(null);
       setBoardContent(null);
       setLiveScript(null);
+      setScientificControl(null);
       // Force clear by setting null first, then new data after a tick
       // This ensures React detects the change and AIWhiteboard resets
       setWhiteboardData(null);
@@ -1368,6 +1373,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setWhiteboardData(null);
       setBoardContent(null);
       setLiveScript(null);
+      setScientificControl(null);
       setWhiteboardSchemaId(data.schema_id);
       setShowWhiteboard(true);
       setShowMedia(false);
@@ -1393,6 +1399,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setWhiteboardSchemaId(null);
       setLiveScript(null);
       setBoardContent(data);
+      setScientificControl(null);
       setShowWhiteboard(true);
       setShowMedia(false);
       setShowExercise(false);
@@ -1471,6 +1478,22 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       } else {
         console.warn('[IA→Simulation] Aucune iframe de simulation active trouvée');
       }
+    });
+
+    wsService.on('scientific_control', (data) => {
+      const allowedCommands: ScientificControlName[] = [
+        'start', 'pause', 'reset', 'next', 'previous', 'set_variant', 'highlight',
+      ];
+      if (!data?.presetId || !allowedCommands.includes(data.command)) {
+        console.warn('[IA→Scène scientifique] Commande invalide ignorée:', data);
+        return;
+      }
+      setScientificControl(previous => ({
+        sequence: (previous?.sequence || 0) + 1,
+        presetId: data.presetId as ScientificPresetId,
+        command: data.command as ScientificControlName,
+        parameters: typeof data.parameters === 'object' && data.parameters ? data.parameters : {},
+      }));
     });
   };
 
@@ -2326,6 +2349,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     assistantReply={
                       [...conversation].reverse().find(m => m.speaker === 'ai')?.text ?? null
                     }
+                    scientificControl={scientificControl}
                   />
                 </div>
               </div>

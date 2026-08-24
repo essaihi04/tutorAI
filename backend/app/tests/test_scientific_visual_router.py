@@ -273,6 +273,7 @@ def test_une_image_fixe_ne_repond_pas_a_fais_la_bouger():
     prompt = build_visual_route_prompt(contexte, "dir lya chi simulation de contraction")
     assert "BOUGER" in prompt
     assert "OUVRIR_SIMULATION" in prompt
+    assert "`preset`" in prompt
     assert "matter" in prompt
     assert "INTERDIT ABSOLU" in prompt          # promettre sans envoyer
     assert "Ne le redessine pas" not in prompt  # l'ancien ordre a disparu

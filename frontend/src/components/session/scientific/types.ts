@@ -38,12 +38,16 @@ export interface CytoscapeNodeSpec {
   id: string;
   label: string;
   color?: string;
+  /** Un état actif reçoit un contour lumineux dans les scènes pilotées. */
+  active?: boolean;
 }
 
 export interface CytoscapeEdgeSpec {
   from: string;
   to: string;
   label?: string;
+  color?: string;
+  active?: boolean;
 }
 
 export interface CytoscapeVisualSpec {
@@ -177,8 +181,44 @@ export interface RoughSVGVisualSpec {
   legend?: RoughSVGLegendItem[];
 }
 
+export type ScientificPresetId =
+  | 'svt_ch1_cycle_atp'
+  | 'svt_ch1_levures_exao'
+  | 'svt_ch1_chimiosmose'
+  | 'svt_ch1_carte_metabolique'
+  | 'svt_ch1_myogrammes'
+  | 'svt_ch1_cycle_actomyosine'
+  | 'svt_ch1_filieres_effort';
+
+/**
+ * Référence sûre vers une scène versionnée. Le LLM choisit un identifiant et
+ * un état ; le navigateur résout ensuite la scène vers JSXGraph/Cytoscape.
+ * Aucun code, HTML ou URL n'est accepté dans ce contrat.
+ */
+export interface ScientificPresetVisualSpec {
+  engine: 'preset';
+  /** Facultatif pour les consommateurs génériques ; le catalogue reste source de vérité. */
+  title?: string;
+  presetId: ScientificPresetId;
+  variant?: string;
+  autoplay?: boolean;
+  step?: number;
+}
+
+export type ScientificControlName =
+  | 'start' | 'pause' | 'reset' | 'next' | 'previous' | 'set_variant' | 'highlight';
+
+export interface ScientificControlCommand {
+  /** Permet de rejouer deux commandes identiques reçues à la suite. */
+  sequence: number;
+  presetId: ScientificPresetId;
+  command: ScientificControlName;
+  parameters?: { variant?: string; step?: number };
+}
+
 export type ScientificVisualSpec =
   | JSXGraphVisualSpec
   | CytoscapeVisualSpec
   | MatterVisualSpec
-  | RoughSVGVisualSpec;
+  | RoughSVGVisualSpec
+  | ScientificPresetVisualSpec;

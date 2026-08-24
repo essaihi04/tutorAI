@@ -17,6 +17,7 @@ import {
   uploadMockExamImage, listMockExamImages, deleteMockExamImage
 } from '../services/api';
 import AdminCourseEditor from '../components/admin/AdminCourseEditor';
+import AdminVisualLibrary from '../components/admin/AdminVisualLibrary';
 
 // ─── Types ───────────────────────────────────────────────────
 interface DashboardStats {
@@ -352,7 +353,7 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visits';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits';
 
 // URL de partage public Umami pour le site Moalim
 // Cette URL est publique par nature (genere via Umami: Settings -> Websites -> Moalim -> Edit -> Enable share URL)
@@ -382,7 +383,9 @@ interface RegistrationRequest {
 
 export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('admin_token'));
-  const [activeTab, setActiveTab] = useState<Tab>('inscriptions');
+  const [activeTab, setActiveTab] = useState<Tab>(() => (
+    new URLSearchParams(window.location.search).get('tab') === 'visuals' ? 'visuals' : 'inscriptions'
+  ));
 
   const switchTab = (t: Tab) => { setActiveTab(t); };
   const [dataLoading, setDataLoading] = useState(false);
@@ -643,6 +646,7 @@ export default function AdminDashboard() {
     { key: 'usage', label: 'Consommation', icon: DollarSign },
     { key: 'requests', label: 'Requêtes récentes', icon: Activity },
     { key: 'courses', label: 'Cours', icon: BookOpen },
+    { key: 'visuals', label: 'Bibliothèque', icon: Image },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
     { key: 'visits', label: 'Visites', icon: Globe },
   ];
@@ -1360,6 +1364,9 @@ export default function AdminDashboard() {
 
         {/* ──── COURSE EDITOR TAB ──── */}
         {activeTab === 'courses' && <AdminCourseEditor />}
+
+        {/* ──── UNIFIED VISUAL LIBRARY TAB ──── */}
+        {activeTab === 'visuals' && <AdminVisualLibrary />}
 
         {/* ──── VISITS / ANALYTICS TAB ──── */}
         {activeTab === 'visits' && <VisitsAnalyticsTab />}

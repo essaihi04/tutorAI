@@ -374,17 +374,21 @@ def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
         lignes = [
             "[L'ÉLÈVE DEMANDE À VOIR LE PHÉNOMÈNE BOUGER]",
             f"Sujet : {route['title']}.",
-            "Une image fixe NE RÉPOND PAS à cette demande. Tu as trois moyens, "
+            "Une image fixe NE RÉPOND PAS à cette demande. Tu as quatre moyens, "
             "dans cet ordre :",
             "1. `OUVRIR_SIMULATION` si le cours en possède une sur cette notion — "
             "c'est toujours le meilleur choix, elle est faite pour être manipulée.",
-            "2. Une ligne `scientific` avec le moteur `matter` : le SEUL moteur qui "
-            "anime. Elle exige `measures` (une grandeur lue en direct) ou "
+            "2. Une ligne `scientific` avec le moteur `preset` si la notion figure "
+            "dans le catalogue contrôlable du chapitre. Le preset réutilise "
+            "JSXGraph/Cytoscape et accepte `start`, `pause`, `next`, "
+            "`set_variant` et `highlight`.",
+            "3. Une ligne `scientific` avec le moteur `matter` pour une mécanique "
+            "2D. Elle exige `measures` (une grandeur lue en direct) ou "
             "`parameters` (un réglage) — sans quoi c'est une animation, pas une "
             "simulation, et un dessin aurait suffi.",
-            "3. Si le phénomène ne relève d'aucun des deux — un glissement de "
-            "filaments, une migration, un repliement — dis-le franchement : "
-            "montre l'état AVANT et l'état APRÈS côte à côte dans une figure "
+            "4. Si le phénomène ne relève d'aucun des trois — un repliement sans "
+            "preset, par exemple — montre "
+            "l'état AVANT et l'état APRÈS côte à côte dans une figure "
             f"`{route['engine']}`, et nomme ce qui a changé entre les deux.",
             "",
             "INTERDIT ABSOLU : annoncer un mouvement, une simulation ou une "
