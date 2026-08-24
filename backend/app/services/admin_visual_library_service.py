@@ -15,6 +15,8 @@ from app.services.admin_course_service import FRONTEND_PUBLIC, admin_course_serv
 from app.services.schema_catalog import SCHEMA_CATALOG, match_schema
 from app.services.scientific_presets import SCIENTIFIC_PRESETS
 from app.services.scientific_visual_skill import (
+    MITOCHONDRION_3D_FALLBACK_PATH,
+    MITOCHONDRION_3D_SPEC,
     SCIENTIFIC_VISUAL_PROMPT,
     normalize_scientific_visual,
     scientific_visual_quality,
@@ -166,7 +168,13 @@ class AdminVisualLibraryService:
     def _resource_item(row: dict[str, Any], lesson: dict[str, Any]) -> dict[str, Any]:
         metadata = _metadata(row.get("metadata"))
         scientific = normalize_scientific_visual(metadata.get("scientific")) if isinstance(metadata.get("scientific"), dict) else None
-        kind = "scientific" if metadata.get("visual_kind") == "scientific" and scientific else str(row.get("resource_type") or "resource")
+        # Compatibilité avec la ressource historique montrée comme une
+        # « Mitochondrie 3D » alors qu'elle n'était qu'un PNG. Elle devient
+        # interactive dès le déploiement du code, même avant l'application de
+        # la migration de données qui inscrit ce même contrat en métadonnées.
+        if scientific is None and _resource_url(row) == MITOCHONDRION_3D_FALLBACK_PATH:
+            scientific = normalize_scientific_visual(MITOCHONDRION_3D_SPEC)
+        kind = "scientific" if scientific else str(row.get("resource_type") or "resource")
         status = str(metadata.get("library_status") or "published")
         if status not in _STATUSES:
             status = "published"

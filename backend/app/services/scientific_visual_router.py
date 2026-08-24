@@ -49,6 +49,16 @@ _MECANIQUE = re.compile(
     re.IGNORECASE,
 )
 
+# La seule scène Three.js validée aujourd'hui est la mitochondrie. Il faut à
+# la fois la notion ET un besoin de profondeur/caméra : « schéma de la
+# mitochondrie » garde le SVG BAC, tandis que « tourne/zoome la mitochondrie
+# en 3D » ouvre le modèle manipulable.
+_MITOCHONDRIE_3D = re.compile(
+    r"(?=.*(?<!\w)mitochondri\w*(?!\w))"
+    r"(?=.*(?<!\w)(?:3d|trois dimensions|profondeur|rotation|tourn\w*|zoom\w*|camera|manipul\w*|simulation)(?!\w))",
+    re.IGNORECASE,
+)
+
 def _mots(*mots: str) -> re.Pattern[str]:
     """Un motif qui admet le pluriel, comme le registre des schémas le fait.
 
@@ -76,7 +86,7 @@ def _mots(*mots: str) -> re.Pattern[str]:
 #: voir bouger. Même prudence pour « dynamique », qui nomme un chapitre.
 _MOUVEMENT = re.compile(
     r"(?<!\w)(?:simulation|simule\w*|animation|anime\w*|bouge\w*"
-    r"|en mouvement)(?!\w)"
+    r"|tourn\w*|zoom\w*|en mouvement)(?!\w)"
     # L'arabizi que la reconnaissance vocale produit telle quelle :
     # « kaytharrek », « t7arrak », « ytharek » — « ça bouge ».
     r"|(?<!\w)(?:ka)?[yi]?t[h7]arr?[ae]k\w*(?!\w)"
@@ -219,6 +229,8 @@ def match_visual_blueprint(context: str) -> tuple[dict[str, Any] | None, int]:
 
 def recommend_generated_engine(context: str) -> str:
     folded = _fold(context)
+    if _MITOCHONDRIE_3D.search(folded):
+        return "three"
     if _DYNAMIC.search(folded) and _MECANIQUE.search(folded):
         return "matter"
     for engine, pattern in _ENGINE_PATTERNS:
@@ -302,7 +314,7 @@ def route_scientific_visual(context: str, demande: str | None = None) -> dict[st
             "source": "mouvement",
             "schema_id": schema_id if schema_id and schema_score >= 3 else None,
             "title": schema_title(schema_id) if schema_id else "Phénomène en mouvement",
-            "engine": recommend_generated_engine(context),
+            "engine": recommend_generated_engine(f"{context} {ou_lire}"),
             "must_show": list(blueprint.get("must_show", [])) if blueprint and blueprint_score >= 3 else [],
             "avoid": list(blueprint.get("avoid", [])) if blueprint and blueprint_score >= 3 else [],
             "score": schema_score,
@@ -374,7 +386,7 @@ def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
         lignes = [
             "[L'ÉLÈVE DEMANDE À VOIR LE PHÉNOMÈNE BOUGER]",
             f"Sujet : {route['title']}.",
-            "Une image fixe NE RÉPOND PAS à cette demande. Tu as quatre moyens, "
+            "Une image fixe NE RÉPOND PAS à cette demande. Tu as cinq moyens, "
             "dans cet ordre :",
             "1. `OUVRIR_SIMULATION` si le cours en possède une sur cette notion — "
             "c'est toujours le meilleur choix, elle est faite pour être manipulée.",
@@ -382,11 +394,14 @@ def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
             "dans le catalogue contrôlable du chapitre. Le preset réutilise "
             "JSXGraph/Cytoscape et accepte `start`, `pause`, `next`, "
             "`set_variant` et `highlight`.",
-            "3. Une ligne `scientific` avec le moteur `matter` pour une mécanique "
+            "3. Une ligne `scientific` avec le moteur `three` pour la mitochondrie "
+            "quand la demande exige rotation, zoom ou profondeur. Le modèle est "
+            "versionné : `model` vaut toujours `mitochondrion`.",
+            "4. Une ligne `scientific` avec le moteur `matter` pour une mécanique "
             "2D. Elle exige `measures` (une grandeur lue en direct) ou "
             "`parameters` (un réglage) — sans quoi c'est une animation, pas une "
             "simulation, et un dessin aurait suffi.",
-            "4. Si le phénomène ne relève d'aucun des trois — un repliement sans "
+            "5. Si le phénomène ne relève d'aucun des quatre — un repliement sans "
             "preset, par exemple — montre "
             "l'état AVANT et l'état APRÈS côte à côte dans une figure "
             f"`{route['engine']}`, et nomme ce qui a changé entre les deux.",

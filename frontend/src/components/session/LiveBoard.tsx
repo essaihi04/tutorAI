@@ -689,7 +689,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           // disparaît aussitôt n'apprend rien. Une simulation, elle, tourne
           // toute seule — on lui laisse le double.
           const dit = typeof step.say === 'string' ? step.say.trim() : '';
-          const animee = step.scientific?.engine === 'matter' || step.scientific?.engine === 'preset';
+          const animee = step.scientific?.engine === 'matter'
+            || step.scientific?.engine === 'preset'
+            || step.scientific?.engine === 'three';
           if (dit && soundOnRef.current) {
             const handle = boardVoice.speak(toSpokenText(dit), langRef.current);
             voiceHandleRef.current = handle;

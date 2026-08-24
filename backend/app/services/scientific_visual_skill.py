@@ -37,6 +37,9 @@ MOTEURS AUTORISÉS dans `line.scientific` :
 - `roughsvg` : structures spatiales, cellules, chromosomes, appareils de
   chimie, circuits et coupes. C'est le moteur de schéma généraliste ; il ne
   reçoit que des primitives SVG déclaratives, jamais du SVG ou du code brut.
+- `three` : profondeur et mouvement de caméra UNIQUEMENT pour le modèle
+  versionné de mitochondrie. L'élève peut tourner, zoomer et isoler ses
+  compartiments ; le LLM ne fournit jamais de géométrie ni de matériau.
 - `preset` : scène animée validée du catalogue. Le preset réutilise JSXGraph
   ou Cytoscape ; le LLM ne fournit jamais les objets internes ni du code.
 
@@ -126,6 +129,13 @@ Primitives : `line`, `arrow`, `rect`, `circle`, `ellipse`, `polygon`,
 dans le cadre et ajoute une `description` accessible. N'émets ni `path`, ni
 HTML, ni URL, ni attribut d'événement.
 
+Format Three.js — seul modèle 3D actuellement autorisé :
+{"type":"scientific","content":"Mitochondrie 3D","scientific":{"engine":"three","model":"mitochondrion","title":"Mitochondrie 3D interactive","description":"Double membrane, crêtes, matrice et ADN mitochondrial.","autoplay":true,"labels":true,"focus":"all"}}
+`focus` : `all`, `outer_membrane`, `intermembrane_space`, `inner_membrane`,
+`cristae`, `matrix`, `mitochondrial_dna`. Utilise ce moteur seulement si la
+profondeur, la rotation ou le zoom servent réellement la leçon. N'invente
+aucun autre modèle et n'ajoute ni caméra, ni lumière, ni texture, ni URL.
+
 RÈGLES DE QUALITÉ :
 - Toutes les légendes sont courtes et en français.
 - Représente uniquement les objets utiles ; pas de surcharge ni chevauchement.
@@ -148,6 +158,24 @@ _EXPRESSION_CHARS = re.compile(r"^[0-9A-Za-z+\-*/^().,\s]+$")
 _EXPRESSION_NAMES = {
     "x", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "abs",
     "exp", "ln", "log", "floor", "ceil", "round", "pi", "e",
+}
+
+MITOCHONDRION_3D_FALLBACK_PATH = (
+    "/media/images/svt/ch1_consommation_matiere_organique/"
+    "lesson_1_liberation_energie/respiration/mitochondrie_3d_sans_legendes.png"
+)
+MITOCHONDRION_3D_SPEC: dict[str, Any] = {
+    "engine": "three",
+    "model": "mitochondrion",
+    "title": "Mitochondrie 3D interactive",
+    "description": (
+        "Modèle pédagogique en coupe : membrane externe, espace "
+        "intermembranaire, membrane interne repliée en crêtes, matrice et "
+        "ADN mitochondrial circulaire."
+    ),
+    "autoplay": True,
+    "labels": True,
+    "focus": "all",
 }
 
 
@@ -832,6 +860,43 @@ def _normalize_roughsvg(value: dict[str, Any]) -> dict[str, Any] | None:
     return result
 
 
+_MITOCHONDRION_FOCUS = {
+    "all",
+    "outer_membrane",
+    "intermembrane_space",
+    "inner_membrane",
+    "cristae",
+    "matrix",
+    "mitochondrial_dna",
+}
+
+
+def _normalize_three(value: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalise l'état d'un modèle 3D versionné, jamais sa géométrie.
+
+    Three.js est plus puissant que les moteurs déclaratifs 2D : accepter des
+    tableaux de sommets, matériaux, textures ou URLs reviendrait à laisser le
+    LLM programmer le navigateur. Le contrat reste donc volontairement
+    minuscule et ne référence qu'une scène auditée dans le frontend.
+    """
+
+    model = str(value.get("model", "")).strip().lower()
+    if model not in {"mitochondrion", "mitochondrie"}:
+        return None
+    focus = str(value.get("focus", "all")).strip().lower()
+    if focus not in _MITOCHONDRION_FOCUS:
+        focus = "all"
+    return {
+        "engine": "three",
+        "model": "mitochondrion",
+        "title": _text(value.get("title"), 80),
+        "description": _text(value.get("description"), 360),
+        "autoplay": value.get("autoplay") is not False,
+        "labels": value.get("labels") is not False,
+        "focus": focus,
+    }
+
+
 def scientific_visual_quality(value: Any) -> dict[str, Any]:
     """Retourne un score mécanique et des défauts actionnables (0 à 100).
 
@@ -945,6 +1010,12 @@ def scientific_visual_quality(value: Any) -> dict[str, Any]:
                 "Donner `scale` (pixels par mètre) pour que les mesures portent une unité."
             )
             score -= 8
+    elif normalized["engine"] == "three":
+        # La géométrie, les couleurs et les légendes sont contrôlées dans le
+        # client. Le payload ne choisit que le modèle et son état initial.
+        if len(normalized.get("description", "")) < 12:
+            score -= 10
+            issues.append("Ajouter une description accessible du modèle 3D.")
     elif normalized["engine"] == "preset":
         # Le contenu scientifique est versionné dans le catalogue du client ;
         # seul l'identifiant et l'état de lecture ont traversé le LLM.
@@ -966,6 +1037,8 @@ def normalize_scientific_visual(value: Any) -> dict[str, Any] | None:
         return _normalize_cytoscape(value)
     if engine == "matter":
         return _normalize_matter(value)
+    if engine in {"three", "threejs", "3d"}:
+        return _normalize_three(value)
     if engine in {"roughsvg", "rough", "svg"}:
         return _normalize_roughsvg(value)
     if engine in {"preset", "catalog", "catalogue"}:

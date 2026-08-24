@@ -92,6 +92,14 @@ function inspect(schema: ScientificSchema): Verdict[] {
 
 const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   {
+    title: 'Three.js — mitochondrie manipulable',
+    spec: {
+      engine: 'three', model: 'mitochondrion', title: 'Mitochondrie 3D interactive',
+      description: 'Double membrane, crêtes, matrice et ADN mitochondrial circulaire.',
+      autoplay: true, labels: true, focus: 'all',
+    },
+  },
+  {
     title: 'JSXGraph — bilan des forces',
     spec: {
       engine: 'jsxgraph', title: 'Bilan des forces sur un solide', boundingBox: [-5, 5, 5, -5], axis: false,

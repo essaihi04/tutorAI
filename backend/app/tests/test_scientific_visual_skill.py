@@ -118,6 +118,35 @@ def test_moteur_non_autorise_est_refuse():
     assert normalize_scientific_visual("jsxgraph") is None
 
 
+def test_three_accepte_seulement_la_mitochondrie_versionnee_et_son_etat():
+    visual = normalize_scientific_visual({
+        "engine": "three",
+        "model": "mitochondrion",
+        "title": "Mitochondrie 3D",
+        "description": "Double membrane, crêtes, matrice et ADN mitochondrial.",
+        "focus": "cristae",
+        "autoplay": True,
+        "labels": True,
+        "geometry": [{"x": 1, "y": 2, "z": 3}],
+        "texture": "https://example.com/secret.png",
+        "javascript": "alert(1)",
+    })
+
+    assert visual == {
+        "engine": "three",
+        "model": "mitochondrion",
+        "title": "Mitochondrie 3D",
+        "description": "Double membrane, crêtes, matrice et ADN mitochondrial.",
+        "autoplay": True,
+        "labels": True,
+        "focus": "cristae",
+    }
+    assert scientific_visual_quality(visual)["acceptable"] is True
+    assert normalize_scientific_visual({
+        "engine": "three", "model": "coeur", "title": "Cœur 3D",
+    }) is None
+
+
 def test_preset_scientifique_ne_laisse_passer_qu_un_catalogue_valide():
     visual = normalize_scientific_visual({
         "engine": "preset",

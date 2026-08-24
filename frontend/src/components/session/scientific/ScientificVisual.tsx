@@ -5,6 +5,7 @@ const JSXGraphVisual = lazy(() => import('./JSXGraphVisual'));
 const CytoscapeVisual = lazy(() => import('./CytoscapeVisual'));
 const MatterSimulation = lazy(() => import('./MatterSimulation'));
 const RoughSVGVisual = lazy(() => import('./RoughSVGVisual'));
+const Mitochondrion3DVisual = lazy(() => import('./Mitochondrion3DVisual'));
 const ScientificPresetVisual = lazy(() => import('./ScientificPresetVisual'));
 
 interface ScientificVisualProps {
@@ -37,6 +38,7 @@ export default function ScientificVisual({ spec, transparent, control }: Scienti
       {spec.engine === 'cytoscape' && <CytoscapeVisual spec={spec} transparent={transparent} />}
       {spec.engine === 'matter' && <MatterSimulation spec={spec} transparent={transparent} />}
       {spec.engine === 'roughsvg' && <RoughSVGVisual spec={spec} transparent={transparent} />}
+      {spec.engine === 'three' && <Mitochondrion3DVisual spec={spec} transparent={transparent} />}
       {spec.engine === 'preset' && (
         <ScientificPresetVisual spec={spec} transparent={transparent} control={control} />
       )}

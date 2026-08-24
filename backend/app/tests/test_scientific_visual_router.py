@@ -38,6 +38,18 @@ def test_le_routeur_heuristique_choisit_les_moteurs_specialises():
     assert recommend_generated_engine("chaîne causale en plusieurs étapes") == "cytoscape"
     assert recommend_generated_engine("simulation de collision mécanique") == "matter"
     assert recommend_generated_engine("coupe et structure d'une cellule") == "roughsvg"
+    assert recommend_generated_engine("mitochondrie 3D à tourner et zoomer") == "three"
+
+
+def test_la_mitochondrie_a_tourner_ne_retombe_pas_sur_une_image_fixe():
+    demande = "Je veux la mitochondrie en 3D pour la faire tourner et zoomer"
+    route = route_scientific_visual("structure de la mitochondrie", demande)
+
+    assert route["source"] == "mouvement"
+    assert route["engine"] == "three"
+    prompt = build_visual_route_prompt("structure de la mitochondrie", demande)
+    assert "`three`" in prompt
+    assert "`mitochondrion`" in prompt
 
 
 def test_chaque_blueprint_bac_est_exploitable_et_testable():

@@ -32,6 +32,21 @@ def test_every_preset_preview_resolves_through_the_shared_validator():
         assert normalize_scientific_visual(item["preview"]["scientific"]) is not None
 
 
+def test_legacy_mitochondrion_png_is_exposed_as_the_interactive_3d_model():
+    item = admin_visual_library_service._resource_item({
+        "id": "mito-legacy",
+        "lesson_id": "lesson-svt",
+        "resource_type": "image",
+        "title": "Mitochondrie 3D à observer",
+        "file_path": "/media/images/svt/ch1_consommation_matiere_organique/lesson_1_liberation_energie/respiration/mitochondrie_3d_sans_legendes.png",
+        "metadata": {},
+    }, {"subject_name": "SVT"})
+
+    assert item["kind"] == "scientific"
+    assert item["preview"]["scientific"]["engine"] == "three"
+    assert item["preview"]["scientific"]["model"] == "mitochondrion"
+
+
 def test_llm_json_extraction_accepts_fence_but_ignores_prose_after_object():
     result = extract_llm_json('```json\n{"title":"Chute","scientific":{"engine":"matter"}}\n```\nExplication')
     assert result["title"] == "Chute"

@@ -181,6 +181,31 @@ export interface RoughSVGVisualSpec {
   legend?: RoughSVGLegendItem[];
 }
 
+export type Mitochondrion3DPart =
+  | 'all'
+  | 'outer_membrane'
+  | 'intermembrane_space'
+  | 'inner_membrane'
+  | 'cristae'
+  | 'matrix'
+  | 'mitochondrial_dna';
+
+/**
+ * Scène Three.js strictement bornée au modèle scientifique versionné.
+ *
+ * Le LLM choisit seulement l'état de la scène. Il ne peut fournir ni
+ * géométrie, ni matériau, ni texture, ni URL, ni code exécutable.
+ */
+export interface Mitochondrion3DVisualSpec {
+  engine: 'three';
+  model: 'mitochondrion';
+  title?: string;
+  description?: string;
+  autoplay?: boolean;
+  labels?: boolean;
+  focus?: Mitochondrion3DPart;
+}
+
 export type ScientificPresetId =
   | 'svt_ch1_cycle_atp'
   | 'svt_ch1_levures_exao'
@@ -221,4 +246,5 @@ export type ScientificVisualSpec =
   | CytoscapeVisualSpec
   | MatterVisualSpec
   | RoughSVGVisualSpec
+  | Mitochondrion3DVisualSpec
   | ScientificPresetVisualSpec;

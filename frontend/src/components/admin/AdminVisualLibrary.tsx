@@ -46,7 +46,7 @@ const KIND_LABELS: Record<string, string> = {
   all: 'Tous les types',
   schema: 'Schémas validés',
   preset: 'Scènes contrôlables',
-  scientific: 'Visuels IA',
+  scientific: 'Figures interactives et 3D',
   image: 'Images',
   video: 'Vidéos',
   simulation: 'Simulations HTML',
@@ -273,7 +273,7 @@ function VisualEditorModal({
   const [prompt, setPrompt] = useState(() => seed.item
     ? `Améliore ce visuel sur « ${seed.item.title} ». Garde uniquement les éléments utiles au cours et des légendes françaises courtes.`
     : '');
-  const [engine, setEngine] = useState<'auto' | 'roughsvg' | 'jsxgraph' | 'cytoscape' | 'matter'>('auto');
+  const [engine, setEngine] = useState<'auto' | 'roughsvg' | 'jsxgraph' | 'cytoscape' | 'matter' | 'three'>('auto');
   const [quality, setQuality] = useState<{ score: number; issues: string[]; acceptable: boolean } | null>(seed.item?.quality || null);
   const [existingMatch, setExistingMatch] = useState<{ id: string; title: string } | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -419,6 +419,7 @@ function VisualEditorModal({
                     <option value="jsxgraph">JSXGraph — courbe/forces</option>
                     <option value="cytoscape">Cytoscape — réseau/processus</option>
                     <option value="matter">Matter.js — mécanique</option>
+                    <option value="three">Three.js — mitochondrie 3D</option>
                   </select>
                   <button onClick={generate} disabled={busy} className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Générer
@@ -513,7 +514,7 @@ function VisualEditorModal({
                     {quality.issues.map(issue => <li key={issue}>• {issue}</li>)}
                   </ul>
                 )}
-                <p className="mt-2 text-xs text-gray-400">JSXGraph, Cytoscape, Matter.js, RoughSVG ou preset. Aucun code libre, HTML, callback ou URL.</p>
+                <p className="mt-2 text-xs text-gray-400">JSXGraph, Cytoscape, Matter.js, RoughSVG, Three.js borné ou preset. Aucun code libre, HTML, callback ou URL.</p>
               </div>
             ) : (
               <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">

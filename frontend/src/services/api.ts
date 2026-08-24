@@ -469,7 +469,7 @@ export const generateAdminVisual = (data: {
   subject?: string;
   lesson_id?: string;
   title?: string;
-  engine?: 'auto' | 'roughsvg' | 'jsxgraph' | 'cytoscape' | 'matter';
+  engine?: 'auto' | 'roughsvg' | 'jsxgraph' | 'cytoscape' | 'matter' | 'three';
   mode?: 'create' | 'edit';
   current_spec?: Record<string, unknown>;
 }) => adminApi.post<{

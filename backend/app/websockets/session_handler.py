@@ -14,7 +14,12 @@ from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
 from app.services.schema_catalog import match_schema
 from app.services.schema_gaps import noter_manque
-from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
+from app.services.scientific_visual_skill import (
+    MITOCHONDRION_3D_FALLBACK_PATH,
+    MITOCHONDRION_3D_SPEC,
+    normalize_scientific_visual,
+    scientific_visual_quality,
+)
 from app.services.scientific_presets import normalize_scientific_control
 from app.services.scientific_visual_router import build_visual_route_prompt
 from app.services.stt_service import stt_service
@@ -6782,10 +6787,21 @@ RÈGLES :
             
             # Both Supabase URLs and versioned /media/ assets are valid. Local
             # assets are shipped with the frontend build and served by nginx.
+            def has_presentable_payload(resource: dict) -> bool:
+                metadata = resource.get("metadata") or {}
+                return bool(
+                    resource.get("file_path")
+                    or resource.get("external_url")
+                    or (
+                        isinstance(metadata, dict)
+                        and isinstance(metadata.get("scientific"), dict)
+                    )
+                )
+
             candidate_resources = [
                 r for r in self.lesson_resources
                 if r.get('resource_type') == target_resource_type
-                and (r.get('file_path') or r.get('external_url'))
+                and has_presentable_payload(r)
             ]
 
             if not candidate_resources and preferred_resource_type:
@@ -6794,7 +6810,7 @@ RÈGLES :
                 candidate_resources = [
                     r for r in self.lesson_resources 
                     if r.get('resource_type') == 'image'
-                    and (r.get('file_path') or r.get('external_url'))
+                    and has_presentable_payload(r)
                 ]
             
             if not candidate_resources:
@@ -6860,10 +6876,25 @@ RÈGLES :
         file_path = resource.get('file_path')
         title = resource.get('title', '')
         description = resource.get('description', '')
+        metadata = resource.get('metadata') or {}
         
         _safe_log(f"[Display Resource] Attempting to display: {title}")
         _safe_log(f"[Display Resource] Type: {resource_type}, Path: {file_path}")
         
+        scientific_payload = metadata.get('scientific') if isinstance(metadata, dict) else None
+        if file_path == MITOCHONDRION_3D_FALLBACK_PATH and not isinstance(scientific_payload, dict):
+            scientific_payload = MITOCHONDRION_3D_SPEC
+        scientific = normalize_scientific_visual(scientific_payload)
+        if scientific is not None:
+            await self.websocket.send_json({"type": "hide_media"})
+            await self._send_board_or_live(title or scientific.get("title", "Mitochondrie 3D"), [{
+                "type": "scientific",
+                "content": description,
+                "scientific": scientific,
+            }], context="ressource scientifique du cours")
+            _safe_log(f"[Resources] Displayed scientific visual: {title}")
+            return
+
         if not file_path and not resource.get('external_url'):
             _safe_log(f"[Display Resource] No file_path or external_url for {title}")
             return

@@ -47,6 +47,6 @@ class AdminVisualGenerate(BaseModel):
     subject: str = Field(default="", max_length=80)
     lesson_id: Optional[str] = None
     title: Optional[str] = Field(default=None, max_length=180)
-    engine: Literal["auto", "roughsvg", "jsxgraph", "cytoscape", "matter"] = "auto"
+    engine: Literal["auto", "roughsvg", "jsxgraph", "cytoscape", "matter", "three"] = "auto"
     mode: Literal["create", "edit"] = "create"
     current_spec: Optional[dict[str, Any]] = None
