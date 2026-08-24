@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  BookOpen,
   Code2,
   Copy,
   Eye,
   FileVideo,
-  FolderOpen,
   Image as ImageIcon,
   LibraryBig,
   LoaderCircle,
@@ -27,6 +25,7 @@ import {
   deleteAdminVisualItem,
   generateAdminVisual,
   getAdminVisualLibrary,
+  getAdminVisualPreviewContent,
   updateAdminVisualItem,
   uploadAdminVisualMedia,
 } from '../../services/api';
@@ -87,10 +86,46 @@ function statusClass(status: string) {
   return 'bg-amber-50 text-amber-700 ring-amber-200';
 }
 
+function canPreviewUrl(url: string, kind: string): boolean {
+  if (url.startsWith('/') || /^https?:\/\//i.test(url) || /^blob:/i.test(url)) return true;
+  return kind === 'image' && /^data:image\//i.test(url);
+}
+
+function UnavailablePreview({ height, message }: { height: string; message: string }) {
+  return (
+    <div className={`${height} flex flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center text-slate-300`}>
+      <AlertTriangle className="h-8 w-8 text-amber-400" />
+      <div>
+        <div className="text-sm font-bold text-white">Aperçu indisponible</div>
+        <p className="mt-1 max-w-lg text-xs leading-5 text-slate-400">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 function VisualPreview({ item, full = false }: { item: AdminVisualLibraryItem; full?: boolean }) {
   const preview = item.preview || { kind: item.kind };
   const schema = preview.schema_id ? getSchemaById(preview.schema_id) : undefined;
   const height = full ? 'min-h-[420px] h-[58vh]' : 'h-44';
+  const [failedUrl, setFailedUrl] = useState('');
+  const [inlinePreview, setInlinePreview] = useState<{
+    itemId: string;
+    html?: string;
+    error?: string;
+  }>({ itemId: item.id });
+
+  useEffect(() => {
+    if (!full || preview.kind !== 'simulation' || !preview.inline_html || !item.resource_id) return;
+    let active = true;
+    void getAdminVisualPreviewContent(item.resource_id)
+      .then(response => {
+        if (active) setInlinePreview({ itemId: item.id, html: response.data.html });
+      })
+      .catch(error => {
+        if (active) setInlinePreview({ itemId: item.id, error: errorMessage(error) });
+      });
+    return () => { active = false; };
+  }, [full, item.id, item.resource_id, preview.inline_html, preview.kind]);
 
   if (schema) {
     return (
@@ -107,20 +142,58 @@ function VisualPreview({ item, full = false }: { item: AdminVisualLibraryItem; f
     );
   }
   if (preview.kind === 'image' && preview.url) {
-    return <img src={preview.url} alt={item.title} className={`${height} w-full bg-slate-100 object-contain`} />;
+    if (!canPreviewUrl(preview.url, 'image') || failedUrl === preview.url) {
+      return <UnavailablePreview height={height} message="Le fichier image est absent, inaccessible ou utilise une adresse non prise en charge." />;
+    }
+    return (
+      <img
+        src={preview.url}
+        alt={item.title}
+        className={`${height} w-full bg-slate-100 object-contain`}
+        loading="lazy"
+        onError={() => setFailedUrl(preview.url || '')}
+      />
+    );
   }
   if (full && preview.kind === 'video' && preview.url) {
-    return <video src={preview.url} controls className={`${height} w-full bg-black object-contain`} />;
+    if (!canPreviewUrl(preview.url, 'video') || failedUrl === preview.url) {
+      return <UnavailablePreview height={height} message="La vidéo est absente ou son adresse ne peut pas être chargée." />;
+    }
+    return <video src={preview.url} controls className={`${height} w-full bg-black object-contain`} onError={() => setFailedUrl(preview.url || '')} />;
+  }
+  if (full && preview.kind === 'simulation' && preview.inline_html) {
+    if (inlinePreview.itemId === item.id && inlinePreview.error) {
+      return <UnavailablePreview height={height} message={inlinePreview.error} />;
+    }
+    if (inlinePreview.itemId !== item.id || !inlinePreview.html) {
+      return <div className={`${height} flex items-center justify-center bg-slate-950 text-sm text-slate-300`}><LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> Chargement de la simulation…</div>;
+    }
+    return (
+      <iframe
+        srcDoc={inlinePreview.html}
+        title={item.title}
+        className={`${height} w-full bg-white`}
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+      />
+    );
   }
   if (full && preview.kind === 'simulation' && preview.url) {
+    if (!canPreviewUrl(preview.url, 'simulation')) {
+      return <UnavailablePreview height={height} message="Cette simulation ne possède pas d’adresse HTML valide." />;
+    }
     return (
       <iframe
         src={preview.url}
         title={item.title}
         className={`${height} w-full bg-white`}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
       />
     );
+  }
+  if (full && preview.available === false) {
+    return <UnavailablePreview height={height} message={preview.reason || "Aucun aperçu n'est associé à cette ressource."} />;
   }
   return (
     <div className={`${height} flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-slate-900 to-slate-800 px-5 text-center text-slate-300`}>
@@ -139,14 +212,13 @@ interface EditorSeed {
   copy: boolean;
 }
 
-interface CourseVisualGroup {
-  key: string;
-  subject: string;
-  chapter: string;
-  lesson: string;
-  scope: 'course' | 'transverse' | 'unclassified';
+interface VisualTypeGroup {
+  kind: string;
+  label: string;
   items: AdminVisualLibraryItem[];
 }
+
+const VISUAL_TYPE_ORDER = ['image', 'simulation', 'schema', 'preset', 'scientific', 'video'];
 
 interface EditorForm {
   lesson_id: string;
@@ -570,56 +642,31 @@ export default function AdminVisualLibrary({ initialLibrary }: { initialLibrary?
     });
   }, [kind, lesson, library, search, status, subject]);
 
-  const courseGroups = useMemo<CourseVisualGroup[]>(() => {
-    const groups = new Map<string, CourseVisualGroup>();
-
+  const typeGroups = useMemo<VisualTypeGroup[]>(() => {
+    const groups = new Map<string, AdminVisualLibraryItem[]>();
     filtered.forEach(item => {
-      const itemSubject = item.subject.trim() || 'Sans matière';
-      const attachedToCourse = Boolean(item.lesson_id);
-      const scope: CourseVisualGroup['scope'] = attachedToCourse
-        ? 'course'
-        : item.source === 'filesystem'
-          ? 'unclassified'
-          : 'transverse';
-      const chapter = attachedToCourse
-        ? item.chapter.trim() || 'Chapitre non précisé'
-        : item.chapter.trim();
-      const course = attachedToCourse
-        ? item.lesson.trim() || 'Cours sans titre'
-        : scope === 'unclassified'
-          ? 'Non rattachés à un cours'
-          : 'Ressources transversales';
-      const key = [scope, itemSubject, chapter, course].join('::');
-      const existing = groups.get(key);
-
-      if (existing) {
-        existing.items.push(item);
-      } else {
-        groups.set(key, {
-          key,
-          subject: itemSubject,
-          chapter,
-          lesson: course,
-          scope,
-          items: [item],
-        });
-      }
+      const items = groups.get(item.kind) || [];
+      items.push(item);
+      groups.set(item.kind, items);
     });
 
-    const scopeOrder = { course: 0, transverse: 1, unclassified: 2 };
-    return Array.from(groups.values())
-      .map(group => ({
-        ...group,
-        items: [...group.items].sort((left, right) => left.title.localeCompare(right.title, 'fr')),
+    return Array.from(groups.entries())
+      .map(([groupKind, items]) => ({
+        kind: groupKind,
+        label: KIND_LABELS[groupKind] || groupKind,
+        items: [...items].sort((left, right) => (
+          (left.subject || 'zzz').localeCompare(right.subject || 'zzz', 'fr')
+          || (left.chapter || 'zzz').localeCompare(right.chapter || 'zzz', 'fr')
+          || (left.lesson || 'zzz').localeCompare(right.lesson || 'zzz', 'fr')
+          || left.title.localeCompare(right.title, 'fr')
+        )),
       }))
       .sort((left, right) => {
-        const leftUnclassified = left.subject === 'Sans matière' ? 1 : 0;
-        const rightUnclassified = right.subject === 'Sans matière' ? 1 : 0;
-        return leftUnclassified - rightUnclassified
-          || left.subject.localeCompare(right.subject, 'fr')
-          || scopeOrder[left.scope] - scopeOrder[right.scope]
-          || left.chapter.localeCompare(right.chapter, 'fr')
-          || left.lesson.localeCompare(right.lesson, 'fr');
+        const leftIndex = VISUAL_TYPE_ORDER.indexOf(left.kind);
+        const rightIndex = VISUAL_TYPE_ORDER.indexOf(right.kind);
+        return (leftIndex < 0 ? VISUAL_TYPE_ORDER.length : leftIndex)
+          - (rightIndex < 0 ? VISUAL_TYPE_ORDER.length : rightIndex)
+          || left.label.localeCompare(right.label, 'fr');
       });
   }, [filtered]);
 
@@ -681,25 +728,19 @@ export default function AdminVisualLibrary({ initialLibrary }: { initialLibrary?
       ) : (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-500">
-            <span>{courseGroups.filter(group => group.scope === 'course').length} cours</span>
-            <span aria-hidden="true">·</span>
-            <span>{courseGroups.filter(group => group.scope === 'transverse').length} groupes transversaux</span>
+            <span>{typeGroups.length} types de ressources</span>
             <span aria-hidden="true">·</span>
             <span>{filtered.length} visuels</span>
           </div>
-          {courseGroups.map(group => (
-            <section key={group.key} className="overflow-hidden rounded-3xl border border-gray-200 bg-slate-50/70 shadow-sm">
+          {typeGroups.map(group => (
+            <section key={group.kind} className="overflow-hidden rounded-3xl border border-gray-200 bg-slate-50/70 shadow-sm">
               <header className="flex flex-col gap-3 border-b border-gray-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
-                  <span className={`mt-0.5 rounded-xl p-2.5 ${group.scope === 'course' ? 'bg-indigo-50 text-indigo-600' : group.scope === 'transverse' ? 'bg-cyan-50 text-cyan-700' : 'bg-amber-50 text-amber-700'}`}>
-                    {group.scope === 'course' ? <BookOpen className="h-5 w-5" /> : <FolderOpen className="h-5 w-5" />}
-                  </span>
+                  <span className="mt-0.5 rounded-xl bg-indigo-50 p-2.5 text-indigo-600">{kindIcon(group.kind)}</span>
                   <div>
-                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-indigo-600">{group.subject}</div>
-                    <h3 className="mt-1 text-lg font-black text-gray-900">{group.lesson}</h3>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      {group.chapter || (group.scope === 'transverse' ? 'Catalogue commun à la matière' : 'À classer depuis la fiche d’un visuel')}
-                    </p>
+                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-indigo-600">Type de ressource</div>
+                    <h3 className="mt-1 text-lg font-black text-gray-900">{group.label}</h3>
+                    <p className="mt-0.5 text-xs text-gray-500">Triées par matière, chapitre puis cours à l’intérieur de cette catégorie.</p>
                   </div>
                 </div>
                 <span className="self-start rounded-full bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600 sm:self-auto">{group.items.length} visuel{group.items.length > 1 ? 's' : ''}</span>
@@ -714,7 +755,7 @@ export default function AdminVisualLibrary({ initialLibrary }: { initialLibrary?
                         <span className={`rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${statusClass(item.status)}`}>{STATUS_LABELS[item.status] || item.status}</span>
                       </div>
                       <h4 className="mt-3 line-clamp-2 min-h-12 font-black leading-6 text-gray-900">{item.title}</h4>
-                      <p className="mt-1 truncate text-xs text-gray-500">{item.section_title || (item.lesson_id ? item.lesson : group.lesson)}</p>
+                      <p className="mt-1 line-clamp-2 min-h-8 text-xs leading-4 text-gray-500">{[item.subject, item.chapter, item.lesson].filter(Boolean).join(' · ') || 'Non rattaché à un cours'}</p>
                       <div className="mt-4 flex items-center justify-between border-t pt-3">
                         <button onClick={() => setSelected(item)} className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800"><Eye className="h-4 w-4" /> Visualiser</button>
                         <div className="flex items-center gap-1">

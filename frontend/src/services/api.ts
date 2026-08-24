@@ -411,6 +411,9 @@ export interface AdminVisualLibraryItem {
     kind: string;
     schema_id?: string;
     url?: string;
+    inline_html?: boolean;
+    available?: boolean;
+    reason?: string;
     scientific?: Record<string, unknown>;
   };
 }
@@ -451,6 +454,10 @@ export interface AdminVisualItemPayload {
 
 export const getAdminVisualLibrary = () =>
   adminApi.get<AdminVisualLibraryResponse>('/visual-library');
+export const getAdminVisualPreviewContent = (resourceId: string) =>
+  adminApi.get<{ html: string; mime_type: string; title: string }>(
+    `/visual-library/items/${encodeURIComponent(resourceId)}/preview-content`,
+  );
 export const createAdminVisualItem = (data: AdminVisualItemPayload) =>
   adminApi.post<{ item: AdminVisualLibraryItem }>('/visual-library/items', data);
 export const updateAdminVisualItem = (resourceId: string, data: Partial<AdminVisualItemPayload>) =>

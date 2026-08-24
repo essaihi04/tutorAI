@@ -25,6 +25,8 @@ from app.supabase_client import get_supabase_admin
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 _VISUAL_RESOURCE_TYPES = {"image", "video", "simulation"}
 _STATUSES = {"draft", "validated", "published", "archived"}
+_INLINE_HTML_KEYS = ("html", "content", "simulation_html")
+_MAX_INLINE_HTML_BYTES = 2 * 1024 * 1024
 
 
 class VisualLibraryError(ValueError):
@@ -45,6 +47,14 @@ def _metadata(value: Any) -> dict[str, Any]:
 
 def _resource_url(row: dict[str, Any]) -> str:
     return str(row.get("file_path") or row.get("external_url") or "")
+
+
+def _metadata_html(metadata: dict[str, Any]) -> str:
+    for key in _INLINE_HTML_KEYS:
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
 
 
 def extract_llm_json(raw: str) -> dict[str, Any]:
@@ -164,8 +174,20 @@ class AdminVisualLibraryService:
         url = _resource_url(row)
         if scientific:
             preview["scientific"] = scientific
-        elif url:
+        elif kind == "simulation" and url == "local:metadata" and _metadata_html(metadata):
+            # The HTML can be large and must not be shipped with the complete
+            # catalogue. The authenticated preview endpoint fetches it only
+            # when an administrator opens this resource.
+            preview["inline_html"] = True
+        elif url and url != "local:metadata":
             preview["url"] = url
+        else:
+            preview["available"] = False
+            preview["reason"] = (
+                "Le contenu HTML enregistré dans les métadonnées est absent."
+                if url == "local:metadata"
+                else "Aucun média exploitable n'est associé à cette ressource."
+            )
         return {
             "id": f"resource:{row.get('id')}",
             "resource_id": str(row.get("id") or ""),
@@ -277,6 +299,39 @@ class AdminVisualLibraryService:
         rows = _data(admin.table("lessons").select("id").eq("id", lesson_id).limit(1).execute())
         if not rows:
             raise VisualLibraryError("Leçon introuvable.")
+
+    def get_preview_content(self, resource_id: str) -> dict[str, str]:
+        """Return metadata-backed HTML only when an admin explicitly opens it."""
+
+        admin = self._admin()
+        rows = _data(
+            admin.table("lesson_resources")
+            .select("id,title,resource_type,file_path,metadata")
+            .eq("id", resource_id)
+            .limit(1)
+            .execute()
+        )
+        if not rows:
+            raise VisualLibraryError("Ressource introuvable.")
+
+        row = rows[0]
+        if str(row.get("resource_type") or "") != "simulation":
+            raise VisualLibraryError("Cette ressource n'est pas une simulation HTML.")
+        if str(row.get("file_path") or "") != "local:metadata":
+            raise VisualLibraryError("Cette simulation utilise déjà un fichier de prévisualisation.")
+
+        metadata = _metadata(row.get("metadata"))
+        html = _metadata_html(metadata)
+        if not html:
+            raise VisualLibraryError("Le contenu HTML de cette simulation est absent.")
+        if len(html.encode("utf-8")) > _MAX_INLINE_HTML_BYTES:
+            raise VisualLibraryError("Le contenu HTML dépasse la taille maximale de prévisualisation.")
+
+        return {
+            "html": html,
+            "mime_type": str(metadata.get("mime_type") or "text/html"),
+            "title": str(row.get("title") or "Simulation HTML"),
+        }
 
     @staticmethod
     def _validated_scientific(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:

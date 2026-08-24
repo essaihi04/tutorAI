@@ -93,3 +93,60 @@ def test_code_catalogue_remains_available_when_database_is_down(monkeypatch):
     assert result["database_available"] is False
     assert len([item for item in result["items"] if item["kind"] == "schema"]) == len(SCHEMA_CATALOG)
     assert len([item for item in result["items"] if item["kind"] == "preset"]) == len(SCIENTIFIC_PRESETS)
+
+
+def test_metadata_backed_simulation_is_marked_for_lazy_inline_preview():
+    item = admin_visual_library_service._resource_item({
+        "id": "simulation-1",
+        "lesson_id": "lesson-1",
+        "resource_type": "simulation",
+        "title": "Fermentation",
+        "file_path": "local:metadata",
+        "metadata": {"mime_type": "text/html", "content": "<!doctype html><html></html>"},
+    }, {})
+
+    assert item["preview"]["inline_html"] is True
+    assert "url" not in item["preview"]
+
+
+def test_broken_metadata_marker_is_never_exposed_as_an_iframe_url():
+    item = admin_visual_library_service._resource_item({
+        "id": "simulation-2",
+        "lesson_id": "lesson-1",
+        "resource_type": "simulation",
+        "title": "Simulation incomplète",
+        "file_path": "local:metadata",
+        "metadata": {},
+    }, {})
+
+    assert item["preview"]["available"] is False
+    assert "url" not in item["preview"]
+
+
+def test_inline_preview_content_is_loaded_only_on_demand(monkeypatch):
+    class Result:
+        data = [{
+            "id": "simulation-1",
+            "title": "Fermentation",
+            "resource_type": "simulation",
+            "file_path": "local:metadata",
+            "metadata": {"mime_type": "text/html", "content": "<!doctype html><html>OK</html>"},
+        }]
+
+    class Query:
+        def select(self, *_args): return self
+        def eq(self, *_args): return self
+        def limit(self, *_args): return self
+        def execute(self): return Result()
+
+    class Admin:
+        def table(self, name):
+            assert name == "lesson_resources"
+            return Query()
+
+    monkeypatch.setattr(admin_visual_library_service, "_admin", lambda: Admin())
+
+    result = admin_visual_library_service.get_preview_content("simulation-1")
+
+    assert result["html"] == "<!doctype html><html>OK</html>"
+    assert result["mime_type"] == "text/html"

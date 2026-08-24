@@ -70,6 +70,26 @@ const lesson = {
 
 const auditItems: AdminVisualLibraryItem[] = [
   {
+    id: 'file:audit-fermentation-image',
+    kind: 'image',
+    title: 'Comparaison respiration et fermentation',
+    description: 'Image de cours locale utilisée pour auditer le classement par type.',
+    subject: 'SVT',
+    subject_key: 'svt',
+    chapter: 'Consommation de la matière organique',
+    lesson: 'Libération de l’énergie',
+    lesson_id: '',
+    concepts: ['respiration', 'fermentation'],
+    source: 'filesystem',
+    status: 'validated',
+    editable: false,
+    deletable: false,
+    preview: {
+      kind: 'image',
+      url: '/media/images/svt/ch1_consommation_matiere_organique/lesson_1_liberation_energie/fermentation/comparaison_respiration_fermentation.svg',
+    },
+  },
+  {
     id: 'resource:audit-free-fall',
     resource_id: 'audit-free-fall',
     kind: 'scientific',
@@ -131,6 +151,7 @@ const library: AdminVisualLibraryResponse = {
     by_kind: {
       schema: schemaItems.length,
       preset: presetItems.length,
+      image: 1,
       scientific: 1,
       simulation: 1,
     },

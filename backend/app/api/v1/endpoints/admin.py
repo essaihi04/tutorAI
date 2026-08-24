@@ -112,6 +112,18 @@ async def create_visual_library_item(
         _raise_visual_library_error(exc)
 
 
+@router.get("/visual-library/items/{resource_id}/preview-content")
+async def get_visual_library_preview_content(
+    resource_id: str,
+    admin: bool = Depends(_verify_admin_token),
+):
+    """Load metadata-backed simulation HTML on demand for the sandboxed admin preview."""
+    try:
+        return admin_visual_library_service.get_preview_content(resource_id)
+    except Exception as exc:
+        _raise_visual_library_error(exc)
+
+
 @router.put("/visual-library/items/{resource_id}")
 async def update_visual_library_item(
     resource_id: str,
