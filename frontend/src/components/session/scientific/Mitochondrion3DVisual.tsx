@@ -105,6 +105,7 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
   const [view, setView] = useState<'model' | 'image'>('model');
   const [autoRotate, setAutoRotate] = useState(spec.autoplay !== false);
   const [labelsVisible, setLabelsVisible] = useState(spec.labels !== false);
+  const [isModelMoving, setIsModelMoving] = useState(spec.autoplay !== false);
   const [modelReady, setModelReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [modelError, setModelError] = useState<string | null>(null);
@@ -153,6 +154,23 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
     controls.autoRotateSpeed = 0.72;
     controls.target.set(0, 0, 0);
     const projectedLabel = new THREE.Vector3();
+    let movementEndTimer: number | null = null;
+
+    // Les points d’ancrage sont fiables dans la vue initiale, mais pas
+    // lorsque l’élève fait pivoter la caméra autour du modèle. Les légendes
+    // restent donc masquées après une interaction jusqu’à ce que l’élève
+    // demande explicitement la vue légendée, qui recentre la caméra.
+    const hideLabelsWhileMoving = () => {
+      if (disposed) return;
+      setIsModelMoving(true);
+      setLabelsVisible(false);
+      if (movementEndTimer !== null) window.clearTimeout(movementEndTimer);
+      movementEndTimer = window.setTimeout(() => {
+        if (!disposed) setIsModelMoving(false);
+      }, 120);
+    };
+
+    controls.addEventListener('start', hideLabelsWhileMoving);
 
     scene.add(new THREE.HemisphereLight(0xf8fafc, 0x172554, 2.5));
     const keyLight = new THREE.DirectionalLight(0xffffff, 4.2);
@@ -257,6 +275,8 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
 
     return () => {
       disposed = true;
+      controls.removeEventListener('start', hideLabelsWhileMoving);
+      if (movementEndTimer !== null) window.clearTimeout(movementEndTimer);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       observer.disconnect();
       renderer.setAnimationLoop(null);
@@ -272,7 +292,32 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
   const focusLabel = spec.focus && spec.focus !== 'all' ? FOCUS_LABELS[spec.focus] : undefined;
   const activeFocus = spec.focus || 'all';
   const showModel = view === 'model' && modelReady && !modelError;
-  const showLabels = showModel && labelsVisible;
+  const showLabels = showModel && labelsVisible && !isModelMoving;
+
+  const handleLegendToggle = () => {
+    if (showLabels) {
+      setLabelsVisible(false);
+      return;
+    }
+
+    // La vue légendée doit toujours être la vue de référence : on arrête la
+    // rotation automatique et on replace la caméra sur son cadrage initial.
+    autoRotateRef.current = false;
+    setAutoRotate(false);
+    resetRef.current();
+    setIsModelMoving(false);
+    setLabelsVisible(true);
+  };
+
+  const handleAutoRotateToggle = () => {
+    const nextAutoRotate = !autoRotate;
+    autoRotateRef.current = nextAutoRotate;
+    setAutoRotate(nextAutoRotate);
+    if (nextAutoRotate) {
+      setIsModelMoving(true);
+      setLabelsVisible(false);
+    }
+  };
 
   return (
     <figure
@@ -284,11 +329,15 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
       data-model-source="local-cc-by"
       data-labels-visible={showLabels ? 'true' : 'false'}
     >
-      <img
-        src={FALLBACK_IMAGE}
-        alt="Coupe réaliste d’une mitochondrie montrant les membranes, les crêtes et la matrice"
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${showModel ? 'opacity-0' : 'opacity-100'}`}
-      />
+      {(view === 'image' || (view === 'model' && Boolean(modelError))) && (
+        <div className="absolute inset-0 grid place-items-center p-3">
+          <img
+            src={FALLBACK_IMAGE}
+            alt="Coupe réaliste d’une mitochondrie montrant les membranes, les crêtes et la matrice"
+            className="h-full w-full object-contain"
+          />
+        </div>
+      )}
 
       <canvas
         ref={canvasRef}
@@ -394,19 +443,19 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
           <>
             <button
               type="button"
-              onClick={() => setLabelsVisible((value) => !value)}
-              className={`grid h-8 w-8 place-items-center rounded-lg border shadow-lg backdrop-blur ${labelsVisible
+              onClick={handleLegendToggle}
+              className={`grid h-8 w-8 place-items-center rounded-lg border shadow-lg backdrop-blur ${showLabels
                 ? 'border-cyan-300/45 bg-cyan-500/25 text-cyan-50'
                 : 'border-white/15 bg-slate-950/80 text-slate-300 hover:bg-cyan-500/30'}`}
-              title={labelsVisible ? 'Masquer les légendes' : 'Afficher les légendes'}
-              aria-label={labelsVisible ? 'Masquer les légendes' : 'Afficher les légendes'}
-              aria-pressed={labelsVisible}
+              title={showLabels ? 'Masquer les légendes' : 'Recentrer et afficher les légendes'}
+              aria-label={showLabels ? 'Masquer les légendes' : 'Recentrer et afficher les légendes'}
+              aria-pressed={showLabels}
             >
               <Tags className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
-              onClick={() => setAutoRotate((value) => !value)}
+              onClick={handleAutoRotateToggle}
               className="grid h-8 w-8 place-items-center rounded-lg border border-white/15 bg-slate-950/80 text-cyan-50 shadow-lg backdrop-blur hover:bg-cyan-500/30"
               title={autoRotate ? 'Arrêter la rotation automatique' : 'Lancer la rotation automatique'}
               aria-label={autoRotate ? 'Arrêter la rotation automatique' : 'Lancer la rotation automatique'}
