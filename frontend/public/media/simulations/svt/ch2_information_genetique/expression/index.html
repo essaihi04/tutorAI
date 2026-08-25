@@ -218,7 +218,7 @@
         <div class="phase" data-phase="Traduction">Traduction</div>
       </div>
       <div class="progress-box">
-        <div class="progress-copy"><span>Progression</span><span id="progressText">1/49</span></div>
+        <div class="progress-copy"><span>Progression</span><span id="progressText">1/57</span></div>
         <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
       </div>
     </header>
@@ -229,7 +229,7 @@
         <div class="stage-vignette"></div>
         <div class="scene-caption"><small id="scenePhase">VUE D’ENSEMBLE</small><strong id="sceneTitle">Une information, deux étapes</strong><span id="sceneSubtitle">L’ADN reste dans le noyau ; l’ARNm porte son message vers le ribosome.</span><em id="sceneActor">ACTEURS 3D · ADN · ARNm · ribosome</em></div>
         <div class="environment-tags"><span id="nucleusTag" class="active">NOYAU</span><span id="cytoplasmTag">CYTOPLASME</span></div>
-        <div class="camera-help">↔ Glisser pour tourner · Molette/pincement pour zoomer</div>
+        <div class="camera-help">↔ Glisser pour tourner · Molette/pincement pour zoomer · Cliquer pour identifier</div>
         <div class="loading" id="loading"><div><div class="loader"></div><strong>Construction de la scène moléculaire 3D…</strong></div></div>
         <div class="fallback hidden" id="fallback"><div><img src="/media/images/svt/ch2_information_genetique/lesson_2_expression/adn_arnm_proteine.png" alt="ADN, ARN messager, ribosome et protéine"/><strong>Mode explicatif statique</strong><p>La 3D n’est pas disponible sur cet appareil. ADN → transcription → ARNm → traduction → protéine.</p></div></div>
       </section>
@@ -247,7 +247,7 @@
         </div>
 
         <div class="step-card">
-          <div class="step-top"><b id="stepNumber">PHÉNOMÈNE 1/49</b><span id="stepState">Prêt</span></div>
+          <div class="step-top"><b id="stepNumber">PHÉNOMÈNE 1/57</b><span id="stepState">Prêt</span></div>
           <h3 id="stepTitle">Une information, deux lieux</h3>
           <p id="stepText">La transcription se déroule dans le noyau. La traduction se déroule dans le cytoplasme, sur un ribosome.</p>
           <div class="step-progress"><div id="stepProgress"></div></div>
@@ -299,6 +299,8 @@
     const CODING_DNA = [...'ATGGAATTTCCGTAA'];
     const RNA = [...'AUGGAAUUUCCGUAA'];
     const CODONS = ['AUG', 'GAA', 'UUU', 'CCG', 'UAA'];
+    const TRNA_ANTICODONS = ['UAC', 'CUU', 'AAA', 'GGC'];
+    const RNA_COMPLEMENT = { A: 'U', U: 'A', C: 'G', G: 'C' };
     const AMINO_ACIDS = [
       { short: 'Met', name: 'Méthionine', color: 0x52d9c4 },
       { short: 'Glu', name: 'Acide glutamique', color: 0x72a7ff },
@@ -312,6 +314,7 @@
     const TRNA_SOURCE_X = 10.8;
     const TRNA_EXIT_X = 12.4;
     if (!(RNA_CYTOPLASM_X > NUCLEUS_RIGHT_EDGE_X && TRNA_SOURCE_X > RNA_CYTOPLASM_X && TRNA_EXIT_X > TRNA_SOURCE_X)) throw new Error('Les trajectoires cytoplasmiques doivent rester à droite du noyau.');
+    if (CODONS.slice(0, 4).some((codon, index) => [...codon].map(base => RNA_COMPLEMENT[base]).join('') !== TRNA_ANTICODONS[index])) throw new Error('Un anticodon ne respecte pas la complémentarité des bases.');
 
     const baseSteps = RNA.map((base, index) => ({
       id: `rna_base_${index + 1}`,
@@ -338,21 +341,29 @@
       { id: 'small_subunit', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Fixation de la petite sous-unité', text: 'La petite sous-unité ribosomique se fixe près de l’extrémité 5′ de l’ARNm et repère le codon AUG.', event: 'Petite sous-unité + ARNm', icon: '1', duration: 1600 },
       { id: 'trna_met_presentation', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Présentation de l’ARNt initiateur', text: 'Dans le cytoplasme, cet ARNt porte la méthionine sur son site de fixation et expose l’anticodon UAC.', event: 'ARNt · site de fixation · méthionine · anticodon UAC', icon: 'Met', duration: 3000 },
       { id: 'trna_met_approach', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'L’ARNt vient du cytoplasme', text: 'L’ARNt chargé se déplace depuis le cytoplasme vers la petite sous-unité déjà fixée sur l’ARNm.', event: 'ARNt initiateur : cytoplasme → ribosome', icon: '→', duration: 2400 },
-      { id: 'initiator_trna', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Fixation de l’ARNt initiateur', text: 'L’anticodon UAC s’apparie au codon AUG. La méthionine devient le premier acide aminé de la future chaîne.', event: 'AUG ↔ UAC · Méthionine', icon: '2', duration: 2600 },
+      { id: 'trna_met_pair_1', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Appariement 1/3 : A avec U', text: 'La première base du codon AUG, l’adénine A, se place en face de l’uracile U complémentaire de l’anticodon.', event: 'Codon A ↔ Anticodon U', icon: 'A–U', duration: 1900 },
+      { id: 'trna_met_pair_2', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Appariement 2/3 : U avec A', text: 'La deuxième base du codon, l’uracile U, s’apparie avec l’adénine A de l’anticodon.', event: 'Codon U ↔ Anticodon A', icon: 'U–A', duration: 1900 },
+      { id: 'initiator_trna', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Appariement 3/3 : G avec C', text: 'La guanine G du codon s’apparie avec la cytosine C. Le codon 5′ AUG 3′ est maintenant aligné avec l’anticodon 3′ UAC 5′.', event: '5′ AUG 3′ ↔ 3′ UAC 5′ · Méthionine', icon: 'G–C', duration: 2600 },
       { id: 'large_subunit', phase: 'Traduction', stage: 'Initiation de la traduction', title: 'Assemblage du ribosome complet', text: 'La grande sous-unité rejoint la petite. Le ribosome possède maintenant les sites nécessaires à l’élongation.', event: 'Petite + grande sous-unité = ribosome actif', icon: '3', duration: 1800 },
       { id: 'trna_glu_presentation', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Présentation du deuxième ARNt', text: 'Cet ARNt cytoplasmique porte l’acide glutamique et présente l’anticodon CUU.', event: 'ARNt · acide glutamique · anticodon CUU', icon: 'Glu', duration: 2800 },
       { id: 'trna_glu_approach', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Approche du deuxième ARNt', text: 'L’ARNt chargé vient du cytoplasme et se dirige vers le site libre du ribosome.', event: 'ARNt-Glu : cytoplasme → ribosome', icon: '→', duration: 2300 },
-      { id: 'trna_glu', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Fixation du deuxième ARNt', text: 'L’anticodon CUU reconnaît le codon GAA. Les deux acides aminés sont maintenant voisins.', event: 'GAA ↔ CUU · Acide glutamique', icon: 'Glu', duration: 2400 },
+      { id: 'trna_glu_pair_1', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 1/3 : G avec C', text: 'La guanine G du codon GAA s’apparie avec la cytosine C de l’anticodon.', event: 'Codon G ↔ Anticodon C', icon: 'G–C', duration: 1700 },
+      { id: 'trna_glu_pair_2', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 2/3 : A avec U', text: 'La deuxième base A du codon s’apparie avec l’uracile U complémentaire.', event: 'Codon A ↔ Anticodon U', icon: 'A–U', duration: 1700 },
+      { id: 'trna_glu', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 3/3 : A avec U', text: 'La troisième paire A–U complète l’alignement 5′ GAA 3′ avec 3′ CUU 5′.', event: '5′ GAA 3′ ↔ 3′ CUU 5′ · Acide glutamique', icon: 'A–U', duration: 2400 },
       { id: 'bond_glu', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Formation d’une liaison peptidique', text: 'Le ribosome catalyse une liaison peptidique entre la méthionine et l’acide glutamique.', event: 'Méthionine — liaison peptidique — Acide glutamique', icon: '⛓', duration: 3000 },
       { id: 'translocation_met', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Translocation et sortie de l’ARNt libre', text: 'Le ribosome avance d’un codon. L’ARNt initiateur, désormais libre, quitte le ribosome vers le cytoplasme et non vers le noyau.', event: 'ARNt libre : ribosome → cytoplasme', icon: '→', duration: 2700 },
       { id: 'trna_phe_presentation', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Présentation de l’ARNt-Phénylalanine', text: 'Dans le cytoplasme, l’ARNt porte la phénylalanine et expose l’anticodon AAA.', event: 'ARNt · phénylalanine · anticodon AAA', icon: 'Phe', duration: 2800 },
       { id: 'trna_phe_approach', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Approche de l’ARNt-Phénylalanine', text: 'L’ARNt chargé rejoint le ribosome depuis le cytoplasme.', event: 'ARNt-Phe : cytoplasme → ribosome', icon: '→', duration: 2300 },
-      { id: 'trna_phe', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Fixation sur le codon UUU', text: 'L’anticodon AAA s’apparie au codon UUU. La phénylalanine se place près de la chaîne.', event: 'UUU ↔ AAA · Phénylalanine', icon: 'Phe', duration: 2400 },
+      { id: 'trna_phe_pair_1', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 1/3 : U avec A', text: 'La première base U du codon UUU s’apparie avec une adénine A de l’anticodon.', event: 'Codon U ↔ Anticodon A', icon: 'U–A', duration: 1700 },
+      { id: 'trna_phe_pair_2', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 2/3 : U avec A', text: 'La deuxième paire complémentaire U–A se met en place.', event: 'Codon U ↔ Anticodon A', icon: 'U–A', duration: 1700 },
+      { id: 'trna_phe', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 3/3 : U avec A', text: 'La troisième paire U–A complète l’alignement 5′ UUU 3′ avec 3′ AAA 5′.', event: '5′ UUU 3′ ↔ 3′ AAA 5′ · Phénylalanine', icon: 'U–A', duration: 2400 },
       { id: 'bond_phe', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Nouvelle liaison peptidique', text: 'Une liaison peptidique unit la phénylalanine à la chaîne en formation.', event: 'Glu — liaison peptidique — Phénylalanine', icon: '⛓', duration: 3000 },
       { id: 'translocation_glu', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Translocation et recyclage de l’ARNt', text: 'Le ribosome avance. L’ARNt devenu libre sort vers le cytoplasme.', event: 'ARNt libre : ribosome → cytoplasme', icon: '→', duration: 2700 },
       { id: 'trna_pro_presentation', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Présentation de l’ARNt-Proline', text: 'Dans le cytoplasme, l’ARNt porte la proline et expose l’anticodon GGC.', event: 'ARNt · proline · anticodon GGC', icon: 'Pro', duration: 2800 },
       { id: 'trna_pro_approach', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Approche de l’ARNt-Proline', text: 'L’ARNt chargé se déplace depuis le cytoplasme jusqu’au ribosome.', event: 'ARNt-Pro : cytoplasme → ribosome', icon: '→', duration: 2300 },
-      { id: 'trna_pro', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Fixation sur le codon CCG', text: 'L’anticodon GGC s’apparie au codon CCG. La proline se place près de la chaîne.', event: 'CCG ↔ GGC · Proline', icon: 'Pro', duration: 2400 },
+      { id: 'trna_pro_pair_1', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 1/3 : C avec G', text: 'La cytosine C du codon CCG s’apparie avec la guanine G de l’anticodon.', event: 'Codon C ↔ Anticodon G', icon: 'C–G', duration: 1700 },
+      { id: 'trna_pro_pair_2', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 2/3 : C avec G', text: 'La deuxième paire complémentaire C–G se met en place.', event: 'Codon C ↔ Anticodon G', icon: 'C–G', duration: 1700 },
+      { id: 'trna_pro', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Appariement 3/3 : G avec C', text: 'La paire G–C complète l’alignement 5′ CCG 3′ avec 3′ GGC 5′.', event: '5′ CCG 3′ ↔ 3′ GGC 5′ · Proline', icon: 'G–C', duration: 2400 },
       { id: 'bond_pro', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Troisième liaison peptidique', text: 'Une liaison peptidique relie la proline au peptide en croissance.', event: 'Phe — liaison peptidique — Proline', icon: '⛓', duration: 3000 },
       { id: 'translocation_phe', phase: 'Traduction', stage: 'Élongation de la traduction', title: 'Dernière translocation', text: 'Le ribosome avance vers le codon STOP. L’ARNt libre repart vers le cytoplasme.', event: 'ARNt libre : ribosome → cytoplasme', icon: '→', duration: 2700 },
       { id: 'stop', phase: 'Traduction', stage: 'Terminaison de la traduction', title: 'Reconnaissance du codon STOP', text: 'UAA ne code aucun acide aminé. Un facteur de libération occupe le site du ribosome.', event: 'UAA = STOP · aucun ARNt correspondant', icon: '■', duration: 1800 },
@@ -366,11 +377,12 @@
     window.SIMULATION_CONFIG = {
       id: 'svt_gene_expression_advanced_lab',
       title: 'Expression génétique 3D — transcription et traduction',
-      version: '4.1',
+      version: '4.2',
       variants: [{ id: 'demonstration', label: 'Simulation 3D complète — ADN → ARNm → protéine', objective: 'Observer la transcription nucléotide par nucléotide puis les trois étapes de la traduction' }],
       objectives: [
         'Observer une double hélice d’ADN ouverte localement par l’ARN polymérase',
         'Suivre la synthèse de l’ARNm nucléotide par nucléotide dans le sens 5′ vers 3′',
+        'Observer chaque base du codon se placer face à sa base complémentaire de l’anticodon',
         'Distinguer initiation, élongation et terminaison de la traduction',
         'Relier codons, anticodons, ARNt et séquence d’acides aminés'
       ],
@@ -408,6 +420,7 @@
     let lastDnaOpen = -1, lastDnaActive = -1;
     let cameraYaw = 0.12, cameraPitch = 0.09, cameraRadius = 22, cameraTarget = new THREE.Vector3(-1.5, .4, 0), targetVisual = null;
     const pointer = { down: false, x: 0, y: 0, moved: false };
+    const raycaster = new THREE.Raycaster(); const pointerNdc = new THREE.Vector2();
 
     const material = (color, options = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: options.roughness ?? .38, metalness: options.metalness ?? .04, clearcoat: options.clearcoat ?? .32, transparent: options.transparent ?? false, opacity: options.opacity ?? 1, depthWrite: options.depthWrite ?? true, side: options.side ?? THREE.FrontSide, emissive: options.emissive ?? 0x000000, emissiveIntensity: options.emissiveIntensity ?? 0 });
     const mats = {
@@ -423,12 +436,23 @@
       if (state.actions.length > 60) state.actions = state.actions.slice(-60);
     }
 
-    function showGuidance(text) {
+    function showGuidance(text, icon = '🤖') {
       if (!text) return;
-      els.aiGuide.textContent = `🤖 ${text}`;
+      els.aiGuide.textContent = `${icon} ${text}`;
       els.aiGuide.classList.add('show');
       clearTimeout(showGuidance.timer);
       showGuidance.timer = setTimeout(() => els.aiGuide.classList.remove('show'), 3800);
+    }
+
+    function tagInteractive(object, name, { deep = false, priority = 2 } = {}) {
+      const apply = node => { node.userData.interactiveName = name; node.userData.selectionPriority = priority; };
+      apply(object); if (deep) object.traverse(apply); return object;
+    }
+
+    function showObjectName(name) {
+      showGuidance(`Élément 3D : ${name}`, '🔎');
+      record('select_object', { name });
+      sendState({ selected_object: name });
     }
 
     function roundedRect(ctx, x, y, width, height, radius) {
@@ -478,15 +502,23 @@
       dnaGroup = new THREE.Group(); world.add(dnaGroup);
       dnaBackboneA = new THREE.Mesh(); dnaBackboneA.material = mats.backboneA; dnaGroup.add(dnaBackboneA);
       dnaBackboneB = new THREE.Mesh(); dnaBackboneB.material = mats.backboneB; dnaGroup.add(dnaBackboneB);
+      tagInteractive(dnaBackboneA, 'Squelette sucre-phosphate du brin transcrit', { priority: 2 });
+      tagInteractive(dnaBackboneB, 'Squelette sucre-phosphate du brin codant', { priority: 2 });
       for (let i = 0; i < TEMPLATE_DNA.length; i++) {
         const nodeA = new THREE.Mesh(new THREE.SphereGeometry(.14, 14, 10), i % 2 ? mats.phosphate : mats.sugar);
         const nodeB = new THREE.Mesh(new THREE.SphereGeometry(.14, 14, 10), i % 2 ? mats.phosphate : mats.sugar);
         dnaGroup.add(nodeA, nodeB); dnaNodes.push([nodeA, nodeB]);
         const matA = material(BASE_COLORS[TEMPLATE_DNA[i]], { roughness: .3 }); const matB = material(BASE_COLORS[CODING_DNA[i]], { roughness: .3 });
         const halfA = cylinder(matA, .105), halfB = cylinder(matB, .105); dnaGroup.add(halfA, halfB); dnaPairs.push([halfA, halfB]);
+        tagInteractive(nodeA, `${i % 2 ? 'Phosphate' : 'Sucre'} du brin transcrit · position ${i + 1}`, { priority: 3 });
+        tagInteractive(nodeB, `${i % 2 ? 'Phosphate' : 'Sucre'} du brin codant · position ${i + 1}`, { priority: 3 });
+        tagInteractive(halfA, `${BASE_NAMES[TEMPLATE_DNA[i]]} (${TEMPLATE_DNA[i]}) · brin transcrit`, { priority: 4 });
+        tagInteractive(halfB, `${BASE_NAMES[CODING_DNA[i]]} (${CODING_DNA[i]}) · brin codant`, { priority: 4 });
       }
       structureLabels.dna = makeLabel('ADN · double hélice', { background: '#183d66e8', border: '#77dcff' }); structureLabels.dna.position.set(-6, 3.55, 0); dnaGroup.add(structureLabels.dna);
+      tagInteractive(structureLabels.dna, 'ADN en double hélice', { priority: 3 });
       activePairLabel = makeLabel('Paire de bases', { background: '#3d245be8', border: '#f4a8c7', scale: .82 }); activePairLabel.visible = false; dnaGroup.add(activePairLabel);
+      tagInteractive(activePairLabel, 'Paire de bases complémentaires de l’ADN', { priority: 4 });
       updateDNA(0, 0);
     }
 
@@ -511,16 +543,19 @@
       const membrane = new THREE.Mesh(new THREE.SphereGeometry(6.15, 48, 32), material(0x6585df, { transparent: true, opacity: .11, roughness: .12, depthWrite: false, side: THREE.DoubleSide })); nucleus.add(membrane);
       const inner = new THREE.Mesh(new THREE.SphereGeometry(5.95, 32, 24), new THREE.MeshBasicMaterial({ color: 0x557be8, wireframe: true, transparent: true, opacity: .055, depthWrite: false })); nucleus.add(inner);
       const label = makeLabel('NOYAU', { background: '#203b80dd', border: '#8ba5ff', scale: .85 }); label.position.set(-2.2, 4.6, -1.2); nucleus.add(label);
+      tagInteractive(membrane, 'Enveloppe nucléaire', { priority: 0 }); tagInteractive(inner, 'Noyau', { priority: 0 }); tagInteractive(label, 'Noyau', { priority: 1 });
 
       pore = new THREE.Group(); pore.position.set(1.18, -.35, 0); world.add(pore);
-      for (let z = -.28; z <= .28; z += .14) { const ring = new THREE.Mesh(new THREE.TorusGeometry(.53, .11, 10, 28), material(0x81a5ff, { emissive: 0x183c82, emissiveIntensity: .3 })); ring.rotation.y = Math.PI / 2; ring.position.z = z; pore.add(ring); }
+      for (let z = -.28; z <= .28; z += .14) { const ring = new THREE.Mesh(new THREE.TorusGeometry(.53, .11, 10, 28), material(0x81a5ff, { emissive: 0x183c82, emissiveIntensity: .3 })); ring.rotation.y = Math.PI / 2; ring.position.z = z; pore.add(ring); tagInteractive(ring, 'Complexe du pore nucléaire', { priority: 3 }); }
       structureLabels.pore = makeLabel('Pore nucléaire', { background: '#203b80e8', border: '#91abff', scale: .78 }); structureLabels.pore.position.set(0, 1.15, 0); pore.add(structureLabels.pore);
+      tagInteractive(structureLabels.pore, 'Pore nucléaire', { priority: 3 });
     }
 
     function buildPolymerase() {
       polymerase = makeBlob(mats.polymerase, [[0, 0, 0, 1.0, .86, .9], [.68, .18, .05, .75, .68, .72], [-.68, .15, .06, .74, .72, .7], [0, -.48, .18, .82, .56, .72]]);
       const cleft = new THREE.Mesh(new THREE.TorusGeometry(.47, .14, 10, 28, Math.PI * 1.5), mats.polymeraseDark); cleft.rotation.x = Math.PI / 2; cleft.rotation.z = Math.PI * .25; polymerase.add(cleft);
       structureLabels.polymerase = makeLabel('ARN polymérase', { background: '#0b6869e8', border: '#62e6d2', scale: .86 }); structureLabels.polymerase.position.set(0, 1.65, 0); polymerase.add(structureLabels.polymerase);
+      tagInteractive(polymerase, 'ARN polymérase', { deep: true, priority: 3 });
       polymerase.visible = false; world.add(polymerase);
     }
 
@@ -529,45 +564,70 @@
       RNA.forEach((base, index) => {
         const group = new THREE.Group(); group.position.set(index * .5, Math.sin(index * .9) * .18, Math.cos(index * .72) * .14);
         const bead = new THREE.Mesh(new THREE.SphereGeometry(.23, 20, 14), material(BASE_COLORS[base], { clearcoat: .65, roughness: .28 })); const letter = makeLetterSprite(base); letter.position.set(0, .01, .24); group.add(bead, letter); group.scale.setScalar(0); group.visible = false; rnaGroup.add(group); rnaNucleotides.push(group);
-        if (index > 0) { const bond = cylinder(mats.rnaBond, .065); rnaGroup.add(bond); placeCylinder(bond, rnaNucleotides[index - 1].position, group.position); bond.visible = false; rnaBonds.push(bond); }
+        tagInteractive(group, `${BASE_NAMES[base]} (${base}) · nucléotide ${index + 1} de l’ARNm`, { deep: true, priority: 4 });
+        if (index > 0) { const bond = cylinder(mats.rnaBond, .065); rnaGroup.add(bond); placeCylinder(bond, rnaNucleotides[index - 1].position, group.position); bond.visible = false; rnaBonds.push(bond); tagInteractive(bond, 'Liaison phosphodiester de l’ARNm', { priority: 3 }); }
       });
       structureLabels.mrna = makeLabel('ARN messager · 5′ → 3′', { background: '#70400be8', border: '#ffbd66', scale: .9 }); structureLabels.mrna.position.set(3.5, -.92, 0); rnaGroup.add(structureLabels.mrna); structureLabels.mrna.visible = false;
+      tagInteractive(structureLabels.mrna, 'ARN messager · sens 5′ vers 3′', { priority: 3 });
     }
 
     function buildRibosome() {
       smallSubunit = makeBlob(mats.small, [[0, 0, 0, 1.85, .46, 1.1], [-.9, .15, .05, .72, .46, .7], [.85, .1, -.04, .72, .42, .72]]); smallSubunit.position.set(1.75, -1.02, 0); smallSubunit.visible = false; world.add(smallSubunit);
       structureLabels.small = makeLabel('Petite sous-unité', { background: '#874414e8', border: '#ffc18d', scale: .72 }); structureLabels.small.position.set(0, -1.15, 0); smallSubunit.add(structureLabels.small);
+      tagInteractive(smallSubunit, 'Petite sous-unité du ribosome', { deep: true, priority: 3 });
 
       largeSubunit = makeBlob(mats.large, [[0, 0, 0, 1.8, 1.15, 1.2], [-1.0, -.05, .1, .85, .9, .82], [.95, .1, -.08, .82, .86, .8], [0, .83, .1, 1.05, .62, .8]]); largeSubunit.position.set(1.75, 1.08, 0); largeSubunit.visible = false; world.add(largeSubunit);
       structureLabels.large = makeLabel('Grande sous-unité', { background: '#8b2937e8', border: '#ff9b8e', scale: .74 }); structureLabels.large.position.set(0, 1.65, 0); largeSubunit.add(structureLabels.large);
+      tagInteractive(largeSubunit, 'Grande sous-unité du ribosome', { deep: true, priority: 3 });
 
       releaseFactor = makeBlob(mats.stop, [[0, 0, 0, .5, 1.0, .48], [0, .8, 0, .62, .45, .55]]); releaseFactor.visible = false; world.add(releaseFactor);
       const label = makeLabel('Facteur de libération', { background: '#8a1932e8', border: '#ff829c', scale: .72 }); label.position.set(0, 1.6, 0); releaseFactor.add(label);
+      tagInteractive(releaseFactor, 'Facteur de libération', { deep: true, priority: 3 });
     }
 
     function createTRNA(index, anticodon, amino) {
       const group = new THREE.Group();
       const points = [new THREE.Vector3(0, -.72, 0), new THREE.Vector3(-.38, -.2, .05), new THREE.Vector3(.34, .22, -.05), new THREE.Vector3(-.22, .78, .05), new THREE.Vector3(0, 1.45, 0)];
-      group.add(tube(points, .09, mats.trna, 48));
-      [-.26, 0, .26].forEach((x, i) => { const base = new THREE.Mesh(new THREE.SphereGeometry(.13, 14, 10), material(BASE_COLORS[anticodon[i]], { roughness: .3 })); base.position.set(x, -.82, 0); const letter = makeLetterSprite(anticodon[i]); letter.scale.set(.25, .25, 1); letter.position.set(x, -.82, .14); group.add(base, letter); });
+      const trnaBody = tube(points, .09, mats.trna, 48); group.add(trnaBody);
+      const anticodonMeshes = [];
+      [-.5, 0, .5].forEach((x, i) => {
+        const base = new THREE.Mesh(new THREE.SphereGeometry(.15, 14, 10), material(BASE_COLORS[anticodon[i]], { roughness: .3 })); base.position.set(x, -.82, 0);
+        const letter = makeLetterSprite(anticodon[i]); letter.scale.set(.27, .27, 1); letter.position.set(x, -.82, .16);
+        group.add(base, letter); anticodonMeshes.push(base);
+      });
       const aa = new THREE.Mesh(new THREE.SphereGeometry(.35, 22, 16), material(amino.color, { clearcoat: .62, roughness: .3 })); aa.position.set(0, 1.77, 0); group.add(aa);
       const aaLabel = makeLabel(amino.name, { background: '#30215ce8', border: '#a99cf4', scale: .62 }); aaLabel.position.set(0, 2.45, 0); group.add(aaLabel);
-      const antiLabel = makeLabel(`anticodon ${anticodon}`, { background: '#30215ce8', border: '#a99cf4', scale: .52 }); antiLabel.position.set(0, -1.28, 0); group.add(antiLabel);
+      const antiLabel = makeLabel(`anticodon 3′ ${anticodon} 5′`, { background: '#30215ce8', border: '#a99cf4', scale: .52 }); antiLabel.position.set(0, -1.28, 0); group.add(antiLabel);
       const trnaLabel = makeLabel('ARNt', { background: '#30215ce8', border: '#a99cf4', scale: .48 }); trnaLabel.position.set(-1.0, .35, 0); group.add(trnaLabel);
       const siteLabel = makeLabel('Site de fixation', { background: '#70400be8', border: '#ffcf7b', scale: .48 }); siteLabel.position.set(1.12, 1.45, 0); group.add(siteLabel);
-      group.userData = { aminoMesh: aa, aminoLabel: aaLabel, componentLabels: [aaLabel, antiLabel, trnaLabel, siteLabel], siteLabel };
+      const codonLabel = makeLabel(`codon 5′ ${CODONS[index]} 3′`, { background: '#70400be8', border: '#ffcf7b', scale: .52 }); codonLabel.visible = false; world.add(codonLabel);
+      const pairBonds = []; const pairLabels = [];
+      for (let pairIndex = 0; pairIndex < 3; pairIndex++) {
+        const codonBase = CODONS[index][pairIndex]; const anticodonBase = anticodon[pairIndex];
+        const bond = cylinder(material(0xffdf72, { roughness: .24, emissive: 0x7a4a00, emissiveIntensity: 1.4 }), .038); bond.visible = false; world.add(bond); pairBonds.push(bond);
+        const pairLabel = makeLabel(`${codonBase}–${anticodonBase}`, { background: '#61470be8', border: '#ffe08a', scale: .28 }); pairLabel.visible = false; world.add(pairLabel); pairLabels.push(pairLabel);
+        tagInteractive(bond, `Appariement complémentaire ${codonBase}–${anticodonBase}`, { priority: 5 });
+        tagInteractive(pairLabel, `Paire complémentaire ${codonBase}–${anticodonBase}`, { priority: 5 });
+      }
+      const genericName = `ARNt ${amino.name} · anticodon 3′ ${anticodon} 5′`;
+      tagInteractive(group, genericName, { deep: true, priority: 3 });
+      anticodonMeshes.forEach((base, baseIndex) => tagInteractive(base, `${BASE_NAMES[anticodon[baseIndex]]} (${anticodon[baseIndex]}) de l’anticodon · complémentaire de ${CODONS[index][baseIndex]}`, { priority: 5 }));
+      tagInteractive(aa, `Acide aminé : ${amino.name}`, { priority: 5 }); tagInteractive(codonLabel, `Codon 5′ ${CODONS[index]} 3′`, { priority: 4 });
+      group.userData = { aminoMesh: aa, aminoLabel: aaLabel, anticodonMeshes, componentLabels: [aaLabel, antiLabel, trnaLabel, siteLabel], siteLabel, codonLabel, pairBonds, pairLabels };
       group.visible = false; world.add(group); return group;
     }
 
     function buildTRNAsAndPeptide() {
-      ['UAC', 'CUU', 'AAA', 'GGC'].forEach((anticodon, index) => trnas.push(createTRNA(index, anticodon, AMINO_ACIDS[index])));
+      TRNA_ANTICODONS.forEach((anticodon, index) => trnas.push(createTRNA(index, anticodon, AMINO_ACIDS[index])));
       peptideGroup = new THREE.Group(); world.add(peptideGroup);
       AMINO_ACIDS.forEach((amino, index) => {
-        const group = new THREE.Group(); const bead = new THREE.Mesh(new THREE.SphereGeometry(.34, 22, 16), material(amino.color, { clearcoat: .7, roughness: .27 })); const label = makeLabel(amino.name, { background: '#5c2146e8', border: '#f5a0bf', scale: .55 }); label.position.set(0, .65, 0); group.add(bead, label); group.visible = false; peptideGroup.add(group); aminoBeads.push(group);
-        if (index > 0) { const bond = cylinder(material(0xf4a1ba, { roughness: .32, emissive: 0x55132f, emissiveIntensity: .22 }), .095); bond.visible = false; peptideGroup.add(bond); peptideBonds.push(bond); }
+        const group = new THREE.Group(); const bead = new THREE.Mesh(new THREE.SphereGeometry(.34, 22, 16), material(amino.color, { clearcoat: .7, roughness: .27 })); const label = makeLabel(amino.name, { background: '#5c2146e8', border: '#f5a0bf', scale: .55 }); label.position.set(1.75, 0, 0); group.add(bead, label); group.visible = false; peptideGroup.add(group); aminoBeads.push(group);
+        tagInteractive(group, `Acide aminé de la chaîne : ${amino.name}`, { deep: true, priority: 5 });
+        if (index > 0) { const bond = cylinder(material(0xf4a1ba, { roughness: .32, emissive: 0x55132f, emissiveIntensity: .22 }), .095); bond.visible = false; peptideGroup.add(bond); peptideBonds.push(bond); tagInteractive(bond, `Liaison peptidique ${AMINO_ACIDS[index - 1].short}–${amino.short}`, { priority: 5 }); }
       });
       structureLabels.peptide = makeLabel('Chaîne polypeptidique', { background: '#6f214ce8', border: '#ff9fc2', scale: .78 }); structureLabels.peptide.position.set(0, 2.15, 0); peptideGroup.add(structureLabels.peptide); structureLabels.peptide.visible = false;
       structureLabels.peptideBond = makeLabel('Liaison peptidique', { background: '#8a204ee8', border: '#ffc0d6', scale: .72 }); peptideGroup.add(structureLabels.peptideBond); structureLabels.peptideBond.visible = false;
+      tagInteractive(structureLabels.peptide, 'Chaîne polypeptidique', { priority: 4 }); tagInteractive(structureLabels.peptideBond, 'Liaison peptidique', { priority: 5 });
     }
 
     function buildScene() {
@@ -586,10 +646,10 @@
     }
 
     const TRNA_LIFECYCLES = [
-      { present: 'trna_met_presentation', approach: 'trna_met_approach', bind: 'initiator_trna', bond: 'bond_glu', exit: 'translocation_met', discharge: 'bond_glu' },
-      { present: 'trna_glu_presentation', approach: 'trna_glu_approach', bind: 'trna_glu', bond: 'bond_phe', exit: 'translocation_glu', discharge: 'bond_phe' },
-      { present: 'trna_phe_presentation', approach: 'trna_phe_approach', bind: 'trna_phe', bond: 'bond_pro', exit: 'translocation_phe', discharge: 'bond_pro' },
-      { present: 'trna_pro_presentation', approach: 'trna_pro_approach', bind: 'trna_pro', bond: 'peptide_release', exit: 'trna_pro_exit', discharge: 'peptide_release' }
+      { present: 'trna_met_presentation', approach: 'trna_met_approach', pair1: 'trna_met_pair_1', pair2: 'trna_met_pair_2', bind: 'initiator_trna', bond: 'bond_glu', exit: 'translocation_met', discharge: 'bond_glu' },
+      { present: 'trna_glu_presentation', approach: 'trna_glu_approach', pair1: 'trna_glu_pair_1', pair2: 'trna_glu_pair_2', bind: 'trna_glu', bond: 'bond_phe', exit: 'translocation_glu', discharge: 'bond_phe' },
+      { present: 'trna_phe_presentation', approach: 'trna_phe_approach', pair1: 'trna_phe_pair_1', pair2: 'trna_phe_pair_2', bind: 'trna_phe', bond: 'bond_pro', exit: 'translocation_phe', discharge: 'bond_pro' },
+      { present: 'trna_pro_presentation', approach: 'trna_pro_approach', pair1: 'trna_pro_pair_1', pair2: 'trna_pro_pair_2', bind: 'trna_pro', bond: 'peptide_release', exit: 'trna_pro_exit', discharge: 'peptide_release' }
     ];
 
     function stepIndex(id) { return STEPS.findIndex(step => step.id === id); }
@@ -606,14 +666,17 @@
       if (index >= stepIndex('stop')) riboCodon = 4;
 
       const trnaOpacity = [0, 0, 0, 0]; const trnaJourney = [0, 0, 0, 0];
-      const trnaDetail = [0, 0, 0, 0]; const trnaCharged = [1, 1, 1, 1];
+      const trnaDetail = [0, 0, 0, 0]; const trnaCharged = [1, 1, 1, 1]; const trnaPairCount = [0, 0, 0, 0];
+      let activePairingTrna = -1;
       TRNA_LIFECYCLES.forEach((life, trnaIndex) => {
-        const presentAt = stepIndex(life.present); const approachAt = stepIndex(life.approach); const bindAt = stepIndex(life.bind); const exitAt = stepIndex(life.exit); const dischargeAt = stepIndex(life.discharge);
+        const presentAt = stepIndex(life.present); const approachAt = stepIndex(life.approach); const pair1At = stepIndex(life.pair1); const pair2At = stepIndex(life.pair2); const bindAt = stepIndex(life.bind); const exitAt = stepIndex(life.exit); const dischargeAt = stepIndex(life.discharge);
         if (index >= presentAt && index <= exitAt) {
           trnaOpacity[trnaIndex] = 1;
           trnaJourney[trnaIndex] = index === presentAt ? 0 : index === approachAt ? .68 : index < exitAt ? 1 : 2;
           trnaDetail[trnaIndex] = index <= bindAt ? 1 : 0;
         }
+        if (index >= pair1At && index < exitAt) trnaPairCount[trnaIndex] = index >= bindAt ? 3 : index >= pair2At ? 2 : 1;
+        if (index >= pair1At && index <= bindAt) activePairingTrna = trnaIndex;
         trnaCharged[trnaIndex] = index < dischargeAt ? 1 : 0;
       });
 
@@ -630,11 +693,14 @@
       const rnaCount = baseIndex >= 0 ? baseIndex + 1 : afterTranscription ? RNA.length : 0;
       const transcriptionActive = index >= 1 && index <= lastBaseStep;
       let cameraX = step.phase === 'Transcription' ? -5.0 : step.phase === 'Export de l’ARNm' ? 1.5 : step.phase === 'Traduction' ? 6.2 : -1.5;
+      let cameraYTarget = step.phase === 'Transcription' ? 1.0 : .45;
       let cameraRadiusTarget = step.phase === 'Vue d’ensemble' ? 22 : 16.5;
       if (id === 'mrna_cytoplasm') { cameraX = 6.4; cameraRadiusTarget = 15; }
       if (isTrnaPresentation) { cameraX = TRNA_SOURCE_X - .7; cameraRadiusTarget = 12.8; }
       if (isTrnaApproach) { cameraX = 7.4; cameraRadiusTarget = 14.5; }
-      if (bondFocus >= 0) { cameraX = RNA_CYTOPLASM_X + (bondFocus + .8) * 1.5; cameraRadiusTarget = 13.8; }
+      if (activePairingTrna >= 0) { cameraX = RNA_CYTOPLASM_X + activePairingTrna * 1.5 + .5; cameraRadiusTarget = 11.2; }
+      if (activePairingTrna === 0 || id === 'trna_met_approach') { cameraX = THREE.MathUtils.lerp(TRNA_SOURCE_X, RNA_CYTOPLASM_X + .5, trnaJourney[0]); cameraRadiusTarget = activePairingTrna === 0 ? 8.2 : 9.2; }
+      if (bondFocus >= 0) { cameraX = RNA_CYTOPLASM_X + (bondFocus + .8) * 1.5; cameraYTarget = 1.4 + bondFocus * .55; cameraRadiusTarget = 14.2 + bondFocus * .4; }
 
       return {
         dnaOpen: index >= 3 && index <= lastBaseStep ? 1 : id === 'transcription_end' ? .2 : 0,
@@ -648,12 +714,12 @@
         largeOpacity: index >= stepIndex('large_subunit') && index < splitIndex ? 1 : 0,
         split: index >= splitIndex ? 1 : 0,
         riboCodon,
-        trnaOpacity, trnaJourney, trnaDetail, trnaCharged, aaCount, bondCount, bondFocus,
+        trnaOpacity, trnaJourney, trnaDetail, trnaCharged, trnaPairCount, aaCount, bondCount, bondFocus,
         stopOpacity: id === 'stop' ? 1 : 0,
         release: index >= stepIndex('peptide_release') ? 1 : 0,
         fold: index >= stepIndex('protein_fold') ? 1 : 0,
         cameraX,
-        cameraY: step.phase === 'Transcription' ? 1.0 : .45,
+        cameraY: cameraYTarget,
         cameraRadius: cameraRadiusTarget
       };
     }
@@ -665,12 +731,13 @@
       const factor = 1 - Math.exp(-delta * 3.8);
       ['dnaOpen', 'polymeraseOpacity', 'polymeraseIndex', 'rnaCount', 'rnaExport', 'poreGlow', 'smallOpacity', 'largeOpacity', 'split', 'riboCodon', 'aaCount', 'bondCount', 'stopOpacity', 'release', 'fold', 'cameraX', 'cameraY', 'cameraRadius'].forEach(key => visual[key] = approach(visual[key], targetVisual[key], factor));
       visual.activeBase = targetVisual.activeBase; visual.bondFocus = targetVisual.bondFocus;
-      visual.trnaOpacity = visual.trnaOpacity || [0, 0, 0, 0]; visual.trnaJourney = visual.trnaJourney || [0, 0, 0, 0]; visual.trnaDetail = visual.trnaDetail || [0, 0, 0, 0]; visual.trnaCharged = visual.trnaCharged || [1, 1, 1, 1];
+      visual.trnaOpacity = visual.trnaOpacity || [0, 0, 0, 0]; visual.trnaJourney = visual.trnaJourney || [0, 0, 0, 0]; visual.trnaDetail = visual.trnaDetail || [0, 0, 0, 0]; visual.trnaCharged = visual.trnaCharged || [1, 1, 1, 1]; visual.trnaPairCount = visual.trnaPairCount || [0, 0, 0, 0];
       for (let i = 0; i < 4; i++) {
         visual.trnaOpacity[i] = approach(visual.trnaOpacity[i], targetVisual.trnaOpacity[i], factor);
         visual.trnaJourney[i] = approach(visual.trnaJourney[i], targetVisual.trnaJourney[i], factor);
         visual.trnaDetail[i] = approach(visual.trnaDetail[i], targetVisual.trnaDetail[i], factor);
         visual.trnaCharged[i] = approach(visual.trnaCharged[i], targetVisual.trnaCharged[i], factor);
+        visual.trnaPairCount[i] = approach(visual.trnaPairCount[i], targetVisual.trnaPairCount[i], factor);
       }
       updateDNA(visual.dnaOpen, Math.round(visual.polymeraseIndex));
 
@@ -680,7 +747,7 @@
 
       rnaNucleotides.forEach((group, index) => { const amount = THREE.MathUtils.clamp(visual.rnaCount - index, 0, 1); group.visible = amount > .015; group.scale.setScalar(amount); group.rotation.y += delta * .18; });
       rnaBonds.forEach((bond, index) => bond.visible = visual.rnaCount > index + 1.05);
-      rnaGroup.position.lerpVectors(new THREE.Vector3(-9.2, -.95, .25), new THREE.Vector3(RNA_CYTOPLASM_X, -.18, .1), visual.rnaExport); structureLabels.mrna.visible = visual.rnaCount > .5;
+      rnaGroup.position.lerpVectors(new THREE.Vector3(-9.2, -.95, .25), new THREE.Vector3(RNA_CYTOPLASM_X, -.18, .1), visual.rnaExport); structureLabels.mrna.visible = visual.rnaCount > .5 && !STEPS[state.step].id.includes('_pair_') && !['initiator_trna', 'trna_glu', 'trna_phe', 'trna_pro'].includes(STEPS[state.step].id);
 
       const currentPhase = STEPS[state.step].phase;
       const currentId = STEPS[state.step].id;
@@ -700,22 +767,34 @@
         const opacity = visual.trnaOpacity[index]; const journey = visual.trnaJourney[index]; const detail = visual.trnaDetail[index]; const charged = visual.trnaCharged[index];
         group.visible = opacity > .02;
         const source = new THREE.Vector3(TRNA_SOURCE_X, .35 + index * .12, 2.35);
-        const bound = new THREE.Vector3(RNA_CYTOPLASM_X + index * 1.5, .62, 1.35);
+        const bound = new THREE.Vector3(RNA_CYTOPLASM_X + index * 1.5 + .5, .68, .38);
         const cytoplasmExit = new THREE.Vector3(TRNA_EXIT_X + index * .18, -.35 + index * .12, 3.2);
         if (journey <= 1) group.position.lerpVectors(source, bound, journey); else group.position.lerpVectors(bound, cytoplasmExit, Math.min(1, journey - 1));
         group.rotation.z = journey > 1 ? (journey - 1) * -.38 : (1 - journey) * .12;
-        group.scale.setScalar(1.25 * Math.min(1, opacity * 1.2));
+        group.scale.setScalar(THREE.MathUtils.lerp(1.25, 1, Math.min(1, journey)) * Math.min(1, opacity * 1.2));
         group.userData.componentLabels.forEach(label => { label.visible = detail > .28; });
         group.userData.aminoMesh.visible = charged > .03;
         group.userData.aminoMesh.scale.setScalar(charged);
         group.userData.aminoLabel.visible = detail > .28 && charged > .18;
         group.userData.siteLabel.visible = detail > .28 && charged > .18;
+        const pairCount = visual.trnaPairCount[index]; const codonStart = index * 3;
+        const activePairIndex = Math.max(0, Math.min(2, Math.ceil(pairCount - .05) - 1));
+        const codonCenter = new THREE.Vector3();
+        for (let pairIndex = 0; pairIndex < 3; pairIndex++) {
+          const pairAmount = THREE.MathUtils.clamp(pairCount - pairIndex, 0, 1); const pairBond = group.userData.pairBonds[pairIndex]; const pairLabel = group.userData.pairLabels[pairIndex];
+          pairBond.visible = opacity > .05 && pairAmount > .04; pairLabel.visible = pairIndex === activePairIndex && pairAmount > .82 && detail > .28;
+          const codonPosition = new THREE.Vector3(); const anticodonPosition = new THREE.Vector3();
+          rnaNucleotides[codonStart + pairIndex].getWorldPosition(codonPosition); group.userData.anticodonMeshes[pairIndex].getWorldPosition(anticodonPosition); codonCenter.add(codonPosition);
+          if (pairBond.visible) { placeCylinder(pairBond, codonPosition, anticodonPosition); pairBond.scale.x = pairBond.scale.z = .65 + pairAmount * .7; }
+          if (pairLabel.visible) pairLabel.position.copy(codonPosition).add(anticodonPosition).multiplyScalar(.5).add(new THREE.Vector3(0, .42, .32));
+        }
+        codonCenter.multiplyScalar(1 / 3); group.userData.codonLabel.position.copy(codonCenter).add(new THREE.Vector3(0, .72, .18)); group.userData.codonLabel.visible = detail > .28;
       });
 
-      const peptideBaseX = visual.release > .2 ? codonX + 1.0 + visual.release * 1.4 : codonX - .25; const peptideBaseY = visual.release > .2 ? 3.2 + visual.release * .9 : 2.65;
+      const peptideBaseX = visual.release > .2 ? codonX + 1.0 + visual.release * 1.4 : codonX + .05; const peptideBaseY = visual.release > .2 ? 2.45 + visual.release * .55 : 1.9;
       for (let i = 0; i < aminoBeads.length; i++) {
         const amount = THREE.MathUtils.clamp(visual.aaCount - i, 0, 1); const bead = aminoBeads[i]; bead.visible = amount > .02;
-        const lineX = peptideBaseX + i * .34; const lineY = peptideBaseY + i * .42;
+        const lineX = peptideBaseX; const lineY = peptideBaseY + i * 1.18;
         const foldX = peptideBaseX + Math.cos(i * 2.1) * .8; const foldY = peptideBaseY + Math.sin(i * 1.55) * .68;
         bead.position.set(THREE.MathUtils.lerp(lineX, foldX, visual.fold), THREE.MathUtils.lerp(lineY, foldY, visual.fold), 1.25 + Math.sin(i * 1.7) * visual.fold * .75); bead.scale.setScalar(amount); bead.children[1].visible = visual.fold < .35;
       }
@@ -728,10 +807,10 @@
           bond.material.emissiveIntensity = focused ? 1.8 + Math.sin(performance.now() * .01) * .45 : .22;
         }
       }
-      structureLabels.peptide.visible = visual.aaCount > .5; structureLabels.peptide.position.set(peptideBaseX + .2, peptideBaseY + 1.45, 1.25);
+      structureLabels.peptide.visible = visual.aaCount > .5; structureLabels.peptide.position.set(peptideBaseX + .8, peptideBaseY + (Math.max(1, visual.aaCount) - 1) * 1.18 + .9, 1.25);
       structureLabels.peptideBond.visible = visual.bondFocus >= 0;
       if (structureLabels.peptideBond.visible) {
-        const bondIndex = visual.bondFocus; structureLabels.peptideBond.position.copy(aminoBeads[bondIndex].position).add(aminoBeads[bondIndex + 1].position).multiplyScalar(.5).add(new THREE.Vector3(0, -.72, .35));
+        const bondIndex = visual.bondFocus; structureLabels.peptideBond.position.copy(aminoBeads[bondIndex].position).add(aminoBeads[bondIndex + 1].position).multiplyScalar(.5).add(new THREE.Vector3(-1.55, 0, .35));
       }
       peptideGroup.rotation.set(0, 0, 0);
 
@@ -746,12 +825,24 @@
       requestAnimationFrame(animate); const delta = Math.min(clock.getDelta(), .05); updateVisual(delta); updateCamera(); renderer.render(scene, camera);
     }
 
+    function selectObjectAt(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointerNdc, camera);
+      const candidates = raycaster.intersectObjects(world.children, true).map(hit => {
+        let object = hit.object;
+        while (object && object !== world && !object.userData.interactiveName) object = object.parent;
+        return object?.userData.interactiveName ? { name: object.userData.interactiveName, priority: object.userData.selectionPriority ?? 1, distance: hit.distance } : null;
+      }).filter(Boolean).sort((a, b) => b.priority - a.priority || a.distance - b.distance);
+      if (candidates[0]) showObjectName(candidates[0].name);
+    }
+
     function addCameraControls() {
       const canvas = renderer.domElement;
       canvas.addEventListener('pointerdown', event => { pointer.down = true; pointer.x = event.clientX; pointer.y = event.clientY; pointer.moved = false; canvas.setPointerCapture(event.pointerId); });
       canvas.addEventListener('pointermove', event => { if (!pointer.down) return; const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y; if (Math.abs(dx) + Math.abs(dy) > 2) pointer.moved = true; cameraYaw -= dx * .006; cameraPitch = THREE.MathUtils.clamp(cameraPitch + dy * .0045, -.45, .55); pointer.x = event.clientX; pointer.y = event.clientY; });
-      canvas.addEventListener('pointerup', () => { pointer.down = false; }); canvas.addEventListener('pointercancel', () => { pointer.down = false; });
-      canvas.addEventListener('wheel', event => { event.preventDefault(); cameraRadius = THREE.MathUtils.clamp(cameraRadius + event.deltaY * .012, 11, 28); visual.cameraRadius = cameraRadius; targetVisual.cameraRadius = cameraRadius; }, { passive: false });
+      canvas.addEventListener('pointerup', event => { const wasMoved = pointer.moved; pointer.down = false; if (!wasMoved) selectObjectAt(event); }); canvas.addEventListener('pointercancel', () => { pointer.down = false; });
+      canvas.addEventListener('wheel', event => { event.preventDefault(); cameraRadius = THREE.MathUtils.clamp(cameraRadius + event.deltaY * .012, 8, 28); visual.cameraRadius = cameraRadius; targetVisual.cameraRadius = cameraRadius; }, { passive: false });
     }
 
     function resize() {
@@ -761,6 +852,16 @@
     function currentRnaCount() { const active = STEPS[state.step].activeBase; if (Number.isInteger(active)) return active + 1; return state.step > 3 + RNA.length ? RNA.length : 0; }
     function currentAaCount() { const index = state.step; if (index < stepIndex('initiator_trna')) return 0; if (index < stepIndex('bond_glu')) return 1; if (index < stepIndex('bond_phe')) return 2; if (index < stepIndex('bond_pro')) return 3; return 4; }
     function currentBondCount() { const index = state.step; if (index < stepIndex('bond_glu')) return 0; if (index < stepIndex('bond_phe')) return 1; if (index < stepIndex('bond_pro')) return 2; return 3; }
+    function currentPairingState() {
+      for (let trnaIndex = 0; trnaIndex < TRNA_LIFECYCLES.length; trnaIndex++) {
+        const life = TRNA_LIFECYCLES[trnaIndex]; const pair1At = stepIndex(life.pair1); const pair2At = stepIndex(life.pair2); const bindAt = stepIndex(life.bind);
+        if (state.step >= pair1At && state.step <= bindAt) {
+          const pairedCount = state.step >= bindAt ? 3 : state.step >= pair2At ? 2 : 1;
+          return { codon_5_3: CODONS[trnaIndex], anticodon_3_5: TRNA_ANTICODONS[trnaIndex], paired_bases: Array.from({ length: pairedCount }, (_, index) => `${CODONS[trnaIndex][index]}–${TRNA_ANTICODONS[trnaIndex][index]}`) };
+        }
+      }
+      return null;
+    }
 
     function snapshot(extra = {}) {
       const step = STEPS[state.step]; const rnaCount = currentRnaCount(); const aaCount = currentAaCount(); const bondCount = currentBondCount();
@@ -769,7 +870,7 @@
         dna_template_3_5: 'TAC CTT AAA GGC ATT', dna_structure: 'double hélice', active_template_base: Number.isInteger(step.activeBase) ? `${TEMPLATE_DNA[step.activeBase]} (${BASE_NAMES[TEMPLATE_DNA[step.activeBase]]})` : null,
         active_rna_base: Number.isInteger(step.activeBase) ? `${RNA[step.activeBase]} (${BASE_NAMES[RNA[step.activeBase]]})` : null,
         mrna_5_3: RNA.slice(0, rnaCount).join(''), mrna_codons_complete: CODONS.slice(0, Math.floor(rnaCount / 3)),
-        peptide: AMINO_ACIDS.slice(0, aaCount).map(a => a.name), peptide_bonds: bondCount, translation_stage: step.phase === 'Traduction' ? step.stage : null,
+        peptide: AMINO_ACIDS.slice(0, aaCount).map(a => a.name), peptide_bonds: bondCount, codon_anticodon_pairing: currentPairingState(), translation_stage: step.phase === 'Traduction' ? step.stage : null,
         scientific_locations: { transcription: 'noyau', mrna_export: 'pore nucléaire', mrna_after_export: 'cytoplasme éloigné du noyau', translation: 'cytoplasme', free_trna_destination: 'cytoplasme', dna_remains_in: 'noyau' },
         completed_variants: state.completed ? ['demonstration'] : [], is_playing: state.playing, playback_speed: state.speed
       }, extra);
@@ -789,6 +890,7 @@
       if (['mrna_release', 'mrna_export', 'mrna_cytoplasm'].includes(id)) return id === 'mrna_export' ? 'ARNm · pore nucléaire' : 'ARN messager 5′ → 3′';
       if (id === 'small_subunit') return 'ARNm · petite sous-unité ribosomique';
       if (id === 'large_subunit') return 'Petite sous-unité · grande sous-unité · ARNt initiateur';
+      if (id.includes('_pair_')) return step.event;
       if (id.includes('met') || id === 'initiator_trna') return id === 'translocation_met' ? 'Ribosome · ARNt libre vers le cytoplasme' : 'ARNt-Méthionine · anticodon UAC';
       if (id.includes('glu')) return id === 'translocation_glu' ? 'Ribosome · ARNt libre vers le cytoplasme' : id === 'bond_glu' ? 'Ribosome · Méthionine · Acide glutamique' : 'ARNt-Acide glutamique · anticodon CUU';
       if (id.includes('phe')) return id === 'translocation_phe' ? 'Ribosome · ARNt libre vers le cytoplasme' : id === 'bond_phe' ? 'Ribosome · peptide · Phénylalanine' : 'ARNt-Phénylalanine · anticodon AAA';
@@ -837,13 +939,19 @@
 
     function sendManifest() {
       window.__SIMULATION_MANIFEST_SENT__ = true;
-      window.parent.postMessage({ type: 'simulation_manifest', simulation_id: window.SIMULATION_CONFIG.id, capabilities: { commands: window.SIMULATION_CONFIG.commands, globals: ['executeAICommand', 'startSimulation', 'pauseSimulation', 'nextStep', 'previousStep', 'resetSimulation', 'setSimulationSpeed', 'highlightTarget', 'getSimulationState'], buttons: [{ id: 'startButton', text: 'Démarrer' }, { id: 'pauseButton', text: 'Pause' }, { id: 'restartButton', text: 'Relancer' }], config: window.SIMULATION_CONFIG, command_schema: window.SIMULATION_CONFIG.command_schema, state_schema: window.SIMULATION_CONFIG.state_schema }, page_text: 'Simulation WebGL 3D de l’expression génétique. Elle montre une double hélice d’ADN avec bases azotées, l’ouverture par l’ARN polymérase, la synthèse de l’ARNm nucléotide par nucléotide, son export hors du noyau, puis l’initiation, l’élongation et la terminaison de la traduction avec petite et grande sous-unités ribosomiques, ARNt, anticodons, acides aminés nommés et chaîne polypeptidique.' }, '*');
+      window.parent.postMessage({ type: 'simulation_manifest', simulation_id: window.SIMULATION_CONFIG.id, capabilities: { commands: window.SIMULATION_CONFIG.commands, globals: ['executeAICommand', 'startSimulation', 'pauseSimulation', 'nextStep', 'previousStep', 'resetSimulation', 'setSimulationSpeed', 'highlightTarget', 'getSimulationState'], buttons: [{ id: 'startButton', text: 'Démarrer' }, { id: 'pauseButton', text: 'Pause' }, { id: 'restartButton', text: 'Relancer' }], config: window.SIMULATION_CONFIG, command_schema: window.SIMULATION_CONFIG.command_schema, state_schema: window.SIMULATION_CONFIG.state_schema }, page_text: 'Simulation WebGL 3D de l’expression génétique. Elle montre une double hélice d’ADN avec bases azotées, l’ouverture par l’ARN polymérase, la synthèse de l’ARNm nucléotide par nucléotide, son export hors du noyau, puis l’initiation, l’élongation et la terminaison de la traduction. Chaque codon s’apparie base par base avec son anticodon, la chaîne peptidique est déployée et chaque objet visible peut être cliqué pour afficher son nom.' }, '*');
     }
 
     window.executeAICommand = executeAICommand; window.startSimulation = start; window.pauseSimulation = pause; window.nextStep = next; window.previousStep = previous; window.resetSimulation = () => restart(false); window.setSimulationSpeed = setSpeed; window.highlightTarget = highlight; window.getSimulationState = () => snapshot();
     window.addEventListener('message', event => { const data = event.data || {}; if (data.type === 'simulation_control' && (!data.simulation_id || data.simulation_id === window.SIMULATION_CONFIG.id)) { if (data.guidance_text) showGuidance(data.guidance_text); executeAICommand(data.command, data.parameters || {}); } });
     window.addEventListener('resize', resize); els.start.addEventListener('click', start); els.pause.addEventListener('click', pause); els.restart.addEventListener('click', () => restart(true));
-    document.addEventListener('keydown', event => { if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : start(); } });
+    document.addEventListener('keydown', event => {
+      if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : start(); }
+      else if (event.code === 'ArrowRight') { event.preventDefault(); next(); }
+      else if (event.code === 'ArrowLeft') { event.preventDefault(); previous(); }
+      else if (event.code === 'End') { event.preventDefault(); clearTimer(); state.status = 'running'; setStep(STEPS.length - 1); }
+      else if (event.code === 'Home') { event.preventDefault(); restart(false); }
+    });
 
     try { buildScene(); sendManifest(); setTimeout(sendManifest, 350); } catch (error) { console.error('[Gene3D]', error); els.loading.classList.add('hidden'); els.fallback.classList.remove('hidden'); window.__GENE_SIM_ERROR__ = String(error?.message || error); }
   </script>

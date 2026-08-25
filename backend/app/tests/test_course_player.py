@@ -435,20 +435,28 @@ def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
         "small_subunit",
         "trna_met_presentation",
         "trna_met_approach",
+        "trna_met_pair_1",
+        "trna_met_pair_2",
         "initiator_trna",
         "large_subunit",
         "trna_glu_presentation",
         "trna_glu_approach",
+        "trna_glu_pair_1",
+        "trna_glu_pair_2",
         "trna_glu",
         "bond_glu",
         "translocation_met",
         "trna_phe_presentation",
         "trna_phe_approach",
+        "trna_phe_pair_1",
+        "trna_phe_pair_2",
         "trna_phe",
         "bond_phe",
         "translocation_glu",
         "trna_pro_presentation",
         "trna_pro_approach",
+        "trna_pro_pair_1",
+        "trna_pro_pair_2",
         "trna_pro",
         "bond_pro",
         "translocation_phe",
@@ -472,6 +480,23 @@ def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
     assert "Liaison peptidique" in source
     assert ".topbar { display: none; }" in source
     assert ".lesson-panel > :not(.controls) { display: none; }" in source
+    assert "PHÉNOMÈNE 1/57" in source
+    assert "trnaPairCount" in source
+    assert "codon 5′" in source
+    assert "anticodon 3′" in source
+    assert "raycaster.intersectObjects" in source
+    assert "interactiveName" in source
+    assert "select_object" in source
+    assert "label.position.set(1.75, 0, 0)" in source
+    assert "i * 1.18" in source
+
+    codons_source = re.search(r"const CODONS = \[([^\]]+)\];", source)
+    anticodons_source = re.search(r"const TRNA_ANTICODONS = \[([^\]]+)\];", source)
+    assert codons_source and anticodons_source
+    codons = re.findall(r"'([AUCG]+)'", codons_source.group(1))[:4]
+    anticodons = re.findall(r"'([AUCG]+)'", anticodons_source.group(1))
+    complement = str.maketrans("AUCG", "UAGC")
+    assert [codon.translate(complement) for codon in codons] == anticodons
 
 
 def test_slide_scientific_visual_is_normalised_before_reaching_the_browser():

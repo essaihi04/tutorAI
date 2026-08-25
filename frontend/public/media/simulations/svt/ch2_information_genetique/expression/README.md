@@ -7,7 +7,7 @@ ressource depuis Internet.
 
 ## Scénario pédagogique
 
-La démonstration contient 49 phénomènes déterministes :
+La démonstration contient 57 phénomènes déterministes :
 
 1. reconnaissance du promoteur, fixation de l’ARN polymérase et ouverture
    locale d’une véritable double hélice avec ses paires de bases ;
@@ -17,11 +17,14 @@ La démonstration contient 49 phénomènes déterministes :
    du noyau dans le cytoplasme ;
 4. initiation de la traduction : petite sous-unité, présentation détaillée de
    l’ARNt initiateur (site de fixation, méthionine et anticodon), trajet depuis
-   le cytoplasme, fixation sur `AUG`, puis arrivée de la grande sous-unité ;
+   le cytoplasme, zoom rapproché puis appariement successif `A–U`, `U–A` et
+   `G–C` entre `5′ AUG 3′` et `3′ UAC 5′` avant l’arrivée de la grande
+   sous-unité ;
 5. élongation : chaque ARNt est d’abord présenté, se déplace depuis le
    cytoplasme, se fixe, puis une pause nomme et met en évidence la liaison
-   peptidique. Après la translocation, chaque ARNt libre repart vers le
-   cytoplasme, à l’opposé du noyau ;
+   peptidique. Pour chaque codon, les trois bases complémentaires sont alignées
+   et reliées une par une. Après la translocation, chaque ARNt libre repart vers
+   le cytoplasme, à l’opposé du noyau ;
 6. terminaison au codon `UAA`, libération du polypeptide, dissociation du
    ribosome et repliement de la protéine.
 
@@ -29,6 +32,11 @@ La caméra accepte la rotation par glissement et le zoom à la molette ou au
 pincement. La scène occupe tout l’écran : le panneau latéral est masqué et les
 seules commandes visibles sont `Démarrer`, `Pause` et `Relancer`. Les acteurs
 du phénomène courant sont nommés directement dans la scène 3D.
+
+La chaîne peptidique est déployée verticalement avec des liaisons plus longues ;
+les noms des acides aminés forment une colonne lisible. Tous les acteurs et
+constituants moléculaires visibles sont cliquables : un clic affiche leur nom,
+des bases azotées jusqu’aux sous-unités ribosomiques et aux liaisons.
 
 ## Intégration avec le tuteur
 
