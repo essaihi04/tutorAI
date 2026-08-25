@@ -50,19 +50,19 @@ const FOCUS_LABELS: Record<LabelPart, string> = {
 const MODEL_LABELS: readonly ModelLabel[] = [
   {
     id: 'outer_membrane', label: 'Membrane externe', color: '#fb7185',
-    side: 'right', row: 0.35, point: [2.4, 0.15, 0.7],
+    side: 'right', row: 0.29, point: [2.4, 0.15, 0.7],
   },
   {
     id: 'intermembrane_space', label: 'Espace intermembranaire', color: '#7dd3fc',
-    side: 'left', row: 0.52, point: [-2.2, 0.52, 0.65],
+    side: 'left', row: 0.29, point: [-2.2, 0.52, 0.65],
   },
   {
     id: 'matrix', label: 'Matrice', color: '#2dd4bf',
-    side: 'left', row: 0.69, point: [-0.35, -0.12, 0.72],
+    side: 'left', row: 0.75, point: [-0.35, -0.12, 0.72],
   },
   {
     id: 'inner_membrane', label: 'Membrane interne', color: '#fdba74',
-    side: 'left', row: 0.35, point: [-1.7, 0.42, 0.75],
+    side: 'left', row: 0.52, point: [-1.7, 0.42, 0.75],
   },
   {
     id: 'cristae', label: 'Crêtes', color: '#fde047',
@@ -70,11 +70,11 @@ const MODEL_LABELS: readonly ModelLabel[] = [
   },
   {
     id: 'mitochondrial_dna', label: 'ADN mitochondrial', color: '#c4b5fd',
-    side: 'right', row: 0.69, point: [0.1, -0.06, 0.75],
+    side: 'right', row: 0.75, point: [0.1, -0.06, 0.75],
   },
 ];
 
-const DEFAULT_CAMERA_POSITION = new THREE.Vector3(7.1, 4.5, 8.7);
+const DEFAULT_CAMERA_POSITION = new THREE.Vector3(7.9, 5.0, 9.7);
 
 function disposeModel(root: THREE.Object3D) {
   const textures = new Set<THREE.Texture>();
@@ -244,7 +244,11 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
       if (width < 2 || height < 2) return;
-      const labelInset = Math.min(148, Math.max(104, width * 0.27));
+      // Les cartes utilisent la même largeur responsive que les traits. Le
+      // point de départ du trait est donc collé au bord intérieur de la
+      // carte, au lieu de flotter entre la carte et le modèle.
+      const labelRailWidth = Math.min(176, Math.max(112, width * 0.24));
+      const labelInset = 8 + labelRailWidth;
 
       MODEL_LABELS.forEach((label) => {
         const path = labelPathRefs.current[label.id];
@@ -377,7 +381,7 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
                     fill="none"
                     stroke={label.color}
                     strokeWidth={active ? 2.5 : 1.4}
-                    strokeOpacity={muted ? 0.25 : 0.82}
+                    strokeOpacity={muted ? 0.58 : 0.9}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className="transition-opacity duration-150"
@@ -403,10 +407,10 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
                 key={label.id}
                 role="listitem"
                 data-label-part={label.id}
-                className={`absolute flex max-w-36 -translate-y-1/2 items-center gap-1.5 rounded-lg border px-2 py-1 text-[9px] font-bold leading-tight shadow-lg backdrop-blur transition ${label.side === 'left' ? 'left-2' : 'right-2'} ${active
+                className={`absolute flex -translate-y-1/2 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-bold leading-tight shadow-lg backdrop-blur transition ${label.side === 'left' ? 'left-2' : 'right-2'} ${active
                   ? 'border-amber-200 bg-amber-950/90 text-amber-50 ring-1 ring-amber-300/60'
-                  : 'border-white/15 bg-slate-950/82 text-slate-100'} ${muted ? 'opacity-45' : 'opacity-100'}`}
-                style={{ top: `${label.row * 100}%` }}
+                  : 'border-white/15 bg-slate-950/88 text-slate-100'} ${muted ? 'opacity-90' : 'opacity-100'}`}
+                style={{ top: `${label.row * 100}%`, width: 'clamp(112px, 24%, 176px)' }}
               >
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
                 {label.label}
@@ -416,7 +420,10 @@ export default function Mitochondrion3DVisual({ spec, transparent }: Mitochondri
         </div>
       )}
 
-      <figcaption className="pointer-events-none absolute left-3 top-3 z-20 max-w-[58%] rounded-xl border border-white/10 bg-slate-950/72 px-3 py-2 text-white shadow-lg backdrop-blur">
+      <figcaption
+        className="pointer-events-none absolute top-3 z-20 rounded-xl border border-white/10 bg-slate-950/72 px-3 py-2 text-center text-white shadow-lg backdrop-blur"
+        style={{ left: '50%', width: 'max-content', maxWidth: '32%', transform: 'translateX(-50%)' }}
+      >
         <div className="text-sm font-bold">{spec.title || 'Mitochondrie 3D réaliste'}</div>
         {view === 'model' ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-cyan-100/80">
