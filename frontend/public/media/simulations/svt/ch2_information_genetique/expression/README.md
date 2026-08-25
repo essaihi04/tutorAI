@@ -7,22 +7,28 @@ ressource depuis Internet.
 
 ## Scénario pédagogique
 
-La démonstration contient 35 phénomènes déterministes :
+La démonstration contient 49 phénomènes déterministes :
 
 1. reconnaissance du promoteur, fixation de l’ARN polymérase et ouverture
    locale d’une véritable double hélice avec ses paires de bases ;
 2. synthèse de `5′ AUG GAA UUU CCG UAA 3′`, nucléotide par nucléotide, avec le
    nom de chaque base azotée et son complément sur le brin transcrit ;
-3. libération de l’ARNm et passage par un pore nucléaire ;
-4. initiation de la traduction : petite sous-unité, ARNt initiateur portant la
-   méthionine, puis grande sous-unité ;
-5. élongation : ARNt, anticodons, translocation, acides aminés nommés et
-   liaisons peptidiques ;
+3. libération de l’ARNm, passage par un pore nucléaire puis éloignement complet
+   du noyau dans le cytoplasme ;
+4. initiation de la traduction : petite sous-unité, présentation détaillée de
+   l’ARNt initiateur (site de fixation, méthionine et anticodon), trajet depuis
+   le cytoplasme, fixation sur `AUG`, puis arrivée de la grande sous-unité ;
+5. élongation : chaque ARNt est d’abord présenté, se déplace depuis le
+   cytoplasme, se fixe, puis une pause nomme et met en évidence la liaison
+   peptidique. Après la translocation, chaque ARNt libre repart vers le
+   cytoplasme, à l’opposé du noyau ;
 6. terminaison au codon `UAA`, libération du polypeptide, dissociation du
    ribosome et repliement de la protéine.
 
 La caméra accepte la rotation par glissement et le zoom à la molette ou au
-pincement. Les commandes visibles sont `Démarrer`, `Pause` et `Relancer`.
+pincement. La scène occupe tout l’écran : le panneau latéral est masqué et les
+seules commandes visibles sont `Démarrer`, `Pause` et `Relancer`. Les acteurs
+du phénomène courant sont nommés directement dans la scène 3D.
 
 ## Intégration avec le tuteur
 

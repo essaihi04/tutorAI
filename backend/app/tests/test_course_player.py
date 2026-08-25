@@ -429,6 +429,50 @@ def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
     assert 'id="pauseButton"' in source
     assert 'id="restartButton"' in source
 
+    ordered_translation_steps = [
+        "mrna_export",
+        "mrna_cytoplasm",
+        "small_subunit",
+        "trna_met_presentation",
+        "trna_met_approach",
+        "initiator_trna",
+        "large_subunit",
+        "trna_glu_presentation",
+        "trna_glu_approach",
+        "trna_glu",
+        "bond_glu",
+        "translocation_met",
+        "trna_phe_presentation",
+        "trna_phe_approach",
+        "trna_phe",
+        "bond_phe",
+        "translocation_glu",
+        "trna_pro_presentation",
+        "trna_pro_approach",
+        "trna_pro",
+        "bond_pro",
+        "translocation_phe",
+        "stop",
+        "peptide_release",
+        "trna_pro_exit",
+    ]
+    offsets = [source.index(f"id: '{step_id}'") for step_id in ordered_translation_steps]
+    assert offsets == sorted(offsets)
+
+    x_positions = {
+        name: float(value)
+        for name, value in re.findall(
+            r"const (NUCLEUS_RIGHT_EDGE_X|RNA_CYTOPLASM_X|TRNA_SOURCE_X|TRNA_EXIT_X) = ([\d.]+);",
+            source,
+        )
+    }
+    assert x_positions["RNA_CYTOPLASM_X"] > x_positions["NUCLEUS_RIGHT_EDGE_X"]
+    assert x_positions["TRNA_SOURCE_X"] > x_positions["RNA_CYTOPLASM_X"]
+    assert x_positions["TRNA_EXIT_X"] > x_positions["TRNA_SOURCE_X"]
+    assert "Liaison peptidique" in source
+    assert ".topbar { display: none; }" in source
+    assert ".lesson-panel > :not(.controls) { display: none; }" in source
+
 
 def test_slide_scientific_visual_is_normalised_before_reaching_the_browser():
     """Une figure de diapositive passe le même filtre que celles du tableau."""
