@@ -394,28 +394,40 @@ def test_new_simulations_expose_platform_bridge_contract():
 
 
 def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
-    source = (
+    simulation_dir = (
         PROJECT_ROOT
-        / "frontend/public/media/simulations/svt/ch2_information_genetique/expression/index.html"
-    ).read_text(encoding="utf-8")
+        / "frontend/public/media/simulations/svt/ch2_information_genetique/expression"
+    )
+    source = (simulation_dir / "index.html").read_text(encoding="utf-8")
 
-    assert "const DEMO_STEPS=" in source
-    assert "transcription_initiation" in source
-    assert "translation_initiation" in source
-    assert "translation_stop" in source
+    assert "const STEPS = [" in source
+    assert "three.module.min.js" in source
+    assert (simulation_dir / "vendor/three.module.min.js").is_file()
+    assert (simulation_dir / "vendor/three.core.min.js").is_file()
+    assert (simulation_dir / "vendor/THREE-LICENSE.txt").is_file()
+    assert "dna_open" in source
+    assert "rna_base_" in source
+    assert "mrna_export" in source
+    assert "small_subunit" in source
+    assert "initiator_trna" in source
+    assert "large_subunit" in source
+    assert "trna_glu" in source
+    assert "peptide_release" in source
+    assert "protein_fold" in source
     assert "TAC CTT AAA GGC ATT" in source
-    assert "['AUG','GAA','UUU','CCG','UAA']" in source
-    assert "pauseDemo" in source
-    assert "nextDemoStep" in source
-    assert "previousDemoStep" in source
+    assert "['AUG', 'GAA', 'UUU', 'CCG', 'UAA']" in source
+    assert "Adénine" in source
+    assert "Méthionine" in source
+    assert "Phénylalanine" in source
+    assert "pauseSimulation" in source
+    assert "nextStep" in source
+    assert "previousStep" in source
     assert "getSimulationState" in source
-    assert "photo-dna-layer" in source
-    assert "photo-rna-layer" in source
-    assert "photo-ribosome-layer" in source
-    assert "photo-protein-layer" in source
-    assert 'id="demoStart"' in source
-    assert 'id="demoPause"' in source
-    assert 'id="demoRestart"' in source
+    assert "simulation_manifest" in source
+    assert "simulation_state" in source
+    assert 'id="startButton"' in source
+    assert 'id="pauseButton"' in source
+    assert 'id="restartButton"' in source
 
 
 def test_slide_scientific_visual_is_normalised_before_reaching_the_browser():
