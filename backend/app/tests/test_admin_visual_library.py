@@ -1,5 +1,8 @@
 """Safety and catalogue contract for the unified admin visual library."""
 
+from pathlib import Path
+import re
+
 import pytest
 
 from app.admin_auth import verify_admin_token
@@ -14,6 +17,9 @@ from app.services.admin_course_service import admin_course_service
 from app.services.schema_catalog import SCHEMA_CATALOG
 from app.services.scientific_presets import SCIENTIFIC_PRESETS
 from app.services.scientific_visual_skill import normalize_scientific_visual
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_catalogue_exposes_every_code_owned_visual_as_protected():
@@ -62,6 +68,21 @@ def test_gene_expression_image_keeps_its_poster_but_opens_the_animated_simulatio
     assert item["preview"]["kind"] == "simulation"
     assert item["preview"]["poster_url"] == poster
     assert item["preview"]["url"].endswith("/expression/index.html")
+
+
+def test_local_simulation_preview_keeps_module_origin_without_weakening_inline_html():
+    source = (
+        PROJECT_ROOT / "frontend/src/components/admin/AdminVisualLibrary.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert re.search(
+        r'srcDoc=\{inlinePreview\.html\}[\s\S]{0,220}sandbox="allow-scripts"',
+        source,
+    )
+    assert re.search(
+        r'src=\{preview\.url\}[\s\S]{0,220}sandbox="allow-scripts allow-same-origin"',
+        source,
+    )
 
 
 def test_llm_json_extraction_accepts_fence_but_ignores_prose_after_object():
