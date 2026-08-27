@@ -33,6 +33,41 @@ def test_catalogue_exposes_every_code_owned_visual_as_protected():
     assert all(item["deletable"] is False for item in schemas + presets)
 
 
+@pytest.mark.parametrize("schema_id, subject_key, course_id", [
+    ("svt_croquis_glycolyse", "svt", "svt_ch1_energy"),
+    ("phys_croquis_signaux_retard", "physics", "phys_ch1_waves"),
+    ("chem_croquis_catalyseur", "chemistry", "chem_ch1_kinetics"),
+    ("math_croquis_tvi", "math", "math_ch1_limits"),
+])
+def test_pencil_schemas_are_exposed_with_course_metadata(schema_id, subject_key, course_id):
+    item = next(
+        item for item in admin_visual_library_service._schema_items()
+        if item["catalog_id"] == schema_id
+    )
+
+    assert item["preview"] == {"kind": "schema", "schema_id": schema_id}
+    assert item["subject_key"] == subject_key
+    assert item["metadata"]["courseId"] == course_id
+    assert item["metadata"]["resourceRole"] == "teacher_sketch"
+    assert item["metadata"]["visualStyle"] == "pencil"
+    assert item["chapter"]
+    assert item["lesson"]
+
+
+def test_database_schema_resource_previews_the_core_schema():
+    item = admin_visual_library_service._resource_item({
+        "id": "resource-glycolyse",
+        "lesson_id": "lesson-svt",
+        "resource_type": "image",
+        "title": "Croquis : bilan de la glycolyse",
+        "file_path": None,
+        "metadata": {"schema_id": "svt_croquis_glycolyse"},
+    }, {"subject_name": "SVT"})
+
+    assert item["kind"] == "schema"
+    assert item["preview"] == {"kind": "schema", "schema_id": "svt_croquis_glycolyse"}
+
+
 def test_every_preset_preview_resolves_through_the_shared_validator():
     for item in admin_visual_library_service._preset_items():
         assert normalize_scientific_visual(item["preview"]["scientific"]) is not None

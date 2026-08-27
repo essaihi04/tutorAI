@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { getSchemaById } from './schemas';
-import type { ScientificControlCommand, ScientificVisualSpec } from './scientific/types';
+import type { ScientificControlCommand, ScientificSimulationUpdate, ScientificVisualSpec } from './scientific/types';
 import LiveBoard, { type LiveScript } from './LiveBoard';
 
 // Types for drawing elements
@@ -85,6 +85,8 @@ interface AIWhiteboardProps {
   onFocusChange?: (focus: boolean) => void;
   /** Commande LLM pour la scène scientifique actuellement affichée. */
   scientificControl?: ScientificControlCommand | null;
+  /** État compact d'une simulation de catalogue, à transmettre au tuteur. */
+  onSimulationUpdate?: (update: ScientificSimulationUpdate) => void;
 }
 
 /**
@@ -172,7 +174,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   };
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange, scientificControl }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange, scientificControl, onSimulationUpdate }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -196,6 +198,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         audioActive={audioActive}
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
+        onSimulationUpdate={onSimulationUpdate}
       />
     );
   }
@@ -230,6 +233,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         audioActive={audioActive}
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
+        onSimulationUpdate={onSimulationUpdate}
       />
     );
   }
@@ -247,6 +251,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         audioActive={audioActive}
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
+        onSimulationUpdate={onSimulationUpdate}
       />
     );
   }
@@ -277,6 +282,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         audioActive={audioActive}
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
+        onSimulationUpdate={onSimulationUpdate}
       />
     );
   }

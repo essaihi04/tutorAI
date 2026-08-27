@@ -43,6 +43,41 @@ ENTRY = re.compile(
     r"keywords:\s*\[(?P<keywords>[^\]]*)\]",
 )
 MOT = re.compile(r"'((?:[^'\\]|\\.)*)'")
+METADATA_BLOCK = re.compile(
+    r"^\s*,\s*metadata:\s*\{(?P<body>.*?)\}\s*,\s*category:",
+    re.DOTALL,
+)
+METADATA_STRING = re.compile(
+    r"(?P<name>courseId|chapter|lesson|visualStyle|resourceRole|paletteId|sourceUrl|sourceTeacher|sourceVideoTitle|auditStatus):\s*"
+    r"'(?P<value>(?:[^'\\]|\\.)*)'",
+)
+METADATA_ARRAY = re.compile(
+    r"(?P<name>learningObjectives|llmIntents|drawingSteps|sourceTimecodes):\s*"
+    r"\[(?P<value>.*?)\]",
+    re.DOTALL,
+)
+
+
+def _metadata_after(source: str, offset: int) -> dict:
+    """Lit le bloc déclaratif placé juste après les mots-clés d'un schéma.
+
+    Le format est volontairement borné à des chaînes et listes de chaînes :
+    ces métadonnées arrivent dans le prompt du tuteur, jamais du JavaScript.
+    """
+    match = METADATA_BLOCK.match(source[offset:])
+    if not match:
+        return {}
+    body = match.group("body")
+    metadata = {
+        item.group("name"): item.group("value").replace("\\'", "'")
+        for item in METADATA_STRING.finditer(body)
+    }
+    for item in METADATA_ARRAY.finditer(body):
+        metadata[item.group("name")] = [
+            value.replace("\\'", "'")
+            for value in MOT.findall(item.group("value"))
+        ]
+    return metadata
 
 
 def collect() -> list[dict[str, str]]:
@@ -55,7 +90,7 @@ def collect() -> list[dict[str, str]]:
             if schema_id in seen:
                 continue
             seen.add(schema_id)
-            found.append({
+            entry = {
                 "id": schema_id,
                 "title": match.group("title").replace("\\'", "'"),
                 "subject": match.group("subject"),
@@ -67,7 +102,11 @@ def collect() -> list[dict[str, str]]:
                     mot.replace("\\'", "'")
                     for mot in MOT.findall(match.group("keywords"))
                 ],
-            })
+            }
+            metadata = _metadata_after(source, match.end())
+            if metadata:
+                entry["metadata"] = metadata
+            found.append(entry)
     return found
 
 
@@ -171,13 +210,20 @@ def render(entries: list[dict]) -> str:
             continue
         lines.append(f"  {SUBJECT_LABELS.get(subject, subject.upper())} :")
         for entry in group:
-            lines.append(f"    {entry['id']} — {entry['title']}")
+            metadata = entry.get("metadata") or {}
+            if metadata.get("resourceRole") == "teacher_sketch":
+                intentions = "; ".join((metadata.get("llmIntents") or [])[:2])
+                suffix = f" [CROQUIS CRAYON LIVE BOARD — {intentions}]" if intentions else " [CROQUIS CRAYON LIVE BOARD]"
+            else:
+                suffix = ""
+            lines.append(f"    {entry['id']} — {entry['title']}{suffix}")
     catalogue = "\n".join(lines)
 
     items = "\n".join(
         "    {"
         f"\"id\": {entry['id']!r}, \"title\": {entry['title']!r}, "
-        f"\"subject\": {entry['subject']!r}, \"keywords\": {entry['keywords']!r}"
+        f"\"subject\": {entry['subject']!r}, \"keywords\": {entry['keywords']!r}, "
+        f"\"metadata\": {entry.get('metadata', {})!r}"
         "},"
         for entry in entries
     )
@@ -214,6 +260,11 @@ Ces schémas sont déjà dessinés, animés et annotés. Les afficher coûte moi
 cher et rend mieux qu'un dessin improvisé : si l'un d'eux couvre la notion,
 c'est LUI qu'on affiche, dans TOUS les modes (cours, exercice, examen,
 question libre).
+Les ressources marquées CROQUIS CRAYON LIVE BOARD sont les versions simples
+qu'un professeur peut tracer au tableau. Si l'élève dit « dessine »,
+« croquis », « schématise » ou « au tableau », préfère la version CROQUIS de
+la notion ; pour une consultation détaillée sans demande de dessin, garde le
+schéma de référence.
 Format : <schema>identifiant</schema> — ou l'action `show_schema`.
 N'INVENTE JAMAIS un identifiant : s'il n'est pas dans cette liste, il n'existe
 pas, et l'élève ne voit rien.

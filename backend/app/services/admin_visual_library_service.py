@@ -12,7 +12,7 @@ from typing import Any
 
 from app.schemas.admin_visual_library import AdminVisualItemCreate, AdminVisualItemUpdate
 from app.services.admin_course_service import FRONTEND_PUBLIC, admin_course_service
-from app.services.schema_catalog import SCHEMA_CATALOG, match_schema
+from app.services.schema_catalog import SCHEMA_CATALOG, SCHEMA_IDS, match_schema
 from app.services.scientific_presets import SCIENTIFIC_PRESETS
 from app.services.scientific_visual_skill import (
     MITOCHONDRION_3D_FALLBACK_PATH,
@@ -119,13 +119,18 @@ class AdminVisualLibraryService:
                 "catalog_id": entry["id"],
                 "kind": "schema",
                 "title": entry["title"],
-                "description": "Schéma SVG validé et versionné dans le projet.",
+                "description": (
+                    "Croquis au crayon validé, transparent et prêt pour le Live Board."
+                    if (entry.get("metadata") or {}).get("resourceRole") == "teacher_sketch"
+                    else "Schéma SVG validé et versionné dans le projet."
+                ),
                 "subject": labels.get(entry.get("subject"), entry.get("subject") or ""),
                 "subject_key": entry.get("subject") or "",
-                "chapter": "",
-                "lesson": "",
+                "chapter": (entry.get("metadata") or {}).get("chapter") or "",
+                "lesson": (entry.get("metadata") or {}).get("lesson") or "",
                 "lesson_id": "",
                 "concepts": list(entry.get("keywords") or [])[:12],
+                "metadata": copy.deepcopy(entry.get("metadata") or {}),
                 "source": "core",
                 "status": "validated",
                 "editable": False,
@@ -174,6 +179,9 @@ class AdminVisualLibraryService:
     def _resource_item(row: dict[str, Any], lesson: dict[str, Any]) -> dict[str, Any]:
         metadata = _metadata(row.get("metadata"))
         url = _resource_url(row)
+        schema_id = str(metadata.get("schema_id") or "").strip()
+        if schema_id not in SCHEMA_IDS:
+            schema_id = ""
         scientific = normalize_scientific_visual(metadata.get("scientific")) if isinstance(metadata.get("scientific"), dict) else None
         # Compatibilité avec la ressource historique montrée comme une
         # « Mitochondrie 3D » alors qu'elle n'était qu'un PNG. Elle devient
@@ -183,7 +191,9 @@ class AdminVisualLibraryService:
             scientific = normalize_scientific_visual(MITOCHONDRION_3D_SPEC)
         animated_gene_expression = scientific is None and url == GENE_EXPRESSION_IMAGE_PATH
         kind = (
-            "scientific"
+            "schema"
+            if schema_id
+            else "scientific"
             if scientific
             else "simulation"
             if animated_gene_expression
@@ -193,7 +203,9 @@ class AdminVisualLibraryService:
         if status not in _STATUSES:
             status = "published"
         preview: dict[str, Any] = {"kind": kind}
-        if scientific:
+        if schema_id:
+            preview["schema_id"] = schema_id
+        elif scientific:
             preview["scientific"] = scientific
         elif animated_gene_expression:
             # Conserve l'illustration comme miniature, mais ouvre désormais la

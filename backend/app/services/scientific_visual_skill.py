@@ -43,7 +43,25 @@ MOTEURS AUTORISÉS dans `line.scientific` :
 - `preset` : scène animée validée du catalogue. Le preset réutilise JSXGraph
   ou Cytoscape ; le LLM ne fournit jamais les objets internes ni du code.
 
-PRESETS DU CHAPITRE SVT « consommation de la matière organique » :
+PRESETS TRANSPARENTS PHYSIQUE / CHIMIE / SVT :
+`phys_ch1_propagation_onde`, `chem_ch1_facteurs_cinetiques`,
+`svt_ch1_respiration_mitochondriale`.
+Notions difficiles complémentaires :
+`phys_ch1_types_ondes`, `phys_ch1_celerite_corde`,
+`chem_ch1_energie_activation`, `chem_ch1_oxydoreduction`,
+`svt_ch1_glissement_sarcomere`, `svt_ch1_couplage_excitation_contraction`.
+Variantes exactes :
+- onde : `propagation`, `retard`, `superposition` ;
+- types d’ondes : `comparaison`, `transversale`, `longitudinale` ;
+- célérité sur une corde : `forte_tension`, `faible_tension`, `forte_masse_lineique` ;
+- facteurs cinétiques : `temperature`, `concentration`, `catalyseur`, `surface_contact` ;
+- énergie d’activation : `comparaison`, `sans_catalyseur`, `avec_catalyseur` ;
+- oxydoréduction : `transfert_direct`, `pile`, `electrolyse` ;
+- respiration mitochondriale : `bilan`, `krebs`, `chaine_respiratoire`.
+- sarcomère : `repos`, `contraction`, `comparaison` ;
+- couplage excitation–contraction : `cycle_complet`, `liberation_calcium`, `contraction`, `relaxation`.
+
+AUTRES PRESETS DU CHAPITRE SVT « consommation de la matière organique » :
 `svt_ch1_cycle_atp`, `svt_ch1_levures_exao`, `svt_ch1_chimiosmose`,
 `svt_ch1_carte_metabolique`, `svt_ch1_myogrammes`,
 `svt_ch1_cycle_actomyosine`, `svt_ch1_filieres_effort`.

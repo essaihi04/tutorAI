@@ -3,7 +3,7 @@
 import pytest
 
 from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
-from app.services.scientific_presets import normalize_scientific_control
+from app.services.scientific_presets import normalize_scientific_control, normalize_scientific_state
 
 
 def test_jsxgraph_conserve_une_figure_valide_et_ecarte_le_code():
@@ -188,6 +188,92 @@ def test_commandes_llm_des_presets_sont_bornees():
         "command": "set_variant",
         "parameters": {"variant": "inventee"},
     }) is None
+
+
+def test_presets_transparents_physique_chimie_svt_sont_fermes_et_pilotables():
+    assert normalize_scientific_visual({
+        "engine": "preset",
+        "presetId": "phys_ch1_propagation_onde",
+        "variant": "retard",
+        "autoplay": True,
+    }) == {
+        "engine": "preset",
+        "presetId": "phys_ch1_propagation_onde",
+        "variant": "retard",
+        "autoplay": True,
+        "step": 0,
+    }
+    assert normalize_scientific_visual({
+        "engine": "preset",
+        "presetId": "chem_ch1_facteurs_cinetiques",
+        "variant": "surface_contact",
+        "step": 999,
+    })["step"] == 36
+    assert normalize_scientific_control({
+        "presetId": "svt_ch1_respiration_mitochondriale",
+        "command": "set_variant",
+        "parameters": {"variant": "chaine_respiratoire"},
+    }) == {
+        "presetId": "svt_ch1_respiration_mitochondriale",
+        "command": "set_variant",
+        "parameters": {"variant": "chaine_respiratoire"},
+    }
+    assert normalize_scientific_state({
+        "simulation_id": "chem_ch1_facteurs_cinetiques",
+        "current_state": {
+            "simulation_status": "running",
+            "variant": "catalyseur",
+            "step": 500,
+            "secret": "ignore",
+        },
+        "student_actions": [{"action": "start", "code": "ignore"}],
+    }) == {
+        "id": "chem_ch1_facteurs_cinetiques",
+        "state": {
+            "simulation_status": "running",
+            "preset_id": "chem_ch1_facteurs_cinetiques",
+            "variant": "catalyseur",
+            "step": 36,
+            "max_step": 36,
+        },
+        "actions": [{"action": "start", "variant": "catalyseur", "step": 36}],
+        "progress": 1.0,
+    }
+
+
+@pytest.mark.parametrize(("preset_id", "variant", "max_step"), [
+    ("phys_ch1_types_ondes", "longitudinale", 40),
+    ("phys_ch1_celerite_corde", "forte_masse_lineique", 40),
+    ("chem_ch1_energie_activation", "avec_catalyseur", 36),
+    ("chem_ch1_oxydoreduction", "electrolyse", 7),
+    ("svt_ch1_glissement_sarcomere", "comparaison", 30),
+    ("svt_ch1_couplage_excitation_contraction", "relaxation", 8),
+])
+def test_presets_des_notions_difficiles_sont_valides_et_bornes(preset_id, variant, max_step):
+    visual = normalize_scientific_visual({
+        "engine": "preset",
+        "presetId": preset_id,
+        "variant": variant,
+        "autoplay": True,
+        "step": 999,
+        "html": "<script>alert(1)</script>",
+    })
+    assert visual == {
+        "engine": "preset",
+        "presetId": preset_id,
+        "variant": variant,
+        "autoplay": True,
+        "step": max_step,
+    }
+    assert normalize_scientific_control({
+        "presetId": preset_id,
+        "command": "set_variant",
+        "parameters": {"variant": variant, "javascript": "ignore"},
+    }) == {
+        "presetId": preset_id,
+        "command": "set_variant",
+        "parameters": {"variant": variant},
+    }
 
 
 def test_roughsvg_ne_laisse_passer_que_des_primitives_declaratives():

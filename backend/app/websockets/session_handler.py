@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
-from app.services.schema_catalog import match_schema
+from app.services.schema_catalog import SCHEMA_IDS, match_schema
 from app.services.schema_gaps import noter_manque
 from app.services.scientific_visual_skill import (
     MITOCHONDRION_3D_FALLBACK_PATH,
@@ -20,7 +20,11 @@ from app.services.scientific_visual_skill import (
     normalize_scientific_visual,
     scientific_visual_quality,
 )
-from app.services.scientific_presets import normalize_scientific_control
+from app.services.scientific_presets import (
+    SCIENTIFIC_PRESETS,
+    normalize_scientific_control,
+    normalize_scientific_state,
+)
 from app.services.scientific_visual_router import build_visual_route_prompt
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
@@ -2724,9 +2728,26 @@ TU DOIS OBLIGATOIREMENT:
             command_schema = active_capabilities.get("command_schema", {})
             simulation_controls = active_capabilities.get("controls", {})
             simulation_config = active_capabilities.get("config", {})
+            preset_definition = SCIENTIFIC_PRESETS.get(active_simulation_id)
+            if preset_definition:
+                active_commands = [
+                    "start", "pause", "reset", "next", "previous",
+                    "set_variant", "highlight",
+                ]
+                simulation_controls = {
+                    "variants": sorted(preset_definition["variants"]),
+                    "max_step": preset_definition["max_step"],
+                }
+                command_schema = {
+                    "set_variant": {"variant": sorted(preset_definition["variants"])},
+                    "highlight": {
+                        "variant": sorted(preset_definition["variants"]),
+                        "step": "0..max_step",
+                    },
+                }
             simulation_snapshot = {
                 "simulation_id": active_simulation_id,
-                "title": simulation_config.get("title"),
+                "title": preset_definition["title"] if preset_definition else simulation_config.get("title"),
                 "learning_objectives": simulation_config.get("learning_objectives", []),
                 "state": self.simulation_state.get("state", {}),
                 "progress": self.simulation_state.get("progress", 0),
@@ -2738,6 +2759,27 @@ TU DOIS OBLIGATOIREMENT:
             snapshot_json = json.dumps(simulation_snapshot, ensure_ascii=False, default=str)
             if len(snapshot_json) > 6000:
                 snapshot_json = snapshot_json[:6000] + "…"
+            if preset_definition:
+                control_example = (
+                    '<ui>{"actions":[{"type":"scientific","action":"control",'
+                    f'"payload":{{"presetId":"{active_simulation_id}","command":"start"}}'
+                    '}]}</ui>'
+                )
+                launch_instruction = (
+                    "Ne déduis pas un résultat absent : invite l'élève à cliquer Démarrer "
+                    "ou envoie la commande start."
+                )
+            else:
+                control_example = (
+                    '<ui>{"actions":[{"type":"simulation","action":"control",'
+                    '"payload":{"command":"set_parameters","parameters":'
+                    '{"nom_exact_du_controle":"valeur_valide"}},'
+                    '"guidance_text":"Observe ce qui change."}]}</ui>'
+                )
+                launch_instruction = (
+                    "Ne déduis pas un résultat absent : invite l'élève à lancer run_trial "
+                    "après avoir formulé sa prédiction."
+                )
             system_prompt += f"""
 
 [SIMULATION INTERACTIVE ACTIVE — ÉTAT RÉEL À UTILISER]
@@ -2746,10 +2788,10 @@ TU DOIS OBLIGATOIREMENT:
 RÈGLES:
 - Fonde tes observations uniquement sur cet état réel; n'invente aucune manipulation.
 - Si l'élève demande une manipulation disponible, utilise une action UI de contrôle. Exemple générique:
-  <ui>{{"actions":[{{"type":"simulation","action":"control","payload":{{"command":"set_parameters","parameters":{{"nom_exact_du_controle":"valeur_valide"}},"guidance_text":"Observe ce qui change."}}}}]}}</ui>
+  {control_example}
 - Choisis exclusivement une commande de available_commands et respecte command_schema.
 - Une seule commande de manipulation par réponse, avec une courte consigne d'observation.
-- Ne déduis pas un résultat absent: invite l'élève à lancer run_trial après avoir formulé sa prédiction.
+- {launch_instruction}
 """
 
         # Les réponses vocales très courtes (« passe », « ok », « 7 ») sont
@@ -3948,6 +3990,17 @@ RÈGLES :
                     etape["say"] = legende.strip()
                 steps.append(etape)
                 continue
+            if ltype == "schema":
+                schema_id = str(line.get("schema_id") or "").strip()
+                if schema_id not in SCHEMA_IDS:
+                    _safe_log(f"[Live] Schéma inconnu ignoré: {schema_id!r}")
+                    continue
+                etape = {"action": "figure", "schema_id": schema_id}
+                legende = line.get("content")
+                if isinstance(legende, str) and legende.strip():
+                    etape["say"] = legende.strip()
+                steps.append(etape)
+                continue
             # Un échiquier, une courbe, une carte mentale, un QCM : ces
             # choses ne s'écrivent pas craie par craie, mais elles ne se
             # perdent plus pour autant — le tableau en direct les pose telles
@@ -4059,6 +4112,17 @@ RÈGLES :
                 # La figure traverse exactement la même porte que sur le
                 # tableau statique : normalisation déclarative puis contrôle
                 # de qualité. Un moteur ne reçoit jamais autre chose.
+                schema_id = str(step.get("schema_id") or "").strip()
+                if schema_id:
+                    if schema_id not in SCHEMA_IDS:
+                        _safe_log(f"[Live] Schéma inconnu ignoré: {schema_id!r}")
+                        continue
+                    etape = {"action": "figure", "schema_id": schema_id}
+                    dit = step.get("say") or step.get("narration")
+                    if isinstance(dit, str) and dit.strip():
+                        etape["say"] = dit.strip()
+                    normalized.append(etape)
+                    continue
                 figure = normalize_scientific_visual(step.get("scientific") or step.get("payload"))
                 if figure is None:
                     _safe_log("[Live] Figure invalide ignorée")
@@ -6794,7 +6858,10 @@ RÈGLES :
                     or resource.get("external_url")
                     or (
                         isinstance(metadata, dict)
-                        and isinstance(metadata.get("scientific"), dict)
+                        and (
+                            isinstance(metadata.get("scientific"), dict)
+                            or metadata.get("schema_id") in SCHEMA_IDS
+                        )
                     )
                 )
 
@@ -6880,6 +6947,20 @@ RÈGLES :
         
         _safe_log(f"[Display Resource] Attempting to display: {title}")
         _safe_log(f"[Display Resource] Type: {resource_type}, Path: {file_path}")
+
+        schema_id = str(metadata.get('schema_id') or '').strip() if isinstance(metadata, dict) else ''
+        if schema_id:
+            if schema_id not in SCHEMA_IDS:
+                _safe_log(f"[Display Resource] Unknown schema_id ignored: {schema_id!r}")
+                return
+            await self.websocket.send_json({"type": "hide_media"})
+            await self._send_board_or_live(title or "Croquis du cours", [{
+                "type": "schema",
+                "schema_id": schema_id,
+                "content": description,
+            }], context="croquis ressource du cours")
+            _safe_log(f"[Resources] Displayed schema on Live Board: {schema_id}")
+            return
         
         scientific_payload = metadata.get('scientific') if isinstance(metadata, dict) else None
         if file_path == MITOCHONDRION_3D_FALLBACK_PATH and not isinstance(scientific_payload, dict):
@@ -7049,6 +7130,18 @@ RÈGLES :
         SWITCHING        — sending command to start the next variant
         DONE             — all variants explored, final summary sent
         """
+        scientific_state = normalize_scientific_state(message)
+        if scientific_state:
+            self.simulation_state = scientific_state
+            self.simulation_history.append({
+                'timestamp': message.get('timestamp'),
+                'actions': scientific_state['actions'],
+                'state': scientific_state['state'],
+            })
+            # Ces scènes sont pilotées par `scientific_control`, pas par
+            # l'orchestrateur des laboratoires HTML et leurs manifests.
+            return
+
         simulation_id = message.get('simulation_id', 'unknown')
         student_actions = message.get('student_actions', [])
         current_state = message.get('current_state', {})

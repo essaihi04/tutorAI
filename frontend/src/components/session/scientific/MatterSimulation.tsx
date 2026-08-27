@@ -269,15 +269,15 @@ export default function MatterSimulation({ spec, transparent }: MatterSimulation
 
   return (
     <figure className={CADRE_FIGURE(transparent)}>
-      <div className="flex items-center justify-between gap-3 px-2 pb-2">
-        <figcaption className="text-sm font-medium text-cyan-200">{spec.title || 'Simulation scientifique'}</figcaption>
+      <div className={transparent ? 'flex justify-center pb-2' : 'flex items-center justify-between gap-3 px-2 pb-2'}>
+        {!transparent && <figcaption className="text-sm font-medium text-cyan-200">{spec.title || 'Simulation scientifique'}</figcaption>}
         <div className="flex gap-2">
           <button type="button" onClick={toggleRunning} className="rounded-md bg-cyan-600 px-3 py-1 text-xs font-semibold text-white hover:bg-cyan-500">
             {running ? 'Pause' : 'Démarrer'}
           </button>
-          <button type="button" onClick={reset} className="rounded-md bg-slate-700 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-600">
+          {!transparent && <button type="button" onClick={reset} className="rounded-md bg-slate-700 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-600">
             Recommencer
-          </button>
+          </button>}
         </div>
       </div>
       {error && <p className="px-2 pb-2 text-sm text-red-300">{error}</p>}
@@ -295,7 +295,7 @@ export default function MatterSimulation({ spec, transparent }: MatterSimulation
 
       {/* Déplacer un curseur rejoue la scène depuis le début : c'est la seule
           façon de comparer deux essais qui ne diffèrent que par ce réglage. */}
-      {(spec.parameters || []).length > 0 && (
+      {!transparent && (spec.parameters || []).length > 0 && (
         <div className="mt-2 grid gap-2 px-2 pb-1 sm:grid-cols-2">
           {(spec.parameters || []).map(parameter => (
             <label key={parameter.target} className="text-xs text-slate-300">

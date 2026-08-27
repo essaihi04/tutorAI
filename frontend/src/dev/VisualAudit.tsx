@@ -14,6 +14,7 @@ import { getAllSchemas } from '../components/session/schemas';
 import SVGSchemaViewer from '../components/session/schemas/SVGSchemaViewer';
 import { SVG_DEFS } from '../components/session/schemas/svgDefs';
 import ScientificVisual from '../components/session/scientific/ScientificVisual';
+import { SCIENTIFIC_PRESETS } from '../components/session/scientific/scientificPresets';
 import type { ScientificSchema } from '../components/session/schemas/types';
 import type { ScientificVisualSpec } from '../components/session/scientific/types';
 
@@ -46,7 +47,7 @@ function inspect(schema: ScientificSchema): Verdict[] {
   }
 
   const svg = schema.layers.map(layer => layer.svgContent).join('');
-  if (!/[؀-ۿ]/.test(svg)) {
+  if (!/[؀-ۿ]/.test(svg) && schema.metadata?.resourceRole !== 'teacher_sketch') {
     verdicts.push({ level: 'warn', message: 'aucun texte arabe dans le dessin (le BAC est bilingue)' });
   }
 
@@ -90,9 +91,18 @@ function inspect(schema: ScientificSchema): Verdict[] {
   return verdicts;
 }
 
-const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
+type AuditResourceType = 'simulations' | 'pencil' | 'all';
+type AuditSubject = 'all' | ScientificSchema['subject'];
+
+const SAMPLES: {
+  title: string;
+  subject: ScientificSchema['subject'];
+  kind: 'simulation' | 'figure';
+  spec: ScientificVisualSpec;
+}[] = [
   {
     title: 'Modèle 3D réaliste — mitochondrie légendée et manipulable',
+    subject: 'svt', kind: 'simulation',
     spec: {
       engine: 'three', model: 'mitochondrion', title: 'Mitochondrie 3D interactive',
       description: 'Double membrane, crêtes, matrice et ADN mitochondrial circulaire.',
@@ -101,6 +111,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   },
   {
     title: 'JSXGraph — bilan des forces',
+    subject: 'physics', kind: 'figure',
     spec: {
       engine: 'jsxgraph', title: 'Bilan des forces sur un solide', boundingBox: [-5, 5, 5, -5], axis: false,
       elements: [
@@ -112,6 +123,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   },
   {
     title: 'JSXGraph — étude de fonction',
+    subject: 'math', kind: 'figure',
     spec: {
       engine: 'jsxgraph', title: 'f(x) = 1/x et son asymptote', boundingBox: [-6, 6, 6, -6], grid: true,
       elements: [
@@ -127,6 +139,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
     // cadre pour tenir l'échelle, et l'écran affichait jusqu'à pH = −15.
     // Un pH négatif n'existe pas — l'élève le lisait quand même.
     title: 'JSXGraph — titrage (axes de grandeurs différentes)',
+    subject: 'chemistry', kind: 'figure',
     spec: {
       engine: 'jsxgraph', title: 'Titrage acide fort / base forte',
       boundingBox: [-2, 14, 26, -1], axis: true, grid: true,
@@ -145,6 +158,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
     // toutes deux des longueurs : libérer l'échelle aplatirait la parabole,
     // et l'élève lirait une trajectoire qui n'est pas celle du mobile.
     title: 'JSXGraph — projectile (axes de même grandeur)',
+    subject: 'physics', kind: 'figure',
     spec: {
       engine: 'jsxgraph', title: 'Trajectoire d’un projectile', boundingBox: [-1, 8, 17, -1],
       axis: true, xLabel: 'x (m)', yLabel: 'y (m)',
@@ -157,6 +171,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   },
   {
     title: 'Cytoscape — respiration cellulaire',
+    subject: 'svt', kind: 'figure',
     spec: {
       engine: 'cytoscape', title: 'De la glycolyse à la chaîne respiratoire', layout: 'breadthfirst',
       nodes: [
@@ -174,6 +189,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   },
   {
     title: 'RoughSVG — électrolyse légendée',
+    subject: 'chemistry', kind: 'figure',
     spec: {
       engine: 'roughsvg',
       title: 'Électrolyse : transformation forcée',
@@ -201,6 +217,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   },
   {
     title: 'Matter — plan incliné (angle)',
+    subject: 'physics', kind: 'simulation',
     spec: {
       engine: 'matter', title: 'Plan incliné à 30°', width: 600, height: 320, gravity: { x: 0, y: 1 },
       bodies: [
@@ -211,6 +228,7 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
   },
   {
     title: 'Matter — chute et rebond',
+    subject: 'physics', kind: 'simulation',
     spec: {
       engine: 'matter', title: 'Chute verticale', width: 600, height: 320, gravity: { x: 0, y: 1 }, autoplay: true,
       bodies: [
@@ -220,6 +238,15 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
     },
   },
   ...([
+    ['phys_ch1_propagation_onde', 'retard'],
+    ['phys_ch1_types_ondes', 'comparaison'],
+    ['phys_ch1_celerite_corde', 'forte_tension'],
+    ['chem_ch1_facteurs_cinetiques', 'catalyseur'],
+    ['chem_ch1_energie_activation', 'comparaison'],
+    ['chem_ch1_oxydoreduction', 'pile'],
+    ['svt_ch1_respiration_mitochondriale', 'bilan'],
+    ['svt_ch1_glissement_sarcomere', 'comparaison'],
+    ['svt_ch1_couplage_excitation_contraction', 'cycle_complet'],
     ['svt_ch1_cycle_atp', 'cycle_complet'],
     ['svt_ch1_levures_exao', 'comparaison'],
     ['svt_ch1_chimiosmose', 'cycle_complet'],
@@ -228,15 +255,39 @@ const SAMPLES: { title: string; spec: ScientificVisualSpec }[] = [
     ['svt_ch1_cycle_actomyosine', 'cycle_complet'],
     ['svt_ch1_filieres_effort', 'effort_prolonge'],
   ] as const).map(([presetId, variant]) => ({
-    title: `Preset SVT — ${presetId}`,
-    spec: { engine: 'preset' as const, presetId, variant, autoplay: false, step: 99 },
+    title: `Simulation — ${SCIENTIFIC_PRESETS[presetId].title}`,
+    subject: (presetId.startsWith('phys_')
+      ? 'physics'
+      : presetId.startsWith('chem_') ? 'chemistry' : 'svt') as ScientificSchema['subject'],
+    kind: 'simulation' as const,
+    spec: { engine: 'preset' as const, presetId, variant, autoplay: false, step: 0 },
   })),
 ];
 
 export default function VisualAudit() {
   const schemas = useMemo(() => getAllSchemas(), []);
-  const [subject, setSubject] = useState<'all' | ScientificSchema['subject']>('all');
-  const shown = schemas.filter(schema => subject === 'all' || schema.subject === subject);
+  const query = useMemo(() => new URLSearchParams(window.location.search), []);
+  const requestedSchemaId = query.get('schema');
+  const requestedType = query.get('type');
+  const requestedSubject = query.get('subject');
+  const [resourceType, setResourceType] = useState<AuditResourceType>(() => (
+    requestedSchemaId ? 'pencil' : requestedType === 'pencil' ? 'pencil' : requestedType === 'all' ? 'all' : 'simulations'
+  ));
+  const [subject, setSubject] = useState<AuditSubject>(() => (
+    requestedSubject === 'physics' || requestedSubject === 'chemistry'
+      || requestedSubject === 'svt' || requestedSubject === 'math'
+      ? requestedSubject
+      : 'all'
+  ));
+  const shownSchemas = resourceType === 'simulations' ? [] : schemas.filter(schema => (
+    requestedSchemaId
+      ? schema.id === requestedSchemaId
+      : schema.metadata?.visualStyle === 'pencil' && (subject === 'all' || schema.subject === subject)
+  ));
+  const shownSamples = resourceType === 'pencil' ? [] : SAMPLES.filter(sample => (
+    (resourceType === 'all' || sample.kind === 'simulation')
+      && (subject === 'all' || sample.subject === subject)
+  ));
 
   const counts = schemas.reduce<Record<string, number>>((acc, schema) => {
     acc[schema.subject] = (acc[schema.subject] || 0) + 1;
@@ -251,31 +302,64 @@ export default function VisualAudit() {
         — chaque vignette est rendue par le composant réel de la session.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {(['all', 'svt', 'physics', 'chemistry', 'math'] as const).map(key => (
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Type</span>
+          {([
+            ['simulations', 'Simulations'], ['pencil', 'Croquis'], ['all', 'Tout'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setResourceType(key)}
+              className={`rounded-lg px-3 py-1.5 text-sm ${resourceType === key ? 'bg-cyan-500 text-slate-950' : 'bg-white/10'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Matière</span>
+          {([
+            ['all', 'Toutes'], ['physics', 'Physique'], ['chemistry', 'Chimie'], ['svt', 'SVT'], ['math', 'Maths'],
+          ] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSubject(key)}
             className={`rounded-lg px-3 py-1.5 text-sm ${subject === key ? 'bg-cyan-500 text-slate-950' : 'bg-white/10'}`}
           >
-            {key}
+            {label}
           </button>
         ))}
+        </div>
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold">Moteurs scientifiques</h2>
-      <div className="mt-3 grid gap-4 lg:grid-cols-2">
-        {SAMPLES.map(sample => (
-          <section key={sample.title} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <h3 className="mb-2 text-sm font-semibold text-cyan-200">{sample.title}</h3>
-            <ScientificVisual spec={sample.spec} />
-          </section>
-        ))}
-      </div>
+      {shownSamples.length > 0 && (
+        <>
+          <h2 className="mt-8 text-lg font-semibold">
+            {resourceType === 'simulations' ? 'Simulations scientifiques' : 'Moteurs scientifiques'}
+            <span className="ml-2 text-sm font-normal text-slate-400">({shownSamples.length})</span>
+          </h2>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            {shownSamples.map(sample => (
+              <section key={sample.title} data-audit-resource="simulation" data-audit-subject={sample.subject}
+                className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <header className="mb-2 flex items-center gap-2">
+                  <span className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-cyan-200">
+                    {sample.subject === 'physics' ? 'Physique' : sample.subject === 'chemistry' ? 'Chimie' : sample.subject.toUpperCase()}
+                  </span>
+                  <h3 className="text-sm font-semibold text-cyan-200">{sample.title}</h3>
+                </header>
+                <ScientificVisual spec={sample.spec} transparent={sample.spec.engine === 'preset'} />
+              </section>
+            ))}
+          </div>
+        </>
+      )}
 
-      <h2 className="mt-10 text-lg font-semibold">Bibliothèque de schémas</h2>
+      {resourceType !== 'simulations' && <>
+      <h2 className="mt-10 text-lg font-semibold">Bibliothèque de croquis</h2>
       <div className="mt-3 grid gap-5 xl:grid-cols-2">
-        {shown.map(schema => {
+        {shownSchemas.map(schema => {
           const verdicts = inspect(schema);
           const worst = verdicts.some(v => v.level === 'error') ? 'error'
             : verdicts.some(v => v.level === 'warn') ? 'warn' : 'ok';
@@ -302,13 +386,14 @@ export default function VisualAudit() {
                   </li>
                 ))}
               </ul>
-              <div className="h-[360px] overflow-hidden rounded-lg bg-white">
+              <div className={`h-[360px] overflow-hidden rounded-lg ${schema.metadata?.visualStyle === 'pencil' ? 'bg-[#071323]' : 'bg-white'}`}>
                 <SVGSchemaViewer schema={schema} autoAnimate={false} handDrawn />
               </div>
             </section>
           );
         })}
       </div>
+      </>}
     </div>
   );
 }

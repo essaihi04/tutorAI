@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import type { ScientificControlCommand, ScientificVisualSpec } from './types';
+import type { ScientificControlCommand, ScientificSimulationUpdate, ScientificVisualSpec } from './types';
 
 const JSXGraphVisual = lazy(() => import('./JSXGraphVisual'));
 const CytoscapeVisual = lazy(() => import('./CytoscapeVisual'));
@@ -21,6 +21,8 @@ interface ScientificVisualProps {
   transparent?: boolean;
   /** Commande reçue du LLM pour la scène de catalogue actuellement visible. */
   control?: ScientificControlCommand | null;
+  /** État de la scène renvoyé au tuteur pour interprétation. */
+  onSimulationUpdate?: (update: ScientificSimulationUpdate) => void;
 }
 
 function LoadingScientificVisual() {
@@ -31,7 +33,7 @@ function LoadingScientificVisual() {
   );
 }
 
-export default function ScientificVisual({ spec, transparent, control }: ScientificVisualProps) {
+export default function ScientificVisual({ spec, transparent, control, onSimulationUpdate }: ScientificVisualProps) {
   return (
     <Suspense fallback={<LoadingScientificVisual />}>
       {spec.engine === 'jsxgraph' && <JSXGraphVisual spec={spec} transparent={transparent} />}
@@ -40,7 +42,12 @@ export default function ScientificVisual({ spec, transparent, control }: Scienti
       {spec.engine === 'roughsvg' && <RoughSVGVisual spec={spec} transparent={transparent} />}
       {spec.engine === 'three' && <Mitochondrion3DVisual spec={spec} transparent={transparent} />}
       {spec.engine === 'preset' && (
-        <ScientificPresetVisual spec={spec} transparent={transparent} control={control} />
+        <ScientificPresetVisual
+          spec={spec}
+          transparent={transparent}
+          control={control}
+          onStateChange={onSimulationUpdate}
+        />
       )}
     </Suspense>
   );

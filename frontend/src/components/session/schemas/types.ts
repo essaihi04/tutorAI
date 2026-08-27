@@ -29,6 +29,31 @@ export interface SchemaHighlight {
   label: string;
 }
 
+/**
+ * Contexte pédagogique d'un schéma prêt à être choisi par le tuteur.
+ *
+ * Les champs restent déclaratifs : ils décrivent quand et comment employer
+ * le visuel, sans jamais embarquer de code exécutable fourni par le LLM.
+ */
+export interface SchemaResourceMetadata {
+  courseId: string;
+  chapter: string;
+  lesson: string;
+  visualStyle: 'pencil' | 'diagram' | 'reference';
+  resourceRole: 'teacher_sketch' | 'reference_figure';
+  learningObjectives: string[];
+  llmIntents: string[];
+  drawingSteps?: string[];
+  /** Identifiant stable de la charte chromatique appliquée au croquis. */
+  paletteId?: string;
+  /** Provenance de l'audit visuel, conservée pour révision et traçabilité. */
+  sourceUrl?: string;
+  sourceTeacher?: string;
+  sourceVideoTitle?: string;
+  sourceTimecodes?: string[];
+  auditStatus?: 'video_reviewed' | 'curriculum_reviewed';
+}
+
 export interface ScientificSchema {
   id: string;
   title: string;
@@ -43,6 +68,8 @@ export interface ScientificSchema {
    */
   credit?: string;
   keywords: string[];
+  /** Métadonnées indexées côté serveur et exposées au prompt du tuteur. */
+  metadata?: SchemaResourceMetadata;
   category: 'process' | 'structure' | 'cycle' | 'diagram' | 'graph' | 'comparison';
   viewBox: string;
   backgroundColor?: string;

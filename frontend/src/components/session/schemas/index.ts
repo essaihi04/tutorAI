@@ -2,9 +2,13 @@ import type { ScientificSchema } from './types';
 import { SVG_DEFS } from './svgDefs';
 
 import * as svtModule from './schemas_svt';
+import * as svtEnergySketchModule from './schemas_svt_energy_sketches';
 import * as physModule from './schemas_physics';
+import * as physSketchModule from './schemas_physics_sketches';
 import * as chemModule from './schemas_chemistry';
+import * as chemSketchModule from './schemas_chemistry_sketches';
 import * as mathModule from './schemas_math';
+import * as mathSketchModule from './schemas_math_sketches';
 
 // ═══════════════════════════════════════════════════════════════
 // Central Schema Registry
@@ -23,9 +27,13 @@ function collectSchemas(module: Record<string, unknown>): ScientificSchema[] {
 
 const ALL_SCHEMAS: ScientificSchema[] = [
   ...collectSchemas(svtModule),
+  ...collectSchemas(svtEnergySketchModule),
   ...collectSchemas(physModule),
+  ...collectSchemas(physSketchModule),
   ...collectSchemas(chemModule),
+  ...collectSchemas(chemSketchModule),
   ...collectSchemas(mathModule),
+  ...collectSchemas(mathSketchModule),
 ];
 
 // Index by id for O(1) lookup

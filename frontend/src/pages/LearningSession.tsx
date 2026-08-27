@@ -2350,6 +2350,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                       [...conversation].reverse().find(m => m.speaker === 'ai')?.text ?? null
                     }
                     scientificControl={scientificControl}
+                    onSimulationUpdate={handleSimulationUpdate}
                   />
                 </div>
               </div>

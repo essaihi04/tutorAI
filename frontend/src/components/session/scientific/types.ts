@@ -207,6 +207,15 @@ export interface Mitochondrion3DVisualSpec {
 }
 
 export type ScientificPresetId =
+  | 'phys_ch1_propagation_onde'
+  | 'phys_ch1_types_ondes'
+  | 'phys_ch1_celerite_corde'
+  | 'chem_ch1_facteurs_cinetiques'
+  | 'chem_ch1_energie_activation'
+  | 'chem_ch1_oxydoreduction'
+  | 'svt_ch1_respiration_mitochondriale'
+  | 'svt_ch1_glissement_sarcomere'
+  | 'svt_ch1_couplage_excitation_contraction'
   | 'svt_ch1_cycle_atp'
   | 'svt_ch1_levures_exao'
   | 'svt_ch1_chimiosmose'
@@ -239,6 +248,26 @@ export interface ScientificControlCommand {
   presetId: ScientificPresetId;
   command: ScientificControlName;
   parameters?: { variant?: string; step?: number };
+}
+
+/** État compact renvoyé au tuteur pour qu'il puisse suivre la scène. */
+export interface ScientificSimulationUpdate {
+  type: 'simulation_state';
+  simulation_id: ScientificPresetId;
+  current_state: {
+    simulation_status: 'idle' | 'running' | 'paused' | 'finished';
+    preset_id: ScientificPresetId;
+    variant: string;
+    step: number;
+    max_step: number;
+  };
+  student_actions: Array<{
+    action: string;
+    variant: string;
+    step: number;
+  }>;
+  objective_progress: number;
+  timestamp: string;
 }
 
 export type ScientificVisualSpec =

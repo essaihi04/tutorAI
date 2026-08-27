@@ -654,8 +654,7 @@ export const svt_cellule_mitochondrie: ScientificSchema = {
       <path d="M 430 393 C 505 440, 540 455, 590 448" fill="none" stroke="#f97316" stroke-width="2.5" stroke-dasharray="7,5"/>
       <text x="530" y="326" text-anchor="middle" font-size="14" font-weight="bold" fill="#c2410c" font-family="system-ui">ZOOM</text>
       <path d="M 586 315 C 586 218, 662 165, 774 172 C 878 179, 917 237, 909 322 C 901 407, 832 455, 724 451 C 629 448, 586 403, 586 315 Z" fill="#ffedd5" stroke="#ea580c" stroke-width="5"/>
-      <path d="M 607 315 C 607 235, 671 193, 767 196 C 850 199, 887 244, 884 319 C 881 385, 827 424, 735 425 C 651 426, 607 389, 607 315 Z" fill="#fff7ed" stroke="#fb923c" stroke-width="3"/>
-      <path d="M 629 253 C 664 216, 691 218, 713 255 C 735 291, 760 292, 784 250 C 807 211, 841 225, 866 259 M 626 333 C 657 293, 688 302, 713 341 C 738 380, 764 384, 791 340 C 819 295, 848 302, 870 337" fill="none" stroke="#ea580c" stroke-width="4"/>
+      <path d="M 608 315 C 608 244, 668 201, 757 196 C 775 195, 789 196, 803 201 C 817 206, 820 218, 812 229 C 800 245, 777 252, 768 268 C 760 282, 772 296, 787 291 C 805 285, 818 263, 835 254 C 853 245, 873 255, 881 274 C 890 295, 887 323, 878 344 C 865 376, 836 397, 799 410 C 783 416, 769 411, 770 397 C 771 381, 786 368, 785 354 C 784 342, 773 336, 762 343 C 745 353, 741 378, 728 393 C 716 406, 699 409, 686 401 C 674 393, 673 380, 680 369 C 689 354, 701 344, 700 331 C 699 319, 687 314, 677 321 C 661 332, 656 354, 644 366 C 630 380, 612 370, 609 350 C 607 338, 606 326, 608 315 Z" fill="#fff7ed" stroke="#fb923c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       <text x="748" y="318" text-anchor="middle" font-size="15" font-weight="bold" fill="#9a3412" font-family="system-ui">Matrice</text>
       <text x="748" y="365" text-anchor="middle" font-size="12" fill="#15803d" font-family="system-ui">Cycle de Krebs</text>
     `},

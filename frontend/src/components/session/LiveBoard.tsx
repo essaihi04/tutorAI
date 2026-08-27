@@ -12,7 +12,7 @@ import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
 import RoughShape from './scientific/RoughShape';
 import ScientificVisual from './scientific/ScientificVisual';
-import type { ScientificControlCommand, ScientificVisualSpec } from './scientific/types';
+import type { ScientificControlCommand, ScientificSimulationUpdate, ScientificVisualSpec } from './scientific/types';
 
 /**
  * LiveBoard — "Mode Prof en Direct"
@@ -156,6 +156,8 @@ interface LiveBoardProps {
   audioActive?: boolean;
   /** Commande LLM adressée à une scène scientifique déjà posée. */
   scientificControl?: ScientificControlCommand | null;
+  /** Remonte l'état compact d'une simulation de catalogue vers le LLM. */
+  onSimulationUpdate?: (update: ScientificSimulationUpdate) => void;
 }
 
 // ── Palette craie (tableau sombre) ─────────────────────────────────
@@ -196,7 +198,7 @@ interface WrittenEntry {
 }
 interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
 
-function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange, scientificControl }: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange, scientificControl, onSimulationUpdate }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   /**
@@ -1507,7 +1509,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                   style={{ animation: 'liveFadeIn 0.45s ease-out both' }}
                 >
                   {figure.kind === 'scientific' && (
-                    <ScientificVisual spec={figure.spec} transparent control={scientificControl} />
+                    <ScientificVisual spec={figure.spec} transparent control={scientificControl} onSimulationUpdate={onSimulationUpdate} />
                   )}
                   {figure.kind === 'bloc' && renderBoardLine(figure.line)}
                   {figure.kind === 'schema' && (() => {
@@ -2049,6 +2051,47 @@ function onde(
   return points;
 }
 
+/**
+ * Ferme et lisse un contour à partir de points de contrôle. Une mitochondrie
+ * ne possède pas des « vagues » posées dans sa matrice : les crêtes sont les
+ * replis d'une seule membrane interne continue.
+ */
+function courbeFermee(points: DrawPoint[], subdivisions = 4): DrawPoint[] {
+  const result: DrawPoint[] = [];
+  const n = points.length;
+  for (let i = 0; i < n; i += 1) {
+    const p0 = points[(i - 1 + n) % n];
+    const p1 = points[i];
+    const p2 = points[(i + 1) % n];
+    const p3 = points[(i + 2) % n];
+    for (let j = 0; j < subdivisions; j += 1) {
+      const t = j / subdivisions;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      result.push({
+        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+      });
+    }
+  }
+  return [...result, result[0]];
+}
+
+function contourMembraneInterneMitochondrie(x: number, y: number, w: number, h: number): DrawPoint[] {
+  const controles = [
+    [0.12, 0.55], [0.13, 0.34], [0.24, 0.20], [0.38, 0.16],
+    [0.46, 0.17], [0.48, 0.25], [0.42, 0.36], [0.39, 0.45],
+    [0.44, 0.51], [0.51, 0.43], [0.56, 0.27], [0.64, 0.22],
+    [0.71, 0.28], [0.69, 0.40], [0.64, 0.50], [0.69, 0.57],
+    [0.77, 0.46], [0.84, 0.47], [0.89, 0.57], [0.87, 0.69],
+    [0.80, 0.78], [0.70, 0.83], [0.63, 0.82], [0.60, 0.74],
+    [0.62, 0.62], [0.57, 0.57], [0.51, 0.66], [0.48, 0.78],
+    [0.41, 0.83], [0.34, 0.78], [0.36, 0.66], [0.31, 0.59],
+    [0.25, 0.66], [0.22, 0.76], [0.16, 0.70],
+  ].map(([px, py]) => ({ x: x + px * w, y: y + py * h }));
+  return courbeFermee(controles);
+}
+
 function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
   el: LiveDrawElement;
   color: string;
@@ -2073,15 +2116,11 @@ function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
       const h = el.height || 60;
       const cx = x + w / 2;
       const cy = y + h / 2;
-      // Membrane externe, puis interne : c'est la DOUBLE membrane qu'on
-      // demande de reconnaître, et le seul détail qui distingue une
-      // mitochondrie d'une patate.
+      // La membrane externe est lisse. La membrane interne, elle, reste un
+      // contour fermé unique et se replie vers la matrice pour former les
+      // crêtes — conformément au croquis BAC de référence.
       trait(<RoughShape kind="ellipse" x={cx} y={cy} width={w} height={h} stroke={color} strokeWidth={sw} seed={seed + 1} style={anim} />);
-      trait(<RoughShape kind="ellipse" x={cx} y={cy} width={w * 0.86} height={h * 0.7} stroke={chalk('green')} strokeWidth={Math.max(1.2, sw - 1)} seed={seed + 2} style={anim} />);
-      for (let i = 0; i < 4; i += 1) {
-        const yc = y + h * 0.3 + i * (h * 0.14);
-        trait(<RoughShape kind="linearPath" points={onde(x + w * 0.16, yc, w * 0.68, h * 0.06, 3, i)} stroke={chalk('green')} strokeWidth={1.6} seed={seed + 10 + i} style={anim} />);
-      }
+      trait(<RoughShape kind="linearPath" points={contourMembraneInterneMitochondrie(x, y, w, h)} stroke={chalk('green')} strokeWidth={Math.max(1.4, sw - 0.7)} seed={seed + 2} style={anim} />);
       labelX = cx;
       labelY = y + h + 18;
       break;

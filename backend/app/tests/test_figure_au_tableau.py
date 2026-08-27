@@ -18,6 +18,8 @@ rythme de la parole — le tableau statique, lui, affichait tout d'un bloc.
 """
 import asyncio
 
+import pytest
+
 from app.websockets.session_handler import SessionHandler
 
 
@@ -129,6 +131,39 @@ def test_une_figure_seule_vaut_un_tableau():
     assert steps[0]["action"] == "figure"
 
 
+def test_un_schema_valide_devient_une_figure_live():
+    steps = SessionHandler._board_lines_to_live_steps([{
+        "type": "schema",
+        "schema_id": "svt_croquis_glycolyse",
+        "content": "On suit le carbone du glucose.",
+    }])
+
+    assert steps == [{
+        "action": "figure",
+        "schema_id": "svt_croquis_glycolyse",
+        "say": "On suit le carbone du glucose.",
+    }]
+
+
+@pytest.mark.parametrize("schema_id", [
+    "phys_croquis_superposition",
+    "chem_croquis_courbes_facteur",
+    "math_croquis_tvi",
+])
+def test_les_croquis_complexes_des_trois_matieres_deviennent_des_figures_live(schema_id):
+    steps = SessionHandler._board_lines_to_live_steps([{
+        "type": "schema",
+        "schema_id": schema_id,
+        "content": "On construit le raisonnement couche par couche.",
+    }])
+
+    assert steps == [{
+        "action": "figure",
+        "schema_id": schema_id,
+        "say": "On construit le raisonnement couche par couche.",
+    }]
+
+
 def test_une_figure_invalide_ne_casse_pas_le_tableau():
     lignes = [
         {"type": "title", "content": "La mitochondrie"},
@@ -156,6 +191,25 @@ def test_le_tableau_envoye_porte_encore_la_figure():
     figures = [s for s in envoi["steps"] if s["action"] == "figure"]
     assert len(figures) == 1
     assert figures[0]["scientific"]["engine"] == "roughsvg"
+
+
+def test_une_ressource_schema_s_ouvre_dans_le_live_board():
+    handler = SessionHandler.__new__(SessionHandler)
+    handler.websocket = FauxWebSocket()
+    handler._remember_mode = lambda *_args, **_kwargs: None
+
+    asyncio.run(handler._display_resource({
+        "resource_type": "image",
+        "title": "Croquis : bilan de la glycolyse",
+        "description": "Suivre le glucose jusqu'aux deux pyruvates.",
+        "file_path": None,
+        "metadata": {"schema_id": "svt_croquis_glycolyse"},
+    }))
+
+    envoi = handler.websocket.envoyes[-1]
+    assert envoi["type"] == "whiteboard_live"
+    figure = next(step for step in envoi["steps"] if step["action"] == "figure")
+    assert figure["schema_id"] == "svt_croquis_glycolyse"
 
 
 def test_un_echiquier_voyage_dans_le_script_sans_se_perdre():
