@@ -405,7 +405,7 @@ export default function BoardAudit() {
               : mode === 'effacer' ? (scriptEffacerPuisRedessiner() as any)
               : null
           }
-          schemaId={mode === 'schema' ? 'phys_dipole_rc' : null}
+          schemaId={mode === 'schema' ? 'svt_glycolyse' : null}
           drawCommands={
             mode === 'dessin' ? COMMANDES_DE_DESSIN
               : mode === 'biologie' ? (CROQUIS_BIOLOGIE as any)
