@@ -25,7 +25,7 @@ export const SVT_CROQUIS_CELLULE_MITOCHONDRIE: ScientificSchema = {
   id: 'svt_croquis_cellule_mitochondrie',
   title: 'Croquis au crayon — De la cellule à la mitochondrie',
   subject: 'svt',
-  keywords: ['cellule', 'mitochondrie', 'cellule mitochondrie', 'localisation mitochondrie', 'zoom mitochondrie', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'consommation matière organique', 'خلية', 'ميتوكندريا'],
+  keywords: ['cellule', 'mitochondrie', 'cellule mitochondrie', 'localisation mitochondrie', 'zoom mitochondrie', 'consommation matière organique', 'خلية', 'ميتوكندريا'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -75,7 +75,7 @@ export const SVT_CROQUIS_ATP_ADP: ScientificSchema = {
   id: 'svt_croquis_atp_adp',
   title: 'Croquis au crayon — Cycle ATP–ADP',
   subject: 'svt',
-  keywords: ['ATP', 'ADP', 'cycle ATP ADP', 'hydrolyse ATP', 'phosphorylation ADP', 'couplage énergétique', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'monnaie énergétique', 'طاقة', 'أدينوزين ثلاثي الفوسفات'],
+  keywords: ['ATP', 'ADP', 'cycle ATP ADP', 'hydrolyse ATP', 'phosphorylation ADP', 'couplage énergétique', 'monnaie énergétique', 'طاقة', 'أدينوزين ثلاثي الفوسفات'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -129,7 +129,7 @@ export const SVT_CROQUIS_EXPERIENCE_LEVURES: ScientificSchema = {
   id: 'svt_croquis_experience_levures',
   title: 'Croquis au crayon — Levures avec ou sans dioxygène',
   subject: 'svt',
-  keywords: ['levures', 'expérience levures', 'levures avec sans O2', 'EXAO O2 CO2', 'respiration fermentation expérience', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'protocole expérimental', 'خميرة', 'تنفس', 'تخمر'],
+  keywords: ['levures', 'expérience levures', 'levures avec sans O2', 'EXAO O2 CO2', 'respiration fermentation expérience', 'protocole expérimental', 'خميرة', 'تنفس', 'تخمر'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -188,7 +188,7 @@ export const SVT_CROQUIS_GLYCOLYSE: ScientificSchema = {
   id: 'svt_croquis_glycolyse',
   title: 'Croquis au crayon — Bilan de la glycolyse',
   subject: 'svt',
-  keywords: ['glycolyse', 'bilan glycolyse', 'glucose pyruvate', '2 ATP nets', '2 NADH H+', 'cytoplasme', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'تحلل سكري'],
+  keywords: ['glycolyse', 'bilan glycolyse', 'glucose pyruvate', '2 ATP nets', '2 NADH H+', 'cytoplasme', 'تحلل سكري'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -238,7 +238,7 @@ export const SVT_CROQUIS_MITOCHONDRIE: ScientificSchema = {
   id: 'svt_croquis_mitochondrie',
   title: 'Croquis au crayon — Ultrastructure de la mitochondrie',
   subject: 'svt',
-  keywords: ['mitochondrie', 'croquis mitochondrie', 'ultrastructure mitochondrie', 'crêtes mitochondriales', 'membrane interne externe', 'matrice mitochondriale', 'espace intermembranaire', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'ميتوكندريا', 'بنية الميتوكندريا'],
+  keywords: ['mitochondrie', 'croquis mitochondrie', 'ultrastructure mitochondrie', 'crêtes mitochondriales', 'membrane interne externe', 'matrice mitochondriale', 'espace intermembranaire', 'ميتوكندريا', 'بنية الميتوكندريا'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -285,7 +285,7 @@ export const SVT_CROQUIS_KREBS: ScientificSchema = {
   id: 'svt_croquis_krebs',
   title: 'Croquis au crayon — Bilan du cycle de Krebs',
   subject: 'svt',
-  keywords: ['krebs', 'cycle de Krebs', 'bilan cycle Krebs', 'acétyl CoA oxaloacétate', 'matrice mitochondriale', 'NADH FADH2 CO2', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'دورة كريبس'],
+  keywords: ['krebs', 'cycle de Krebs', 'bilan cycle Krebs', 'acétyl CoA oxaloacétate', 'matrice mitochondriale', 'NADH FADH2 CO2', 'دورة كريبس'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -333,7 +333,7 @@ export const SVT_CROQUIS_CHAINE_RESPIRATOIRE: ScientificSchema = {
   id: 'svt_croquis_chaine_respiratoire',
   title: 'Croquis au crayon — Chaîne respiratoire et ATP synthase',
   subject: 'svt',
-  keywords: ['chaîne respiratoire', 'croquis chaîne respiratoire', 'phosphorylation oxydative', 'gradient H+', 'ATP synthase', 'dioxygène accepteur final', 'NADH électrons', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'السلسلة التنفسية', 'أكسجين'],
+  keywords: ['chaîne respiratoire', 'croquis chaîne respiratoire', 'phosphorylation oxydative', 'gradient H+', 'ATP synthase', 'dioxygène accepteur final', 'NADH électrons', 'السلسلة التنفسية', 'أكسجين'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -395,7 +395,7 @@ export const SVT_CROQUIS_RESPIRATION_FERMENTATION: ScientificSchema = {
   id: 'svt_croquis_respiration_fermentation',
   title: 'Croquis au crayon — Respiration ou fermentation',
   subject: 'svt',
-  keywords: ['respiration', 'fermentation', 'respiration versus fermentation', 'avec sans dioxygène', 'pyruvate bifurcation', 'rendement ATP comparé', 'fermentation lactique alcoolique', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'تنفس', 'تخمر'],
+  keywords: ['respiration', 'fermentation', 'respiration versus fermentation', 'avec sans dioxygène', 'pyruvate bifurcation', 'rendement ATP comparé', 'fermentation lactique alcoolique', 'تنفس', 'تخمر'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',
@@ -446,7 +446,7 @@ export const SVT_CROQUIS_BILAN_RESPIRATION: ScientificSchema = {
   id: 'svt_croquis_bilan_respiration',
   title: 'Croquis au crayon — Bilan de la respiration cellulaire',
   subject: 'svt',
-  keywords: ['respiration cellulaire', 'bilan respiration cellulaire', 'glucose O2 CO2 H2O ATP', 'glycolyse Krebs chaîne respiratoire', 'bilan énergétique global', 'croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا', 'libération énergie', 'تنفس خلوي'],
+  keywords: ['respiration cellulaire', 'bilan respiration cellulaire', 'glucose O2 CO2 H2O ATP', 'glycolyse Krebs chaîne respiratoire', 'bilan énergétique global', 'libération énergie', 'تنفس خلوي'],
   metadata: {
     courseId: 'svt_ch1_energy',
     chapter: 'Consommation de la matière organique et libération de l\'énergie',

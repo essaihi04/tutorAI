@@ -1810,7 +1810,19 @@ class SessionHandler:
         # main dès qu'il faut GÉNÉRER — c'est ce qu'elle seule sait cadrer.
         if route_scientific_visual(contexte, demande)["source"] == "schema":
             return carte
-        return f"{carte}\n\n{build_visual_route_prompt(contexte, demande)}"
+        # Les deux blocs partent ensemble, et le second dit « dessine » pendant
+        # que le premier dit « affiche ». L'ordre entre eux n'était écrit nulle
+        # part : le tuteur tranchait au hasard, et c'est le dessin improvisé qui
+        # gagnait — devant une scène du catalogue déjà réglée sur la notion.
+        return (
+            f"{carte}\n\n"
+            "[ORDRE ENTRE LES DEUX BLOCS] La bibliothèque ci-dessus passe "
+            "D'ABORD. Le bloc suivant dit comment fabriquer une figure : il ne "
+            "vaut que pour ce que la bibliothèque ne couvre PAS — un point de "
+            "ton explication qui n'a pas sa ressource, ou la suite de la "
+            "séance.\n\n"
+            f"{build_visual_route_prompt(contexte, demande)}"
+        )
 
     def _derniere_demande(self) -> str:
         """La dernière phrase écrite par l'ÉLÈVE, seule.

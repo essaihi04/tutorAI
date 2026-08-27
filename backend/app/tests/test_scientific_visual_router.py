@@ -2,6 +2,8 @@
 
 from app.services.scientific_visual_router import (
     build_visual_route_prompt,
+    demande_une_courbe,
+    match_visual_blueprint,
     recommend_generated_engine,
     route_scientific_visual,
     visual_blueprints,
@@ -311,3 +313,54 @@ def test_le_nom_d_une_notion_n_est_pas_une_demande_d_animation():
         "étude dynamique du pendule",
     ):
         assert route_scientific_visual(demande, demande)["source"] != "mouvement", demande
+
+
+def test_un_mot_generique_repete_ne_fait_pas_une_fiche():
+    """La fiche de l'énergie mécanique liste « energie mecanique », « energie
+    cinetique potentielle » et « conservation energie » : trois mots-clés, le
+    même mot « énergie ». Additionnés, ils atteignaient le seuil à eux seuls —
+    et « explique-moi l'énergie d'activation », une question de CHIMIE,
+    repartait avec la fiche de MÉCANIQUE."""
+    fiche, _ = match_visual_blueprint("explique-moi l'énergie d'activation")
+
+    assert (fiche or {}).get("id") != "phys_energie_mecanique"
+
+
+def test_une_fiche_reste_trouvable_par_sa_propre_notion():
+    """Le resserrage ne doit pas fermer les fiches qu'il protège."""
+    fiche, score = match_visual_blueprint("conservation de l'énergie mécanique d'un solide")
+
+    assert (fiche or {}).get("id") == "phys_energie_mecanique"
+    assert score >= 3
+
+
+def test_une_fonction_ecrite_par_l_eleve_se_trace_au_lieu_de_sortir_une_planche():
+    """« trace la courbe de f(x) = (x²−4)/(x−2) » contient « courbe » et
+    « limite » : le registre gagnait et le tuteur recevait l'ordre « affiche
+    `math_limites`, NE LE REDESSINE PAS ». L'élève voyait alors la planche
+    « méthodes du BAC » — juste, et sans sa fonction dedans."""
+    route = route_scientific_visual(
+        "trace la courbe de f(x) = (x^2-4)/(x-2) et explique la limite en 2",
+        "trace la courbe de f(x) = (x^2-4)/(x-2) et explique la limite en 2",
+    )
+
+    assert route["source"] == "courbe"
+    assert route["engine"] == "jsxgraph"
+
+    # La planche ne disparaît pas quand elle est franchement rapprochée : elle
+    # accompagne la MÉTHODE, elle ne remplace pas le tracé demandé.
+    avec_planche = route_scientific_visual(
+        "limites continuité asymptote : trace la courbe de f(x) = 1/x",
+        "limites continuité asymptote : trace la courbe de f(x) = 1/x",
+    )
+
+    assert avec_planche["source"] == "courbe"
+    assert avec_planche["schema_id"] == "math_limites"
+
+
+def test_une_courbe_nommee_sans_fonction_ne_detourne_rien():
+    """« la courbe de titrage » ou « la courbe d'avancement » nomment une
+    figure du cours, pas une expression à tracer."""
+    assert not demande_une_courbe("trace la courbe de titrage acide base")
+    assert not demande_une_courbe("montre-moi la courbe d'avancement")
+    assert demande_une_courbe("dessine le graphe de f(x) = 2*x + 1")

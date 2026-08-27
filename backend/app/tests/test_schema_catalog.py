@@ -8,7 +8,13 @@ répondu, on voit seulement un dessin à main levée à la place du bon schéma.
 import json
 from pathlib import Path
 
-from app.services.schema_catalog import SCHEMA_CATALOG, SCHEMA_IDS, match_schema, schema_title
+from app.services.schema_catalog import (
+    SCHEMA_CATALOG,
+    SCHEMA_IDS,
+    classer_schemas,
+    match_schema,
+    schema_title,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -75,17 +81,48 @@ def test_le_mot_cle_le_plus_precis_l_emporte():
     assert sarcomere == "svt_muscle_sarcomere"
 
 
-def test_une_demande_de_croquis_prefere_la_version_crayon():
-    reference, _ = match_schema("explique la glycolyse")
-    croquis, score = match_schema("dessine la glycolyse au tableau")
-    darija_latin, _ = match_schema("rsem lia glycolyse f tableau")
-    darija_arabe, _ = match_schema("رسم ليا بنية الميتوكندريا")
+def test_le_verbe_de_la_demande_ne_designe_aucune_figure():
+    """« dessine » dit ce que l'élève VEUT, pas de quoi il parle.
 
-    assert reference == "svt_glycolyse"
-    assert croquis == "svt_croquis_glycolyse"
-    assert darija_latin == "svt_croquis_glycolyse"
-    assert darija_arabe == "svt_croquis_mitochondrie"
-    assert score >= 3
+    Les neuf croquis SVT portaient ce verbe — et « croquis », et « رسم ليا » —
+    parmi leurs mots-clés. Toute demande de dessin les touchait donc TOUS, à
+    égalité, et l'ordre du catalogue tranchait : « dessine-moi le montage de
+    conductimétrie » repartait avec la mitochondrie. L'intention se lit
+    ailleurs (`demande_un_croquis`), la notion seule rapproche une figure.
+    """
+    hors_sujet, _ = match_schema("dessine-moi le montage de la conductimétrie")
+    autre_matiere, _ = match_schema("dessine-moi une onde sur une corde")
+
+    assert not (hors_sujet or "").startswith("svt_")
+    assert not (autre_matiere or "").startswith("svt_")
+
+
+def test_les_deux_versions_d_une_notion_restent_toutes_deux_atteignables():
+    """Le classement rapproche la planche ET le croquis ; c'est la carte des
+    visuels qui choisit ensuite, selon ce que l'élève a demandé."""
+    trouves = dict(classer_schemas("dessine la glycolyse au tableau"))
+
+    assert "svt_glycolyse" in trouves
+    assert "svt_croquis_glycolyse" in trouves
+
+
+def test_une_forme_verbale_retrouve_le_mot_cle_nominal():
+    """Le catalogue dit « contraction », l'élève écrit « se contracte »."""
+    trouve, score = match_schema("comment le muscle se contracte pendant l'effort")
+
+    assert trouve == "svt_muscle_sarcomere"
+    assert score >= 2
+
+
+def test_un_sigle_du_programme_vaut_une_notion():
+    """« ATP » fait trois lettres et ne désigne rien d'autre que l'ATP.
+
+    Sous le seuil des six lettres, il ne valait qu'un point : « c'est quoi
+    l'ATP ? » ne sortait ni le croquis ATP–ADP ni la scène du cycle."""
+    trouve, score = match_schema("c'est quoi l'ATP ?")
+
+    assert trouve is not None
+    assert score >= 2
 
 
 def test_les_croquis_des_premiers_cours_portent_les_metadonnees_llm():

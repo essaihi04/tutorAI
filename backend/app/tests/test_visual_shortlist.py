@@ -225,3 +225,76 @@ def test_le_bloc_ne_nomme_que_des_identifiants_qui_existent():
             assert identifiant_de(ligne) in MODELES_3D
             vus += 1
     assert vus, "la notion la mieux couverte du programme ne sort aucune ressource"
+
+
+# ── Ce que l'audit du 27 août 2026 a trouvé fermé ─────────────────────
+
+def test_une_demande_de_mouvement_descend_le_seuil_des_scenes():
+    """« montre-moi l'onde qui bouge » ne sortait RIEN.
+
+    « onde » est un mot de chapitre : il vaut un point, sous le seuil de deux.
+    La scène de propagation restait donc fermée, et le tuteur repartait vers un
+    dessin FIXE — c'est-à-dire vers une réponse qui ne répond pas. Face à une
+    demande de mouvement, une scène faiblement rapprochée bat une image
+    immobile.
+    """
+    carte = carte_des_visuels("montre-moi l'onde qui bouge", "montre-moi l'onde qui bouge")
+
+    assert carte["veut_mouvement"]
+    assert "phys_ch1_propagation_onde" in dict(carte["presets"])
+
+
+def test_une_courbe_a_tracer_n_est_pas_un_croquis_a_la_craie():
+    """Le verbe est le même, la demande ne l'est pas : un croquis au crayon
+    est une planche pré-dessinée, il ne peut pas placer les points de la
+    fonction que l'élève vient d'écrire."""
+    assert not demande_un_croquis("trace la courbe de f(x) = x^2 - 1")
+    assert not demande_un_croquis("dessine le graphe de la fonction")
+    assert demande_un_croquis("dessine-moi le cycle de Krebs")
+
+
+def test_un_mot_generique_ne_repeche_pas_une_figure_d_une_autre_matiere():
+    """Le repêchage sert à sortir la planche du chapitre quand rien de mieux
+    n'existe. « énergie » traverse la moitié du programme : il ne doit pas
+    faire sortir les oscillations RLC sur une question de chimie."""
+    carte = carte_des_visuels(
+        "explique-moi l'énergie d'activation",
+        "explique-moi l'énergie d'activation",
+    )
+
+    assert (carte["reference"] or ("", 0))[0] != "phys_rlc"
+    assert "chem_ch1_energie_activation" in dict(carte["presets"])
+
+
+def test_l_apostrophe_typographique_ne_ferme_plus_une_scene():
+    """Le catalogue écrit « énergie d’activation », l'élève tape « d'activation ».
+    `re.escape` compare des caractères : les deux ne se rencontraient jamais."""
+    assert "chem_ch1_energie_activation" in dict(
+        apparier_presets("comment le catalyseur abaisse l'énergie d'activation")
+    )
+
+
+def test_une_scene_animee_seule_recoit_quand_meme_sa_consigne():
+    """Le trou de la chaîne : quand aucun schéma ne couvre la notion mais
+    qu'une scène le fait, le bloc annonçait « l'une d'elles part dans cette
+    réponse » puis ne disait pas LAQUELLE — et le bloc de génération qui suit
+    réclamait un dessin. C'est le dessin improvisé qui partait."""
+    bloc = bloc_visuels_disponibles(
+        "explique-moi l'énergie d'activation avec un catalyseur",
+        "explique-moi l'énergie d'activation avec un catalyseur",
+    )
+
+    assert "SCÈNE ANIMÉE" in bloc
+    assert "SCHÉMA DE RÉFÉRENCE" not in bloc
+    assert "c'est ELLE qui part, pas une figure improvisée" in bloc
+
+
+def test_la_fonction_ecrite_par_l_eleve_passe_avant_toute_ressource():
+    """Aucune planche du chapitre ne contient SA courbe."""
+    bloc = bloc_visuels_disponibles(
+        "trace la courbe de f(x) = (x^2-4)/(x-2) et explique la limite en 2",
+        "trace la courbe de f(x) = (x^2-4)/(x-2) et explique la limite en 2",
+    )
+
+    assert "Il a ÉCRIT une fonction à tracer" in bloc
+    assert "AUCUNE demande particulière" not in bloc

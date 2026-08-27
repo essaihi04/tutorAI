@@ -41,11 +41,12 @@ from app.services.schema_catalog import (
     mot_cle_present,
     plier,
     poids_mot_cle,
+    schema_entry,
     schema_title,
 )
 from app.services.scientific_presets import SCIENTIFIC_PRESETS
 from app.services.scientific_visual_skill import MODELES_3D
-from app.services.scientific_visual_router import demande_du_mouvement
+from app.services.scientific_visual_router import demande_du_mouvement, demande_une_courbe
 
 
 # ── Ce que l'élève demande, dans les trois langues de la séance ───────
@@ -78,11 +79,25 @@ _PROFONDEUR = re.compile(
 )
 
 
+#: Ce qui se trace dans un REPÈRE, et pas à la craie. Le verbe est le même —
+#: « trace », « dessine » — mais la demande ne l'est pas : un croquis au crayon
+#: est une planche pré-dessinée du programme, il ne peut pas placer les points
+#: de la fonction que l'élève vient d'écrire. « Trace la courbe de f » appelle
+#: JSXGraph, pas la boîte à craies.
+_A_TRACER = re.compile(
+    r"(?<!\w)(?:courbe|graphe|graphique|repere)(?!\w)|f\s*\(\s*x\s*\)",
+    re.IGNORECASE,
+)
+
+
 def demande_un_croquis(texte: str) -> bool:
     """L'élève demande-t-il un DESSIN au tableau, et non une planche ?"""
     if not texte:
         return False
-    return bool(_CROQUIS.search(plier(texte)) or _CROQUIS.search(texte))
+    plie = plier(texte)
+    if _A_TRACER.search(plie):
+        return False
+    return bool(_CROQUIS.search(plie) or _CROQUIS.search(texte))
 
 
 def demande_de_la_profondeur(texte: str) -> bool:
@@ -103,7 +118,12 @@ def _score(keywords: Iterable[Any], contexte_plie: str) -> int:
     )
 
 
-def _classer(catalogue: dict[str, dict[str, Any]], contexte: str, limite: int) -> list[tuple[str, int]]:
+def _classer(
+    catalogue: dict[str, dict[str, Any]],
+    contexte: str,
+    limite: int,
+    seuil: int = 2,
+) -> list[tuple[str, int]]:
     contexte_plie = plier(contexte)
     if not contexte_plie.strip():
         return []
@@ -111,24 +131,54 @@ def _classer(catalogue: dict[str, dict[str, Any]], contexte: str, limite: int) -
         (identifiant, _score(definition.get("keywords", ()), contexte_plie))
         for identifiant, definition in catalogue.items()
     ]
-    trouves = [(identifiant, score) for identifiant, score in trouves if score >= 2]
+    trouves = [(identifiant, score) for identifiant, score in trouves if score >= seuil]
     trouves.sort(key=lambda item: item[1], reverse=True)
     return trouves[:limite]
 
 
-def apparier_presets(contexte: str, limite: int = 2) -> list[tuple[str, int]]:
+def apparier_presets(contexte: str, limite: int = 2, seuil: int = 2) -> list[tuple[str, int]]:
     """Les scènes animées du catalogue qui couvrent cette notion.
 
     Le seuil de 2 est le même que celui du registre SVG : un mot-clé
     distinctif seul suffit (« chimiosmose », « myogramme »), un mot de
     chapitre seul ne suffit pas.
+
+    Il descend à 1 quand l'élève demande à voir la chose BOUGER, et c'est le
+    seul cas. Le seuil protège d'une animation hors sujet ; mais face à
+    « montre-moi l'onde qui bouge », l'alternative n'est pas le silence : c'est
+    un dessin FIXE, qui ne répond pas à la question posée. Une scène du bon
+    chapitre, même rapprochée sur le seul mot « onde », vaut mieux qu'une image
+    immobile envoyée à quelqu'un qui demande du mouvement.
     """
-    return _classer(SCIENTIFIC_PRESETS, contexte, limite)
+    return _classer(SCIENTIFIC_PRESETS, contexte, limite, seuil)
 
 
 def apparier_modeles_3d(contexte: str, limite: int = 1) -> list[tuple[str, int]]:
     """Les modèles 3D audités qui couvrent cette notion."""
     return _classer(MODELES_3D, contexte, limite)
+
+
+def _porte_la_notion(schema_id: str, contexte_plie: str) -> bool:
+    """La figure PARLE-t-elle du mot par lequel elle a été touchée ?
+
+    Un mot-clé générique — « énergie », « cycle », « structure » — vaut un
+    point parce qu'il traverse le programme. Il ne devient une raison
+    d'afficher CETTE figure que lorsqu'il la nomme : il est alors dans son
+    titre ou son identifiant, et pas seulement dans sa liste de mots-clés.
+    """
+    entree = schema_entry(schema_id)
+    if not entree:
+        return False
+    # Les identifiants s'écrivent avec des tirets bas, que `\w` avale : sans
+    # cette césure, « onde » ne se trouverait pas dans `phys_ondes_mecaniques`.
+    # Seul le tiret bas est coupé : effacer toute la ponctuation perdrait les
+    # notions qui en contiennent une, à commencer par « 0/0 ».
+    identite = plier(f"{entree['id']} {entree['title']}").replace("_", " ")
+    return any(
+        mot_cle_present(mot, contexte_plie) and mot_cle_present(mot, identite)
+        for mot in entree.get("keywords", ())
+        if isinstance(mot, str) and mot.strip()
+    )
 
 
 #: Un mot du titre d'une ressource ne devient un mot-clé qu'à partir d'une
@@ -185,18 +235,44 @@ def carte_des_visuels(
     dessin, du mouvement ou de la profondeur.
     """
     classement = classer_schemas(contexte, limite=8)
-    croquis = [(sid, score) for sid, score in classement if est_croquis(sid) and score >= 2]
-    references = [(sid, score) for sid, score in classement if not est_croquis(sid) and score >= 2]
+    contexte_plie = plier(contexte)
 
+    def _meilleur(garder_les_croquis: bool) -> tuple[str, int] | None:
+        """Le mieux rapproché, et à défaut le moins mal — mais pas n'importe quoi.
+
+        Le seuil de 2 dit « ce rapprochement est sûr ». Il vaut pour DÉCIDER —
+        c'est le rôle du routeur. Ici on ne décide rien : on dresse la liste de
+        ce qui existe sur la notion. Un mot de chapitre seul (« onde »,
+        « cellule ») n'y suffit pas tant qu'une figure mieux rapprochée est
+        disponible ; mais quand il n'y en a aucune, taire la planche du
+        chapitre revient à laisser le tuteur improviser un dessin alors que
+        celui du programme était là.
+
+        Le repêchage exige alors que le mot en question soit CE DONT LA FIGURE
+        PARLE — présent dans son titre ou son identifiant. « onde » repêche les
+        ondes mécaniques ; « énergie », qui traverse la moitié du programme,
+        ne repêche pas les oscillations RLC pour une question de chimie sur
+        l'énergie d'activation.
+        """
+        touches = [
+            (sid, score) for sid, score in classement
+            if est_croquis(sid) is garder_les_croquis
+        ]
+        srs = [item for item in touches if item[1] >= 2]
+        repeches = [item for item in touches if _porte_la_notion(item[0], contexte_plie)]
+        return (srs or repeches or [None])[0]
+
+    veut_mouvement = demande_du_mouvement(demande)
     return {
-        "reference": references[0] if references else None,
-        "croquis": croquis[0] if croquis else None,
-        "presets": apparier_presets(contexte),
+        "reference": _meilleur(False),
+        "croquis": _meilleur(True),
+        "presets": apparier_presets(contexte, seuil=1 if veut_mouvement else 2),
         "modeles_3d": apparier_modeles_3d(contexte),
         "simulations": apparier_simulations(contexte, simulations),
         "veut_croquis": demande_un_croquis(demande),
-        "veut_mouvement": demande_du_mouvement(demande),
+        "veut_mouvement": veut_mouvement,
         "veut_profondeur": demande_de_la_profondeur(demande),
+        "veut_courbe": demande_une_courbe(demande),
     }
 
 
@@ -283,7 +359,18 @@ def bloc_visuels_disponibles(
 
     # L'ordre des règles suit celui des intentions détectées : la première qui
     # s'applique est celle que l'élève a formulée, pas celle qui reste.
-    if carte["veut_profondeur"] and carte["modeles_3d"]:
+    if carte["veut_courbe"]:
+        # Elle passe AVANT tout le reste : l'élève a écrit sa fonction, et
+        # aucune des ressources ci-dessus ne la contient. Les lui envoyer
+        # reviendrait à répondre à une autre question que la sienne.
+        lignes.append(
+            "→ Il a ÉCRIT une fonction à tracer : AUCUNE des ressources "
+            "ci-dessus ne contient SA courbe. Trace-la toi-même — ligne "
+            "`scientific`, moteur `jsxgraph`, un élément `function` avec son "
+            "expression. Les ressources listées ne servent alors qu'à la "
+            "MÉTHODE, et seulement si tu y viens ensuite."
+        )
+    elif carte["veut_profondeur"] and carte["modeles_3d"]:
         lignes.append(
             "→ Il demande à TOURNER AUTOUR / à voir en 3D : envoie le MODÈLE 3D "
             "(ligne `scientific`, moteur `three`)."
@@ -310,6 +397,18 @@ def bloc_visuels_disponibles(
         lignes.append(
             "→ Aucune planche de référence sur cette notion : trace le CROQUIS AU "
             "CRAYON dans un pas `figure` de `show_live`."
+        )
+    elif carte["presets"] or carte["simulations"] or carte["modeles_3d"]:
+        # Le trou de la chaîne : quand seule une scène animée couvre la notion,
+        # le bloc annonçait « l'une d'elles part dans cette réponse » puis ne
+        # disait pas laquelle — et le bloc de génération qui suit réclamait un
+        # dessin. Deux ordres contraires, et c'est le dessin improvisé qui
+        # partait, à la place d'une scène déjà réglée sur la même notion.
+        lignes.append(
+            "→ Aucun schéma dessiné sur cette notion, mais une SCÈNE du "
+            "catalogue la couvre : c'est ELLE qui part, pas une figure "
+            "improvisée. Elle est déjà réglée, elle se met en pause et l'élève "
+            "peut l'avancer pas à pas — ce qu'un dessin ne fera jamais."
         )
 
     if vus:

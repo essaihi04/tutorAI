@@ -1,13 +1,11 @@
 import type { ScientificSchema } from './types';
 import { BAC_PENCIL as P, BAC_PENCIL_FONT as FONT, BAC_PENCIL_PALETTE_ID, pencilDefs } from './pencilPalette';
 
-const REQUEST_WORDS = ['croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا'];
-
 export const MATH_CROQUIS_FORMES_INDETERMINEES: ScientificSchema = {
   id: 'math_croquis_formes_indeterminees',
   title: 'Croquis au crayon — Les quatre formes indéterminées',
   subject: 'math',
-  keywords: ['formes indéterminées', 'FI limites', 'zéro sur zéro', 'infini sur infini', 'zéro fois infini', 'infini moins infini', ...REQUEST_WORDS],
+  keywords: ['formes indéterminées', 'FI limites', 'zéro sur zéro', 'infini sur infini', 'zéro fois infini', 'infini moins infini'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Lever une forme indéterminée',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -40,7 +38,7 @@ export const MATH_CROQUIS_BOITE_FACTORISATION: ScientificSchema = {
   id: 'math_croquis_boite_factorisation',
   title: 'Croquis au crayon — Boîte à outils de factorisation',
   subject: 'math',
-  keywords: ['factorisation limite', 'identités remarquables', 'a carré moins b carré', 'a cube moins b cube', 'racine polynôme', 'lever 0 sur 0', ...REQUEST_WORDS],
+  keywords: ['factorisation limite', 'identités remarquables', 'a carré moins b carré', 'a cube moins b cube', 'racine polynôme', 'lever 0 sur 0'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Lever une forme indéterminée',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -75,7 +73,7 @@ export const MATH_CROQUIS_STRATEGIE_FI: ScientificSchema = {
   id: 'math_croquis_strategie_fi',
   title: 'Croquis au crayon — Stratégie pour lever 0/0',
   subject: 'math',
-  keywords: ['méthode limite 0 sur 0', 'stratégie forme indéterminée', 'substitution factorisation simplification', 'limite quotient polynômes', 'x carré moins 4', ...REQUEST_WORDS],
+  keywords: ['méthode limite 0 sur 0', '0/0', 'lever une indétermination', 'stratégie forme indéterminée', 'substitution factorisation simplification', 'limite quotient polynômes', 'x carré moins 4'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Lever une forme indéterminée',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -115,7 +113,7 @@ export const MATH_CROQUIS_TROU_LIMITE: ScientificSchema = {
   id: 'math_croquis_trou_limite',
   title: 'Croquis au crayon — Un trou, mais une limite finie',
   subject: 'math',
-  keywords: ['trou dans la courbe', 'limite finie fonction non définie', 'x carré moins 1 sur x moins 1', 'limite en 1 égale 2', 'prolongement par continuité', ...REQUEST_WORDS],
+  keywords: ['trou dans la courbe', 'limite finie fonction non définie', 'x carré moins 1 sur x moins 1', 'limite en 1 égale 2', 'prolongement par continuité'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Calculer — reconnaître puis lever une indétermination',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -148,7 +146,7 @@ export const MATH_CROQUIS_ASYMPTOTES: ScientificSchema = {
   id: 'math_croquis_asymptotes',
   title: 'Croquis au crayon — Asymptotes verticale et horizontale',
   subject: 'math',
-  keywords: ['asymptote verticale horizontale', 'limite infinie en a', 'limite finie à infini', 'x égale a y égale L', 'fonction 1 sur x', ...REQUEST_WORDS],
+  keywords: ['asymptote verticale horizontale', 'limite infinie en a', 'limite finie à infini', 'x égale a y égale L', 'fonction 1 sur x'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Asymptotes — traduire une limite en géométrie',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -181,7 +179,7 @@ export const MATH_CROQUIS_TVI: ScientificSchema = {
   id: 'math_croquis_tvi',
   title: 'Croquis au crayon — Théorème des valeurs intermédiaires',
   subject: 'math',
-  keywords: ['théorème valeurs intermédiaires', 'TVI solution f x égale zéro', 'continuité intervalle', 'changement de signe', 'existence unicité racine', ...REQUEST_WORDS],
+  keywords: ['théorème valeurs intermédiaires', 'TVI solution f x égale zéro', 'continuité intervalle', 'changement de signe', 'existence unicité racine'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Continuité et TVI — existence puis unicité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -214,7 +212,7 @@ export const MATH_CROQUIS_CARTE_METHODES: ScientificSchema = {
   id: 'math_croquis_carte_methodes',
   title: 'Croquis au crayon — Carte des méthodes de limites',
   subject: 'math',
-  keywords: ['carte méthodes limites', 'calcul direct factoriser conjugué terme dominant', 'asymptote continuité TVI', 'synthèse limites', 'méthode BAC limites', ...REQUEST_WORDS],
+  keywords: ['carte méthodes limites', 'calcul direct factoriser conjugué terme dominant', 'asymptote continuité TVI', 'synthèse limites', 'méthode BAC limites'],
   metadata: {
     courseId: 'math_ch1_limits', chapter: 'Limites et continuité', lesson: 'Bilan de compétence',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',

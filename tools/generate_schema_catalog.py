@@ -127,10 +127,36 @@ def _motif(mot: str) -> re.Pattern:
     return re.compile(rf"(?<!\w){re.escape(_sans_accents(mot))}[sx]?(?!\w)", re.UNICODE)
 
 
+#: Les caracteres que deux claviers ecrivent differemment pour la MEME chose.
+#:
+#: Un mot-cle recopie depuis un manuel porte l'apostrophe typographique
+#: (« energie d’activation ») ; l'eleve, lui, tape celle du clavier
+#: (« energie d'activation »). `re.escape` compare des caracteres : les deux
+#: ne se rencontraient jamais, et la scene animee de l'energie d'activation
+#: restait introuvable pour la question qui la nomme mot pour mot.
+_PONCTUATION_EQUIVALENTE = str.maketrans({
+    "’": "'", "‘": "'", "ʼ": "'", "`": "'", "´": "'",
+    "‑": "-", "–": "-", "—": "-",
+})
+
+
 def _sans_accents(texte: str) -> str:
     """Un eleve tape « accretion » : le mot-cle accentue doit quand meme repondre."""
-    plie = unicodedata.normalize("NFKD", texte.lower())
-    return "".join(c for c in plie if not unicodedata.combining(c))
+    plie = unicodedata.normalize("NFKD", (texte or "").lower())
+    plie = "".join(c for c in plie if not unicodedata.combining(c))
+    return plie.translate(_PONCTUATION_EQUIVALENTE)
+
+
+#: Les sigles du programme : trop courts pour le seuil de six lettres, et
+#: pourtant les mots les plus distinctifs de leur chapitre. « ATP » ne designe
+#: rien d'autre que l'ATP. Sans cette liste, « c'est quoi l'ATP ? » ne valait
+#: qu'un point : ni le croquis ATP-ADP, ni la scene du cycle ne sortaient, et
+#: l'eleve recevait de la prose sur la notion la plus dessinee du chapitre.
+_SIGLES = {
+    "adn", "arn", "arnm", "arnt", "atp", "adp", "amp", "nad", "nadh", "fad",
+    "fadh", "co2", "o2", "h2o", "ph", "pka", "pke", "exao", "rc", "rlc",
+    "tvi", "fem", "cog", "svt",
+}
 
 
 _MOTS_GENERIQUES = {
@@ -156,9 +182,55 @@ def _poids_mot_cle(mot: str) -> int:
     normalise = _sans_accents(mot.strip())
     if " " in normalise:
         return 3
+    if normalise in _SIGLES:
+        return 2
     if len(normalise) >= 6 and normalise not in _MOTS_GENERIQUES:
         return 2
     return 1
+
+
+#: Les terminaisons qui separent deux formes du MEME mot, de la plus longue a
+#: la plus courte. Elles ne font pas une analyse morphologique : elles couvrent
+#: le seul ecart qu'on observe entre un mot-cle et une question d'eleve — le
+#: nom dans le catalogue (« contraction », « glissement », « propagation »), le
+#: verbe dans la bouche de l'eleve (« se contracte », « glisse », « se
+#: propage »).
+_TERMINAISONS = (
+    "ations", "ation", "ements", "ement", "ions", "ion", "ees", "ee", "es",
+    "er", "ez", "e", "s", "x",
+)
+
+
+def _racine(mot: str) -> str:
+    """La racine d'un mot, ou le mot lui-meme quand la couper l'appauvrirait.
+
+    Le plancher de cinq lettres est ce qui empeche la famille de mots de
+    devenir un rapprochement au jugé : « onde » se reduirait a « ond », qui
+    touche « onduler » et « ondee » ; « force » a « forc », qui touche
+    « forcement ». Ces racines-la sont laissees entieres.
+    """
+    for terminaison in _TERMINAISONS:
+        if mot.endswith(terminaison) and len(mot) - len(terminaison) >= 5:
+            return mot[: -len(terminaison)]
+    return mot
+
+
+def racines_du_contexte(contexte_plie: str) -> frozenset[str]:
+    """Les racines de tous les mots d'un contexte deja plie."""
+    return frozenset(_racine(mot) for mot in re.findall(r"[a-z0-9]+", contexte_plie))
+
+
+def mot_cle_de_la_famille(mot: str, racines: frozenset[str]) -> bool:
+    """Ce mot-cle est-il une autre forme d'un mot de la question ?
+
+    Reserve aux mots-cles d'UN SEUL mot. Sur un mot-cle compose, comparer des
+    racines sans tenir compte de l'ordre reviendrait a rapprocher « bilan des
+    forces » et « bilan energetique » : deux figures sans rapport.
+    """
+    nu = _sans_accents(mot.strip())
+    if not nu or " " in nu:
+        return False
+    return _racine(nu) in racines
 
 
 # ── Surface publique du rapprochement ─────────────────────────────
@@ -196,15 +268,25 @@ def _rapprochements(context: str) -> list[tuple[int, int, str]]:
     if not contexte.strip():
         return []
 
+    racines = racines_du_contexte(contexte)
     trouvailles: list[tuple[int, int, str]] = []
     for entry in SCHEMA_CATALOG:
         trouves = [mot for mot in entry["keywords"] if _motif(mot).search(contexte)]
-        if not trouves:
+        # Le mot-clé dit « contraction », l'élève écrit « le muscle se
+        # contracte » : c'est le même mot, et le rapprochement le manquait.
+        # Une famille de mots vaut UN point, jamais les deux d'une
+        # correspondance exacte — elle complète un rapprochement, elle ne le
+        # fabrique pas à elle seule quand le mot-clé est générique.
+        familles = [
+            mot for mot in entry["keywords"]
+            if mot not in trouves and mot_cle_de_la_famille(mot, racines)
+        ]
+        if not trouves and not familles:
             continue
-        score = sum(_poids_mot_cle(mot) for mot in trouves)
+        score = sum(_poids_mot_cle(mot) for mot in trouves) + len(familles)
         # À score égal, le mot-clé le plus long tranche : « fibre musculaire »
         # l'emporte sur « muscle », qui désigne le chapitre et non la figure.
-        precision = max(len(mot) for mot in trouves)
+        precision = max(len(mot) for mot in (trouves or familles))
         trouvailles.append((score, precision, entry["id"]))
     trouvailles.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return trouvailles

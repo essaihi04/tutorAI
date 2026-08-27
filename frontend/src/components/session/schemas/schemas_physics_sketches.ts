@@ -7,13 +7,12 @@ const LESSON = 'Propagation, retard et célérité';
 const SOURCE_URL = 'https://www.youtube.com/watch?v=E79tE5gmdrk';
 const SOURCE_TEACHER = 'Jihad El Goufifa';
 const SOURCE_TITLE = 'Physique-Chimie 2Bac - 1: Les ondes mécaniques progressives (Cours)';
-const REQUEST_WORDS = ['croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا'];
 
 export const PHYS_CROQUIS_PROPAGATION_LOCALE: ScientificSchema = {
   id: 'phys_croquis_propagation_locale',
   title: 'Croquis au crayon — Propagation et mouvement local',
   subject: 'physics',
-  keywords: ['onde mécanique progressive', 'perturbation corde', 'propagation sans transport de matière', 'mouvement local', 'impulsion', ...REQUEST_WORDS],
+  keywords: ['onde mécanique progressive', 'onde sur une corde', 'perturbation corde', 'propagation sans transport de matière', 'mouvement local', 'impulsion'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -49,7 +48,7 @@ export const PHYS_CROQUIS_TRANSVERSALE_LONGITUDINALE: ScientificSchema = {
   id: 'phys_croquis_transversale_longitudinale',
   title: 'Croquis au crayon — Onde transversale ou longitudinale',
   subject: 'physics',
-  keywords: ['onde transversale', 'onde longitudinale', 'corde ressort', 'compression dilatation', 'directions propagation perturbation', ...REQUEST_WORDS],
+  keywords: ['onde transversale', 'onde longitudinale', 'corde ressort', 'compression dilatation', 'directions propagation perturbation'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -86,7 +85,7 @@ export const PHYS_CROQUIS_SON_MILIEU: ScientificSchema = {
   id: 'phys_croquis_son_milieu',
   title: 'Croquis au crayon — Le son a besoin d’un milieu',
   subject: 'physics',
-  keywords: ['son milieu matériel', 'cloche à vide', 'son dans le vide', 'diapason bille', 'onde sonore', ...REQUEST_WORDS],
+  keywords: ['son milieu matériel', 'cloche à vide', 'son dans le vide', 'diapason bille', 'onde sonore'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -125,7 +124,7 @@ export const PHYS_CROQUIS_SUPERPOSITION: ScientificSchema = {
   id: 'phys_croquis_superposition',
   title: 'Croquis au crayon — Superposition de deux perturbations',
   subject: 'physics',
-  keywords: ['superposition ondes', 'deux perturbations se croisent', 'interférence impulsions', 'ondes après croisement', ...REQUEST_WORDS],
+  keywords: ['superposition ondes', 'deux perturbations se croisent', 'interférence impulsions', 'ondes après croisement'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -161,7 +160,7 @@ export const PHYS_CROQUIS_RESSORT_CELERITE: ScientificSchema = {
   id: 'phys_croquis_ressort_celerite',
   title: 'Croquis au crayon — Mesurer la célérité sur un ressort',
   subject: 'physics',
-  keywords: ['ressort célérité', 'onde sur ressort', 'capteurs retard distance', 'mesure vitesse propagation', 'compression ressort', ...REQUEST_WORDS],
+  keywords: ['ressort célérité', 'onde sur ressort', 'capteurs retard distance', 'mesure vitesse propagation', 'compression ressort'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -193,7 +192,7 @@ export const PHYS_CROQUIS_CORDE_POULIE: ScientificSchema = {
   id: 'phys_croquis_corde_poulie',
   title: 'Croquis au crayon — Corde tendue par une masse',
   subject: 'physics',
-  keywords: ['corde poulie masse', 'tension corde', 'célérité tension masse linéique', 'v racine T sur mu', 'poids Mg', ...REQUEST_WORDS],
+  keywords: ['corde poulie masse', 'tension corde', 'célérité tension masse linéique', 'v racine T sur mu', 'poids Mg'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -227,7 +226,7 @@ export const PHYS_CROQUIS_RETARD: ScientificSchema = {
   id: 'phys_croquis_retard',
   title: 'Croquis au crayon — Retard entre la source S et le point M',
   subject: 'physics',
-  keywords: ['retard onde source point M', 'tau SM sur v', 'élongation yM yS', 'onde progressive relation temporelle', ...REQUEST_WORDS],
+  keywords: ['retard onde source point M', 'tau SM sur v', 'élongation yM yS', 'onde progressive relation temporelle'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Propagation, retard et célérité',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -262,7 +261,7 @@ export const PHYS_CROQUIS_DEUX_CAPTEURS: ScientificSchema = {
   id: 'phys_croquis_deux_capteurs',
   title: 'Croquis au crayon — Deux capteurs sur une corde',
   subject: 'physics',
-  keywords: ['deux capteurs onde', 'capteurs A B corde', 'distance retard célérité', 'AB 80 cm 20 ms', 'protocole onde', ...REQUEST_WORDS],
+  keywords: ['deux capteurs onde', 'capteurs A B corde', 'distance retard célérité', 'AB 80 cm 20 ms', 'protocole onde'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Retard et célérité — mesurer sans confondre',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -290,7 +289,7 @@ export const PHYS_CROQUIS_SIGNAUX_RETARD: ScientificSchema = {
   id: 'phys_croquis_signaux_retard',
   title: 'Croquis au crayon — Décalage de deux signaux',
   subject: 'physics',
-  keywords: ['signaux capteurs A B', 'signaux homologues', 'pics décalés retard', 'retard graphique', 'lecture graphique retard', 'points homologues', 'tA 1,5 tB 3,5', ...REQUEST_WORDS],
+  keywords: ['signaux capteurs A B', 'signaux homologues', 'pics décalés retard', 'retard graphique', 'lecture graphique retard', 'points homologues', 'tA 1,5 tB 3,5'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Méthode BAC — exploiter deux signaux',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -319,7 +318,7 @@ export const PHYS_CROQUIS_BILAN_ONDES: ScientificSchema = {
   id: 'phys_croquis_bilan_ondes',
   title: 'Croquis au crayon — Bilan des ondes mécaniques',
   subject: 'physics',
-  keywords: ['bilan ondes mécaniques', 'carte onde propagation retard célérité', 'milieu énergie transversale longitudinale', 'synthèse chapitre ondes', ...REQUEST_WORDS],
+  keywords: ['bilan ondes mécaniques', 'carte onde propagation retard célérité', 'milieu énergie transversale longitudinale', 'synthèse chapitre ondes'],
   metadata: {
     courseId: 'phys_ch1_waves', chapter: 'Ondes mécaniques progressives', lesson: 'Bilan de compétence',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',

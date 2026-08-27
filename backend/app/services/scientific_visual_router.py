@@ -104,6 +104,38 @@ def demande_du_mouvement(texte: str) -> bool:
     return bool(_MOUVEMENT.search(_fold(texte)) or _MOUVEMENT.search(texte))
 
 
+#: L'élève a ÉCRIT la fonction. « trace la courbe de f(x) = (x²−4)/(x−2) » ne
+#: se répond pas avec la planche « Limites et continuité — méthodes du BAC » :
+#: elle est juste, elle est belle, et elle ne montre pas SA courbe à lui. Ce
+#: qu'il demande est un repère avec SON expression dedans — c'est-à-dire
+#: JSXGraph, le seul moteur qui trace une expression.
+#:
+#: Les deux verrous se lisent sur le texte BRUT, et non sur le repli : `_fold`
+#: efface la ponctuation, et « f(x) » y devient « f x », c'est-à-dire rien.
+_FONCTION_NOMMEE = re.compile(
+    r"(?<!\w)[fgh]\s*\(\s*x\s*\)|(?<!\w)y\s*=|(?<!\w)courbe d[eu] [fgh](?!\w)",
+    re.IGNORECASE,
+)
+#: Les accents sont retirés AVANT la recherche : « représente » et « étudie »
+#: s'écrivent donc ici sans eux.
+_VERBE_DE_TRACE = re.compile(
+    r"(?<!\w)(?:trac\w*|dessin\w*|represent\w*|graphe|graphique|courbe"
+    r"|etudi\w*)(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def demande_une_courbe(texte: str) -> bool:
+    """L'élève donne-t-il une fonction à TRACER dans un repère ?"""
+    if not texte:
+        return False
+    sans_accents = unicodedata.normalize("NFKD", texte)
+    sans_accents = "".join(c for c in sans_accents if not unicodedata.combining(c))
+    return bool(
+        _FONCTION_NOMMEE.search(sans_accents) and _VERBE_DE_TRACE.search(sans_accents)
+    )
+
+
 #: Un échiquier de croisement, un tableau de variations ou un tableau
 #: d'avancement ne sont pas des dessins : les faire dessiner produit une
 #: figure fausse là où deux colonnes disent tout, et cela contredit le
@@ -196,8 +228,22 @@ def visual_request_is_explicit(context: str) -> bool:
 
 
 def _blueprint_score(blueprint: dict[str, Any], folded_context: str) -> int:
+    """Ce que pèse une fiche face au contexte.
+
+    Un jeton du contexte ne compte QU'UNE FOIS, quel que soit le nombre de
+    mots-clés qui le contiennent. C'est la seule chose qui sépare une fiche
+    rapprochée d'une fiche répétitive : celle de l'énergie mécanique liste
+    « energie mecanique », « energie cinetique potentielle » et « conservation
+    energie » — trois mots-clés, le même mot « énergie ». Additionnés, ils
+    atteignaient le seuil à eux seuls, et « explique l'énergie d'activation »,
+    une question de CHIMIE, repartait avec la fiche de mécanique.
+
+    La phrase entière retrouvée dans le contexte, elle, reste un signal fort et
+    garde son barème ; de même qu'un mot-clé dont TOUS les mots sont présents.
+    """
     score = 0
     context_tokens = _tokens(folded_context) - _STOPWORDS
+    jetons_partiels: set[str] = set()
     for raw_keyword in blueprint.get("keywords", []):
         keyword = _fold(str(raw_keyword))
         if not keyword:
@@ -208,10 +254,10 @@ def _blueprint_score(blueprint: dict[str, Any], folded_context: str) -> int:
         keyword_tokens = _tokens(keyword) - _STOPWORDS
         common = context_tokens & keyword_tokens
         if keyword_tokens and common:
-            score += len(common)
+            jetons_partiels |= common
             if keyword_tokens <= context_tokens:
                 score += 2
-    return score
+    return score + len(jetons_partiels)
 
 
 def match_visual_blueprint(context: str) -> tuple[dict[str, Any] | None, int]:
@@ -334,6 +380,28 @@ def route_scientific_visual(context: str, demande: str | None = None) -> dict[st
             "explicit": True,
         }
 
+    # ── Une planche du chapitre ne trace pas LA fonction de l'élève ──
+    #
+    # « trace la courbe de f(x) = (x²−4)/(x−2) » contient « courbe » et
+    # « limite », mots-clés de `math_limites` : le registre gagnait, et le
+    # tuteur recevait l'ordre « affiche cette planche, NE LA REDESSINE PAS ».
+    # L'élève voyait alors « Limites et continuité — méthodes du BAC » — une
+    # figure juste, qui ne contient pas sa fonction. C'est la demande la plus
+    # fréquente du chapitre 1 de maths, et la bibliothèque y répondait à côté.
+    #
+    # Comme pour le mouvement, la planche ne disparaît pas : elle accompagne.
+    if demande_une_courbe(ou_lire):
+        return {
+            "source": "courbe",
+            "schema_id": schema_id if schema_id and schema_score >= 3 else None,
+            "title": "Courbe à tracer dans un repère",
+            "engine": "jsxgraph",
+            "must_show": list(blueprint.get("must_show", [])) if blueprint and blueprint_score >= 3 else [],
+            "avoid": list(blueprint.get("avoid", [])) if blueprint and blueprint_score >= 3 else [],
+            "score": schema_score,
+            "explicit": True,
+        }
+
     # Un rapprochement fort avec un SVG contrôlé reste toujours prioritaire.
     if schema_id and schema_score >= 3:
         return {
@@ -432,6 +500,32 @@ def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
                 f"Un schéma validé existe — `{route['schema_id']}` — mais il est FIXE : "
                 "il accompagne ton explication, il ne remplace pas ce que l'élève "
                 "demande."
+            ))
+        if route.get("must_show"):
+            lignes.append("Éléments scientifiques obligatoires : " + "; ".join(route["must_show"]) + ".")
+        if route.get("avoid"):
+            lignes.append("Erreurs scientifiques interdites : " + "; ".join(route["avoid"]) + ".")
+        return "\n".join(lignes)
+
+    if route["source"] == "courbe":
+        lignes = [
+            "[L'ÉLÈVE A ÉCRIT LA FONCTION — TRACE LA SIENNE]",
+            "Une planche du chapitre ne montre pas SA courbe : ce qu'il demande "
+            "est un repère avec SON expression dedans.",
+            "Produis une ligne `scientific` moteur `jsxgraph` dans CETTE réponse, "
+            "avec un élément `function` portant son `expression`, écrite en "
+            "syntaxe autorisée (`*` explicite : `2*x`, jamais `2x`).",
+            "Borne la courbe avec `from`/`to` dès que la fonction n'a de sens que "
+            "sur un intervalle, et nomme les deux axes avec leur unité.",
+            "Ajoute ce que la question réclame : une asymptote en `line` "
+            "pointillée, le trou d'une valeur interdite en `point`, une `area` "
+            "pour une intégrale, un `text` pour la limite lue.",
+        ]
+        if route.get("schema_id"):
+            lignes.insert(2, (
+                f"Une planche validée existe — `{route['schema_id']}` — et elle "
+                "reste utile pour la MÉTHODE ; elle ne remplace pas le tracé "
+                "demandé."
             ))
         if route.get("must_show"):
             lignes.append("Éléments scientifiques obligatoires : " + "; ".join(route["must_show"]) + ".")

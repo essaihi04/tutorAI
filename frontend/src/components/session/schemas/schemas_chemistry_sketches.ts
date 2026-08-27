@@ -1,13 +1,11 @@
 import type { ScientificSchema } from './types';
 import { BAC_PENCIL as P, BAC_PENCIL_FONT as FONT, BAC_PENCIL_PALETTE_ID, pencilDefs } from './pencilPalette';
 
-const REQUEST_WORDS = ['croquis', 'dessine', 'dessin au tableau', 'schématise', 'rsem lia', 'rassam lia', 'رسم ليا'];
-
 export const CHEM_CROQUIS_CARTE_CINETIQUE: ScientificSchema = {
   id: 'chem_croquis_carte_cinetique',
   title: 'Croquis au crayon — Carte des transformations rapides et lentes',
   subject: 'chemistry',
-  keywords: ['transformation rapide lente', 'cinétique chimique', 'durée transformation', 'facteurs cinétiques', 'concentration température', ...REQUEST_WORDS],
+  keywords: ['transformation rapide lente', 'cinétique chimique', 'durée transformation', 'facteurs cinétiques', 'concentration température'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Durée et facteurs cinétiques',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -47,7 +45,7 @@ export const CHEM_CROQUIS_TRANSFERT_ELECTRONS: ScientificSchema = {
   id: 'chem_croquis_transfert_electrons',
   title: 'Croquis au crayon — Transfert d’électrons en oxydoréduction',
   subject: 'chemistry',
-  keywords: ['oxydoréduction', 'oxydant réducteur', 'transfert électrons', 'demi équation électronique', 'couple ox red', ...REQUEST_WORDS],
+  keywords: ['oxydoréduction', 'oxydant réducteur', 'transfert électrons', 'demi équation électronique', 'couple ox red'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Rappel : réactions d’oxydoréduction',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -85,7 +83,7 @@ export const CHEM_CROQUIS_DUREE_TRANSFORMATION: ScientificSchema = {
   id: 'chem_croquis_duree_transformation',
   title: 'Croquis au crayon — Durée d’une transformation chimique',
   subject: 'chemistry',
-  keywords: ['durée transformation', 'transformation rapide lente', 'avancement temps plateau', 'courbe cinétique', 'instantanée', ...REQUEST_WORDS],
+  keywords: ['durée transformation', 'transformation rapide lente', 'avancement temps plateau', 'courbe cinétique', 'instantanée'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Durée et facteurs cinétiques',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -118,7 +116,7 @@ export const CHEM_CROQUIS_FACTEURS_CONTROLES: ScientificSchema = {
   id: 'chem_croquis_facteurs_controles',
   title: 'Croquis au crayon — Comparer concentration et température',
   subject: 'chemistry',
-  keywords: ['facteurs cinétiques expérience', 'concentration température', 'deux béchers comparaison', 'essai témoin', 'variables contrôlées', ...REQUEST_WORDS],
+  keywords: ['facteurs cinétiques expérience', 'concentration température', 'deux béchers comparaison', 'essai témoin', 'variables contrôlées'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Durée et facteurs cinétiques',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1',
@@ -155,7 +153,7 @@ export const CHEM_CROQUIS_TROIS_BECHERS: ScientificSchema = {
   id: 'chem_croquis_trois_bechers',
   title: 'Croquis au crayon — Trois béchers à températures différentes',
   subject: 'chemistry',
-  keywords: ['trois béchers température', 'dégagement gazeux température', 'bulles réaction froide chaude', 'diagnostic cinétique', ...REQUEST_WORDS],
+  keywords: ['trois béchers température', 'dégagement gazeux température', 'bulles réaction froide chaude', 'diagnostic cinétique'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Diagnostic — mêmes réactifs, durées différentes',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -184,7 +182,7 @@ export const CHEM_CROQUIS_INDICES_MACROSCOPIQUES: ScientificSchema = {
   id: 'chem_croquis_indices_macroscopiques',
   title: 'Croquis au crayon — Indices macroscopiques d’une transformation',
   subject: 'chemistry',
-  keywords: ['indice macroscopique transformation', 'couleur absorbance gaz pression pH conductivité', 'suivi cinétique grandeur mesurable', 'précipité', ...REQUEST_WORDS],
+  keywords: ['indice macroscopique transformation', 'couleur absorbance gaz pression pH conductivité', 'suivi cinétique grandeur mesurable', 'précipité'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Classer — rapide ou lente à l’échelle de l’observation',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -212,7 +210,7 @@ export const CHEM_CROQUIS_QUATRE_FACTEURS: ScientificSchema = {
   id: 'chem_croquis_quatre_facteurs',
   title: 'Croquis au crayon — Les quatre facteurs cinétiques',
   subject: 'chemistry',
-  keywords: ['quatre facteurs cinétiques', 'température concentration surface catalyseur', 'chocs efficaces', 'accélérer transformation', 'carte facteurs', ...REQUEST_WORDS],
+  keywords: ['quatre facteurs cinétiques', 'température concentration surface catalyseur', 'chocs efficaces', 'accélérer transformation', 'carte facteurs'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Facteurs cinétiques — accélérer sans changer le bilan',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -243,7 +241,7 @@ export const CHEM_CROQUIS_CATALYSEUR: ScientificSchema = {
   id: 'chem_croquis_catalyseur',
   title: 'Croquis au crayon — Ce que change un catalyseur',
   subject: 'chemistry',
-  keywords: ['catalyseur énergie activation', 'profil énergie activation', 'profil énergétique catalysé', 'catalyseur régénéré', 'même état final', 'voie réactionnelle', ...REQUEST_WORDS],
+  keywords: ['catalyseur énergie activation', 'profil énergie activation', 'profil énergétique catalysé', 'catalyseur régénéré', 'même état final', 'voie réactionnelle'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Le catalyseur : trois idées à ne pas confondre',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -275,7 +273,7 @@ export const CHEM_CROQUIS_SURFACE_CONTACT: ScientificSchema = {
   id: 'chem_croquis_surface_contact',
   title: 'Croquis au crayon — Comprimé entier ou réduit en poudre',
   subject: 'chemistry',
-  keywords: ['surface de contact', 'comprimé entier poudre', 'même masse solide', 'facteur cinétique solide', 'protocole surface', ...REQUEST_WORDS],
+  keywords: ['surface de contact', 'comprimé entier poudre', 'même masse solide', 'facteur cinétique solide', 'protocole surface'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Méthode BAC — proposer et critiquer un protocole',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
@@ -303,7 +301,7 @@ export const CHEM_CROQUIS_COURBES_FACTEUR: ScientificSchema = {
   id: 'chem_croquis_courbes_facteur',
   title: 'Croquis au crayon — Deux cinétiques, même état final',
   subject: 'chemistry',
-  keywords: ['deux courbes cinétiques', 'pente initiale durée demi réaction', 'même plateau facteur cinétique', 'plus rapide courbe', 'avancement temps comparaison', ...REQUEST_WORDS],
+  keywords: ['deux courbes cinétiques', 'pente initiale durée demi réaction', 'même plateau facteur cinétique', 'plus rapide courbe', 'avancement temps comparaison'],
   metadata: {
     courseId: 'chem_ch1_kinetics', chapter: 'Transformations lentes et transformations rapides', lesson: 'Laboratoire — isoler l’effet d’un facteur',
     visualStyle: 'pencil', resourceRole: 'teacher_sketch', paletteId: 'bac-pencil-v1', auditStatus: 'curriculum_reviewed',
