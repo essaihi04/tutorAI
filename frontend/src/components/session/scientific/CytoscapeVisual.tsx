@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
 import type { CytoscapeVisualSpec } from './types';
 
@@ -36,7 +36,13 @@ function CADRE_FIGURE(transparent?: boolean): string {
 
 export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const instanceRef = useRef<cytoscape.Core | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const structureKey = useMemo(() => JSON.stringify({
+    layout: spec.layout,
+    nodes: spec.nodes.map(node => node.id),
+    edges: spec.edges.map(edge => [edge.from, edge.to]),
+  }), [spec.edges, spec.layout, spec.nodes]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -44,6 +50,11 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
     let instance: cytoscape.Core | null = null;
     let observer: ResizeObserver | null = null;
     let active = true;
+    const structure = JSON.parse(structureKey) as {
+      layout?: CytoscapeVisualSpec['layout'];
+      nodes: string[];
+      edges: Array<[string, string]>;
+    };
     const reportError = (message: string | null) => {
       queueMicrotask(() => {
         if (active) setError(message);
@@ -53,27 +64,27 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
       instance = cytoscape({
         container: containerRef.current,
         elements: [
-          ...spec.nodes.map(node => ({
+          ...structure.nodes.map(id => ({
             data: {
-              id: node.id,
-              label: node.label,
-              color: resolveColor(node.color),
-              active: node.active === true ? 1 : 0,
+              id,
+              label: '',
+              color: resolveColor(),
+              active: 0,
             },
           })),
-          ...spec.edges.map((edge, index) => ({
+          ...structure.edges.map(([from, to], index) => ({
             data: {
-              id: `edge-${index}-${edge.from}-${edge.to}`,
-              source: edge.from,
-              target: edge.to,
-              label: edge.label || '',
-              color: resolveColor(edge.color || (edge.active ? 'cyan' : undefined)),
-              active: edge.active === true ? 1 : 0,
+              id: `edge-${index}-${from}-${to}`,
+              source: from,
+              target: to,
+              label: '',
+              color: resolveColor(),
+              active: 0,
             },
           })),
         ],
         layout: {
-          name: spec.layout || 'breadthfirst',
+          name: structure.layout || 'breadthfirst',
           directed: true,
           padding: 24,
           spacingFactor: 1.2,
@@ -122,6 +133,7 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
         minZoom: 0.35,
         maxZoom: 2,
       });
+      instanceRef.current = instance;
 
       instance.fit(undefined, 24);
       reportError(null);
@@ -139,8 +151,34 @@ export default function CytoscapeVisual({ spec, transparent }: CytoscapeVisualPr
       active = false;
       observer?.disconnect();
       instance?.destroy();
+      if (instanceRef.current === instance) instanceRef.current = null;
     };
-  }, [spec]);
+  }, [structureKey]);
+
+  // Les nœuds gardent leur position et leur texte. L'animation ne change que
+  // les couleurs et les contours qui matérialisent l'étape active.
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance) return;
+    instance.batch(() => {
+      spec.nodes.forEach(node => {
+        const element = instance.getElementById(node.id);
+        element.data({
+          label: node.label,
+          color: resolveColor(node.color),
+          active: node.active === true ? 1 : 0,
+        });
+      });
+      spec.edges.forEach((edge, index) => {
+        const element = instance.getElementById(`edge-${index}-${edge.from}-${edge.to}`);
+        element.data({
+          label: edge.label || '',
+          color: resolveColor(edge.color || (edge.active ? 'cyan' : undefined)),
+          active: edge.active === true ? 1 : 0,
+        });
+      });
+    });
+  }, [spec, structureKey]);
 
   return (
     <figure className={CADRE_FIGURE(transparent)}>

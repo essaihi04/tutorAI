@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import JXG from 'jsxgraph';
 import './jsxgraph.css';
 import type { JSXGraphElementSpec, JSXGraphVisualSpec, ScientificPoint } from './types';
@@ -8,6 +8,11 @@ interface JSXGraphVisualProps {
   spec: JSXGraphVisualSpec;
   /** La figure se pose SUR le tableau : ni cadre, ni fond peint. */
   transparent?: boolean;
+  /**
+   * Libellés d'une simulation animée. Ils sont rendus dans une couche HTML
+   * fixe, distincte de la géométrie que JSXGraph redessine à chaque étape.
+   */
+  fixedLabels?: JSXGraphElementSpec[];
 }
 
 const BOARD_COLORS: Record<string, string> = {
@@ -30,15 +35,27 @@ function pointTuple(point: ScientificPoint): [number, number] {
   return [point.x, point.y];
 }
 
-function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
+function addElement(
+  board: JXG.Board,
+  element: JSXGraphElementSpec,
+  hideLabels = false,
+): JXG.GeometryElement[] {
+  const created: JXG.GeometryElement[] = [];
+  // Les surcharges de `board.create` exposent aussi des compositions dans
+  // leur union de retour, même lorsque le type littéral crée bien un élément.
+  const remember = (object: unknown): JXG.GeometryElement => {
+    const geometry = object as JXG.GeometryElement;
+    created.push(geometry);
+    return geometry;
+  };
   const color = resolveColor(element.color);
   const attributes = {
-    name: element.label || '',
+    name: hideLabels ? '' : element.label || '',
     // JSXGraph n'affiche le nom d'un segment, d'une droite, d'une flèche ou
     // d'une courbe QUE si on le demande — seul un point le montre par défaut.
     // Sans cette ligne, « P » et « R » disparaissaient d'un bilan des forces :
     // l'élève voyait deux flèches opposées sans savoir laquelle est le poids.
-    withLabel: Boolean(element.label),
+    withLabel: !hideLabels && Boolean(element.label),
     strokeColor: color,
     fillColor: color,
     fixed: element.draggable !== true,
@@ -52,20 +69,20 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
 
   switch (element.type) {
     case 'point':
-      if (points[0]) board.create('point', pointTuple(points[0]), attributes);
+      if (points[0]) remember(board.create('point', pointTuple(points[0]), attributes));
       break;
     case 'segment':
-      if (points.length >= 2) board.create('segment', [pointTuple(points[0]), pointTuple(points[1])], attributes);
+      if (points.length >= 2) remember(board.create('segment', [pointTuple(points[0]), pointTuple(points[1])], attributes));
       break;
     case 'line':
-      if (points.length >= 2) board.create('line', [pointTuple(points[0]), pointTuple(points[1])], attributes);
+      if (points.length >= 2) remember(board.create('line', [pointTuple(points[0]), pointTuple(points[1])], attributes));
       break;
     case 'arrow':
-      if (points.length >= 2) board.create('arrow', [pointTuple(points[0]), pointTuple(points[1])], attributes);
+      if (points.length >= 2) remember(board.create('arrow', [pointTuple(points[0]), pointTuple(points[1])], attributes));
       break;
     case 'circle':
       if (element.center && typeof element.radius === 'number') {
-        board.create('circle', [pointTuple(element.center), element.radius], attributes);
+        remember(board.create('circle', [pointTuple(element.center), element.radius], attributes));
       }
       break;
     case 'function':
@@ -74,25 +91,25 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
         if (!fn) break;
         // Sans bornes, la parabole d'un projectile remonte de l'autre côté de
         // l'axe et l'élève y lit un rebond qui n'existe pas.
-        board.create('functiongraph', element.domain ? [fn, element.domain[0], element.domain[1]] : [fn], attributes);
+        remember(board.create('functiongraph', element.domain ? [fn, element.domain[0], element.domain[1]] : [fn], attributes));
       }
       break;
     case 'text':
       // Le seul moyen d'écrire une phrase SUR la figure : « Fe, le plus
       // stable » près du creux d'une courbe d'Aston vaut tout un paragraphe.
-      if (points[0] && element.label) {
-        board.create('text', [points[0].x, points[0].y, element.label], {
+      if (!hideLabels && points[0] && element.label) {
+        remember(board.create('text', [points[0].x, points[0].y, element.label], {
           ...attributes,
           fontSize: 15,
           color: '#e2e8f0',
           cssStyle: 'font-weight:600',
           anchorX: 'middle',
-        });
+        }));
       }
       break;
     case 'polygon':
       if (points.length >= 3) {
-        board.create('polygon', points.map(pointTuple), {
+        remember(board.create('polygon', points.map(pointTuple), {
           ...attributes,
           fillColor: color,
           fillOpacity: element.filled === false ? 0 : 0.18,
@@ -102,20 +119,20 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
           // mécanique où elles ne veulent rien dire.
           vertices: { visible: false, withLabel: false, fixed: true },
           hasInnerPoints: false,
-        });
+        }));
       }
       break;
     case 'angle':
       // Première branche, sommet, seconde branche : l'ordre de lecture de la
       // notation scolaire « ASB ».
       if (points.length >= 3) {
-        board.create('angle', [pointTuple(points[0]), pointTuple(points[1]), pointTuple(points[2])], {
+        remember(board.create('angle', [pointTuple(points[0]), pointTuple(points[1]), pointTuple(points[2])], {
           ...attributes,
           radius: 0.8,
           fillColor: color,
           fillOpacity: 0.25,
           orthoType: 'square',
-        });
+        }));
       }
       break;
     case 'area':
@@ -124,19 +141,19 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
       if (element.expression && element.domain) {
         const fn = compileSafeMathExpression(element.expression);
         if (!fn) break;
-        const curve = board.create('functiongraph', [fn, element.domain[0], element.domain[1]], {
+        const curve = remember(board.create('functiongraph', [fn, element.domain[0], element.domain[1]], {
           strokeColor: color,
           strokeWidth: 2.5,
           withLabel: false,
           fixed: true,
           highlightStrokeColor: color,
-        });
+        }));
         // Les quatre poignées de l'intégrale sont faites pour être glissées.
         // Sur un tableau de cours elles se nomment A, B, C, D et l'élève les
         // lit comme des points de la leçon : quatre lettres qui n'ont aucun
         // sens à côté d'une aire.
         const hidden = { visible: false, withLabel: false, fixed: true };
-        board.create('integral', [element.domain, curve], {
+        remember(board.create('integral', [element.domain, curve], {
           ...attributes,
           fillColor: color,
           fillOpacity: 0.3,
@@ -149,12 +166,12 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
           // en joules, pas un nombre nu) et qui chasse la légende demandée.
           withLabel: false,
           name: '',
-        });
+        }));
         // On repose donc la légende du modèle au milieu de l'aire.
-        if (element.label) {
+        if (!hideLabels && element.label) {
           const [a, b] = element.domain;
           const middle = (a + b) / 2;
-          board.create('text', [middle, fn(middle) / 2, element.label], {
+          remember(board.create('text', [middle, fn(middle) / 2, element.label], {
             fontSize: 14,
             color: '#e2e8f0',
             cssStyle: 'font-weight:600',
@@ -162,11 +179,25 @@ function addElement(board: JXG.Board, element: JSXGraphElementSpec) {
             anchorX: 'middle',
             anchorY: 'middle',
             highlight: false,
-          });
+          }));
         }
       }
       break;
   }
+  return created;
+}
+
+function fixedLabelPoint(element: JSXGraphElementSpec): ScientificPoint | null {
+  if (element.type === 'circle' && element.center) return element.center;
+  const points = element.points || [];
+  if (points.length === 1) return points[0];
+  if (points.length >= 2) {
+    return {
+      x: (points[0].x + points[points.length - 1].x) / 2,
+      y: (points[0].y + points[points.length - 1].y) / 2,
+    };
+  }
+  return null;
 }
 
 /** L'unité écrite entre parenthèses — « t (s) » → « s ». Vide si absente. */
@@ -197,9 +228,9 @@ function unite(label?: string): string | null {
  * géométrie n'a pas d'axes nommés du tout — elle garde donc l'échelle, comme
  * avant.
  */
-function memeEchelleSurLesDeuxAxes(spec: JSXGraphVisualSpec): boolean {
-  const x = unite(spec.xLabel);
-  const y = unite(spec.yLabel);
+function memeEchelleSurLesDeuxAxes(xLabel?: string, yLabel?: string): boolean {
+  const x = unite(xLabel);
+  const y = unite(yLabel);
   if (x === null && y === null) return true;   // figure de géométrie
   return x === y;
 }
@@ -215,15 +246,33 @@ function CADRE_FIGURE(transparent?: boolean): string {
     : 'my-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 p-2';
 }
 
-export default function JSXGraphVisual({ spec, transparent }: JSXGraphVisualProps) {
+export default function JSXGraphVisual({ spec, transparent, fixedLabels }: JSXGraphVisualProps) {
   const reactId = useId();
   const boardId = `science-board-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<JXG.Board | null>(null);
+  const animatedObjectsRef = useRef<JXG.GeometryElement[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const structureKey = useMemo(() => JSON.stringify({
+    boundingBox: spec.boundingBox,
+    axis: spec.axis,
+    grid: spec.grid,
+    xLabel: spec.xLabel,
+    yLabel: spec.yLabel,
+    keepAspectRatio: memeEchelleSurLesDeuxAxes(spec.xLabel, spec.yLabel),
+  }), [spec.axis, spec.boundingBox, spec.grid, spec.xLabel, spec.yLabel]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const structure = JSON.parse(structureKey) as {
+      boundingBox?: [number, number, number, number];
+      axis?: boolean;
+      grid?: boolean;
+      xLabel?: string;
+      yLabel?: string;
+      keepAspectRatio: boolean;
+    };
 
     let board: JXG.Board | null = null;
     let observer: ResizeObserver | null = null;
@@ -235,9 +284,9 @@ export default function JSXGraphVisual({ spec, transparent }: JSXGraphVisualProp
     };
     try {
       board = JXG.JSXGraph.initBoard(boardId, {
-        boundingbox: spec.boundingBox || [-5, 5, 5, -5],
-        axis: spec.axis !== false,
-        grid: spec.grid === true,
+        boundingbox: structure.boundingBox || [-5, 5, 5, -5],
+        axis: structure.axis !== false,
+        grid: structure.grid === true,
         defaultAxes: {
           x: {
             strokeColor: '#64748b',
@@ -258,7 +307,7 @@ export default function JSXGraphVisual({ spec, transparent }: JSXGraphVisualProp
         },
         showCopyright: false,
         showNavigation: false,
-        keepaspectratio: memeEchelleSurLesDeuxAxes(spec),
+        keepaspectratio: structure.keepAspectRatio,
         pan: { enabled: false },
         zoom: { wheel: false },
       });
@@ -278,11 +327,9 @@ export default function JSXGraphVisual({ spec, transparent }: JSXGraphVisualProp
           highlight: false,
         });
       const marge = (value: number, span: number) => value - span * 0.04;
-      if (spec.xLabel) axisLabel(spec.xLabel, marge(xMax, xMax - xMin), marge(0, yMax - yMin), 'right');
-      if (spec.yLabel) axisLabel(spec.yLabel, marge(0, xMax - xMin), marge(yMax, yMax - yMin), 'right');
-
-      spec.elements.forEach(element => addElement(board as JXG.Board, element));
-      board.fullUpdate();
+      if (structure.xLabel) axisLabel(structure.xLabel, marge(xMax, xMax - xMin), marge(0, yMax - yMin), 'right');
+      if (structure.yLabel) axisLabel(structure.yLabel, marge(0, xMax - xMin), marge(yMax, yMax - yMin), 'right');
+      boardRef.current = board;
 
       observer = new ResizeObserver(() => {
         if (!board || !container.clientWidth) return;
@@ -300,21 +347,74 @@ export default function JSXGraphVisual({ spec, transparent }: JSXGraphVisualProp
       active = false;
       observer?.disconnect();
       if (board) JXG.JSXGraph.freeBoard(board);
+      if (boardRef.current === board) boardRef.current = null;
+      animatedObjectsRef.current = [];
     };
-  }, [boardId, spec]);
+  }, [boardId, structureKey]);
+
+  // La planche, ses axes et ses textes restent montés. Seuls les traits et
+  // objets scientifiques sont remplacés entre deux pas d'animation.
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    try {
+      board.suspendUpdate();
+      if (animatedObjectsRef.current.length) {
+        board.removeObject([...animatedObjectsRef.current].reverse());
+      }
+      animatedObjectsRef.current = spec.elements.flatMap(element =>
+        addElement(board, element, Boolean(fixedLabels)));
+      board.unsuspendUpdate();
+      board.fullUpdate();
+    } catch (reason) {
+      board.unsuspendUpdate();
+      console.error('[ScientificVisual][JSXGraph] Animation update failed:', reason);
+      queueMicrotask(() => setError('La figure scientifique ne peut pas être actualisée.'));
+    }
+  }, [fixedLabels, spec.elements, structureKey]);
+
+  const boundingBox = spec.boundingBox || [-5, 5, 5, -5];
+  const [xMin, yMax, xMax, yMin] = boundingBox;
+  const fixedText = fixedLabels?.flatMap((element, index) => {
+    const point = fixedLabelPoint(element);
+    if (!point || !element.label) return [];
+    const left = ((point.x - xMin) / (xMax - xMin)) * 100;
+    const top = ((yMax - point.y) / (yMax - yMin)) * 100;
+    return [{ element, index, left, top }];
+  });
 
   return (
     <figure className={CADRE_FIGURE(transparent)}>
       {spec.title && <figcaption className="px-2 pb-2 text-sm font-medium text-cyan-200">{spec.title}</figcaption>}
       {error && <p className="px-2 pb-2 text-sm text-red-300">{error}</p>}
-      <div
-        id={boardId}
-        ref={containerRef}
-        className="jxgbox w-full"
-        style={{ height: 320, border: 0, background: 'transparent' }}
-        role="img"
-        aria-label={spec.title || 'Figure scientifique interactive'}
-      />
+      <div className="relative w-full">
+        <div
+          id={boardId}
+          ref={containerRef}
+          className="jxgbox w-full"
+          style={{ height: 320, border: 0, background: 'transparent' }}
+          role="img"
+          aria-label={spec.title || 'Figure scientifique interactive'}
+        />
+        {fixedText && (
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            {fixedText.map(({ element, index, left, top }) => (
+              <span
+                key={element.id || `${element.type}-${index}`}
+                className="absolute max-w-[48%] -translate-x-1/2 -translate-y-1/2 text-center text-[13px] font-semibold leading-tight"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  color: resolveColor(element.color),
+                  textShadow: '0 1px 3px rgba(2, 6, 23, 0.95)',
+                }}
+              >
+                {element.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </figure>
   );
 }

@@ -124,6 +124,15 @@ export default function ScientificPresetVisual({
     () => resolveScientificPreset(spec.presetId, variant, step),
     [spec.presetId, step, variant],
   );
+  // Les libellés décrivent l'expérience, ils ne sont pas des objets animés.
+  // On les prend dans l'état final de la variante afin que leur contenu et
+  // leur position restent identiques du premier au dernier pas.
+  const fixedLabels = useMemo(() => {
+    const finalSpec = resolveScientificPreset(spec.presetId, variant, meta.maxStep);
+    return finalSpec.engine === 'jsxgraph'
+      ? finalSpec.elements.filter(element => Boolean(element.label))
+      : undefined;
+  }, [meta.maxStep, spec.presetId, variant]);
 
   return (
     <div
@@ -135,7 +144,9 @@ export default function ScientificPresetVisual({
     >
       <div className="min-h-0 flex-1">
         {resolved.engine === 'cytoscape' && <CytoscapeVisual spec={resolved} transparent={transparent} />}
-        {resolved.engine === 'jsxgraph' && <JSXGraphVisual spec={resolved} transparent={transparent} />}
+        {resolved.engine === 'jsxgraph' && (
+          <JSXGraphVisual spec={resolved} transparent={transparent} fixedLabels={fixedLabels} />
+        )}
       </div>
       <div
         className={transparent

@@ -479,8 +479,11 @@ function facteursCinetiquesSpec(variant: string, step: number, maxStep: number):
       ...pointsToSegments('reference', reference, 'blue', 'référence', step, maxStep, { x: 10.8, y: 8.8 }),
       ...pointsToSegments('acceleree', accelerated, 'orange', factorLabels[variant] || 'facteur augmenté', step, maxStep, { x: 8.6, y: 10.7 }),
       { id: 'plateau', type: 'segment', points: [{ x: 0, y: 10 }, { x: 12, y: 10 }], color: 'green', dashed: true, label: 'même état final' },
-      { id: 'ref-now', type: 'point', points: [{ x: time, y: refY }], color: 'blue', label: 'référence' },
-      { id: 'fast-now', type: 'point', points: [{ x: time, y: fastY }], color: 'orange', label: factorLabels[variant] || 'facteur augmenté' },
+      // Les deux points avancent sur les courbes : leurs noms sont déjà
+      // écrits à des positions fixes au bout des courbes. Ne pas rattacher de
+      // texte aux marqueurs mobiles évite doublons, déplacement et clignotement.
+      { id: 'ref-now', type: 'point', points: [{ x: time, y: refY }], color: 'blue' },
+      { id: 'fast-now', type: 'point', points: [{ x: time, y: fastY }], color: 'orange' },
     ],
   };
 }
