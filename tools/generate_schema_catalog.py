@@ -161,6 +161,55 @@ def _poids_mot_cle(mot: str) -> int:
     return 1
 
 
+# ── Surface publique du rapprochement ─────────────────────────────
+#
+# Le catalogue des schémas n'est pas la seule bibliothèque à rapprocher d'une
+# phrase d'élève : les scènes animées et les modèles 3D ont eux aussi des
+# mots-clés, et il n'y a aucune raison qu'ils soient comparés autrement. Les
+# trois fonctions ci-dessous exposent la MÊME mécanique — repli sans accents,
+# bornes de mot, pondération — pour que `visual_shortlist` n'en réécrive pas
+# une seconde, forcément divergente.
+
+
+def plier(texte: str) -> str:
+    """La forme comparable d'un texte : minuscules, sans accents."""
+    return _sans_accents(texte or "")
+
+
+def mot_cle_present(mot: str, contexte_plie: str) -> bool:
+    """Le mot-clé apparaît-il comme MOT dans un contexte déjà plié ?"""
+    return bool(_motif(mot).search(contexte_plie))
+
+
+def poids_mot_cle(mot: str) -> int:
+    """Ce que vaut ce mot-clé : 3 s'il est composé, 2 s'il est distinctif, 1 sinon."""
+    return _poids_mot_cle(mot)
+
+
+def _rapprochements(context: str) -> list[tuple[int, int, str]]:
+    """Tous les schémas touchés par le contexte, du meilleur au moins bon.
+
+    Le tri est STABLE : à score et précision égaux, l'ordre du catalogue
+    tranche, exactement comme le faisait la comparaison stricte d'origine.
+    """
+    contexte = _sans_accents(context or "")
+    if not contexte.strip():
+        return []
+
+    trouvailles: list[tuple[int, int, str]] = []
+    for entry in SCHEMA_CATALOG:
+        trouves = [mot for mot in entry["keywords"] if _motif(mot).search(contexte)]
+        if not trouves:
+            continue
+        score = sum(_poids_mot_cle(mot) for mot in trouves)
+        # À score égal, le mot-clé le plus long tranche : « fibre musculaire »
+        # l'emporte sur « muscle », qui désigne le chapitre et non la figure.
+        precision = max(len(mot) for mot in trouves)
+        trouvailles.append((score, precision, entry["id"]))
+    trouvailles.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return trouvailles
+
+
 def match_schema(context: str) -> tuple[str | None, int]:
     """Le schéma de la bibliothèque qui colle le mieux au contexte, et son score.
 
@@ -171,29 +220,43 @@ def match_schema(context: str) -> tuple[str | None, int]:
 
     Les appelants décident du seuil : rapprocher n'est pas afficher.
     """
-    contexte = _sans_accents(context or "")
-    if not contexte.strip():
+    trouvailles = _rapprochements(context)
+    if not trouvailles:
         return None, 0
+    score, _, schema_id = trouvailles[0]
+    return schema_id, score
 
-    meilleur_id, meilleur_score, meilleur_precision = None, 0, 0
+
+def classer_schemas(context: str, limite: int = 8) -> list[tuple[str, int]]:
+    """Le classement complet, et pas seulement son vainqueur.
+
+    Un seul identifiant ne suffit plus depuis que la bibliothèque contient DEUX
+    versions de la même notion : le schéma de référence, détaillé, et le
+    croquis au crayon que le professeur trace au tableau. Choisir entre les
+    deux dépend de ce que l'élève demande, pas du score — il faut donc les voir
+    tous les deux.
+    """
+    return [(schema_id, score) for score, _, schema_id in _rapprochements(context)[:limite]]
+
+
+def schema_entry(schema_id: str) -> dict | None:
     for entry in SCHEMA_CATALOG:
-        trouves = [mot for mot in entry["keywords"] if _motif(mot).search(contexte)]
-        if not trouves:
-            continue
-        score = sum(_poids_mot_cle(mot) for mot in trouves)
-        # À score égal, le mot-clé le plus long tranche : « fibre musculaire »
-        # l'emporte sur « muscle », qui désigne le chapitre et non la figure.
-        precision = max(len(mot) for mot in trouves)
-        if (score, precision) > (meilleur_score, meilleur_precision):
-            meilleur_id, meilleur_score, meilleur_precision = entry["id"], score, precision
-    return (meilleur_id, meilleur_score) if meilleur_score else (None, 0)
+        if entry["id"] == schema_id:
+            return entry
+    return None
+
+
+def est_croquis(schema_id: str) -> bool:
+    """Ce schéma est-il la version « craie au tableau » de la notion ?"""
+    entry = schema_entry(schema_id)
+    if not entry:
+        return False
+    return (entry.get("metadata") or {}).get("resourceRole") == "teacher_sketch"
 
 
 def schema_title(schema_id: str) -> str:
-    for entry in SCHEMA_CATALOG:
-        if entry["id"] == schema_id:
-            return entry["title"]
-    return ""
+    entry = schema_entry(schema_id)
+    return entry["title"] if entry else ""
 
 '''
 

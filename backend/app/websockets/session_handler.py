@@ -25,7 +25,11 @@ from app.services.scientific_presets import (
     normalize_scientific_control,
     normalize_scientific_state,
 )
-from app.services.scientific_visual_router import build_visual_route_prompt
+from app.services.scientific_visual_router import (
+    build_visual_route_prompt,
+    route_scientific_visual,
+)
+from app.services.visual_shortlist import bloc_visuels_disponibles
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
 from app.services.prompt_builder import prompt_builder
@@ -1762,6 +1766,7 @@ class SessionHandler:
         et injecte les critères scientifiques propres à la notion demandée.
         """
         contexte = self._contexte_de_rapprochement()
+        demande = self._derniere_demande()
         schema_id, score = self._auto_match_schema()
         if not schema_id or score < 2:
             # Le serveur SAIT ici que la bibliothèque ne couvre pas la séance.
@@ -1769,7 +1774,33 @@ class SessionHandler:
             # devant un tableau à la place d'un schéma. Désormais le manque
             # s'écrit, et la liste se lit comme une liste de courses.
             noter_manque(contexte, schema_id, score)
-        return build_visual_route_prompt(contexte, self._derniere_demande())
+
+        # La route dit COMMENT produire une figure ; elle ne dit pas ce qui
+        # existe déjà. Un seul identifiant en sortait, et seulement quand le
+        # registre SVG gagnait — les croquis au crayon, les scènes animées, le
+        # modèle 3D et les simulations du cours restaient hors de vue. La carte
+        # les nomme tous, pour la question que l'élève vient de poser.
+        carte = bloc_visuels_disponibles(
+            contexte,
+            demande,
+            simulations=self.lesson_resources,
+            # En question libre, la séance n'a ni leçon ni objectif pour
+            # orienter le tuteur : c'est le mode où la bibliothèque servait le
+            # moins alors que l'élève y travaille le plus souvent seul.
+            insister=self.session_mode in ("libre", "explain"),
+        )
+        if not carte:
+            return build_visual_route_prompt(contexte, demande)
+
+        # Les deux blocs se contrediraient sur le seul cas qu'ils traitent tous
+        # les deux : « affiche `svt_mitochondrie_structure`, NE LE REDESSINE
+        # PAS » juste après « l'élève a dit dessine, envoie le croquis ». La
+        # carte connaît la même planche ET ses alternatives, et elle sait
+        # laquelle la demande appelle : c'est elle qui parle. La route garde la
+        # main dès qu'il faut GÉNÉRER — c'est ce qu'elle seule sait cadrer.
+        if route_scientific_visual(contexte, demande)["source"] == "schema":
+            return carte
+        return f"{carte}\n\n{build_visual_route_prompt(contexte, demande)}"
 
     def _derniere_demande(self) -> str:
         """La dernière phrase écrite par l'ÉLÈVE, seule.

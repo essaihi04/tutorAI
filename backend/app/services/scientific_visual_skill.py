@@ -14,7 +14,80 @@ import unicodedata
 from typing import Any
 
 from app.services.visual_gaps import noter_element_refuse
-from app.services.scientific_presets import normalize_scientific_preset
+from app.services.scientific_presets import (
+    SCIENTIFIC_PRESETS,
+    normalize_scientific_preset,
+)
+
+
+#: Les modèles 3D audités, avec de quoi les RAPPROCHER d'une demande d'élève.
+#:
+#: Le contrat Three.js était décrit en prose dans le prompt et vérifié par un
+#: littéral au fond du validateur. Le modèle existait donc, mais rien ne le
+#: proposait : il fallait que l'élève prononce lui-même « mitochondrie EN 3D »
+#: pour qu'un motif du routeur le débloque. Les mots-clés le rendent
+#: atteignable comme un schéma ou une scène animée, et l'ajout d'un second
+#: modèle ne se fera plus qu'ici.
+MODELES_3D: dict[str, dict[str, Any]] = {
+    "mitochondrion": {
+        "title": "Mitochondrie 3D interactive",
+        "subject": "SVT",
+        "keywords": [
+            "mitochondrie", "ultrastructure de la mitochondrie", "crête",
+            "membrane interne", "espace intermembranaire",
+            "matrice mitochondriale", "ADN mitochondrial",
+            "ميتوكوندري", "الميتوكوندري",
+        ],
+        "focus": (
+            "all",
+            "outer_membrane",
+            "intermembrane_space",
+            "inner_membrane",
+            "cristae",
+            "matrix",
+            "mitochondrial_dna",
+        ),
+    },
+}
+
+#: Les orthographes que le modèle produit pour un identifiant de modèle.
+_ALIAS_3D: dict[str, str] = {"mitochondrie": "mitochondrion"}
+
+_MITOCHONDRION_FOCUS = set(MODELES_3D["mitochondrion"]["focus"])
+
+
+def _catalogue_presets() -> str:
+    """La liste des scènes animées, ÉCRITE DEPUIS le catalogue.
+
+    Elle était recopiée à la main dans le prompt, groupée par « transparence »
+    puis par chapitre. Trois listes à tenir pour une seule vérité : le jour où
+    une scène est ajoutée sans que quelqu'un pense à ce paragraphe, elle
+    existe dans le navigateur, elle passe la validation, et le modèle ne la
+    nomme jamais. Le regroupement pédagogique était joli ; il coûtait plus
+    qu'il ne rendait.
+    """
+    par_matiere: dict[str, list[str]] = {}
+    for preset_id, definition in SCIENTIFIC_PRESETS.items():
+        variantes = ", ".join(f"`{v}`" for v in sorted(definition["variants"]))
+        par_matiere.setdefault(str(definition.get("subject") or "Autre"), []).append(
+            f"  `{preset_id}` — {definition['title']}\n"
+            f"    variantes : {variantes}"
+        )
+    lignes: list[str] = []
+    for matiere in sorted(par_matiere):
+        lignes.append(f"{matiere.upper()} :")
+        lignes.extend(par_matiere[matiere])
+    return "\n".join(lignes)
+
+
+def _catalogue_3d() -> str:
+    """La liste des modèles 3D, ÉCRITE DEPUIS le registre."""
+    lignes: list[str] = []
+    for model_id, definition in MODELES_3D.items():
+        focus = ", ".join(f"`{f}`" for f in definition["focus"])
+        lignes.append(f"  `{model_id}` — {definition['title']}")
+        lignes.append(f"    focus : {focus}")
+    return "\n".join(lignes)
 
 
 SCIENTIFIC_VISUAL_PROMPT = r"""
@@ -43,36 +116,11 @@ MOTEURS AUTORISÉS dans `line.scientific` :
 - `preset` : scène animée validée du catalogue. Le preset réutilise JSXGraph
   ou Cytoscape ; le LLM ne fournit jamais les objets internes ni du code.
 
-PRESETS TRANSPARENTS PHYSIQUE / CHIMIE / SVT :
-`phys_ch1_propagation_onde`, `chem_ch1_facteurs_cinetiques`,
-`svt_ch1_respiration_mitochondriale`.
-Notions difficiles complémentaires :
-`phys_ch1_types_ondes`, `phys_ch1_celerite_corde`,
-`chem_ch1_energie_activation`, `chem_ch1_oxydoreduction`,
-`svt_ch1_glissement_sarcomere`, `svt_ch1_couplage_excitation_contraction`.
-Variantes exactes :
-- onde : `propagation`, `retard`, `superposition` ;
-- types d’ondes : `comparaison`, `transversale`, `longitudinale` ;
-- célérité sur une corde : `forte_tension`, `faible_tension`, `forte_masse_lineique` ;
-- facteurs cinétiques : `temperature`, `concentration`, `catalyseur`, `surface_contact` ;
-- énergie d’activation : `comparaison`, `sans_catalyseur`, `avec_catalyseur` ;
-- oxydoréduction : `transfert_direct`, `pile`, `electrolyse` ;
-- respiration mitochondriale : `bilan`, `krebs`, `chaine_respiratoire`.
-- sarcomère : `repos`, `contraction`, `comparaison` ;
-- couplage excitation–contraction : `cycle_complet`, `liberation_calcium`, `contraction`, `relaxation`.
-
-AUTRES PRESETS DU CHAPITRE SVT « consommation de la matière organique » :
-`svt_ch1_cycle_atp`, `svt_ch1_levures_exao`, `svt_ch1_chimiosmose`,
-`svt_ch1_carte_metabolique`, `svt_ch1_myogrammes`,
-`svt_ch1_cycle_actomyosine`, `svt_ch1_filieres_effort`.
-Variantes exactes :
-- cycle ATP : `cycle_complet`, `hydrolyse`, `phosphorylation`, `couplage` ;
-- levures : `comparaison`, `avec_oxygene`, `sans_oxygene` ;
-- chimiosmose : `cycle_complet`, `transfert_electrons`, `pompage_protons`, `synthese_atp` ;
-- carte métabolique : `vue_ensemble`, `respiration`, `fermentation_lactique`, `fermentation_alcoolique` ;
-- myogrammes : `secousse`, `sommation`, `tetanus_incomplet`, `tetanus_complet` ;
-- actomyosine : `cycle_complet`, `fixation`, `pivotement`, `detachement`, `reactivation` ;
-- filières : `vue_ensemble`, `effort_bref`, `effort_intense`, `effort_prolonge`, `recuperation`.
+SCÈNES ANIMÉES DU CATALOGUE — identifiants et variantes EXACTS.
+Une scène animée bat toujours un dessin quand la notion CHANGE dans le temps :
+elle est déjà réglée, elle se met en pause, et l'élève peut la faire avancer
+pas à pas.
+{{CATALOGUE_PRESETS}}
 Format :
 {"type":"scientific","content":"Cycle ATP–ADP","scientific":{"engine":"preset","presetId":"svt_ch1_cycle_atp","variant":"cycle_complet","autoplay":true}}
 Pour piloter la scène déjà affichée, émets une action séparée :
@@ -147,12 +195,13 @@ Primitives : `line`, `arrow`, `rect`, `circle`, `ellipse`, `polygon`,
 dans le cadre et ajoute une `description` accessible. N'émets ni `path`, ni
 HTML, ni URL, ni attribut d'événement.
 
-Format Three.js — seul modèle 3D actuellement autorisé :
+Format Three.js — modèles 3D audités, et eux seuls :
 {"type":"scientific","content":"Mitochondrie 3D","scientific":{"engine":"three","model":"mitochondrion","title":"Mitochondrie 3D interactive","description":"Double membrane, crêtes, matrice et ADN mitochondrial.","autoplay":true,"labels":true,"focus":"all"}}
-`focus` : `all`, `outer_membrane`, `intermembrane_space`, `inner_membrane`,
-`cristae`, `matrix`, `mitochondrial_dna`. Utilise ce moteur seulement si la
-profondeur, la rotation ou le zoom servent réellement la leçon. N'invente
-aucun autre modèle et n'ajoute ni caméra, ni lumière, ni texture, ni URL.
+{{CATALOGUE_3D}}
+Utilise ce moteur seulement si la profondeur, la rotation ou le zoom servent
+réellement la leçon — sinon la planche SVG reste meilleure, car légendée et
+imprimable. N'invente aucun autre modèle et n'ajoute ni caméra, ni lumière,
+ni texture, ni URL.
 
 RÈGLES DE QUALITÉ :
 - Toutes les légendes sont courtes et en français.
@@ -163,7 +212,11 @@ RÈGLES DE QUALITÉ :
 - Une simulation doit faire observer une variable ou tester une hypothèse ;
   sinon un schéma statique suffit.
 - N'invente jamais un moteur, un type d'élément ou du code JavaScript.
-""".strip()
+""".strip().replace(
+    "{{CATALOGUE_PRESETS}}", _catalogue_presets()
+).replace(
+    "{{CATALOGUE_3D}}", _catalogue_3d()
+)
 
 
 _COLORS = {
@@ -878,15 +931,6 @@ def _normalize_roughsvg(value: dict[str, Any]) -> dict[str, Any] | None:
     return result
 
 
-_MITOCHONDRION_FOCUS = {
-    "all",
-    "outer_membrane",
-    "intermembrane_space",
-    "inner_membrane",
-    "cristae",
-    "matrix",
-    "mitochondrial_dna",
-}
 
 
 def _normalize_three(value: dict[str, Any]) -> dict[str, Any] | None:
@@ -899,14 +943,15 @@ def _normalize_three(value: dict[str, Any]) -> dict[str, Any] | None:
     """
 
     model = str(value.get("model", "")).strip().lower()
-    if model not in {"mitochondrion", "mitochondrie"}:
+    model = _ALIAS_3D.get(model, model)
+    if model not in MODELES_3D:
         return None
     focus = str(value.get("focus", "all")).strip().lower()
-    if focus not in _MITOCHONDRION_FOCUS:
+    if focus not in MODELES_3D[model]["focus"]:
         focus = "all"
     return {
         "engine": "three",
-        "model": "mitochondrion",
+        "model": model,
         "title": _text(value.get("title"), 80),
         "description": _text(value.get("description"), 360),
         "autoplay": value.get("autoplay") is not False,

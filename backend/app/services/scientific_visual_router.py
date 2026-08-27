@@ -239,6 +239,19 @@ def recommend_generated_engine(context: str) -> str:
     return "roughsvg"
 
 
+def _noms_des_modeles_3d() -> str:
+    """Les identifiants 3D réellement audités, nommés dans le prompt.
+
+    La phrase disait « la mitochondrie », et `model` « vaut toujours
+    `mitochondrion` ». C'était vrai tant qu'il n'y avait qu'un modèle ; le
+    jour où un second est ajouté au registre, cette prose l'interdit au tuteur
+    sans que rien ne signale la contradiction.
+    """
+    from app.services.scientific_visual_skill import MODELES_3D
+
+    return ", ".join(f"`{model_id}`" for model_id in MODELES_3D)
+
+
 def _fiche_reclame_un_tableau(blueprint: dict[str, Any]) -> bool:
     """La fiche demande-t-elle elle-même un tableau parmi ses obligations ?
 
@@ -394,9 +407,10 @@ def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
             "dans le catalogue contrôlable du chapitre. Le preset réutilise "
             "JSXGraph/Cytoscape et accepte `start`, `pause`, `next`, "
             "`set_variant` et `highlight`.",
-            "3. Une ligne `scientific` avec le moteur `three` pour la mitochondrie "
-            "quand la demande exige rotation, zoom ou profondeur. Le modèle est "
-            "versionné : `model` vaut toujours `mitochondrion`.",
+            "3. Une ligne `scientific` avec le moteur `three` quand la demande "
+            "exige rotation, zoom ou profondeur, et que la notion figure parmi "
+            f"les modèles 3D audités ({_noms_des_modeles_3d()}). Ils sont "
+            "versionnés : reprends l'identifiant tel quel, n'en invente aucun.",
             "4. Une ligne `scientific` avec le moteur `matter` pour une mécanique "
             "2D. Elle exige `measures` (une grandeur lue en direct) ou "
             "`parameters` (un réglage) — sans quoi c'est une animation, pas une "
