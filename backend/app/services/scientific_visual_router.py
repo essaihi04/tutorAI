@@ -461,17 +461,36 @@ def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
             "graphique ne les rend mieux, et tous les rendent faux."
         )
 
+    # Le visuel PART, qu'on l'ait demandé ou non.
+    #
+    # La règle était « produis-le lorsqu'il sert l'objectif ; ne l'ajoute pas
+    # comme décoration ». Prudente, et vraie sur le papier — sauf qu'un modèle
+    # à qui on laisse le choix de ne rien dessiner ne dessine pas. La
+    # bibliothèque déjà tracée a la même consigne depuis qu'elle est câblée :
+    # l'élève ignore ce qui existe, il ne le réclamera jamais, et attendre sa
+    # demande revient à ne rien montrer. Une figure GÉNÉRÉE ne se comporte pas
+    # autrement.
+    #
+    # « Explicite » ne décide donc plus s'il faut une figure, mais avec quelle
+    # fermeté : une demande formulée ne se négocie pas, une réponse ordinaire
+    # se dessine quand même.
     obligation = (
         "L'élève demande explicitement un schéma : tu DOIS produire maintenant une ligne "
         "`scientific` dans `show_board`."
         if route["explicit"]
         else
-        "Produis ce visuel lorsqu'il sert l'objectif de la réponse ; ne l'ajoute pas comme décoration."
+        "Il n'a rien demandé — c'est le cas NORMAL, et ce n'est pas une raison de "
+        "répondre sans figure. Produis cette ligne `scientific` DANS CETTE RÉPONSE : "
+        "l'élève ne sait pas ce que tu peux dessiner, il ne le réclamera jamais."
     )
     lines = [
         "[SCHÉMA À GÉNÉRER — AUCUN SVG VALIDÉ ASSEZ PRÉCIS]",
         obligation,
         f"Moteur imposé : `{route['engine']}`. Titre cible : {route['title']}.",
+        "Deux réserves, et deux seulement : le tour où tu POSES une question et "
+        "attends la réponse reste SANS figure — la dessiner reviendrait à montrer "
+        "ce que tu demandes de trouver ; et si la figure que tu viens d'envoyer "
+        "est encore à l'écran, commente-la au lieu de la refaire.",
     ]
     if route.get("must_show"):
         lines.append("Éléments scientifiques obligatoires : " + "; ".join(route["must_show"]) + ".")

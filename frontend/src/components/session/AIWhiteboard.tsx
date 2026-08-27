@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { getSchemaById } from './schemas';
 import type { ScientificControlCommand, ScientificSimulationUpdate, ScientificVisualSpec } from './scientific/types';
 import LiveBoard, { type LiveScript } from './LiveBoard';
@@ -184,6 +184,38 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   });
   const activeSchema = schemaId ? getSchemaById(schemaId) : undefined;
 
+  // ── Le script ne se refabrique QUE si son contenu change ──
+  //
+  // Il était construit en plein rendu. `LiveBoard` redémarre son script dès
+  // que l'objet reçu change d'identité — et cet objet en changeait à chaque
+  // rendu, donc à chaque bascule de `audioActive` : la voix commence, le
+  // tableau repart de zéro ; elle s'arrête, il repart encore. L'élève voyait
+  // le titre s'écrire, puis se réécrire, deux ou trois fois par tour.
+  //
+  // `useMemo` rend l'identité stable tant que le contenu l'est. Les hooks
+  // vivent au-dessus des aiguillages : ils doivent être appelés à chaque
+  // rendu, quel que soit le tableau choisi ensuite.
+  const scriptTableau = useMemo(
+    () => (boardContent && boardContent.lines && boardContent.lines.length > 0
+      ? scriptDepuisTableau(boardContent)
+      : null),
+    [boardContent],
+  );
+  // `activeHighlights` arrive souvent en tableau fraîchement construit : on se
+  // lie à son CONTENU, pas à sa référence, sinon le mémo ne retient rien.
+  const clesSurlignages = (activeHighlights || []).join('|');
+  const scriptSchema = useMemo(
+    () => (activeSchema
+      ? scriptDepuisSchema(activeSchema.id, activeSchema.title, clesSurlignages ? clesSurlignages.split('|') : [])
+      : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeSchema?.id, activeSchema?.title, clesSurlignages],
+  );
+  const scriptCroquis = useMemo(
+    () => (drawCommands && drawCommands.length > 0 ? scriptDepuisCroquis(drawCommands) : null),
+    [drawCommands],
+  );
+
   // ── Live mode (priorité maximale) : le professeur écrit/dessine en direct ──
   if (liveScript && liveScript.steps && liveScript.steps.length > 0) {
     return (
@@ -223,7 +255,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   if (!hasActiveDrawCommands && boardContent && boardContent.lines && boardContent.lines.length > 0) {
     return (
       <LiveBoard
-        script={scriptDepuisTableau(boardContent)}
+        script={scriptTableau!}
         isVisible={isVisible}
         onClose={onClose}
         onStudentMessage={onStudentMessage}
@@ -241,7 +273,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   if (!hasActiveDrawCommands && activeSchema) {
     return (
       <LiveBoard
-        script={scriptDepuisSchema(activeSchema.id, activeSchema.title, activeHighlights)}
+        script={scriptSchema!}
         isVisible={isVisible}
         onClose={onClose}
         onStudentMessage={onStudentMessage}
@@ -272,7 +304,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   if (drawCommands && drawCommands.length > 0) {
     return (
       <LiveBoard
-        script={scriptDepuisCroquis(drawCommands)}
+        script={scriptCroquis!}
         isVisible={isVisible}
         onClose={onClose}
         onStudentMessage={onStudentMessage}

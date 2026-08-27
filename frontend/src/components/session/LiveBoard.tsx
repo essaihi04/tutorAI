@@ -52,6 +52,29 @@ interface LiveLine {
  */
 const LANGUE_DU_TABLEAU = 'fr' as const;
 
+/**
+ * Deux titres disent-ils la même chose ?
+ *
+ * Le titre du script et celui écrit à la craie viennent souvent de la même
+ * source, mais pas toujours à l'identique : le LLM préfixe volontiers la ligne
+ * d'un émoji (« 🎯 Structure de la mitochondrie ») là où l'en-tête reçoit le
+ * texte nu. Comparer les chaînes brutes laisserait passer ce doublon-là, qui
+ * est justement le plus fréquent.
+ */
+function memeTitre(a: unknown, b: unknown): boolean {
+  const plier = (v: unknown) =>
+    String(v ?? '')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      // Émojis, puces et ponctuation de décoration : ils ornent le titre, ils
+      // ne le distinguent pas.
+      .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
+      .trim()
+      .toLowerCase();
+  const ga = plier(a);
+  return !!ga && ga === plier(b);
+}
+
 interface DrawPoint { x: number; y: number }
 
 interface LiveDrawElement {
@@ -333,6 +356,23 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     s => (s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0)
       || (s?.action === 'figure' && (!!s.scientific || !!s.schema_id))
       || (s?.action === 'bloc' && ['graph', 'diagram', 'mindmap'].includes(String(s.line?.type || '')))
+  );
+
+  // ── Le titre ne s'affiche pas deux fois ──
+  //
+  // Il vivait à deux endroits : la pastille de l'en-tête, et la première
+  // ligne écrite à la craie. Les trois convertisseurs de `AIWhiteboard` les
+  // remplissaient avec le MÊME texte — pour un schéma de la bibliothèque,
+  // caractère pour caractère. L'élève lisait donc son titre en haut, puis le
+  // voyait s'écrire juste en dessous.
+  //
+  // C'est la craie qui gagne : elle est plus grande, elle s'écrit devant lui,
+  // et c'est ce qu'un professeur souligne au tableau. L'en-tête s'efface
+  // quand la ligne existe.
+  const titreDejaEcrit = !!script?.title && Array.isArray(script?.steps) && script.steps.some(
+    s => s?.action === 'write'
+      && ['title', 'subtitle'].includes(String(s.line?.type || ''))
+      && memeTitre(s.line?.content, script.title)
   );
 
   /**
@@ -1336,7 +1376,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             <div className="w-2 h-2 rounded-full bg-green-400" />
           </div>
           <span className="text-white/70 text-xs font-medium shrink-0">👨‍🏫 Cours en direct</span>
-          {script.title && (
+          {script.title && !titreDejaEcrit && (
             <span className="text-emerald-300/90 text-xs truncate">— {script.title}</span>
           )}
         </div>
@@ -1450,9 +1490,16 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         }}
       >
         {/* Zone d'écriture */}
+        {/* La colonne d'écriture garde une LARGEUR DE LECTURE.
+            Sans figure à côté, elle prenait toute la largeur du tableau : des
+            lignes de cent caractères en écriture manuscrite, que l'œil ne
+            suit plus, et plus un centimètre où poser un croquis. Un professeur
+            n'écrit pas d'un bord à l'autre — il garde la moitié droite libre.
+            La borne ne s'applique que là : dès qu'une figure occupe la droite,
+            la colonne est déjà cadrée par elle. */}
         <div
           ref={textZoneRef}
-          className={`flex-1 min-w-0 overflow-y-auto px-5 ${focus ? 'pt-10 pb-16' : 'py-4'}`}
+          className={`flex-1 min-w-0 overflow-y-auto px-5 ${focus ? 'pt-10 pb-16' : 'py-4'} ${hasDrawSteps ? '' : 'md:max-w-4xl md:mx-auto md:w-full'}`}
           style={eraseText ? { animation: `liveEraseWipe ${ERASE_MS}ms ease-in forwards` } : undefined}
         >
           {written.map((entry, i) => (
