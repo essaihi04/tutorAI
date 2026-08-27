@@ -146,6 +146,52 @@ def test_le_bloc_envoie_au_modele_3d_quand_l_eleve_veut_tourner_autour():
     assert "Il demande à TOURNER AUTOUR" in bloc
 
 
+def test_le_visuel_part_meme_quand_l_eleve_n_a_rien_demande():
+    """L'élève ignore que ces figures existent : il ne les réclamera jamais.
+    Attendre sa demande, c'est garder la bibliothèque fermée."""
+    bloc = bloc_visuels_disponibles(
+        "svt la mitochondrie ses crêtes et sa matrice",
+        "je comprends pas trop ce chapitre",
+    )
+
+    assert "AFFICHE-EN UNE MAINTENANT" in bloc
+    assert "TU N'ATTENDS PAS QU'ON TE LE DEMANDE" in bloc
+    assert "AUCUNE demande particulière" in bloc
+
+
+def test_le_tour_socratique_reste_sans_tableau():
+    """Afficher pendant qu'on interroge, c'est montrer la réponse. C'est la
+    seule exception, et l'affichage par défaut ne doit pas l'écraser."""
+    bloc = bloc_visuels_disponibles(
+        "svt la mitochondrie ses crêtes et sa matrice",
+        "explique-moi la mitochondrie",
+    )
+
+    assert "SEULE EXCEPTION" in bloc
+    assert "POSES une question" in bloc
+
+
+def test_une_figure_deja_a_l_ecran_n_est_pas_renvoyee():
+    """Le seul défaut que l'affichage automatique produit tout seul : le
+    contexte bouge peu, la même ressource ressort, et le tableau clignote."""
+    contexte = "svt la mitochondrie ses crêtes et sa matrice"
+    schema_id = carte_des_visuels(contexte)["reference"][0]
+
+    bloc = bloc_visuels_disponibles(contexte, "continue", deja_affiches=[schema_id])
+
+    assert "DÉJÀ À L'ÉCRAN" in bloc
+    assert "Ne les RENVOIE pas" in bloc
+    assert schema_id in bloc  # elle reste nommée : on peut la commenter
+
+
+def test_sans_historique_aucune_regle_de_repetition_n_encombre_le_bloc():
+    bloc = bloc_visuels_disponibles(
+        "svt la mitochondrie ses crêtes et sa matrice", "explique-moi ça"
+    )
+
+    assert "DÉJÀ À L'ÉCRAN" not in bloc
+
+
 def test_le_bloc_reste_vide_quand_rien_ne_couvre_la_notion():
     """Répéter « aucune ressource » à chaque tour occuperait le contexte sans
     rien apprendre au modèle, qui sait déjà générer une figure."""

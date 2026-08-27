@@ -8,7 +8,7 @@ import unicodedata
 import base64
 import asyncio
 import sys
-from typing import Optional
+from typing import Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
@@ -907,6 +907,15 @@ class SessionHandler:
         self.simulation_state: dict = {}  # Track current simulation state
         self.simulation_history: list[dict] = []  # Track all simulation actions
         self.recent_resource_modes: list[str] = []
+        #: Les visuels DÉJÀ apparus à l'écran, du plus ancien au plus récent.
+        #:
+        #: Le tuteur affiche désormais une figure sans attendre que l'élève la
+        #: demande : c'est ce qui rend la bibliothèque utile, mais la carte des
+        #: ressources est recalculée à CHAQUE tour et rapproche la même notion
+        #: tant que la conversation ne bouge pas. Sans mémoire, « affiche-en
+        #: une » devient « renvoie la même à chaque phrase », et l'élève voit
+        #: son tableau se réinitialiser pendant qu'il réfléchit.
+        self._visuels_affiches: list[str] = []
         self.simulation_orchestration: dict = {}
         # Currently-open exam panel view (kept in sync by frontend).
         # Used to inject accurate exam metadata into the LLM system prompt
@@ -1788,6 +1797,7 @@ class SessionHandler:
             # orienter le tuteur : c'est le mode où la bibliothèque servait le
             # moins alors que l'élève y travaille le plus souvent seul.
             insister=self.session_mode in ("libre", "explain"),
+            deja_affiches=self._visuels_affiches,
         )
         if not carte:
             return build_visual_route_prompt(contexte, demande)
@@ -4153,6 +4163,7 @@ RÈGLES :
                     if isinstance(dit, str) and dit.strip():
                         etape["say"] = dit.strip()
                     normalized.append(etape)
+                    self._noter_visuel_affiche(schema_id)
                     continue
                 figure = normalize_scientific_visual(step.get("scientific") or step.get("payload"))
                 if figure is None:
@@ -4173,6 +4184,10 @@ RÈGLES :
                 if isinstance(dit, str) and dit.strip():
                     etape["say"] = dit.strip()
                 normalized.append(etape)
+                # Une scène du catalogue est identifiée ; une figure générée ne
+                # l'est pas, et n'a donc rien à retenir — deux `roughsvg`
+                # successifs ne sont pas la même image.
+                self._noter_visuel_affiche(figure.get("presetId") or figure.get("model"))
                 continue
 
             if action == "write" or (not action and isinstance(step.get("content"), str)):
@@ -5106,6 +5121,7 @@ RÈGLES :
                                 "type": "whiteboard_schema",
                                 "schema_id": schema_id,
                             })
+                            self._noter_visuel_affiche(schema_id)
                             self._remember_mode("whiteboard")
                             ui_actions_handled = True
                         else:
@@ -5503,6 +5519,7 @@ RÈGLES :
                 "type": "whiteboard_schema",
                 "schema_id": schema_id
             })
+            self._noter_visuel_affiche(schema_id)
             self._remember_mode("whiteboard")
             schema_handled = True
 
@@ -5899,6 +5916,7 @@ RÈGLES :
                     "type": "whiteboard_schema",
                     "schema_id": auto_schema_id
                 })
+                self._noter_visuel_affiche(auto_schema_id)
                 self._remember_mode("whiteboard")
                 schema_handled = True
             elif auto_schema_id:
@@ -5928,6 +5946,7 @@ RÈGLES :
                         "type": "whiteboard_schema",
                         "schema_id": auto_schema_id
                     })
+                    self._noter_visuel_affiche(auto_schema_id)
                     self._remember_mode("whiteboard")
                     schema_handled = True
                 else:
@@ -6473,6 +6492,28 @@ RÈGLES :
         self.recent_resource_modes.append(mode)
         if len(self.recent_resource_modes) > 5:
             self.recent_resource_modes = self.recent_resource_modes[-5:]
+
+    def _noter_visuel_affiche(self, identifiant: Any) -> None:
+        """Retenir ce qui vient d'apparaître à l'écran de l'élève.
+
+        Le tuteur n'attend plus qu'on lui demande une figure : dès que la
+        bibliothèque couvre la notion, il en affiche une. Le rapprochement,
+        lui, est refait à chaque tour sur un contexte qui bouge peu — la même
+        ressource ressort donc trois, quatre, dix fois de suite. La renvoyer
+        efface le tableau et le redessine à l'identique, au milieu d'une
+        explication : ce qui devait aider devient un clignotement.
+
+        Quatre entrées suffisent : au-delà, l'élève a changé de notion et
+        revoir une figure n'est plus une répétition, c'est un rappel.
+        """
+        if not isinstance(identifiant, str) or not identifiant.strip():
+            return
+        identifiant = identifiant.strip()
+        if self._visuels_affiches and self._visuels_affiches[-1] == identifiant:
+            return
+        self._visuels_affiches.append(identifiant)
+        if len(self._visuels_affiches) > 4:
+            self._visuels_affiches = self._visuels_affiches[-4:]
 
     def _contexte_de_rapprochement(self) -> str:
         """Ce sur quoi porte la séance, vu des mots employés.

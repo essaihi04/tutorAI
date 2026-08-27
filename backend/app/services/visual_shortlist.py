@@ -217,30 +217,47 @@ def bloc_visuels_disponibles(
     demande: str = "",
     simulations: Sequence[dict] | None = None,
     insister: bool = False,
+    deja_affiches: Sequence[str] | None = None,
 ) -> str:
     """L'instruction compacte à injecter avant le prompt du tuteur.
 
     Rend une chaîne vide quand rien n'est prêt : dire « aucune ressource ne
     couvre cette notion » à chaque tour occuperait le contexte pour ne rien
     apprendre au modèle, qui sait déjà générer une figure quand il n'a rien.
+
+    `deja_affiches` est ce que l'élève a DÉJÀ sous les yeux. Il ne retire rien
+    de la liste — une figure revue est parfois exactement ce qu'il faut — mais
+    il empêche la seule chose qu'un affichage automatique produit tout seul :
+    renvoyer la même image à chaque phrase, ce qui efface le tableau et le
+    redessine à l'identique au milieu d'une explication.
     """
     carte = carte_des_visuels(contexte, demande, simulations)
+    vus = {identifiant for identifiant in (deja_affiches or []) if identifiant}
+
+    def _marque(identifiant: str) -> str:
+        return "  ← DÉJÀ À L'ÉCRAN" if identifiant in vus else ""
 
     inventaire: list[str] = []
     if carte["reference"]:
         schema_id = carte["reference"][0]
         inventaire.append(
             f"  • SCHÉMA DE RÉFÉRENCE : {schema_id} — {schema_title(schema_id)}"
+            f"{_marque(schema_id)}"
         )
     if carte["croquis"]:
         schema_id = carte["croquis"][0]
         inventaire.append(
             f"  • CROQUIS AU CRAYON  : {schema_id} — {schema_title(schema_id)}"
+            f"{_marque(schema_id)}"
         )
     for preset_id, _ in carte["presets"]:
-        inventaire.append(f"  • SCÈNE ANIMÉE       : {_ligne_preset(preset_id)}")
+        inventaire.append(
+            f"  • SCÈNE ANIMÉE       : {_ligne_preset(preset_id)}{_marque(preset_id)}"
+        )
     for model_id, _ in carte["modeles_3d"]:
-        inventaire.append(f"  • MODÈLE 3D          : {_ligne_modele_3d(model_id)}")
+        inventaire.append(
+            f"  • MODÈLE 3D          : {_ligne_modele_3d(model_id)}{_marque(model_id)}"
+        )
     for ressource in carte["simulations"]:
         titre = str(ressource.get("title") or "").strip() or "simulation du cours"
         inventaire.append(f"  • SIMULATION DU COURS: « {titre} » — ouvre-la avec OUVRIR_SIMULATION")
@@ -249,14 +266,19 @@ def bloc_visuels_disponibles(
         return ""
 
     lignes = [
-        "[DÉJÀ PRÊT POUR CETTE DEMANDE — NE REDESSINE PAS CE QUI EXISTE]",
+        "[LA BIBLIOTHÈQUE COUVRE CETTE NOTION — AFFICHE-EN UNE MAINTENANT]",
         "Ces ressources sont déjà tracées, légendées et conformes au BAC. Les",
         "afficher rend mieux et coûte moins cher qu'une figure improvisée.",
         "",
         *inventaire,
         "",
-        "LAQUELLE : c'est CE QUE L'ÉLÈVE DEMANDE qui tranche, jamais la plus",
-        "impressionnante des cinq.",
+        "TU N'ATTENDS PAS QU'ON TE LE DEMANDE. L'élève ne sait pas que ces",
+        "figures existent : c'est à toi de les sortir, comme un professeur qui",
+        "va au tableau sans qu'on l'en prie. Par défaut, l'une d'elles part",
+        "DANS CETTE RÉPONSE.",
+        "",
+        "LAQUELLE : c'est le SENS de ce que dit l'élève qui tranche, jamais la",
+        "plus impressionnante des cinq.",
     ]
 
     # L'ordre des règles suit celui des intentions détectées : la première qui
@@ -280,13 +302,26 @@ def bloc_visuels_disponibles(
         )
     elif carte["reference"]:
         lignes.append(
-            "→ Il demande une EXPLICATION : affiche le SCHÉMA DE RÉFÉRENCE avec "
-            "`show_schema`, et commente-le au lieu de le décrire."
+            "→ AUCUNE demande particulière : c'est le cas NORMAL, et il n'annule "
+            "rien. Affiche le SCHÉMA DE RÉFÉRENCE avec `show_schema` pendant que "
+            "tu expliques, et commente-le au lieu de le décrire."
         )
     elif carte["croquis"]:
         lignes.append(
             "→ Aucune planche de référence sur cette notion : trace le CROQUIS AU "
             "CRAYON dans un pas `figure` de `show_live`."
+        )
+
+    if vus:
+        # Le seul défaut que l'affichage automatique produit tout seul. Il
+        # n'était pas visible tant que le tuteur attendait qu'on lui demande.
+        deja = ", ".join(sorted(vus))
+        lignes.append(
+            f"→ DÉJÀ À L'ÉCRAN : {deja}. Ne les RENVOIE pas — l'élève les a sous "
+            "les yeux, et les rouvrir efface le tableau pour le redessiner à "
+            "l'identique. Continue dessus (commente, zoome, change de variante "
+            "avec `control`), ou passe à une AUTRE ressource de la liste quand "
+            "ton explication avance."
         )
 
     lignes.append(
@@ -296,6 +331,12 @@ def bloc_visuels_disponibles(
     lignes.append(
         "→ N'INVENTE AUCUN identifiant : ceux ci-dessus existent, les autres non, "
         "et l'élève ne verrait rien."
+    )
+    lignes.append(
+        "→ SEULE EXCEPTION à l'affichage par défaut : le tour où tu POSES une "
+        "question et attends la réponse de l'élève. Écrire au tableau y "
+        "reviendrait à lui montrer ce que tu lui demandes de trouver. Tu affiches "
+        "au tour SUIVANT, quand tu reprends sa réponse."
     )
 
     if insister:
