@@ -35,6 +35,27 @@ const COMMANDES_DE_DESSIN = [
       { id: 'legende', type: 'text' as const, x: 250, y: 300, text: 'Le noyau perd 2 protons et 2 neutrons', color: 'white', strokeWidth: 1, fontSize: 16 },
     ],
   },
+  // ── Le cas qui rendait un croquis illisible ────────────────────────
+  //
+  // Le tuteur pose ses mots aux coordonnées qu'il a choisies, sans regarder
+  // le tableau : deux légendes tombaient au même endroit — « direction de
+  // propagation » écrite PAR-DESSUS « propagation » — et un mot posé près du
+  // bord sortait du cadre, l'élève lisant « …cule » au lieu de « molécule ».
+  //
+  // Cette étape rejoue exactement cette collision, sur un tableau qui porte
+  // déjà l'étape précédente. Les trois mots doivent se lire séparément, et
+  // aucun ne doit toucher le bord.
+  {
+    title: 'Superposition — les mots se relisent avant de s’écrire',
+    elements: [
+      {
+        id: 'sens', type: 'arrow' as const, color: 'red', strokeWidth: 3, label: 'direction de propagation',
+        points: [{ x: 300, y: 260 }, { x: 460, y: 260 }],
+      },
+      { id: 'double', type: 'text' as const, x: 340, y: 252, text: 'propagation', color: 'white', strokeWidth: 1, fontSize: 15 },
+      { id: 'hors_cadre', type: 'text' as const, x: -30, y: 40, text: 'molécule du milieu', color: 'cyan', strokeWidth: 1, fontSize: 15 },
+    ],
+  },
 ];
 
 /* ------------------------------------------------------------------ */

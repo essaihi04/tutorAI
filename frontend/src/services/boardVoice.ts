@@ -14,6 +14,7 @@
  */
 
 import { audioUnlock } from './audioUnlock';
+import { voiceFloor } from './voiceFloor';
 
 export interface BoardSpeakHandle {
   /** Résolue à la fin de la lecture. `true` si la voix a réellement parlé. */
@@ -42,6 +43,16 @@ class BoardVoiceService {
   /** Requêtes en vol, pour ne jamais demander deux fois le même fragment. */
   private inflight = new Map<string, Promise<string | null>>();
   private current: HTMLAudioElement | null = null;
+  /**
+   * Arrêt propre de la réplique en cours.
+   *
+   * `current` ne suffisait pas : couper l'élément <audio> laissait la promesse
+   * `done` de son appelant en suspens jusqu'au chien de garde (8 s). Et comme
+   * `speak()` n'arrêtait pas la réplique précédente, deux tableaux — le cours
+   * en diapositives et le tableau en direct — pouvaient parler ENSEMBLE, la
+   * seconde écrasant simplement `current`.
+   */
+  private arretCourant: (() => void) | null = null;
   /**
    * Voix serveur indisponible jusqu'à cet instant (timestamp ms).
    *
@@ -175,11 +186,18 @@ class BoardVoiceService {
     let audio: HTMLAudioElement | null = null;
     let stopped = false;
     let wantPaused = false;
+    /** Rendue par `voiceFloor` dès que cette réplique se fait entendre. */
+    let rendreLaParole: (() => void) | null = null;
 
     const done = (async (): Promise<boolean> => {
       if (!clean) return false;
       const url = await this.fetchAudio(clean, lang);
       if (stopped || !url) return false;
+
+      // Une seule voix de tableau à la fois : la réplique précédente est
+      // coupée ET sa promesse résolue, sinon son appelant attendrait le chien
+      // de garde pendant que celle-ci parle déjà.
+      this.stop();
 
       audio = new Audio(url);
       audio.playbackRate = TTS_PLAYBACK_RATE;
@@ -199,9 +217,16 @@ class BoardVoiceService {
           clearInterval(chienDeGarde);
           try { el.pause(); } catch { /* ignore */ }
           if (this.current === el) this.current = null;
+          if (this.arretCourant === arret) this.arretCourant = null;
+          // Le tableau rend la parole : le chat peut de nouveau se faire
+          // entendre au tour suivant.
+          rendreLaParole?.();
+          rendreLaParole = null;
           onProgress?.(1);
           resolve(spoke);
         };
+        const arret = () => settle(false);
+        this.arretCourant = arret;
 
         // Progression réelle de la lecture, 20 fois par seconde.
         const timer = window.setInterval(() => {
@@ -238,6 +263,10 @@ class BoardVoiceService {
 
         const lancer = () =>
           el.play().then(() => {
+            // Un son sort vraiment : c'est MAINTENANT que le tableau prend la
+            // parole. Le faire plus tôt (à la demande de synthèse) aurait
+            // fait taire le chat même quand la voix serveur ne répond pas.
+            rendreLaParole = rendreLaParole || voiceFloor.acquire();
             onStart?.();
             // Le tableau a pu demander la pause avant le début effectif.
             if (wantPaused) el.pause();
@@ -293,6 +322,8 @@ class BoardVoiceService {
 
   /** Coupe la voix en cours (changement de cours, fermeture du tableau…). */
   stop() {
+    const arret = this.arretCourant;
+    this.arretCourant = null;
     if (this.current) {
       try {
         this.current.pause();
@@ -300,6 +331,9 @@ class BoardVoiceService {
       } catch { /* ignore */ }
       this.current = null;
     }
+    // Résout la promesse de l'appelant (`done` → false) et rend la parole :
+    // sans cela son script restait suspendu jusqu'au chien de garde.
+    arret?.();
   }
 }
 

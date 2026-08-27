@@ -1,5 +1,6 @@
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 import RoughShape from './RoughShape';
+import { poserLesTextes, type PoseTexte } from '../boardTextLayout';
 import type { RoughSVGElementSpec, RoughSVGVisualSpec, ScientificPoint } from './types';
 
 interface RoughSVGVisualProps {
@@ -32,7 +33,12 @@ function arrowHead(points: ScientificPoint[]): ScientificPoint[] {
   ];
 }
 
-function RenderElement({ element, index }: { element: RoughSVGElementSpec; index: number }) {
+function RenderElement({ element, index, pose }: {
+  element: RoughSVGElementSpec;
+  index: number;
+  /** La place trouvée pour son texte, une fois la figure relue (cf. `boardTextLayout`). */
+  pose: PoseTexte | null;
+}) {
   const stroke = resolveColor(element.color, '#cbd5e1');
   const fill = element.fill ? resolveColor(element.fill, element.fill) : undefined;
   const strokeWidth = element.strokeWidth || 2.2;
@@ -41,14 +47,17 @@ function RenderElement({ element, index }: { element: RoughSVGElementSpec; index
   const seed = index + 17;
 
   if (element.type === 'text') {
+    // Le mot ne se pose PAS à la coordonnée reçue quand elle est déjà prise ou
+    // hors cadre : deux légendes superposées ne se lisent ni l'une ni l'autre.
+    const place = pose || { x: element.x || 0, y: element.y || 0, fontSize: element.fontSize || 16, ancre: element.align || 'middle' };
     return (
       <text
-        x={element.x}
-        y={element.y}
+        x={place.x}
+        y={place.y}
         fill={stroke}
-        fontSize={element.fontSize || 16}
-        fontWeight={element.fontSize && element.fontSize >= 22 ? 700 : 600}
-        textAnchor={element.align || 'middle'}
+        fontSize={place.fontSize}
+        fontWeight={place.fontSize >= 22 ? 700 : 600}
+        textAnchor={place.ancre}
         fontFamily="'Patrick Hand', 'Segoe Print', system-ui"
       >
         {element.text}
@@ -107,6 +116,17 @@ export default function RoughSVGVisual({ spec, transparent }: RoughSVGVisualProp
   const width = spec.width || 800;
   const height = spec.height || 440;
 
+  // La figure se relit avant de s'écrire : chaque légende cherche la place
+  // libre la plus proche de celle demandée, et reste dans le cadre.
+  const places = useMemo(
+    () => poserLesTextes(
+      [],
+      spec.elements.map(el => ({ ...el, align: el.align || 'middle' })),
+      { largeur: width, hauteur: height },
+    ),
+    [spec.elements, width, height],
+  );
+
   return (
     <figure className={CADRE_FIGURE(transparent)}>
       {spec.title && <figcaption id={titleId} className="px-2 pb-2 text-sm font-medium text-cyan-200">{spec.title}</figcaption>}
@@ -120,7 +140,12 @@ export default function RoughSVGVisual({ spec, transparent }: RoughSVGVisualProp
         preserveAspectRatio="xMidYMid meet"
       >
         {spec.elements.map((element, index) => (
-          <RenderElement key={element.id || `${element.type}-${index}`} element={element} index={index} />
+          <RenderElement
+            key={element.id || `${element.type}-${index}`}
+            element={element}
+            index={index}
+            pose={places[index]?.pose || null}
+          />
         ))}
       </svg>
       {spec.description && <p className="px-2 pt-2 text-xs text-slate-300">{spec.description}</p>}

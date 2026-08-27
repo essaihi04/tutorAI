@@ -133,7 +133,7 @@ def test_le_bloc_envoie_a_la_scene_animee_quand_l_eleve_veut_du_mouvement():
 
     assert "SCÈNE ANIMÉE" in bloc
     assert "chem_ch1_facteurs_cinetiques" in bloc
-    assert "Il demande à voir BOUGER" in bloc
+    assert "UNE SCÈNE QUI BOUGE COUVRE CETTE NOTION" in bloc
 
 
 def test_le_bloc_envoie_au_modele_3d_quand_l_eleve_veut_tourner_autour():
@@ -156,7 +156,50 @@ def test_le_visuel_part_meme_quand_l_eleve_n_a_rien_demande():
 
     assert "AFFICHE-EN UNE MAINTENANT" in bloc
     assert "TU N'ATTENDS PAS QU'ON TE LE DEMANDE" in bloc
-    assert "AUCUNE demande particulière" in bloc
+    assert "la SCÈNE ANIMÉE ou la SIMULATION DU COURS — il la manipule" in bloc
+
+
+def test_sans_demande_c_est_la_scene_qui_ouvre_et_pas_la_planche():
+    """L'ordre pédagogique demandé : l'élève MANIPULE d'abord, on écrit après.
+
+    C'était la planche fixe qui partait par défaut, et la scène n'apparaissait
+    que si l'élève avait prononcé « fais bouger » — ce qu'il ne dit jamais,
+    puisqu'il ignore qu'une scène existe."""
+    bloc = bloc_visuels_disponibles(
+        "chimie cinétique effet du catalyseur sur la vitesse",
+        "explique-moi ce chapitre",
+    )
+
+    assert "UNE SCÈNE QUI BOUGE COUVRE CETTE NOTION" in bloc
+    assert "c'est par ELLE que ton explication COMMENCE" in bloc
+    assert "SCHÉMA DE RÉFÉRENCE avec `show_schema`" not in bloc
+
+
+def test_la_scene_ouvre_les_quatre_temps_de_l_explication():
+    """Une scène affichée puis recouverte par le tableau dans la même réponse
+    est une scène que l'élève n'a pas manipulée : elle ne lui apprend rien de
+    plus qu'une image fixe."""
+    bloc = bloc_visuels_disponibles(
+        "chimie cinétique effet du catalyseur sur la vitesse",
+        "explique-moi ce chapitre",
+    )
+
+    assert "L'ORDRE D'UNE EXPLICATION QUI COMMENCE PAR UNE SCÈNE" in bloc
+    assert "TU LUI LAISSES LA MAIN" in bloc
+    assert "LA QUESTION DE COMPRÉHENSION" in bloc
+    assert "SEULEMENT APRÈS SA RÉPONSE tu passes au TABLEAU" in bloc
+
+
+def test_sans_scene_le_deroule_en_quatre_temps_ne_s_affiche_pas():
+    """Il ne parle que de manipuler : sans scène à manipuler, il occuperait le
+    contexte pour décrire un enchaînement impossible."""
+    bloc = bloc_visuels_disponibles(
+        "physique onde mécanique progressive le long d'une corde",
+        "explique-moi ce chapitre",
+    )
+
+    assert "SCHÉMA DE RÉFÉRENCE avec `show_schema`" in bloc
+    assert "L'ORDRE D'UNE EXPLICATION" not in bloc
 
 
 def test_le_tour_socratique_reste_sans_tableau():
@@ -218,6 +261,8 @@ def test_le_bloc_ne_nomme_que_des_identifiants_qui_existent():
 
     vus = 0
     for ligne in bloc.splitlines():
+        if not ligne.startswith("  •"):
+            continue
         if "SCÈNE ANIMÉE" in ligne:
             assert identifiant_de(ligne) in SCIENTIFIC_PRESETS
             vus += 1
@@ -286,7 +331,7 @@ def test_une_scene_animee_seule_recoit_quand_meme_sa_consigne():
 
     assert "SCÈNE ANIMÉE" in bloc
     assert "SCHÉMA DE RÉFÉRENCE" not in bloc
-    assert "c'est ELLE qui part, pas une figure improvisée" in bloc
+    assert "c'est par ELLE que ton explication COMMENCE" in bloc
 
 
 def test_la_fonction_ecrite_par_l_eleve_passe_avant_toute_ressource():

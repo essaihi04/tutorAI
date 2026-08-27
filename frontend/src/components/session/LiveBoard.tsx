@@ -8,10 +8,15 @@ import SVGSchemaViewer from './schemas/SVGSchemaViewer';
 import { getSchemaById } from './schemas';
 import { speechService } from '../../services/speechService';
 import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
+import { voiceFloor } from '../../services/voiceFloor';
 import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
 import RoughShape from './scientific/RoughShape';
 import ScientificVisual from './scientific/ScientificVisual';
+import {
+  poserLesTextes, empreinte,
+  type EmpreinteElement, type PoseTexte,
+} from './boardTextLayout';
 import type { ScientificControlCommand, ScientificSimulationUpdate, ScientificVisualSpec } from './scientific/types';
 
 /**
@@ -219,7 +224,42 @@ interface WrittenEntry {
   voiceDriven?: boolean;
   stepNumber?: number;
 }
-interface DrawnEntry { key: number; el: LiveDrawElement; delayMs: number; drawMs: number }
+interface DrawnEntry {
+  key: number;
+  el: LiveDrawElement;
+  delayMs: number;
+  drawMs: number;
+  /** Où son mot a trouvé sa place, une fois le tableau relu (cf. `boardTextLayout`). */
+  place: { pose: PoseTexte; texte: string } | null;
+  /** Ce qu'il occupe désormais, pour le prochain élément qui viendra s'écrire. */
+  empreinte: EmpreinteElement;
+}
+
+/**
+ * Le tableau se RELIT avant de s'écrire.
+ *
+ * Un professeur ne pose pas son mot à l'aveugle : il regarde ce qui est déjà
+ * tracé, et décale. Les éléments d'une même salve arrivent d'un bloc, et les
+ * salves s'ajoutent à ce qui reste du croquis précédent — donc les deux se
+ * lisent ici, `deja` puis `elements`.
+ */
+function poserLaSalve(
+  deja: DrawnEntry[],
+  elements: LiveDrawElement[],
+  cle: (i: number) => number,
+  delai: (i: number) => number,
+  duree: number,
+): DrawnEntry[] {
+  const places = poserLesTextes(deja.map(e => e.empreinte), elements);
+  return elements.map((el, i) => ({
+    key: cle(i),
+    el,
+    delayMs: delai(i),
+    drawMs: duree,
+    place: places[i],
+    empreinte: empreinte(el, places[i]),
+  }));
+}
 
 function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange, scientificControl, onSimulationUpdate }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
@@ -457,6 +497,22 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
    * premier `speakAndReveal`. Sans ce sas, le tableau prenait la parole sur
    * la phrase d'introduction du chat — les deux voix ensemble, inaudibles.
    */
+  /**
+   * Le tableau garde la parole du PREMIER son jusqu'à la fin du script.
+   *
+   * Sans cette prise continue, la voix du chat — qui arrive plusieurs secondes
+   * après le script — se glissait dans le premier silence entre deux lignes :
+   * l'élève entendait alors la même leçon dite deux fois, autrement.
+   */
+  const paroleRef = useRef<null | (() => void)>(null);
+  const prendreLaParole = useCallback(() => {
+    if (!paroleRef.current) paroleRef.current = voiceFloor.acquire();
+  }, []);
+  const rendreLaParole = useCallback(() => {
+    paroleRef.current?.();
+    paroleRef.current = null;
+  }, []);
+
   const attendreLeSilence = useCallback(async (runId: number): Promise<boolean> => {
     if (!voiceEnabled) return true;
     const limite = performance.now() + 20000;   // le chat n'est jamais venu
@@ -540,7 +596,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       const observed = ratio * estimatedMs;
       if (observed > elapsed) elapsed = observed;
       else estimatedMs = Math.max(600, elapsed / Math.max(ratio, 0.01));
-    });
+    }, prendreLaParole);
     voiceHandleRef.current = handle;
     // L'élève a pu mettre en pause pendant la génération de l'audio.
     if (!playingRef.current) handle.pause();
@@ -583,7 +639,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     }
     setVoiceReveal(1);
     return true;
-  }, []);
+  }, [prendreLaParole]);
 
   /**
    * Dit une phrase SANS rien écrire — le professeur explique ce qui est déjà
@@ -593,13 +649,13 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     if (!soundOnRef.current) return runId === runIdRef.current;
     const spoken = toSpokenText(raw);
     if (!spoken) return runId === runIdRef.current;
-    const handle = boardVoice.speak(spoken, langRef.current);
+    const handle = boardVoice.speak(spoken, langRef.current, undefined, prendreLaParole);
     voiceHandleRef.current = handle;
     if (!playingRef.current) handle.pause();
     await handle.done;
     if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
     return runId === runIdRef.current;
-  }, []);
+  }, [prendreLaParole]);
 
   // Moteur de lecture séquentielle du script
   const play = useCallback(async (steps: LiveStep[], runId: number) => {
@@ -668,13 +724,18 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const els = Array.isArray(step.elements) ? step.elements.filter(e => e && e.type) : [];
           if (els.length === 0) break;
           const spd = speedRef.current;
-          const entries: DrawnEntry[] = els.map((el, j) => ({
-            key: ++keyRef.current,
-            el,
-            delayMs: (j * DRAW_ELEMENT_STAGGER) / spd,
-            drawMs: DRAW_ELEMENT_MS / spd,
-          }));
-          setDrawn(prev => [...prev, ...entries]);
+          const cles = els.map(() => ++keyRef.current);
+          // La place de chaque mot dépend de ce qui est DÉJÀ au tableau : elle
+          // se calcule donc à partir de `prev`, pas d'une salve isolée.
+          setDrawn(prev => [
+            ...prev,
+            ...poserLaSalve(
+              prev, els,
+              i => cles[i],
+              j => (j * DRAW_ELEMENT_STAGGER) / spd,
+              DRAW_ELEMENT_MS / spd,
+            ),
+          ]);
           const drawTotal = els.length * DRAW_ELEMENT_STAGGER + DRAW_ELEMENT_MS;
           // Le prof commente son croquis pendant qu'il le trace (`say` sur le
           // step draw) : la voix et le tracé courent en parallèle, et on
@@ -682,7 +743,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const toSayDraw = typeof step.say === 'string' ? step.say.trim() : '';
           const spokenDraw = toSayDraw && soundOnRef.current ? toSpokenText(toSayDraw) : '';
           if (spokenDraw) {
-            const handle = boardVoice.speak(spokenDraw, langRef.current);
+            const handle = boardVoice.speak(spokenDraw, langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
             if (!playingRef.current) handle.pause();
             const [, waited] = await Promise.all([handle.done, wait(drawTotal, runId)]);
@@ -707,7 +768,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           }
           const ditBloc = typeof step.say === 'string' ? step.say.trim() : '';
           if (ditBloc && soundOnRef.current) {
-            const handle = boardVoice.speak(toSpokenText(ditBloc), langRef.current);
+            const handle = boardVoice.speak(toSpokenText(ditBloc), langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
             if (!playingRef.current) handle.pause();
             const [, waited] = await Promise.all([handle.done, wait(900, runId)]);
@@ -735,7 +796,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             || step.scientific?.engine === 'preset'
             || step.scientific?.engine === 'three';
           if (dit && soundOnRef.current) {
-            const handle = boardVoice.speak(toSpokenText(dit), langRef.current);
+            const handle = boardVoice.speak(toSpokenText(dit), langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
             if (!playingRef.current) handle.pause();
             const [, waited] = await Promise.all([
@@ -848,8 +909,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           break;
       }
     }
+    // Script terminé : le chat peut de nouveau se faire entendre.
+    rendreLaParole();
     if (runId === runIdRef.current) setFinished(true);
-  }, [wait, speakAndReveal, prefetchFrom]);
+  }, [wait, speakAndReveal, prefetchFrom, prendreLaParole, rendreLaParole]);
 
   // (Re)démarrage quand un nouveau script arrive
   useEffect(() => {
@@ -903,6 +966,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       voiceHandleRef.current?.stop();
       voiceHandleRef.current = null;
       boardVoice.stop();
+      rendreLaParole();
       if (revealClockRef.current !== null) {
         clearInterval(revealClockRef.current);
         revealClockRef.current = null;
@@ -927,8 +991,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       voiceHandleRef.current?.stop();
       voiceHandleRef.current = null;
       boardVoice.stop();
+      // Son coupé : le tableau n'a plus la parole, le chat la reprend.
+      rendreLaParole();
     }
-  }, [soundOn]);
+  }, [soundOn, rendreLaParole]);
 
   // Auto-scroll de la zone d'écriture
   useEffect(() => {
@@ -942,6 +1008,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     voiceHandleRef.current?.stop();
     voiceHandleRef.current = null;
     boardVoice.stop();
+    rendreLaParole();
     if (revealClockRef.current !== null) {
       clearInterval(revealClockRef.current);
       revealClockRef.current = null;
@@ -964,7 +1031,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         if (isStep) stepNo += 1;
         finalWritten.push({ key: ++keyRef.current, line: step.line, revealMs: 0, stepNumber: isStep ? stepNo : undefined });
       } else if (step.action === 'draw' && Array.isArray(step.elements)) {
-        step.elements.forEach(el => el && el.type && finalDrawn.push({ key: ++keyRef.current, el, delayMs: 0, drawMs: 0 }));
+        const els = step.elements.filter(el => el && el.type);
+        // Même relecture qu'en direct : sauter à la fin ne doit pas empiler les
+        // mots les uns sur les autres.
+        finalDrawn.push(...poserLaSalve(finalDrawn, els, () => ++keyRef.current, () => 0, 0));
       } else if (step.action === 'figure' && (step.scientific || step.schema_id)) {
         finalFigure = step.schema_id
           ? { kind: 'schema', id: step.schema_id, highlights: step.highlights }
@@ -1952,33 +2022,33 @@ function LiveWrittenLine({ entry, isActive, voicePct }: {
 // ── Élément dessiné avec animation de tracé SVG ────────────────────
 
 /**
- * Où écrire le nom d'une forme, et à quelle taille.
+ * Le mot d'un élément, à la place que le tableau lui a trouvée.
  *
- * L'ancienne règle rétrécissait la police jusqu'à faire tenir le mot dans la
- * forme : « sarcomère » dans une case de 50 px tombait à 9 px, illisible sur
- * un tableau qu'on regarde de loin. Un professeur ne rapetisse pas son
- * écriture — il écrit à côté.
- *
- * En dessous de 11 px, le nom sort donc de la forme et se pose AU-DESSUS.
- * Rien n'est jamais rendu plus petit que ce plancher.
+ * Où il VOUDRAIT aller — dans sa forme s'il y tient, au-dessus de son trait,
+ * au milieu de sa flèche — est décidé par `souhaitDuTexte`. Ce qu'il en reste
+ * après relecture du tableau — décalé d'une ligne parce que la place était
+ * prise, rentré dans le cadre parce qu'il en sortait — est décidé par
+ * `poserLesTextes`, AVANT le rendu. Ici, on écrit, c'est tout.
  */
-const TAILLE_LABEL_MIN = 11;
-const TAILLE_LABEL_MAX = 14;
-
-function poserLabel(
-  label: string | undefined,
-  cx: number,
-  cy: number,
-  largeur: number,
-  hautDeLaForme: number,
-): { x: number; y: number; fontSize: number } | null {
-  if (!label) return null;
-  // ~0,55 em par caractère pour une cursive : suffisant pour décider si ça tient.
-  const tenteDedans = Math.min(TAILLE_LABEL_MAX, (largeur * 0.9) / (label.length * 0.55));
-  if (tenteDedans >= TAILLE_LABEL_MIN) {
-    return { x: cx, y: cy, fontSize: Math.round(tenteDedans) };
-  }
-  return { x: cx, y: Math.max(TAILLE_LABEL_MIN, hautDeLaForme - 6), fontSize: TAILLE_LABEL_MIN };
+function TexteDeLElement({ entry, color, style }: {
+  entry: DrawnEntry;
+  color: string;
+  style: React.CSSProperties;
+}) {
+  const place = entry.place;
+  if (!place) return null;
+  return (
+    <text
+      x={place.pose.x}
+      y={place.pose.y}
+      fill={color}
+      fontSize={place.pose.fontSize}
+      textAnchor={place.pose.ancre}
+      style={style}
+    >
+      {place.texte}
+    </text>
+  );
 }
 
 function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
@@ -2004,7 +2074,7 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
       return (
         <g>
           <RoughShape kind="linearPath" points={pts} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
-          {el.label && <text x={pts[0].x} y={pts[0].y - 8} fill={color} fontSize={13} style={labelStyle}>{el.label}</text>}
+          <TexteDeLElement entry={entry} color={color} style={labelStyle} />
         </g>
       );
     }
@@ -2016,50 +2086,34 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
       const hl = 12;
       const h1 = { x: to.x - hl * Math.cos(angle - Math.PI / 6), y: to.y - hl * Math.sin(angle - Math.PI / 6) };
       const h2 = { x: to.x - hl * Math.cos(angle + Math.PI / 6), y: to.y - hl * Math.sin(angle + Math.PI / 6) };
-      const midX = (from.x + to.x) / 2, midY = (from.y + to.y) / 2;
       return (
         <g>
           <RoughShape kind="line" points={[from, to]} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
           <RoughShape kind="polygon" points={[to, h1, h2]} stroke={color} strokeWidth={1} fill={color} seed={entry.key + 101} style={fadeAnim} />
-          {el.label && <text x={midX} y={midY - 7} fill={color} fontSize={12} textAnchor="middle" style={labelStyle}>{el.label}</text>}
+          <TexteDeLElement entry={entry} color={color} style={labelStyle} />
         </g>
       );
     }
     case 'rect': {
       const x = el.x || 0, y = el.y || 0, w = el.width || 100, h = el.height || 60;
-      const pose = poserLabel(el.label, x + w / 2, y + h / 2 + 5, w, y);
       return (
         <g>
           <RoughShape kind="rectangle" x={x} y={y} width={w} height={h} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
-          {pose && (
-            <text x={pose.x} y={pose.y} fill={color} fontSize={pose.fontSize} textAnchor="middle" style={labelStyle}>
-              {el.label}
-            </text>
-          )}
+          <TexteDeLElement entry={entry} color={color} style={labelStyle} />
         </g>
       );
     }
     case 'circle': {
       const cx = el.x || 0, cy = el.y || 0, r = el.radius || 35;
-      const pose = poserLabel(el.label, cx, cy + 4, r * 2, cy - r);
       return (
         <g>
           <RoughShape kind="circle" x={cx} y={cy} radius={r} stroke={color} strokeWidth={sw} seed={entry.key + 1} style={strokeAnim} />
-          {pose && (
-            <text x={pose.x} y={pose.y} fill={color} fontSize={pose.fontSize} textAnchor="middle" style={labelStyle}>
-              {el.label}
-            </text>
-          )}
+          <TexteDeLElement entry={entry} color={color} style={labelStyle} />
         </g>
       );
     }
-    case 'text': {
-      return (
-        <text x={el.x || 0} y={el.y || 0} fill={color} fontSize={el.fontSize || 15} style={labelStyle}>
-          {el.text || el.label || ''}
-        </text>
-      );
-    }
+    case 'text':
+      return <TexteDeLElement entry={entry} color={color} style={labelStyle} />;
 
     // ── Les cinq formes de SVT ───────────────────────────────────
     //
@@ -2077,7 +2131,12 @@ function LiveDrawnElement({ entry }: { entry: DrawnEntry }) {
     case 'nucleus':
     case 'dna':
     case 'membrane':
-      return <FormeBiologique el={el} color={color} sw={sw} seed={entry.key} anim={strokeAnim} labelStyle={labelStyle} />;
+      return (
+        <FormeBiologique
+          el={el} color={color} sw={sw} seed={entry.key} anim={strokeAnim}
+          nom={<TexteDeLElement entry={entry} color={color} style={labelStyle} />}
+        />
+      );
 
     default:
       return null;
@@ -2139,19 +2198,18 @@ function contourMembraneInterneMitochondrie(x: number, y: number, w: number, h: 
   return courbeFermee(controles);
 }
 
-function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
+function FormeBiologique({ el, color, sw, seed, anim, nom }: {
   el: LiveDrawElement;
   color: string;
   sw: number;
   seed: number;
   anim: React.CSSProperties;
-  labelStyle: React.CSSProperties;
+  /** Le nom de la forme, déjà placé par le tableau (cf. `TexteDeLElement`). */
+  nom: React.ReactNode;
 }) {
   const x = el.x || 0;
   const y = el.y || 0;
   const traits: React.ReactNode[] = [];
-  let labelX = x;
-  let labelY = y;
 
   const trait = (noeud: React.ReactNode) => traits.push(
     <g key={traits.length}>{noeud}</g>
@@ -2168,16 +2226,12 @@ function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
       // crêtes — conformément au croquis BAC de référence.
       trait(<RoughShape kind="ellipse" x={cx} y={cy} width={w} height={h} stroke={color} strokeWidth={sw} seed={seed + 1} style={anim} />);
       trait(<RoughShape kind="linearPath" points={contourMembraneInterneMitochondrie(x, y, w, h)} stroke={chalk('green')} strokeWidth={Math.max(1.4, sw - 0.7)} seed={seed + 2} style={anim} />);
-      labelX = cx;
-      labelY = y + h + 18;
       break;
     }
     case 'cell': {
       const r = el.radius || 80;
       trait(<RoughShape kind="circle" x={x} y={y} radius={r} stroke={color} strokeWidth={sw} seed={seed + 1} style={anim} />);
       trait(<RoughShape kind="circle" x={x} y={y} radius={r - 6} stroke={chalk('cyan')} strokeWidth={Math.max(1.2, sw - 1.3)} seed={seed + 2} style={anim} />);
-      labelX = x;
-      labelY = y + r + 20;
       break;
     }
     case 'nucleus': {
@@ -2198,8 +2252,6 @@ function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
         />);
       }
       trait(<RoughShape kind="circle" x={x + r * 0.18} y={y - r * 0.12} radius={r * 0.2} stroke={chalk('pink')} strokeWidth={1.6} seed={seed + 30} style={anim} />);
-      labelX = x;
-      labelY = y + r + 18;
       break;
     }
     case 'dna': {
@@ -2215,8 +2267,6 @@ function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
         const e2 = Math.sin((t / h) * Math.PI * 4 + Math.PI) * (w / 2);
         trait(<RoughShape kind="line" points={[{ x: cx + e1, y: y + t }, { x: cx + e2, y: y + t }]} stroke={chalk('white')} strokeWidth={1.2} seed={seed + 20 + t} style={anim} />);
       }
-      labelX = cx;
-      labelY = y + h + 16;
       break;
     }
     case 'membrane': {
@@ -2231,8 +2281,6 @@ function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
         trait(<RoughShape kind="line" points={[{ x: x + i, y: y + h / 2 + 1 }, { x: x + i, y: y + h - 5 }]} stroke={chalk('cyan')} strokeWidth={1.2} seed={seed + 200 + i} style={anim} />);
         trait(<RoughShape kind="circle" x={x + i} y={y + h} radius={4} stroke={chalk('orange')} strokeWidth={1.4} seed={seed + 300 + i} style={anim} />);
       }
-      labelX = x + w / 2;
-      labelY = y + h + 20;
       break;
     }
   }
@@ -2240,11 +2288,7 @@ function FormeBiologique({ el, color, sw, seed, anim, labelStyle }: {
   return (
     <g>
       {traits}
-      {el.label && (
-        <text x={labelX} y={labelY} fill={color} fontSize={el.fontSize || 14} textAnchor="middle" style={labelStyle}>
-          {el.label}
-        </text>
-      )}
+      {nom}
     </g>
   );
 }

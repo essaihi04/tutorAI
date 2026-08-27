@@ -5,6 +5,7 @@ import ScientificVisual from '../session/scientific/ScientificVisual';
 import { SessionMediaDisplay } from '../session/MediaViewer';
 import { saveCourseProgress, saveSlideAttempt } from '../../services/api';
 import { boardVoice, type BoardSpeakHandle } from '../../services/boardVoice';
+import { voiceFloor } from '../../services/voiceFloor';
 import type {
   CourseActivity,
   CourseDeck,
@@ -93,6 +94,19 @@ export default function CoursePlayer({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const onDemandVoiceRef = useRef<BoardSpeakHandle | null>(null);
+  /**
+   * L'audio pré-généré d'une diapositive est une voix de tableau comme une
+   * autre : tant qu'il joue, le chat se tait. Sans cette prise, il croisait la
+   * voix du tableau en direct, qui, elle, l'ignorait complètement.
+   */
+  const paroleRef = useRef<null | (() => void)>(null);
+  const prendreLaParole = useCallback(() => {
+    if (!paroleRef.current) paroleRef.current = voiceFloor.acquire();
+  }, []);
+  const rendreLaParole = useCallback(() => {
+    paroleRef.current?.();
+    paroleRef.current = null;
+  }, []);
   const revealTimerRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const questionIntervalRef = useRef<number | null>(null);
@@ -133,9 +147,10 @@ export default function CoursePlayer({
       audio.src = '';
     }
     audioRef.current = null;
+    rendreLaParole();
     setPlaying(false);
     setOnDemandAudioStatus('idle');
-  }, []);
+  }, [rendreLaParole]);
 
   const persist = useCallback((
     nextIndex: number,
@@ -224,13 +239,15 @@ export default function CoursePlayer({
       const storedPosition = index === initialIndex ? (progress?.audio_position_ms || 0) : 0;
       if (storedPosition > 0) audio.currentTime = Math.max(0, storedPosition / 1000 - 1.5);
       audio.ontimeupdate = () => persist(index, audio.currentTime * 1000);
-      audio.onended = () => { setPlaying(false); showQuestion(); };
+      audio.onended = () => { rendreLaParole(); setPlaying(false); showQuestion(); };
       audio.onerror = () => {
+        rendreLaParole();
         setPlaying(false);
         revealTimerRef.current = window.setTimeout(showQuestion, 1500);
       };
       audioRef.current = audio;
-      audio.play().then(() => setPlaying(true)).catch(() => {
+      audio.play().then(() => { prendreLaParole(); setPlaying(true); }).catch(() => {
+        rendreLaParole();
         setPlaying(false);
         revealTimerRef.current = window.setTimeout(showQuestion, 1800);
       });
@@ -270,7 +287,7 @@ export default function CoursePlayer({
       const seconds = current.slide.timing?.reading_seconds ?? clamp(Math.ceil(transcript.length / 22), 6, 18);
       revealTimerRef.current = window.setTimeout(showQuestion, seconds * 1000);
     }
-  }, [clearTimers, current, currentAudio?.url, index, initialIndex, language, muted, persist, progress?.audio_position_ms, showQuestion, speed, started, stopAudio, transcript]);
+  }, [clearTimers, current, currentAudio?.url, index, initialIndex, language, muted, persist, prendreLaParole, progress?.audio_position_ms, rendreLaParole, showQuestion, speed, started, stopAudio, transcript]);
 
   useEffect(() => {
     beginSlide();

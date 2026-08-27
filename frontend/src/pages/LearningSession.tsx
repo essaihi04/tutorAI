@@ -14,6 +14,7 @@ import {
   type CourseIntentResolution,
 } from '../services/api';
 import { speechService } from '../services/speechService';
+import { voiceFloor } from '../services/voiceFloor';
 import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
 import AIAvatar from '../components/session/AIAvatar';
@@ -390,6 +391,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [contextSuggestions, setContextSuggestions] = useState<QuickAction[]>([]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /** Morceau de la file en cours de lecture — pour pouvoir le couper net. */
+  const chunkAudioRef = useRef<HTMLAudioElement | null>(null);
+  /** Le tableau a la parole : l'audio du chat est écarté pour ce tour. */
+  const tableauParleRef = useRef(false);
   const audioUrlRef = useRef<string | null>(null);
   const handlersRegisteredRef = useRef(false);
   const showExamPanelRef = useRef(false);
@@ -903,6 +908,50 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     premierBlocRef.current = true;
   };
 
+  /**
+   * Fait taire la voix du CHAT (réponse lue par le serveur), sous toutes ses
+   * formes : flux PCM, file de morceaux, élément <audio> d'une réponse d'un
+   * seul tenant. Les morceaux encore en attente sont jetés — les rejouer
+   * après le tableau redirait la même leçon une seconde fois.
+   */
+  const couperVoixDuChat = () => {
+    try { speechService.stop(); } catch { /* noop */ }
+    arreterFluxPcm();
+    if (chunkAudioRef.current) {
+      try { chunkAudioRef.current.pause(); } catch { /* noop */ }
+      chunkAudioRef.current = null;
+    }
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch { /* noop */ }
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+    audioChunksRef.current = [];
+    isPlayingChunksRef.current = false;
+    expectedChunksRef.current = 0;
+    totalChunksFinalRef.current = 0;
+    relanceAudioRef.current = null;
+    setSpeaking(false);
+  };
+
+  // ── Une seule voix : celle du tableau ────────────────────────────
+  //
+  // Le tableau attendait le silence avant de commencer, mais la synthèse du
+  // chat arrive plusieurs secondes après l'envoi du script : les deux voix
+  // finissaient par se répondre, la même leçon dite deux fois autrement.
+  // Dès que le tableau se fait entendre, le chat se tait et ses morceaux
+  // sont écartés jusqu'à la fin de la lecture.
+  useEffect(() => voiceFloor.subscribe((tableauParle) => {
+    tableauParleRef.current = tableauParle;
+    if (tableauParle) couperVoixDuChat();
+  }), []);
+
   const revealPendingMedia = () => {
     if (pendingMediaRef.current) {
       setShowWhiteboard(false);
@@ -1042,6 +1091,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     wsService.on('audio_response', (data) => {
       console.log('[Handler] audio_response received');
+      if (tableauParleRef.current) {
+        console.log('[Audio] Tableau en cours de lecture — voix du chat écartée');
+        setProcessing(false);
+        return;
+      }
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
@@ -1049,6 +1103,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     });
 
     wsService.on('audio_chunk', (data) => {
+      if (tableauParleRef.current) {
+        setProcessing(false);
+        return;   // le tableau a la parole
+      }
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
@@ -1098,6 +1156,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // éléments <audio> — le silence entre deux éléments était audible, et
     // c'est ce même enchaînement qui produisait les bugs d'index.
     wsService.on('audio_stream_start', (data) => {
+      if (tableauParleRef.current) {
+        setProcessing(false);
+        return;   // le tableau a la parole
+      }
       audioReceivedRef.current = true;
       setProcessing(false);
       setTtsErrorMessage(null);
@@ -1105,6 +1167,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     });
 
     wsService.on('audio_stream_chunk', (data) => {
+      if (tableauParleRef.current) return;   // le tableau a la parole
       if (data?.pcm) jouerBlocPcm(data.pcm);
     });
 
@@ -1596,10 +1659,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // (ERR_FILE_NOT_FOUND sur le blob), et l'index sautait un morceau. La file
     // se vidait donc avant l'arrivée du segment suivant : la voix s'arrêtait
     // au premier morceau et le reste du cours ne se jouait jamais.
+    chunkAudioRef.current = audio;
     let fini = false;
     const terminer = () => {
       if (fini) return;
       fini = true;
+      if (chunkAudioRef.current === audio) chunkAudioRef.current = null;
       URL.revokeObjectURL(audioUrl);
       onEnd();
     };

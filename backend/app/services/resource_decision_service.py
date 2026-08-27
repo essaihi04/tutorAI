@@ -42,7 +42,11 @@ class ResourceDecisionService:
         phase_weights = {
             "activation": {"image": 4, "whiteboard": 2},
             "exploration": {"simulation": 5, "image": 2},
-            "explanation": {"whiteboard": 5, "image": 2},
+            # Une explication commence par ce que l'élève peut MANIPULER, et
+            # le tableau CONCLUT ce qu'il a vu. La simulation passe donc devant
+            # le tableau ici ; elle retombe d'elle-même quand le cours n'en a
+            # aucune (malus `resource_unavailable`) ou qu'une tourne déjà.
+            "explanation": {"simulation": 5, "whiteboard": 4, "image": 2},
             "application": {"exercise": 5, "simulation": 3, "whiteboard": 1},
             "consolidation": {"evaluation": 5, "image": 1},
         }
@@ -100,11 +104,13 @@ class ResourceDecisionService:
         should_prepare_whiteboard = primary_mode == "whiteboard" and not explicit_media_request
         auto_present_resource = explicit_media_request
 
-        if not auto_present_resource and phase == "exploration" and chosen_resource_type == "simulation":
-            auto_present_resource = any(
-                token in lower_student_text
-                for token in ["voir", "montre", "montrer", "observer", "tester", "comparer"]
-            ) and not simulation_active
+        # Une simulation ne s'ouvrait qu'en phase d'exploration, et seulement si
+        # l'élève avait prononcé « montre » ou « tester ». Il ne sait pas qu'elle
+        # existe : il ne la demandera pas. Dès qu'elle est le support retenu et
+        # qu'aucune ne tourne déjà, on l'ouvre — comme un professeur qui lance
+        # l'expérience avant d'expliquer ce qu'on va y voir.
+        if not auto_present_resource and chosen_resource_type == "simulation":
+            auto_present_resource = not simulation_active
 
         if not auto_present_resource and phase == "activation" and chosen_resource_type == "image":
             auto_present_resource = any(

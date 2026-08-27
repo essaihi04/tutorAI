@@ -353,8 +353,13 @@ def bloc_visuels_disponibles(
         "va au tableau sans qu'on l'en prie. Par défaut, l'une d'elles part",
         "DANS CETTE RÉPONSE.",
         "",
-        "LAQUELLE : c'est le SENS de ce que dit l'élève qui tranche, jamais la",
-        "plus impressionnante des cinq.",
+        "LAQUELLE : une demande EXPLICITE (« dessine », « en 3D », « trace la",
+        "courbe ») est toujours servie telle quelle. Sans demande explicite,",
+        "l'ordre est celui de ce que l'élève peut FAIRE avec :",
+        "  1. la SCÈNE ANIMÉE ou la SIMULATION DU COURS — il la manipule ;",
+        "  2. à défaut, le CROQUIS AU CRAYON ou le SCHÉMA de la bibliothèque ;",
+        "  3. à défaut de tout, la figure que tu génères toi-même.",
+        "Ne descends d'un cran que si le cran du dessus est vide.",
     ]
 
     # L'ordre des règles suit celui des intentions détectées : la première qui
@@ -375,40 +380,48 @@ def bloc_visuels_disponibles(
             "→ Il demande à TOURNER AUTOUR / à voir en 3D : envoie le MODÈLE 3D "
             "(ligne `scientific`, moteur `three`)."
         )
-    elif carte["veut_mouvement"] and (carte["presets"] or carte["simulations"]):
-        lignes.append(
-            "→ Il demande à voir BOUGER : envoie la SCÈNE ANIMÉE (ligne "
-            "`scientific`, moteur `preset`) ou ouvre la SIMULATION DU COURS. "
-            "Une image fixe ne répond pas à cette demande."
-        )
     elif carte["veut_croquis"] and carte["croquis"]:
         lignes.append(
             "→ Il demande un DESSIN (« dessine », « croquis », « au tableau », "
             "« رسم ليا ») : envoie le CROQUIS AU CRAYON dans un pas `figure` de "
             "`show_live`, pas la planche de référence."
         )
+    elif carte["presets"] or carte["simulations"]:
+        # LE CAS NORMAL, et le plus important.
+        #
+        # C'était la planche de référence qui partait par défaut, et la scène
+        # animée n'apparaissait que si l'élève avait prononcé « fais bouger ».
+        # Un élève ne demande pas ce qu'il ignore : il n'a jamais su qu'une
+        # scène existait, et l'a donc rarement vue. Or c'est la SEULE surface
+        # qu'il peut manipuler — il change un paramètre, il regarde ce que ça
+        # fait, et il comprend avant qu'on lui explique.
+        #
+        # Une image fixe et une ligne au tableau viennent APRÈS, pour fixer ce
+        # qu'il vient de voir bouger. Jamais avant.
+        lignes.append(
+            "→ UNE SCÈNE QUI BOUGE COUVRE CETTE NOTION : c'est par ELLE que ton "
+            "explication COMMENCE — scène animée (ligne `scientific`, moteur "
+            "`preset`) ou SIMULATION DU COURS (`OUVRIR_SIMULATION`). N'attends "
+            "pas qu'il demande à voir bouger : il ne sait pas que c'est "
+            "possible. Une planche fixe et une ligne au tableau viennent "
+            "APRÈS, pour fixer ce qu'il aura vu."
+        )
     elif carte["reference"]:
         lignes.append(
-            "→ AUCUNE demande particulière : c'est le cas NORMAL, et il n'annule "
-            "rien. Affiche le SCHÉMA DE RÉFÉRENCE avec `show_schema` pendant que "
-            "tu expliques, et commente-le au lieu de le décrire."
+            "→ AUCUNE SCÈNE MANIPULABLE sur cette notion : on descend d'un cran. "
+            "Affiche le SCHÉMA DE RÉFÉRENCE avec `show_schema` pendant que tu "
+            "expliques, et commente-le au lieu de le décrire."
         )
     elif carte["croquis"]:
         lignes.append(
-            "→ Aucune planche de référence sur cette notion : trace le CROQUIS AU "
-            "CRAYON dans un pas `figure` de `show_live`."
+            "→ Ni scène, ni planche de référence sur cette notion : trace le "
+            "CROQUIS AU CRAYON dans un pas `figure` de `show_live`."
         )
-    elif carte["presets"] or carte["simulations"] or carte["modeles_3d"]:
-        # Le trou de la chaîne : quand seule une scène animée couvre la notion,
-        # le bloc annonçait « l'une d'elles part dans cette réponse » puis ne
-        # disait pas laquelle — et le bloc de génération qui suit réclamait un
-        # dessin. Deux ordres contraires, et c'est le dessin improvisé qui
-        # partait, à la place d'une scène déjà réglée sur la même notion.
+    elif carte["modeles_3d"]:
         lignes.append(
-            "→ Aucun schéma dessiné sur cette notion, mais une SCÈNE du "
-            "catalogue la couvre : c'est ELLE qui part, pas une figure "
-            "improvisée. Elle est déjà réglée, elle se met en pause et l'élève "
-            "peut l'avancer pas à pas — ce qu'un dessin ne fera jamais."
+            "→ Rien de plat sur cette notion, mais un MODÈLE 3D la couvre : "
+            "envoie-le (ligne `scientific`, moteur `three`). L'élève le tourne "
+            "lui-même, ce qu'un dessin ne fera jamais."
         )
 
     if vus:
@@ -423,6 +436,37 @@ def bloc_visuels_disponibles(
             "ton explication avance."
         )
 
+    if carte["presets"] or carte["simulations"]:
+        # Montrer la scène ne suffit pas : elle était affichée puis recouverte
+        # par le tableau dans la même réponse, avant que l'élève ait eu le
+        # temps de toucher un curseur. Une simulation qu'on n'a pas manipulée
+        # n'apprend rien de plus qu'une image.
+        lignes.extend([
+            "",
+            "L'ORDRE D'UNE EXPLICATION QUI COMMENCE PAR UNE SCÈNE — quatre temps,",
+            "et un seul par réponse :",
+            "  1. TU LA LANCES, et ton explication se tient À CÔTÉ : deux ou trois",
+            "     phrases dans le chat qui disent QUOI REGARDER (« observe ce qui",
+            "     arrive quand la fréquence monte »). Rien ne s'écrit au tableau",
+            "     dans cette réponse : la scène occupe l'écran, et ce que tu",
+            "     écrirais recouvrirait ce que tu demandes de regarder.",
+            "  2. TU LUI LAISSES LA MAIN. Termine par une consigne de",
+            "     MANIPULATION — quel curseur bouger, quoi comparer — puis",
+            "     ARRÊTE-TOI. Tu ne continues pas dans la même réponse : c'est",
+            "     son tour, et c'est le seul moment où il apprend par lui-même.",
+            "  3. QUAND IL REVIENT, tu poses LA QUESTION DE COMPRÉHENSION sur ce",
+            "     qu'il vient de voir — une seule, courte, sur le lien de cause à",
+            "     effet qu'il a manipulé. Tu n'écris toujours rien.",
+            "  4. SEULEMENT APRÈS SA RÉPONSE tu passes au TABLEAU : `show_live`",
+            "     écrit la définition, la formule, la conclusion — ce qu'il",
+            "     recopie dans son cahier. Le tableau CONCLUT ce qu'il a vu ; il",
+            "     ne le précède jamais.",
+            "→ Ne saute aucun de ces quatre temps, et n'en mets pas deux dans la",
+            "  même réponse. Une scène lancée et aussitôt recouverte de texte est",
+            "  une scène que l'élève n'a pas manipulée : elle ne lui a rien appris",
+            "  de plus qu'une image fixe.",
+            "",
+        ])
     lignes.append(
         "→ Une seule ressource à la fois : ouvrir la suivante ferme la précédente. "
         "Enchaîne-les dans l'ordre de ton explication plutôt que de tout empiler."
