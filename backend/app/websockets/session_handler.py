@@ -3648,16 +3648,46 @@ RÈGLES STRICTES:
                 _full_name = (self.session_context.get("student_name") or "").strip()
                 _first_name = _full_name.split()[0] if _full_name and _full_name != "l'étudiant" else "mon ami"
 
+                # ── PAR QUOI LA SÉANCE COMMENCE ──────────────────────
+                #
+                # L'ouverture écrivait TOUJOURS `OUVRIR_IMAGE` : la séance
+                # démarrait sur une image fixe même quand la leçon portait un
+                # laboratoire virtuel que l'élève peut régler lui-même. Les
+                # simulations du cours sont d'ailleurs rangées en phase
+                # `exploration` ou `application`, jamais en `activation` — la
+                # première minute d'une séance n'en ouvrait donc jamais une.
+                #
+                # L'élève ne réclame pas ce qu'il ignore. L'ordre est celui de
+                # ce qu'il peut FAIRE : ce qui se manipule d'abord, ce qui se
+                # regarde ensuite, et le tableau en dernier.
+                _a_une_simulation = "simulation" in self._available_resource_types()
+                _ouverture_tag = "OUVRIR_SIMULATION" if _a_une_simulation else "OUVRIR_IMAGE"
+                _ouverture_quoi = (
+                    "la SIMULATION que l'élève va manipuler lui-même"
+                    if _a_une_simulation
+                    else "la ressource d'activation"
+                )
+                _ouverture_suite = (
+                    "4. Donne UNE consigne de MANIPULATION très courte — quel réglage changer, quoi comparer — puis ARRÊTE-TOI : c'est à lui d'agir, et c'est le seul moment où il apprend par lui-même. Ta question de compréhension attend le tour SUIVANT, quand il revient dire ce qu'il a vu."
+                    if _a_une_simulation
+                    else "4. Pose UNE question d'observation très courte sur ce que l'élève voit."
+                )
+                _ouverture_regle_7 = (
+                    "7. RIEN ne s'écrit au tableau tant qu'il n'a pas manipulé PUIS répondu : le tableau CONCLUT ce qu'il a vu, il ne le précède jamais."
+                    if _a_une_simulation
+                    else "7. Utilise une simulation interactive dès qu'un exercice visuel correspondant est disponible."
+                )
+
                 lesson_plan_opening = f"""Démarre la séance « {_lesson_topic} » en MODE VISUEL.
 
 RÈGLES OBLIGATOIRES :
 1. Salue l'élève par son prénom en alphabet arabe, en le transcrivant depuis le profil ({_first_name}), en UNE phrase de 15 mots maximum. Ne recopie pas la forme latine.
-2. Écris immédiatement OUVRIR_IMAGE afin d'afficher la ressource d'activation.
+2. Écris immédiatement {_ouverture_tag} afin d'afficher {_ouverture_quoi}.
 3. Ne donne encore aucun paragraphe de cours et n'affiche pas de plan textuel.
-4. Pose UNE question d'observation très courte sur ce que l'élève voit.
+{_ouverture_suite}
 5. Termine par trois <suggestions> courtes : deux observations plausibles et « Je ne sais pas ».
 6. Après sa réponse, alterne ressource visuelle ou simulation puis question. Limite chaque prise de parole à 2 phrases courtes sauf demande explicite d'explication détaillée.
-7. Utilise une simulation interactive dès qu'un exercice visuel correspondant est disponible.
+{_ouverture_regle_7}
 
 But : l'élève observe et agit avant de lire l'explication."""
 
@@ -3908,6 +3938,23 @@ RÈGLES :
                 )
             except Exception as cmd_err:
                 _safe_log(f"[Session Init] Command execution error (non-fatal): {cmd_err}")
+
+            # ── Le filet : la séance s'ouvre sur ce qui se manipule ─────
+            #
+            # `OUVRIR_SIMULATION` est une consigne donnée au modèle, et un
+            # modèle en oublie une — l'élève tombait alors sur un écran nu au
+            # premier tour, celui qui décide s'il reste. Le serveur, lui, SAIT
+            # ce que la leçon contient : quand rien n'a été ouvert et qu'une
+            # simulation existe, il l'ouvre à sa place.
+            #
+            # `_auto_suggest_resource` retombe seul sur une image si aucune
+            # simulation n'est présentable : le filet ne peut pas vider l'écran.
+            try:
+                if self._faut_ouvrir_la_simulation(opening):
+                    _safe_log("[Session Init] Ouverture sans ressource — la simulation part quand même")
+                    await self._auto_suggest_resource(preferred_resource_type="simulation")
+            except Exception as filet_err:
+                _safe_log(f"[Session Init] Filet simulation (non-fatal): {filet_err}")
 
             # Single TTS on full text (non-blocking, reliable)
             asyncio.create_task(self.generate_and_send_audio_chunks(opening))
@@ -6490,6 +6537,31 @@ RÈGLES :
                 "auto": True
             })
             _safe_log(f"[Phase] Advanced to {self.current_phase}")
+
+    #: Ce qui compte comme « quelque chose de manipulable s'est ouvert ».
+    #: Un `<board>` ou un `<live>` n'en est pas : une séance qui démarre sur du
+    #: texte écrit est exactement ce qu'on corrige ici.
+    _OUVERTURES_VISUELLES = (
+        "OUVRIR_SIMULATION", "OUVRIR_IMAGE", "OUVRIR_EXERCICE",
+        "<schema>", "scientific",
+    )
+
+    def _faut_ouvrir_la_simulation(self, ouverture: str) -> bool:
+        """Le premier tour a-t-il laissé l'élève devant un écran nu ?
+
+        `OUVRIR_SIMULATION` est une consigne donnée au modèle, et un modèle en
+        oublie une. Le serveur, lui, SAIT ce que la leçon contient : quand rien
+        de manipulable n'est parti et qu'une simulation existe, il l'ouvre à sa
+        place. Le tour qui décide si l'élève reste est le premier.
+
+        Ne s'applique pas à une séance REPRISE (l'élève retrouve son écran là
+        où il l'avait laissé), ni aux modes sans leçon rattachée.
+        """
+        if self.session_mode in ("libre", "explain") or self.is_resumed_session:
+            return False
+        if "simulation" not in self._available_resource_types():
+            return False
+        return not any(tag in (ouverture or "") for tag in self._OUVERTURES_VISUELLES)
 
     def _available_resource_types(self) -> set[str]:
         return {

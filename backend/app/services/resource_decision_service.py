@@ -40,7 +40,11 @@ class ResourceDecisionService:
             reasons[preferred_mode].append("explicit_request")
 
         phase_weights = {
-            "activation": {"image": 4, "whiteboard": 2},
+            # La toute première minute d'une séance : elle ouvrait sur une
+            # image fixe, alors que les simulations du cours sont rangées en
+            # `exploration` ou `application` et n'arrivaient donc jamais au
+            # démarrage. Ce qui se manipule passe devant ce qui se regarde.
+            "activation": {"simulation": 5, "image": 4, "whiteboard": 2},
             "exploration": {"simulation": 5, "image": 2},
             # Une explication commence par ce que l'élève peut MANIPULER, et
             # le tableau CONCLUT ce qu'il a vu. La simulation passe donc devant
