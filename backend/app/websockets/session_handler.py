@@ -29,7 +29,8 @@ from app.services.scientific_visual_router import (
     build_visual_route_prompt,
     route_scientific_visual,
 )
-from app.services.visual_shortlist import bloc_visuels_disponibles
+from app.services.visual_shortlist import bloc_visuels_disponibles, carte_des_visuels
+from app.services import libre_journal
 from app.services.stt_service import stt_service
 from app.services.tts_service import tts_service
 from app.services.prompt_builder import prompt_builder
@@ -1799,6 +1800,22 @@ class SessionHandler:
             insister=self.session_mode in ("libre", "explain"),
             deja_affiches=self._visuels_affiches,
         )
+
+        # ── Première moitié du journal : ce qu'on lui a PROPOSÉ ──
+        #
+        # La seconde moitié — ce qu'il en a fait — n'arrive qu'après sa
+        # réponse. Les deux se rejoignent dans `libre_journal`, faute de quoi
+        # on ne peut jamais dire si le tuteur a ignoré une ressource ou s'il
+        # n'y en avait aucune. C'est la seule question que pose un élève qui
+        # dit « ça ne marche toujours pas ».
+        if self.session_mode in ("libre", "explain"):
+            libre_journal.retenir_offre(
+                str(self.student_id),
+                demande,
+                carte_des_visuels(contexte, demande, self.lesson_resources),
+                route_scientific_visual(contexte, demande),
+            )
+
         if not carte:
             return build_visual_route_prompt(contexte, demande)
 
@@ -4964,6 +4981,26 @@ RÈGLES :
                         except Exception as e:
                             _safe_log(f"[AI Commands] UI parse retry failed: {e}")
                             self._ui_parse_retry_count = 0
+            # ── Seconde moitié du journal : ce qu'il en a FAIT ──
+            #
+            # Ici, et seulement ici, la réponse du modèle et les actions
+            # décodées sont disponibles ensemble. Le rapprochement avec
+            # l'offre retenue plus haut donne les trois défauts qu'on ne
+            # savait pas nommer : ressource ignorée, tableau promis mais
+            # jamais envoyé, identifiant inventé.
+            #
+            # APRÈS la reprise sur bloc `<ui>` malformé, pas avant : celle-ci
+            # relance le traitement complet puis sort. Journaliser en amont
+            # compterait la tentative ratée ET sa reprise, et le bilan
+            # accuserait le tuteur deux fois pour un seul tour.
+            if self.session_mode in ("libre", "explain"):
+                libre_journal.noter_tour(
+                    str(self.student_id),
+                    ai_response,
+                    ui_actions,
+                    mode=self.session_mode,
+                )
+
             ui_actions_handled = False
 
             # Collect all board payloads to merge them into one combined board

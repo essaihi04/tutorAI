@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import unicodedata
@@ -25,7 +26,16 @@ from pathlib import Path
 
 _log = logging.getLogger(__name__)
 
-FICHIER = Path(__file__).resolve().parents[2] / "data" / "schema_gaps.jsonl"
+#: Où s'écrit le journal. Surchargeable par l'environnement pour UNE
+#: raison : la suite de tests appelle le validateur avec des figures
+#: volontairement invalides, et chaque exécution ajoutait ses refus au
+#: journal de PRODUCTION. Les fixtures ont fini par y être majoritaires —
+#: `classement()`, censé dire quelle primitive manque vraiment aux élèves,
+#: ne classait plus que du décor de test.
+FICHIER = Path(
+    os.environ.get("SCHEMA_GAPS_PATH")
+    or Path(__file__).resolve().parents[2] / "data" / "schema_gaps.jsonl"
+)
 
 # Un même sujet revient à chaque tour d'une séance : on ne le note qu'une fois
 # par processus, sinon la liste de courses devient un journal de bord.
