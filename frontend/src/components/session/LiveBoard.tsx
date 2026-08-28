@@ -574,7 +574,15 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     // ⚠️ setInterval, PAS requestAnimationFrame : rAF s'arrête net dès que
     // l'onglet passe en arrière-plan ou que le navigateur suspend le rendu —
     // l'écriture restait alors gelée, puis tout apparaissait d'un coup.
-    revealClockRef.current = window.setInterval(() => {
+    //
+    // ⚠️ L'horloge est gardée EN LOCAL autant que dans la ref partagée. La ref
+    // ne désigne qu'une seule horloge à la fois : quand un script est annulé
+    // pendant qu'il parle, son `speakAndReveal` continue de tourner en fond et
+    // finit APRÈS que le script suivant a démarré. Il arrêtait alors l'horloge
+    // du NOUVEAU script, dont l'écriture ne repartait plus jamais — le tableau
+    // restait figé sur sa première ligne, « Explication terminée » affiché, et
+    // la figure qui suivait n'arrivait pas. Chacun n'arrête que la sienne.
+    const horloge = window.setInterval(() => {
       if (done || runId !== runIdRef.current) return;
       const now = performance.now();
       const dt = now - last;
@@ -586,6 +594,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         setVoiceReveal(pct);
       }
     }, 50);
+    revealClockRef.current = horloge;
 
     const handle = boardVoice.speak(spoken, langue, (ratio) => {
       // ratio >= 1 est le signal de FIN : s'y recaler ferait sauter la ligne
@@ -606,16 +615,31 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
 
     // Voix indisponible (serveur muet, lecture refusée) : on laisse l'horloge
     // finir d'écrire lettre après lettre, plutôt que de figer la ligne.
+    //
+    // La sortie ne dépend PAS que de l'horloge. `elapsed` n'avance que si
+    // l'horloge tourne encore ; si elle s'arrête pour une raison quelconque,
+    // la condition ne peut plus devenir fausse et la boucle tourne sans fin.
+    // Un second compteur, tenu ici même, donne une porte de sortie : au pire
+    // la ligne s'affiche d'un coup, ce qui reste infiniment préférable à un
+    // tableau qui ne repart jamais.
     if (!voiceSpoke && runId === runIdRef.current) {
-      while (elapsed < estimatedMs) {
+      // Le temps compté ici est celui de la LECTURE, pas celui de la montre :
+      // un élève qui met en pause doit pouvoir s'arrêter aussi longtemps qu'il
+      // veut sans que la ligne se termine toute seule.
+      let attendu = 0;
+      let dernier = performance.now();
+      while (elapsed < estimatedMs && attendu < estimatedMs + 2000) {
         await new Promise(r => setTimeout(r, 60));
         if (runId !== runIdRef.current) break;
+        const maintenant = performance.now();
+        if (playingRef.current) attendu += maintenant - dernier;
+        dernier = maintenant;
       }
     }
 
     done = true;
-    if (revealClockRef.current !== null) {
-      clearInterval(revealClockRef.current);
+    clearInterval(horloge);
+    if (revealClockRef.current === horloge) {
       revealClockRef.current = null;
     }
     if (runId !== runIdRef.current) return true;
