@@ -165,13 +165,41 @@ const BOARD_BLOC_TYPES = new Set([
  * le professeur écrit. L'élève voyait la figure sans un mot autour.
  */
 function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: string[]): LiveScript {
-  return {
-    title: titre,
-    steps: [
-      { action: 'write', line: { type: 'title', content: titre } },
-      { action: 'figure', schema_id: schemaId, highlights: surlignages },
-    ],
-  };
+  const steps: LiveScript['steps'] = [
+    { action: 'write', line: { type: 'title', content: titre } },
+    { action: 'figure', schema_id: schemaId, highlights: surlignages },
+  ];
+
+  // ── Le professeur COMMENTE la planche qu'il vient d'accrocher ──
+  //
+  // Le script s'arrêtait sur ces deux pas : un titre, une figure, et une
+  // colonne de gauche vide jusqu'à « Explication terminée ». L'élève recevait
+  // une image sans un mot autour — celle-là même que le commentaire de cette
+  // fonction promettait d'éviter.
+  //
+  // Les mots existaient pourtant déjà : chaque schéma porte ses annotations,
+  // et chacune a un intitulé et une phrase qui l'explique. Personne ne les
+  // lisait. Elles sont écrites à la craie l'une après l'autre, dans l'ordre du
+  // schéma, donc dites à voix haute par le tableau — c'est exactement ce qu'un
+  // professeur fait en désignant sa planche du doigt.
+  //
+  // La borne à six lignes n'est pas décorative : au-delà, la colonne défile et
+  // l'élève ne voit plus la figure dont on lui parle.
+  const annotations = (getSchemaById(schemaId)?.annotations || []).slice(0, 6);
+  for (const annotation of annotations) {
+    const intitule = (annotation.label || '').trim();
+    const explication = (annotation.description || '').trim();
+    if (!intitule && !explication) continue;
+    steps.push({
+      action: 'write',
+      line: {
+        type: 'text',
+        content: intitule && explication ? `${intitule} : ${explication}` : intitule || explication,
+      },
+    });
+  }
+
+  return { title: titre, steps };
 }
 
   function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange, scientificControl, onSimulationUpdate }: AIWhiteboardProps) {
