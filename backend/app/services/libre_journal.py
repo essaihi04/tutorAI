@@ -227,8 +227,27 @@ def noter_tour(
             or offre.get("modeles_3d")
             or offre.get("simulations")
         )
+        # « Avoir agi » n'est pas « avoir montré quelque chose ».
+        #
+        # Les GESTES comptaient ici, et un seul suffisait à déclarer le tour
+        # servi. Or le geste le plus fréquent en question libre est un
+        # `media/open` qui n'ouvre RIEN — la table des ressources est vide, le
+        # serveur répond « aucune ressource ouverte », et l'écran de l'élève
+        # ne bouge pas. Mesuré en séance : quatre ressources proposées,
+        # `ENVOI : rien | gestes=open`, et aucun défaut signalé. Le journal
+        # couvrait exactement le cas qu'il devait dénoncer.
+        #
+        # Seul ce qui porte une image compte donc : un schéma, une scène, un
+        # moteur — ou un geste qui écrit vraiment au tableau.
+        _GESTES_QUI_MONTRENT = {
+            "show_board", "show_live", "show_draw", "show_schema",
+            "board", "live", "live_board", "teach_live", "draw",
+        }
         a_envoye = bool(
-            envoi["schemas"] or envoi["presets"] or envoi["moteurs"] or envoi["gestes"]
+            envoi["schemas"]
+            or envoi["presets"]
+            or envoi["moteurs"]
+            or (set(envoi["gestes"]) & _GESTES_QUI_MONTRENT)
         )
         inconnus = _identifiants_inconnus(envoi)
 

@@ -151,3 +151,33 @@ def test_le_journal_n_interrompt_jamais_une_seance():
     """Une trace ne vaut pas une séance : une entrée absurde rend None au
     lieu de lever, et l'élève ne voit rien passer."""
     assert libre_journal.noter_tour("inconnu", None, "pas une liste") is not None
+
+
+def test_un_geste_qui_n_ouvre_rien_ne_compte_pas_comme_un_envoi():
+    """Le cas mesuré en séance, et le pire pour un journal : il le taisait.
+
+    Le tuteur emet un `media/open` alors que la table des ressources est
+    vide. Le serveur repond « aucune ressource ouverte », l'ecran de l'eleve
+    ne bouge pas — et le journal declarait le tour servi parce qu'un geste
+    avait eu lieu. Quatre ressources proposees, rien montre, aucun defaut
+    signale.
+    """
+    ligne = _tour(
+        "explique-moi la respiration cellulaire",
+        actions=[{"type": "media", "action": "open"}],
+    )
+
+    assert ligne["ressource_ignoree"] is True
+
+
+def test_un_geste_qui_ecrit_au_tableau_compte_bien_comme_un_envoi():
+    """La reserve de la regle precedente : `show_live` montre vraiment
+    quelque chose, meme sans identifiant de bibliotheque."""
+    ligne = _tour(
+        "explique-moi la respiration cellulaire",
+        actions=[{"action": "show_live", "payload": {"steps": [
+            {"action": "write", "line": {"type": "title", "content": "Respiration"}},
+        ]}}],
+    )
+
+    assert ligne["ressource_ignoree"] is False
