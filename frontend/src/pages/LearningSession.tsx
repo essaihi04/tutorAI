@@ -23,8 +23,6 @@ import { SessionMediaDisplay } from '../components/session/MediaViewer';
 import AIWhiteboard from '../components/session/AIWhiteboard';
 import ExamExercisePanel from '../components/session/ExamExercisePanel';
 import type { ExamExercise } from '../components/session/ExamExercisePanel';
-import LessonProgressBar from '../components/session/LessonProgressBar';
-import PhaseProgress from '../components/session/PhaseProgress';
 import QuickActions from '../components/session/QuickActions';
 import type { QuickAction } from '../components/session/QuickActions';
 import CoursePlayer from '../components/course/CoursePlayer';
@@ -280,7 +278,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     ? allowedSubjectNames.join(', ')
     : 'tes matières';
   const {
-    sessionId, setSessionId, currentPhase, setPhase,
+    sessionId, setSessionId, setPhase,
     isProcessing, processingStage, setProcessing,
     isSpeaking, setSpeaking, addMessage, updateMessage, conversation,
     setLanguage, clearSession, language,
@@ -288,7 +286,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
   const [connected, setConnected] = useState(false);
   const [lessonInfo, setLessonInfo] = useState<LessonSummary | null>(null);
-  const [lessonPosition, setLessonPosition] = useState({ current: 1, total: 1 });
   const [nextLesson, setNextLesson] = useState<LessonSummary | null>(null);
   const [courseDeck, setCourseDeck] = useState<CourseDeck | null>(null);
   const [courseProgress, setCourseProgress] = useState<CourseProgressSnapshot | null>(null);
@@ -302,6 +299,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     if (typeof window === 'undefined') return true;
     return window.matchMedia('(min-width: 768px)').matches;
   });
+  const showChatRef = useRef(showChat);
+  const chatBeforeBoardFocusRef = useRef(showChat);
+  const boardFocusRef = useRef(false);
+  useEffect(() => { showChatRef.current = showChat; }, [showChat]);
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 767px)').matches;
@@ -355,20 +356,32 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     [liveScript],
   );
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  useEffect(() => {
+    // Le serveur, la barre de la page et le bouton du tableau peuvent tous le
+    // fermer. Si cela arrive en plein écran, le composant est démonté avant
+    // de pouvoir émettre `focus=false` : on restaure donc le chat ici aussi.
+    if (!showWhiteboard && boardFocusRef.current) {
+      boardFocusRef.current = false;
+      if (chatBeforeBoardFocusRef.current) setShowChat(true);
+    }
+  }, [showWhiteboard]);
   const [currentExercise, setCurrentExercise] = useState<any | null>(null);
   const [showExercise, setShowExercise] = useState(false);
   const [examExercises, setExamExercises] = useState<ExamExercise[]>([]);
   const [showExamPanel, setShowExamPanel] = useState(false);
   const [examQuery, setExamQuery] = useState<string>('');
   
-  // Lesson progress state for coaching mode
-  const [learningObjectives, setLearningObjectives] = useState<string[]>([]);
-  const [completedObjectives, setCompletedObjectives] = useState<number[]>([]);
-  const [currentObjectiveIndex, setCurrentObjectiveIndex] = useState(0);
-  const [objectiveEvidence, setObjectiveEvidence] = useState({ correctAnswers: 0, hasReasoning: false });
-  const [isResumedSession, setIsResumedSession] = useState(false);
-  const [showProgressBar, setShowProgressBar] = useState(false);
+  // Seule la fin de leçon reste affichée : les objectifs et les phases ne
+  // pilotent plus rien depuis que leurs deux bandeaux ont quitté le haut de
+  // l'écran (cf. le commentaire au-dessus de « Lesson Completed Banner »).
   const [lessonCompleted, setLessonCompleted] = useState(false);
+  /** Bandeau de fin de leçon déplié ? Replié, il ne prend plus qu'une ligne. */
+  const [bandeauFinOuvert, setBandeauFinOuvert] = useState(true);
+  // Une leçon terminée à nouveau (après un « Recommencer ») est une nouvelle :
+  // elle se réaffiche entière, même si l'élève avait replié la précédente.
+  useEffect(() => {
+    if (lessonCompleted) setBandeauFinOuvert(true);
+  }, [lessonCompleted]);
 
   // Le titre suit le mode COURANT : c'est le seul repère qui dit à l'élève ce
   // qui se passe, maintenant qu'il ne change plus d'écran ni d'URL.
@@ -626,10 +639,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       
       setLessonInfo(lesson);
       const selectedLessonIndex = lessons.findIndex((item) => item.id === lesson.id);
-      setLessonPosition({
-        current: Math.max(1, selectedLessonIndex + 1),
-        total: Math.max(1, lessons.length),
-      });
       setNextLesson(
         selectedLessonIndex >= 0 && selectedLessonIndex < lessons.length - 1
           ? lessons[selectedLessonIndex + 1]
@@ -952,13 +961,24 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     if (tableauParle) couperVoixDuChat();
   }), []);
 
-  const revealPendingMedia = () => {
-    if (pendingMediaRef.current) {
-      setShowWhiteboard(false);
-      setCurrentMedia(pendingMediaRef.current);
-      setShowMedia(true);
-      pendingMediaRef.current = null;
+  /** Le média différé attend la FIN du tableau, pas le premier son. */
+  const attendLeTableauRef = useRef(false);
+  const filetPendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const revealPendingMedia = (apresLeTableau = false) => {
+    if (!pendingMediaRef.current) return;
+    // Les appels branchés sur le démarrage de la voix ne doivent pas ouvrir
+    // un média que le tuteur est justement en train d'annoncer au tableau.
+    if (attendLeTableauRef.current && !apresLeTableau) return;
+    if (filetPendingRef.current) {
+      clearTimeout(filetPendingRef.current);
+      filetPendingRef.current = null;
     }
+    attendLeTableauRef.current = false;
+    setShowWhiteboard(false);
+    setCurrentMedia(pendingMediaRef.current);
+    setShowMedia(true);
+    pendingMediaRef.current = null;
   };
 
   const launchResolvedCourse = useCallback((
@@ -1217,23 +1237,13 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // Handle session initialization with progress data
     wsService.on('session_initialized', (data) => {
       console.log('[Session] session_initialized received:', data);
-      if (data.learning_objectives && Array.isArray(data.learning_objectives)) {
-        setLearningObjectives(data.learning_objectives);
-        setShowProgressBar(true);
-      }
       if (data.progress) {
-        setCompletedObjectives(data.progress.objectives_completed || []);
-        setCurrentObjectiveIndex(data.progress.current_objective_index || 0);
-        setObjectiveEvidence({ correctAnswers: 0, hasReasoning: false });
         // Restore lesson completion status
         const isDone = data.progress.status === 'completed' ||
           (data.learning_objectives && Array.isArray(data.learning_objectives) &&
            data.learning_objectives.length > 0 &&
            (data.progress.objectives_completed || []).length >= data.learning_objectives.length);
         setLessonCompleted(!!isDone);
-      }
-      if (data.is_resumed) {
-        setIsResumedSession(true);
       }
     });
 
@@ -1259,33 +1269,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       setContextSuggestions([]);
     });
 
-    // Handle objective completion updates from backend
-    wsService.on('objective_completed', (data) => {
-      console.log('[Session] objective_completed:', data);
-      if (typeof data.objective_index === 'number') {
-        setCompletedObjectives(prev => 
-          prev.includes(data.objective_index) ? prev : [...prev, data.objective_index]
-        );
-        setCurrentObjectiveIndex(data.objective_index + 1);
-        setObjectiveEvidence({ correctAnswers: 0, hasReasoning: false });
-      }
-    });
-
-    wsService.on('objective_changed', (data) => {
-      if (typeof data.objective_index === 'number') {
-        setCurrentObjectiveIndex(data.objective_index);
-        setObjectiveEvidence({ correctAnswers: 0, hasReasoning: false });
-      }
-    });
-
-    wsService.on('objective_evidence_updated', (data) => {
-      if (typeof data.objective_index === 'number') {
-        setObjectiveEvidence({
-          correctAnswers: Number(data.correct_answers || 0),
-          hasReasoning: Boolean(data.has_reasoning),
-        });
-      }
-    });
+    // `objective_completed`, `objective_changed` et `objective_evidence_updated`
+    // n'alimentaient que les bandeaux de progression retirés du haut de
+    // l'écran. Le serveur continue de les émettre — il suit la progression pour
+    // son propre compte — mais la page n'a plus rien à en faire.
 
     // Handle full lesson completion — mark lesson as completed globally
     wsService.on('lesson_completed', (data) => {
@@ -1296,6 +1283,23 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     wsService.on('show_media', (data) => {
       if (!data || !data.media) {
         console.error('[Display][ERROR] show_media received without a valid media payload:', data);
+        return;
+      }
+      // `defer` : le tuteur vient d'écrire au tableau et n'a pas fini d'en
+      // parler. Le média attend la fin du script au lieu de l'effacer en
+      // pleine phrase — c'est « il annonce, il écrit, PUIS il lance ».
+      if (data.defer) {
+        console.log('[Display] Media mis en attente jusqu’a la fin du tableau', {
+          mediaType: data.media?.type,
+          title: data.media?.title || data.media?.name || data.media?.resource_name || 'unknown',
+        });
+        pendingMediaRef.current = data.media;
+        attendLeTableauRef.current = true;
+        // Filet : si le tableau ne se joue pas — script perdu, élève qui
+        // ferme — le média finit quand même par arriver plutôt que de rester
+        // introuvable.
+        if (filetPendingRef.current) clearTimeout(filetPendingRef.current);
+        filetPendingRef.current = setTimeout(() => revealPendingMedia(true), 45000);
         return;
       }
       console.log('[Display] Showing media, hiding whiteboard', {
@@ -1312,7 +1316,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       if (!currentMedia) {
         console.warn('[Display][WARN] hide_media received while no media is currently shown');
       }
-      pendingMediaRef.current = null;
+      // Un média EN ATTENTE n'est pas un média affiché : le `hide_media` qui
+      // précède un nouveau tableau ne le vise pas. Le jeter ici faisait
+      // disparaître pour de bon la simulation que le tuteur venait d'annoncer
+      // — l'élève voyait le tableau se remplir et l'écran promis n'arrivait
+      // jamais. Il attend désormais la fin du DERNIER script écrit.
+      if (!attendLeTableauRef.current) {
+        pendingMediaRef.current = null;
+      }
       setShowMedia(false);
     });
 
@@ -1775,7 +1786,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
    * refermerait la barre en boucle, y compris hors plein écran.
    */
   const handleBoardFocusChange = useCallback((focus: boolean) => {
-    if (focus) setShowChat(false);
+    boardFocusRef.current = focus;
+    if (focus) {
+      chatBeforeBoardFocusRef.current = showChatRef.current;
+      setShowChat(false);
+    } else if (chatBeforeBoardFocusRef.current) {
+      // Le plein écran est une parenthèse : au retour, le champ de discussion
+      // retrouve exactement l'état visible qu'il avait avant.
+      setShowChat(true);
+    }
   }, []);
 
   const handleSendText = async (text: string) => {
@@ -1794,7 +1813,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       }
     }
 
-    wsService.sendJson({ type: 'text_input', text });
+    // Un cours scénarisé occupe déjà l'écran central : la réponse du tuteur
+    // reste dans la colonne de gauche au lieu de remplacer la diapositive par
+    // un tableau ou une image. Même porte que le mode libre, même chat.
+    wsService.sendJson({
+      type: 'text_input',
+      text,
+      ...(courseDeck && !isLibreConnexion ? { course_player_question: true } : {}),
+    });
   };
 
   // Depuis la bibliothèque, « Demander à Moalim » ouvre le tuteur puis lui
@@ -1822,18 +1848,51 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     void handleSendText(text);
   };
 
-  /** Interruption du lecteur : réponse dans la bulle, sans remplacer la diapo. */
-  const handleCourseQuestion = (text: string) => {
-    if (!connected || isProcessing || !text.trim()) return;
+  /**
+   * La parole du professeur pendant un cours scénarisé rejoint le chat.
+   *
+   * Le lecteur de cours narrait dans le vide : la colonne de gauche restait
+   * vide toute la leçon. Elle est pourtant la seule trace consultable — celle
+   * que le mode libre a toujours eue.
+   */
+  const handleCourseNarration = useCallback((text: string) => {
+    addMessage('ai', text);
+  }, [addMessage]);
+
+  /**
+   * L'élève lève la main pendant le cours, depuis le coin élève du tableau.
+   *
+   * Sa question rejoint le chat comme n'importe quelle autre — la colonne de
+   * gauche reste la trace unique de la séance — et part au tuteur avec le
+   * drapeau qui empêche la réponse de remplacer le cours par un tableau.
+   */
+  const handleCourseQuestion = useCallback((text: string) => {
+    const propre = text.trim();
+    if (!connected || !propre) return;
     setContextSuggestions([]);
-    addMessage('student', text);
-    wsService.sendJson({ type: 'set_mode', mode: 'question' });
-    wsService.sendJson({
-      type: 'text_input',
-      text,
-      course_player_question: true,
-    });
-  };
+    addMessage('student', propre);
+    wsService.sendJson({ type: 'text_input', text: propre, course_player_question: true });
+  }, [addMessage, connected]);
+
+  /**
+   * Le lecteur de cours passe en plein écran, ou en sort.
+   *
+   * Mêmes règles que le tableau en direct, mais avec ses propres témoins : le
+   * tableau peut s'ouvrir et se refermer pendant un cours, et il restaurerait
+   * alors une colonne de messages que le cours, lui, tient encore repliée.
+   */
+  const coursEnPleinEcranRef = useRef(false);
+  const chatAvantLeCoursRef = useRef(true);
+  const handleCourseFocusChange = useCallback((focus: boolean) => {
+    if (focus === coursEnPleinEcranRef.current) return;
+    coursEnPleinEcranRef.current = focus;
+    if (focus) {
+      chatAvantLeCoursRef.current = showChatRef.current;
+      setShowChat(false);
+    } else if (chatAvantLeCoursRef.current) {
+      setShowChat(true);
+    }
+  }, []);
 
   /** Quick-action: injecte le prompt dans le champ texte du VoiceInput. */
   const handleQuickInject = (text: string) => {
@@ -1950,48 +2009,66 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         </div>
       )}
 
-      {/* Progress Bar for Coaching Mode */}
-      {showProgressBar && learningObjectives.length > 0 && !isLibre && (
-        <div className="shrink-0 px-3 pt-2">
-          <LessonProgressBar
-            objectives={learningObjectives}
-            completedIndices={completedObjectives}
-            currentIndex={currentObjectiveIndex}
-            lessonTitle={lessonInfo?.title_fr || 'Leçon'}
-            isResumed={isResumedSession}
-            lessonIndex={lessonPosition.current}
-            totalLessons={lessonPosition.total}
-            currentEvidence={objectiveEvidence}
-          />
-        </div>
-      )}
+      {/* Deux bandeaux de progression occupaient ici le haut de l'écran : les
+          objectifs de la leçon, puis les cinq phases (« Question de départ »,
+          « J'observe »…). Le mode libre n'en a jamais eu, et c'est autant de
+          hauteur reprise par le cours lui-même. La progression reste lisible
+          là où elle se joue : la barre du lecteur de cours, et le bandeau de
+          fin de leçon juste en dessous. */}
 
-      {showProgressBar && learningObjectives.length > 0 && !isLibre && (
-        <PhaseProgress currentPhase={currentPhase} />
-      )}
-
-      {/* Lesson Completed Banner */}
+      {/* Lesson Completed Banner
+          Repliable : une fois lu, ce bandeau n'a plus rien à dire mais gardait
+          toute une rangée en haut du cours. La flèche le réduit à une ligne —
+          il ne disparaît jamais tout à fait, sinon « Continuer vers la leçon
+          suivante » deviendrait introuvable. */}
       {lessonCompleted && !isLibre && (
         <div className="shrink-0 px-3 pt-2">
-          <div className="rounded-xl bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-400/40 px-4 py-3 flex items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">🎉</div>
-              <div>
-                <div className="text-emerald-300 font-semibold text-sm">Leçon terminée !</div>
-                <div className="text-emerald-200/70 text-xs">
-                  {nextLesson
-                    ? `Prochaine étape : ${nextLesson.title_fr}`
-                    : 'Tu as validé toutes les leçons de ce chapitre.'}
+          {bandeauFinOuvert ? (
+            <div className="rounded-xl bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-400/40 px-4 py-3 flex items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">🎉</div>
+                <div>
+                  <div className="text-emerald-300 font-semibold text-sm">Leçon terminée !</div>
+                  <div className="text-emerald-200/70 text-xs">
+                    {nextLesson
+                      ? `Prochaine étape : ${nextLesson.title_fr}`
+                      : 'Tu as validé toutes les leçons de ce chapitre.'}
+                  </div>
                 </div>
               </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={nextLesson ? handleOpenNextLesson : handleEndSession}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-emerald-500/30"
+                >
+                  {nextLesson ? 'Continuer vers la leçon suivante' : 'Fermer la session'}
+                </button>
+                <button
+                  onClick={() => setBandeauFinOuvert(false)}
+                  className="w-7 h-7 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 flex items-center justify-center text-emerald-200 transition-colors"
+                  title="Replier le bandeau — gagner de la place"
+                  aria-expanded
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
+          ) : (
             <button
-              onClick={nextLesson ? handleOpenNextLesson : handleEndSession}
-              className="shrink-0 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-emerald-500/30"
+              onClick={() => setBandeauFinOuvert(true)}
+              className="w-full rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/25 px-3 py-1 flex items-center justify-center gap-2 text-[11px] text-emerald-200/80 transition-colors"
+              title="Afficher le bandeau de fin de leçon"
+              aria-expanded={false}
             >
-              {nextLesson ? 'Continuer vers la leçon suivante' : 'Fermer la session'}
+              <span>🎉</span>
+              <span>Leçon terminée</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
-          </div>
+          )}
         </div>
       )}
 
@@ -2218,17 +2295,20 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                 title="💡 Réponses suggérées"
               />
             )}
-            {!courseDeck && (
-              <QuickActions
-                actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
-                onInject={handleQuickInject}
-                onSend={handleQuickSend}
-                disabled={!connected || isProcessing}
-                theme="dark"
-                title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
-                collapsible
-              />
-            )}
+            {/* Les raccourcis étaient masqués dès qu'un cours scénarisé était
+                ouvert : l'élève n'avait plus rien pour relancer le tuteur. Le
+                mode libre, lui, les garde en toutes circonstances. */}
+            <QuickActions
+              actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
+              onInject={handleQuickInject}
+              onSend={handleQuickSend}
+              disabled={!connected || isProcessing}
+              theme="dark"
+              title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
+              collapsible
+              defaultCollapsed={Boolean(courseDeck)}
+            />
+
             <VoiceInput
               onTextSend={handleSendText}
               disabled={!connected}
@@ -2416,6 +2496,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                     }
                     scientificControl={scientificControl}
                     onSimulationUpdate={handleSimulationUpdate}
+                    onScriptEnd={() => revealPendingMedia(true)}
                   />
                 </div>
               </div>
@@ -2460,12 +2541,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   deck={courseDeck}
                   progress={courseProgress}
                   language={language}
+                  onNarration={handleCourseNarration}
                   onStudentQuestion={handleCourseQuestion}
-                  onResumeCourse={() => wsService.sendJson({ type: 'set_mode', mode: 'cours' })}
                   assistantReply={
                     [...conversation].reverse().find(message => message.speaker === 'ai')?.text ?? null
                   }
+                  onFocusChange={handleCourseFocusChange}
                   tutorBusy={isProcessing}
+                  scientificControl={scientificControl}
                   externalAudioActive={isSpeaking}
                   onSimulationUpdate={handleSimulationUpdate}
                   onComplete={() => setLessonCompleted(true)}
@@ -2516,18 +2599,16 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           {/* Voice input when chat is hidden */}
           {!showChat && (
             <div className="shrink-0 w-full max-w-3xl mx-auto px-3 sm:px-6 pb-3 sm:pb-4">
-              {!courseDeck && (
-                <QuickActions
-                  actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
-                  onInject={handleQuickInject}
-                  onSend={handleQuickSend}
-                  disabled={!connected || isProcessing}
-                  theme="dark"
-                  title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
-                  collapsible
-                  defaultCollapsed={showWhiteboard || showExercise || showMedia || showExamPanel}
-                />
-              )}
+              <QuickActions
+                actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}
+                onInject={handleQuickInject}
+                onSend={handleQuickSend}
+                disabled={!connected || isProcessing}
+                theme="dark"
+                title={isLibre ? 'Raccourcis' : 'Raccourcis leçon'}
+                collapsible
+                defaultCollapsed={showWhiteboard || showExercise || showMedia || showExamPanel || Boolean(courseDeck)}
+              />
               <VoiceInput
                 onTextSend={handleSendText}
                 disabled={!connected}

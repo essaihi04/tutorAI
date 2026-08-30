@@ -155,6 +155,26 @@ def test_une_ecriture_en_cours_de_seance_ne_defait_pas_le_choix_du_tuteur():
     assert ModeSession("coaching").courant == "cours"
 
 
+def test_le_scenario_ne_transforme_pas_libre_en_examen():
+    """Sur `/libre`, ne pas avoir de chapitre est le comportement attendu.
+
+    Une recommandation d'examen blanc peut rester dans le briefing, mais elle
+    n'a pas le droit d'écraser l'écran que l'élève vient explicitement d'ouvrir.
+    """
+    handler = _handler()
+    handler._mode = ModeSession("libre")
+
+    assert handler._scenario_peut_imposer_le_mode({"mode": "libre"}) is False
+    assert handler._mode.courant == "question"
+
+
+def test_le_scenario_garde_la_main_sur_une_ouverture_generique():
+    handler = _handler()
+
+    assert handler._scenario_peut_imposer_le_mode({"mode": "coaching"}) is True
+    assert handler._scenario_peut_imposer_le_mode({"lesson_id": "lesson-1"}) is False
+
+
 # ── Ce qui part vers le navigateur ────────────────────────────────
 
 def test_une_balise_valide_change_le_mode_et_previent_l_ecran():

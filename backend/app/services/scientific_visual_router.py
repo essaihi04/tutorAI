@@ -59,6 +59,18 @@ _MITOCHONDRIE_3D = re.compile(
     re.IGNORECASE,
 )
 
+# Le couplage excitation–contraction est une exception claire au schéma plat :
+# l'élève doit suivre un signal dans la profondeur de la fibre, puis observer
+# séparément le réticulum, le complexe troponine–tropomyosine et le sarcomère.
+# La demande doit toutefois exprimer un besoin 3D/profondeur pour ne pas
+# détourner une simple question de cours vers WebGL.
+_MUSCLE_EXCITATION_3D = re.compile(
+    r"(?=.*(?<!\w)muscle\w*(?!\w))"
+    r"(?=.*(?<!\w)(?:flux nerveux|potentiel d action|tubule t|reticulum sarcoplasmique|calcium|troponine|tropomyosine|actomyosine|contraction musculaire)(?!\w))"
+    r"(?=.*(?<!\w)(?:3d|trois dimensions|profondeur|rotation|tourn\w*|zoom\w*|camera|manipul\w*|simulation)(?!\w))",
+    re.IGNORECASE,
+)
+
 def _mots(*mots: str) -> re.Pattern[str]:
     """Un motif qui admet le pluriel, comme le registre des schémas le fait.
 
@@ -277,6 +289,8 @@ def recommend_generated_engine(context: str) -> str:
     folded = _fold(context)
     if _MITOCHONDRIE_3D.search(folded):
         return "three"
+    if _MUSCLE_EXCITATION_3D.search(folded):
+        return "three"
     if _DYNAMIC.search(folded) and _MECANIQUE.search(folded):
         return "matter"
     for engine, pattern in _ENGINE_PATTERNS:
@@ -355,6 +369,20 @@ def route_scientific_visual(context: str, demande: str | None = None) -> dict[st
             "avoid": [],
             "score": 0,
             "explicit": visual_request_is_explicit(context),
+        }
+
+    # Une demande explicite de profondeur pour le mécanisme musculaire doit
+    # passer avant le schéma de sarcomère : celui-ci est juste, mais il ne
+    # montre ni le trajet du potentiel d'action ni les changements de
+    # conformation qui intéressent l'élève.
+    if _MUSCLE_EXCITATION_3D.search(_fold(f"{context} {ou_lire}")):
+        return {
+            "source": "model_3d",
+            "model_id": "muscle_excitation_contraction",
+            "title": "Couplage excitation–contraction du muscle 3D",
+            "engine": "three",
+            "score": 0,
+            "explicit": True,
         }
 
     # ── Une image fixe ne répond pas à « fais-la bouger » ──
@@ -462,6 +490,32 @@ def route_scientific_visual(context: str, demande: str | None = None) -> dict[st
 def build_visual_route_prompt(context: str, demande: str | None = None) -> str:
     """Instruction compacte injectée avant le prompt général du tuteur."""
     route = route_scientific_visual(context, demande)
+
+    if route["source"] == "model_3d":
+        return (
+            "[MODÈLE 3D DU COUPLAGE EXCITATION–CONTRACTION DISPONIBLE]\n"
+            "La demande porte explicitement sur le trajet nerveux et le mécanisme "
+            "musculaire en 3D. Produis maintenant une ligne `scientific` dans "
+            "`show_board` avec exactement le modèle versionné "
+            "`muscle_excitation_contraction`, `autoplay:false`, `labels:true`, "
+            '`focus:"all"` et `step`:0.\n'
+            "Cette scène zoome du muscle entier vers le faisceau, la fibre, la "
+            "myofibrille, le sarcomère puis la tête de myosine. Elle s'arrête à "
+            "chaque étape : potentiel d'action, tubule T, "
+            "réticulum sarcoplasmique, Ca²⁺, troponine, déplacement de la "
+            "tropomyosine, pont actomyosine, coup de force, ATP → ADP + Pi et "
+            "recapture du Ca²⁺ par SERCA. La scène montre seulement les noms courts "
+            "des constituants en français, sans interprétation ni liste d'étapes : "
+            "explique toi-même à l'élève "
+            "l'élément correspondant au `step`, puis pilote le zoom suivant. "
+            "Repères : 0=muscle, 1=faisceau, 2=fibre, 3=myofibrille, "
+            "4=fibres striées réelles, 5=sarcomère, 6=jonction neuromusculaire, "
+            "7=tubule T, 8=libération du Ca²⁺, 9=troponine C–Ca²⁺, "
+            "10=tropomyosine déplacée, 11=pont actomyosine, 12=coup de force, "
+            "13=fixation ATP et détachement, 14=hydrolyse ATP et réarmement, "
+            "15=SERCA et relâchement. "
+            "N'envoie pas une image fixe à la place."
+        )
 
     if route["source"] == "mouvement":
         lignes = [

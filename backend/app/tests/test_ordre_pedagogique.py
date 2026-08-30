@@ -69,6 +69,19 @@ def test_sans_simulation_dans_le_cours_on_descend_d_un_cran():
     assert decision["resource_type_for_suggestion"] == "image"
 
 
+def test_un_inventaire_vide_ne_choisit_pas_un_media_inexistant():
+    """La question libre charge bien l'inventaire, mais il peut être vide.
+
+    Ce n'est pas « disponibilité inconnue » : le tableau et son catalogue
+    local doivent reprendre la main au lieu d'émettre une ouverture vide.
+    """
+    decision = _decide("explanation", disponibles=[])
+
+    assert decision["primary_mode"] == "whiteboard"
+    assert decision["resource_type_for_suggestion"] is None
+    assert decision["auto_present_resource"] is False
+
+
 def test_une_demande_explicite_reste_servie_telle_quelle():
     """« dessine-moi ça » demande le tableau, pas une simulation — l'ordre par
     défaut ne s'applique qu'à défaut de demande."""

@@ -84,8 +84,10 @@ _MAX_OFFRES = 64
 #: PROMESSE, et elle n'a le droit d'exister que dans une réponse qui porte
 #: réellement le bloc correspondant.
 _ANNONCE = re.compile(
-    r"(?:regarde|voici|voila|voilà)\s+(?:le\s+|ce\s+)?(?:tableau|schema|schéma|figure)"
-    r"|j(?:e vais|'ai)\s+(?:te\s+)?(?:montrer|dessiner|ecrire|écrire|tracer)"
+    r"(?:regarde|observe|voici|voila|voilà)\s+(?:le\s+|la\s+|ce\s+|cette\s+)?"
+    r"(?:tableau|schema|schéma|figure|scene|scène|simulation)"
+    r"|j(?:e vais|'ai)\s+(?:te\s+)?(?:montrer|dessiner|ecrire|écrire|tracer|lancer)"
+    r"|je\s+lance\s+(?:la\s+|une\s+)?(?:scene|scène|simulation)"
     r"|(?:شوف|كتبت ليك|غادي نرسم|غادي نكتب|رسمت ليك)",
     re.IGNORECASE,
 )
@@ -242,6 +244,7 @@ def noter_tour(
         _GESTES_QUI_MONTRENT = {
             "show_board", "show_live", "show_draw", "show_schema",
             "board", "live", "live_board", "teach_live", "draw",
+            "show_media",
         }
         a_envoye = bool(
             envoi["schemas"]

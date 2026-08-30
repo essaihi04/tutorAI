@@ -12,11 +12,12 @@ from typing import Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.llm_service import llm_service
 from app.services.resource_decision_service import resource_decision_service
-from app.services.schema_catalog import SCHEMA_IDS, match_schema
+from app.services.schema_catalog import SCHEMA_IDS, match_schema, schema_title
 from app.services.schema_gaps import noter_manque
 from app.services.scientific_visual_skill import (
     MITOCHONDRION_3D_FALLBACK_PATH,
     MITOCHONDRION_3D_SPEC,
+    MODELES_3D,
     normalize_scientific_visual,
     scientific_visual_quality,
 )
@@ -40,6 +41,12 @@ from app.services.lesson_phase import PhaseLesson
 from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
 from app.services.scenario_service import Alternance, Progression
+from app.services.routeur_pedagogique import (
+    INTRODUCTION,
+    consigne_d_etape,
+    forme_attendue,
+    router as router_pedagogique,
+)
 from app.services.teaching_tactics import BanditTactiques, marquer_source
 from app.services import humanisation
 from app.services import tag_decoder
@@ -837,6 +844,15 @@ _AVEUX_DE_BLOCAGE = (
     "j'ai pas compris", "compris",
 )
 
+#: L'élève réclame lui-même une simulation. Le serveur valide le choix du
+#: MODÈLE, pas celui de l'élève : quand c'est lui qui la demande, la question
+#: « manipuler sert-il vraiment ? » ne se pose plus.
+_CLAME_UNE_SIMULATION = re.compile(
+    r"(simulation|simulateur|simule|manipul|experience|experimente|"
+    r"laboratoire|labo)\w*"
+)
+
+
 #: Un pictogramme par réponse, pas un par phrase.
 #:
 #: Le prompt les interdit déjà dans le texte parlé ; l'échange du 18 août en
@@ -855,6 +871,82 @@ _TYPES_EN_BLOC = frozenset({
     "table", "graph", "diagram", "mindmap",
     "qcm", "vrai_faux", "association", "illustration",
 })
+
+
+#: Les noms de matière portés par la base, ramenés aux quatre étiquettes que
+#: `_detect_subject_from_text` renvoie. Sans ce pont, comparer la matière
+#: demandée à celle d'une ressource échouait toujours : la base dit « Sciences
+#: de la Vie et de la Terre (SVT) » là où le détecteur dit « SVT ».
+_MATIERES_CANONIQUES = (
+    ("svt", "SVT"),
+    ("vie et de la terre", "SVT"),
+    ("math", "Mathématiques"),
+    ("physique", "Physique"),
+    ("physics", "Physique"),
+    ("chimie", "Chimie"),
+)
+
+
+def _normaliser_matiere(nom: object) -> str | None:
+    """L'étiquette canonique d'une matière, ou rien si le nom est inconnu."""
+    if not isinstance(nom, str) or not nom.strip():
+        return None
+    reduit = _sans_diacritiques(nom).lower()
+    for fragment, canonique in _MATIERES_CANONIQUES:
+        if fragment in reduit:
+            return canonique
+    return None
+
+
+#: Les scènes du catalogue portent leur matière en tête de leur identifiant.
+#: C'est la seule chose qui permette d'abaisser leur seuil de rapprochement
+#: sans rouvrir la porte au hors-sujet : une scène à un seul point, mais de la
+#: BONNE matière, vaut mieux qu'une image fixe.
+_MATIERE_PAR_PREFIXE: dict[str, str] = {
+    "phys": "Physique",
+    "chem": "Chimie",
+    "svt": "SVT",
+    "math": "Mathématiques",
+}
+
+
+def _matiere_du_visuel(identifiant: str) -> str | None:
+    """La matière d'une scène ou d'un modèle, lue dans son identifiant."""
+    if not isinstance(identifiant, str) or "_" not in identifiant:
+        return None
+    return _MATIERE_PAR_PREFIXE.get(identifiant.split("_", 1)[0])
+
+
+def _est_croquis(resource: dict) -> bool:
+    """Ce média est-il un croquis de prof, à tracer sur le tableau en direct ?
+
+    Ces neuf entrées portent `transparent_background` : elles n'ont pas de
+    fichier, seulement un `schema_id`, et se posent SUR le tableau pendant que
+    le tuteur écrit. Les faire concourir avec les simulations les envoyait à
+    l'écran comme une image ordinaire, hors du seul moment où elles ont un
+    sens — celui où l'élève regarde la craie avancer.
+    """
+    metadata = resource.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return (
+        metadata.get("resource_role") == "teacher_sketch"
+        or metadata.get("render_target") == "live_board"
+    )
+
+
+def _matiere_du_chemin(resource: dict) -> str | None:
+    """La matière lue dans le chemin du média, quand la leçon ne la dit pas.
+
+    Les fichiers sont rangés par matière — `/media/simulations/svt/…`,
+    `/media/simulations/physics/…`. C'est un repli, pas la source de vérité :
+    une ressource sans fichier local n'en a pas.
+    """
+    chemin = resource.get("file_path") or resource.get("external_url") or ""
+    if not isinstance(chemin, str):
+        return None
+    trouve = re.search(r"/media/[^/]+/([^/]+)/", chemin)
+    return _normaliser_matiere(trouve.group(1)) if trouve else None
 
 
 class SessionHandler:
@@ -904,10 +996,37 @@ class SessionHandler:
         # vaut retomber sur la darija que sur du français.
         self.language: str = "mixed"
         self.lesson_resources: list[dict] = []  # Cached lesson resources
+        # Matière de chaque leçon, pour ne pas ouvrir un labo de SVT quand
+        # l'élève demande une scène de physique. En mode libre la table est
+        # chargée en entier, toutes matières confondues.
+        self.lesson_subjects: dict[str, str] = {}
+        # Vrai quand la dernière simulation attend la fin du tableau pour
+        # prendre la surface : le tableau ne doit alors pas être masqué.
+        self._media_en_attente: bool = False
+        # Les surfaces déjà servies pour le micro-objectif en cours. Elles
+        # empêchent de reposer la même image à chaque tour faute de mieux, et
+        # se vident dès que l'objectif change.
+        self.surfaces_du_micro_objectif: list[str] = []
+        #: La dernière étape décidée par le routeur, lue par le prompt.
+        self.derniere_etape = None
+        #: La matière du micro-objectif en cours. En changer rouvre toutes
+        #: les surfaces.
+        self._matiere_du_micro_objectif: str | None = None
+        #: Le plan de la séance a-t-il été annoncé pour la notion en cours ?
+        #: En question libre l'élève arrive sans briefing : il faut lui dire
+        #: d'où il part et où on l'emmène avant d'ouvrir quoi que ce soit.
+        self._plan_annonce: bool = False
+        #: Vrai pendant le seul tour de présentation. Aucun support ne s'ouvre
+        #: alors : le tableau porte le plan, et rien d'autre.
+        self._tour_d_introduction: bool = False
         self.current_lesson_id: str = None
         self.simulation_state: dict = {}  # Track current simulation state
         self.simulation_history: list[dict] = []  # Track all simulation actions
         self.recent_resource_modes: list[str] = []
+        # Surface réellement ouverte par le dernier repli de ressource.
+        # `True` seul ne suffit pas : un preset ou un schéma vit au tableau et
+        # ne doit surtout pas être masqué comme un média HTML juste après.
+        self._last_resource_surface: str | None = None
         #: Les visuels DÉJÀ apparus à l'écran, du plus ancien au plus récent.
         #:
         #: Le tuteur affiche désormais une figure sans attendre que l'élève la
@@ -956,6 +1075,19 @@ class SessionHandler:
         lever `phase_order.index()` dans la progression des objectifs.
         """
         self._phase.definir(valeur)
+
+    def _scenario_peut_imposer_le_mode(self, message: dict) -> bool:
+        """Le conseil adaptatif peut-il choisir l'activité d'ouverture ?
+
+        `/libre` est déjà un choix explicite de l'élève. L'absence de chapitre
+        y est normale, pas un blanc que le scénario doit remplir avec sa
+        recommandation (souvent un examen blanc).
+        """
+        return (
+            self._mode.courant != "question"
+            and not message.get("chapter_id")
+            and not message.get("lesson_id")
+        )
 
     def _sanitize_history_content(self, content: str) -> str:
         """Remove heavy command payloads before re-sending history to the LLM."""
@@ -1261,6 +1393,15 @@ class SessionHandler:
             "interférence", "diffraction", "lentille", "miroir", "quantique", "photons",
             "photoélectrique", "radioactivité", "radioactivite", "noyau atomique",
             "fission", "fusion nucléaire", "fusion nucleaire",
+            # ── Mécanique du point ──
+            # Absents jusqu'au 28 août 2026 : « explique-moi la chute libre
+            # d'une bille » ne marquait AUCUN point de physique, la matière
+            # sortait indéterminée, et la bibliothèque ouvrait un labo de SVT.
+            "chute libre", "chute verticale", "gravité", "gravite", "pesanteur",
+            "gravitation", "projectile", "cinématique", "cinematique",
+            "trajectoire", "quantité de mouvement", "quantite de mouvement",
+            "référentiel", "referentiel", "ressort", "oscillation", "oscillations",
+            "longueur d'onde", "célérité", "celerite", "diapason",
         ]
         chem_kw = [
             "chimie", "chim", "acide", "base", "ph", "titrage", "réaction", "reaction",
@@ -1812,7 +1953,10 @@ class SessionHandler:
             libre_journal.retenir_offre(
                 str(self.student_id),
                 demande,
-                carte_des_visuels(contexte, demande, self.lesson_resources),
+                carte_des_visuels(
+                contexte, demande, self.lesson_resources,
+                lecon_rattachee=True,
+            ),
                 route_scientific_visual(contexte, demande),
             )
 
@@ -1918,6 +2062,9 @@ class SessionHandler:
             bloc_schema = self._bloc_schema_disponible()
             if bloc_schema:
                 base_prompt = bloc_schema + "\n\n" + base_prompt
+            bloc_etape = self._bloc_routeur()
+            if bloc_etape:
+                base_prompt = bloc_etape + "\n\n" + base_prompt
             return base_prompt
         prompt = llm_service.build_system_prompt(
             subject=ctx.get("subject", "Physique"),
@@ -1936,7 +2083,10 @@ class SessionHandler:
             scenario=self.scenario,
         )
         bloc_schema = self._bloc_schema_disponible()
-        return f"{bloc_schema}\n\n{prompt}" if bloc_schema else prompt
+        if bloc_schema:
+            prompt = f"{bloc_schema}\n\n{prompt}"
+        bloc_etape = self._bloc_routeur()
+        return f"{bloc_etape}\n\n{prompt}" if bloc_etape else prompt
 
     async def handle_connection(self):
         """Main WebSocket handler loop."""
@@ -2913,6 +3063,12 @@ RÈGLES:
         if needs_drawing or preferred_resource_type == "whiteboard":
             max_tokens = max(max_tokens, 2000)
 
+        # L'étape se décide AVANT que le modèle parle : c'est elle qui lui dit
+        # quelle surface il tient, quelle action il doit demander et à quoi il
+        # verra que ça a marché. Décidée après, elle n'aurait servi qu'au tour
+        # suivant — le modèle aurait déjà promis autre chose.
+        self._preparer_l_etape(student_text)
+
         _safe_log(
             f"[Decision] primary={decision.get('primary_mode')} resource={decision.get('resource_type_for_suggestion')} "
             f"reason={decision.get('reason_code')} confidence={decision.get('confidence')} max_tokens={max_tokens}"
@@ -3019,6 +3175,9 @@ RÈGLES:
             student_text, ai_response, prof_ctx
         ))
 
+        # Réinitialisé à chaque tour : le journal ne doit pas attribuer au tour
+        # courant la surface ouverte au tour précédent.
+        self._last_resource_surface = None
         media_already_sent = False
         resource_type_for_suggestion = decision.get("resource_type_for_suggestion")
         # Skip auto-suggest for exams - use exam panel system instead (exam_exercise WebSocket messages)
@@ -3030,8 +3189,8 @@ RÈGLES:
             media_already_sent = await self._auto_suggest_resource(
                 preferred_resource_type=resource_type_for_suggestion,
             )
-            if media_already_sent:
-                await self.websocket.send_json({"type": "hide_whiteboard"})
+            if media_already_sent and self._last_resource_surface == "media":
+                await self._masquer_tableau_apres_media()
             else:
                 _safe_log(
                     "[Auto Suggest] Aucune ressource ouverte : le tableau reste en place"
@@ -3358,9 +3517,11 @@ RÈGLES:
             # demandé de précis. S'il a ouvert un chapitre, c'est son choix
             # qui commande : lui imposer autre chose serait le pire des
             # tuteurs autonomes — celui qui n'écoute pas.
-            if directive and not message.get("chapter_id") and not message.get("lesson_id"):
+            if directive and self._scenario_peut_imposer_le_mode(message):
                 self._mode.demander(directive.mode, par="tuteur")
                 _safe_log(f"[Session Init] Scénario impose le mode {self._mode.courant}")
+            elif directive and self._mode.courant == "question":
+                _safe_log("[Session Init] Mode /libre conservé malgré la recommandation du scénario")
         except Exception as exc:
             _safe_log(f"[Session Init] Scénario indisponible: {exc}")
             self.scenario = ""
@@ -4630,6 +4791,50 @@ RÈGLES :
         
         _safe_log(f"[AI Commands] Checking AI response for commands... (force_schema={force_schema})")
         _safe_log(f"[AI Commands] Response preview: {ai_response[:200]}...")
+        ctx = self.session_context or {}
+        sujet_reprise = (
+            (student_text or "").strip()
+            or self._derniere_demande()
+            or str(ctx.get("lesson_title") or ctx.get("chapter_title") or ctx.get("subject") or "").strip()
+            or "le contenu pédagogique de la réponse précédente"
+        )[:240]
+        regle_reprise = (
+            f"SUJET À CONSERVER : {sujet_reprise}. "
+            "Reprends uniquement le contenu scientifique déjà présent et reste "
+            "dans Mathématiques, Physique, Chimie ou SVT. N'introduis aucun "
+            "exemple informatique, UML, bibliothèque ou autre domaine. Chaque "
+            "ligne utilise les clés `type` et `content` (jamais `text`). "
+        )
+
+        # Un tour ne doit être refermé dans le journal qu'après son dernier
+        # repli. En particulier, une prose sans <ui> peut encore produire un
+        # <live>, réussir une relance structurée ou être convertie en tableau.
+        # Journaliser avant ces étapes créerait un faux « rien montré », puis
+        # une seconde ligne quand la relance réussit.
+        tour_journalise = False
+
+        def _journaliser_tour(actions: list[dict[str, Any]] | None = None) -> None:
+            nonlocal tour_journalise
+            if tour_journalise or self.session_mode not in ("libre", "explain"):
+                return
+
+            envois = list(actions or [])
+            # Le moteur de décision peut avoir affiché la ressource juste avant
+            # l'analyse de la réponse du modèle. `suppress_media` signifie alors
+            # « ne la recouvre pas », pas « rien n'a été montré ».
+            surface = getattr(self, "_last_resource_surface", None)
+            if suppress_media and surface:
+                envois.append({
+                    "action": "show_media" if surface == "media" else "show_board"
+                })
+
+            libre_journal.noter_tour(
+                str(self.student_id),
+                ai_response,
+                envois,
+                mode=self.session_mode,
+            )
+            tour_journalise = True
 
         # Le tuteur décide de ce que l'élève fait maintenant. Traité en
         # PREMIER : les commandes qui suivent (tableau, panneau d'examen)
@@ -4676,7 +4881,11 @@ RÈGLES :
             self.conversation_history.append({"role": "assistant", "content": ai_response})
             
             # Inject correction message
-            correction_msg = "⚠️ ERREUR: Tu as utilisé un placeholder au lieu de générer le JSON complet. Tu DOIS générer le JSON complet maintenant. Pas de [ui], pas de [tableau], pas d'excuses - génère le <ui>{...}</ui> avec le payload complet immédiatement."
+            correction_msg = (
+                regle_reprise
+                + "ERREUR: tu as utilisé un placeholder. Génère maintenant le "
+                "<ui>{...}</ui> complet, sans [ui], [tableau], excuse ni nouveau sujet."
+            )
             self.conversation_history.append({"role": "user", "content": correction_msg})
             
             # Retry generation with higher token limit
@@ -4705,6 +4914,12 @@ RÈGLES :
             fallback_ui = re.search(r'<ui>(.*)', ai_response, re.DOTALL)
             if fallback_ui:
                 ui_blocks = [fallback_ui.group(1)]
+
+        # Existe même sans bloc : la prose pure est précisément le cas que le
+        # journal doit voir. `journal_visual_actions` reçoit les replis que le
+        # serveur a réellement affichés après une action media/open.
+        ui_actions = []
+        journal_visual_actions = []
 
         if ui_blocks:
             def try_fix_ui_json(s):
@@ -4807,8 +5022,6 @@ RÈGLES :
                 except json.JSONDecodeError:
                     pass
                 return None
-
-            ui_actions = []
 
             for block_idx, ui_json_str in enumerate(ui_blocks):
                 ui_json_str = str(ui_json_str).strip().replace('</ui>', '').strip()
@@ -4947,6 +5160,8 @@ RÈGLES :
                         retry_messages.append({
                             "role": "user",
                             "content": (
+                                regle_reprise
+                                +
                                 "ERREUR JSON CRITIQUE: Le bloc <ui> est malformé ou tronqué. "
                                 "Génère un nouveau bloc <ui> COMPLET avec la STRUCTURE CORRECTE:\n"
                                 '<ui>{"actions":[{"type":"whiteboard","action":"show_board","payload":{"title":"Titre","lines":[{"type":"title","content":"..."},{"type":"text","content":"..."}]}}]}</ui>\n'
@@ -4981,26 +5196,6 @@ RÈGLES :
                         except Exception as e:
                             _safe_log(f"[AI Commands] UI parse retry failed: {e}")
                             self._ui_parse_retry_count = 0
-            # ── Seconde moitié du journal : ce qu'il en a FAIT ──
-            #
-            # Ici, et seulement ici, la réponse du modèle et les actions
-            # décodées sont disponibles ensemble. Le rapprochement avec
-            # l'offre retenue plus haut donne les trois défauts qu'on ne
-            # savait pas nommer : ressource ignorée, tableau promis mais
-            # jamais envoyé, identifiant inventé.
-            #
-            # APRÈS la reprise sur bloc `<ui>` malformé, pas avant : celle-ci
-            # relance le traitement complet puis sort. Journaliser en amont
-            # compterait la tentative ratée ET sa reprise, et le bilan
-            # accuserait le tuteur deux fois pour un seul tour.
-            if self.session_mode in ("libre", "explain"):
-                libre_journal.noter_tour(
-                    str(self.student_id),
-                    ai_response,
-                    ui_actions,
-                    mode=self.session_mode,
-                )
-
             ui_actions_handled = False
 
             # Collect all board payloads to merge them into one combined board
@@ -5209,7 +5404,18 @@ RÈGLES :
                         continue
                     if action_name in {"show_schema", "schema", "open_schema"}:
                         schema_id = action.get("schema_id") or (payload.get("schema_id") if isinstance(payload, dict) else None)
-                        if schema_id:
+                        if schema_id and self._support_interdit_ce_tour(f"Schéma {schema_id}"):
+                            ui_actions_handled = True
+                        elif schema_id and self._deja_a_l_ecran(schema_id):
+                            # Le serveur vient de le poser par le repli du
+                            # catalogue ; le modèle le redemande dans le même
+                            # tour. Le renvoyer effacerait le tableau pour le
+                            # redessiner à l'identique, en pleine phrase.
+                            _safe_log(
+                                f"[AI Commands] Schéma {schema_id} déjà à l'écran — pas de second envoi"
+                            )
+                            ui_actions_handled = True
+                        elif schema_id:
                             await self.websocket.send_json({"type": "hide_exercise"})
                             await self.websocket.send_json({"type": "hide_media"})
                             await self.websocket.send_json({"type": "clear_whiteboard"})
@@ -5219,6 +5425,10 @@ RÈGLES :
                             })
                             self._noter_visuel_affiche(schema_id)
                             self._remember_mode("whiteboard")
+                            journal_visual_actions.append({
+                                "action": "show_schema",
+                                "schema_id": schema_id,
+                            })
                             ui_actions_handled = True
                         else:
                             _safe_log(f"[AI Commands][WARN] whiteboard schema action missing schema_id. action={action!r}")
@@ -5247,6 +5457,7 @@ RÈGLES :
                                 "steps": draw_steps,
                             })
                             self._remember_mode("whiteboard")
+                            journal_visual_actions.append({"action": "show_draw"})
                             ui_actions_handled = True
                         else:
                             _safe_log(f"[AI Commands][WARN] whiteboard draw action had no valid steps. action={action!r}")
@@ -5265,6 +5476,10 @@ RÈGLES :
                                 "steps": live_steps,
                             })
                             self._remember_mode("whiteboard")
+                            journal_visual_actions.append({
+                                "action": "show_live",
+                                "payload": {"steps": live_steps},
+                            })
                             ui_actions_handled = True
                             _safe_log(f"[AI Commands] Live teaching script sent: '{live_title}' ({len(live_steps)} steps)")
                         else:
@@ -5277,7 +5492,9 @@ RÈGLES :
                         ui_actions_handled = True
 
                 elif action_type == "media":
-                    if action_name in {"open", "show"}:
+                    if action_name in {"open", "show"} and self._support_interdit_ce_tour("Média"):
+                        ui_actions_handled = True
+                    elif action_name in {"open", "show"}:
                         resource_source = action.get("payload") if isinstance(action.get("payload"), dict) else action
                         resource_type = str(resource_source.get("resource_type", resource_source.get("resource", "image"))).lower().strip()
                         if not resource_type:
@@ -5291,8 +5508,11 @@ RÈGLES :
                                 "simulation" if resource_type == "simulation" else "image"
                             ),
                         )
-                        if ouverte:
-                            await self.websocket.send_json({"type": "hide_whiteboard"})
+                        if ouverte and self._last_resource_surface == "media":
+                            await self._masquer_tableau_apres_media()
+                            journal_visual_actions.append({"action": "show_media"})
+                        elif ouverte:
+                            journal_visual_actions.append({"action": "show_board"})
                         elif resource_type == "simulation":
                             self._noter_simulation_introuvable()
                         ui_actions_handled = True
@@ -5301,12 +5521,17 @@ RÈGLES :
                         ui_actions_handled = True
 
                 elif action_type == "simulation":
-                    if action_name in {"open", "show"}:
+                    if action_name in {"open", "show"} and self._support_interdit_ce_tour("Simulation"):
+                        ui_actions_handled = True
+                    elif action_name in {"open", "show"}:
                         ouverte = await self._auto_suggest_resource(
                             preferred_resource_type="simulation",
                         )
-                        if ouverte:
-                            await self.websocket.send_json({"type": "hide_whiteboard"})
+                        if ouverte and self._last_resource_surface == "media":
+                            await self._masquer_tableau_apres_media()
+                            journal_visual_actions.append({"action": "show_media"})
+                        elif ouverte:
+                            journal_visual_actions.append({"action": "show_board"})
                         else:
                             self._noter_simulation_introuvable()
                         ui_actions_handled = True
@@ -5405,12 +5630,23 @@ RÈGLES :
                 await self.websocket.send_json({"type": "clear_whiteboard"})
 
                 await self._send_board_or_live(merged_title, merged_lines, context="<ui> show_board")
+                journal_visual_actions.append({
+                    "action": "show_board",
+                    "payload": {"lines": merged_lines},
+                })
 
             for control in collected_scientific_controls:
                 await self.websocket.send_json({
                     "type": "scientific_control",
                     **control,
                 })
+
+            # ── Seconde moitié du journal : ce qui est vraiment parti ──
+            #
+            # Après l'exécution des actions : un `media/open` peut échouer puis
+            # descendre vers un preset ou un schéma. Le noter avant cette boucle
+            # confondrait encore « geste demandé » et « chose affichée ».
+            _journaliser_tour(journal_visual_actions)
 
             if ui_actions_handled:
                 # ── ALWAYS run exam exercise detection even when UI actions
@@ -5477,6 +5713,7 @@ RÈGLES :
                 })
                 self._remember_mode("whiteboard")
                 _safe_log(f"[AI Commands] Live teaching script sent (tag): '{live_title}' ({len(live_steps)} steps)")
+                _journaliser_tour([{"action": "show_live"}])
                 return
             else:
                 _safe_log("[AI Commands][WARN] <live> tag present but no valid steps could be extracted")
@@ -6034,7 +6271,12 @@ RÈGLES :
                 reason = "force_schema=True" if force_schema and not has_drawing_intent else "drawing intent in text"
                 _safe_log(f"[AI Commands] Attempting auto-match schema (reason: {reason})")
                 auto_schema_id, auto_score = self._auto_match_schema()
-                if auto_schema_id and auto_score >= 3:
+                if auto_schema_id and self._deja_a_l_ecran(auto_schema_id):
+                    _safe_log(
+                        f"[AI Commands] Schéma {auto_schema_id} déjà à l'écran — pas de second envoi"
+                    )
+                    schema_handled = True
+                elif auto_schema_id and auto_score >= 3:
                     _safe_log(f"[AI Commands] Auto-matched schema: {auto_schema_id} (score={auto_score})")
                     await self.websocket.send_json({"type": "hide_media"})
                     await self.websocket.send_json({"type": "clear_whiteboard"})
@@ -6054,10 +6296,20 @@ RÈGLES :
                 _safe_log(f"[AI Commands] Media trigger detected but suppressed (already sent explicit media)")
             else:
                 _safe_log(f"[AI Commands] Media trigger detected in AI response")
-                await self.websocket.send_json({"type": "hide_whiteboard"})
-                await self._auto_suggest_resource()
+                ouverte = await self._auto_suggest_resource()
+                if ouverte:
+                    journal_visual_actions.append({
+                        "action": (
+                            "show_media"
+                            if self._last_resource_surface == "media"
+                            else "show_board"
+                        )
+                    })
+                if ouverte and self._last_resource_surface == "media":
+                    await self._masquer_tableau_apres_media()
 
         # ── 5. <draw> canvas drawing — suppressed when exam mode active ──
+        draw_sent = False
         if draw_data_match and not schema_handled and not should_suppress_board:
             draw_title_match = re.search(r'DESSINER_SCHEMA:(.+?)(?:\n|$)', ai_response)
             draw_title = draw_title_match.group(1).strip() if draw_title_match else "Schema"
@@ -6102,6 +6354,7 @@ RÈGLES :
                     "steps": draw_steps
                 })
                 self._remember_mode("whiteboard")
+                draw_sent = True
             else:
                 _safe_log(f"[AI Commands][ERROR] Failed to parse draw JSON even after fix attempts. Preview: {draw_json_str[:200]}")
 
@@ -6118,8 +6371,17 @@ RÈGLES :
         # OUVRIR_IMAGE — open relevant image from lesson resources
         if "OUVRIR_IMAGE" in ai_response:
             _safe_log("[AI Commands] OUVRIR_IMAGE detected")
-            await self.websocket.send_json({"type": "hide_whiteboard"})
-            await self._auto_suggest_resource(preferred_resource_type="image")
+            ouverte = await self._auto_suggest_resource(preferred_resource_type="image")
+            if ouverte:
+                journal_visual_actions.append({
+                    "action": (
+                        "show_media"
+                        if self._last_resource_surface == "media"
+                        else "show_board"
+                    )
+                })
+            if ouverte and self._last_resource_surface == "media":
+                await self._masquer_tableau_apres_media()
 
         # FERMER_IMAGE — close image/media
         if "FERMER_IMAGE" in ai_response or "CACHER_MEDIA" in ai_response:
@@ -6129,8 +6391,19 @@ RÈGLES :
         # OUVRIR_SIMULATION — open relevant simulation
         if "OUVRIR_SIMULATION" in ai_response:
             _safe_log("[AI Commands] OUVRIR_SIMULATION detected")
-            await self.websocket.send_json({"type": "hide_whiteboard"})
-            await self._auto_suggest_resource(preferred_resource_type="simulation")
+            ouverte = await self._auto_suggest_resource(preferred_resource_type="simulation")
+            if ouverte:
+                journal_visual_actions.append({
+                    "action": (
+                        "show_media"
+                        if self._last_resource_surface == "media"
+                        else "show_board"
+                    )
+                })
+            if ouverte and self._last_resource_surface == "media":
+                await self._masquer_tableau_apres_media()
+            elif not ouverte:
+                self._noter_simulation_introuvable()
 
         # FERMER_SIMULATION — close simulation
         if "FERMER_SIMULATION" in ai_response:
@@ -6248,6 +6521,7 @@ RÈGLES :
                 "exercise_id": exercise_id
             })
             self._remember_mode("exercise")
+            _journaliser_tour(journal_visual_actions)
             return
 
         # ══════════════════════════════════════════════════════════════════════════
@@ -6256,6 +6530,7 @@ RÈGLES :
         #    SKIP if media was already displayed (suppress_media=True) to avoid
         #    overwriting an image/simulation that was just shown.
         # ══════════════════════════════════════════════════════════════════════════
+        auto_board_sent = False
         has_any_visual = (
             board_handled
             or schema_handled
@@ -6350,6 +6625,7 @@ RÈGLES :
             )
             if is_conversational and not has_educational_content and not force_schema and not promesse_de_tableau:
                 _safe_log(f"[AI Commands] Skipping auto-board fallback (conversational response, {len(clean_text)} chars)")
+                _journaliser_tour(journal_visual_actions)
                 return
 
             if len(clean_text) > 20:
@@ -6371,12 +6647,16 @@ RÈGLES :
                         retry_prompts = [
                             # Retry 1: Gentle reminder
                             (
+                                regle_reprise
+                                +
                                 "Tu n'as pas généré le contenu visuel demandé. Réessaie maintenant en produisant UNIQUEMENT le contenu visuel final. "
                                 "Génère un bloc <ui>{\"actions\":[{\"type\":\"whiteboard\",\"action\":\"show_board\",\"payload\":{\"title\":\"...\",\"lines\":[...]}}]}</ui> complet. "
                                 "Ne paraphrase pas. Donne directement le JSON structuré."
                             ),
                             # Retry 2: More strict
                             (
+                                regle_reprise
+                                +
                                 "ERREUR: Ta réponse ne contient pas de tableau structuré valide. "
                                 "Tu DOIS générer UNIQUEMENT un bloc <ui> avec le JSON complet du tableau. "
                                 "Format EXACT requis: <ui>{\"actions\":[{\"type\":\"whiteboard\",\"action\":\"show_board\",\"payload\":{\"title\":\"TITRE\",\"lines\":[{\"type\":\"title\",\"content\":\"...\"}]}}]}</ui> "
@@ -6384,6 +6664,8 @@ RÈGLES :
                             ),
                             # Retry 3: Final warning - very strict
                             (
+                                regle_reprise
+                                +
                                 "DERNIÈRE TENTATIVE. Tu as échoué 2 fois à générer un tableau. "
                                 "Génère MAINTENANT ce bloc EXACT (remplace les ... par le contenu): "
                                 "<ui>{\"actions\":[{\"type\":\"whiteboard\",\"action\":\"show_board\",\"payload\":{\"title\":\"...\",\"lines\":[{\"type\":\"title\",\"content\":\"...\"},{\"type\":\"text\",\"content\":\"...\"}]}}]}</ui> "
@@ -6454,6 +6736,7 @@ RÈGLES :
                         "[AI Commands] Repli auto-board abandonné : réponse en "
                         "darija, le tableau s'écrit en français"
                     )
+                    _journaliser_tour(journal_visual_actions)
                     return
 
                 auto_lines = []
@@ -6559,6 +6842,14 @@ RÈGLES :
                     await self._send_board_or_live(
                         "Explication", auto_lines, context="auto-board fallback"
                     )
+                    auto_board_sent = True
+
+        envois_finaux = list(journal_visual_actions)
+        if board_handled or schema_handled or auto_board_sent:
+            envois_finaux.append({"action": "show_board"})
+        if draw_sent:
+            envois_finaux.append({"action": "show_draw"})
+        _journaliser_tour(envois_finaux)
 
     async def _auto_advance_phase(self):
         """Avance d'un cran — déclenché par « PHASE_SUIVANTE » dans la réponse.
@@ -6613,6 +6904,21 @@ RÈGLES :
         self.recent_resource_modes.append(mode)
         if len(self.recent_resource_modes) > 5:
             self.recent_resource_modes = self.recent_resource_modes[-5:]
+
+    def _deja_a_l_ecran(self, identifiant: Any) -> bool:
+        """Cette figure est-elle DÉJÀ celle que l'élève regarde ?
+
+        Le repli du catalogue et le rapprochement automatique tombent souvent
+        sur le même schéma dans le même tour. Le second envoi effaçait le
+        tableau pour le redessiner à l'identique : un clignotement au milieu
+        d'une phrase, et une deuxième surface pour une seule idée.
+        """
+        return bool(
+            isinstance(identifiant, str)
+            and identifiant.strip()
+            and self._visuels_affiches
+            and self._visuels_affiches[-1] == identifiant.strip()
+        )
 
     def _noter_visuel_affiche(self, identifiant: Any) -> None:
         """Retenir ce qui vient d'apparaître à l'écran de l'élève.
@@ -6678,7 +6984,11 @@ RÈGLES :
     async def _load_all_resources(self):
         """Load ALL resources from lesson_resources table (for libre mode)."""
         try:
-            supabase = get_supabase()
+            # Lecture strictement côté serveur : `lesson_resources` est sous
+            # RLS et le client anon renvoie alors une liste vide sans erreur.
+            # C'était la source du trompeur « Loaded 0 total resources »
+            # alors que la bibliothèque distante est bien peuplée.
+            supabase = get_supabase_admin()
             result = supabase.table("lesson_resources")\
                 .select("*")\
                 .order("order_index")\
@@ -6686,14 +6996,46 @@ RÈGLES :
             
             self.lesson_resources = result.data if result.data else []
             _safe_log(f"[Resources] Libre mode: Loaded {len(self.lesson_resources)} total resources from all lessons")
+            await self._charger_matieres_des_lecons()
         except Exception as e:
             _safe_log(f"[Resources] Error loading all resources: {e}")
             self.lesson_resources = []
 
+    async def _charger_matieres_des_lecons(self):
+        """Rattache chaque leçon à sa matière, une fois pour la séance.
+
+        En question libre la bibliothèque est chargée en entier : 142 médias,
+        toutes matières confondues. Sans cette carte, « explique-moi la chute
+        libre » ouvrait un laboratoire de physiologie musculaire, parce que le
+        score de rapprochement ne regardait que les mots du titre.
+        """
+        try:
+            supabase = get_supabase_admin()
+            matieres = {
+                ligne["id"]: ligne.get("name_fr") or ligne.get("name") or ""
+                for ligne in (supabase.table("subjects").select("id, name_fr").execute().data or [])
+            }
+            lecons = supabase.table("lessons")                .select("id, chapters(subject_id)")                .execute().data or []
+            carte: dict[str, str] = {}
+            for lecon in lecons:
+                chapitre = lecon.get("chapters") or {}
+                if isinstance(chapitre, list):
+                    chapitre = chapitre[0] if chapitre else {}
+                nom = matieres.get(chapitre.get("subject_id"))
+                normalisee = _normaliser_matiere(nom)
+                if normalisee:
+                    carte[lecon["id"]] = normalisee
+            self.lesson_subjects = carte
+            _safe_log(f"[Resources] Matières rattachées à {len(carte)} leçons")
+        except Exception as e:
+            # Sans la carte on ne filtre plus, mais on n'empêche pas la séance.
+            _safe_log(f"[Resources] Impossible de rattacher les matières: {e}")
+            self.lesson_subjects = {}
+
     async def _load_lesson_resources(self, lesson_id: str):
         """Load all resources for the current lesson from lesson_resources table."""
         try:
-            supabase = get_supabase()
+            supabase = get_supabase_admin()
             
             # Load lesson data with chapter info
             lesson_result = supabase.table("lessons")\
@@ -6991,6 +7333,320 @@ RÈGLES :
             "que tu n'envoies pas dans la même réponse."
         )
 
+    def _preparer_l_etape(self, demande: str) -> None:
+        """Décide l'étape du tour, avant que le modèle ne parle.
+
+        Le routeur a besoin de savoir CE QUI EXISTE. Les scènes et les modèles
+        3D se lisent dans le catalogue, les images et les simulations dans la
+        bibliothèque de la séance — sans jamais toucher au réseau : cette
+        décision est prise à chaque tour, elle doit rester gratuite.
+        """
+        try:
+            contexte = self._contexte_de_rapprochement()
+            # Changer de matière, c'est changer de micro-objectif : les
+            # surfaces déjà servies ne valent plus rien pour la nouvelle
+            # notion, et les garder fermées priverait l'élève de la scène.
+            matiere = self._detect_subject_from_text(demande or "")
+            if matiere and matiere != self._matiere_du_micro_objectif:
+                self._rouvrir_toutes_les_surfaces()
+                self._matiere_du_micro_objectif = matiere
+                # Nouvelle notion, nouveau plan : l'élève a droit à sa
+                # présentation avant qu'on lui montre quoi que ce soit.
+                self._plan_annonce = False
+            carte = self._scenes_de_la_matiere(carte_des_visuels(
+                contexte, demande, self.lesson_resources,
+                lecon_rattachee=True,
+            ))
+            types = self._available_resource_types()
+            self.derniere_etape = router_pedagogique(
+                demande=demande,
+                contexte=contexte,
+                scene_disponible=bool(carte.get("presets")),
+                image_disponible="image" in types,
+                modele_3d_disponible=bool(carte.get("modeles_3d")),
+                simulation_disponible="simulation" in types,
+                manipulation_exigee=bool(
+                    _CLAME_UNE_SIMULATION.search(_sans_diacritiques(demande or "").lower())
+                ),
+                # Le briefing d'une leçon rattachée tient déjà lieu de plan ;
+                # c'est en question libre que l'élève arrive sans rien.
+                plan_annonce=self._plan_annonce or self.session_mode != "libre",
+                deja_montre=self.surfaces_du_micro_objectif,
+            )
+            self._tour_d_introduction = self.derniere_etape.surface == INTRODUCTION
+            if self._tour_d_introduction:
+                # Le plan est annoncé DANS ce tour : on le note tout de suite
+                # pour que le tour suivant passe à l'explication.
+                self._plan_annonce = True
+            _safe_log(
+                f"[Routeur] Tour préparé — étape {self.derniere_etape.rang} "
+                f"{self.derniere_etape.surface} "
+                f"(forme attendue : {forme_attendue(f'{demande} {contexte}')})"
+            )
+        except Exception as exc:
+            # Une étape manquante ne doit pas coûter le tour : le tuteur
+            # retombe sur son comportement d'avant le routeur.
+            self.derniere_etape = None
+            self._tour_d_introduction = False
+            _safe_log(f"[Routeur] Étape non préparée: {exc}")
+
+    def _bloc_routeur(self) -> str:
+        """La consigne d'étape, telle que le modèle doit la lire."""
+        etape = getattr(self, "derniere_etape", None)
+        if etape is None:
+            return ""
+        entete = "── ÉTAPE EN COURS (le serveur l'a choisie, tiens-la) ──"
+        return entete + "\n" + consigne_d_etape(etape)
+
+    def _support_interdit_ce_tour(self, quoi: str) -> bool:
+        """Le tour de présentation ne porte QUE le plan.
+
+        Le routeur retenait déjà toute ouverture côté serveur, mais le bloc
+        écrit par le modèle passait à côté : le 29 août 2026, le premier tour
+        sur les ondes annonçait le plan ET posait un schéma. L'élève voyait
+        une figure avant de savoir ce qu'on allait en faire.
+
+        Le tableau écrit reste autorisé — c'est LUI qui porte le plan.
+        """
+        if not self._tour_d_introduction:
+            return False
+        _safe_log(f"[Routeur] {quoi} retenu : le tour de présentation ne porte que le plan")
+        return True
+
+    def _noter_surface_servie(self, surface: str) -> None:
+        """Retient qu'une surface a déjà servi ce micro-objectif."""
+        if surface and surface not in self.surfaces_du_micro_objectif:
+            self.surfaces_du_micro_objectif.append(surface)
+
+    def _rouvrir_toutes_les_surfaces(self) -> None:
+        """Nouveau micro-objectif : toutes les surfaces redeviennent libres."""
+        if self.surfaces_du_micro_objectif:
+            _safe_log("[Routeur] Nouveau micro-objectif — surfaces rouvertes")
+            self.surfaces_du_micro_objectif = []
+
+    async def _afficher_modele_3d(self, carte: dict[str, Any]) -> bool:
+        """Pose le modèle 3D le mieux rapproché, quand la profondeur compte."""
+        modeles = carte.get("modeles_3d") or []
+        if not modeles:
+            return False
+        model_id = modeles[0][0]
+        definition = MODELES_3D[model_id]
+        if await self._afficher_visuel_scientifique(
+            normalize_scientific_visual({
+                "engine": "three",
+                "model": model_id,
+                "title": definition["title"],
+                "autoplay": model_id != "muscle_excitation_contraction",
+                "labels": True,
+                "focus": "all",
+            }),
+            definition["title"],
+            model_id,
+        ):
+            _safe_log(f"[Routeur] Modèle 3D {model_id}")
+            self._noter_surface_servie("modele_3d")
+            return True
+        return False
+
+    async def _afficher_visuel_scientifique(
+        self,
+        scientific: dict[str, Any] | None,
+        titre: str,
+        identifiant: str,
+    ) -> bool:
+        """Pose une figure scientifique sur le tableau. Dit si elle est partie."""
+        if scientific is None:
+            return False
+        await self.websocket.send_json({"type": "hide_media"})
+        await self.websocket.send_json({"type": "clear_whiteboard"})
+        await self._send_board_or_live(
+            titre,
+            [{
+                "type": "scientific",
+                "content": titre,
+                "scientific": scientific,
+            }],
+            context="repli catalogue après média absent",
+        )
+        self._noter_visuel_affiche(identifiant)
+        self._last_resource_surface = "whiteboard"
+        return True
+
+    async def _afficher_scene_controlable(
+        self, carte: dict[str, Any], preferred_resource_type: str | None
+    ) -> bool:
+        """Ouvre la scène contrôlable la mieux rapprochée, s'il en existe une.
+
+        Ce sont les « scènes contrôlables » de la bibliothèque visuelle : le
+        tuteur les pilote pas à pas pendant qu'il parle, là où une simulation
+        HTML reste une page fermée qu'il ne fait qu'ouvrir. C'est pour cela
+        qu'elles passent AVANT les médias de la table, et non plus seulement
+        en repli quand celle-ci n'a rien donné.
+
+        Le seuil de rapprochement d'`apparier_presets` reste le seul juge de
+        la pertinence : sans lui, prioriser les scènes reviendrait à en ouvrir
+        une hors sujet, exactement le défaut corrigé la veille.
+        """
+        veut_scene = (
+            preferred_resource_type == "simulation"
+            or carte.get("veut_mouvement")
+            or not carte.get("veut_croquis")
+        )
+        presets = carte.get("presets") or []
+        if not (veut_scene and presets):
+            return False
+        preset_id = presets[0][0]
+        definition = SCIENTIFIC_PRESETS[preset_id]
+        if await self._afficher_visuel_scientifique(
+            normalize_scientific_visual({
+                "engine": "preset",
+                "presetId": preset_id,
+                "variant": definition["default_variant"],
+                "autoplay": True,
+            }),
+            definition["title"],
+            preset_id,
+        ):
+            _safe_log(f"[Auto Suggest] Scène contrôlable {preset_id}")
+            return True
+        return False
+
+    async def _afficher_repli_du_catalogue(
+        self, preferred_resource_type: str | None = None
+    ) -> bool:
+        """Descend vers une scène locale, puis vers un schéma validé.
+
+        `lesson_resources` est une bibliothèque de médias de cours ; ce n'est
+        pas le catalogue du tableau. Quand la table est vide, les presets et
+        les schémas versionnés existent toujours. Les ignorer transformait une
+        préférence de simulation en `media/open` sans résultat.
+        """
+        contexte = self._contexte_de_rapprochement()
+        demande = self._derniere_demande()
+        carte = carte_des_visuels(
+                contexte, demande, self.lesson_resources,
+                lecon_rattachee=True,
+            )
+
+        afficher_science = self._afficher_visuel_scientifique
+
+        modeles_3d = carte.get("modeles_3d") or []
+        if carte.get("veut_profondeur") and modeles_3d:
+            model_id = modeles_3d[0][0]
+            definition = MODELES_3D[model_id]
+            if await afficher_science(
+                normalize_scientific_visual({
+                    "engine": "three",
+                    "model": model_id,
+                    "title": definition["title"],
+                    "autoplay": model_id != "muscle_excitation_contraction",
+                    "labels": True,
+                    "focus": "all",
+                }),
+                definition["title"],
+                model_id,
+            ):
+                _safe_log(f"[Auto Suggest] Repli catalogue: modèle 3D {model_id}")
+                return True
+
+        # Ce qui bouge d'abord, le trait ensuite : la scène n'attend plus que
+        # la demande contienne un mot de mouvement. Seul un élève qui réclame
+        # un croquis la fait passer son tour.
+        if await self._afficher_scene_controlable(carte, preferred_resource_type):
+            return True
+
+        # Une demande de croquis garde sa forme ; dans les autres cas la
+        # planche de référence, plus complète, passe avant le croquis.
+        candidat = (
+            carte.get("croquis")
+            if carte.get("veut_croquis") and carte.get("croquis")
+            else carte.get("reference") or carte.get("croquis")
+        )
+        if candidat:
+            schema_id = candidat[0]
+            if self._deja_a_l_ecran(schema_id):
+                _safe_log(f"[Auto Suggest] Schéma {schema_id} déjà à l'écran — conservé tel quel")
+                self._last_resource_surface = "whiteboard"
+                return True
+            await self.websocket.send_json({"type": "hide_media"})
+            await self.websocket.send_json({"type": "clear_whiteboard"})
+            await self.websocket.send_json({
+                "type": "whiteboard_schema",
+                "schema_id": schema_id,
+            })
+            self._noter_visuel_affiche(schema_id)
+            self._remember_mode("whiteboard")
+            self._last_resource_surface = "whiteboard"
+            _safe_log(
+                f"[Auto Suggest] Repli catalogue: schéma {schema_id} "
+                f"({schema_title(schema_id)})"
+            )
+            return True
+
+        # Sans planche ni croquis, un modèle 3D pertinent reste préférable
+        # au silence, même si l'élève n'a pas prononcé le mot « 3D ».
+        if modeles_3d:
+            model_id = modeles_3d[0][0]
+            definition = MODELES_3D[model_id]
+            if await afficher_science(
+                normalize_scientific_visual({
+                    "engine": "three",
+                    "model": model_id,
+                    "title": definition["title"],
+                    "autoplay": model_id != "muscle_excitation_contraction",
+                    "labels": True,
+                    "focus": "all",
+                }),
+                definition["title"],
+                model_id,
+            ):
+                _safe_log(f"[Auto Suggest] Repli catalogue: modèle 3D {model_id}")
+                return True
+
+        return False
+
+    def _scenes_de_la_matiere(self, carte: dict[str, Any]) -> dict[str, Any]:
+        """La carte, débarrassée des scènes d'une AUTRE matière.
+
+        Le seuil de rapprochement des scènes est descendu à un point : sans
+        lui, la scène du chapitre — celle qui convenait — restait invisible et
+        le tuteur ouvrait une photo à la place. Ce qui protégeait du hors-sujet
+        n'est plus le seuil mais la matière, qui est un juge bien plus sûr.
+        """
+        matiere = self._matiere_demandee()
+        if not matiere:
+            return carte
+        filtree = dict(carte)
+        for cle in ("presets", "modeles_3d"):
+            retenus = [
+                item for item in (carte.get(cle) or [])
+                if _matiere_du_visuel(item[0]) in (None, matiere)
+            ]
+            ecartes = len(carte.get(cle) or []) - len(retenus)
+            if ecartes:
+                _safe_log(f"[Routeur] {ecartes} {cle} d'une autre matière écarté(s)")
+            filtree[cle] = retenus
+        return filtree
+
+    def _matiere_de_la_ressource(self, resource: dict) -> str | None:
+        """La matière d'un média : sa leçon d'abord, son chemin ensuite."""
+        par_lecon = self.lesson_subjects.get(resource.get("lesson_id"))
+        return par_lecon or _matiere_du_chemin(resource)
+
+    def _matiere_demandee(self) -> str | None:
+        """La matière que l'élève vient de nommer, sinon celle de la séance.
+
+        On lit d'abord la seule dernière demande : en question libre l'élève
+        change de matière d'un message à l'autre, et le contexte de séance
+        garderait la précédente. On ne retombe sur le contexte que si la phrase
+        ne dit rien, et jamais sur une matière par défaut — mieux vaut ne pas
+        filtrer que filtrer sur une matière inventée.
+        """
+        depuis_demande = self._detect_subject_from_text(self._derniere_demande())
+        if depuis_demande:
+            return depuis_demande
+        return self._infer_subject_from_context(fallback=None)
+
     async def _auto_suggest_resource(self, preferred_resource_type: str = None) -> bool:
         """Ouvre la ressource la plus pertinente. Dit si elle en a ouvert une.
 
@@ -7004,14 +7660,18 @@ RÈGLES :
         Constaté le 24 août 2026, chute libre : « peux-tu créer une
         simulation ? », le tuteur promet, le tableau s'efface, rien n'arrive.
         """
+        self._last_resource_surface = None
+        if self._tour_d_introduction:
+            _safe_log("[Routeur] Tour de présentation — aucun support n'est ouvert")
+            return False
         try:
             _safe_log(f"[Auto Suggest] Starting resource suggestion...")
-            
+
             # Reload resources fresh from DB to get latest updates
             if self.current_lesson_id:
                 await self._load_lesson_resources(self.current_lesson_id)
             elif not self.lesson_resources:
-                supabase = get_supabase()
+                supabase = get_supabase_admin()
                 result = supabase.table("lesson_resources")\
                     .select("*")\
                     .order("order_index")\
@@ -7019,9 +7679,16 @@ RÈGLES :
                 self.lesson_resources = result.data if result.data else []
                 _safe_log(f"[Auto Suggest] Fallback loaded {len(self.lesson_resources)} resources without lesson_id")
             
+            demande_courante = self._derniere_demande()
+            contexte_courant = self._contexte_de_rapprochement()
+            carte_scenes = self._scenes_de_la_matiere(carte_des_visuels(
+                contexte_courant, demande_courante, self.lesson_resources,
+                lecon_rattachee=True,
+            ))
+
             if not self.lesson_resources:
-                _safe_log(f"[Auto Suggest] No resources available for this lesson")
-                return False
+                _safe_log("[Auto Suggest] Aucun média DB — repli vers le catalogue du tableau")
+                return await self._afficher_repli_du_catalogue(preferred_resource_type)
             
             _safe_log(f"[Auto Suggest] Available resources: {len(self.lesson_resources)}")
             
@@ -7058,24 +7725,100 @@ RÈGLES :
                     )
                 )
 
-            candidate_resources = [
-                r for r in self.lesson_resources
-                if r.get('resource_type') == target_resource_type
-                and has_presentable_payload(r)
-            ]
+            # Une ressource d'une AUTRE matière est hors sujet, quel que soit
+            # son score. Le 28 août 2026, « explique-moi la chute libre »
+            # ouvrait le PhysioLab du muscle et « un cours sur les ondes »
+            # l'AtmosLab de la pollution : deux laboratoires de SVT, choisis
+            # parce que le bonus `is_primary` pesait plus que les mots du
+            # titre. Mieux vaut le repli du catalogue qu'un contenu qui parle
+            # d'autre chose.
+            # Uniquement quand la bibliothèque entière est en jeu. Dans une
+            # leçon rattachée, les médias sont déjà ceux de la bonne matière,
+            # et certains n'ont ni fichier ni leçon connue : les filtrer les
+            # ferait disparaître sans raison.
+            matiere_visee = None if self.current_lesson_id else self._matiere_demandee()
 
-            if not candidate_resources and preferred_resource_type:
-                _safe_log(f"[Auto Suggest] No valid {preferred_resource_type} resources found, falling back to image")
-                target_resource_type = 'image'
-                candidate_resources = [
-                    r for r in self.lesson_resources 
-                    if r.get('resource_type') == 'image'
+            def candidats(type_voulu: str) -> list[dict]:
+                retenus = [
+                    r for r in self.lesson_resources
+                    if r.get('resource_type') == type_voulu
                     and has_presentable_payload(r)
+                    and not _est_croquis(r)
+                    and (
+                        not matiere_visee
+                        or self._matiere_de_la_ressource(r) == matiere_visee
+                    )
                 ]
-            
+                return retenus
+
+            # UNE étape, UNE surface, UNE action. L'ordre est fixe — scène,
+            # image, modèle 3D, simulation, cahier — et chaque marche a sa
+            # condition : la 3D ne sert que si la profondeur compte, la
+            # simulation que si manipuler change la compréhension. Le modèle
+            # explique ; c'est ici que le serveur valide le choix.
+            # L'étape a déjà été décidée AVANT que le modèle parle, et c'est
+            # elle qu'il a reçue comme consigne. En recalculer une seconde ici
+            # la faisait changer entre-temps — le contexte a grossi de toute la
+            # réponse — et le tuteur annonçait une image pendant que le serveur
+            # ouvrait autre chose. On rejoue le routeur uniquement quand aucune
+            # étape n'a pu être préparée.
+            etape = self.derniere_etape
+            if etape is None:
+                etape = router_pedagogique(
+                    demande=demande_courante,
+                    contexte=contexte_courant,
+                    scene_disponible=bool(carte_scenes.get("presets")),
+                    image_disponible=bool(candidats("image")),
+                    modele_3d_disponible=bool(carte_scenes.get("modeles_3d")),
+                    simulation_disponible=bool(candidats("simulation")),
+                    manipulation_exigee=preferred_resource_type == "simulation"
+                    and _CLAME_UNE_SIMULATION.search(_sans_diacritiques(demande_courante).lower()) is not None,
+                    deja_montre=self.surfaces_du_micro_objectif,
+                )
+                self.derniere_etape = etape
+            _safe_log(
+                f"[Routeur] Étape {etape.rang} — {etape.surface} "
+                f"({etape.raison}), repli={etape.repli}"
+            )
+
+            # Une marche peut échouer à l'affichage même quand le routeur la
+            # croyait tenable. On prend alors le REPLI qu'elle porte, pas le
+            # cahier : descendre de quatre marges d'un coup priverait l'élève
+            # de la simulation que la scène devait seulement précéder.
+            surface_a_tenir = etape.surface
+            if surface_a_tenir == "scene":
+                if await self._afficher_scene_controlable(carte_scenes, preferred_resource_type):
+                    self._noter_surface_servie("scene")
+                    return True
+                _safe_log("[Routeur] Scène indisponible — descente d'une marche")
+                surface_a_tenir = etape.repli or "cahier"
+
+            if surface_a_tenir == "modele_3d":
+                if await self._afficher_modele_3d(carte_scenes):
+                    return True
+                _safe_log("[Routeur] Modèle 3D indisponible — descente d'une marche")
+                surface_a_tenir = "image"
+
+            target_resource_type = {"image": "image", "simulation": "simulation"}.get(
+                surface_a_tenir
+            )
+            if not target_resource_type:
+                # Le cahier : rien à ouvrir, tout à écrire.
+                return await self._afficher_repli_du_catalogue(preferred_resource_type)
+
+            candidate_resources = candidats(target_resource_type)
+            if matiere_visee:
+                _safe_log(
+                    f"[Auto Suggest] Matière demandée: {matiere_visee} — "
+                    f"{len(candidate_resources)} {target_resource_type}(s) retenu(s)"
+                )
+
             if not candidate_resources:
-                _safe_log(f"[Auto Suggest] No valid {target_resource_type} resources found")
-                return False
+                _safe_log(
+                    f"[Auto Suggest] Aucun média {target_resource_type} valide — "
+                    "repli vers le catalogue du tableau"
+                )
+                return await self._afficher_repli_du_catalogue(preferred_resource_type)
             
             # Score resources by concept match
             best_resource = None
@@ -7115,22 +7858,75 @@ RÈGLES :
             
             if best_resource:
                 _safe_log(f"[Auto Suggest] Best match: {best_resource.get('title')} (score: {best_score})")
-                await self._display_resource(best_resource)
+                surface = await self._display_resource(best_resource)
             else:
                 # Fallback: show first resource of the preferred type
                 _safe_log(f"[Auto Suggest] No concept match, showing first {target_resource_type}")
-                await self._display_resource(candidate_resources[0])
-            return True
+                surface = await self._display_resource(candidate_resources[0])
+            self._last_resource_surface = surface
+            if surface:
+                self._noter_surface_servie(surface_a_tenir)
+                return True
+            return await self._afficher_repli_du_catalogue(preferred_resource_type)
 
         except Exception as e:
             _safe_log(f"[Auto Suggest] ERROR: {str(e)}")
             import traceback
             traceback.print_exc()
+            return await self._afficher_repli_du_catalogue(preferred_resource_type)
+
+    async def _masquer_tableau_apres_media(self) -> None:
+        """Efface le tableau, sauf quand la simulation attend qu'il ait parlé.
+
+        Le masquage suivait l'ouverture du média sans condition. Depuis que le
+        tuteur écrit AVANT de lancer, cet ordre effaçait sa propre annonce à
+        la seconde où il venait de l'écrire.
+        """
+        if self._media_en_attente:
+            _safe_log("[Display] Tableau conservé : la simulation attend la fin du script")
+            return
+        await self.websocket.send_json({"type": "hide_whiteboard"})
+
+    async def _annoncer_au_tableau(
+        self, titre: str, description: str, resource: dict
+    ) -> bool:
+        """Écrit au tableau ce que la simulation va montrer. Dit si c'est parti.
+
+        Le tuteur ouvrait la scène en silence : l'élève voyait un laboratoire
+        apparaître sans savoir ce qu'il devait y regarder. Deux lignes de
+        craie — ce que c'est, ce qu'on y cherche — suffisent à en faire une
+        consigne au lieu d'une image.
+        """
+        self._media_en_attente = False
+        lignes: list[dict] = []
+        texte = (description or "").strip()
+        if texte:
+            lignes.append({"type": "text", "content": texte[:280]})
+        notions = resource.get("concepts") or []
+        if isinstance(notions, list):
+            retenues = [str(n).strip() for n in notions[:4] if str(n).strip()]
+            for rang, notion in enumerate(retenues, start=1):
+                lignes.append({
+                    "type": "step",
+                    "label": str(rang),
+                    "content": notion,
+                })
+        if not lignes:
             return False
+        await self._send_board_or_live(
+            titre or "Ce que tu vas observer",
+            lignes,
+            context="annonce avant l'ouverture d'une simulation",
+        )
+        self._media_en_attente = True
+        _safe_log(f"[Display Resource] Annonce au tableau avant la simulation: {titre}")
+        return True
 
     async def _display_resource(self, resource: dict):
-        """Display a resource to the student."""
+        """Display a resource and return the surface that really received it."""
         import time
+
+        self._media_en_attente = False
         
         resource_type = resource.get('resource_type')
         file_path = resource.get('file_path')
@@ -7145,7 +7941,7 @@ RÈGLES :
         if schema_id:
             if schema_id not in SCHEMA_IDS:
                 _safe_log(f"[Display Resource] Unknown schema_id ignored: {schema_id!r}")
-                return
+                return None
             await self.websocket.send_json({"type": "hide_media"})
             await self._send_board_or_live(title or "Croquis du cours", [{
                 "type": "schema",
@@ -7153,7 +7949,8 @@ RÈGLES :
                 "content": description,
             }], context="croquis ressource du cours")
             _safe_log(f"[Resources] Displayed schema on Live Board: {schema_id}")
-            return
+            self._noter_visuel_affiche(schema_id)
+            return "whiteboard"
         
         scientific_payload = metadata.get('scientific') if isinstance(metadata, dict) else None
         if file_path == MITOCHONDRION_3D_FALLBACK_PATH and not isinstance(scientific_payload, dict):
@@ -7167,11 +7964,12 @@ RÈGLES :
                 "scientific": scientific,
             }], context="ressource scientifique du cours")
             _safe_log(f"[Resources] Displayed scientific visual: {title}")
-            return
+            self._noter_visuel_affiche(scientific.get("presetId") or scientific.get("model"))
+            return "whiteboard"
 
         if not file_path and not resource.get('external_url'):
             _safe_log(f"[Display Resource] No file_path or external_url for {title}")
-            return
+            return None
         
         url = file_path or resource.get('external_url')
         
@@ -7185,7 +7983,7 @@ RÈGLES :
                 _safe_log(f"[Display Resource] Built data:text/html URL from metadata ({len(html_content)} chars)")
             else:
                 _safe_log(f"[Display Resource] ERROR: file_path is 'local:metadata' but no HTML found in metadata keys: {list(metadata.keys())}")
-                return
+                return None
         
         if url.startswith('/media/'):
             _safe_log(f"[Display Resource] Serving versioned frontend asset: {url}")
@@ -7225,8 +8023,14 @@ RÈGLES :
             })
             self._remember_mode("video")
         elif resource_type == 'simulation':
+            # Le tuteur annonce, écrit, PUIS lance. Une simulation posée sans
+            # un mot laissait l'élève devant un écran qu'il ne savait pas
+            # regarder : le tableau dit d'abord ce qu'il va y voir, et la
+            # simulation prend la surface quand le script est fini.
+            await self._annoncer_au_tableau(title, description, resource)
             await self.websocket.send_json({
                 "type": "show_media",
+                "defer": self._media_en_attente,
                 "media": {
                     "type": "simulation",
                     "url": url,
@@ -7244,6 +8048,7 @@ RÈGLES :
             self._remember_mode("exam")
         
         _safe_log(f"[Resources] Displayed {resource_type}: {title}")
+        return "media" if resource_type in {"image", "video", "simulation"} else "exam"
 
     async def _handle_simulation_manifest(self, message: dict):
         """Handle simulation manifest — learn about ANY simulation's capabilities."""

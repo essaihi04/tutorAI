@@ -6,6 +6,7 @@ const CytoscapeVisual = lazy(() => import('./CytoscapeVisual'));
 const MatterSimulation = lazy(() => import('./MatterSimulation'));
 const RoughSVGVisual = lazy(() => import('./RoughSVGVisual'));
 const Mitochondrion3DVisual = lazy(() => import('./Mitochondrion3DVisual'));
+const MuscleExcitation3DVisual = lazy(() => import('./MuscleExcitation3DVisual'));
 const ScientificPresetVisual = lazy(() => import('./ScientificPresetVisual'));
 
 interface ScientificVisualProps {
@@ -40,7 +41,8 @@ export default function ScientificVisual({ spec, transparent, control, onSimulat
       {spec.engine === 'cytoscape' && <CytoscapeVisual spec={spec} transparent={transparent} />}
       {spec.engine === 'matter' && <MatterSimulation spec={spec} transparent={transparent} />}
       {spec.engine === 'roughsvg' && <RoughSVGVisual spec={spec} transparent={transparent} />}
-      {spec.engine === 'three' && <Mitochondrion3DVisual spec={spec} transparent={transparent} />}
+      {spec.engine === 'three' && spec.model === 'mitochondrion' && <Mitochondrion3DVisual spec={spec} transparent={transparent} />}
+      {spec.engine === 'three' && spec.model === 'muscle_excitation_contraction' && <MuscleExcitation3DVisual spec={spec} transparent={transparent} />}
       {spec.engine === 'preset' && (
         <ScientificPresetVisual
           spec={spec}

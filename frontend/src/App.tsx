@@ -32,6 +32,7 @@ const VisualAudit = lazy(() => import('./dev/VisualAudit'));
 // Planche de contrôle des tableaux — jamais servie en production.
 const BoardAudit = lazy(() => import('./dev/BoardAudit'));
 const AdminVisualLibraryAudit = lazy(() => import('./dev/AdminVisualLibraryAudit'));
+const CoursePlayerAudit = lazy(() => import('./dev/CoursePlayerAudit'));
 
 function PageLoader() {
   return (
@@ -69,6 +70,7 @@ export default function App() {
           {import.meta.env.DEV && <Route path="/dev/visual-audit" element={<VisualAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/board-audit" element={<BoardAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/admin-visual-library" element={<AdminVisualLibraryAudit />} />}
+          {import.meta.env.DEV && <Route path="/dev/course-player" element={<CoursePlayerAudit />} />}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />

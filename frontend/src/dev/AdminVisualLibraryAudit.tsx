@@ -19,8 +19,8 @@ const schemaItems: AdminVisualLibraryItem[] = getAllSchemas().map(schema => ({
   description: 'Schéma SVG validé et versionné dans le projet.',
   subject: subjectNames[schema.subject],
   subject_key: schema.subject,
-  chapter: '',
-  lesson: '',
+  chapter: schema.metadata?.chapter || '',
+  lesson: schema.metadata?.lesson || '',
   lesson_id: '',
   concepts: schema.keywords,
   source: 'core',
@@ -29,6 +29,15 @@ const schemaItems: AdminVisualLibraryItem[] = getAllSchemas().map(schema => ({
   deletable: false,
   preview: { kind: 'schema', schema_id: schema.id },
 }));
+
+const MUSCLE_PRESET_IDS = new Set([
+  'svt_ch1_myogrammes',
+  'svt_ch1_chaleurs_muscle',
+  'svt_ch1_glissement_sarcomere',
+  'svt_ch1_couplage_excitation_contraction',
+  'svt_ch1_cycle_actomyosine',
+  'svt_ch1_filieres_effort',
+]);
 
 const presetItems: AdminVisualLibraryItem[] = Object.values(SCIENTIFIC_PRESETS).map(preset => ({
   id: `preset:${preset.id}`,
@@ -39,7 +48,9 @@ const presetItems: AdminVisualLibraryItem[] = Object.values(SCIENTIFIC_PRESETS).
   subject: 'SVT',
   subject_key: 'svt',
   chapter: 'Consommation de la matière organique',
-  lesson: '',
+  lesson: MUSCLE_PRESET_IDS.has(preset.id)
+    ? 'Rôle du muscle strié squelettique dans la conversion de l’énergie'
+    : '',
   lesson_id: '',
   concepts: preset.variants.map(variant => variant.label),
   source: 'core',
@@ -58,6 +69,38 @@ const presetItems: AdminVisualLibraryItem[] = Object.values(SCIENTIFIC_PRESETS).
     },
   },
 }));
+
+const muscle3DItems: AdminVisualLibraryItem[] = [{
+  id: 'three:muscle_excitation_contraction',
+  catalog_id: 'muscle_excitation_contraction',
+  kind: 'scientific',
+  title: 'Voyage au cœur du muscle — 3D contrôlable',
+  description: 'Parcours réaliste en 16 pauses : muscle, fibre, sarcomère, Ca²⁺, cycle actomyosine, ATP et SERCA.',
+  subject: 'SVT',
+  subject_key: 'svt',
+  chapter: 'Consommation de la matière organique et libération de l’énergie',
+  lesson: 'Rôle du muscle strié squelettique dans la conversion de l’énergie',
+  lesson_id: '',
+  concepts: ['flux nerveux', 'tubule T', 'réticulum sarcoplasmique', 'calcium', 'troponine', 'tropomyosine', 'actomyosine', 'ATP', 'relâchement'],
+  source: 'core',
+  status: 'validated',
+  editable: false,
+  deletable: false,
+  variants: [],
+  preview: {
+    kind: 'scientific',
+    scientific: {
+      engine: 'three',
+      model: 'muscle_excitation_contraction',
+      title: 'Voyage au cœur du muscle',
+      description: 'Modèle 3D pédagogique du trajet nerveux jusqu’au cycle actomyosine et au relâchement.',
+      autoplay: false,
+      labels: true,
+      focus: 'all',
+      step: 0,
+    },
+  },
+}];
 
 const lesson = {
   id: 'audit-physics-free-fall',
@@ -143,16 +186,16 @@ const auditItems: AdminVisualLibraryItem[] = [
 ];
 
 const library: AdminVisualLibraryResponse = {
-  items: [...schemaItems, ...presetItems, ...auditItems],
+  items: [...schemaItems, ...presetItems, ...muscle3DItems, ...auditItems],
   lessons: [lesson],
   stats: {
-    total: schemaItems.length + presetItems.length + auditItems.length,
+    total: schemaItems.length + presetItems.length + muscle3DItems.length + auditItems.length,
     editable: 1,
     by_kind: {
       schema: schemaItems.length,
       preset: presetItems.length,
       image: 1,
-      scientific: 1,
+      scientific: muscle3DItems.length + 1,
       simulation: 1,
     },
   },

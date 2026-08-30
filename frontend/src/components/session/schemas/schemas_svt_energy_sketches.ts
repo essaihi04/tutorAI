@@ -71,6 +71,90 @@ export const SVT_CROQUIS_CELLULE_MITOCHONDRIE: ScientificSchema = {
   ],
 };
 
+export const SVT_CROQUIS_CELLULE_CHLOROPLASTES: ScientificSchema = {
+  id: 'svt_croquis_cellule_chloroplastes',
+  title: 'Croquis au crayon — Cellule végétale éclairée',
+  subject: 'svt',
+  keywords: ['cellule végétale', 'chloroplaste', 'chloroplastes', 'lumière', 'photosynthèse', 'production matière organique', 'خلية نباتية', 'بلاستيدة خضراء'],
+  metadata: {
+    courseId: 'svt_ch1_energy',
+    chapter: 'Consommation de la matière organique et libération de l\'énergie',
+    lesson: 'Libération de l\'énergie emmagasinée dans la matière organique',
+    visualStyle: 'pencil',
+    resourceRole: 'teacher_sketch',
+    learningObjectives: ['Localiser les chloroplastes dans une cellule végétale', 'Relier lumière, chloroplastes et production de matière organique'],
+    llmIntents: ['dessiner une cellule végétale éclairée', 'montrer les chloroplastes sans surcharger le croquis', 'relier lumière et photosynthèse'],
+    drawingSteps: ['Tracer la paroi et la membrane', 'Placer la grande vacuole et le noyau', 'Ajouter quelques chloroplastes et mitochondries', 'Faire arriver la lumière sur les chloroplastes'],
+  },
+  category: 'structure',
+  viewBox: '0 0 900 520',
+  layers: [
+    { id: 'cellule', label: 'Cellule végétale', delay: 0, svgContent: `
+      ${PENCIL_DEFS}
+      <path d="M250 72 Q450 35 650 72 Q718 245 650 448 Q450 485 250 448 Q182 245 250 72Z" fill="#efffdc" fill-opacity="0.32" stroke="#4d7c0f" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M265 87 Q450 53 635 87 Q695 245 635 433 Q450 467 265 433 Q205 245 265 87Z" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+    ` },
+    { id: 'organites', label: 'Organites essentiels', delay: 500, svgContent: `
+      <path d="M355 125 Q505 82 585 160 Q625 250 580 365 Q490 435 355 382 Q305 255 355 125Z" fill="#bde9f4" fill-opacity="0.52" stroke="#37839a" stroke-width="3"/>
+      <circle cx="290" cy="335" r="42" fill="#f5d0a9" fill-opacity="0.62" stroke="#92400e" stroke-width="3"/>
+      <circle cx="290" cy="335" r="13" fill="none" stroke="#92400e" stroke-width="2"/>
+      <g fill="none" stroke="#c2410c" stroke-width="3">
+        <ellipse cx="610" cy="135" rx="28" ry="15" transform="rotate(20 610 135)"/>
+        <path d="M590 137 Q603 121 615 137 T633 137"/>
+        <ellipse cx="300" cy="145" rx="28" ry="15" transform="rotate(-18 300 145)"/>
+        <path d="M279 146 Q292 130 305 146 T325 146"/>
+      </g>
+    ` },
+    { id: 'chloroplastes', label: 'Chloroplastes et lumière', delay: 900, svgContent: `
+      <g fill="#77d65b" fill-opacity="0.7" stroke="#15803d" stroke-width="4">
+        <ellipse cx="275" cy="225" rx="39" ry="22" transform="rotate(-16 275 225)"/>
+        <ellipse cx="620" cy="225" rx="39" ry="22" transform="rotate(14 620 225)"/>
+        <ellipse cx="610" cy="350" rx="39" ry="22" transform="rotate(-12 610 350)"/>
+        <ellipse cx="365" cy="420" rx="39" ry="22" transform="rotate(8 365 420)"/>
+      </g>
+      <g stroke="#166534" stroke-width="2.5">
+        <path d="M249 225 L301 225 M255 216 L295 216 M255 234 L295 234"/>
+        <path d="M594 225 L646 225 M600 216 L640 216 M600 234 L640 234"/>
+        <path d="M584 350 L636 350 M590 341 L630 341 M590 359 L630 359"/>
+        <path d="M339 420 L391 420 M345 411 L385 411 M345 429 L385 429"/>
+      </g>
+      <circle cx="104" cy="82" r="35" fill="#facc15" fill-opacity="0.24" stroke="#fbbf24" stroke-width="4"/>
+      <g stroke="#fbbf24" stroke-width="5" stroke-linecap="round">
+        <line x1="104" y1="24" x2="104" y2="4"/><line x1="54" y1="44" x2="38" y2="29"/><line x1="45" y1="91" x2="22" y2="94"/>
+        <line x1="148" y1="42" x2="164" y2="25"/>
+      </g>
+      <g fill="none" stroke="#fbbf24" stroke-width="5" stroke-linecap="round" marker-end="url(#pencilArrow)">
+        <path d="M137 103 Q175 135 225 194"/>
+        <path d="M147 82 Q260 90 574 202"/>
+      </g>
+    ` },
+    { id: 'legendes', label: 'Légendes', delay: 1250, svgContent: `
+      <text x="104" y="148" text-anchor="middle" font-size="21" fill="#fbbf24" font-family="${FONT}">Lumière</text>
+
+      <path d="M650 135 L705 112" fill="none" stroke="#c2410c" stroke-width="2.5"/>
+      <text x="716" y="116" font-size="20" fill="#c2410c" font-family="${FONT}">Mitochondrie</text>
+
+      <path d="M656 225 L705 205" fill="none" stroke="#15803d" stroke-width="2.5"/>
+      <text x="716" y="209" font-size="20" fill="#15803d" font-family="${FONT}">Chloroplastes</text>
+
+      <path d="M580 300 L705 292" fill="none" stroke="#37839a" stroke-width="2.5"/>
+      <text x="716" y="298" font-size="20" fill="#37839a" font-family="${FONT}">Vacuole</text>
+
+      <path d="M250 335 L172 354" fill="none" stroke="#92400e" stroke-width="2.5"/>
+      <text x="160" y="360" text-anchor="end" font-size="20" fill="#92400e" font-family="${FONT}">Noyau</text>
+    ` },
+  ],
+  annotations: [
+    { id: 'chloroplastes', x: 235, y: 195, width: 425, height: 250, label: 'Chloroplastes', description: 'Organites chlorophylliens qui captent l’énergie lumineuse et réalisent la photosynthèse.', color: '#15803d' },
+    { id: 'vacuole', x: 330, y: 105, width: 280, height: 310, label: 'Vacuole', description: 'Grande cavité caractéristique de la cellule végétale.', color: '#37839a' },
+    { id: 'noyau', x: 245, y: 290, width: 90, height: 90, label: 'Noyau', description: 'Organite contenant l’information génétique.', color: '#92400e' },
+    { id: 'mitochondries', x: 270, y: 110, width: 375, height: 65, label: 'Mitochondries', description: 'Organites de la respiration cellulaire.', color: '#c2410c' },
+  ],
+  highlights: [
+    { id: 'chloroplastes', cx: 620, cy: 225, radius: 62, label: 'Chloroplastes' },
+  ],
+};
+
 export const SVT_CROQUIS_ATP_ADP: ScientificSchema = {
   id: 'svt_croquis_atp_adp',
   title: 'Croquis au crayon — Cycle ATP–ADP',
@@ -499,6 +583,113 @@ export const SVT_CROQUIS_BILAN_RESPIRATION: ScientificSchema = {
   ],
 };
 
+export const SVT_CROQUIS_HIERARCHIE_MUSCLE: ScientificSchema = {
+  id: 'svt_croquis_hierarchie_muscle',
+  title: 'Croquis au crayon — Du muscle au sarcomère',
+  subject: 'svt',
+  keywords: ['muscle', 'myofibrille', 'sarcomère', 'organisation hiérarchique du muscle', 'zoom du muscle au sarcomère', 'عضلة', 'لييف عضلي'],
+  metadata: {
+    courseId: 'svt_ch1_muscle', chapter: 'Consommation de la matière organique et libération de l\'énergie', lesson: 'Rôle du muscle strié squelettique dans la conversion de l\'énergie', visualStyle: 'pencil', resourceRole: 'teacher_sketch',
+    learningObjectives: ['Décrire les niveaux d’organisation du muscle strié', 'Relier fibre, myofibrille et sarcomère'],
+    llmIntents: ['dessiner du muscle au sarcomère', 'faire les niveaux d organisation du muscle', 'montrer fibre myofibrille sarcomère'],
+    drawingSteps: ['Tracer le muscle et son tendon', 'Extraire une fibre musculaire', 'Agrandir une myofibrille', 'Délimiter un sarcomère entre deux stries Z'],
+  },
+  category: 'structure', viewBox: '0 0 900 520',
+  layers: [
+    { id: 'niveaux', label: 'Niveaux d’organisation', delay: 0, svgContent: `
+      ${PENCIL_DEFS}
+      <path d="M55 120 C125 75 205 92 250 145 C205 198 125 215 55 170Z" fill="none" stroke="${ALERT}" stroke-width="5"/>
+      <path d="M55 145 L20 110 M55 160 L20 195" fill="none" stroke="${MUTED}" stroke-width="5"/>
+      <text x="145" y="255" text-anchor="middle" font-size="24" fill="${INK}" font-family="${FONT}">Muscle</text>
+      <path d="M260 155 L330 155" fill="none" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/>
+      <rect x="340" y="105" width="150" height="100" rx="48" fill="none" stroke="${ALERT}" stroke-width="4"/>
+      <g stroke="${MUTED}" stroke-width="2"><line x1="365" y1="120" x2="365" y2="190"/><line x1="395" y1="115" x2="395" y2="195"/><line x1="425" y1="115" x2="425" y2="195"/><line x1="455" y1="120" x2="455" y2="190"/></g>
+      <text x="415" y="255" text-anchor="middle" font-size="24" fill="${INK}" font-family="${FONT}">Fibre musculaire</text>
+      <path d="M500 155 L570 155" fill="none" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/>
+      <rect x="580" y="125" width="250" height="60" rx="28" fill="none" stroke="${ATP}" stroke-width="4"/>
+      <g stroke="${MUTED}" stroke-width="2"><line x1="610" y1="130" x2="610" y2="180"/><line x1="650" y1="130" x2="650" y2="180"/><line x1="690" y1="130" x2="690" y2="180"/><line x1="730" y1="130" x2="730" y2="180"/><line x1="770" y1="130" x2="770" y2="180"/><line x1="810" y1="130" x2="810" y2="180"/></g>
+      <text x="705" y="255" text-anchor="middle" font-size="24" fill="${INK}" font-family="${FONT}">Myofibrille</text>` },
+    { id: 'sarcomere', label: 'Sarcomère', delay: 700, svgContent: `
+      <path d="M650 195 C630 280 525 315 430 330" fill="none" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/>
+      <line x1="250" y1="350" x2="250" y2="475" stroke="${ATP}" stroke-width="5"/><line x1="650" y1="350" x2="650" y2="475" stroke="${ATP}" stroke-width="5"/>
+      <g stroke="${ALERT}" stroke-width="4"><line x1="250" y1="385" x2="430" y2="385"/><line x1="470" y1="385" x2="650" y2="385"/><line x1="250" y1="435" x2="430" y2="435"/><line x1="470" y1="435" x2="650" y2="435"/></g>
+      <g stroke="${OXYGEN}" stroke-width="7"><line x1="350" y1="380" x2="550" y2="380"/><line x1="350" y1="430" x2="550" y2="430"/></g>
+      <text x="250" y="340" text-anchor="middle" font-size="18" fill="${ATP}" font-family="${FONT}">Z</text><text x="650" y="340" text-anchor="middle" font-size="18" fill="${ATP}" font-family="${FONT}">Z</text>
+      <path d="M260 490 L640 490" fill="none" stroke="${INK}" stroke-width="3" marker-start="url(#pencilArrow)" marker-end="url(#pencilArrow)"/>
+      <text x="450" y="515" text-anchor="middle" font-size="23" fill="${INK}" font-family="${FONT}">1 sarcomère</text>` },
+  ],
+  annotations: [
+    { id: 'fiber', x: 330, y: 95, width: 170, height: 175, label: 'Fibre musculaire', description: 'Cellule plurinucléée contenant de nombreuses myofibrilles parallèles.', color: ALERT },
+    { id: 'sarcomere', x: 230, y: 330, width: 440, height: 180, label: 'Sarcomère', description: 'Unité contractile répétée d’une myofibrille, comprise entre deux stries Z.', color: ATP },
+  ],
+  highlights: [{ id: 'levels', cx: 430, cy: 160, radius: 390, label: 'Niveaux d’organisation' }, { id: 'unit', cx: 450, cy: 415, radius: 230, label: 'Sarcomère' }],
+};
+
+export const SVT_CROQUIS_MYOGRAMMES: ScientificSchema = {
+  id: 'svt_croquis_myogrammes', title: 'Croquis au crayon — Secousse, sommation et tétanos', subject: 'svt',
+  keywords: ['muscle', 'myogramme', 'secousse musculaire', 'sommation', 'tétanos incomplet', 'tétanos complet', 'fréquence stimulation', 'تقلص عضلي'],
+  metadata: { courseId: 'svt_ch1_muscle', chapter: 'Consommation de la matière organique et libération de l\'énergie', lesson: 'Rôle du muscle strié squelettique dans la conversion de l\'énergie', visualStyle: 'pencil', resourceRole: 'teacher_sketch', learningObjectives: ['Analyser une secousse, une sommation et un tétanos'], llmIntents: ['dessiner les myogrammes', 'comparer secousse sommation tetanos'], drawingSteps: ['Tracer les axes tension et temps', 'Dessiner une secousse isolée', 'Rapprocher les stimulations pour la sommation', 'Montrer les tétanos incomplet puis complet'] },
+  category: 'graph', viewBox: '0 0 900 520',
+  layers: [
+    { id: 'axes', label: 'Axes', delay: 0, svgContent: `${PENCIL_DEFS}<line x1="70" y1="455" x2="850" y2="455" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><line x1="70" y1="455" x2="70" y2="55" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><text x="850" y="490" text-anchor="end" font-size="20" fill="${INK}" font-family="${FONT}">temps</text><text x="30" y="75" transform="rotate(-90 30 75)" font-size="20" fill="${INK}" font-family="${FONT}">tension</text>` },
+    { id: 'curves', label: 'Réponses mécaniques', delay: 450, svgContent: `
+      <path d="M95 160 C120 160 125 85 160 85 C195 85 200 160 225 160" fill="none" stroke="${ALERT}" stroke-width="4"/>
+      <text x="160" y="195" text-anchor="middle" font-size="19" fill="${INK}" font-family="${FONT}">Secousse</text>
+      <path d="M270 160 C295 160 300 100 330 100 C350 100 355 65 390 65 C430 65 435 160 465 160" fill="none" stroke="${ATP}" stroke-width="4"/>
+      <text x="370" y="195" text-anchor="middle" font-size="19" fill="${INK}" font-family="${FONT}">Sommation</text>
+      <path d="M510 160 C520 130 530 75 545 90 C560 55 575 82 590 62 C605 80 620 55 635 78 C650 62 665 90 680 68 C700 92 710 130 720 160" fill="none" stroke="${OXYGEN}" stroke-width="4"/>
+      <text x="615" y="195" text-anchor="middle" font-size="19" fill="${INK}" font-family="${FONT}">Tétanos incomplet</text>
+      <path d="M115 370 C125 315 145 285 185 285 L360 285 C400 285 415 330 425 370" fill="none" stroke="${PRODUCT}" stroke-width="5"/>
+      <text x="270" y="410" text-anchor="middle" font-size="19" fill="${INK}" font-family="${FONT}">Tétanos complet</text>
+      <g stroke="${MUTED}" stroke-width="2"><line x1="125" y1="455" x2="125" y2="438"/><line x1="305" y1="455" x2="305" y2="438"/><line x1="330" y1="455" x2="330" y2="438"/><line x1="545" y1="455" x2="545" y2="438"/><line x1="575" y1="455" x2="575" y2="438"/><line x1="605" y1="455" x2="605" y2="438"/></g>` },
+  ],
+  annotations: [{ id: 'frequency', x: 90, y: 45, width: 650, height: 390, label: 'Fréquence des stimulations', description: 'Quand l’intervalle entre stimulations diminue, les réponses se somment jusqu’au tétanos.', color: ATP }],
+  highlights: [{ id: 'twitch', cx: 160, cy: 125, radius: 90, label: 'Secousse' }, { id: 'tetany', cx: 270, cy: 330, radius: 180, label: 'Tétanos complet' }],
+};
+
+export const SVT_CROQUIS_CYCLE_ACTOMYOSINE: ScientificSchema = {
+  id: 'svt_croquis_cycle_actomyosine', title: 'Croquis au crayon — Cycle actine–myosine et ATP', subject: 'svt',
+  keywords: ['muscle', 'actine myosine', 'cycle ponts', 'ATP contraction', 'Ca2+', 'pivotement myosine', 'détachement', 'تقلص', 'ATP عضلة'],
+  metadata: { courseId: 'svt_ch1_muscle', chapter: 'Consommation de la matière organique et libération de l\'énergie', lesson: 'Rôle du muscle strié squelettique dans la conversion de l\'énergie', visualStyle: 'pencil', resourceRole: 'teacher_sketch', learningObjectives: ['Expliquer le cycle des ponts actine–myosine et le rôle de l’ATP'], llmIntents: ['dessiner le cycle actomyosine', 'montrer role ATP contraction'], drawingSteps: ['Placer actine et tête de myosine', 'Montrer la fixation autorisée par Ca²⁺', 'Tracer le pivotement', 'Ajouter ATP pour le détachement puis son hydrolyse'] },
+  category: 'cycle', viewBox: '0 0 900 520',
+  layers: [
+    { id: 'steps', label: 'Quatre étapes', delay: 0, svgContent: `${PENCIL_DEFS}
+      <g fill="none" stroke="${ALERT}" stroke-width="4"><path d="M105 120 Q170 85 235 120"/><path d="M330 120 Q395 85 460 120"/><path d="M555 120 Q620 85 685 120"/><path d="M330 350 Q395 315 460 350"/></g>
+      <g fill="none" stroke="${OXYGEN}" stroke-width="7"><path d="M170 205 L170 130"/><path d="M395 205 L410 130"/><path d="M620 205 L650 135"/><path d="M395 435 L370 365"/></g>
+      <text x="170" y="245" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">1. Fixation</text><text x="395" y="245" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">2. Pivotement</text><text x="620" y="245" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">3. Détachement</text><text x="395" y="475" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">4. Réactivation</text>
+      <text x="92" y="80" font-size="18" fill="${ATP}" font-family="${FONT}">Ca²⁺ expose les sites</text><text x="565" y="80" font-size="18" fill="${ATP}" font-family="${FONT}">+ ATP</text><text x="505" y="420" font-size="18" fill="${ATP}" font-family="${FONT}">ATP → ADP + Pi</text>` },
+    { id: 'cycle', label: 'Boucle', delay: 650, svgContent: `<path d="M245 160 L315 160" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><path d="M470 160 L540 160" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><path d="M650 260 C640 330 540 360 475 375" fill="none" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><path d="M315 375 C230 350 175 295 175 260" fill="none" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><text x="785" y="315" text-anchor="middle" font-size="18" fill="${PRODUCT}" font-family="${FONT}">Le cycle répété</text><text x="785" y="342" text-anchor="middle" font-size="18" fill="${PRODUCT}" font-family="${FONT}">fait glisser l’actine</text>` },
+  ],
+  annotations: [{ id: 'atp', x: 520, y: 45, width: 200, height: 420, label: 'Double rôle de l’ATP', description: 'La fixation d’ATP détache la myosine ; son hydrolyse réarme la tête pour un nouveau cycle.', color: ATP }],
+  highlights: [{ id: 'power', cx: 395, cy: 165, radius: 95, label: 'Pivotement' }, { id: 'atp', cx: 620, cy: 165, radius: 95, label: 'ATP' }],
+};
+
+export const SVT_CROQUIS_CHALEURS_MUSCLE: ScientificSchema = {
+  id: 'svt_croquis_chaleurs_muscle', title: 'Croquis au crayon — Chaleurs et transformations chimiques du muscle', subject: 'svt',
+  keywords: ['chaleur musculaire', 'chaleur initiale', 'chaleur retardée', 'myogramme chaleur', 'O2 récupération', 'glycogène lactate', 'phénomènes chimiques contraction'],
+  metadata: { courseId: 'svt_ch1_muscle', chapter: 'Consommation de la matière organique et libération de l\'énergie', lesson: 'Rôle du muscle strié squelettique dans la conversion de l\'énergie', visualStyle: 'pencil', resourceRole: 'teacher_sketch', learningObjectives: ['Exploiter les phénomènes thermiques et chimiques associés à la contraction'], llmIntents: ['dessiner chaleur initiale et retardée', 'relier myogramme chaleur oxygen'], drawingSteps: ['Tracer la secousse musculaire', 'Placer la chaleur initiale pendant contraction et relâchement', 'Ajouter la chaleur retardée de récupération', 'Relier O₂ à la régénération de l’ATP'] },
+  category: 'graph', viewBox: '0 0 900 520',
+  layers: [
+    { id: 'graph', label: 'Myogramme et chaleurs', delay: 0, svgContent: `${PENCIL_DEFS}<line x1="90" y1="430" x2="845" y2="430" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><line x1="90" y1="430" x2="90" y2="65" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><path d="M130 190 C180 190 185 80 270 80 C355 80 360 190 415 190" fill="none" stroke="${INK}" stroke-width="5"/><text x="270" y="55" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">Secousse musculaire</text><path d="M130 390 C180 390 190 275 275 275 C350 275 360 390 415 390" fill="none" stroke="${ALERT}" stroke-width="5"/><text x="270" y="250" text-anchor="middle" font-size="20" fill="${ALERT}" font-family="${FONT}">Chaleur initiale</text><path d="M415 390 C470 390 485 300 600 300 C725 300 730 390 805 390" fill="none" stroke="${OXYGEN}" stroke-width="5"/><text x="610" y="275" text-anchor="middle" font-size="20" fill="${OXYGEN}" font-family="${FONT}">Chaleur retardée</text>` },
+    { id: 'chemistry', label: 'Bilan chimique', delay: 650, svgContent: `<text x="185" y="470" font-size="18" fill="${ATP}" font-family="${FONT}">ATP → ADP + Pi</text><text x="500" y="470" font-size="18" fill="${OXYGEN}" font-family="${FONT}">O₂ consommé pendant la récupération</text><text x="500" y="500" font-size="17" fill="${MUTED}" font-family="${FONT}">ATP et phosphocréatine sont régénérés</text>` },
+  ],
+  annotations: [{ id: 'initial', x: 120, y: 240, width: 310, height: 175, label: 'Chaleur initiale', description: 'Elle accompagne la contraction et le relâchement, liés à l’utilisation immédiate de l’ATP.', color: ALERT }, { id: 'delayed', x: 430, y: 260, width: 390, height: 160, label: 'Chaleur retardée', description: 'Elle apparaît pendant la récupération et dépend surtout des réactions oxydatives utilisant O₂.', color: OXYGEN }],
+  highlights: [{ id: 'initial', cx: 275, cy: 340, radius: 155, label: 'Chaleur initiale' }, { id: 'delayed', cx: 610, cy: 350, radius: 200, label: 'Chaleur retardée' }],
+};
+
+export const SVT_CROQUIS_FILIERES_MUSCLE: ScientificSchema = {
+  id: 'svt_croquis_filieres_muscle', title: 'Croquis au crayon — Filières de régénération de l’ATP', subject: 'svt',
+  keywords: ['filières énergétiques', 'phosphocréatine', 'glycolyse anaérobie', 'respiration aérobie', 'effort bref intense prolongé', 'ATP muscle'],
+  metadata: { courseId: 'svt_ch1_muscle', chapter: 'Consommation de la matière organique et libération de l\'énergie', lesson: 'Rôle du muscle strié squelettique dans la conversion de l\'énergie', visualStyle: 'pencil', resourceRole: 'teacher_sketch', learningObjectives: ['Identifier la filière de régénération de l’ATP selon l’effort'], llmIntents: ['dessiner les filieres du muscle', 'comparer effort bref intense prolonge'], drawingSteps: ['Placer l’ATP au centre', 'Ajouter phosphocréatine pour l’effort très bref', 'Ajouter glycolyse anaérobie pour l’effort intense', 'Ajouter respiration pour l’effort prolongé'] },
+  category: 'comparison', viewBox: '0 0 900 520',
+  layers: [
+    { id: 'timeline', label: 'Durée de l’effort', delay: 0, svgContent: `${PENCIL_DEFS}<line x1="80" y1="440" x2="840" y2="440" stroke="${INK}" stroke-width="3" marker-end="url(#pencilArrow)"/><text x="835" y="475" text-anchor="end" font-size="20" fill="${INK}" font-family="${FONT}">durée de l’effort</text><rect x="90" y="105" width="200" height="270" rx="28" fill="none" stroke="${ATP}" stroke-width="4"/><rect x="350" y="105" width="200" height="270" rx="28" fill="none" stroke="${ALERT}" stroke-width="4"/><rect x="610" y="105" width="200" height="270" rx="28" fill="none" stroke="${OXYGEN}" stroke-width="4"/>` },
+    { id: 'labels', label: 'Trois filières', delay: 500, svgContent: `<text x="190" y="155" text-anchor="middle" font-size="23" fill="${ATP}" font-family="${FONT}">Phosphocréatine</text><text x="190" y="215" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">très rapide</text><text x="190" y="250" text-anchor="middle" font-size="18" fill="${MUTED}" font-family="${FONT}">faible capacité</text><text x="190" y="320" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">effort très bref</text><text x="450" y="155" text-anchor="middle" font-size="23" fill="${ALERT}" font-family="${FONT}">Glycolyse anaérobie</text><text x="450" y="215" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">rapide · sans O₂</text><text x="450" y="250" text-anchor="middle" font-size="18" fill="${MUTED}" font-family="${FONT}">lactate</text><text x="450" y="320" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">effort intense</text><text x="710" y="155" text-anchor="middle" font-size="23" fill="${OXYGEN}" font-family="${FONT}">Respiration</text><text x="710" y="215" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">plus lente · avec O₂</text><text x="710" y="250" text-anchor="middle" font-size="18" fill="${MUTED}" font-family="${FONT}">forte capacité</text><text x="710" y="320" text-anchor="middle" font-size="20" fill="${INK}" font-family="${FONT}">effort prolongé</text>` },
+  ],
+  annotations: [{ id: 'pc', x: 85, y: 95, width: 210, height: 290, label: 'Phosphocréatine', description: 'Régénère très vite l’ATP mais ses réserves sont faibles.', color: ATP }, { id: 'anaerobic', x: 345, y: 95, width: 210, height: 290, label: 'Glycolyse anaérobie', description: 'Fournit rapidement peu d’ATP et produit du lactate.', color: ALERT }, { id: 'aerobic', x: 605, y: 95, width: 210, height: 290, label: 'Respiration', description: 'Fournit durablement beaucoup d’ATP en présence de dioxygène.', color: OXYGEN }],
+  highlights: [{ id: 'short', cx: 190, cy: 240, radius: 125, label: 'Très bref' }, { id: 'long', cx: 710, cy: 240, radius: 125, label: 'Prolongé' }],
+};
+
 export const SVT_ENERGY_PENCIL_SKETCHES = [
   SVT_CROQUIS_CELLULE_MITOCHONDRIE,
   SVT_CROQUIS_ATP_ADP,
@@ -509,4 +700,9 @@ export const SVT_ENERGY_PENCIL_SKETCHES = [
   SVT_CROQUIS_CHAINE_RESPIRATOIRE,
   SVT_CROQUIS_RESPIRATION_FERMENTATION,
   SVT_CROQUIS_BILAN_RESPIRATION,
+  SVT_CROQUIS_HIERARCHIE_MUSCLE,
+  SVT_CROQUIS_MYOGRAMMES,
+  SVT_CROQUIS_CYCLE_ACTOMYOSINE,
+  SVT_CROQUIS_CHALEURS_MUSCLE,
+  SVT_CROQUIS_FILIERES_MUSCLE,
 ] as const;

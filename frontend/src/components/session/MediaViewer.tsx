@@ -484,6 +484,7 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
     '/media/simulations/svt/ch2_information_genetique/expression/',
     '/media/simulations/svt/ch4_geodynamique_interne/',
     '/media/simulations/physics/advanced/',
+    '/media/simulations/svt/ch1_consommation_matiere_organique/documents/',
   ].some((path) => cleanUrl.includes(path));
 
   const handleSimulationLoad = () => {
@@ -583,7 +584,9 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
       )}
 
       {media.type === 'simulation' && (
-        <div className="h-full w-full overflow-hidden rounded-lg border bg-white">
+        <div className={usesNativeSimulationViewport
+          ? 'h-full w-full overflow-hidden rounded-lg bg-transparent'
+          : 'h-full w-full overflow-hidden rounded-lg border bg-white'}>
           <div className={usesNativeSimulationViewport
             ? 'w-full h-full'
             : 'w-[145%] h-[145%] origin-top-left scale-[0.68]'}>

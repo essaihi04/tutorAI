@@ -206,6 +206,40 @@ export interface Mitochondrion3DVisualSpec {
   focus?: Mitochondrion3DPart;
 }
 
+export type MuscleExcitation3DPart =
+  | 'all'
+  | 'muscle'
+  | 'fascicle'
+  | 'muscle_fiber'
+  | 'myofibril'
+  | 'neuromuscular_junction'
+  | 'sarcolemma'
+  | 't_tubule'
+  | 'sarcoplasmic_reticulum'
+  | 'calcium'
+  | 'troponin'
+  | 'tropomyosin'
+  | 'actin'
+  | 'myosin'
+  | 'atp'
+  | 'sarcomere';
+
+/**
+ * Modèle 3D procédural et versionné du couplage excitation–contraction.
+ * Le LLM choisit uniquement l'étape et le repère ; la géométrie reste dans
+ * le composant pédagogique audité.
+ */
+export interface MuscleExcitation3DVisualSpec {
+  engine: 'three';
+  model: 'muscle_excitation_contraction';
+  title?: string;
+  description?: string;
+  autoplay?: boolean;
+  labels?: boolean;
+  focus?: MuscleExcitation3DPart;
+  step?: number;
+}
+
 export type ScientificPresetId =
   | 'phys_ch1_propagation_onde'
   | 'phys_ch1_types_ondes'
@@ -218,9 +252,19 @@ export type ScientificPresetId =
   | 'svt_ch1_couplage_excitation_contraction'
   | 'svt_ch1_cycle_atp'
   | 'svt_ch1_levures_exao'
+  | 'svt_ch1_glycolyse_etapes'
+  | 'svt_ch1_krebs_detaille'
+  | 'svt_ch1_echelle_redox'
+  | 'svt_ch1_molecules_glucose_atp'
+  | 'svt_ch1_rendement_energetique'
+  | 'svt_ch1_schema_bilan_annote'
+  | 'svt_ch1_vesicules_atp_synthase'
+  | 'svt_ch1_ultrastructure_mitochondrie'
+  | 'svt_ch1_flux_protons'
   | 'svt_ch1_chimiosmose'
   | 'svt_ch1_carte_metabolique'
   | 'svt_ch1_myogrammes'
+  | 'svt_ch1_chaleurs_muscle'
   | 'svt_ch1_cycle_actomyosine'
   | 'svt_ch1_filieres_effort';
 
@@ -276,4 +320,5 @@ export type ScientificVisualSpec =
   | MatterVisualSpec
   | RoughSVGVisualSpec
   | Mitochondrion3DVisualSpec
+  | MuscleExcitation3DVisualSpec
   | ScientificPresetVisualSpec;

@@ -9,8 +9,11 @@ Chaque test verrouille l'un des trois défauts qu'il doit rendre visibles, plus
 le cas normal, qui ne doit RIEN signaler : un journal qui crie à chaque tour
 ne se lit plus.
 """
+import asyncio
 
 from app.services import libre_journal
+from app.services.session_mode import ModeSession
+from app.websockets.session_handler import SessionHandler
 
 
 def _tour(demande, actions, reponse="D'accord.", carte=None, route=None):
@@ -48,6 +51,16 @@ def test_un_tableau_promis_sans_bloc_est_signale():
 
 def test_la_promesse_se_reconnait_aussi_en_francais():
     ligne = _tour("explique", actions=[], reponse="Je vais te dessiner le cycle.")
+
+    assert ligne["promesse_non_tenue"] is True
+
+
+def test_je_vais_lancer_une_scene_est_journalise_comme_promesse():
+    ligne = _tour(
+        "explique la propagation d'une onde",
+        actions=[],
+        reponse="Je vais lancer une scène animée. Regarde comment l'onde avance.",
+    )
 
     assert ligne["promesse_non_tenue"] is True
 
@@ -181,3 +194,25 @@ def test_un_geste_qui_ecrit_au_tableau_compte_bien_comme_un_envoi():
     )
 
     assert ligne["ressource_ignoree"] is False
+
+
+def test_le_handler_journalise_aussi_une_reponse_sans_bloc_ui(monkeypatch):
+    """Le point d'accroche ne doit plus vivre à l'intérieur de `if ui_blocks`."""
+    appels = []
+
+    class FauxWebSocket:
+        async def send_json(self, _message):
+            return None
+
+    handler = SessionHandler(FauxWebSocket(), "eleve-prose")
+    handler._mode = ModeSession("libre")
+    monkeypatch.setattr(
+        libre_journal,
+        "noter_tour",
+        lambda *args, **kwargs: appels.append((args, kwargs)),
+    )
+
+    asyncio.run(handler._execute_ai_commands("Une réponse purement orale."))
+
+    assert len(appels) == 1
+    assert appels[0][0][2] == []

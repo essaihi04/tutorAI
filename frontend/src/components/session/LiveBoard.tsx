@@ -13,6 +13,7 @@ import { toSpokenText, estimateSpeechMs } from '../../utils/mathSpeech';
 import { useSessionStore } from '../../stores/sessionStore';
 import RoughShape from './scientific/RoughShape';
 import ScientificVisual from './scientific/ScientificVisual';
+import { SessionMediaDisplay } from './MediaViewer';
 import {
   poserLesTextes, empreinte,
   type EmpreinteElement, type PoseTexte,
@@ -122,6 +123,18 @@ export interface LiveStep {
    * figure de moteur : le professeur l'affiche, en parle, puis l'efface.
    */
   schema_id?: string;
+  /**
+   * `figure` : une planche déjà photographiée ou dessinée — le professeur
+   * l'épingle au tableau. Le tableau ne savait afficher que ce qu'un moteur
+   * sait tracer ; les cours rédigés, eux, portent aussi des images.
+   */
+  image?: { url: string; alt?: string; caption?: string };
+  /**
+   * `figure` : une simulation servie en page autonome (iframe). Les moteurs
+   * scientifiques couvrent les figures que l'on calcule ; celles-ci sont des
+   * laboratoires entiers, écrits à part et déjà en ligne.
+   */
+  simulation?: { url: string; caption?: string };
   /** `figure` + `schema_id` : les parties que le professeur montre du doigt. */
   highlights?: string[];
   /**
@@ -138,6 +151,15 @@ export interface LiveStep {
   say?: string;
   /** ask : boutons de réponse proposés (la bonne + distracteurs). */
   options?: string[];
+  /**
+   * Enregistrement déjà produit pour ce qui se dit ici.
+   *
+   * Le tableau synthétise sa voix à la volée, ligne par ligne — c'est ce
+   * qu'il faut quand le professeur improvise. Un cours rédigé, lui, a sa voix
+   * générée, écoutée et publiée à l'avance : c'est celle-là qu'il faut jouer,
+   * pas une resynthèse. Absent, le tableau retombe sur sa propre voix.
+   */
+  audio_url?: string;
   /** zoom : point visé (coordonnées croquis 0-500 × 0-400) + échelle.
    *  scale 1 = retour au tableau entier. */
   x?: number;
@@ -174,6 +196,32 @@ interface LiveBoardProps {
    */
   onFocusChange?: (focus: boolean) => void;
   /**
+   * Ouvrir directement en plein écran.
+   *
+   * Le tableau d'une séance libre est un appoint : il s'installe dans la page
+   * et l'élève l'agrandit s'il veut. Un cours rédigé, lui, EST la séance —
+   * il prend l'écran dès la première diapositive. Le choix de l'élève reste
+   * maître ensuite : ce n'est qu'une valeur de départ, jamais réimposée.
+   */
+  startFocused?: boolean;
+  /**
+   * Afficher la bulle qui recopie ce que le professeur PRONONCE.
+   *
+   * Elle est la seule trace de la narration dans une séance libre. Un cours
+   * rédigé, lui, verse déjà cette parole dans le chat : la bulle y répétait
+   * un paragraphe entier en travers du bas du tableau.
+   */
+  showNarration?: boolean;
+  /**
+   * Commandes appartenant à l'APPELANT, posées dans le coin élève.
+   *
+   * Un cours rédigé enchaîne des diapositives ; le tableau n'en sait rien et
+   * n'a pas à le savoir. Ses boutons à lui (« Suivant », « Recommencer »)
+   * vivaient donc dans une seconde barre, en haut — deux barres pour un seul
+   * cours. Ils descendent ici, dans la barre qui reste.
+   */
+  deckControls?: React.ReactNode;
+  /**
    * true tant que la voix du chat parle.
    *
    * C'est LE signal de synchronisation : le tableau n'écrit que pendant que
@@ -186,6 +234,14 @@ interface LiveBoardProps {
   scientificControl?: ScientificControlCommand | null;
   /** Remonte l'état compact d'une simulation de catalogue vers le LLM. */
   onSimulationUpdate?: (update: ScientificSimulationUpdate) => void;
+  /**
+   * Le script vient d'être écrit en entier.
+   *
+   * C'est le signal qu'attend une simulation mise en attente : le tuteur
+   * annonce, écrit, PUIS lance. Sans lui, le média s'affichait à l'instant où
+   * il arrivait et effaçait le tableau au milieu de la première phrase.
+   */
+  onScriptEnd?: () => void;
 }
 
 // ── Palette craie (tableau sombre) ─────────────────────────────────
@@ -261,7 +317,7 @@ function poserLaSalve(
   }));
 }
 
-function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange, scientificControl, onSimulationUpdate }: LiveBoardProps) {
+function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistantReply, busy, voiceEnabled = true, audioActive = false, onFocusChange, scientificControl, onSimulationUpdate, onScriptEnd, startFocused = false, showNarration = true, deckControls }: LiveBoardProps) {
   const [written, setWritten] = useState<WrittenEntry[]>([]);
   const [drawn, setDrawn] = useState<DrawnEntry[]>([]);
   /**
@@ -281,6 +337,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   type OccupantDuDessin =
     | { kind: 'scientific'; spec: ScientificVisualSpec }
     | { kind: 'schema'; id: string; highlights?: string[] }
+    | { kind: 'image'; url: string; alt?: string; caption?: string }
+    | { kind: 'simulation'; url: string; caption?: string }
     | { kind: 'bloc'; line: BoardLine };
   const [figure, setFigure] = useState<OccupantDuDessin | null>(null);
   const [narration, setNarration] = useState<string | null>(null);
@@ -310,11 +368,12 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const [dragging, setDragging] = useState(false);
 
   // ── Mode plein écran « cours magistral » ──
-  // Dès que le professeur prend la parole, le tableau occupe tout l'écran
-  // avec une interface minimale (auto-masquée) pour garder l'élève concentré.
+  // Le tableau reste dans la séance par défaut : le chat et son champ de
+  // réponse demeurent accessibles. Le plein écran est un choix explicite de
+  // l'élève via le bouton dédié.
   // L'élève peut « lever la main » : le cours se met en pause et il pose sa
   // question au clavier ou à la voix, comme dans une vraie salle de classe.
-  const [focus, setFocus] = useState(true);
+  const [focus, setFocus] = useState(startFocused);
   useEffect(() => { onFocusChange?.(focus); }, [focus, onFocusChange]);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [askOpen, setAskOpen] = useState(false);
@@ -394,7 +453,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // ne s'afficherait nulle part.
   const hasDrawSteps = Array.isArray(script?.steps) && script.steps.some(
     s => (s?.action === 'draw' && Array.isArray(s.elements) && s.elements.length > 0)
-      || (s?.action === 'figure' && (!!s.scientific || !!s.schema_id))
+      // ⚠️ Les QUATRE formes de figure comptent. La liste n'en connaissait que
+      // deux : une planche ou une simulation arrivait sans zone où se poser, et
+      // ne s'affichait donc nulle part — ni erreur, ni cadre vide, rien.
+      || (s?.action === 'figure' && (!!s.scientific || !!s.schema_id || !!s.image?.url || !!s.simulation?.url))
       || (s?.action === 'bloc' && ['graph', 'diagram', 'mindmap'].includes(String(s.line?.type || '')))
   );
 
@@ -465,6 +527,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       }
     }
   }, [spokenTextOf]);
+
+  // Gardée en ref : `play` est mémoïsé, et rattacher la callback à ses
+  // dépendances relancerait le script à chaque rendu du parent.
+  const onScriptEndRef = useRef(onScriptEnd);
+  onScriptEndRef.current = onScriptEnd;
 
   /**
    * Le tableau a-t-il le droit d'avancer maintenant ?
@@ -554,6 +621,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     raw: string,
     runId: number,
     langue: 'fr' | 'ar' | 'mixed' = langRef.current,
+    urlPrete?: string | null,
   ): Promise<boolean> => {
     if (!soundOnRef.current) return false;
     const spoken = toSpokenText(raw);
@@ -605,7 +673,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       const observed = ratio * estimatedMs;
       if (observed > elapsed) elapsed = observed;
       else estimatedMs = Math.max(600, elapsed / Math.max(ratio, 0.01));
-    }, prendreLaParole);
+    }, prendreLaParole, urlPrete);
     voiceHandleRef.current = handle;
     // L'élève a pu mettre en pause pendant la génération de l'audio.
     if (!playingRef.current) handle.pause();
@@ -808,6 +876,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             setFigure({ kind: 'schema', id: step.schema_id, highlights: step.highlights });
           } else if (step.scientific) {
             setFigure({ kind: 'scientific', spec: step.scientific });
+          } else if (step.image?.url) {
+            setFigure({ kind: 'image', url: step.image.url, alt: step.image.alt, caption: step.image.caption });
+          } else if (step.simulation?.url) {
+            setFigure({ kind: 'simulation', url: step.simulation.url, caption: step.simulation.caption });
           } else {
             break;
           }
@@ -818,7 +890,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const dit = typeof step.say === 'string' ? step.say.trim() : '';
           const animee = step.scientific?.engine === 'matter'
             || step.scientific?.engine === 'preset'
-            || step.scientific?.engine === 'three';
+            || step.scientific?.engine === 'three'
+            || !!step.simulation?.url;
           if (dit && soundOnRef.current) {
             const handle = boardVoice.speak(toSpokenText(dit), langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
@@ -854,7 +927,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           if (typeof step.text === 'string' && step.text.trim()) {
             const text = step.text.trim();
             setNarration(text);
-            const spoke = await speakAndReveal(text, runId);
+            const spoke = await speakAndReveal(text, runId, langRef.current, step.audio_url);
             if (runId !== runIdRef.current) return;
             // Son coupé ou voix indisponible : on laisse le temps de lire.
             if (!spoke && !(await wait(narrateDuration(text), runId))) return;
@@ -935,7 +1008,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     }
     // Script terminé : le chat peut de nouveau se faire entendre.
     rendreLaParole();
-    if (runId === runIdRef.current) setFinished(true);
+    if (runId === runIdRef.current) {
+      setFinished(true);
+      onScriptEndRef.current?.();
+    }
   }, [wait, speakAndReveal, prefetchFrom, prendreLaParole, rendreLaParole]);
 
   // (Re)démarrage quand un nouveau script arrive
@@ -951,9 +1027,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setPlaying(true);
     setVoiceReveal(1);
     stepCounterRef.current = 0;
-    // Nouveau cours : le professeur reprend la parole en plein écran, la
-    // question en cours est close (la réponse arrive justement via ce script).
-    setFocus(true);
+    // Nouveau cours : on conserve le choix d'affichage de l'élève. Forcer le
+    // plein écran à chaque réponse recouvrait le chat juste au moment où il
+    // devait répondre.
     setAskOpen(false);
     setQuestionText('');
     setAwaitingReply(false);
@@ -1059,10 +1135,14 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         // Même relecture qu'en direct : sauter à la fin ne doit pas empiler les
         // mots les uns sur les autres.
         finalDrawn.push(...poserLaSalve(finalDrawn, els, () => ++keyRef.current, () => 0, 0));
-      } else if (step.action === 'figure' && (step.scientific || step.schema_id)) {
+      } else if (step.action === 'figure' && (step.scientific || step.schema_id || step.image?.url || step.simulation?.url)) {
         finalFigure = step.schema_id
           ? { kind: 'schema', id: step.schema_id, highlights: step.highlights }
-          : { kind: 'scientific', spec: step.scientific! };
+          : step.scientific
+          ? { kind: 'scientific', spec: step.scientific }
+          : step.image?.url
+          ? { kind: 'image', url: step.image.url, alt: step.image.alt, caption: step.image.caption }
+          : { kind: 'simulation', url: step.simulation!.url, caption: step.simulation!.caption };
       } else if (step.action === 'bloc' && step.line?.type) {
         const t = step.line.type;
         if (t === 'graph' || t === 'diagram' || t === 'mindmap') {
@@ -1084,6 +1164,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setNarration(lastNarration);
     setErasingZone(null);
     setFinished(true);
+    onScriptEndRef.current?.();
     setStepIndex(Math.max(0, (script?.steps?.length || 1) - 1));
   }, [script]);
 
@@ -1449,12 +1530,12 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       `}</style>
 
       {/* ── Barre d'outils ──
-           En plein écran elle flotte au-dessus du tableau et s'efface toute
-           seule pendant que le professeur parle (un geste la fait revenir). */}
+           En plein écran elle reste accessible : quitter/fermer doit répondre
+           au premier clic, sans clic préalable servant seulement à la révéler. */}
       <div
         className={`${
           focus
-            ? `absolute top-0 left-0 right-0 z-30 transition-all duration-300 ${controlsVisible ? '' : '-translate-y-full opacity-0 pointer-events-none'}`
+            ? 'absolute top-0 left-0 right-0 z-30'
             : 'shrink-0'
         } flex items-center justify-between px-3 py-1.5`}
         style={{
@@ -1653,6 +1734,28 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                     <ScientificVisual spec={figure.spec} transparent control={scientificControl} onSimulationUpdate={onSimulationUpdate} />
                   )}
                   {figure.kind === 'bloc' && renderBoardLine(figure.line)}
+                  {figure.kind === 'image' && (
+                    <figure className="h-full w-full flex flex-col p-2">
+                      <img
+                        src={figure.url}
+                        alt={figure.alt || ''}
+                        decoding="async"
+                        className="flex-1 min-h-0 w-full object-contain rounded-lg"
+                      />
+                      {figure.caption && (
+                        <figcaption className="shrink-0 pt-1.5 text-center text-[11px] text-white/55">
+                          {figure.caption}
+                        </figcaption>
+                      )}
+                    </figure>
+                  )}
+                  {figure.kind === 'simulation' && (
+                    <SessionMediaDisplay
+                      media={{ type: 'simulation', url: figure.url, caption: figure.caption }}
+                      isVisible
+                      onSimulationUpdate={onSimulationUpdate}
+                    />
+                  )}
                   {figure.kind === 'schema' && (() => {
                     const schema = getSchemaById(figure.id);
                     return schema
@@ -1697,7 +1800,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
 
       {/* ── Coin élève : pause + lever la main + question du prof + réponse ──
            (affiché aussi hors plein écran quand le professeur pose une question) */}
-      {(focus || pendingAsk) && (
+      {(focus || pendingAsk || deckControls) && (
         <div className="absolute bottom-0 left-0 right-0 z-40 flex flex-col items-center gap-2 px-3 pb-3 pointer-events-none">
           {/* Réponse du professeur à la question posée */}
           {askOpen && profReply && (
@@ -1832,6 +1935,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
               <button onClick={() => setFocus(false)} className="text-white/60 hover:text-white text-xs px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors">
                 Quitter le plein écran
               </button>
+              {deckControls}
             </div>
           ) : focus ? (
             /* Pendant le cours : deux commandes seulement, auto-masquées */
@@ -1858,13 +1962,19 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
                   ✋ Poser une question
                 </button>
               )}
+              {deckControls}
+            </div>
+          ) : deckControls ? (
+            /* Hors plein écran, la barre du bas n'existe que pour elles. */
+            <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
+              {deckControls}
             </div>
           ) : null}
         </div>
       )}
 
       {/* ── Narration du professeur (futur audio) ── */}
-      {narration && (
+      {narration && showNarration && (
         <div
           className="shrink-0 flex items-start gap-2 px-4 py-2.5"
           style={{

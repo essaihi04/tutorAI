@@ -74,15 +74,47 @@ class CoursePlayerService:
         ]
         return copy.deepcopy(self._manifest_cache)
 
-    def _load_local_manifest(self, lesson_title: str = "") -> Optional[dict]:
+    @staticmethod
+    def _lesson_match_score(manifest: dict, lesson_title: str, chapter_title: str = "") -> int:
+        """Note la correspondance d'un manifest avec une leçon.
+
+        Le titre du chapitre ne vaut pas celui de la leçon. « Consommation de
+        la matière organique et flux d'énergie » est un intitulé de chapitre
+        qui couvre AUSSI la leçon sur le muscle : confondre les deux faisait
+        ouvrir le cours du muscle quand l'élève cliquait sur celui de
+        l'énergie. Un mot-clé trouvé dans la leçon l'emporte donc toujours sur
+        le même mot-clé trouvé dans le chapitre, et le libellé le plus
+        spécifique l'emporte sur le plus court.
+        """
+        lesson_blob = _search_normalise(lesson_title)
+        chapter_blob = _search_normalise(chapter_title)
+        best = 0
+        for value in manifest.get("lesson_match") or []:
+            token = _search_normalise(value)
+            if not token:
+                continue
+            precision = len(token.split()) * 10 + len(token)
+            if token in lesson_blob:
+                best = max(best, 1000 + precision)
+            elif token in chapter_blob:
+                best = max(best, precision)
+        return best
+
+    def _load_local_manifest(self, lesson_title: str = "", chapter_title: str = "") -> Optional[dict]:
         manifests = self._load_local_manifests()
         if not manifests:
             return None
-        normalised_title = _normalise(lesson_title)
-        for manifest in manifests:
-            if any(_normalise(token) in normalised_title for token in manifest.get("lesson_match", [])):
-                return manifest
-        return manifests[0] if not lesson_title else None
+        if not lesson_title and not chapter_title:
+            return manifests[0]
+        scored = [
+            (self._lesson_match_score(manifest, lesson_title, chapter_title), manifest)
+            for manifest in manifests
+        ]
+        scored = [item for item in scored if item[0] > 0]
+        if not scored:
+            return None
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return scored[0][1]
 
     def match_manifest_intent(self, text: str) -> Optional[dict]:
         """Associe une demande explicite de cours à un seul manifest local."""
@@ -157,17 +189,15 @@ class CoursePlayerService:
 
     @staticmethod
     def _manifest_matches_lesson(manifest: dict, lesson: dict) -> bool:
+        return CoursePlayerService._lesson_score(manifest, lesson) > 0
+
+    @staticmethod
+    def _lesson_score(manifest: dict, lesson: dict) -> int:
         chapter = CoursePlayerService._chapter_from_lesson(lesson)
-        title_blob = _search_normalise(" ".join([
+        return CoursePlayerService._lesson_match_score(
+            manifest,
             str(lesson.get("title_fr") or ""),
             str(chapter.get("title_fr") or ""),
-        ]))
-        return any(
-            token and token in title_blob
-            for token in (
-                _search_normalise(value)
-                for value in manifest.get("lesson_match") or []
-            )
         )
 
     async def get_catalog(self, student: dict) -> dict:
@@ -240,6 +270,9 @@ class CoursePlayerService:
 
         published_rows = [row for row in deck_rows if row.get("status") == "published"]
         handled_database_ids: set[str] = set()
+        # Deux cours d'un même chapitre ne peuvent pas pointer la même leçon :
+        # sans cela, la carte d'un cours ouvrait la leçon de l'autre.
+        claimed_lesson_ids: set[str] = set()
 
         for manifest in self._load_local_manifests():
             stable_id = manifest.get("stable_id") or manifest.get("id")
@@ -265,12 +298,22 @@ class CoursePlayerService:
                     handled_database_ids.add(str(row.get("id")))
                     break
             if lesson is None:
-                lesson = next(
-                    (item for item in allowed_lessons if self._manifest_matches_lesson(manifest, item)),
-                    None,
+                # La leçon la mieux notée, pas la première rencontrée : l'ordre
+                # des lignes renvoyées par la base n'a aucune valeur pédagogique.
+                ranked = sorted(
+                    (
+                        (self._lesson_score(manifest, item), item)
+                        for item in allowed_lessons
+                        if str(item.get("id")) not in claimed_lesson_ids
+                    ),
+                    key=lambda pair: pair[0],
+                    reverse=True,
                 )
+                if ranked and ranked[0][0] > 0:
+                    lesson = ranked[0][1]
             if lesson is None:
                 continue
+            claimed_lesson_ids.add(str(lesson.get("id")))
 
             chapter = self._chapter_from_lesson(lesson)
             subject_id = str(chapter.get("subject_id") or "")
@@ -600,22 +643,24 @@ class CoursePlayerService:
         except Exception as exc:
             _log.info("[CoursePlayer] Published deck unavailable, using manifest fallback: %s", exc)
 
-        title_blob = ""
+        lesson_title = ""
+        chapter_title = ""
         try:
             admin = get_supabase_admin()
             lesson_result = admin.table("lessons").select("title_fr, chapter_id, chapters(title_fr)").eq(
                 "id", lesson_id
             ).limit(1).execute()
             lesson = lesson_result.data[0] if lesson_result.data else {}
-            title_blob = " ".join([
-                str(lesson.get("title_fr") or ""),
-                str((lesson.get("chapters") or {}).get("title_fr") or ""),
-            ])
+            lesson_title = str(lesson.get("title_fr") or "")
+            chapter_title = str(self._chapter_from_lesson(lesson).get("title_fr") or "")
         except Exception:
             # The REST endpoint already checked lesson access.  During local
             # development the manifest remains useful even if Supabase is down.
-            title_blob = ""
-        manifest = self._load_local_manifest(title_blob)
+            lesson_title = ""
+            chapter_title = ""
+        # Les deux titres restent séparés : fondus en un seul texte, l'intitulé
+        # du chapitre rendait les deux leçons indiscernables.
+        manifest = self._load_local_manifest(lesson_title, chapter_title)
         if not manifest:
             return None
         manifest["lesson_id"] = lesson_id

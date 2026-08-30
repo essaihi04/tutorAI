@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Documents expérimentaux - SVT 2BAC</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#06151b;color:#e2f7fb}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:grid;place-items:center}
+    main{width:100%;height:100%;padding:12px;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:8px}
+    figure{position:relative;margin:0;min-height:0;border:1px solid #155e75;border-radius:18px;overflow:hidden;background:#fff}
+    img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+    svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    figcaption{position:absolute;left:10px;bottom:8px;font-size:11px;letter-spacing:.02em;color:#e2f7fb;background:#06151bcc;border:1px solid #155e75;border-radius:8px;padding:3px 8px}
+    .panel{fill:#06151be8;stroke:#22d3ee;stroke-width:1.5}.axis{stroke:#94a3b8;stroke-width:1.5}
+    .o2{fill:none;stroke:#22d3ee;stroke-width:4;stroke-linejoin:round}.co2{fill:none;stroke:#22c55e;stroke-width:4;stroke-linejoin:round}.eth{fill:none;stroke:#fb7185;stroke-width:4;stroke-linejoin:round}
+    .cut{stroke:#fef08a;stroke-width:2;stroke-dasharray:7 5}
+    text{fill:#f8fafc;font-size:18px;font-weight:650}.muted{fill:#bae6fd;font-size:14px;font-weight:500}.tag{fill:#fef08a;font-size:15px}.cell{fill:#f8fafc;font-size:15px;font-weight:600}
+    .marker{fill:#fb7185;stroke:#fff;stroke-width:2}
+    footer{min-height:50px;border-radius:14px;background:#0b2b35;border:1px solid #155e75;padding:9px 14px;display:flex;gap:12px;align-items:center}
+    #step{color:#67e8f9;font-weight:800;white-space:nowrap}#interpretation{font-size:clamp(13px,1.8vw,18px);line-height:1.3}
+    @media(max-width:720px){main{padding:7px}footer{align-items:flex-start;flex-direction:column;gap:2px}text{font-size:15px}.muted{font-size:12px}.cell{font-size:13px}figcaption{font-size:9px}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<main>
+  <figure>
+    <img id="photo" alt="">
+    <svg id="overlay" viewBox="0 0 1000 563" aria-hidden="true"></svg>
+    <figcaption>Reconstitution pédagogique — illustration générée</figcaption>
+  </figure>
+  <footer><span id="step"></span><span id="interpretation"></span></footer>
+</main>
+<script>
+(() => {
+  const root='/media/images/svt/ch1_consommation_matiere_organique/lesson_1_liberation_energie/documents/';
+  const key=new URLSearchParams(location.search).get('scene')||'mitochondries';
+
+  // Chaque etape porte ses valeurs mesurees : la courbe est ensuite tracee a
+  // partir d'elles. Des courbes de Bezier calees a la main auraient donne un
+  // dessin sans rapport verifiable avec les graduations affichees.
+  const scenes={
+    mitochondries:{
+      id:'svt_ch1_mitochondries_isolees',
+      title:'Document 6 — mitochondries isolées et nature du substrat',
+      image:'enceinte_exao_mitochondries.webp',
+      alt:'Enceinte EXAO avec mitochondries isolées, sonde à dioxygène et deux seringues',
+      objectifs:['Décrire le montage','Déduire le substrat utilisé par la mitochondrie'],
+      axes:{x:'temps (min)',y:'[O₂] (µmol/L)',max:140},
+      series:[{key:'o2',label:'O₂',cls:'o2'}],
+      steps:[
+        {t:'Enceinte fermée : [O₂] stable avant toute injection',o2:120},
+        {t:'Injection de glucose à t₁ : aucune variation de [O₂]',o2:120,tag:'glucose'},
+        {t:'Injection de pyruvate à t₂ : [O₂] diminue',o2:88,tag:'pyruvate'},
+        {t:'Les mitochondries isolées utilisent le pyruvate, pas directement le glucose',o2:55}
+      ]
+    },
+    aerobie:{
+      id:'svt_ch1_exao_aerobie',
+      title:'Document 1 — respiration des levures en aérobiose',
+      image:'dispositif_exao_bioreacteur.webp',
+      alt:'Bioréacteur aérobie avec levures, bullage, agitation, sonde et seringue',
+      objectifs:['Décrire le protocole EXAO','Interpréter les échanges gazeux'],
+      axes:{x:'temps (min)',y:'concentration (µmol/L)',max:300},
+      series:[{key:'o2',label:'O₂',cls:'o2'},{key:'co2',label:'CO₂',cls:'co2'}],
+      steps:[
+        {t:'Avant le glucose : O₂ et CO₂ restent stables',o2:270,co2:25},
+        {t:'Injection de glucose : la respiration démarre',o2:245,co2:50,tag:'glucose'},
+        {t:'Les levures consomment O₂ et rejettent CO₂',o2:150,co2:170},
+        {t:'Respiration aérobie : oxydation complète du glucose',o2:80,co2:280}
+      ]
+    },
+    anaerobie:{
+      id:'svt_ch1_fermentation_anaerobie',
+      title:'Document 2 — fermentation des levures en anaérobiose',
+      image:'dispositif_fermentation_anaerobie_v2.png',
+      alt:'À gauche, flacon fermé contenant des levures relié à un tube d’eau de chaux ; à droite, espace réservé aux courbes',
+      objectifs:['Décrire le montage anaérobie','Identifier les produits de la fermentation'],
+      axes:{x:'temps (s)',y:'concentration (mg/L)',max:300},
+      series:[{key:'o2',label:'O₂',cls:'o2'},{key:'co2',label:'CO₂',cls:'co2'},{key:'ethanol',label:'Éthanol',cls:'eth'}],
+      steps:[
+        {t:'Le flacon est fermé : le dioxygène devient rapidement nul',o2:12,co2:25,ethanol:0},
+        {t:'Le glucose est consommé malgré l’absence de O₂',o2:0,co2:90,ethanol:35,
+         tag:'O₂ épuisé',note:'Bandelette réactive : le glucose du milieu diminue'},
+        {t:'CO₂ trouble l’eau de chaux et l’éthanol s’accumule',o2:0,co2:190,ethanol:110,
+         note:'Eau de chaux troublée → CO₂ identifié'},
+        {t:'Fermentation alcoolique : glucose → éthanol + CO₂ + 2 ATP',o2:0,co2:260,ethanol:200}
+      ]
+    },
+    levures:{
+      id:'svt_ch1_levures_comparaison',
+      title:'Document 3 — métabolisme et équipement mitochondrial',
+      image:'electronographies_levures_comparees.webp',
+      alt:'Comparaison de deux levures en coupe, aérobie à gauche et anaérobie à droite',
+      objectifs:['Comparer deux cultures','Relier métabolisme et présence de mitochondries'],
+      // Le tableau de culture est le coeur quantitatif du document : sans lui,
+      // la comparaison des electronographies reste une impression.
+      table:{
+        cols:['','Poids de levures','Glucose initial','Glucose consommé','Test à l’alcool'],
+        rows:[['Aérobie','1,970 g','150 g','150 g','négatif'],
+              ['Anaérobie','0,255 g','150 g','45 g','positif']]
+      },
+      steps:[
+        {t:'Deux cellules de levure de taille comparable'},
+        {t:'Aérobiose : nombreuses mitochondries allongées à crêtes développées',left:1,row:1},
+        {t:'Anaérobiose : grandes vacuoles et rares petites mitochondries',left:1,right:1,row:2},
+        {t:'La respiration est liée aux mitochondries ; la fermentation se déroule dans le hyaloplasme',left:1,right:1,row:2}
+      ]
+    }
+  };
+
+  const cfg=scenes[key]||scenes.mitochondries;
+  let step=0,timer=null;const actions=[];
+  const photo=document.querySelector('#photo'),svg=document.querySelector('#overlay'),
+        stepEl=document.querySelector('#step'),interp=document.querySelector('#interpretation');
+  photo.src=root+cfg.image;photo.alt=cfg.alt;
+
+  window.SIMULATION_CONFIG={
+    id:cfg.id,title:cfg.title,
+    variants:[{id:'scene',label:'Scène'}],
+    objectives:cfg.objectifs,learning_objectives:cfg.objectifs,
+    commands:['start','next','previous','reset','replay','highlight','pause','set_variant']
+  };
+
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+  function graph(){
+    const A=cfg.axes,x0=700,x1=935,y0=370,y1=150,n=cfg.steps.length;
+    const px=i=>x0+(x1-x0)*(n>1?i/(n-1):0);
+    const py=v=>y0-(y0-y1)*Math.max(0,Math.min(1,(v||0)/A.max));
+    let s=`<rect class="panel" x="620" y="62" width="345" height="372" rx="18"/>`;
+    // Legende : les series sont nommees ici, pas au bout des courbes, ou leur
+    // libelle debordait du cadre des la derniere etape.
+    s+=cfg.series.map((se,i)=>
+      `<line class="${se.cls}" x1="${642+i*95}" y1="96" x2="${668+i*95}" y2="96"/>`+
+      `<text class="muted" x="${673+i*95}" y="101">${se.label}</text>`).join('');
+    s+=`<line class="axis" x1="${x0}" y1="${y0}" x2="${x1+10}" y2="${y0}"/>`+
+       `<line class="axis" x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1-10}"/>`;
+    // Un axe sans nom ni unite est faux au bac : les deux sont obligatoires.
+    s+=`<text class="muted" x="${x0-9}" y="${y0+5}" text-anchor="end">0</text>`+
+       `<text class="muted" x="${x0-9}" y="${y1+5}" text-anchor="end">${A.max}</text>`+
+       `<text class="muted" x="${(x0+x1)/2}" y="${y0+32}" text-anchor="middle">${A.x}</text>`+
+       `<text class="muted" transform="translate(${x0-46} ${(y0+y1)/2}) rotate(-90)" text-anchor="middle">${A.y}</text>`;
+    for(const se of cfg.series){
+      const pts=cfg.steps.slice(0,step+1).map((st,i)=>`${px(i)},${py(st[se.key])}`).join(' ');
+      s+=`<polyline class="${se.cls}" points="${pts}"/>`;
+    }
+    // Reperes d'injection et epuisement du O2, ancres sur l'abscisse de l'etape
+    // ou l'evenement se produit.
+    cfg.steps.slice(0,step+1).forEach((st,i)=>{
+      if(!st.tag)return;
+      s+=`<line class="cut" x1="${px(i)}" y1="${y1-6}" x2="${px(i)}" y2="${y0}"/>`+
+         `<circle class="marker" cx="${px(i)}" cy="${y1-14}" r="7"/>`+
+         `<text class="tag" x="${px(i)}" y="${y1-24}" text-anchor="middle">${esc(st.tag)}</text>`;
+    });
+    return s;
+  }
+
+  function table(){
+    const T=cfg.table,shown=cfg.steps[step].row||0;
+    // Panneau ramene vers le bas : il masquait le tiers inferieur des deux
+    // cellules, alors que les vacuoles de la levure anaerobie font partie de
+    // ce qu'il faut observer.
+    const x=[55,235,420,600,790],y0=443;
+    let s=`<rect class="panel" x="35" y="420" width="930" height="122" rx="16"/>`;
+    s+=T.cols.map((c,i)=>`<text class="muted" x="${x[i]}" y="${y0}">${esc(c)}</text>`).join('');
+    T.rows.forEach((r,ri)=>{
+      if(ri+1>shown)return;
+      s+=r.map((c,i)=>`<text class="cell" x="${x[i]}" y="${y0+31+ri*31}">${esc(c)}</text>`).join('');
+    });
+    return s;
+  }
+
+  function render(){
+    const st=cfg.steps[step];
+    let content='';
+    if(cfg.table){
+      const v=st;
+      content=`<rect class="panel" x="35" y="30" width="250" height="58" rx="14"/><text x="55" y="67">Aérobiose</text>`+
+              `<rect class="panel" x="715" y="30" width="250" height="58" rx="14"/><text x="735" y="67">Anaérobiose</text>`+
+              (v.left?`<circle class="marker" cx="210" cy="235" r="18"/><circle class="marker" cx="370" cy="170" r="18"/>`:'')+
+              (v.right?`<circle class="marker" cx="920" cy="207" r="15"/>`:'')+
+              table();
+    } else content=graph();
+    svg.innerHTML=content;
+    stepEl.textContent=`Étape ${step+1}/${cfg.steps.length}`;
+    interp.textContent=st.t+(st.note?' — '+st.note:'');
+    emit(step>=cfg.steps.length-1?'finished':'running',st.t);
+  }
+
+  function emit(status,text){
+    const last=step>=cfg.steps.length-1;
+    const values={};
+    (cfg.series||[]).forEach(se=>{values[se.key]=cfg.steps[step][se.key]});
+    parent.postMessage({type:'simulation_state',simulation_id:cfg.id,
+      student_actions:actions.slice(-12),
+      current_state:{simulation_status:status,current_variant:'scene',
+        variants_completed:last?['scene']:[],step,max_step:cfg.steps.length-1,
+        scientific_interpretation:text,...values},
+      objective_progress:step/(cfg.steps.length-1),timestamp:Date.now()},'*');
+  }
+
+  // Sans moteur d'avancement, la scene restait sur son premier palier : la
+  // machine a etats du backend ne quitte RUNNING_VARIANT que sur le statut
+  // « finished », et l'orchestrateur n'envoie jamais `next`.
+  function stop(){if(timer){clearInterval(timer);timer=null}}
+  function play(){
+    stop();render();
+    timer=setInterval(()=>{
+      if(step>=cfg.steps.length-1){stop();return}
+      step++;render();
+    },4500);
+  }
+
+  window.executeAICommand=(command)=>{
+    actions.push({action:command,step});
+    if(command==='next'){stop();step=Math.min(step+1,cfg.steps.length-1);render()}
+    else if(command==='previous'){stop();step=Math.max(0,step-1);render()}
+    else if(command==='reset'){stop();step=0;render()}
+    else if(command==='highlight'){stop();step=cfg.steps.length-1;render()}
+    else if(command==='pause'){stop();render()}
+    else if(command==='replay'){step=0;play()}
+    // `start` arrive apres le manifeste, alors que la lecture a deja commence :
+    // le relancer ferait repartir l'eleve du debut au milieu de sa lecture.
+    else if(command==='start'){if(!timer){step=0;play()}}
+    else if(command==='set_variant'){/* une seule variante : sans effet */}
+  };
+
+  addEventListener('message',e=>{
+    const d=e.data;
+    if(d?.type==='simulation_control'&&(!d.simulation_id||d.simulation_id===cfg.id))
+      window.executeAICommand(d.command,d.parameters||{});
+  });
+
+  setTimeout(()=>{
+    parent.postMessage({type:'simulation_manifest',simulation_id:cfg.id,
+      capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,controls:{}},
+      page_text:cfg.title+' — '+cfg.steps.map(x=>x.t).join(' ')},'*');
+    window.__SIMULATION_MANIFEST_SENT__=true;
+    play();
+  },250);
+})();
+</script>
+</body>
+</html>

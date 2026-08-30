@@ -2,7 +2,11 @@
 
 import pytest
 
-from app.services.scientific_visual_skill import normalize_scientific_visual, scientific_visual_quality
+from app.services.scientific_visual_skill import (
+    SCIENTIFIC_VISUAL_PROMPT,
+    normalize_scientific_visual,
+    scientific_visual_quality,
+)
 from app.services.scientific_presets import normalize_scientific_control, normalize_scientific_state
 
 
@@ -147,6 +151,35 @@ def test_three_accepte_seulement_la_mitochondrie_versionnee_et_son_etat():
     }) is None
 
 
+def test_three_accepte_le_couplage_musculaire_versionne_et_borne_son_etape():
+    visual = normalize_scientific_visual({
+        "engine": "three",
+        "model": "muscle_excitation_contraction",
+        "title": "Du flux nerveux au relâchement",
+        "description": "Potentiel d’action, calcium, troponine, actomyosine et ATP.",
+        "focus": "troponin",
+        "step": 42,
+        "labels": True,
+        "geometry": [{"x": 1, "y": 2, "z": 3}],
+        "url": "https://example.com/model.glb",
+    })
+
+    assert visual == {
+        "engine": "three",
+        "model": "muscle_excitation_contraction",
+        "title": "Du flux nerveux au relâchement",
+        "description": "Potentiel d’action, calcium, troponine, actomyosine et ATP.",
+        "autoplay": False,
+        "labels": True,
+        "focus": "troponin",
+        "step": 15,
+    }
+
+    assert "étape 9 — Troponine C et Ca²⁺" in SCIENTIFIC_VISUAL_PROMPT
+    assert "étape 14 — Hydrolyse de l'ATP" in SCIENTIFIC_VISUAL_PROMPT
+    assert "La scène est volontairement muette" in SCIENTIFIC_VISUAL_PROMPT
+
+
 def test_preset_scientifique_ne_laisse_passer_qu_un_catalogue_valide():
     visual = normalize_scientific_visual({
         "engine": "preset",
@@ -248,6 +281,16 @@ def test_presets_transparents_physique_chimie_svt_sont_fermes_et_pilotables():
     ("chem_ch1_oxydoreduction", "electrolyse", 7),
     ("svt_ch1_glissement_sarcomere", "comparaison", 30),
     ("svt_ch1_couplage_excitation_contraction", "relaxation", 8),
+    ("svt_ch1_chaleurs_muscle", "sans_oxygene", 36),
+    ("svt_ch1_glycolyse_etapes", "scene", 9),
+    ("svt_ch1_krebs_detaille", "scene", 10),
+    ("svt_ch1_echelle_redox", "scene", 8),
+    ("svt_ch1_molecules_glucose_atp", "scene", 5),
+    ("svt_ch1_rendement_energetique", "scene", 10),
+    ("svt_ch1_schema_bilan_annote", "scene", 21),
+    ("svt_ch1_vesicules_atp_synthase", "scene", 8),
+    ("svt_ch1_chimiosmose", "scene", 12),
+    ("svt_ch1_carte_metabolique", "scene", 10),
 ])
 def test_presets_des_notions_difficiles_sont_valides_et_bornes(preset_id, variant, max_step):
     visual = normalize_scientific_visual({

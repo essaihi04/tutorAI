@@ -2274,6 +2274,9 @@ interface MockExamRecord {
     part2?: string[];
     profile_id?: string;
     profile_label?: string;
+    // Math layout: liste d'exercices + type de fonction du probleme
+    exercises?: { domain?: string; points?: number }[];
+    func_type?: string;
     gen_variant?: string;
     geo_variant?: string;
     env_variant?: string;

@@ -73,6 +73,36 @@ def test_every_preset_preview_resolves_through_the_shared_validator():
         assert normalize_scientific_visual(item["preview"]["scientific"]) is not None
 
 
+def test_les_scenes_du_muscle_sont_classees_dans_la_bonne_lecon():
+    muscle_ids = {
+        "svt_ch1_myogrammes",
+        "svt_ch1_chaleurs_muscle",
+        "svt_ch1_glissement_sarcomere",
+        "svt_ch1_couplage_excitation_contraction",
+        "svt_ch1_cycle_actomyosine",
+        "svt_ch1_filieres_effort",
+    }
+    items = {
+        item["catalog_id"]: item
+        for item in admin_visual_library_service._preset_items()
+        if item["catalog_id"] in muscle_ids
+    }
+
+    assert set(items) == muscle_ids
+    assert all("muscle strié" in item["lesson"] for item in items.values())
+
+
+def test_le_modele_3d_du_couplage_musculaire_est_dans_la_bibliotheque():
+    items = admin_visual_library_service._three_model_items()
+
+    assert len(items) == 1
+    item = items[0]
+    assert item["catalog_id"] == "muscle_excitation_contraction"
+    assert item["kind"] == "scientific"
+    assert "muscle strié" in item["lesson"]
+    assert normalize_scientific_visual(item["preview"]["scientific"]) is not None
+
+
 def test_legacy_mitochondrion_png_is_exposed_as_the_interactive_3d_model():
     item = admin_visual_library_service._resource_item({
         "id": "mito-legacy",

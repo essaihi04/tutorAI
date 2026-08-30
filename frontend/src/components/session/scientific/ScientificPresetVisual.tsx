@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import CytoscapeVisual from './CytoscapeVisual';
 import JSXGraphVisual from './JSXGraphVisual';
+import RoughSVGVisual from './RoughSVGVisual';
 import type {
   ScientificControlCommand,
   ScientificPresetVisualSpec,
@@ -147,6 +148,7 @@ export default function ScientificPresetVisual({
         {resolved.engine === 'jsxgraph' && (
           <JSXGraphVisual spec={resolved} transparent={transparent} fixedLabels={fixedLabels} />
         )}
+        {resolved.engine === 'roughsvg' && <RoughSVGVisual spec={resolved} transparent={transparent} />}
       </div>
       <div
         className={transparent

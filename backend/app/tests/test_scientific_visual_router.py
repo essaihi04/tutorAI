@@ -54,6 +54,23 @@ def test_la_mitochondrie_a_tourner_ne_retombe_pas_sur_une_image_fixe():
     assert "`mitochondrion`" in prompt
 
 
+def test_le_flux_nerveux_musculaire_demande_en_3d_ouvre_le_modele_dedie():
+    demande = (
+        "Montre en 3D le flux nerveux dans le muscle, le réticulum, le calcium, "
+        "la troponine et la tropomyosine, avec une pause à chaque étape"
+    )
+    route = route_scientific_visual("contraction du muscle strié", demande)
+
+    assert route["source"] == "model_3d"
+    assert route["model_id"] == "muscle_excitation_contraction"
+    prompt = build_visual_route_prompt("contraction du muscle strié", demande)
+    assert "`muscle_excitation_contraction`" in prompt
+    assert "`autoplay:false`" in prompt
+    assert "`labels:true`" in prompt
+    assert "SERCA" in prompt
+    assert "14=hydrolyse ATP et réarmement" in prompt
+
+
 def test_chaque_blueprint_bac_est_exploitable_et_testable():
     allowed = {"jsxgraph", "cytoscape", "matter", "roughsvg"}
     blueprints = visual_blueprints()

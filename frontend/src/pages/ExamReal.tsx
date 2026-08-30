@@ -938,7 +938,7 @@ export default function ExamReal() {
 
       {/* Confirm submit dialog */}
       {showConfirmSubmit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowConfirmSubmit(false)}>
           <div onClick={(e) => e.stopPropagation()} className="glass-strong rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-4">
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-white">
               <div className="flex items-start justify-between">
@@ -946,7 +946,7 @@ export default function ExamReal() {
                   <h3 className="text-lg font-bold">Rendre la copie ?</h3>
                   <p className="text-xs text-emerald-200 mt-0.5">La correction détaillée sera affichée après la remise</p>
                 </div>
-                <button onClick={onClose} className="p-1 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                <button onClick={() => setShowConfirmSubmit(false)} className="p-1 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>

@@ -48,12 +48,19 @@ interface PdfData {
 
 type Phase = 'idle' | 'render' | 'ocr' | 'detect' | 'done';
 
+type StepStatus = 'pending' | 'active' | 'done' | 'error';
+
+interface SubStep {
+  label: string;
+  status: StepStatus;
+}
+
 interface PipelineStep {
   id: string;
   label: string;
   detail: string;
-  status: 'pending' | 'active' | 'done' | 'error';
-  subSteps?: { label: string; status: 'pending' | 'active' | 'done' | 'error' }[];
+  status: StepStatus;
+  subSteps?: SubStep[];
 }
 
 type Step = 'upload' | 'extracting' | 'results';
@@ -306,7 +313,7 @@ export default function ExamExtractor() {
 
       // ── Process sujet ──
       const sn = sujetPdf.numPages;
-      const sSubSteps = Array.from({ length: sn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' as const }));
+      const sSubSteps: SubStep[] = Array.from({ length: sn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' }));
       setSujet(prev => ({ ...prev, totalPages: sn, ocrPages: Array.from({ length: sn }, (_, i) => ({ pageNumber: i + 1, text: '', markdown: '', status: 'pending' as const })), pageImages: [] }));
 
       // Render sujet
@@ -325,7 +332,7 @@ export default function ExamExtractor() {
 
       // OCR sujet
       setCurrentPhase('ocr');
-      const ocrSubSteps = Array.from({ length: sn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' as const }));
+      const ocrSubSteps: SubStep[] = Array.from({ length: sn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' }));
       updateStep('sujet_ocr', { status: 'active', detail: `0/${sn}`, subSteps: [...ocrSubSteps] });
       for (let p = 1; p <= sn; p++) {
         const ss = [...ocrSubSteps]; ss[p - 1] = { ...ss[p - 1], status: 'active' };
@@ -345,7 +352,7 @@ export default function ExamExtractor() {
 
       // Detect zones sujet
       setCurrentPhase('detect');
-      const detSubSteps = Array.from({ length: sn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' as const }));
+      const detSubSteps: SubStep[] = Array.from({ length: sn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' }));
       updateStep('sujet_detect', { status: 'active', detail: `0/${sn}`, subSteps: [...detSubSteps] });
       for (let p = 1; p <= sn; p++) {
         const ss = [...detSubSteps]; ss[p - 1] = { ...ss[p - 1], status: 'active' };
@@ -373,7 +380,7 @@ export default function ExamExtractor() {
 
         // Render correction
         setCurrentPhase('render');
-        const crSubSteps = Array.from({ length: cn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' as const }));
+        const crSubSteps: SubStep[] = Array.from({ length: cn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' }));
         updateStep('corr_render', { status: 'active', detail: `0/${cn}`, subSteps: [...crSubSteps] });
         const corrCanvases: { base64: string }[] = [];
         for (let p = 1; p <= cn; p++) {
@@ -389,7 +396,7 @@ export default function ExamExtractor() {
 
         // OCR correction
         setCurrentPhase('ocr');
-        const coSubSteps = Array.from({ length: cn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' as const }));
+        const coSubSteps: SubStep[] = Array.from({ length: cn }, (_, i) => ({ label: `Page ${i + 1}`, status: 'pending' }));
         updateStep('corr_ocr', { status: 'active', detail: `0/${cn}`, subSteps: [...coSubSteps] });
         for (let p = 1; p <= cn; p++) {
           const ss = [...coSubSteps]; ss[p - 1] = { ...ss[p - 1], status: 'active' };

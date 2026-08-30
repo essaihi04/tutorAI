@@ -78,6 +78,8 @@ interface FeedbackData {
   feedback: string;
   correction: string;
   points_max: number;
+  // Renvoye par /exam/evaluate ; absent des anciennes sauvegardes de progression
+  score?: number;
 }
 
 interface ParsedFeedbackSection {

@@ -142,7 +142,6 @@ export default function AnswerInput({
   const [extracting, setExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const [extractedFromImage, setExtractedFromImage] = useState(false);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 

@@ -15,6 +15,11 @@ class ResourceDecisionService:
         simulation_active: bool = False,
     ) -> dict:
         lower_student_text = (student_text or "").lower()
+        # `None` signifie « inventaire inconnu » ; un ensemble vide signifie
+        # au contraire « inventaire chargé, aucune ressource ». L'ancien `or
+        # []` confondait les deux et traitait le vide comme si tous les médias
+        # existaient : `primary=simulation`, puis ouverture dans le néant.
+        availability_known = available_resource_types is not None
         available = set(available_resource_types or [])
         recent = list(recent_modes or [])
         preferred_mode = self._detect_explicit_mode(lower_student_text)
@@ -98,12 +103,14 @@ class ResourceDecisionService:
             reasons[recent[-1]].append("double_repeat_penalty")
 
         for mode in ["image", "simulation", "video", "exam"]:
-            if available and mode not in available:
+            if availability_known and mode not in available:
                 scores[mode] -= 6
                 reasons[mode].append("resource_unavailable")
 
         primary_mode = max(scores, key=scores.get)
-        fallback_mode = self._best_available_resource_mode(scores, available)
+        fallback_mode = self._best_available_resource_mode(
+            scores, available if availability_known else None
+        )
         chosen_resource_type = preferred_mode if explicit_media_request else fallback_mode
         should_prepare_whiteboard = primary_mode == "whiteboard" and not explicit_media_request
         auto_present_resource = explicit_media_request
@@ -160,11 +167,16 @@ class ResourceDecisionService:
         )
         return decision["resource_type_for_suggestion"] or "image"
 
-    def _best_available_resource_mode(self, scores: dict, available: set[str]) -> str:
+    def _best_available_resource_mode(
+        self, scores: dict, available: set[str] | None
+    ) -> str | None:
         resource_modes = ["simulation", "image", "video", "exam"]
-        valid_modes = [mode for mode in resource_modes if not available or mode in available]
+        if available is None:
+            valid_modes = resource_modes
+        else:
+            valid_modes = [mode for mode in resource_modes if mode in available]
         if not valid_modes:
-            return "image"
+            return None
         return max(valid_modes, key=lambda mode: scores.get(mode, -999))
 
     def _detect_explicit_mode(self, text: str) -> str | None:

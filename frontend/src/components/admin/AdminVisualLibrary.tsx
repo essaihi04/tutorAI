@@ -583,6 +583,9 @@ function DetailModal({ item, onClose, onEdit, onAI, onAttach }: {
   onAI: () => void;
   onAttach: () => void;
 }) {
+  const isSilentMuscleZoom = item.preview?.kind === 'scientific'
+    && item.preview.scientific?.model === 'muscle_excitation_contraction';
+
   return (
     <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" onMouseDown={onClose}>
       <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
@@ -599,15 +602,17 @@ function DetailModal({ item, onClose, onEdit, onAI, onAttach }: {
           <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100"><X className="h-5 w-5" /></button>
         </div>
         <div className="bg-slate-950 p-4"><div className="overflow-hidden rounded-2xl border border-slate-700"><VisualPreview item={item} full /></div></div>
-        <div className="space-y-4 p-5">
-          {item.description && <p className="text-sm leading-6 text-gray-600">{item.description}</p>}
-          {item.concepts.length > 0 && <div className="flex flex-wrap gap-2">{item.concepts.slice(0, 12).map(concept => <span key={concept} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">{concept}</span>)}</div>}
-          <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-            {item.editable && <button onClick={onEdit} className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"><Pencil className="h-4 w-4" /> Modifier</button>}
-            {(item.kind === 'scientific' || item.kind === 'schema' || item.kind === 'preset') && <button onClick={onAI} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700"><Sparkles className="h-4 w-4" /> {item.editable ? 'Améliorer avec le LLM' : 'Créer une version avec le LLM'}</button>}
-            {!item.editable && (item.kind === 'image' || item.kind === 'simulation') && <button onClick={onAttach} className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white"><Copy className="h-4 w-4" /> Rattacher à une leçon</button>}
+        {!isSilentMuscleZoom && (
+          <div className="space-y-4 p-5">
+            {item.description && <p className="text-sm leading-6 text-gray-600">{item.description}</p>}
+            {item.concepts.length > 0 && <div className="flex flex-wrap gap-2">{item.concepts.slice(0, 12).map(concept => <span key={concept} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">{concept}</span>)}</div>}
+            <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+              {item.editable && <button onClick={onEdit} className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"><Pencil className="h-4 w-4" /> Modifier</button>}
+              {(item.kind === 'scientific' || item.kind === 'schema' || item.kind === 'preset') && <button onClick={onAI} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700"><Sparkles className="h-4 w-4" /> {item.editable ? 'Améliorer avec le LLM' : 'Créer une version avec le LLM'}</button>}
+              {!item.editable && (item.kind === 'image' || item.kind === 'simulation') && <button onClick={onAttach} className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white"><Copy className="h-4 w-4" /> Rattacher à une leçon</button>}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

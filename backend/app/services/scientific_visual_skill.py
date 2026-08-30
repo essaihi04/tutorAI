@@ -48,10 +48,54 @@ MODELES_3D: dict[str, dict[str, Any]] = {
             "mitochondrial_dna",
         ),
     },
+    "muscle_excitation_contraction": {
+        "title": "Couplage excitation–contraction du muscle 3D",
+        "subject": "SVT",
+        "keywords": [
+            "muscle", "flux nerveux", "potentiel d’action", "sarcolemme",
+            "tubule T", "réticulum sarcoplasmique", "calcium", "Ca2+",
+            "troponine", "tropomyosine", "actomyosine", "actine", "myosine",
+            "ATP", "relâchement", "contraction musculaire", "couplage excitation contraction",
+            "عضلة", "كالسيوم", "تقلص عضلي",
+        ],
+        "focus": (
+            "all", "muscle", "fascicle", "muscle_fiber", "myofibril",
+            "neuromuscular_junction", "sarcolemma", "t_tubule",
+            "sarcoplasmic_reticulum", "calcium", "troponin", "tropomyosin",
+            "actin", "myosin", "atp", "sarcomere",
+        ),
+    },
 }
 
+# La scène reste volontairement muette. Ce catalogue donne au tuteur la
+# position exacte du zoom et la notion qu'il doit expliquer oralement, sans
+# peindre ces paragraphes dans le visuel de l'élève.
+MUSCLE_EXCITATION_STAGES: tuple[tuple[int, str, str], ...] = (
+    (0, "Muscle strié squelettique", "organe contractile qui convertit l'énergie de l'ATP en mouvement"),
+    (1, "Faisceau musculaire", "ensemble organisé de fibres musculaires"),
+    (2, "Fibre musculaire", "cellule plurinucléée limitée par le sarcolemme"),
+    (3, "Myofibrille", "cylindre contractile formé d'une succession de sarcomères"),
+    (4, "Fibres musculaires striées", "observation réelle de l'alignement des sarcomères"),
+    (5, "Sarcomère", "unité contractile comprise entre deux stries Z"),
+    (6, "Jonction neuromusculaire", "acétylcholine puis potentiel d'action musculaire"),
+    (7, "Tubule transverse T", "conduction de la dépolarisation au cœur de la fibre"),
+    (8, "Réticulum sarcoplasmique et Ca²⁺", "libération du calcium vers les myofibrilles"),
+    (9, "Troponine C et Ca²⁺", "fixation du calcium sur la troponine C"),
+    (10, "Tropomyosine", "déplacement qui expose les sites de l'actine"),
+    (11, "Pont actomyosine", "fixation de la tête myosine–ADP–Pi sur l'actine"),
+    (12, "Coup de force", "libération de Pi puis ADP et glissement de l'actine"),
+    (13, "Fixation de l'ATP", "détachement de la tête de myosine de l'actine"),
+    (14, "Hydrolyse de l'ATP", "formation d'ADP + Pi et réarmement de la tête"),
+    (15, "Pompe SERCA et relâchement", "recapture du Ca²⁺ et retour au repos"),
+)
+
 #: Les orthographes que le modèle produit pour un identifiant de modèle.
-_ALIAS_3D: dict[str, str] = {"mitochondrie": "mitochondrion"}
+_ALIAS_3D: dict[str, str] = {
+    "mitochondrie": "mitochondrion",
+    "muscle": "muscle_excitation_contraction",
+    "muscle_excitation": "muscle_excitation_contraction",
+    "couplage_excitation_contraction": "muscle_excitation_contraction",
+}
 
 _MITOCHONDRION_FOCUS = set(MODELES_3D["mitochondrion"]["focus"])
 
@@ -90,6 +134,13 @@ def _catalogue_3d() -> str:
     return "\n".join(lignes)
 
 
+def _catalogue_etapes_muscle() -> str:
+    return "\n".join(
+        f"  étape {step} — {element} : {cue}"
+        for step, element, cue in MUSCLE_EXCITATION_STAGES
+    )
+
+
 SCIENTIFIC_VISUAL_PROMPT = r"""
 [SKILL VISUELS SCIENTIFIQUES — CHOIX DU BON MOTEUR]
 N'utilise PAS un moteur spécialisé pour décorer. Choisis le visuel qui sert
@@ -110,9 +161,10 @@ MOTEURS AUTORISÉS dans `line.scientific` :
 - `roughsvg` : structures spatiales, cellules, chromosomes, appareils de
   chimie, circuits et coupes. C'est le moteur de schéma généraliste ; il ne
   reçoit que des primitives SVG déclaratives, jamais du SVG ou du code brut.
-- `three` : profondeur et mouvement de caméra UNIQUEMENT pour le modèle
-  versionné de mitochondrie. L'élève peut tourner, zoomer et isoler ses
-  compartiments ; le LLM ne fournit jamais de géométrie ni de matériau.
+- `three` : profondeur et mouvement de caméra UNIQUEMENT pour les modèles
+  versionnés de mitochondrie ou de couplage excitation–contraction musculaire.
+  L'élève peut tourner, zoomer et avancer étape par étape ; le LLM ne fournit
+  jamais de géométrie ni de matériau.
 - `preset` : scène animée validée du catalogue. Le preset réutilise JSXGraph
   ou Cytoscape ; le LLM ne fournit jamais les objets internes ni du code.
 
@@ -197,11 +249,23 @@ HTML, ni URL, ni attribut d'événement.
 
 Format Three.js — modèles 3D audités, et eux seuls :
 {"type":"scientific","content":"Mitochondrie 3D","scientific":{"engine":"three","model":"mitochondrion","title":"Mitochondrie 3D interactive","description":"Double membrane, crêtes, matrice et ADN mitochondrial.","autoplay":true,"labels":true,"focus":"all"}}
+Pour le muscle, utilise `muscle_excitation_contraction` avec
+`autoplay:false` et `labels:true`. La scène est volontairement muette mais
+affiche les noms anatomiques courts en français :
+{"type":"scientific","content":"Zoom du muscle","scientific":{"engine":"three","model":"muscle_excitation_contraction","title":"Voyage au cœur du muscle","description":"Zoom visuel légendé piloté par le tuteur.","autoplay":false,"labels":true,"focus":"all","step":0}}
 {{CATALOGUE_3D}}
-Utilise ce moteur seulement si la profondeur, la rotation ou le zoom servent
-réellement la leçon — sinon la planche SVG reste meilleure, car légendée et
-imprimable. N'invente aucun autre modèle et n'ajoute ni caméra, ni lumière,
-ni texture, ni URL.
+ÉTAPES EXACTES DU ZOOM MUSCULAIRE — le tuteur explique l'élément courant,
+puis réaffiche le même modèle avec le `step` suivant. La scène affiche uniquement
+les légendes françaises des structures : jamais de définition, de rôle, de
+commentaire, de formule ni de liste d'étapes :
+{{CATALOGUE_ETAPES_MUSCLE}}
+Utilise ce moteur seulement si la profondeur, la rotation, le zoom ou la
+progression 3D servent réellement la leçon — sinon la planche SVG reste
+meilleure, car légendée et imprimable. Pour le muscle, la scène zoome du muscle
+entier vers le faisceau, la fibre, la myofibrille, le sarcomère puis la tête de
+myosine. Elle garde seulement les noms des constituants en français : c'est le
+tuteur qui donne leur définition et leur rôle à partir du catalogue ci-dessus. N'invente
+aucun autre modèle et n'ajoute ni caméra, ni lumière, ni texture, ni URL.
 
 RÈGLES DE QUALITÉ :
 - Toutes les légendes sont courtes et en français.
@@ -216,6 +280,8 @@ RÈGLES DE QUALITÉ :
     "{{CATALOGUE_PRESETS}}", _catalogue_presets()
 ).replace(
     "{{CATALOGUE_3D}}", _catalogue_3d()
+).replace(
+    "{{CATALOGUE_ETAPES_MUSCLE}}", _catalogue_etapes_muscle()
 )
 
 
@@ -949,15 +1015,23 @@ def _normalize_three(value: dict[str, Any]) -> dict[str, Any] | None:
     focus = str(value.get("focus", "all")).strip().lower()
     if focus not in MODELES_3D[model]["focus"]:
         focus = "all"
-    return {
+    autoplay = value.get("autoplay") is True if model == "muscle_excitation_contraction" else value.get("autoplay") is not False
+    result: dict[str, Any] = {
         "engine": "three",
         "model": model,
         "title": _text(value.get("title"), 80),
         "description": _text(value.get("description"), 360),
-        "autoplay": value.get("autoplay") is not False,
-        "labels": value.get("labels") is not False,
+        "autoplay": autoplay,
+        "labels": True if model == "muscle_excitation_contraction" else value.get("labels") is not False,
         "focus": focus,
     }
+    if model == "muscle_excitation_contraction":
+        try:
+            step = int(value.get("step", 0))
+        except (TypeError, ValueError):
+            step = 0
+        result["step"] = max(0, min(15, step))
+    return result
 
 
 def scientific_visual_quality(value: Any) -> dict[str, Any]:

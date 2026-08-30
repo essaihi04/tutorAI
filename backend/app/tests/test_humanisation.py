@@ -492,6 +492,12 @@ def test_la_meme_annonce_avec_le_tableau_ne_declenche_rien():
     assert not humanisation.promesse_de_tableau_non_tenue(_PROMESSE + _TABLEAU_GENETIQUE)
 
 
+def test_je_vais_lancer_une_scene_sans_action_est_une_promesse():
+    assert humanisation.promesse_de_tableau_non_tenue(
+        "Avant d'écrire, je vais lancer une scène animée. Observe bien."
+    )
+
+
 def test_parler_du_tableau_de_variation_nest_pas_une_promesse():
     """Le mot « tableau » seul ne promet rien — il faut l'annonce."""
     reponse = "نديرو le tableau de variation ديال la fonction، وغادي نشوفو le signe."

@@ -19,38 +19,34 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
   onAnnotationClick,
   className = '',
 }) => {
-  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set());
   const [selectedAnnotation, setSelectedAnnotation] = useState<SchemaAnnotation | null>(null);
   const [animationDone, setAnimationDone] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Animate layers in sequence
+  /**
+   * ── La mise en scène est faite par CSS, plus par React ──
+   *
+   * Les couches apparaissaient une à une par `setState`, et le schéma entier
+   * est écrit dans le DOM par `innerHTML` : à CHAQUE couche ajoutée, tout le
+   * SVG était reconstruit et reparsé. Or chaque `<g>` porte une animation
+   * d'entrée en ligne — recréé, il la rejoue. Un schéma de six couches
+   * repartait donc six fois de zéro, et l'élève voyait un clignotement qui
+   * durait exactement le temps de la mise en place.
+   *
+   * Les couches sont désormais TOUTES écrites d'emblée, chacune avec son
+   * propre `animation-delay` : le navigateur les échelonne sans que la chaîne
+   * SVG ne bouge d'un caractère. Il ne reste ici qu'une échéance, pour savoir
+   * quand la mise en place est finie — elle ne touche pas au dessin.
+   */
   useEffect(() => {
-    // Clear previous timers
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
-    setVisibleLayers(new Set());
-    setAnimationDone(false);
+    setAnimationDone(!autoAnimate);
     setSelectedAnnotation(null);
+    if (!autoAnimate) return;
 
-    if (!autoAnimate) {
-      // Show all layers immediately
-      setVisibleLayers(new Set(schema.layers.map(l => l.id)));
-      setAnimationDone(true);
-      return;
-    }
-
-    let maxDelay = 0;
-    for (const layer of schema.layers) {
-      const delay = layer.delay ?? 0;
-      if (delay > maxDelay) maxDelay = delay;
-      const timer = setTimeout(() => {
-        setVisibleLayers(prev => new Set([...prev, layer.id]));
-      }, delay);
-      timersRef.current.push(timer);
-    }
-
+    const maxDelay = schema.layers.reduce((max, layer) => Math.max(max, layer.delay ?? 0), 0);
     const doneTimer = setTimeout(() => setAnimationDone(true), maxDelay + 600);
     timersRef.current.push(doneTimer);
 
@@ -68,14 +64,21 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
   const skipAnimation = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
-    setVisibleLayers(new Set(schema.layers.map(l => l.id)));
     setAnimationDone(true);
-  }, [schema]);
+  }, []);
 
   // Build SVG content
+  //
+  // Toutes les couches, tout de suite : c'est leur `animation-delay` qui les
+  // échelonne. `both` les garde invisibles AVANT leur tour — sans lui, elles
+  // seraient posées d'un bloc puis disparaîtraient pour se refondre.
   const svgContent = schema.layers
-    .filter(l => visibleLayers.has(l.id))
-    .map(l => `<g class="schema-layer" data-layer-id="${l.id}" style="animation: schemaFadeIn 0.4s ease-out">${l.svgContent}</g>`)
+    .map(l => {
+      const entree = animationDone
+        ? 'opacity:1'
+        : `animation: schemaFadeIn 0.4s ease-out ${l.delay ?? 0}ms both`;
+      return `<g class="schema-layer" data-layer-id="${l.id}" style="${entree}">${l.svgContent}</g>`;
+    })
     .join('\n');
 
   // Annotation overlays (clickable zones)

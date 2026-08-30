@@ -249,8 +249,17 @@ const SAMPLES: {
     ['svt_ch1_couplage_excitation_contraction', 'cycle_complet'],
     ['svt_ch1_cycle_atp', 'cycle_complet'],
     ['svt_ch1_levures_exao', 'comparaison'],
-    ['svt_ch1_chimiosmose', 'cycle_complet'],
-    ['svt_ch1_carte_metabolique', 'respiration'],
+    ['svt_ch1_glycolyse_etapes', 'scene'],
+    ['svt_ch1_krebs_detaille', 'scene'],
+    ['svt_ch1_echelle_redox', 'scene'],
+    ['svt_ch1_molecules_glucose_atp', 'scene'],
+    ['svt_ch1_rendement_energetique', 'scene'],
+    ['svt_ch1_schema_bilan_annote', 'scene'],
+    ['svt_ch1_vesicules_atp_synthase', 'scene'],
+    ['svt_ch1_ultrastructure_mitochondrie', 'scene'],
+    ['svt_ch1_flux_protons', 'scene'],
+    ['svt_ch1_chimiosmose', 'scene'],
+    ['svt_ch1_carte_metabolique', 'scene'],
     ['svt_ch1_myogrammes', 'tetanus_incomplet'],
     ['svt_ch1_cycle_actomyosine', 'cycle_complet'],
     ['svt_ch1_filieres_effort', 'effort_prolonge'],
@@ -260,7 +269,7 @@ const SAMPLES: {
       ? 'physics'
       : presetId.startsWith('chem_') ? 'chemistry' : 'svt') as ScientificSchema['subject'],
     kind: 'simulation' as const,
-    spec: { engine: 'preset' as const, presetId, variant, autoplay: false, step: 0 },
+    spec: { engine: 'preset' as const, presetId, variant, autoplay: false, step: SCIENTIFIC_PRESETS[presetId].maxStep },
   })),
 ];
 

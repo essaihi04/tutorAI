@@ -516,7 +516,6 @@ export default function StudyPlan() {
     }
   };
 
-  const todayISO = toISODateLocal(new Date());
   const todayTotalMin = todaySessions.reduce((a: number, s: any) => a + (s.duration_minutes || 0), 0);
   const todayCompleted = todaySessions.filter((s: any) => s.status === 'completed').length;
 

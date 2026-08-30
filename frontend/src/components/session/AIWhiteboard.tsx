@@ -87,6 +87,8 @@ interface AIWhiteboardProps {
   scientificControl?: ScientificControlCommand | null;
   /** État compact d'une simulation de catalogue, à transmettre au tuteur. */
   onSimulationUpdate?: (update: ScientificSimulationUpdate) => void;
+  /** Le tableau vient de finir de s'écrire : une simulation en attente peut partir. */
+  onScriptEnd?: () => void;
 }
 
 /**
@@ -202,7 +204,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
   return { title: titre, steps };
 }
 
-  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange, scientificControl, onSimulationUpdate }: AIWhiteboardProps) {
+  function AIWhiteboardInner({ drawCommands, isVisible, onClose, schemaId, activeHighlights, boardContent, liveScript, onStudentMessage, assistantReply, busy, voiceEnabled, audioActive, onFocusChange, scientificControl, onSimulationUpdate, onScriptEnd }: AIWhiteboardProps) {
   console.log('[AIWhiteboard] Render:', {
     hasDrawCommands: !!(drawCommands && drawCommands.length > 0),
     hasSchemaId: !!schemaId,
@@ -259,6 +261,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
         onSimulationUpdate={onSimulationUpdate}
+        onScriptEnd={onScriptEnd}
       />
     );
   }
@@ -294,6 +297,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
         onSimulationUpdate={onSimulationUpdate}
+        onScriptEnd={onScriptEnd}
       />
     );
   }
@@ -312,6 +316,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
         onSimulationUpdate={onSimulationUpdate}
+        onScriptEnd={onScriptEnd}
       />
     );
   }
@@ -343,6 +348,7 @@ function scriptDepuisSchema(schemaId: string, titre: string, surlignages?: strin
         onFocusChange={onFocusChange}
         scientificControl={scientificControl}
         onSimulationUpdate={onSimulationUpdate}
+        onScriptEnd={onScriptEnd}
       />
     );
   }

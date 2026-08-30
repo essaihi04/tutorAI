@@ -548,7 +548,9 @@ _PROMESSES_DE_TABLEAU = (
     # français
     "je t'écris", "j'écris", "je note", "regarde ce que", "voici ce que",
     "au tableau", "sur le tableau", "dans le tableau", "je te dessine",
-    "je dessine", "j'ai écrit", "je t'ai écrit",
+    "je dessine", "j'ai écrit", "je t'ai écrit", "je vais lancer",
+    "je lance la scène", "je lance une scène", "je lance la simulation",
+    "regarde la scène", "observe la scène", "voici la scène",
     # darija / arabe — l'annonce telle qu'elle sort en séance
     "كتبت ليك", "كتبتها", "غادي نكتب", "كنكتب", "نكتب ليك", "غادي نرسم",
     "كنرسم", "رسمت ليك", "شوف le tableau", "شوف اللوح", "ف le tableau",

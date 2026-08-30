@@ -4,6 +4,8 @@ import type {
   CytoscapeVisualSpec,
   JSXGraphElementSpec,
   JSXGraphVisualSpec,
+  RoughSVGElementSpec,
+  RoughSVGVisualSpec,
   ScientificPoint,
   ScientificPresetId,
   ScientificVisualSpec,
@@ -159,31 +161,57 @@ export const SCIENTIFIC_PRESETS: Record<ScientificPresetId, ScientificPresetMeta
     maxStep: 24,
     frameMs: 180,
   },
+  svt_ch1_glycolyse_etapes: {
+    id: 'svt_ch1_glycolyse_etapes', title: 'Les étapes de la glycolyse',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Glycolyse' }], maxStep: 9, frameMs: 900,
+  },
+  svt_ch1_krebs_detaille: {
+    id: 'svt_ch1_krebs_detaille', title: 'Oxydation du pyruvate et cycle de Krebs',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Krebs' }], maxStep: 10, frameMs: 850,
+  },
+  svt_ch1_echelle_redox: {
+    id: 'svt_ch1_echelle_redox', title: 'Potentiels d’oxydoréduction',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Échelle redox' }], maxStep: 8, frameMs: 850,
+  },
+  svt_ch1_ultrastructure_mitochondrie: {
+    id: 'svt_ch1_ultrastructure_mitochondrie', title: 'Ultrastructure et composition de la mitochondrie',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Ultrastructure' }], maxStep: 12, frameMs: 850,
+  },
+  svt_ch1_flux_protons: {
+    id: 'svt_ch1_flux_protons', title: 'Réduction du dioxygène et flux de protons',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Flux de protons' }], maxStep: 8, frameMs: 850,
+  },
+  svt_ch1_molecules_glucose_atp: {
+    id: 'svt_ch1_molecules_glucose_atp', title: 'Structure du glucose et de l’ATP',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Glucose et ATP' }], maxStep: 5, frameMs: 850,
+  },
+  svt_ch1_rendement_energetique: {
+    id: 'svt_ch1_rendement_energetique', title: 'Bilan en ATP et rendement énergétique',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Rendement énergétique' }], maxStep: 10, frameMs: 900,
+  },
+  svt_ch1_schema_bilan_annote: {
+    id: 'svt_ch1_schema_bilan_annote', title: 'Schéma-bilan de la respiration',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Schéma-bilan' }], maxStep: 21, frameMs: 900,
+  },
+  svt_ch1_vesicules_atp_synthase: {
+    id: 'svt_ch1_vesicules_atp_synthase', title: 'Rôle des sphères pédonculées',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Vésicules retournées' }], maxStep: 8, frameMs: 850,
+  },
   svt_ch1_chimiosmose: {
     id: 'svt_ch1_chimiosmose',
     title: 'Chaîne respiratoire et chimiosmose',
-    defaultVariant: 'cycle_complet',
-    variants: [
-      { id: 'cycle_complet', label: 'Vue complète' },
-      { id: 'transfert_electrons', label: 'Électrons' },
-      { id: 'pompage_protons', label: 'Pompage H⁺' },
-      { id: 'synthese_atp', label: 'Synthèse d’ATP' },
-    ],
-    maxStep: 7,
+    defaultVariant: 'scene',
+    variants: [{ id: 'scene', label: 'Chaîne respiratoire' }],
+    maxStep: 12,
     frameMs: 800,
   },
   svt_ch1_carte_metabolique: {
     id: 'svt_ch1_carte_metabolique',
     title: 'De la matière organique à l’ATP',
-    defaultVariant: 'vue_ensemble',
-    variants: [
-      { id: 'vue_ensemble', label: 'Vue d’ensemble' },
-      { id: 'respiration', label: 'Respiration' },
-      { id: 'fermentation_lactique', label: 'Fermentation lactique' },
-      { id: 'fermentation_alcoolique', label: 'Fermentation alcoolique' },
-    ],
-    maxStep: 8,
-    frameMs: 720,
+    defaultVariant: 'scene',
+    variants: [{ id: 'scene', label: 'Devenir du pyruvate' }],
+    maxStep: 10,
+    frameMs: 850,
   },
   svt_ch1_myogrammes: {
     id: 'svt_ch1_myogrammes',
@@ -197,6 +225,18 @@ export const SCIENTIFIC_PRESETS: Record<ScientificPresetId, ScientificPresetMeta
     ],
     maxStep: 32,
     frameMs: 110,
+  },
+  svt_ch1_chaleurs_muscle: {
+    id: 'svt_ch1_chaleurs_muscle',
+    title: 'Secousse musculaire et dégagements de chaleur',
+    defaultVariant: 'comparaison',
+    variants: [
+      { id: 'comparaison', label: 'Comparer avec et sans O₂' },
+      { id: 'avec_oxygene', label: 'Récupération avec O₂' },
+      { id: 'sans_oxygene', label: 'Récupération sans O₂' },
+    ],
+    maxStep: 36,
+    frameMs: 130,
   },
   svt_ch1_cycle_actomyosine: {
     id: 'svt_ch1_cycle_actomyosine',
@@ -615,6 +655,33 @@ function myogramSpec(variant: string, step: number, maxStep: number): JSXGraphVi
   };
 }
 
+function muscleHeatSpec(variant: string, step: number, maxStep: number): JSXGraphVisualSpec {
+  const twitchCurve = samples(t => 5.5 * Math.exp(-Math.pow((t - 2.1) / 0.68, 2)), 0, 8, 81);
+  const initialHeat = samples(t => 2.7 * Math.exp(-Math.pow((t - 2.6) / 1.0, 2)), 0, 8, 81);
+  const delayedWithOxygen = samples(t => 1.7 * Math.exp(-Math.pow((t - 5.8) / 1.25, 2)), 0, 8, 81);
+  const delayedWithoutOxygen = samples(t => 0.25 * Math.exp(-Math.pow((t - 5.8) / 1.25, 2)), 0, 8, 81);
+  const elements = [
+    ...pointsToSegments('secousse', twitchCurve, 'orange', 'Tension musculaire', step, maxStep),
+    ...pointsToSegments('initiale', initialHeat, 'red', 'Chaleur initiale', step, maxStep),
+  ];
+  if (variant !== 'sans_oxygene') {
+    elements.push(...pointsToSegments('retardee-o2', delayedWithOxygen, 'cyan', 'Chaleur retardée avec O₂', step, maxStep));
+  }
+  if (variant !== 'avec_oxygene') {
+    elements.push(...pointsToSegments('retardee-sans-o2', delayedWithoutOxygen, 'purple', 'Chaleur retardée sans O₂', step, maxStep));
+  }
+  return {
+    engine: 'jsxgraph',
+    title: 'La chaleur retardée dépend des réactions oxydatives de récupération',
+    boundingBox: [-0.5, 6.5, 8.7, -0.8],
+    axis: true,
+    grid: true,
+    xLabel: 'Temps (u.a.)',
+    yLabel: 'Valeur relative (u.a.)',
+    elements,
+  };
+}
+
 function atpSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
   const paths: Record<string, string[]> = {
     hydrolyse: ['atp', 'adp', 'travail'],
@@ -641,56 +708,323 @@ function atpSpec(variant: string, step: number, maxStep: number): CytoscapeVisua
   );
 }
 
-function chimiosmoseSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
-    transfert_electrons: ['nadh', 'electrons', 'complexes', 'o2', 'h2o'],
-    pompage_protons: ['electrons', 'complexes', 'pompage', 'gradient'],
-    synthese_atp: ['gradient', 'atpsynthase', 'adp', 'atp'],
-    cycle_complet: ['nadh', 'electrons', 'complexes', 'pompage', 'gradient', 'atpsynthase', 'atp'],
-  };
+function glycolyseEtapesSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
+  const nodes: Array<[string, string]> = [
+    ['glucose', 'Glucose 6C'], ['g6p', 'Glucose-6-phosphate 6C'],
+    ['f6p', 'Fructose-6-phosphate 6C'], ['f16bp', 'Fructose-1,6-bisphosphate 6C'],
+    ['trioses', '2 trioses phosphate 3C'], ['bpg', '2 × 1,3-bisphosphoglycérate 3C'],
+    ['pg3', '2 × 3-phosphoglycérate 3C'], ['pg2', '2 × 2-phosphoglycérate 3C'],
+    ['pep', '2 × phosphoénolpyruvate 3C'], ['pyruvate', '2 pyruvates 3C'],
+  ];
+  const edges: Array<[string, string, string?]> = [
+    ['glucose', 'g6p', '1 hexokinase · ATP → ADP'], ['g6p', 'f6p', '2 isomérisation'],
+    ['f6p', 'f16bp', '3 PFK · ATP → ADP'], ['f16bp', 'trioses', '4–5 scission + isomérisation'],
+    ['trioses', 'bpg', '6 : 2 NAD⁺ + 2 Pi → 2 NADH,H⁺'], ['bpg', 'pg3', '7 : 2 ADP → 2 ATP'],
+    ['pg3', 'pg2', '8 mutase'], ['pg2', 'pep', '9 : −2 H₂O'], ['pep', 'pyruvate', '10 : 2 ADP → 2 ATP'],
+  ];
+  return processSpec('Glycolyse : 2 ATP nets et 2 NADH,H⁺ par glucose', 'breadthfirst', nodes, edges,
+    nodes.map(([id]) => id), step, maxStep);
+}
+
+function krebsDetailleSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
+  const nodes: Array<[string, string]> = [
+    ['pyruvate', 'Pyruvate 3C'], ['acetyl', 'Acétyl-CoA 2C'], ['citrate', 'Citrate 6C'],
+    ['c5', 'Composé 5C'], ['c4a', 'Composé 4C'], ['succinate', 'Succinate 4C'],
+    ['fumarate', 'Fumarate 4C'], ['malate', 'Malate 4C'], ['oxaloacetate', 'Oxaloacétate 4C'],
+    ['bilan', 'Par glucose : 6 CO₂ · 8 NADH,H⁺ · 2 FADH₂ · 2 ATP'],
+  ];
+  const edges: Array<[string, string, string?]> = [
+    ['pyruvate', 'acetyl', 'CO₂ + NADH,H⁺'], ['acetyl', 'citrate', '+ oxaloacétate'],
+    ['citrate', 'c5', 'CO₂ + NADH,H⁺'], ['c5', 'c4a', 'CO₂ + NADH,H⁺'],
+    ['c4a', 'succinate', 'ADP + Pi → ATP'], ['succinate', 'fumarate', 'FAD → FADH₂'],
+    ['fumarate', 'malate', '+ H₂O'], ['malate', 'oxaloacetate', 'NAD⁺ → NADH,H⁺'],
+    ['oxaloacetate', 'citrate', 'nouveau tour'], ['oxaloacetate', 'bilan', '2 tours par glucose'],
+  ];
+  return processSpec('Oxydation du pyruvate puis deux tours de Krebs', 'circle', nodes, edges,
+    ['pyruvate', 'acetyl', 'citrate', 'c5', 'c4a', 'succinate', 'fumarate', 'malate', 'oxaloacetate', 'bilan'], step, maxStep);
+}
+
+function echelleRedoxSpec(_variant: string, step: number, maxStep: number): JSXGraphVisualSpec {
+  const couples = [
+    { y: -320, label: 'NADH,H⁺ / NAD⁺', color: 'cyan' },
+    { y: -100, label: 'FMNH₂ / FMN', color: 'blue' },
+    { y: 40, label: 'QH₂ / Q', color: 'orange' },
+    { y: 250, label: 'cyt c Fe²⁺ / Fe³⁺', color: 'purple' },
+    { y: 820, label: 'H₂O / O₂', color: 'green' },
+  ];
+  const shown = Math.min(couples.length, revealedCount(couples.length, step, maxStep));
+  const elements: JSXGraphElementSpec[] = couples.slice(0, shown).flatMap((c, i) => [
+    { id: `redox-p-${i}`, type: 'point', points: [{ x: 2.2, y: c.y }], color: c.color },
+    { id: `redox-t-${i}`, type: 'text', points: [{ x: 2.7, y: c.y }], label: c.label, color: c.color },
+  ]);
+  if (step >= 6) elements.push({ id: 'flux-e', type: 'arrow', points: [{ x: 6.2, y: -320 }, { x: 6.2, y: 820 }], color: 'yellow', label: 'flux spontané des e⁻' });
+  if (step >= 7) elements.push({ id: 'delta-e', type: 'text', points: [{ x: 4.5, y: 650 }], color: 'orange', label: 'ΔE°′ > 0 : énergie libérée' });
+  if (step >= 8) elements.push({ id: 'o2-final', type: 'text', points: [{ x: 4.5, y: 800 }], color: 'green', label: 'O₂ = accepteur final → H₂O' });
+  return { engine: 'jsxgraph', title: 'Échelle des potentiels redox mitochondriaux',
+    boundingBox: [-0.6, 950, 8.3, -430], axis: true, grid: true, xLabel: 'couples redox', yLabel: 'E°′ (mV)', elements };
+}
+
+function ultrastructureMitochondrieSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const INK = '#e0f2fe', CYAN = '#22d3ee', MATRIX = '#0c4a6e', GOLD = '#fde047';
+  // Les huit reperes du document sont numerotes sur la coupe et repris dans
+  // une legende : c'est la forme exacte de la question d'examen, « annotez le
+  // document en donnant le nom correspondant a chaque numero ».
+  const reperes: Array<[number, number, string]> = [
+    [286, 52, 'Membrane externe'],
+    [352, 86, 'Membrane interne'],
+    [300, 200, 'Matrice'],
+    [168, 200, 'Crêtes mitochondriales'],
+    [470, 104, 'Espace intermembranaire'],
+    [392, 252, 'ADN mitochondrial'],
+    [112, 132, 'Phospholipides'],
+    [452, 286, 'Protéines intégrées'],
+  ];
+  const shown = Math.max(0, Math.min(reperes.length, Math.round(step)));
+
+  const el: RoughSVGElementSpec[] = [
+    { type: 'ellipse', x: 300, y: 200, radiusX: 262, radiusY: 148, color: CYAN, fill: '#082f49' },
+    { type: 'ellipse', x: 300, y: 200, radiusX: 232, radiusY: 118, color: CYAN, fill: MATRIX },
+  ];
+  for (let i = 0; i < 5; i += 1) {
+    const x = 130 + i * 85;
+    el.push({ type: 'polyline', color: CYAN, strokeWidth: 3, points: [
+      { x, y: 200 - 112 }, { x: x + 34, y: 200 - 46 }, { x, y: 200 }, { x: x + 34, y: 200 + 46 }, { x, y: 200 + 112 },
+    ] });
+  }
+  el.push({ type: 'circle', x: 392, y: 252, radius: 17, color: GOLD, fill: '#713f12' });
+
+  reperes.slice(0, shown).forEach(([x, y], i) => {
+    el.push({ type: 'circle', x, y, radius: 15, color: GOLD, fill: '#0f172a' });
+    el.push({ type: 'text', x, y: y + 7, text: String(i + 1), color: GOLD, fontSize: 19, align: 'middle' });
+  });
+  reperes.slice(0, shown).forEach(([, , label], i) => {
+    el.push({ type: 'text', x: 600, y: 70 + i * 34, text: `${i + 1}  ${label}`, color: INK, fontSize: 19, align: 'start' });
+  });
+
+  if (step >= 9) {
+    el.push({ type: 'circle', x: 186, y: 68, radius: 9, color: '#4ade80', fill: '#14532d' });
+    el.push({ type: 'text', x: 600, y: 358, text: 'Porine : ions et métabolites hydrosolubles', color: '#4ade80', fontSize: 17, align: 'start' });
+  }
+  if (step >= 10) {
+    for (let i = 0; i < 4; i += 1) {
+      const x = 172 + i * 86;
+      el.push({ type: 'line', x, y: 318, width: 0, height: -16, color: '#c4b5fd', strokeWidth: 3 });
+      el.push({ type: 'circle', x, y: 296, radius: 11, color: '#c4b5fd', fill: '#4c1d95' });
+    }
+    el.push({ type: 'text', x: 600, y: 388, text: 'Sphères pédonculées = ATP synthase', color: '#c4b5fd', fontSize: 17, align: 'start' });
+  }
+  if (step >= 11) {
+    const rows: Array<[string, string, string]> = [
+      ['Membrane externe', '38 % lipides · 62 % protéines', 'comparable à la membrane cytoplasmique'],
+      ['Membrane interne', '20 % lipides · 80 % protéines', 'nombreuses enzymes, dont l’ATP synthase'],
+      ['Matrice', 'pas de glucose · pyruvate et ATP', 'déshydrogénases et carboxylases'],
+    ];
+    el.push({ type: 'rect', x: 40, y: 396, width: 880, height: 138, color: CYAN, fill: '#06202e' });
+    rows.forEach(([a, b, c], i) => {
+      const y = 428 + i * 34;
+      el.push({ type: 'text', x: 62, y, text: a, color: GOLD, fontSize: 17, align: 'start' });
+      el.push({ type: 'text', x: 268, y, text: b, color: INK, fontSize: 17, align: 'start' });
+      el.push({ type: 'text', x: 570, y, text: c, color: '#93c5fd', fontSize: 16, align: 'start' });
+    });
+  }
+  if (step >= 12) {
+    el.push({ type: 'text', x: 480, y: 556, align: 'middle', fontSize: 18, color: '#4ade80',
+      text: 'Une membrane interne riche en protéines : c’est là que se déroulent les oxydations respiratoires.' });
+  }
+
+  return { engine: 'roughsvg', title: 'Ultrastructure de la mitochondrie', width: 960, height: 576,
+    description: 'Coupe annotée de la mitochondrie et composition chimique de ses compartiments.', elements: el };
+}
+
+function fluxProtonsSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  // Repere dessine a la main plutot que confie a JSXGraph : une cinetique de
+  // 330 s contre 60 unites ne tient pas dans le rapport du conteneur, et le
+  // moteur etirait alors l'axe des abscisses jusqu'a faire cogner son nom
+  // contre ses propres graduations.
+  const AXE = '#94a3b8', INK = '#e0f2fe', ORANGE = '#fb923c', GOLD = '#fde047';
+  const px = (t: number) => 150 + t * (750 / 330);
+  const py = (h: number) => 430 - h * (340 / 62);
+  const courbe: Array<[number, number]> = [
+    [0, 10], [20, 10], [40, 10], [55, 32], [66, 58],
+    [90, 50], [130, 40], [180, 32], [240, 25], [330, 18],
+  ];
+  const total = courbe.length - 1;
+  const shown = step >= 5 ? total : Math.max(1, Math.ceil((step / 5) * total));
+
+  const el: RoughSVGElementSpec[] = [
+    { type: 'arrow', points: [{ x: 150, y: 430 }, { x: 920, y: 430 }], color: AXE, strokeWidth: 2 },
+    { type: 'arrow', points: [{ x: 150, y: 430 }, { x: 150, y: 76 }], color: AXE, strokeWidth: 2 },
+    // Nom ET unite sur chaque axe : un axe anonyme est faux au bac.
+    { type: 'text', x: 535, y: 470, text: 'temps (s)', color: INK, fontSize: 19, align: 'middle' },
+    { type: 'text', x: 150, y: 62, text: '[H⁺] (10⁻⁹ mol/L)', color: INK, fontSize: 19, align: 'start' },
+  ];
+  [0, 100, 200, 300].forEach(t => {
+    el.push({ type: 'line', points: [{ x: px(t), y: 430 }, { x: px(t), y: 438 }], color: AXE, strokeWidth: 2 });
+    el.push({ type: 'text', x: px(t), y: 458, text: String(t), color: '#cbd5e1', fontSize: 16, align: 'middle' });
+  });
+  [10, 20, 30, 40, 50, 60].forEach(h => {
+    el.push({ type: 'line', points: [{ x: 142, y: py(h) }, { x: 150, y: py(h) }], color: AXE, strokeWidth: 2 });
+    el.push({ type: 'text', x: 132, y: py(h) + 6, text: String(h), color: '#cbd5e1', fontSize: 16, align: 'end' });
+  });
+
+  el.push({ type: 'line', dashed: true, color: GOLD, strokeWidth: 2,
+    points: [{ x: px(40), y: 430 }, { x: px(40), y: 104 }] });
+  el.push({ type: 'text', x: px(40) + 10, y: 96, text: 'pulse de O₂', color: GOLD, fontSize: 18, align: 'start' });
+
+  el.push({ type: 'polyline', color: ORANGE, strokeWidth: 4,
+    points: courbe.slice(0, shown + 1).map(([t, h]) => ({ x: px(t), y: py(h) })) });
+
+  if (step >= 6) el.push({ type: 'text', x: px(95), y: 94, align: 'start',
+    text: 'montée rapide : les H⁺ sortent de la matrice', color: ORANGE, fontSize: 18 });
+  if (step >= 7) el.push({ type: 'text', x: px(150), y: py(44), align: 'start',
+    text: 'décroissance lente : ils regagnent la matrice', color: '#67e8f9', fontSize: 18 });
+  if (step >= 8) el.push({ type: 'text', x: px(60), y: py(6), align: 'start',
+    text: 'sans O₂, aucun flux : la chaîne est à l’arrêt', color: '#4ade80', fontSize: 18 });
+
+  return { engine: 'roughsvg', title: 'Flux de protons après un pulse de dioxygène', width: 960, height: 500,
+    description: 'Concentration en protons du milieu avant et après une injection de dioxygène.', elements: el };
+}
+
+function moleculesGlucoseAtpSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const phosphate = (x: number, text: string): RoughSVGElementSpec[] => [
+    { type: 'circle', x, y: 210, radius: 34, color: '#22d3ee', fill: '#0c4a6e' },
+    { type: 'text', x, y: 218, text, color: '#e0f2fe', fontSize: 22, align: 'middle' },
+  ];
+  const all: RoughSVGElementSpec[] = [
+    { type: 'polygon', points: [{ x: 80, y: 120 }, { x: 155, y: 80 }, { x: 230, y: 120 }, { x: 230, y: 210 }, { x: 155, y: 250 }, { x: 80, y: 210 }], color: '#22c55e', fill: '#14532d' },
+    { type: 'text', x: 155, y: 170, text: 'Glucose', color: 'white', fontSize: 26, align: 'middle' },
+    { type: 'text', x: 155, y: 285, text: 'C₆H₁₂O₆ · hexose cyclique', color: '#bbf7d0', fontSize: 18, align: 'middle' },
+    { type: 'rect', x: 330, y: 145, width: 105, height: 120, color: '#c084fc', fill: '#581c87' },
+    { type: 'text', x: 382, y: 210, text: 'Adénine', color: 'white', fontSize: 19, align: 'middle' },
+    { type: 'polygon', points: [{ x: 465, y: 150 }, { x: 535, y: 175 }, { x: 520, y: 250 }, { x: 450, y: 250 }, { x: 430, y: 185 }], color: '#fbbf24', fill: '#78350f' },
+    { type: 'text', x: 485, y: 215, text: 'Ribose', color: 'white', fontSize: 18, align: 'middle' },
+    ...phosphate(600, 'P'), ...phosphate(690, 'P'), ...phosphate(780, 'P'),
+    { type: 'arrow', points: [{ x: 748, y: 150 }, { x: 748, y: 95 }], color: '#fb7185', strokeWidth: 4 },
+    { type: 'text', x: 748, y: 72, text: 'liaison riche en énergie', color: '#fb7185', fontSize: 17, align: 'middle' },
+    { type: 'text', x: 595, y: 330, text: 'ATP + H₂O ⇄ ADP + Pi + énergie', color: '#fef08a', fontSize: 25, align: 'middle' },
+    { type: 'text', x: 595, y: 370, text: 'hydrolyse exoénergétique · phosphorylation endoénergétique', color: '#bae6fd', fontSize: 16, align: 'middle' },
+  ];
+  const countByStep = [3, 5, 9, 13, 15, all.length][Math.max(0, Math.min(5, Math.round(step)))] || all.length;
+  return { engine: 'roughsvg', title: 'Le glucose stocke l’énergie ; l’ATP la transfère', width: 900, height: 430, elements: all.slice(0, countByStep) };
+}
+
+function rendementEnergetiqueSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const lines = [
+    'Glycolyse : 2 ATP + 2 NADH,H⁺',
+    'Matrice : 2 ATP + 8 NADH,H⁺ + 2 FADH₂',
+    'Total avant chaîne : 4 ATP + 10 NADH,H⁺ + 2 FADH₂',
+    '1 NADH,H⁺ → 3 ATP ; 1 FADH₂ → 2 ATP',
+    '4 + (10 × 3) + (2 × 2) = 38 ATP',
+    'Navettes : 38 ATP (cœur, foie) ou 36 ATP (muscle, cerveau)',
+    'Fermentation : 2 ATP', 'R = (E′ / 2860) × 100',
+    'Même échelle : 2860 kJ par mole de glucose',
+    'Respiration : 1159 kJ en ATP → 40,5 %',
+    'Fermentation : 61 kJ en ATP → 2,13 %',
+  ];
+  const n = Math.max(1, Math.min(lines.length, Math.round(step) + 1));
+  const elements: RoughSVGElementSpec[] = lines.slice(0, n).map((text, i) => ({
+    type: 'text', x: 40, y: 45 + i * 28, text, color: i === n - 1 ? '#fef08a' : '#e2e8f0', fontSize: 17,
+  }));
+  if (step >= 8) elements.push(
+    { type: 'rect', x: 500, y: 85, width: 330, height: 70, color: '#64748b' },
+    { type: 'rect', x: 500, y: 85, width: 134, height: 70, color: '#22c55e', fill: '#166534' },
+    { type: 'text', x: 665, y: 180, text: 'Respiration : 2860 kJ', color: 'white', fontSize: 16, align: 'middle' },
+    { type: 'rect', x: 500, y: 250, width: 330, height: 70, color: '#64748b' },
+    { type: 'rect', x: 500, y: 250, width: 7, height: 70, color: '#22c55e', fill: '#166534' },
+    { type: 'text', x: 665, y: 345, text: 'Fermentation : 2860 kJ', color: 'white', fontSize: 16, align: 'middle' },
+  );
+  return { engine: 'roughsvg', title: 'Respiration et fermentation à la même échelle énergétique', width: 900, height: 410, elements,
+    legend: [{ color: '#22c55e', label: 'Énergie conservée dans l’ATP' }, { color: '#64748b', label: 'Chaleur ou énergie résiduelle' }] };
+}
+
+function schemaBilanAnnoteSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const labels = [
+    '1 Glucose C₆H₁₂O₆', '2 Deux pyruvates', '3 2 ADP + 2 Pi → 2 ATP', '4 Glycolyse',
+    '5–7 2 R′ → 2 R′H₂ · déshydrogénation', '8 Hyaloplasme', '9 Espace intermembranaire',
+    '10 Matrice', '11 Pyruvates dans la matrice', '12 Décarboxylation · 6 CO₂',
+    '13–15 10 R′ → 10 R′H₂', '16 2 ADP + 2 Pi → 2 ATP', '17 Membrane interne',
+    '18 12 R′H₂ + 6 O₂', '19 12 R′ + 6 H₂O', '20 Sphère pédonculée',
+    '21 Mitochondrie · 34 ATP',
+  ];
+  const shown = step >= 21 ? labels.length : Math.max(0, Math.min(labels.length, Math.round(step)));
+  const elements: RoughSVGElementSpec[] = [
+    { type: 'rect', x: 40, y: 35, width: 820, height: 100, color: '#38bdf8' },
+    { type: 'text', x: 55, y: 60, text: 'HYALOPLASME', color: '#7dd3fc', fontSize: 18 },
+    { type: 'ellipse', x: 60, y: 155, radiusX: 390, radiusY: 115, color: '#f59e0b' },
+    { type: 'ellipse', x: 90, y: 175, radiusX: 350, radiusY: 90, color: '#fb7185' },
+    { type: 'text', x: 450, y: 190, text: 'MITOCHONDRIE', color: '#fdba74', fontSize: 18, align: 'middle' },
+    { type: 'arrow', points: [{ x: 200, y: 95 }, { x: 200, y: 225 }], color: '#22d3ee' },
+    { type: 'arrow', points: [{ x: 400, y: 230 }, { x: 650, y: 230 }], color: '#22c55e' },
+  ];
+  labels.slice(0, shown).forEach((text, i) => elements.push({
+    type: 'text', x: 55 + (i % 3) * 275, y: 310 + Math.floor(i / 3) * 30,
+    text, color: i === shown - 1 ? '#fef08a' : '#e2e8f0', fontSize: 14,
+  }));
+  if (shown === 0) labels.forEach((_, i) => elements.push({ type: 'text', x: 85 + (i % 7) * 110, y: 335 + Math.floor(i / 7) * 35, text: String(i + 1), color: '#fef08a', fontSize: 18 }));
+  return { engine: 'roughsvg', title: step === 0 ? 'Repères à identifier' : 'Correction progressive du schéma-bilan', width: 900, height: 520, elements };
+}
+
+function vesiculesAtpSynthaseSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const elements: RoughSVGElementSpec[] = [
+    { type: 'text', x: 70, y: 45, text: 'Mitochondrie', color: 'white', fontSize: 18 },
+    { type: 'arrow', points: [{ x: 155, y: 42 }, { x: 250, y: 42 }], color: '#22d3ee' },
+    { type: 'text', x: 280, y: 45, text: 'Ultrasons → fragments → vésicules retournées', color: '#bae6fd', fontSize: 18 },
+  ];
+  const experiments = [
+    ['pHi 6 · pHe 4', 'Pas d’ATP', '#ef4444'], ['pHi 7 · pHe 7', 'Pas d’ATP', '#ef4444'], ['pHi 6 · pHe 9', 'ATP synthétisé', '#22c55e'],
+  ];
+  experiments.forEach((exp, i) => {
+    if (step < 4 + i) return;
+    const x = 185 + i * 270;
+    elements.push(
+      { type: 'circle', x, y: 220, radius: 82, color: '#c084fc' },
+      { type: 'circle', x, y: 220, radius: 55, color: '#64748b' },
+      { type: 'text', x, y: 215, text: exp[0], color: 'white', fontSize: 17, align: 'middle' },
+      { type: 'text', x, y: 330, text: exp[1], color: exp[2], fontSize: 18, align: 'middle' },
+    );
+    for (let k = 0; k < 7; k += 1) elements.push({ type: 'circle', x: x - 60 + k * 20, y: 125, radius: 6, color: '#fb7185', fill: '#fb7185' });
+    if (i === 2) elements.push({ type: 'arrow', points: [{ x, y: 195 }, { x, y: 120 }], color: '#fb7185', strokeWidth: 4 });
+  });
+  if (step >= 7) elements.push({ type: 'text', x: 450, y: 390, text: 'ATP seulement si pHi < pHe : [H⁺]i > [H⁺]e', color: '#fef08a', fontSize: 22, align: 'middle' });
+  if (step >= 8) elements.push({ type: 'text', x: 450, y: 435, text: 'ADP + Pi · gradient de H⁺ sortant · ATP synthase', color: '#bbf7d0', fontSize: 19, align: 'middle' });
+  return { engine: 'roughsvg', title: 'Les sphères pédonculées utilisent le gradient de protons', width: 900, height: 480, elements };
+}
+
+function chimiosmoseSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
   return processSpec(
-    'Membrane interne mitochondriale', 'breadthfirst',
+    'Chaîne respiratoire de la membrane interne mitochondriale', 'breadthfirst',
     [
-      ['nadh', 'NADH,H⁺ / FADH₂'], ['electrons', 'Électrons'],
-      ['complexes', 'Complexes respiratoires'], ['pompage', 'Pompage des H⁺'],
-      ['gradient', 'Gradient de H⁺'], ['atpsynthase', 'ATP synthase : ADP + Pi'],
-      ['atp', 'ATP'], ['o2', 'O₂ accepteur final'], ['h2o', 'H₂O'],
+      ['nadh', 'NADH,H⁺'], ['ci', 'CI · 4 H⁺'], ['fadh2', 'FADH₂'], ['cii', 'CII · 0 H⁺'],
+      ['q', 'Coenzyme Q'], ['ciii', 'CIII · 4 H⁺'], ['cytc', 'Cytochrome c'], ['civ', 'CIV · 2 H⁺'],
+      ['o2', '½ O₂ + 2 H⁺'], ['h2o', 'H₂O'], ['gradient', 'Gradient de H⁺'],
+      ['atpsynthase', 'ATP synthase · 3 H⁺/ATP'], ['atp', 'NADH → 3 ATP · FADH₂ → 2 ATP'],
     ],
     [
-      ['nadh', 'electrons', 'Oxydation'], ['electrons', 'complexes', 'Transfert'],
-      ['complexes', 'pompage', 'Énergie'], ['pompage', 'gradient', 'H⁺ accumulés'],
-      ['gradient', 'atpsynthase', 'Retour des H⁺'],
-      ['atpsynthase', 'atp', 'Phosphorylation'], ['complexes', 'o2', 'e⁻'],
-      ['o2', 'h2o', '+ H⁺'],
+      ['nadh', 'ci', '2 e⁻'], ['ci', 'q'], ['fadh2', 'cii', '2 e⁻'], ['cii', 'q'],
+      ['q', 'ciii'], ['ciii', 'cytc'], ['cytc', 'civ'], ['civ', 'o2'], ['o2', 'h2o'],
+      ['ci', 'gradient', '4 H⁺'], ['ciii', 'gradient', '4 H⁺'], ['civ', 'gradient', '2 H⁺'],
+      ['gradient', 'atpsynthase', 'retour des H⁺'], ['atpsynthase', 'atp', 'ADP + Pi'],
     ],
-    paths[variant] || paths.cycle_complet, step, maxStep,
+    ['nadh', 'ci', 'q', 'ciii', 'cytc', 'civ', 'o2', 'h2o', 'gradient', 'atpsynthase', 'atp'], step, maxStep,
   );
 }
 
-const METABOLIC_NODES: Array<[string, string]> = [
-  ['glucose', 'Glucose'], ['glycolyse', 'Glycolyse (cytosol)'], ['pyruvate', 'Pyruvate'],
-  ['acetyl', 'Acétyl-CoA'], ['krebs', 'Cycle de Krebs'], ['chaine', 'Chaîne respiratoire'],
-  ['atp', 'ATP'], ['lactate', 'Lactate'], ['ethanol', 'Éthanol + CO₂'], ['travail', 'Activités cellulaires'],
-];
-const METABOLIC_EDGES: Array<[string, string, string?]> = [
-  ['glucose', 'glycolyse', 'Oxydation partielle'], ['glycolyse', 'pyruvate', '2 ATP + coenzymes réduits'],
-  ['pyruvate', 'acetyl', 'Avec O₂'], ['acetyl', 'krebs', 'CO₂'],
-  ['krebs', 'chaine', 'NADH / FADH₂'], ['chaine', 'atp', 'ATP'],
-  ['pyruvate', 'lactate', 'Sans O₂'], ['pyruvate', 'ethanol', 'Sans O₂'],
-  ['glycolyse', 'atp'], ['atp', 'travail', 'Hydrolyse'],
-];
-
-function metabolicSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
-    respiration: ['glucose', 'glycolyse', 'pyruvate', 'acetyl', 'krebs', 'chaine', 'atp', 'travail'],
-    fermentation_lactique: ['glucose', 'glycolyse', 'pyruvate', 'lactate'],
-    fermentation_alcoolique: ['glucose', 'glycolyse', 'pyruvate', 'ethanol'],
-    vue_ensemble: ['glucose', 'glycolyse', 'pyruvate', 'acetyl', 'krebs', 'chaine', 'atp', 'travail'],
-  };
-  return processSpec(
-    'Respiration et fermentations : voies comparées', 'breadthfirst',
-    METABOLIC_NODES, METABOLIC_EDGES, paths[variant] || paths.vue_ensemble, step, maxStep,
-  );
+function metabolicSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
+  const nodes: Array<[string, string]> = [
+    ['glucose', 'Glucose'], ['glycolyse', 'Glycolyse : 2 ATP + 2 NADH,H⁺'], ['pyruvate', '2 pyruvates'],
+    ['respiration', 'Respiration mitochondriale'], ['lactate', '2 acides lactiques'],
+    ['acetaldehyde', '2 acétaldéhydes + 2 CO₂'], ['ethanol', '2 éthanols'],
+    ['nad_resp', 'NAD⁺ régénéré'], ['nad_lac', 'NAD⁺ régénéré'], ['nad_eth', 'NAD⁺ régénéré'],
+    ['conclusion', 'Sans régénération du NAD⁺, la glycolyse s’arrête'],
+  ];
+  const edges: Array<[string, string, string?]> = [
+    ['glucose', 'glycolyse'], ['glycolyse', 'pyruvate'], ['pyruvate', 'respiration', 'avec O₂'],
+    ['pyruvate', 'lactate', 'fermentation lactique'], ['pyruvate', 'acetaldehyde', 'décarboxylation'],
+    ['acetaldehyde', 'ethanol', 'NADH,H⁺ → NAD⁺'], ['respiration', 'nad_resp'],
+    ['lactate', 'nad_lac'], ['ethanol', 'nad_eth'], ['nad_resp', 'conclusion'], ['nad_lac', 'conclusion'], ['nad_eth', 'conclusion'],
+  ];
+  return processSpec('Trois devenirs du pyruvate, une même nécessité : régénérer le NAD⁺', 'breadthfirst', nodes, edges,
+    nodes.map(([id]) => id), step, maxStep);
 }
 
 function respirationMitochondrialeSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
@@ -872,9 +1206,19 @@ export function resolveScientificPreset(
     case 'svt_ch1_couplage_excitation_contraction': return couplageExcitationContractionSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_cycle_atp': return atpSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_levures_exao': return levuresSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_glycolyse_etapes': return glycolyseEtapesSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_krebs_detaille': return krebsDetailleSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_echelle_redox': return echelleRedoxSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_ultrastructure_mitochondrie': return ultrastructureMitochondrieSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_flux_protons': return fluxProtonsSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_molecules_glucose_atp': return moleculesGlucoseAtpSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_rendement_energetique': return rendementEnergetiqueSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_schema_bilan_annote': return schemaBilanAnnoteSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_vesicules_atp_synthase': return vesiculesAtpSynthaseSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_chimiosmose': return chimiosmoseSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_carte_metabolique': return metabolicSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_myogrammes': return myogramSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_chaleurs_muscle': return muscleHeatSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_cycle_actomyosine': return actomyosineSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_filieres_effort': return filieresSpec(safeVariant, step, meta.maxStep);
   }

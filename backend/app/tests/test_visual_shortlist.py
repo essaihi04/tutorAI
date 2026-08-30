@@ -48,6 +48,14 @@ def test_le_modele_3d_devient_atteignable_par_la_notion():
     assert "mitochondrion" in trouves
 
 
+def test_le_modele_3d_musculaire_est_retrouve_par_son_mecanisme():
+    trouves = dict(apparier_modeles_3d(
+        "muscle : flux nerveux, réticulum sarcoplasmique, calcium, troponine et ATP"
+    ))
+
+    assert "muscle_excitation_contraction" in trouves
+
+
 def test_une_simulation_de_cours_est_nommee_avant_d_etre_demandee():
     """`OUVRIR_SIMULATION` était un pari : le tuteur promettait, le serveur
     cherchait après coup, et en question libre il ne trouvait rien."""

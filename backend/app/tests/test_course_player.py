@@ -548,3 +548,80 @@ def test_schema_catalog_matches_the_browser_registry():
 
     assert declared, "aucun schéma trouvé dans la bibliothèque du navigateur"
     assert declared == set(SCHEMA_IDS)
+
+
+def test_two_courses_of_one_chapter_open_their_own_lesson(monkeypatch):
+    """Le titre du chapitre ne doit pas rendre les deux leçons interchangeables.
+
+    « Consommation de la matière organique et flux d'énergie » est l'intitulé
+    du CHAPITRE ; il contient les mots-clés du cours sur l'énergie tout en
+    couvrant aussi la leçon sur le muscle. Fondus dans un même texte, les deux
+    titres faisaient ouvrir le cours du muscle quand l'élève cliquait sur celui
+    de l'énergie. La leçon du muscle est placée en tête pour reproduire l'ordre
+    de lignes qui déclenchait la confusion.
+    """
+    subjects = [{"id": "subject-svt", "name_fr": "SVT", "catalog_key": "svt"}]
+    chapter = {
+        "id": "chapter-svt-1",
+        "title_fr": "Consommation de la matière organique et flux d'énergie",
+        "subject_id": "subject-svt",
+        "subjects": subjects[0],
+    }
+    lessons = [
+        {
+            "id": "lesson-muscle",
+            "title_fr": "Le rôle du muscle strié squelettique dans la conversion d'énergie",
+            "chapters": chapter,
+        },
+        {
+            "id": "lesson-energy",
+            "title_fr": "Les réactions responsables de la libération de l'énergie",
+            "chapters": chapter,
+        },
+    ]
+
+    class FakeQuery:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def select(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=self.rows)
+
+    class FakeAdmin:
+        def table(self, name):
+            return FakeQuery(lessons if name == "lessons" else [])
+
+    monkeypatch.setattr(course_player_module, "get_supabase_admin", lambda: FakeAdmin())
+    monkeypatch.setattr(
+        course_player_module.subject_access_service,
+        "get_context",
+        lambda _student: {"subjects": subjects},
+    )
+
+    catalog = asyncio.run(CoursePlayerService().get_catalog({"id": "student"}))
+    lesson_by_course = {
+        course["stable_id"]: course["lesson_id"]
+        for folder in catalog["subjects"]
+        for course in folder["courses"]
+    }
+
+    assert lesson_by_course["svt_ch1_energy"] == "lesson-energy"
+    assert lesson_by_course["svt_ch1_muscle"] == "lesson-muscle"
+
+
+def test_lesson_title_outweighs_chapter_title_when_loading_a_manifest():
+    service = CoursePlayerService()
+    chapter = "Consommation de la matière organique et flux d'énergie"
+
+    muscle = service._load_local_manifest(
+        "Le rôle du muscle strié squelettique dans la conversion d'énergie", chapter
+    )
+    energy = service._load_local_manifest(
+        "Les réactions responsables de la libération de l'énergie", chapter
+    )
+
+    assert muscle["stable_id"] == "svt_ch1_muscle"
+    assert energy["stable_id"] == "svt_ch1_energy"

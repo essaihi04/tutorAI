@@ -175,12 +175,19 @@ class BoardVoiceService {
    * `onProgress` reçoit l'avancement réel de la lecture (0 → 1) : c'est lui
    * qui pilote l'écriture manuscrite, donc le texte se forme exactement au
    * rythme de la parole du professeur.
+   *
+   * `urlPrete` : un enregistrement DÉJÀ produit, à jouer tel quel. Les cours
+   * rédigés ont leur voix générée puis vérifiée et publiée à l'avance ; la
+   * resynthétiser au moment de la lecture serait à la fois plus lent et moins
+   * fidèle — ce n'est pas la voix que l'auteur a validée. Le texte reste
+   * transmis : il sert de clé de cache et de repli si le fichier ne vient pas.
    */
   speak(
     text: string,
     lang: Lang,
     onProgress?: (ratio: number) => void,
     onStart?: () => void,
+    urlPrete?: string | null,
   ): BoardSpeakHandle {
     const clean = (text || '').trim();
     let audio: HTMLAudioElement | null = null;
@@ -190,8 +197,8 @@ class BoardVoiceService {
     let rendreLaParole: (() => void) | null = null;
 
     const done = (async (): Promise<boolean> => {
-      if (!clean) return false;
-      const url = await this.fetchAudio(clean, lang);
+      if (!clean && !urlPrete) return false;
+      const url = urlPrete || await this.fetchAudio(clean, lang);
       if (stopped || !url) return false;
 
       // Une seule voix de tableau à la fois : la réplique précédente est
@@ -312,10 +319,22 @@ class BoardVoiceService {
       pause: () => {
         wantPaused = true;
         try { audio?.pause(); } catch { /* ignore */ }
+        // Un tableau en pause n'émet plus aucun son : il rend la parole.
+        // La garder revenait à écarter la voix du chat pendant tout l'arrêt
+        // — c'est-à-dire exactement pendant que le professeur répond.
+        rendreLaParole?.();
+        rendreLaParole = null;
       },
       resume: () => {
         wantPaused = false;
-        try { void audio?.play(); } catch { /* ignore */ }
+        try {
+          const lecture = audio?.play();
+          if (lecture) {
+            void lecture.then(() => {
+              rendreLaParole = rendreLaParole || voiceFloor.acquire();
+            }).catch(() => { /* le chien de garde reprend la main */ });
+          }
+        } catch { /* ignore */ }
       },
     };
   }

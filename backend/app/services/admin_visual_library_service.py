@@ -143,8 +143,20 @@ class AdminVisualLibraryService:
     @staticmethod
     def _preset_items() -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
+        muscle_presets = {
+            "svt_ch1_myogrammes",
+            "svt_ch1_chaleurs_muscle",
+            "svt_ch1_glissement_sarcomere",
+            "svt_ch1_couplage_excitation_contraction",
+            "svt_ch1_cycle_actomyosine",
+            "svt_ch1_filieres_effort",
+        }
         for preset_id, definition in SCIENTIFIC_PRESETS.items():
             default_variant = str(definition["default_variant"])
+            muscle_lesson = (
+                "Rôle du muscle strié squelettique dans la conversion de l’énergie"
+                if preset_id in muscle_presets else ""
+            )
             items.append({
                 "id": f"preset:{preset_id}",
                 "catalog_id": preset_id,
@@ -154,7 +166,7 @@ class AdminVisualLibraryService:
                 "subject": definition.get("subject") or "",
                 "subject_key": "svt" if definition.get("subject") == "SVT" else "",
                 "chapter": "Consommation de la matière organique",
-                "lesson": "",
+                "lesson": muscle_lesson,
                 "lesson_id": "",
                 "concepts": list(definition.get("keywords") or []),
                 "source": "core",
@@ -174,6 +186,52 @@ class AdminVisualLibraryService:
                 },
             })
         return items
+
+    @staticmethod
+    def _three_model_items() -> list[dict[str, Any]]:
+        """Expose les modèles 3D versionnés comme ressources de la bibliothèque."""
+
+        return [{
+            "id": "three:muscle_excitation_contraction",
+            "catalog_id": "muscle_excitation_contraction",
+            "kind": "scientific",
+            "title": "Voyage au cœur du muscle — 3D contrôlable",
+            "description": (
+                "Zoom immersif du muscle vers la fibre, le sarcomère et la tête "
+                "de myosine : potentiel d’action, Ca²⁺, troponine, tropomyosine, "
+                "pont actomyosine, hydrolyse de l’ATP et relâchement."
+            ),
+            "subject": "SVT",
+            "subject_key": "svt",
+            "chapter": "Consommation de la matière organique et libération de l’énergie",
+            "lesson": "Rôle du muscle strié squelettique dans la conversion de l’énergie",
+            "lesson_id": "",
+            "concepts": [
+                "flux nerveux", "tubule T", "réticulum sarcoplasmique", "calcium",
+                "troponine", "tropomyosine", "actomyosine", "ATP", "relâchement",
+            ],
+            "source": "core",
+            "status": "validated",
+            "editable": False,
+            "deletable": False,
+            "variants": [],
+            "preview": {
+                "kind": "scientific",
+                "scientific": {
+                    "engine": "three",
+                    "model": "muscle_excitation_contraction",
+                    "title": "Voyage au cœur du muscle",
+                    "description": (
+                        "Parcours visuel réaliste en 16 pauses, du muscle entier "
+                        "à l’hydrolyse de l’ATP puis au relâchement."
+                    ),
+                    "autoplay": False,
+                    "labels": True,
+                    "focus": "all",
+                    "step": 0,
+                },
+            },
+        }]
 
     @staticmethod
     def _resource_item(row: dict[str, Any], lesson: dict[str, Any]) -> dict[str, Any]:
@@ -313,7 +371,13 @@ class AdminVisualLibraryService:
             if str(row.get("resource_type") or "") in _VISUAL_RESOURCE_TYPES
         ]
         known_urls = {_resource_url(row) for row in rows if _resource_url(row)}
-        items = self._schema_items() + self._preset_items() + resource_items + self._filesystem_items(known_urls)
+        items = (
+            self._schema_items()
+            + self._preset_items()
+            + self._three_model_items()
+            + resource_items
+            + self._filesystem_items(known_urls)
+        )
         items.sort(key=lambda item: (
             item.get("subject") or "zzz",
             0 if item.get("lesson_id") else 1,

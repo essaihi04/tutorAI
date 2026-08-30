@@ -131,11 +131,11 @@ def test_les_croquis_des_premiers_cours_portent_les_metadonnees_llm():
         if (entry.get("metadata") or {}).get("resourceRole") == "teacher_sketch"
     ]
 
-    assert len(croquis) == 36
+    assert len(croquis) == 42
     assert {
         subject: len([entry for entry in croquis if entry["subject"] == subject])
         for subject in {entry["subject"] for entry in croquis}
-    } == {"svt": 9, "physics": 10, "chemistry": 10, "math": 7}
+    } == {"svt": 15, "physics": 10, "chemistry": 10, "math": 7}
     for entry in croquis:
         metadata = entry["metadata"]
         assert metadata["visualStyle"] == "pencil"
@@ -172,6 +172,22 @@ def test_les_demandes_complexes_selectionnent_les_croquis_explications():
     assert signaux == "phys_croquis_signaux_retard"
     assert catalyseur == "chem_croquis_catalyseur"
     assert tvi == "math_croquis_tvi"
+
+
+def test_le_cours_du_muscle_couvre_ses_cinq_besoins_visuels():
+    attendus = {
+        "svt_croquis_hierarchie_muscle",
+        "svt_croquis_myogrammes",
+        "svt_croquis_cycle_actomyosine",
+        "svt_croquis_chaleurs_muscle",
+        "svt_croquis_filieres_muscle",
+    }
+    trouves = {
+        entry["id"] for entry in SCHEMA_CATALOG
+        if (entry.get("metadata") or {}).get("courseId") == "svt_ch1_muscle"
+    }
+
+    assert trouves == attendus
 
 
 def test_les_trois_cours_ne_referencent_que_des_schemas_enregistres():

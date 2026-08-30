@@ -226,6 +226,7 @@ def carte_des_visuels(
     contexte: str,
     demande: str = "",
     simulations: Sequence[dict] | None = None,
+    lecon_rattachee: bool = False,
 ) -> dict[str, Any]:
     """Tout ce qui est prêt pour cette notion, rangé par surface.
 
@@ -266,7 +267,15 @@ def carte_des_visuels(
     return {
         "reference": _meilleur(False),
         "croquis": _meilleur(True),
-        "presets": apparier_presets(contexte, seuil=1 if veut_mouvement else 2),
+        # Le seuil de 2 se méfie d'une scène hors sujet : c'est la bonne
+        # prudence en question libre, où l'élève saute d'une matière à
+        # l'autre. Dans une leçon RATTACHÉE, elle devient un handicap — le
+        # titre du chapitre est alors le sujet de la séance, pas un mot vague,
+        # et la scène du chapitre marquait 1 point sur 2 quand elle était
+        # justement la seule qui convenait.
+        "presets": apparier_presets(
+            contexte, seuil=1 if (veut_mouvement or lecon_rattachee) else 2
+        ),
         "modeles_3d": apparier_modeles_3d(contexte),
         "simulations": apparier_simulations(contexte, simulations),
         "veut_croquis": demande_un_croquis(demande),
@@ -445,11 +454,12 @@ def bloc_visuels_disponibles(
             "",
             "L'ORDRE D'UNE EXPLICATION QUI COMMENCE PAR UNE SCÈNE — quatre temps,",
             "et un seul par réponse :",
-            "  1. TU LA LANCES, et ton explication se tient À CÔTÉ : deux ou trois",
-            "     phrases dans le chat qui disent QUOI REGARDER (« observe ce qui",
-            "     arrive quand la fréquence monte »). Rien ne s'écrit au tableau",
-            "     dans cette réponse : la scène occupe l'écran, et ce que tu",
-            "     écrirais recouvrirait ce que tu demandes de regarder.",
+            "  1. TU LA LANCES DANS CETTE RÉPONSE : elle contient obligatoirement",
+            "     l'action d'affichage (`scientific`/`show_live` ou",
+            "     `OUVRIR_SIMULATION`) ET deux ou trois phrases dans le chat qui",
+            "     disent QUOI REGARDER (« observe ce qui arrive quand la fréquence",
+            "     monte »). « Je vais lancer » sans action est INTERDIT. N'ajoute",
+            "     aucune ligne de COURS : la scène elle-même occupe le tableau.",
             "  2. TU LUI LAISSES LA MAIN. Termine par une consigne de",
             "     MANIPULATION — quel curseur bouger, quoi comparer — puis",
             "     ARRÊTE-TOI. Tu ne continues pas dans la même réponse : c'est",
