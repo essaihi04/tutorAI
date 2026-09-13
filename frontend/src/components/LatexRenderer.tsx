@@ -43,7 +43,7 @@ const LatexRenderer: React.FC<LatexRendererProps> = ({ content, display = false 
       const html = katex.renderToString(innerLatex, {
         displayMode: isDisplay || display,
         throwOnError: false,
-        trust: true,
+        trust: false,
       });
       parts.push(
         <span

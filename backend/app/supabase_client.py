@@ -1,13 +1,14 @@
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from app.config import get_settings
 
 settings = get_settings()
 
-# Public client for auth flows bound to anon key
-supabase: Client = create_client(settings.supabase_url, settings.supabase_anon_key)
+# Server-only database client. Never sign in/up on a shared client.
+supabase: Client = create_client(settings.supabase_url, settings.supabase_service_role_key,
+    options=ClientOptions(auto_refresh_token=False, persist_session=False))
 
 # Admin client for server-side database operations that should bypass RLS
-supabase_admin: Client = create_client(settings.supabase_url, settings.supabase_service_role_key)
+supabase_admin: Client = supabase
 
 def get_supabase() -> Client:
     """Get Supabase client instance"""

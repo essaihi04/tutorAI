@@ -4,16 +4,20 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=moalim
+Group=moalim
 WorkingDirectory=/root/moalim/backend
-EnvironmentFile=/root/moalim/backend/.env
+EnvironmentFile=/etc/moalim/backend.env
+Environment=HOME=/var/lib/moalim
+Environment=XDG_CACHE_HOME=/var/cache/moalim
+Environment=HF_HOME=/var/cache/moalim/huggingface
+Environment=TORCH_HOME=/var/cache/moalim/torch
 ExecStart=/root/moalim/backend/.venv/bin/uvicorn app.main:app \
     --host 127.0.0.1 \
     --port 8000 \
     --workers 1 \
     --proxy-headers \
-    --forwarded-allow-ips="*" \
+    --forwarded-allow-ips="127.0.0.1" \
     --no-access-log
 Restart=always
 RestartSec=5
@@ -24,6 +28,20 @@ SyslogIdentifier=moalim-backend
 # Sécurité — n'affecte que ce service
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindReadOnlyPaths=/root/moalim
+BindPaths=/root/moalim/backend/data /root/moalim/frontend/public
+ReadWritePaths=/root/moalim/backend/data /root/moalim/frontend/public /var/cache/moalim /var/lib/moalim
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]
 WantedBy=multi-user.target

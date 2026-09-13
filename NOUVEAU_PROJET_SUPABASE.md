@@ -142,8 +142,8 @@ Si tout fonctionne correctement, vous devriez voir:
 ```env
 # Supabase
 SUPABASE_URL=https://ldeifdnczkzgtxctjlel.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZWlmZG5jemt6Z3R4Y3RqbGVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwNTcxMTUsImV4cCI6MjA3ODYzMzExNX0._6t-wGotwy00NafsRnvXdmX7SXg6z5Cd6B98889Ic1o
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZWlmZG5jemt6Z3R4Y3RqbGVsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzA1NzExNSwiZXhwIjoyMDc4NjMzMTE1fQ.uDZEO-RBNDszxBuhK7I11K6FTc8b4U2jYJzN5gMtPJQ
+SUPABASE_ANON_KEY=YOUR_SUPABASE_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_KEY
 
 # Database (à compléter avec votre mot de passe)
 DATABASE_URL=postgresql+asyncpg://postgres:[YOUR_PASSWORD]@db.ldeifdnczkzgtxctjlel.supabase.co:5432/postgres

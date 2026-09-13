@@ -42,7 +42,6 @@ class AdminService:
 
     async def create_user(self, email: str, password: str, full_name: str, username: str, promo_code: Optional[str] = None, is_admin: bool = False) -> dict:
         """Create a new user account via Supabase Auth + students table."""
-        supabase_public = get_supabase()
 
         # Check existing
         existing = self.supabase.table("students").select("id").eq("email", email).execute()
@@ -54,9 +53,10 @@ class AdminService:
             raise ValueError("Username already taken")
 
         # Create auth user
-        auth_response = supabase_public.auth.sign_up({
+        auth_response = self.supabase.auth.admin.create_user({
             "email": email,
             "password": password,
+            "email_confirm": True,
         })
 
         if not auth_response.user:

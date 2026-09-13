@@ -9,12 +9,10 @@
  *
  * ── L'ordre des étapes ──
  *
- * Le professeur pose d'abord sa figure — l'élève doit voir de quoi on parle
- * avant d'entendre parler. Il écrit ensuite son titre puis ses lignes, chacune
- * lue à mesure qu'elle s'écrit (c'est le comportement par défaut d'un `write`
- * sans `say`). Il explique enfin, à voix nue, devant un tableau déjà rempli —
- * c'est le `speech_text` de la diapositive. Et si elle porte une question, il
- * la pose et il ATTEND.
+ * Le professeur pose d'abord la figure et le contexte nécessaires. Si la
+ * diapositive interroge l'élève, il pose ENSUITE la question et attend sa
+ * réponse avant d'écrire ou de dire la correction. Cette règle évite qu'une
+ * explication révèle la réponse juste avant l'interrogation.
  *
  * ── La voix ──
  *
@@ -44,8 +42,11 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
   const contenu = slide.screen_content || {};
   const visuel = slide.visual;
 
-  // ── 1. La figure, d'abord ──
-  if (visuel) {
+  const figureLaterale = visuel && visuel.placement !== 'inline';
+  const figureDansLeTexte = visuel && visuel.placement === 'inline';
+
+  // ── 1. La figure latérale, d'abord ──
+  if (figureLaterale) {
     if (visuel.kind === 'schema' && visuel.schema_id) {
       steps.push({ action: 'figure', schema_id: visuel.schema_id, say: visuel.caption });
     } else if (visuel.kind === 'scientific' && visuel.scientific) {
@@ -72,26 +73,19 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
   };
 
   ecrire('title', slide.title);
+  if (figureDansLeTexte && visuel.kind === 'schema' && visuel.schema_id) {
+    steps.push({
+      action: 'bloc',
+      line: {
+        type: 'schema',
+        content: visuel.caption || '',
+        schema_id: visuel.schema_id,
+      },
+    });
+  }
   ecrire('subtitle', contenu.lead);
-  // Le texte essentiel ne se réécrit pas s'il répète le chapeau : deux lignes
-  // identiques à la craie, c'est une faute de tableau, pas une insistance.
-  if ((contenu.essential_text || '').trim() !== (contenu.lead || '').trim()) {
-    ecrire('text', contenu.essential_text);
-  }
-  (contenu.bullets || []).forEach(puce => ecrire('step', puce));
-  if (contenu.student_trace) {
-    steps.push({ action: 'write', line: { type: 'box', content: contenu.student_trace, color: 'green' } });
-  }
 
-  // ── 3. L'explication, devant le tableau écrit ──
-  const parole = textePourLaLangue(slide.speech_text, langue);
-  if (parole) {
-    const pistes = slide.audio || {};
-    const piste = pistes[langue] || pistes.mixed || pistes.fr || Object.values(pistes)[0];
-    steps.push({ action: 'narrate', text: parole, audio_url: piste?.url });
-  }
-
-  // ── 4. La question, s'il y en a une : il la pose et il attend ──
+  // ── 3. La question vient AVANT toute réponse ou explication ──
   const question = slide.question;
   const enonce = (question?.prompt || '').trim();
   if (enonce) {
@@ -100,6 +94,78 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
       text: enonce,
       options: (question?.options || []).filter(option => !!option?.trim()).slice(0, 4),
     });
+  }
+
+  // ── 4. Correction écrite, seulement après la réponse de l'élève ──
+  // Le texte essentiel ne se réécrit pas s'il répète le chapeau : deux lignes
+  // identiques à la craie, c'est une faute de tableau, pas une insistance.
+  if ((contenu.essential_text || '').trim() !== (contenu.lead || '').trim()) {
+    ecrire('text', contenu.essential_text);
+  }
+  (contenu.bullets || []).forEach(puce => ecrire('step', puce));
+  if (contenu.table?.headers?.length && contenu.table.rows?.length) {
+    steps.push({
+      action: 'bloc',
+      line: {
+        type: 'table',
+        content: '',
+        headers: contenu.table.headers,
+        rows: contenu.table.rows,
+      },
+    });
+  }
+  if (contenu.student_trace) {
+    steps.push({ action: 'write', line: { type: 'box', content: contenu.student_trace, color: 'green' } });
+  }
+
+  // ── 5. Les exercices cliquables, sur le tableau désormais complété ──
+  //
+  // Ils viennent après l'écrit : on n'évalue pas une notion avant de l'avoir
+  // posée. Et avant la parole finale, pour que le professeur commente un
+  // tableau où l'élève a déjà de quoi travailler sous les doigts.
+  (slide.exercises || []).forEach(exercice => {
+    const enonceExercice = (exercice.prompt || '').trim();
+    if (!enonceExercice) return;
+    if (exercice.type === 'qcm' && exercice.choices?.length) {
+      steps.push({
+        action: 'bloc',
+        line: {
+          type: 'qcm',
+          content: enonceExercice,
+          choices: exercice.choices,
+          correct: typeof exercice.correct === 'number' ? exercice.correct : 0,
+          explanation: exercice.explanation,
+        },
+      });
+    } else if (exercice.type === 'vrai_faux' && exercice.statements?.length) {
+      steps.push({
+        action: 'bloc',
+        line: {
+          type: 'vrai_faux',
+          content: enonceExercice,
+          statements: exercice.statements,
+          explanation: exercice.explanation,
+        },
+      });
+    } else if (exercice.type === 'association' && exercice.pairs?.length) {
+      steps.push({
+        action: 'bloc',
+        line: {
+          type: 'association',
+          content: enonceExercice,
+          pairs: exercice.pairs,
+          explanation: exercice.explanation,
+        },
+      });
+    }
+  });
+
+  // ── 6. Correction orale, devant le tableau maintenant complété ──
+  const parole = textePourLaLangue(slide.speech_text, langue);
+  if (parole) {
+    const pistes = slide.audio || {};
+    const piste = pistes[langue] || pistes.mixed || pistes.fr || Object.values(pistes)[0];
+    steps.push({ action: 'narrate', text: parole, audio_url: piste?.url });
   }
 
   // Une diapositive sans rien à écrire ni à dire laisserait un tableau vide et

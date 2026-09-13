@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Voyage du glucose — glycolyse</title>
+  <style>
+    :root { color-scheme: dark; --ink:#e8fbf5; --muted:#a9c8c2; --cyan:#62e6e0; --lime:#b6f36b; --gold:#ffd166; --pink:#ff8fab; --panel:rgba(8,35,43,.86); }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:100%; margin:0; overflow:hidden; }
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: radial-gradient(circle at 15% 15%,#16444b 0,#09272f 42%,#061a22 100%); color:var(--ink); }
+    .app { height:100%; display:flex; flex-direction:column; padding:clamp(5px,1vh,10px); }
+    .panel { min-height:0; flex:1; display:flex; flex-direction:column; gap:clamp(5px,.8vh,8px); padding:clamp(5px,.8vw,9px); border:1px solid rgba(156,232,220,.2); border-radius:18px; background:rgba(3,20,27,.52); box-shadow:0 14px 40px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.04); }
+    .scene { position:relative; min-height:0; flex:1; border-radius:16px; overflow:hidden; background:#031923; }
+    .scene:before { content:""; position:absolute; z-index:1; inset:0; pointer-events:none; background:linear-gradient(180deg,rgba(2,18,26,.16),rgba(2,18,26,.04) 55%,rgba(2,18,26,.58)); }
+    svg { position:absolute; inset:0; width:100%; height:100%; }
+    .cell-fill { fill:rgba(24,83,85,.22); }
+    .cell-membrane { fill:none; stroke:#77ded1; stroke-width:3; opacity:.72; }
+    .cell-membrane.inner { stroke:#d4fff6; stroke-width:1.4; opacity:.35; }
+    .cell-label { fill:#75d9ce; font-size:15px; font-weight:800; letter-spacing:.14em; }
+    .nucleus { fill:rgba(120,155,214,.18); stroke:rgba(157,193,247,.5); stroke-width:2; }
+    .nucleus-core { fill:rgba(167,129,207,.24); }
+    .cell-note { fill:#90b6b1; font-size:12px; }
+    .route { fill:none; stroke:rgba(177,239,223,.2); stroke-width:3; stroke-dasharray:8 12; }
+    .route-glow { fill:none; stroke:rgba(98,230,224,.4); stroke-width:7; filter:url(#glow); opacity:.45; }
+    .stage-label { fill:#c6e5de; font-size:17px; font-weight:700; letter-spacing:.04em; }
+    .small-label { fill:#9dbdb7; font-size:14px; }
+    .atom { stroke:#e8fff6; stroke-width:2; filter:url(#glow); }
+    .carbon { fill:#ffbd69; }
+    .carbon.alt { fill:#ff8fab; }
+    .phosphate { fill:#70d6ff; }
+    .molecule { transition:transform .75s cubic-bezier(.22,.8,.26,1), opacity .45s ease; }
+    .chain-line { stroke:#ffdda4; stroke-width:8; stroke-linecap:round; }
+    .stage0 .molecule.single { transform:translate(86px,213px); }
+    .stage1 .molecule.single { transform:translate(191px,213px); }
+    .stage2 .molecule.single { opacity:0; transform:translate(261px,213px) scale(.85); }
+    .stage3 .molecule.single { opacity:0; }
+    .stage4 .molecule.single { opacity:0; }
+    .split { opacity:0; transition:opacity .55s ease, transform .8s cubic-bezier(.22,.8,.26,1); }
+    .stage2 .split { opacity:1; transform:translate(0,0); }
+    .stage3 .split { opacity:0; transform:translate(110px,0); }
+    .stage4 .split { opacity:0; transform:translate(230px,0); }
+    .products { opacity:0; transform:translate(0,0); transition:opacity .55s ease, transform .9s cubic-bezier(.22,.8,.26,1); }
+    .stage3 .products { opacity:1; transform:translate(0,0); }
+    .stage4 .products { opacity:1; transform:translate(10px,18px); }
+    .token { opacity:0; transition:opacity .45s ease; }
+    .stage1 .spent, .stage2 .spent { opacity:1; }
+    .stage3 .made, .stage4 .made { opacity:1; }
+    .stage3 .payoff-input { opacity:1; }
+    .stage2 .spent { opacity:.7; }
+    .stage-title { position:absolute; z-index:2; left:18px; top:14px; padding:.38rem .64rem; border-radius:10px; background:rgba(3,21,28,.82); border:1px solid rgba(182,243,107,.3); color:var(--lime); font-weight:800; font-size:clamp(.73rem,1.5vw,.96rem); }
+    .reaction-flow { position:absolute; z-index:2; left:18px; right:18px; bottom:38px; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; }
+    .flow-chip { min-width:0; padding:.34rem .5rem; border-radius:9px; background:rgba(3,21,28,.82); border:1px solid rgba(255,255,255,.12); text-align:center; }
+    .flow-chip small { display:block; margin-bottom:1px; font-size:clamp(.47rem,.85vw,.59rem); font-weight:900; letter-spacing:.1em; }
+    .flow-chip b { display:block; overflow:hidden; text-overflow:ellipsis; font-size:clamp(.57rem,1.05vw,.72rem); white-space:nowrap; }
+    .flow-chip.input small { color:var(--cyan); }
+    .flow-chip.output small { color:var(--gold); }
+    .reaction-arrow { color:var(--lime); font-size:clamp(1rem,2.2vw,1.45rem); filter:drop-shadow(0 0 6px rgba(182,243,107,.45)); }
+    .hint { position:absolute; z-index:2; left:18px; right:18px; bottom:12px; color:#b3d2cb; font-size:clamp(.58rem,1.05vw,.72rem); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .reaction-vector { fill:none; stroke-width:2.4; stroke-linecap:round; opacity:0; transition:opacity .35s ease; }
+    .reaction-vector.input { stroke:#62e6e0; marker-end:url(#arrowIn); }
+    .reaction-vector.output { stroke:#ffd166; marker-end:url(#arrowOut); }
+    .stage1 .activation-vector, .stage3 .yield-vector, .stage4 .mitochondria-vector { opacity:1; }
+    .legend { display:flex; flex-wrap:wrap; gap:8px 16px; justify-content:center; color:var(--muted); font-size:clamp(.62rem,1.25vw,.78rem); }
+    .legend span { display:inline-flex; align-items:center; gap:6px; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; box-shadow:0 0 9px currentColor; }
+    .dot.c { color:#ffbd69; background:#ffbd69; } .dot.p { color:#70d6ff; background:#70d6ff; } .dot.n { color:#b6f36b; background:#b6f36b; }
+    .controls { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+    button { border:0; border-radius:12px; padding:.55rem .9rem; color:#042128; background:var(--cyan); font-weight:800; cursor:pointer; font-size:clamp(.67rem,1.35vw,.82rem); transition:transform .2s, filter .2s; }
+    button:hover { transform:translateY(-1px); filter:brightness(1.08); } button.secondary { color:#dff8f1; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); } button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    @media (max-width:520px) { .app{padding:4px}.panel{padding:5px;border-radius:14px}.legend{display:none}.reaction-flow{left:8px;right:8px;gap:4px}.flow-chip{padding:.25rem .3rem} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="panel">
+      <div class="scene stage0" id="scene">
+        <div class="stage-title" id="stageTitle">1 · Glucose intact</div>
+        <div class="reaction-flow" aria-label="Entrées et sorties de la réaction">
+          <span class="flow-chip input"><small>ENTRÉE</small><b id="inputValue">Glucose (C₆)</b></span>
+          <span class="reaction-arrow" aria-hidden="true">⟶</span>
+          <span class="flow-chip output"><small>SORTIE</small><b id="outputValue">Molécule à 6 carbones</b></span>
+        </div>
+        <div class="hint" id="hint">Observe la chaîne : chaque boule orange représente un carbone.</div>
+        <svg viewBox="0 0 760 430" role="img" aria-label="Simulation animée de la glycolyse">
+          <defs><filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8Z" fill="#62e6e0"/></marker><marker id="arrowIn" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8Z" fill="#62e6e0"/></marker><marker id="arrowOut" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8Z" fill="#ffd166"/></marker></defs>
+          <image href="cellule_realiste_mitochondrie.png" x="0" y="0" width="760" height="430" preserveAspectRatio="xMidYMid slice"/>
+          <rect x="0" y="0" width="760" height="430" fill="rgba(0,25,34,.18)"/>
+          <path class="route-glow" d="M75 213 C210 182 325 190 425 218"/><path class="route" d="M75 213 C210 182 325 190 425 218" marker-end="url(#arrow)"/>
+          <text x="74" y="160" class="stage-label">CYTOPLASME</text><text x="568" y="135" class="stage-label">MITOCHONDRIE</text>
+          <g class="molecule single"><line class="chain-line" x1="0" y1="0" x2="100" y2="0"/><circle class="atom carbon" cx="0" cy="0" r="21"/><circle class="atom carbon" cx="20" cy="0" r="21"/><circle class="atom carbon" cx="40" cy="0" r="21"/><circle class="atom carbon" cx="60" cy="0" r="21"/><circle class="atom carbon" cx="80" cy="0" r="21"/><circle class="atom carbon" cx="100" cy="0" r="21"/><text x="-4" y="51" class="stage-label">Glucose</text><text x="112" y="5" class="small-label">C₆</text></g>
+          <g class="split"><g transform="translate(285 170)"><line class="chain-line" x1="0" y1="0" x2="70" y2="0"/><circle class="atom carbon alt" cx="0" cy="0" r="20"/><circle class="atom carbon alt" cx="35" cy="0" r="20"/><circle class="atom carbon alt" cx="70" cy="0" r="20"/><text x="0" y="45" class="small-label">triose A · C₃</text></g><g transform="translate(285 256)"><line class="chain-line" x1="0" y1="0" x2="70" y2="0"/><circle class="atom carbon alt" cx="0" cy="0" r="20"/><circle class="atom carbon alt" cx="35" cy="0" r="20"/><circle class="atom carbon alt" cx="70" cy="0" r="20"/><text x="0" y="45" class="small-label">triose B · C₃</text></g></g>
+          <g class="products"><g transform="translate(300 170)"><line class="chain-line" x1="0" y1="0" x2="70" y2="0"/><circle class="atom carbon alt" cx="0" cy="0" r="20"/><circle class="atom carbon alt" cx="35" cy="0" r="20"/><circle class="atom carbon alt" cx="70" cy="0" r="20"/><text x="0" y="45" class="stage-label">Pyruvate</text></g><g transform="translate(300 250)"><line class="chain-line" x1="0" y1="0" x2="70" y2="0"/><circle class="atom carbon alt" cx="0" cy="0" r="20"/><circle class="atom carbon alt" cx="35" cy="0" r="20"/><circle class="atom carbon alt" cx="70" cy="0" r="20"/><text x="0" y="45" class="stage-label">Pyruvate</text></g></g>
+          <g class="token spent" transform="translate(190 88)"><circle class="atom" fill="#ffd166" cx="0" cy="0" r="18"/><text x="-14" y="5" class="small-label">ATP</text></g><g class="token spent" transform="translate(245 88)"><circle class="atom" fill="#ffd166" cx="0" cy="0" r="18"/><text x="-14" y="5" class="small-label">ATP</text></g><g class="token spent" transform="translate(350 88)"><rect x="-31" y="-17" width="62" height="34" rx="15" fill="rgba(255,209,102,.16)" stroke="#ffd166"/><text x="-23" y="5" class="small-label">2 ADP</text></g>
+          <path class="reaction-vector input activation-vector" d="M190 110 C195 145 215 165 225 186"/><path class="reaction-vector input activation-vector" d="M245 110 C245 145 250 165 255 186"/><path class="reaction-vector output activation-vector" d="M295 195 C320 170 337 140 346 111"/>
+          <g class="token payoff-input" transform="translate(390 343)"><rect x="-39" y="-16" width="78" height="32" rx="14" fill="rgba(98,230,224,.12)" stroke="#62e6e0"/><text x="-28" y="5" class="small-label">2 NAD⁺</text></g><g class="token payoff-input" transform="translate(545 343)"><rect x="-64" y="-16" width="128" height="32" rx="14" fill="rgba(98,230,224,.12)" stroke="#62e6e0"/><text x="-52" y="5" class="small-label">4 ADP + 4 Pi</text></g>
+          <g class="token made" transform="translate(455 80)"><circle class="atom" fill="#b6f36b" cx="0" cy="0" r="17"/><text x="-21" y="-27" class="small-label">2 NADH,H⁺</text><text x="-8" y="6" class="stage-label">N</text></g><g class="token made" transform="translate(575 80)"><circle class="atom" fill="#ffd166" cx="0" cy="0" r="17"/><text x="-21" y="-27" class="small-label">4 ATP</text><text x="-7" y="6" class="stage-label">A</text></g>
+          <path class="reaction-vector input yield-vector" d="M390 323 C370 300 350 282 335 264"/><path class="reaction-vector input yield-vector" d="M545 323 C480 292 420 275 370 260"/><path class="reaction-vector output yield-vector" d="M335 155 C370 125 420 108 453 101"/><path class="reaction-vector output yield-vector" d="M365 155 C440 120 525 105 568 99"/>
+          <path class="reaction-vector input mitochondria-vector" d="M400 218 C407 218 414 219 420 221"/>
+        </svg>
+      </div>
+      <div class="controls"><button id="startBtn">▶ Démarrer</button><button id="resetBtn" class="secondary">↺ Recommencer</button></div>
+    </section>
+  </div>
+  <script>
+    const SIMULATION_CONFIG = { id:'glycolyse_glucose_cytoplasme', commands:['start','next','pause','reset','set_variant','highlight'], variants:[{id:'glycolyse',label:'Glycolyse complète',params:{}}], objectives:['Suivre les six carbones du glucose','Relier ATP consommés, ATP produits et NADH,H⁺','Établir le bilan net de la glycolyse'] };
+    const labels=[['1 · Glucose dans le cytoplasme','La glycolyse commence dans le cytoplasme de la cellule.'],['2 · Activation','Deux ATP entrent ; deux ADP sortent après le transfert des phosphates.'],['3 · Coupure C₆ → 2 × C₃','Une chaîne à six carbones donne deux chaînes à trois carbones.'],['4 · Formation des pyruvates','NAD⁺, ADP et Pi entrent ; deux pyruvates, NADH,H⁺ et ATP sont formés.'],['5 · Près de la mitochondrie','Les deux pyruvates restent représentés dans le cytoplasme, à côté de la mitochondrie.']];
+    const flows=[['Glucose (C₆)','Glycolyse dans le cytoplasme'],['Glucose + 2 ATP','Molécule activée + 2 ADP'],['Molécule C₆ activée','2 molécules C₃'],['2 C₃ + 2 NAD⁺ + 4 ADP + 4 Pi','2 pyruvates + 2 NADH,H⁺ + 4 ATP'],['2 pyruvates dans le cytoplasme','À proximité de la mitochondrie']];
+    const state={step:0,running:false,status:'idle',actions:[],current_state:{}}; let timer=null;
+    const scene=document.getElementById('scene');
+    function publish(action){ state.actions.push(action); state.current_state={step:state.step+1,stage:labels[state.step][0],reaction_input:flows[state.step][0],reaction_output:flows[state.step][1],atp_consumed:state.step>=1?2:0,atp_produced:state.step>=3?4:0,atp_net:state.step>=3?2:state.step>=1?-2:0,nadh_h_plus:state.step>=3?2:0,pyruvate_count:state.step>=3?2:0,carbon_balance:'C6 = 2 × C3',location:state.step>=4?'cytoplasme, à proximité de la mitochondrie':'cytoplasme de la cellule',simulation_status:state.status,current_variant:'glycolyse',variants_completed:state.status==='finished'?['glycolyse']:[]}; window.parent.postMessage({type:'simulation_state',simulation_id:SIMULATION_CONFIG.id,student_actions:state.actions,current_state:state.current_state,objective_progress:state.step/4,timestamp:Date.now()},'*'); }
+    function render(){ scene.className='scene stage'+state.step; document.getElementById('stageTitle').textContent=labels[state.step][0]; document.getElementById('hint').textContent=labels[state.step][1]; document.getElementById('inputValue').textContent=flows[state.step][0]; document.getElementById('outputValue').textContent=flows[state.step][1]; document.getElementById('startBtn').textContent=state.running?'⏸ Pause':state.status==='finished'?'↻ Rejouer':'▶ Démarrer'; }
+    function stopTimer(){ if(timer){clearTimeout(timer);timer=null;} }
+    function next(){ if(state.step>=4)return; state.step++; const finished=state.step>=4; if(finished)state.running=false; state.status=finished?'finished':'running'; publish('next_step_'+(state.step+1)); render(); if(state.running&&state.step<4) timer=setTimeout(next,1900); else if(finished)publish('finish_simulation'); }
+    function start(){ stopTimer(); if(state.step>=4){state.step=0;state.actions=[];} state.running=true; state.status='running'; publish('start_simulation'); render(); timer=setTimeout(next,1300); }
+    function reset(){ stopTimer(); state.step=0; state.running=false; state.status='idle'; state.actions=[]; publish('reset_simulation'); render(); }
+    document.getElementById('startBtn').onclick=()=>state.running? (stopTimer(),state.running=false,state.status='idle',publish('pause_simulation'),render()):start(); document.getElementById('resetBtn').onclick=reset;
+    window.executeAICommand=(command,params={})=>{ if(command==='start'||command==='replay')start(); else if(command==='next'||command==='step') {state.running=false;stopTimer();next();} else if(command==='pause'){state.running=false;stopTimer();state.status='idle';publish('pause_simulation');render();} else if(command==='reset')reset(); else if(command==='set_variant')reset(); };
+    window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='simulation_control'&&d.simulation_id===SIMULATION_CONFIG.id)executeAICommand(d.command,d.parameters||{});});
+    window.SIMULATION_CONFIG=SIMULATION_CONFIG; window.__SIMULATION_MANIFEST_SENT__=true; window.parent.postMessage({type:'simulation_manifest',simulation_id:SIMULATION_CONFIG.id,capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,buttons:['startBtn','resetBtn']},page_text:'Dans le cytoplasme de la cellule, la glycolyse transforme un glucose C6 en exactement 2 pyruvates C3. Les deux pyruvates sont représentés à proximité de la mitochondrie, sans être placés à l’intérieur.'},'*'); render(); publish('ready');
+  </script>
+</body>
+</html>

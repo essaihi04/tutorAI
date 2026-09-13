@@ -113,9 +113,15 @@ def _catalogue_presets() -> str:
     par_matiere: dict[str, list[str]] = {}
     for preset_id, definition in SCIENTIFIC_PRESETS.items():
         variantes = ", ".join(f"`{v}`" for v in sorted(definition["variants"]))
+        etapes = definition.get("steps")
+        ligne_etapes = ""
+        if isinstance(etapes, dict) and etapes:
+            ligne_etapes = "\n    étapes pilotables : " + " ; ".join(
+                f"{numero}={libelle}" for numero, libelle in etapes.items()
+            )
         par_matiere.setdefault(str(definition.get("subject") or "Autre"), []).append(
             f"  `{preset_id}` — {definition['title']}\n"
-            f"    variantes : {variantes}"
+            f"    variantes : {variantes}{ligne_etapes}"
         )
     lignes: list[str] = []
     for matiere in sorted(par_matiere):
@@ -155,6 +161,30 @@ directement l'objectif du cours, dans cet ordre :
    simple qui change dans le temps et qu'aucune ressource ne couvre.
 
 MOTEURS AUTORISÉS dans `line.scientific` :
+- Pour assembler le bilan ATP, utilise `svt_ch1_rendement_energetique` :
+  cinq vues visuelles, sans bloc de calculs permanent. `variant=scene` suit
+  la convention scolaire 38 ATP ; `variant=navette_36` montre l'autre navette.
+  Étapes 0–2 glycolyse, 3–5 matrice, 6–7 chaîne, 8 assemblage, 9–10 rendement.
+  Explique oralement la vue active ; les détails restent accessibles au clic.
+  Ne compte pas les NADH/FADH₂ en plus de l'ATP qu'ils permettent de produire.
+- Pour animer la chaîne respiratoire et comparer NADH,H⁺ / FADH₂, utilise
+  `svt_ch1_chimiosmose` avec `variant=nadh` ou `variant=fadh2` ; ne reconstruis
+  pas une chaîne de cases. Les H⁺ sortent de la matrice via CI/CIII/CIV,
+  reviennent par l'ATP synthase ; sa tête F₁ produit l'ATP côté matrice
+  (pas dans un stroma). Affiche la convention scolaire : 3 ATP/NADH,H⁺ et
+  2 ATP/FADH₂, sans les présenter comme des rendements biochimiques universels.
+  CII ne pompe aucun H⁺. L'espace intermembranaire accumule les H⁺ : son pH
+  est inférieur à celui de la matrice. Les pH 7/8 sont illustratifs.
+  Le retour par l'ATP synthase tend à réduire le déséquilibre, mais le
+  pompage l'entretient. Aux étapes 13–18 le pompage s'arrête et le gradient
+  se dissipe : ne montre pas un équilibre complet avec pompage actif.
+  ΔpH est une composante du gradient électrochimique, pas sa totalité.
+  Le visuel reste peu chargé : ne superpose pas les équations écrites d'eau
+  ou d'ATP. L'élève peut cliquer sur le coenzyme, O₂ ou ADP/ATP pour rejouer
+  les transformations moléculaires : départ des électrons (1–2), O₂ en
+  attente puis capture (7) et formation de deux H₂O (8), fixation du Pi
+  (10), ATP (11). Une molécule entière O₂ reçoit quatre e⁻ et quatre H⁺ ;
+  ce détail local couvre deux paires d'électrons, pas un seul coenzyme.
 - `jsxgraph` : géométrie, forces, vecteurs, optique, fonctions et courbes.
 - `cytoscape` : chaînes, réseaux et processus SVT avec nœuds et flèches.
 - `matter` : mécanique 2D simple (chute, choc, pendule, plan, projectile).
@@ -179,6 +209,21 @@ Pour piloter la scène déjà affichée, émets une action séparée :
 {"type":"scientific","action":"control","payload":{"presetId":"svt_ch1_cycle_atp","command":"set_variant","parameters":{"variant":"hydrolyse"}}}
 Commandes : `start`, `pause`, `reset`, `next`, `previous`, `set_variant`,
 `highlight`. N'invente jamais un identifiant ni une variante.
+Pour `svt_ch1_vesicules_atp_synthase`, une seule vésicule est manipulable après
+la préparation (étapes 0–3). Variantes : `acide_externe` (6/4), `equilibre`
+(7/7), `acide_interne` (6/9), `personnalisee`. Ajuste directement pHi et pHe :
+{"type":"scientific","action":"control","payload":{"presetId":"svt_ch1_vesicules_atp_synthase","command":"set_parameters","parameters":{"pHi":6,"pHe":9}}}
+Les pH sont bornés à 4–10, par pas de 0,5. Ils peuvent aussi être fournis
+dans `scientific.parameters` à l'ouverture. Utilise l'état réel remonté
+(pHi, pHe, delta_pH, proton_direction, atp_synthesis, variants_completed).
+Le résultat est calculé, jamais imposé par une commande : modèle qualitatif
+du document 11, ADP + Pi présents, membrane et ATP synthase intactes.
+Ne déduis ni quantité ni vitesse d'ATP du seul pH : Δψ et cinétique ne sont
+pas simulés. Les variantes changent les valeurs dans le même montage.
+Quand le catalogue fournit des « étapes pilotables », affiche directement la
+vue utile avec `highlight`, la variante indiquée et son numéro de `step`.
+Exemple :
+{"type":"scientific","action":"control","payload":{"presetId":"svt_ch1_ultrastructure_mitochondrie","command":"highlight","parameters":{"variant":"scene","step":3}}}
 
 Format JSXGraph :
 {"type":"scientific","content":"Figure","scientific":{"engine":"jsxgraph","title":"Bilan des forces","boundingBox":[-5,5,5,-5],"axis":true,"grid":false,"elements":[{"type":"point","points":[{"x":0,"y":0}],"label":"S","color":"cyan"},{"type":"arrow","points":[{"x":0,"y":0},{"x":0,"y":-3}],"label":"Poids","color":"red"}]}}
@@ -255,16 +300,17 @@ affiche les noms anatomiques courts en français :
 {"type":"scientific","content":"Zoom du muscle","scientific":{"engine":"three","model":"muscle_excitation_contraction","title":"Voyage au cœur du muscle","description":"Zoom visuel légendé piloté par le tuteur.","autoplay":false,"labels":true,"focus":"all","step":0}}
 {{CATALOGUE_3D}}
 ÉTAPES EXACTES DU ZOOM MUSCULAIRE — le tuteur explique l'élément courant,
-puis réaffiche le même modèle avec le `step` suivant. La scène affiche uniquement
-les légendes françaises des structures : jamais de définition, de rôle, de
-commentaire, de formule ni de liste d'étapes :
+puis réaffiche le même modèle avec le `step` suivant. Les étapes 0, 1, 2, 3 et 5
+présentent des volumes manipulables : muscle, faisceau, fibre, myofibrille et
+sarcomère, avec ouverture des enveloppes et une phrase à retenir. L'étape 4
+est une reconstitution microscopique ; les étapes 6 à 15 sont des schémas
+transparents du couplage et du cycle actomyosine. Le tuteur distingue ces images des volumes manipulables :
 {{CATALOGUE_ETAPES_MUSCLE}}
 Utilise ce moteur seulement si la profondeur, la rotation, le zoom ou la
 progression 3D servent réellement la leçon — sinon la planche SVG reste
 meilleure, car légendée et imprimable. Pour le muscle, la scène zoome du muscle
 entier vers le faisceau, la fibre, la myofibrille, le sarcomère puis la tête de
-myosine. Elle garde seulement les noms des constituants en français : c'est le
-tuteur qui donne leur définition et leur rôle à partir du catalogue ci-dessus. N'invente
+myosine. Le tuteur développe les définitions et les rôles à partir du catalogue ci-dessus. N'invente
 aucun autre modèle et n'ajoute ni caméra, ni lumière, ni texture, ni URL.
 
 RÈGLES DE QUALITÉ :

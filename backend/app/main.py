@@ -2,13 +2,16 @@
 AI Tutor BAC - Main FastAPI Application
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException, Request
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.dependencies import student_from_token
+from app.security_middleware import SecurityMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from app.public_media import PublicMediaFiles
 from app.config import get_settings
 from app.api.v1.api import api_router
 from app.websockets.session_handler import SessionHandler
-from app.supabase_client import get_supabase
 import logging
 import os
 import threading
@@ -71,17 +74,27 @@ app = FastAPI(
     description="AI Tutoring Platform for Moroccan Baccalaureate - 2ème BAC Sciences",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None if settings.app_env == 'production' else '/docs',
+    redoc_url=None if settings.app_env == 'production' else '/redoc',
+    openapi_url=None if settings.app_env == 'production' else '/openapi.json',
 )
 
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Autoriser tous les origins en développement
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+app.add_middleware(SecurityMiddleware)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def safe_http_error(request: Request, exc: StarletteHTTPException):
+    detail = 'Erreur interne du service' if exc.status_code >= 500 else exc.detail
+    return JSONResponse({'detail': detail}, status_code=exc.status_code, headers=exc.headers)
 
 # REST API routes
 app.include_router(api_router)
@@ -89,12 +102,12 @@ app.include_router(api_router)
 # Serve exam assets (images, documents) as static files
 _exams_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "exams")
 if os.path.isdir(_exams_dir):
-    app.mount("/static/exams", StaticFiles(directory=_exams_dir), name="exam_assets")
+    app.mount("/static/exams", PublicMediaFiles(directory=_exams_dir), name="exam_assets")
 
 # Serve mock exam assets (uploaded images)
 _mock_exams_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "mock_exams")
 os.makedirs(_mock_exams_dir, exist_ok=True)
-app.mount("/static/mock-exams", StaticFiles(directory=_mock_exams_dir), name="mock_exam_assets")
+app.mount("/static/mock-exams", PublicMediaFiles(directory=_mock_exams_dir), name="mock_exam_assets")
 
 
 @app.get("/health")
@@ -104,30 +117,18 @@ async def health_check():
 
 @app.websocket("/ws/tutor/{token}")
 async def websocket_tutor(websocket: WebSocket, token: str):
-    """WebSocket endpoint for real-time tutoring voice pipeline."""
-    supabase = get_supabase()
-    
+    """Authenticate and authorize the account before starting any paid work."""
+    origin = websocket.headers.get('origin')
+    if origin and origin.rstrip('/') not in settings.allowed_origins:
+        await websocket.close(code=1008)
+        return
     try:
-        # Verify token with Supabase Auth
-        user_response = supabase.auth.get_user(token)
-        
-        if not user_response or not user_response.user:
-            # Must accept before closing to avoid 403
-            await websocket.accept()
-            await websocket.close(code=4001, reason="Invalid or expired token")
-            return
-        
-        student_id = str(user_response.user.id)
-        
-        handler = SessionHandler(websocket=websocket, student_id=student_id)
-        await handler.handle_connection()
-        
-    except Exception as e:
-        logger.error(f"WebSocket auth error: {e}")
-        try:
-            # Accept first so we can send a proper close frame
-            await websocket.accept()
-            await websocket.send_json({"type": "error", "message": f"Authentication failed: {str(e)}"})
-            await websocket.close(code=4001, reason=f"Authentication failed: {str(e)}")
-        except Exception:
-            pass
+        student = await student_from_token(token)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    from app.websockets.security import protect_tutor_socket
+    protect_tutor_socket(websocket, student['id'], token)
+    handler = SessionHandler(websocket=websocket, student_id=student['id'])
+    await handler.handle_connection()

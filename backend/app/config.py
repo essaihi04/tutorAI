@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 from pydantic_settings import BaseSettings
 from functools import lru_cache
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # JWT Auth
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = ""
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
@@ -130,12 +131,17 @@ class Settings(BaseSettings):
     # vertex_location: str = ""
 
     # Admin Dashboard
-    admin_password: str = "admin123"  # Change in production via .env
+    admin_password: str = ""  # Fail closed until explicitly configured.
+    admin_token_expire_minutes: int = 60
 
     # App
     app_env: str = "development"
     cors_origins: str = "http://localhost:5173"
     
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip() and o.strip() != "*"]
+
     # RAG
     rag_disabled: int = 0
 
@@ -147,4 +153,5 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    # systemd loads the protected EnvironmentFile before dropping privileges.
+    return Settings(_env_file=None) if os.environ.get('APP_ENV') == 'production' else Settings()

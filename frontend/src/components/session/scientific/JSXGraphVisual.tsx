@@ -232,6 +232,8 @@ function memeEchelleSurLesDeuxAxes(xLabel?: string, yLabel?: string): boolean {
   const x = unite(xLabel);
   const y = unite(yLabel);
   if (x === null && y === null) return true;   // figure de géométrie
+  // Des unités arbitraires ne rendent pas deux grandeurs comparables.
+  if (x?.replace(/[^a-z]/gi, "").toLowerCase() === "ua") return false;
   return x === y;
 }
 

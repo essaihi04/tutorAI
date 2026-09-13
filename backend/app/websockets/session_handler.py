@@ -2965,6 +2965,10 @@ TU DOIS OBLIGATOIREMENT:
                         "step": "0..max_step",
                     },
                 }
+                if numeric_parameters := preset_definition.get("numeric_parameters"):
+                    active_commands.append("set_parameters")
+                    simulation_controls["parameters"] = numeric_parameters
+                    command_schema["set_parameters"] = numeric_parameters
             simulation_snapshot = {
                 "simulation_id": active_simulation_id,
                 "title": preset_definition["title"] if preset_definition else simulation_config.get("title"),

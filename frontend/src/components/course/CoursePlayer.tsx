@@ -174,6 +174,7 @@ export default function CoursePlayer({
    * puisqu'elle est posée à l'oral au tableau.
    */
   const narrationEnvoyeeRef = useRef<string | null>(null);
+  const correctionEnvoyeeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!started || !current || !onNarration) return;
     const cle = `${current.slide.id}:${language}`;
@@ -182,14 +183,27 @@ export default function CoursePlayer({
     const parole = current.slide.speech_text || {};
     const dit = (parole[language] || parole.mixed || parole.fr || Object.values(parole)[0] || '').trim();
     const lignes: string[] = [];
-    if (dit) lignes.push(dit);
     const enonce = current.slide.question?.prompt?.trim();
     if (enonce) {
       lignes.push(enonce);
       (current.slide.question?.options || []).forEach(option => lignes.push(`• ${option}`));
+    } else if (dit) {
+      // Sans interrogation, l'explication peut rejoindre le chat tout de
+      // suite. Avec une question, elle n'y arrive qu'après la réponse.
+      lignes.push(dit);
     }
     if (lignes.length) onNarration(lignes.join('\n'));
   }, [current, language, onNarration, started]);
+
+  const archiverCorrectionApresReponse = useCallback(() => {
+    if (!current || !onNarration || !current.slide.question?.prompt) return;
+    const cle = `${current.slide.id}:${language}`;
+    if (correctionEnvoyeeRef.current === cle) return;
+    correctionEnvoyeeRef.current = cle;
+    const parole = current.slide.speech_text || {};
+    const dit = (parole[language] || parole.mixed || parole.fr || Object.values(parole)[0] || '').trim();
+    if (dit) onNarration(dit);
+  }, [current, language, onNarration]);
 
   const goToNext = useCallback(() => {
     if (!current) return;
@@ -317,6 +331,7 @@ export default function CoursePlayer({
           audioActive={externalAudioActive}
           scientificControl={scientificControl}
           onSimulationUpdate={onSimulationUpdate}
+          onScriptEnd={archiverCorrectionApresReponse}
           deckControls={commandesDuDeck}
           // La parole du professeur est déjà versée dans le chat de gauche
           // (`onNarration`) : la répéter en travers du bas du tableau

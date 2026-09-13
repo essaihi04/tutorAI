@@ -5,6 +5,19 @@ import { compression } from 'vite-plugin-compression2'
 
 export default defineConfig({
   plugins: [
+    {
+      name: 'public-simulation-assets',
+      configureServer(server) {
+        server.middlewares.use((request, response, next) => {
+          // Sandboxed simulations have an opaque origin. Only public media
+          // receives CORS access; authenticated API responses stay private.
+          if (request.url?.startsWith('/media/')) {
+            response.setHeader('Access-Control-Allow-Origin', '*');
+          }
+          next();
+        });
+      },
+    },
     react(),
     tailwindcss(),
     compression({ exclude: [/\.(png|jpg|jpeg|gif|webp|woff2?|ttf|eot)$/i] }),

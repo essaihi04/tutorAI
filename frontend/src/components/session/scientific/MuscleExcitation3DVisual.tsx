@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pause, Play, RefreshCcw } from 'lucide-react';
 import type { MuscleExcitation3DPart, MuscleExcitation3DVisualSpec } from './types';
+import MuscleStructure3D from './MuscleStructure3D';
+import ScientificPresetVisual from './ScientificPresetVisual';
 
 interface MuscleExcitation3DVisualProps {
   spec: MuscleExcitation3DVisualSpec;
@@ -283,6 +285,24 @@ export default function MuscleExcitation3DVisual({ spec, transparent }: MuscleEx
     setRunning(false);
     setStep(0);
   };
+
+  if (step <= 3 || step === 5) {
+    return <MuscleStructure3D step={step} labels={spec.labels !== false} onStep={value => { setRunning(false); setStep(value); }} />;
+  }
+
+  // The former zooms at these stages were opaque photographs. Use the
+  // authored board diagrams so the entire explanatory sequence is transparent.
+  if (step >= 6) {
+    const molecular = step >= 9 && step <= 14;
+    return <div className="h-full w-full bg-transparent" data-stage-index={step} data-stage={currentStage.id}>
+      <ScientificPresetVisual transparent spec={{
+        engine: 'preset',
+        presetId: molecular ? 'svt_ch1_cycle_actomyosine' : 'svt_ch1_couplage_excitation_contraction',
+        variant: molecular ? ({9:'fixation',10:'fixation',11:'fixation',12:'pivotement',13:'detachement',14:'reactivation'} as Record<number,string>)[step] : step === 15 ? 'relaxation' : 'liberation_calcium',
+        step: !molecular && step < 15 ? Math.min(8,(step-6)*3) : 0, autoplay: false,
+      }} />
+    </div>;
+  }
 
   return (
     <figure

@@ -250,12 +250,17 @@ const SAMPLES: {
     ['svt_ch1_cycle_atp', 'cycle_complet'],
     ['svt_ch1_levures_exao', 'comparaison'],
     ['svt_ch1_glycolyse_etapes', 'scene'],
+    ['svt_ch1_pyruvate_acetyl_coa', 'scene'],
     ['svt_ch1_krebs_detaille', 'scene'],
     ['svt_ch1_echelle_redox', 'scene'],
+    ['svt_ch1_molecules_glucose_atp', 'glucose'],
+    ['svt_ch1_molecules_glucose_atp', 'atp'],
     ['svt_ch1_molecules_glucose_atp', 'scene'],
     ['svt_ch1_rendement_energetique', 'scene'],
     ['svt_ch1_schema_bilan_annote', 'scene'],
     ['svt_ch1_vesicules_atp_synthase', 'scene'],
+    ['svt_ch1_isolement_cretes_ultrasons', 'scene'],
+    ['svt_ch1_fermentations_photos', 'scene'],
     ['svt_ch1_ultrastructure_mitochondrie', 'scene'],
     ['svt_ch1_flux_protons', 'scene'],
     ['svt_ch1_chimiosmose', 'scene'],
@@ -264,7 +269,7 @@ const SAMPLES: {
     ['svt_ch1_cycle_actomyosine', 'cycle_complet'],
     ['svt_ch1_filieres_effort', 'effort_prolonge'],
   ] as const).map(([presetId, variant]) => ({
-    title: `Simulation — ${SCIENTIFIC_PRESETS[presetId].title}`,
+    title: `Simulation — ${SCIENTIFIC_PRESETS[presetId].title} · ${variant}`,
     subject: (presetId.startsWith('phys_')
       ? 'physics'
       : presetId.startsWith('chem_') ? 'chemistry' : 'svt') as ScientificSchema['subject'],
@@ -277,6 +282,11 @@ export default function VisualAudit() {
   const schemas = useMemo(() => getAllSchemas(), []);
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const requestedSchemaId = query.get('schema');
+  const requestedPresetId = query.get('preset');
+  const requestedStepValue = Number(query.get('step'));
+  const requestedStep = query.has('step') && Number.isFinite(requestedStepValue)
+    ? Math.max(0, Math.round(requestedStepValue))
+    : null;
   const requestedType = query.get('type');
   const requestedSubject = query.get('subject');
   const [resourceType, setResourceType] = useState<AuditResourceType>(() => (
@@ -296,6 +306,7 @@ export default function VisualAudit() {
   const shownSamples = resourceType === 'pencil' ? [] : SAMPLES.filter(sample => (
     (resourceType === 'all' || sample.kind === 'simulation')
       && (subject === 'all' || sample.subject === subject)
+      && (!requestedPresetId || (sample.spec.engine === 'preset' && sample.spec.presetId === requestedPresetId))
   ));
 
   const counts = schemas.reduce<Record<string, number>>((acc, schema) => {
@@ -358,7 +369,12 @@ export default function VisualAudit() {
                   </span>
                   <h3 className="text-sm font-semibold text-cyan-200">{sample.title}</h3>
                 </header>
-                <ScientificVisual spec={sample.spec} transparent={sample.spec.engine === 'preset'} />
+                <ScientificVisual
+                  spec={sample.spec.engine === 'preset' && requestedStep !== null
+                    ? { ...sample.spec, autoplay: false, step: requestedStep }
+                    : sample.spec}
+                  transparent={sample.spec.engine === 'preset'}
+                />
               </section>
             ))}
           </div>

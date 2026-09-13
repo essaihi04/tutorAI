@@ -135,7 +135,7 @@ def test_gene_expression_image_keeps_its_poster_but_opens_the_animated_simulatio
     assert item["preview"]["url"].endswith("/expression/index.html")
 
 
-def test_local_simulation_preview_keeps_module_origin_without_weakening_inline_html():
+def test_simulation_previews_isolate_the_application_origin():
     source = (
         PROJECT_ROOT / "frontend/src/components/admin/AdminVisualLibrary.tsx"
     ).read_text(encoding="utf-8")
@@ -145,7 +145,7 @@ def test_local_simulation_preview_keeps_module_origin_without_weakening_inline_h
         source,
     )
     assert re.search(
-        r'src=\{preview\.url\}[\s\S]{0,220}sandbox="allow-scripts allow-same-origin"',
+        r'src=\{preview\.url\}[\s\S]{0,220}sandbox="allow-scripts"',
         source,
     )
 

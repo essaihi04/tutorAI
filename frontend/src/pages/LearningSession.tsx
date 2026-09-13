@@ -11,6 +11,7 @@ import {
   resolveCourseIntent,
   startSession,
   endSession,
+  getFreshAccessToken,
   type CourseIntentResolution,
 } from '../services/api';
 import { speechService } from '../services/speechService';
@@ -571,7 +572,9 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         console.log(`[Session] ${mode} mode — setting up handlers then connecting`);
         setupWSHandlers();
 
-        await wsService.connect(token);
+        // Toujours partir avec un jeton frais : celui du store peut avoir
+        // expire pendant que l'eleve lisait la page.
+        await wsService.connect(await getFreshAccessToken());
         console.log(`[Session] WebSocket connected (${mode})`);
         setConnected(true);
 
@@ -679,7 +682,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
       // Connect WebSocket
       console.log('[Session] Connecting WebSocket with token:', token?.substring(0, 20) + '...');
-      await wsService.connect(token);
+      await wsService.connect(await getFreshAccessToken());
       console.log('[Session] WebSocket connected');
       setConnected(true);
 
@@ -1558,6 +1561,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       const allowedCommands: ScientificControlName[] = [
         'start', 'pause', 'reset', 'next', 'previous', 'set_variant', 'highlight',
       ];
+      if (data?.presetId === 'svt_ch1_vesicules_atp_synthase') allowedCommands.push('set_parameters');
       if (!data?.presetId || !allowedCommands.includes(data.command)) {
         console.warn('[IA→Scène scientifique] Commande invalide ignorée:', data);
         return;

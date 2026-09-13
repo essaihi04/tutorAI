@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScientificSchema, SchemaAnnotation } from './types';
 import { SVG_DEFS } from './svgDefs';
@@ -157,7 +158,7 @@ const SVGSchemaViewer: React.FC<SVGSchemaViewerProps> = ({
       {/* SVG Render */}
       <div
         className="flex-1 min-h-0 overflow-hidden rounded-lg"
-        dangerouslySetInnerHTML={{ __html: fullSVG }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(fullSVG, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ["foreignObject", "script"] }) }}
         onClick={(e) => {
           const target = e.target as SVGElement;
           const annGroup = target.closest('[data-ann-id]');

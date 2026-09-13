@@ -5,7 +5,7 @@ Ce module remplace l'affichage libre du cours par un parcours scénarisé. Il r�
 ## Parcours livré
 
 - `svt_ch1_energy` : 11 activités, 22 diapositives, 197 minutes prévues.
-- `svt_ch1_muscle` : 5 activités, 10 diapositives, 98 minutes prévues.
+- `svt_ch1_muscle` : 5 activités, 18 diapositives, 98 minutes prévues.
 - Chaque activité dure de 15 à 20 minutes et associe objectif, apport scientifique, support visuel, activité de l'élève et évaluation formative.
 - Chaque diapositive contient un texte de narration, une trace écrite et une microquestion temporisée. Sans réponse, le lecteur poursuit automatiquement.
 - Les réponses attendues restent côté serveur. Le navigateur ne reçoit ni corrigé ni liste des réponses acceptées.

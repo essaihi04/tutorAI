@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { useAuthStore } from '../stores/authStore';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -34,7 +35,46 @@ async function performRefresh(): Promise<string> {
   if (!access_token) throw new Error('refresh_failed');
   localStorage.setItem('token', access_token);
   if (newRefresh) localStorage.setItem('refresh_token', newRefresh);
+  // Le store gardait l'ancien jeton : la session WebSocket repartait ensuite
+  // avec un jeton perime et le backend la fermait comme « expiree ».
+  useAuthStore.getState().setTokens(access_token, newRefresh ?? null);
   return access_token;
+}
+
+/** Un seul rafraichissement en vol, partage par tous les appelants. */
+export function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = performRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+/** Secondes restantes avant expiration d'un JWT (0 si illisible ou expire). */
+function secondsBeforeExpiry(token: string): number {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload?.exp) return Number.POSITIVE_INFINITY;
+    return payload.exp - Math.floor(Date.now() / 1000);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Jeton d'acces garanti valide encore `marginSeconds`.
+ *
+ * Le WebSocket ne peut pas rejouer une requete apres un 401 : il porte son
+ * jeton dans l'URL. Il doit donc partir avec un jeton frais, sinon le backend
+ * ferme la session avec le code 4001 et l'eleve est renvoye vers /login.
+ */
+export async function getFreshAccessToken(marginSeconds = 120): Promise<string> {
+  const token = localStorage.getItem('token');
+  if (!token) throw new Error('no_token');
+  if (secondsBeforeExpiry(token) > marginSeconds) return token;
+  if (!localStorage.getItem('refresh_token')) return token;
+  return refreshAccessToken();
 }
 
 api.interceptors.response.use(
@@ -52,9 +92,7 @@ api.interceptors.response.use(
     if (!isExpired || !original || original._retry) {
       // Refresh itself failed → wipe session and force re-login
       if (status === 401 && detail === 'refresh_token_invalid') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('student');
+        useAuthStore.getState().logout();
         if (window.location.pathname !== '/login') {
           window.location.assign('/login');
         }
@@ -65,20 +103,13 @@ api.interceptors.response.use(
     original._retry = true;
 
     try {
-      if (!refreshPromise) {
-        refreshPromise = performRefresh().finally(() => {
-          refreshPromise = null;
-        });
-      }
-      const newToken = await refreshPromise;
+      const newToken = await refreshAccessToken();
       original.headers = original.headers ?? {};
       (original.headers as any).Authorization = `Bearer ${newToken}`;
       return api.request(original);
     } catch (refreshErr) {
       // Refresh failed → session dead
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('student');
+      useAuthStore.getState().logout();
       if (window.location.pathname !== '/login') {
         window.location.assign('/login');
       }
@@ -535,6 +566,26 @@ mockExamAdminApi.interceptors.request.use((config) => {
 
 export const generateMockExam = (data: { subject?: string; target_domains?: string[] }) =>
   mockExamAdminApi.post('/generate', data);
+
+export async function openMockExamPrintable(subject: string, examId: string, variant: 'sujet' | 'corrige') {
+  const preview = window.open('', '_blank');
+  if (!preview) return;
+  preview.opener = null;
+  try {
+    const { data } = await mockExamAdminApi.get<string>(
+      `/${encodeURIComponent(subject)}/${encodeURIComponent(examId)}/printable`,
+      { params: { type: variant, autoprint: 1 }, responseType: 'text' },
+    );
+    // Keep root-relative image URLs working from a blob document.
+    const html = data.replace('<head>', `<head><base href="${window.location.origin}/">`);
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    preview.location.href = url;
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    preview.close();
+    window.alert("Impossible d'ouvrir le document. Vérifiez votre connexion administrateur.");
+  }
+}
 
 export const listMockExams = (subject?: string) =>
   mockExamAdminApi.get('/list', { params: subject ? { subject } : {} });

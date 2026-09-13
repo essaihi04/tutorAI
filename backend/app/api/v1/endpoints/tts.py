@@ -9,13 +9,14 @@ l'écriture sur la lecture.
 La voix est TOUJOURS celle de nos modèles serveur (Academy en tête) — jamais la
 synthèse du navigateur, qui ne sait pas dire la darija.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.dependencies import get_current_student
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.services.tts_service import synthesize
 
-router = APIRouter(prefix="/tts", tags=["tts"])
+router = APIRouter(prefix="/tts", tags=["tts"], dependencies=[Depends(get_current_student)])
 
 
 class SpeakRequest(BaseModel):

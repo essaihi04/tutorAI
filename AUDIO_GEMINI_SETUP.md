@@ -10,7 +10,7 @@
 ### Fichier: `backend/.env`
 
 ```env
-GEMINI_API_KEY=AIzaSyAHnoDj3VGQUxKb5HFLguSiPyyiOesm8AQ
+GEMINI_API_KEY=YOUR_GOOGLE_API_KEY
 ```
 
 ### Fichier: `backend/app/config.py`
@@ -105,7 +105,7 @@ if (audioChunksRef.current.length === data.total_chunks) {
 cat backend/.env | grep GEMINI_API_KEY
 ```
 
-**Clé actuelle**: `AIzaSyAHnoDj3VGQUxKb5HFLguSiPyyiOesm8AQ`
+**Clé actuelle**: `YOUR_GOOGLE_API_KEY`
 
 ### 2. Backend démarre sans erreur
 
@@ -220,7 +220,7 @@ uvicorn app.main:app --reload --log-level debug
 
 ```bash
 curl -X POST \
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=AIzaSyAHnoDj3VGQUxKb5HFLguSiPyyiOesm8AQ" \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=YOUR_GOOGLE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "contents": [{

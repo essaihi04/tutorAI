@@ -15,13 +15,15 @@ import json
 import base64
 import httpx
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.admin_auth import verify_admin_token
 from pydantic import BaseModel
 from typing import Optional
 from app.config import get_settings
+from app.utils.safe_paths import safe_child_path
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/exam-extract", tags=["exam-extraction"])
+router = APIRouter(prefix="/exam-extract", tags=["exam-extraction"], dependencies=[Depends(verify_admin_token)])
 
 settings = get_settings()
 
@@ -374,7 +376,7 @@ async def publish_exam(req: PublishExamRequest):
     # Build folder path:  data/exams/<subject>/<year>-<session_slug>/
     session_slug = req.session.lower().replace(" ", "-")
     folder_name = f"{req.year}-{session_slug}"
-    exam_dir = EXAMS_DIR / req.subject.lower() / folder_name
+    exam_dir = safe_child_path(EXAMS_DIR, req.subject.lower(), folder_name)
     assets_dir = exam_dir / "assets"
 
     try:
@@ -541,7 +543,7 @@ async def delete_published_exam(exam_id: str):
     index = _load_index()
     entry = next((e for e in index if e["id"] == exam_id), None)
     if entry:
-        exam_dir = EXAMS_DIR / entry["path"]
+        exam_dir = safe_child_path(EXAMS_DIR, entry["path"])
         if exam_dir.exists():
             shutil.rmtree(exam_dir)
             logger.info(f"Deleted exam folder: {exam_dir}")
@@ -590,7 +592,7 @@ async def update_published_exam(exam_id: str, req: UpdateExamRequest):
     if entry:
         entry.update(updates)
         # Also update exam.json title/note if it exists
-        exam_json_path = EXAMS_DIR / entry["path"] / "exam.json"
+        exam_json_path = safe_child_path(EXAMS_DIR, entry["path"], "exam.json")
         if exam_json_path.exists():
             try:
                 with open(exam_json_path, "r", encoding="utf-8") as f:

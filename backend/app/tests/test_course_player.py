@@ -41,6 +41,40 @@ def test_full_chapter_has_sixteen_timed_activities_and_microquestions():
             assert 10 <= slide["question"]["timeout_seconds"] <= 30
 
 
+def test_isolement_cretes_precede_zoom_mitochondrial_et_garde_orientation_correcte():
+    manifest = _manifests((COURSE_DIR / "svt_ch1_energy_course_v1.json",))[0]
+    slides = [slide for activity in manifest["activities"] for slide in activity["slides"]]
+    ids = [slide["id"] for slide in slides]
+
+    isolation_index = ids.index("energy_a05_s03b")
+    zoom_index = ids.index("energy_a05_s04")
+    isolation = slides[isolation_index]
+
+    assert isolation_index + 1 == zoom_index
+    assert isolation["visual"]["scientific"]["presetId"] == "svt_ch1_isolement_cretes_ultrasons"
+    assert isolation["visual"]["scientific"]["autoplay"] is False
+    assert "face matricielle" in isolation["screen_content"]["essential_text"].lower()
+    assert "espace intermembranaire" in isolation["speech_text"]["fr"].lower()
+
+
+def test_diapos_fermentation_utilisent_comparaison_photographique_apres_prediction():
+    manifest = _manifests((COURSE_DIR / "svt_ch1_energy_course_v1.json",))[0]
+    slides = {
+        slide["id"]: slide
+        for activity in manifest["activities"]
+        for slide in activity["slides"]
+    }
+    discovery = slides["energy_a09_s01"]
+    synthesis = slides["energy_a09_s02"]
+
+    assert discovery["visual"]["scientific"]["presetId"] == "svt_ch1_fermentations_photos"
+    assert discovery["visual"]["scientific"]["autoplay"] is False
+    assert "avant de lancer" in discovery["screen_content"]["lead"].lower()
+    assert "prends le temps de répondre" in discovery["speech_text"]["fr"].lower()
+    assert synthesis["visual"]["scientific"]["presetId"] == "svt_ch1_fermentations_photos"
+    assert synthesis["visual"]["scientific"]["step"] == 3
+
+
 def test_all_manifest_file_visuals_exist_in_frontend_public():
     for manifest in _manifests():
         for activity in manifest["activities"]:
@@ -376,7 +410,8 @@ def test_new_simulations_expose_platform_bridge_contract():
     simulation_sources = [
         (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/atp-adp/index.html").read_text(encoding="utf-8"),
         (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/chimiosmose/index.html").read_text(encoding="utf-8"),
-        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/muscle/contraction/index.html").read_text(encoding="utf-8"),
+        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/muscle/contraction/index.html").read_text(encoding="utf-8") +
+        (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch1_consommation_matiere_organique/muscle/contraction/simulation.js").read_text(encoding="utf-8"),
         (PROJECT_ROOT / "frontend/public/media/simulations/svt/ch2_information_genetique/expression/index.html").read_text(encoding="utf-8"),
         (PROJECT_ROOT / "frontend/public/media/simulations/physics/advanced/waves/index.html").read_text(encoding="utf-8"),
         (

@@ -1703,7 +1703,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         {hasDrawSteps && (
           <div
             ref={drawZoneRef}
-            className="shrink-0 md:w-[42%] h-[45%] md:h-auto min-h-0 border-t md:border-t-0 md:border-l"
+            className={`shrink-0 ${figure?.kind === 'scientific' && figure.spec.engine === 'preset' && figure.spec.presetId === 'svt_ch1_schema_bilan_annote' ? 'md:w-[70%] h-[72%]' : 'md:w-[42%] h-[45%]'} md:h-auto min-h-0 border-t md:border-t-0 md:border-l`}
             style={{
               borderColor: 'rgba(255,255,255,0.1)',
               background: 'rgba(0,0,0,0.15)',

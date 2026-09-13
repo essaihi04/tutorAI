@@ -5,11 +5,17 @@ import type {
   JSXGraphElementSpec,
   JSXGraphVisualSpec,
   RoughSVGElementSpec,
+  RoughSVGHotspotPanelSpec,
+  RoughSVGHotspotSpec,
   RoughSVGVisualSpec,
+  ScientificDetailSpec,
   ScientificPoint,
   ScientificPresetId,
   ScientificVisualSpec,
 } from './types';
+import { initialVesicleState, vesicleResult } from './vesicleExperimentModel';
+import { RESPIRATORY_MAX_STEP } from './respiratoryChainModel';
+import { energyBalance, energyNumber } from './energyBalanceModel';
 
 export interface ScientificPresetVariant {
   id: string;
@@ -165,17 +171,21 @@ export const SCIENTIFIC_PRESETS: Record<ScientificPresetId, ScientificPresetMeta
     id: 'svt_ch1_glycolyse_etapes', title: 'Les étapes de la glycolyse',
     defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Glycolyse' }], maxStep: 9, frameMs: 900,
   },
+  svt_ch1_pyruvate_acetyl_coa: {
+    id: 'svt_ch1_pyruvate_acetyl_coa', title: 'Voyage du pyruvate vers la matrice',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Pyruvate → acétyl-CoA' }], maxStep: 8, frameMs: 900,
+  },
   svt_ch1_krebs_detaille: {
-    id: 'svt_ch1_krebs_detaille', title: 'Oxydation du pyruvate et cycle de Krebs',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Krebs' }], maxStep: 10, frameMs: 850,
+    id: 'svt_ch1_krebs_detaille', title: 'Cycle de Krebs dans la matrice',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Krebs' }], maxStep: 8, frameMs: 1150,
   },
   svt_ch1_echelle_redox: {
     id: 'svt_ch1_echelle_redox', title: 'Potentiels d’oxydoréduction',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Échelle redox' }], maxStep: 8, frameMs: 850,
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Escalier des électrons' }], maxStep: 8, frameMs: 1000,
   },
   svt_ch1_ultrastructure_mitochondrie: {
-    id: 'svt_ch1_ultrastructure_mitochondrie', title: 'Ultrastructure et composition de la mitochondrie',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Ultrastructure' }], maxStep: 12, frameMs: 850,
+    id: 'svt_ch1_ultrastructure_mitochondrie', title: 'Zoom sur les compartiments de la mitochondrie',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Compartiments essentiels' }], maxStep: 4, frameMs: 1100,
   },
   svt_ch1_flux_protons: {
     id: 'svt_ch1_flux_protons', title: 'Réduction du dioxygène et flux de protons',
@@ -183,27 +193,48 @@ export const SCIENTIFIC_PRESETS: Record<ScientificPresetId, ScientificPresetMeta
   },
   svt_ch1_molecules_glucose_atp: {
     id: 'svt_ch1_molecules_glucose_atp', title: 'Structure du glucose et de l’ATP',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Glucose et ATP' }], maxStep: 5, frameMs: 850,
+    defaultVariant: 'glucose', variants: [
+      { id: 'glucose', label: 'Glucose' },
+      { id: 'atp', label: 'ATP' },
+      { id: 'scene', label: 'Glucose et ATP' },
+    ], maxStep: 5, frameMs: 850,
   },
   svt_ch1_rendement_energetique: {
     id: 'svt_ch1_rendement_energetique', title: 'Bilan en ATP et rendement énergétique',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Rendement énergétique' }], maxStep: 10, frameMs: 900,
+    defaultVariant: 'scene', variants: [
+      { id: 'scene', label: 'Convention 38 ATP' },
+      { id: 'navette_36', label: 'Convention 36 ATP · navette' },
+    ], maxStep: 10, frameMs: 2200,
   },
   svt_ch1_schema_bilan_annote: {
     id: 'svt_ch1_schema_bilan_annote', title: 'Schéma-bilan de la respiration',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Schéma-bilan' }], maxStep: 21, frameMs: 900,
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Schéma-bilan' }], maxStep: 21, frameMs: 1400,
   },
   svt_ch1_vesicules_atp_synthase: {
     id: 'svt_ch1_vesicules_atp_synthase', title: 'Rôle des sphères pédonculées',
-    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Vésicules retournées' }], maxStep: 8, frameMs: 850,
+    defaultVariant: 'scene', variants: [
+      { id: 'scene', label: 'Préparation puis expérience' },
+      { id: 'acide_externe', label: 'pHi 6 / pHe 4' },
+      { id: 'equilibre', label: 'pHi 7 / pHe 7' },
+      { id: 'acide_interne', label: 'pHi 6 / pHe 9' },
+      { id: 'personnalisee', label: 'pH personnalisés' },
+    ], maxStep: 8, frameMs: 850,
+  },
+  svt_ch1_isolement_cretes_ultrasons: {
+    id: 'svt_ch1_isolement_cretes_ultrasons', title: 'Isolement des crêtes par ultrasons',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Sonication et vésicules retournées' }], maxStep: 3, frameMs: 1800,
+  },
+  svt_ch1_fermentations_photos: {
+    id: 'svt_ch1_fermentations_photos', title: 'Fermentations lactique et alcoolique en photos',
+    defaultVariant: 'scene', variants: [{ id: 'scene', label: 'Muscle et levure' }], maxStep: 3, frameMs: 1900,
   },
   svt_ch1_chimiosmose: {
     id: 'svt_ch1_chimiosmose',
-    title: 'Chaîne respiratoire et chimiosmose',
-    defaultVariant: 'scene',
-    variants: [{ id: 'scene', label: 'Chaîne respiratoire' }],
-    maxStep: 12,
-    frameMs: 800,
+    title: 'Chaîne respiratoire et phosphorylation oxydative',
+    defaultVariant: 'nadh',
+    variants: [{ id: 'nadh', label: 'NADH,H⁺' }, { id: 'fadh2', label: 'FADH₂' }, { id: 'scene', label: 'NADH,H⁺ (ancien cours)' }],
+    maxStep: RESPIRATORY_MAX_STEP,
+    frameMs: 1800,
   },
   svt_ch1_carte_metabolique: {
     id: 'svt_ch1_carte_metabolique',
@@ -278,6 +309,259 @@ function revealedCount(length: number, step: number, maxStep: number): number {
   if (length <= 0) return 0;
   const safeStep = Math.max(0, Math.min(maxStep, Math.round(step)));
   return Math.max(1, Math.ceil((safeStep / maxStep) * length));
+}
+
+/** Une voie du carrefour : ce qui l'ouvre, puis ce qu'elle traverse. */
+interface VoieCarrefour {
+  etiquette: string;
+  stations: StationRuban[];
+}
+
+/**
+ * Le carrefour : un tronc, des voies paralleles, parfois une arrivee commune.
+ * Trois colonnes seulement, parce qu'au-dela les cartes redeviennent illisibles
+ * a la largeur reelle de la vignette.
+ */
+function carrefourSpec(
+  title: string,
+  tronc: StationRuban,
+  voies: VoieCarrefour[],
+  arrivee: StationRuban | null,
+  step: number,
+  maxStep: number,
+): RoughSVGVisualSpec {
+  const VIF = '#67e8f9';
+  const OR = '#fde047';
+  const COL_L = 270;
+  const colonnes = [155, 480, 805];
+
+  const ordre: StationRuban[] = [tronc];
+  voies.forEach(voie => ordre.push(...voie.stations));
+  if (arrivee) ordre.push(arrivee);
+  const vues = revealedCount(ordre.length, step, maxStep);
+  const visible = (station: StationRuban) => ordre.indexOf(station) < vues;
+  const courant = ordre[Math.max(0, vues - 1)];
+
+  const el: RoughSVGElementSpec[] = [];
+  const zones: RoughSVGHotspotSpec[] = [];
+
+  const poser = (station: StationRuban, cx: number, cy: number, largeur: number, hauteur: number) => {
+    const actif = station === courant;
+    el.push({
+      id: `c-${station.id}`, type: 'rect', x: cx - largeur / 2, y: cy - hauteur / 2,
+      width: largeur, height: hauteur,
+      color: actif ? OR : VIF, fill: actif ? '#713f12' : '#0e7490', strokeWidth: actif ? 5 : 3,
+    });
+    const lignes = couperTexte(station.label, Math.floor(largeur / 11), 3);
+    const depart = cy - ((lignes.length - 1) * 23) / 2 + 7;
+    lignes.forEach((ligne, i) => el.push({
+      id: `c-${station.id}-l${i}`, type: 'text', x: cx, y: depart + i * 23,
+      text: ligne, color: '#ecfeff', fontSize: 19, align: 'middle',
+    }));
+    if (station.detail) zones.push({
+      id: station.id, x: cx - largeur / 2, y: cy - hauteur / 2, width: largeur, height: hauteur,
+      color: actif ? OR : VIF, label: station.label, value: station.detail.value, lines: station.detail.lines,
+    });
+  };
+
+  poser(tronc, 480, 62, 380, 78);
+
+  voies.forEach((voie, v) => {
+    const cx = colonnes[v] || colonnes[colonnes.length - 1];
+    if (voie.stations.some(visible)) {
+      // La fleche s'arrete avant l'etiquette : sur la colonne du milieu elle
+      // la traversait de part en part.
+      el.push({ id: `v-${v}`, type: 'arrow', strokeWidth: 3, color: OR,
+        points: [{ x: 480, y: 101 }, { x: cx, y: 142 }] });
+      el.push({ id: `v-${v}-t`, type: 'text', x: cx, y: 170,
+        text: couperTexte(voie.etiquette, 22, 1)[0], color: '#fcd34d', fontSize: 15, align: 'middle' });
+    }
+    voie.stations.forEach((station, k) => {
+      if (!visible(station)) return;
+      const cy = 232 + k * 118;
+      poser(station, cx, cy, COL_L, 88);
+      if (k > 0) el.push({ id: `v-${v}-f${k}`, type: 'arrow', strokeWidth: 3, color: VIF,
+        points: [{ x: cx, y: cy - 76 }, { x: cx, y: cy - 48 }] });
+    });
+  });
+
+  const profondeur = Math.max(...voies.map(voie => voie.stations.length));
+  const basVoies = 232 + (profondeur - 1) * 118 + 44;
+
+  if (arrivee && visible(arrivee)) {
+    voies.forEach((_voie, v) => {
+      const cx = colonnes[v] || colonnes[colonnes.length - 1];
+      el.push({ id: `j-${v}`, type: 'arrow', strokeWidth: 3, color: OR, dashed: true,
+        points: [{ x: cx, y: basVoies + 4 }, { x: 480, y: basVoies + 52 }] });
+    });
+    poser(arrivee, 480, basVoies + 96, 560, 78);
+  }
+
+  const bas = basVoies + (arrivee ? 140 : 10);
+  return {
+    engine: 'roughsvg', title, width: 960, height: bas + 168,
+    elements: el,
+    hotspots: zones,
+    hotspotPanel: zones.length ? panneauQuestion(30, bas + 28, 400, 124) : undefined,
+  };
+}
+
+/** Les libelles de transition, ranges par couple de stations successives. */
+function transitionsSuivant(chemin: string[], table: Record<string, string>): string[] {
+  return chemin.slice(0, -1).map((id, i) => table[`${id}>${chemin[i + 1]}`] || '');
+}
+
+/** Une station du ruban : son nom complet, son nom court, sa fiche. */
+interface StationRuban {
+  id: string;
+  label: string;
+  /** Nom court, celui qui tient dans la piste du bas. */
+  court: string;
+  detail?: ScientificDetailSpec;
+}
+
+/**
+ * Le SVG ne coupe pas les lignes tout seul : on les coupe avant de les poser.
+ * Au-dela du nombre de lignes permis, on tronque plutot que de deborder.
+ */
+function couperTexte(texte: string, maxCar: number, maxLignes: number): string[] {
+  const lignes: string[] = [];
+  let courante = '';
+  for (const mot of texte.split(' ')) {
+    const essai = courante ? `${courante} ${mot}` : mot;
+    if (!courante || essai.length <= maxCar) {
+      courante = essai;
+      continue;
+    }
+    lignes.push(courante);
+    courante = mot;
+  }
+  if (courante) lignes.push(courante);
+  if (lignes.length <= maxLignes) return lignes;
+  const gardees = lignes.slice(0, maxLignes);
+  gardees[maxLignes - 1] = `${gardees[maxLignes - 1].slice(0, maxCar - 1)}…`;
+  return gardees;
+}
+
+/**
+ * Le ruban : une chaine longue ne tient pas en entier a une taille lisible.
+ * On montre donc une fenetre de trois grandes cartes autour de l'etape
+ * courante, et la chaine complete est rappelee en dessous sur une piste.
+ * La transformation s'ecrit dans l'intervalle, la ou elle a lieu.
+ */
+function rubanSpec(
+  title: string,
+  stations: StationRuban[],
+  transitions: string[],
+  step: number,
+  maxStep: number,
+  /** Un cycle : la derniere station ramene a la premiere. */
+  boucle = false,
+): RoughSVGVisualSpec {
+  const INK = '#e0f2fe';
+  const VIF = '#67e8f9';
+  const PALE = '#64748b';
+  const OR = '#fde047';
+
+  const total = stations.length;
+  const courant = Math.max(0, Math.min(total - 1, revealedCount(total, step, maxStep) - 1));
+  // La fenetre reste pleine aux deux bouts : un tiers de cadre vide en fin
+  // de chaine donne l'impression que la figure est cassee.
+  const debut = Math.max(0, Math.min(courant - 1, total - 3));
+  const fenetre = boucle
+    ? [(courant - 1 + total) % total, courant, (courant + 1) % total]
+    : [debut, debut + 1, debut + 2];
+  const centres = [160, 480, 800];
+  const CARTE_L = 210;
+  const CARTE_H = 118;
+  const HAUT = 91;
+
+  const el: RoughSVGElementSpec[] = [];
+
+  fenetre.forEach((index, place) => {
+    const station = stations[index];
+    if (!station) return;
+    const actif = index === courant;
+    const cx = centres[place];
+    el.push({
+      id: `carte-${place}`, type: 'rect', x: cx - CARTE_L / 2, y: HAUT,
+      width: CARTE_L, height: CARTE_H,
+      color: actif ? VIF : PALE, fill: actif ? '#0e7490' : '#1e293b', strokeWidth: actif ? 5 : 3,
+    });
+    const lignes = couperTexte(station.label, 19, 3);
+    const depart = 150 - ((lignes.length - 1) * 24) / 2 + 8;
+    lignes.forEach((ligne, i) => el.push({
+      id: `carte-${place}-l${i}`, type: 'text', x: cx, y: depart + i * 24,
+      text: ligne, color: actif ? '#ecfeff' : '#cbd5e1', fontSize: 20, align: 'middle',
+    }));
+  });
+
+  // Les fleches et, dans leur intervalle, ce qui se transforme.
+  [0, 1].forEach(place => {
+    const depuis = fenetre[place];
+    const vers = fenetre[place + 1];
+    if (!stations[depuis] || !stations[vers]) return;
+    const x1 = centres[place] + CARTE_L / 2 + 4;
+    const x2 = centres[place + 1] - CARTE_L / 2 - 4;
+    el.push({ id: `fleche-${place}`, type: 'arrow', points: [{ x: x1, y: 150 }, { x: x2, y: 150 }], color: OR, strokeWidth: 3 });
+    const texte = transitions[depuis] || '';
+    couperTexte(texte, 15, 3).forEach((ligne, i) => el.push({
+      id: `trans-${place}-${i}`, type: 'text', x: (x1 + x2) / 2, y: 184 + i * 20,
+      text: ligne, color: '#fcd34d', fontSize: 15, align: 'middle',
+    }));
+  });
+
+  // La piste : toute la chaine, en petit, pour savoir ou l'on en est.
+  const PAR_RANG = 7;
+  const rangs = Math.ceil(total / PAR_RANG);
+  const largeurJeton = (900 - (PAR_RANG - 1) * 8) / PAR_RANG;
+  stations.forEach((station, i) => {
+    const rang = Math.floor(i / PAR_RANG);
+    const colonne = i % PAR_RANG;
+    const x = 30 + colonne * (largeurJeton + 8);
+    const y = 258 + rang * 44;
+    const passe = i <= courant;
+    el.push({
+      id: `jeton-${i}`, type: 'rect', x, y, width: largeurJeton, height: 34,
+      color: i === courant ? OR : (passe ? VIF : PALE),
+      fill: i === courant ? '#713f12' : (passe ? '#164e63' : '#0f172a'), strokeWidth: i === courant ? 3 : 2,
+    });
+    el.push({
+      id: `jeton-t-${i}`, type: 'text', x: x + largeurJeton / 2, y: y + 22,
+      text: couperTexte(station.court, 14, 1)[0], color: i === courant ? OR : (passe ? INK : '#94a3b8'),
+      fontSize: 13, align: 'middle',
+    });
+  });
+
+  if (boucle) {
+    const finRang = 258 + (rangs - 1) * 44;
+    el.push({ id: 'retour', type: 'arrow', strokeWidth: 3, color: OR, dashed: true,
+      points: [{ x: 930, y: finRang + 44 }, { x: 930, y: finRang + 62 }, { x: 30, y: finRang + 62 }, { x: 30, y: finRang + 46 }] });
+    el.push({ id: 'retour-t', type: 'text', x: 480, y: finRang + 80, text: 'et le cycle recommence', color: OR, fontSize: 16, align: 'middle' });
+  }
+
+  const basPiste = 258 + rangs * 44 + (boucle ? 44 : 0);
+  el.push({
+    id: 'compteur', type: 'text', x: 930, y: basPiste + 26,
+    text: `étape ${courant + 1} sur ${total}`, color: PALE, fontSize: 16, align: 'end',
+  });
+
+  const zones: RoughSVGHotspotSpec[] = fenetre.flatMap((index, place) => {
+    const station = stations[index];
+    if (!station || !station.detail) return [];
+    return [{
+      id: `${station.id}-${index}`, x: centres[place] - CARTE_L / 2, y: HAUT, width: CARTE_L, height: CARTE_H,
+      color: index === courant ? OR : VIF,
+      label: station.label, value: station.detail.value, lines: station.detail.lines,
+    }];
+  });
+
+  return {
+    engine: 'roughsvg', title, width: 960, height: basPiste + 176,
+    elements: el,
+    hotspots: zones,
+    hotspotPanel: zones.length ? panneauQuestion(30, basPiste + 40, 400, 124) : undefined,
+  };
 }
 
 function processSpec(
@@ -564,34 +848,50 @@ function energieActivationSpec(variant: string, step: number, maxStep: number): 
   };
 }
 
-function oxydoreductionSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
+function oxydoreductionSpec(variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  const chemins: Record<string, string[]> = {
     transfert_direct: ['reducteur', 'electrons', 'oxydant', 'produits'],
     pile: ['anode', 'electrons', 'circuit', 'cathode', 'reduction'],
     electrolyse: ['generateur', 'anode', 'oxydation', 'electrons', 'cathode', 'reduction'],
   };
-  return processSpec(
+  const table: Record<string, StationRuban> = {
+    reducteur: { id: 'reducteur', label: 'Réducteur', court: 'Réducteur',
+      detail: { value: 'il donne les e⁻', lines: ['son nombre d’oxydation augmente', 'c’est donc lui qui est oxydé'] } },
+    electrons: { id: 'electrons', label: 'Électrons', court: 'e⁻',
+      detail: { value: 'jamais libres en solution', lines: ['ils passent directement d’une espèce à l’autre'] } },
+    oxydant: { id: 'oxydant', label: 'Oxydant', court: 'Oxydant',
+      detail: { value: 'il capte les e⁻', lines: ['son nombre d’oxydation diminue', 'c’est donc lui qui est réduit'] } },
+    produits: { id: 'produits', label: 'Produits redox', court: 'Produits',
+      detail: { value: 'les deux couples ont échangé', lines: ['oxydation et réduction sont simultanées'] } },
+    anode: { id: 'anode', label: 'Anode', court: 'Anode',
+      detail: { value: 'siège de l’oxydation', lines: ['pôle − dans une pile', 'pôle + dans une électrolyse'] } },
+    circuit: { id: 'circuit', label: 'Circuit extérieur', court: 'Circuit',
+      detail: { value: 'le courant électrique', lines: ['les e⁻ y circulent, en sens inverse du courant'] } },
+    cathode: { id: 'cathode', label: 'Cathode', court: 'Cathode',
+      detail: { value: 'siège de la réduction', lines: ['l’électrode où arrivent les électrons'] } },
+    reduction: { id: 'reduction', label: 'Espèce réduite', court: 'Réduite',
+      detail: { value: 'elle a capté les e⁻', lines: ['c’est le produit de la cathode'] } },
+    generateur: { id: 'generateur', label: 'Générateur', court: 'Générateur',
+      detail: { value: 'il impose le sens', lines: ['l’électrolyse est une transformation forcée'] } },
+    oxydation: { id: 'oxydation', label: 'Espèce oxydée', court: 'Oxydée',
+      detail: { value: 'elle a cédé ses e⁻', lines: ['c’est le produit de l’anode'] } },
+  };
+  const libelles: Record<string, string> = {
+    'reducteur>electrons': 'oxydation', 'electrons>oxydant': 'transfert direct',
+    'oxydant>produits': 'réduction', 'anode>electrons': 'e⁻ libérés',
+    'electrons>circuit': 'courant', 'circuit>cathode': 'e⁻ reçus',
+    'cathode>reduction': 'réduction', 'generateur>anode': 'impose le sens',
+    'anode>oxydation': 'oxydation forcée', 'oxydation>electrons': 'e⁻ arrachés',
+    'electrons>cathode': 'vers la cathode',
+  };
+  const chemin = chemins[variant] || chemins.transfert_direct;
+  return rubanSpec(
     variant === 'pile' ? 'Pile : réaction spontanée et courant électrique'
       : variant === 'electrolyse' ? 'Électrolyse : transformation imposée par le générateur'
         : 'Oxydation et réduction sont simultanées',
-    'breadthfirst',
-    [
-      ['reducteur', 'Réducteur : donne e⁻'], ['electrons', 'Électrons'],
-      ['oxydant', 'Oxydant : capte e⁻'], ['produits', 'Produits redox'],
-      ['anode', 'Anode : oxydation'], ['circuit', 'Circuit extérieur'],
-      ['cathode', 'Cathode : réduction'], ['reduction', 'Espèce réduite'],
-      ['generateur', 'Générateur'], ['oxydation', 'Espèce oxydée'],
-    ],
-    [
-      ['reducteur', 'electrons', 'oxydation'], ['electrons', 'oxydant', 'transfert'],
-      ['oxydant', 'produits', 'réduction'], ['anode', 'electrons', 'e⁻ libérés'],
-      ['electrons', 'circuit', 'courant'], ['circuit', 'cathode', 'e⁻ reçus'],
-      ['cathode', 'reduction'], ['generateur', 'anode', 'impose le sens'],
-      ['anode', 'oxydation'], ['oxydation', 'electrons', 'e⁻ arrachés'],
-    ],
-    paths[variant] || paths.transfert_direct,
-    step,
-    maxStep,
+    chemin.map(id => table[id]),
+    transitionsSuivant(chemin, libelles),
+    step, maxStep,
   );
 }
 
@@ -651,7 +951,15 @@ function myogramSpec(variant: string, step: number, maxStep: number): JSXGraphVi
     grid: true,
     xLabel: 'Temps (u.a.)',
     yLabel: 'Tension musculaire (u.a.)',
-    elements: pointsToSegments('myogramme', myogramPoints(variant), 'orange', label, step, maxStep),
+    elements: [
+      ...pointsToSegments('myogramme', myogramPoints(variant), 'orange', label, step, maxStep),
+      ...(variant === 'secousse' ? [
+        { id: 'stimulus', type: 'arrow' as const, points: [{ x: 0.75, y: -0.55 }, { x: 0.75, y: 0 }], color: 'yellow' },
+        { id: 'latence', type: 'text' as const, points: [{ x: 0.8, y: 0.65 }], label: 'Latence', color: 'yellow' },
+        { id: 'contraction', type: 'text' as const, points: [{ x: 1.5, y: 2.7 }], label: 'Contraction', color: 'orange' },
+        { id: 'relachement', type: 'text' as const, points: [{ x: 4, y: 1.5 }], label: 'Relâchement', color: 'cyan' },
+      ] : []),
+    ],
   };
 }
 
@@ -682,158 +990,414 @@ function muscleHeatSpec(variant: string, step: number, maxStep: number): JSXGrap
   };
 }
 
-function atpSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
-    hydrolyse: ['atp', 'adp', 'travail'],
-    phosphorylation: ['nutriments', 'adp', 'atp'],
-    couplage: ['nutriments', 'atp', 'travail', 'adp'],
+function atpSpec(variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  const chemins: Record<string, string[]> = {
+    hydrolyse: ['atp', 'travail', 'adp'],
+    regeneration: ['adp', 'nutriments', 'atp'],
     cycle_complet: ['nutriments', 'adp', 'atp', 'travail'],
   };
-  return processSpec(
-    'L’ATP transfère l’énergie aux activités cellulaires', 'circle',
-    [
-      ['nutriments', 'Énergie de la respiration / fermentation'],
-      ['adp', 'ADP + Pi'],
-      ['atp', 'ATP'],
-      ['travail', 'Travail cellulaire'],
-    ],
-    [
-      ['nutriments', 'adp', 'Phosphorylation'],
-      ['adp', 'atp', '+ énergie'],
-      ['atp', 'travail', 'Hydrolyse : énergie libérée'],
-      ['atp', 'adp', 'ATP → ADP + Pi'],
-      ['travail', 'adp', 'Après transfert'],
-    ],
-    paths[variant] || paths.cycle_complet, step, maxStep,
+  const table: Record<string, StationRuban> = {
+    nutriments: { id: 'nutriments', label: 'Énergie des nutriments', court: 'Nutriments',
+      detail: { value: '2860 kJ par mole de glucose', lines: ['dont 40,5 % seulement passent dans l’ATP'] } },
+    adp: { id: 'adp', label: 'ADP + Pi', court: 'ADP + Pi',
+      detail: { value: 'la forme déchargée', lines: ['la respiration la recharge en continu'] } },
+    atp: { id: 'atp', label: 'ATP', court: 'ATP',
+      detail: { value: 'la monnaie de la cellule', lines: ['le stock ne tient que quelques secondes', 'il est refait aussitôt que dépensé'] } },
+    travail: { id: 'travail', label: 'Travail cellulaire', court: 'Travail',
+      detail: { value: 'contraction, transport, synthèses', lines: ['toutes payées par l’hydrolyse de l’ATP'] } },
+  };
+  const libelles: Record<string, string> = {
+    'nutriments>adp': 'énergie libérée', 'adp>atp': 'phosphorylation',
+    'atp>travail': 'hydrolyse', 'travail>nutriments': 'il faut recharger',
+    'atp>adp': 'ATP → ADP + Pi', 'travail>adp': 'après transfert', 'adp>nutriments': 'recharge',
+  };
+  const chemin = chemins[variant] || chemins.cycle_complet;
+  const boucle = chemin === chemins.cycle_complet;
+  const suite = boucle ? [...chemin, chemin[0]] : chemin;
+  return rubanSpec(
+    'L’ATP transfère l’énergie aux activités cellulaires',
+    chemin.map(id => table[id]),
+    transitionsSuivant(suite, libelles),
+    step, maxStep, boucle,
   );
 }
 
-function glycolyseEtapesSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const nodes: Array<[string, string]> = [
-    ['glucose', 'Glucose 6C'], ['g6p', 'Glucose-6-phosphate 6C'],
-    ['f6p', 'Fructose-6-phosphate 6C'], ['f16bp', 'Fructose-1,6-bisphosphate 6C'],
-    ['trioses', '2 trioses phosphate 3C'], ['bpg', '2 × 1,3-bisphosphoglycérate 3C'],
-    ['pg3', '2 × 3-phosphoglycérate 3C'], ['pg2', '2 × 2-phosphoglycérate 3C'],
-    ['pep', '2 × phosphoénolpyruvate 3C'], ['pyruvate', '2 pyruvates 3C'],
-  ];
-  const edges: Array<[string, string, string?]> = [
-    ['glucose', 'g6p', '1 hexokinase · ATP → ADP'], ['g6p', 'f6p', '2 isomérisation'],
-    ['f6p', 'f16bp', '3 PFK · ATP → ADP'], ['f16bp', 'trioses', '4–5 scission + isomérisation'],
-    ['trioses', 'bpg', '6 : 2 NAD⁺ + 2 Pi → 2 NADH,H⁺'], ['bpg', 'pg3', '7 : 2 ADP → 2 ATP'],
-    ['pg3', 'pg2', '8 mutase'], ['pg2', 'pep', '9 : −2 H₂O'], ['pep', 'pyruvate', '10 : 2 ADP → 2 ATP'],
-  ];
-  return processSpec('Glycolyse : 2 ATP nets et 2 NADH,H⁺ par glucose', 'breadthfirst', nodes, edges,
-    nodes.map(([id]) => id), step, maxStep);
+function glycolyseEtapesSpec(_variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  return rubanSpec(
+    'Glycolyse : 2 ATP nets et 2 NADH,H⁺ par glucose',
+    [
+      { id: 'glucose', label: 'Glucose 6C', court: 'Glucose',
+        detail: { value: '6 carbones', lines: ['le point de départ, dans le cytoplasme'] } },
+      { id: 'g6p', label: 'Glucose-6-phosphate', court: 'G6P',
+        detail: { value: '1er ATP dépensé', lines: ['le phosphate piège le glucose dans la cellule'] } },
+      { id: 'f6p', label: 'Fructose-6-phosphate', court: 'F6P',
+        detail: { value: 'simple isomérisation', lines: ['même formule brute, autre structure'] } },
+      { id: 'f16bp', label: 'Fructose-1,6-bisphosphate', court: 'F1,6BP',
+        detail: { value: '2 ATP dépensés en tout', lines: ['fin de la phase d’investissement', 'la cellule paie avant de gagner'] } },
+      { id: 'trioses', label: '2 trioses phosphate 3C', court: '2 × 3C',
+        detail: { value: '6C → 2 × 3C', lines: ['tout ce qui suit compte double'] } },
+      { id: 'bpg', label: '2 bisphosphoglycérates', court: '2 × BPG',
+        detail: { value: '2 NADH,H⁺ formés', lines: ['ils partiront vers la chaîne respiratoire'] } },
+      { id: 'pg3', label: '2 phosphoglycérates 3', court: '2 × 3PG',
+        detail: { value: '2 ATP produits', lines: ['la cellule commence à être remboursée'] } },
+      { id: 'pg2', label: '2 phosphoglycérates 2', court: '2 × 2PG',
+        detail: { value: 'le phosphate se déplace', lines: ['préparation de la dernière étape'] } },
+      { id: 'pep', label: '2 phosphoénolpyruvates', court: '2 × PEP',
+        detail: { value: 'liaison très instable', lines: ['c’est elle qui rendra le dernier ATP'] } },
+      { id: 'pyruvate', label: '2 pyruvates 3C', court: 'Pyruvate',
+        detail: { value: 'bilan : 2 ATP nets', lines: ['4 ATP produits moins 2 investis', 'et 2 NADH,H⁺'] } },
+    ],
+    [
+      '1 · ATP → ADP', '2 · isomérisation', '3 · ATP → ADP', '4–5 · scission',
+      '6 · 2 NAD⁺ → 2 NADH', '7 · 2 ADP → 2 ATP', '8 · mutase', '9 · − 2 H₂O', '10 · 2 ADP → 2 ATP',
+    ],
+    step, maxStep,
+  );
 }
 
 function krebsDetailleSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
   const nodes: Array<[string, string]> = [
-    ['pyruvate', 'Pyruvate 3C'], ['acetyl', 'Acétyl-CoA 2C'], ['citrate', 'Citrate 6C'],
-    ['c5', 'Composé 5C'], ['c4a', 'Composé 4C'], ['succinate', 'Succinate 4C'],
+    ['acetyl', 'Acétyl-CoA 2C'], ['citrate', 'Citrate 6C'], ['isocitrate', 'Isocitrate 6C'],
+    ['c5', 'α-cétoglutarate 5C'], ['succinyl', 'Succinyl-CoA 4C'], ['succinate', 'Succinate 4C'],
     ['fumarate', 'Fumarate 4C'], ['malate', 'Malate 4C'], ['oxaloacetate', 'Oxaloacétate 4C'],
-    ['bilan', 'Par glucose : 6 CO₂ · 8 NADH,H⁺ · 2 FADH₂ · 2 ATP'],
+    ['bilan', 'Par tour : 2 CO₂ · 3 NADH,H⁺ · 1 FADH₂ · 1 GTP ≈ ATP'],
   ];
   const edges: Array<[string, string, string?]> = [
-    ['pyruvate', 'acetyl', 'CO₂ + NADH,H⁺'], ['acetyl', 'citrate', '+ oxaloacétate'],
-    ['citrate', 'c5', 'CO₂ + NADH,H⁺'], ['c5', 'c4a', 'CO₂ + NADH,H⁺'],
-    ['c4a', 'succinate', 'ADP + Pi → ATP'], ['succinate', 'fumarate', 'FAD → FADH₂'],
+    ['acetyl', 'citrate', '+ oxaloacétate + H₂O ; sortie CoA-SH'], ['citrate', 'isocitrate', 'isomérisation'],
+    ['isocitrate', 'c5', 'NAD⁺ → NADH,H⁺ ; sortie CO₂'], ['c5', 'succinyl', 'NAD⁺ + CoA-SH → NADH,H⁺ ; sortie CO₂'],
+    ['succinyl', 'succinate', 'GDP + Pi → GTP ; sortie CoA-SH'], ['succinate', 'fumarate', 'FAD → FADH₂'],
     ['fumarate', 'malate', '+ H₂O'], ['malate', 'oxaloacetate', 'NAD⁺ → NADH,H⁺'],
-    ['oxaloacetate', 'citrate', 'nouveau tour'], ['oxaloacetate', 'bilan', '2 tours par glucose'],
+    ['oxaloacetate', 'citrate', 'nouveau tour'], ['oxaloacetate', 'bilan', 'bilan d’un tour'],
   ];
-  return processSpec('Oxydation du pyruvate puis deux tours de Krebs', 'circle', nodes, edges,
-    ['pyruvate', 'acetyl', 'citrate', 'c5', 'c4a', 'succinate', 'fumarate', 'malate', 'oxaloacetate', 'bilan'], step, maxStep);
+  return processSpec('Cycle de Krebs dans la matrice', 'circle', nodes, edges,
+    ['acetyl', 'citrate', 'isocitrate', 'c5', 'succinyl', 'succinate', 'fumarate', 'malate', 'oxaloacetate', 'bilan'], step, maxStep);
 }
 
-function echelleRedoxSpec(_variant: string, step: number, maxStep: number): JSXGraphVisualSpec {
-  const couples = [
-    { y: -320, label: 'NADH,H⁺ / NAD⁺', color: 'cyan' },
-    { y: -100, label: 'FMNH₂ / FMN', color: 'blue' },
-    { y: 40, label: 'QH₂ / Q', color: 'orange' },
-    { y: 250, label: 'cyt c Fe²⁺ / Fe³⁺', color: 'purple' },
-    { y: 820, label: 'H₂O / O₂', color: 'green' },
+/**
+ * L'encart de réponse des planches interrogeables. Même invite partout :
+ * l'élève apprend le geste une fois et le rejoue sur toutes les figures.
+ */
+function panneauQuestion(x: number, y: number, width: number, height: number): RoughSVGHotspotPanelSpec {
+  return { x, y, width, height, hint: 'Clique sur un « ? » pour le détail' };
+}
+
+/**
+ * L'escalier des électrons. La chaîne respiratoire n'est pas un nuage de
+ * points dans un repère : c'est une descente. La HAUTEUR d'une marche est
+ * l'énergie libérée, proportionnelle au ΔE°′ réel (360, 210 puis 570 mV) ;
+ * trois marches, trois complexes qui pompent des H⁺. Les millivolts restent
+ * en légende sous chaque palier, sans axe ni grille.
+ */
+function echelleRedoxSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const INK = '#e0f2fe';
+  const MEMBRANE = '#fbbf24';
+  const PROTON = '#c084fc';
+  const ELECTRON = '#fde047';
+  const PUMP_OFF = '#64748b';
+  const PUMP_ON = '#f472b6';
+  const OXY = '#22d3ee';
+  const WATER = '#86efac';
+  const current = Math.max(0, Math.min(8, Math.round(step)));
+
+  const landings = [
+    { x0: 90, x1: 270, y: 105, name: 'NADH,H⁺', mv: 'E°′ = −320 mV' },
+    { x0: 330, x1: 500, y: 209, name: 'Q / QH₂', mv: 'E°′ = +40 mV' },
+    { x0: 560, x1: 700, y: 270, name: 'cyt c', mv: 'E°′ = +250 mV' },
+    { x0: 760, x1: 900, y: 435, name: 'O₂, accepteur final', mv: 'E°′ = +820 mV' },
   ];
-  const shown = Math.min(couples.length, revealedCount(couples.length, step, maxStep));
-  const elements: JSXGraphElementSpec[] = couples.slice(0, shown).flatMap((c, i) => [
-    { id: `redox-p-${i}`, type: 'point', points: [{ x: 2.2, y: c.y }], color: c.color },
-    { id: `redox-t-${i}`, type: 'text', points: [{ x: 2.7, y: c.y }], label: c.label, color: c.color },
-  ]);
-  if (step >= 6) elements.push({ id: 'flux-e', type: 'arrow', points: [{ x: 6.2, y: -320 }, { x: 6.2, y: 820 }], color: 'yellow', label: 'flux spontané des e⁻' });
-  if (step >= 7) elements.push({ id: 'delta-e', type: 'text', points: [{ x: 4.5, y: 650 }], color: 'orange', label: 'ΔE°′ > 0 : énergie libérée' });
-  if (step >= 8) elements.push({ id: 'o2-final', type: 'text', points: [{ x: 4.5, y: 800 }], color: 'green', label: 'O₂ = accepteur final → H₂O' });
-  return { engine: 'jsxgraph', title: 'Échelle des potentiels redox mitochondriaux',
-    boundingBox: [-0.6, 950, 8.3, -430], axis: true, grid: true, xLabel: 'couples redox', yLabel: 'E°′ (mV)', elements };
+  // Une pompe par marche : le complexe se lit à l'endroit exact de la chute.
+  const pumps = [
+    { x: 300, y: 157, label: 'Complexe I', from: 2 },
+    { x: 530, y: 240, label: 'Complexe III', from: 4 },
+    { x: 730, y: 352, label: 'Complexe IV', from: 6 },
+  ];
+  const spots = [
+    { x: 130, y: 105 }, { x: 250, y: 105 }, { x: 300, y: 157 }, { x: 420, y: 209 },
+    { x: 530, y: 240 }, { x: 640, y: 270 }, { x: 730, y: 352 }, { x: 820, y: 435 },
+    { x: 820, y: 435 },
+  ];
+
+  const stairs: ScientificPoint[] = landings.flatMap(l => [{ x: l.x0, y: l.y }, { x: l.x1, y: l.y }]);
+
+  // Décor : même longueur et même ordre à chaque étape, sinon les traits
+  // crayonnés se retirent au sort d'une image à l'autre et la figure tremble.
+  const el: RoughSVGElementSpec[] = [
+    { id: 'espace-txt', type: 'text', x: 470, y: 28, text: 'Espace intermembranaire : les H⁺ s’y entassent', color: PROTON, fontSize: 18, align: 'middle' },
+    { id: 'escalier', type: 'polyline', points: stairs, color: MEMBRANE, strokeWidth: 6 },
+    { id: 'matrice-txt', type: 'text', x: 120, y: 470, text: 'Matrice', color: '#7dd3fc', fontSize: 19, align: 'start' },
+  ];
+
+  landings.forEach((l, i) => {
+    const mid = (l.x0 + l.x1) / 2;
+    el.push(
+      { id: `pal-n-${i}`, type: 'text', x: mid, y: l.y + 30, text: l.name, color: i === 3 ? OXY : INK, fontSize: 21, align: 'middle' },
+      { id: `pal-mv-${i}`, type: 'text', x: mid, y: l.y + 52, text: l.mv, color: '#94a3b8', fontSize: 15, align: 'middle' },
+    );
+  });
+
+  pumps.forEach((p, i) => {
+    const on = current >= p.from;
+    el.push(
+      { id: `pompe-${i}`, type: 'rect', x: p.x - 32, y: p.y - 23, width: 64, height: 46, color: on ? PUMP_ON : PUMP_OFF, fill: on ? '#500724' : '#1e293b', strokeWidth: 4 },
+      { id: `pompe-t-${i}`, type: 'text', x: p.x + 42, y: p.y + 6, text: p.label, color: on ? PUMP_ON : PUMP_OFF, fontSize: 17, align: 'start' },
+    );
+  });
+
+  // Ce que la chute produit : des H⁺ montés dans l'espace intermembranaire.
+  pumps.forEach((p, i) => {
+    if (current < p.from) return;
+    el.push({ id: `h-fleche-${i}`, type: 'arrow', points: [{ x: p.x, y: p.y - 28 }, { x: p.x, y: 80 }], color: PROTON, strokeWidth: 3, dashed: true });
+    for (let k = 0; k < 3; k += 1) {
+      el.push({ id: `h-${i}-${k}`, type: 'circle', x: p.x - 30 + k * 30, y: 58, radius: 9, color: PROTON, fill: '#3b0764', strokeWidth: 2 });
+    }
+  });
+
+  const spot = spots[current];
+  el.push(
+    { id: 'e-corps', type: 'circle', x: spot.x, y: spot.y - 18, radius: 15, color: '#78350f', fill: ELECTRON, strokeWidth: 3 },
+    { id: 'e-oeil-g', type: 'circle', x: spot.x - 5, y: spot.y - 22, radius: 2, color: '#78350f', fill: '#78350f', strokeWidth: 1 },
+    { id: 'e-oeil-d', type: 'circle', x: spot.x + 5, y: spot.y - 22, radius: 2, color: '#78350f', fill: '#78350f', strokeWidth: 1 },
+    { id: 'e-txt', type: 'text', x: spot.x, y: spot.y - 42, text: 'e⁻', color: ELECTRON, fontSize: 20, align: 'middle' },
+  );
+
+  if (current >= 7) {
+    el.push(
+      { id: 'eau', type: 'ellipse', x: 922, y: 396, radiusX: 27, radiusY: 21, color: WATER, fill: '#064e3b', strokeWidth: 3 },
+      { id: 'eau-t', type: 'text', x: 922, y: 403, text: 'H₂O', color: WATER, fontSize: 17, align: 'middle' },
+    );
+  }
+  if (current >= 8) {
+    el.push({ id: 'bilan', type: 'text', x: 340, y: 500, text: 'Marche haute = beaucoup d’énergie libérée', color: ELECTRON, fontSize: 20, align: 'middle' });
+  }
+
+  const recits = [
+    'Un électron riche en énergie arrive du NADH,H⁺ : il est tout en haut de l’escalier.',
+    'Sur un palier il ne perd rien : c’est en tombant, pas en avançant, qu’il libère de l’énergie.',
+    'Première marche : la chute traverse le complexe I, qui pompe des H⁺ vers l’espace intermembranaire.',
+    'L’électron se pose sur le transporteur Q, un cran plus bas en énergie.',
+    'Deuxième marche, la plus courte : le complexe III libère moins d’énergie.',
+    'Palier du cytochrome c : l’électron attend la dernière chute.',
+    'Troisième marche, la plus haute : le complexe IV libère le plus d’énergie de toute la chaîne.',
+    'En bas, le dioxygène récupère l’électron : il devient de l’eau. C’est l’accepteur final.',
+    'Bilan : la hauteur d’une marche est l’énergie libérée, et elle sert à entasser les H⁺ en haut.',
+  ];
+
+  return {
+    engine: 'roughsvg',
+    title: 'L’escalier des électrons : du NADH au dioxygène',
+    width: 960,
+    height: 540,
+    description: recits[current],
+    elements: el,
+    // Chaque marche se laisse interroger : le ΔE°′ n'encombre pas le dessin,
+    // il attend la question. La zone couvre la chute ET son complexe.
+    hotspots: [
+      { id: 'marche-1', x: 256, y: 98, width: 88, height: 118, color: PUMP_ON,
+        label: 'Marche 1 — complexe I', value: 'ΔE°′ = + 360 mV',
+        lines: ['NADH,H⁺ (−320 mV) → Q (+40 mV)', 'de quoi pomper des H⁺'] },
+      { id: 'marche-2', x: 486, y: 202, width: 88, height: 76, color: PUMP_ON,
+        label: 'Marche 2 — complexe III', value: 'ΔE°′ = + 210 mV',
+        lines: ['Q (+40 mV) → cyt c (+250 mV)', 'la plus courte des trois'] },
+      { id: 'marche-3', x: 686, y: 263, width: 88, height: 180, color: PUMP_ON,
+        label: 'Marche 3 — complexe IV', value: 'ΔE°′ = + 570 mV',
+        lines: ['cyt c (+250 mV) → O₂ (+820 mV)', 'la plus haute : le plus d’énergie'] },
+    ],
+    hotspotPanel: panneauQuestion(58, 292, 352, 124),
+    legend: [
+      { color: ELECTRON, label: 'électron' },
+      { color: MEMBRANE, label: 'membrane interne' },
+      { color: PUMP_ON, label: 'complexe qui pompe' },
+      { color: PROTON, label: 'H⁺' },
+    ],
+  };
 }
 
 function ultrastructureMitochondrieSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
-  const INK = '#e0f2fe', CYAN = '#22d3ee', MATRIX = '#0c4a6e', GOLD = '#fde047';
-  // Les huit reperes du document sont numerotes sur la coupe et repris dans
-  // une legende : c'est la forme exacte de la question d'examen, « annotez le
-  // document en donnant le nom correspondant a chaque numero ».
-  const reperes: Array<[number, number, string]> = [
-    [286, 52, 'Membrane externe'],
-    [352, 86, 'Membrane interne'],
-    [300, 200, 'Matrice'],
-    [168, 200, 'Crêtes mitochondriales'],
-    [470, 104, 'Espace intermembranaire'],
-    [392, 252, 'ADN mitochondrial'],
-    [112, 132, 'Phospholipides'],
-    [452, 286, 'Protéines intégrées'],
-  ];
-  const shown = Math.max(0, Math.min(reperes.length, Math.round(step)));
+  const INK = '#e0f2fe';
+  const OUTER = '#22d3ee';
+  const INNER = '#fbbf24';
+  const SPACE = '#c084fc';
+  const MATRIX = '#0c4a6e';
+  const FOCUS = '#fde047';
+  const safeStep = Math.max(0, Math.min(4, Math.round(step)));
 
   const el: RoughSVGElementSpec[] = [
-    { type: 'ellipse', x: 300, y: 200, radiusX: 262, radiusY: 148, color: CYAN, fill: '#082f49' },
-    { type: 'ellipse', x: 300, y: 200, radiusX: 232, radiusY: 118, color: CYAN, fill: MATRIX },
+    // Coupe principale, volontairement grande et limitée aux compartiments utiles.
+    { id: 'outer', type: 'ellipse', x: 330, y: 270, radiusX: 285, radiusY: 170, color: OUTER, fill: '#082f49', strokeWidth: 4 },
+    { id: 'inner', type: 'ellipse', x: 330, y: 270, radiusX: 255, radiusY: 140, color: INNER, fill: MATRIX, strokeWidth: 4 },
   ];
+
+  const crests: ScientificPoint[][] = [];
   for (let i = 0; i < 5; i += 1) {
-    const x = 130 + i * 85;
-    el.push({ type: 'polyline', color: CYAN, strokeWidth: 3, points: [
-      { x, y: 200 - 112 }, { x: x + 34, y: 200 - 46 }, { x, y: 200 }, { x: x + 34, y: 200 + 46 }, { x, y: 200 + 112 },
-    ] });
-  }
-  el.push({ type: 'circle', x: 392, y: 252, radius: 17, color: GOLD, fill: '#713f12' });
-
-  reperes.slice(0, shown).forEach(([x, y], i) => {
-    el.push({ type: 'circle', x, y, radius: 15, color: GOLD, fill: '#0f172a' });
-    el.push({ type: 'text', x, y: y + 7, text: String(i + 1), color: GOLD, fontSize: 19, align: 'middle' });
-  });
-  reperes.slice(0, shown).forEach(([, , label], i) => {
-    el.push({ type: 'text', x: 600, y: 70 + i * 34, text: `${i + 1}  ${label}`, color: INK, fontSize: 19, align: 'start' });
-  });
-
-  if (step >= 9) {
-    el.push({ type: 'circle', x: 186, y: 68, radius: 9, color: '#4ade80', fill: '#14532d' });
-    el.push({ type: 'text', x: 600, y: 358, text: 'Porine : ions et métabolites hydrosolubles', color: '#4ade80', fontSize: 17, align: 'start' });
-  }
-  if (step >= 10) {
-    for (let i = 0; i < 4; i += 1) {
-      const x = 172 + i * 86;
-      el.push({ type: 'line', x, y: 318, width: 0, height: -16, color: '#c4b5fd', strokeWidth: 3 });
-      el.push({ type: 'circle', x, y: 296, radius: 11, color: '#c4b5fd', fill: '#4c1d95' });
-    }
-    el.push({ type: 'text', x: 600, y: 388, text: 'Sphères pédonculées = ATP synthase', color: '#c4b5fd', fontSize: 17, align: 'start' });
-  }
-  if (step >= 11) {
-    const rows: Array<[string, string, string]> = [
-      ['Membrane externe', '38 % lipides · 62 % protéines', 'comparable à la membrane cytoplasmique'],
-      ['Membrane interne', '20 % lipides · 80 % protéines', 'nombreuses enzymes, dont l’ATP synthase'],
-      ['Matrice', 'pas de glucose · pyruvate et ATP', 'déshydrogénases et carboxylases'],
+    const x = 145 + i * 82;
+    const points = [
+      { x, y: 137 }, { x: x + 38, y: 202 }, { x, y: 270 },
+      { x: x + 38, y: 338 }, { x, y: 403 },
     ];
-    el.push({ type: 'rect', x: 40, y: 396, width: 880, height: 138, color: CYAN, fill: '#06202e' });
-    rows.forEach(([a, b, c], i) => {
-      const y = 428 + i * 34;
-      el.push({ type: 'text', x: 62, y, text: a, color: GOLD, fontSize: 17, align: 'start' });
-      el.push({ type: 'text', x: 268, y, text: b, color: INK, fontSize: 17, align: 'start' });
-      el.push({ type: 'text', x: 570, y, text: c, color: '#93c5fd', fontSize: 16, align: 'start' });
-    });
-  }
-  if (step >= 12) {
-    el.push({ type: 'text', x: 480, y: 556, align: 'middle', fontSize: 18, color: '#4ade80',
-      text: 'Une membrane interne riche en protéines : c’est là que se déroulent les oxydations respiratoires.' });
+    crests.push(points);
+    el.push({ id: `crest-${i}`, type: 'polyline', color: INNER, strokeWidth: 4, points });
   }
 
-  return { engine: 'roughsvg', title: 'Ultrastructure de la mitochondrie', width: 960, height: 576,
-    description: 'Coupe annotée de la mitochondrie et composition chimique de ses compartiments.', elements: el };
+  // Repères courts : aucune donnée chiffrée dans l'image.
+  el.push(
+    { type: 'arrow', color: OUTER, strokeWidth: 2, points: [{ x: 78, y: 78 }, { x: 125, y: 116 }] },
+    { type: 'text', x: 70, y: 64, text: 'Membrane externe', color: INK, fontSize: 18, align: 'start' },
+    { type: 'arrow', color: INNER, strokeWidth: 2, points: [{ x: 98, y: 466 }, { x: 155, y: 395 }] },
+    { type: 'text', x: 72, y: 492, text: 'Membrane interne + crêtes', color: INK, fontSize: 18, align: 'start' },
+    { type: 'arrow', color: SPACE, strokeWidth: 2, points: [{ x: 520, y: 76 }, { x: 555, y: 132 }] },
+    { type: 'text', x: 450, y: 60, text: 'Espace intermembranaire', color: INK, fontSize: 18, align: 'start' },
+    { type: 'arrow', color: '#38bdf8', strokeWidth: 2, points: [{ x: 525, y: 466 }, { x: 470, y: 360 }] },
+    { type: 'text', x: 510, y: 492, text: 'Matrice', color: INK, fontSize: 18, align: 'start' },
+  );
+
+  const anchors = [
+    { x: 600, y: 205, label: 'Vue d’ensemble' },
+    { x: 595, y: 188, label: 'Membrane externe' },
+    { x: 485, y: 270, label: 'Membrane interne et crêtes' },
+    { x: 570, y: 150, label: 'Espace intermembranaire' },
+    { x: 455, y: 335, label: 'Matrice' },
+  ];
+  const focus = anchors[safeStep];
+
+  if (safeStep === 1) {
+    el.push({ type: 'ellipse', x: 330, y: 270, radiusX: 285, radiusY: 170, color: FOCUS, strokeWidth: 7 });
+  } else if (safeStep === 2) {
+    el.push({ type: 'ellipse', x: 330, y: 270, radiusX: 255, radiusY: 140, color: FOCUS, strokeWidth: 7 });
+    el.push({ type: 'polyline', color: FOCUS, strokeWidth: 7, points: crests[4] });
+  } else if (safeStep === 3) {
+    el.push({ type: 'ellipse', x: 330, y: 270, radiusX: 270, radiusY: 155, color: FOCUS, strokeWidth: 7, dashed: true });
+  } else if (safeStep === 4) {
+    el.push({ type: 'ellipse', x: 330, y: 270, radiusX: 205, radiusY: 105, color: FOCUS, strokeWidth: 6, dashed: true });
+  }
+
+  // Loupe pédagogique : son contenu change à chaque étape, sans ajouter de texte documentaire.
+  el.push(
+    { type: 'arrow', color: FOCUS, strokeWidth: 3, dashed: true, points: [{ x: focus.x, y: focus.y }, { x: 676, y: 242 }] },
+    { type: 'circle', x: 810, y: 260, radius: 132, color: FOCUS, fill: '#06202e', strokeWidth: 5 },
+  );
+
+  if (safeStep === 0) {
+    el.push(
+      { type: 'ellipse', x: 810, y: 255, radiusX: 92, radiusY: 54, color: OUTER, fill: '#082f49', strokeWidth: 4 },
+      { type: 'ellipse', x: 810, y: 255, radiusX: 76, radiusY: 39, color: INNER, fill: MATRIX, strokeWidth: 4 },
+      { type: 'polyline', color: INNER, strokeWidth: 4, points: [{ x: 775, y: 219 }, { x: 798, y: 255 }, { x: 775, y: 291 }] },
+      { type: 'polyline', color: INNER, strokeWidth: 4, points: [{ x: 820, y: 217 }, { x: 844, y: 255 }, { x: 820, y: 293 }] },
+    );
+  } else if (safeStep === 1) {
+    el.push(
+      { type: 'polyline', color: FOCUS, strokeWidth: 8, points: [{ x: 710, y: 235 }, { x: 760, y: 205 }, { x: 815, y: 202 }, { x: 870, y: 220 }, { x: 910, y: 250 }] },
+      { type: 'polyline', color: OUTER, strokeWidth: 3, points: [{ x: 710, y: 257 }, { x: 760, y: 227 }, { x: 815, y: 224 }, { x: 870, y: 242 }, { x: 910, y: 272 }] },
+    );
+  } else if (safeStep === 2) {
+    el.push(
+      { type: 'polyline', color: INNER, strokeWidth: 9, points: [{ x: 716, y: 190 }, { x: 770, y: 255 }, { x: 730, y: 327 }] },
+      { type: 'polyline', color: INNER, strokeWidth: 9, points: [{ x: 792, y: 185 }, { x: 850, y: 255 }, { x: 804, y: 330 }] },
+      { type: 'polyline', color: INNER, strokeWidth: 9, points: [{ x: 862, y: 198 }, { x: 902, y: 255 }, { x: 870, y: 315 }] },
+    );
+  } else if (safeStep === 3) {
+    el.push(
+      { type: 'polyline', color: OUTER, strokeWidth: 7, points: [{ x: 715, y: 215 }, { x: 810, y: 190 }, { x: 905, y: 215 }] },
+      { type: 'polyline', color: INNER, strokeWidth: 7, points: [{ x: 720, y: 298 }, { x: 810, y: 273 }, { x: 900, y: 298 }] },
+      { type: 'text', x: 810, y: 248, text: 'espace', color: SPACE, fontSize: 22, align: 'middle' },
+    );
+  } else {
+    el.push(
+      { type: 'ellipse', x: 810, y: 260, radiusX: 103, radiusY: 78, color: '#38bdf8', fill: MATRIX, strokeWidth: 4 },
+      { type: 'circle', x: 770, y: 240, radius: 9, color: INK, fill: '#38bdf8' },
+      { type: 'circle', x: 825, y: 225, radius: 9, color: INK, fill: '#38bdf8' },
+      { type: 'circle', x: 850, y: 280, radius: 9, color: INK, fill: '#38bdf8' },
+      { type: 'circle', x: 785, y: 295, radius: 9, color: INK, fill: '#38bdf8' },
+    );
+  }
+
+  el.push(
+    { type: 'text', x: 810, y: 430, text: safeStep === 0 ? 'Vue d’ensemble' : `Zoom ${safeStep}/4`, color: FOCUS, fontSize: 19, align: 'middle' },
+    { type: 'text', x: 810, y: 458, text: focus.label, color: INK, fontSize: 20, align: 'middle' },
+  );
+
+  return {
+    engine: 'roughsvg',
+    title: 'Zoom sur la mitochondrie',
+    width: 960,
+    height: 530,
+    description: 'Coupe agrandie et zoom progressif sur les compartiments essentiels de la mitochondrie.',
+    elements: el,
+  };
+}
+
+function pyruvateAcetylCoaSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  const current = Math.max(0, Math.min(8, Math.round(step)));
+  const elements: RoughSVGElementSpec[] = [
+    { id: 'zone-cyto', type: 'text', x: 105, y: 45, text: 'Cytoplasme', color: '#67e8f9', fontSize: 24, align: 'middle' },
+    { id: 'mito-title', type: 'text', x: 625, y: 40, text: 'Mitochondrie', color: '#fef08a', fontSize: 26, align: 'middle' },
+    { id: 'outer', type: 'ellipse', x: 620, y: 240, radiusX: 270, radiusY: 185, color: '#e2e8f0', fill: '#102a2a', strokeWidth: 4 },
+    { id: 'inner', type: 'ellipse', x: 620, y: 240, radiusX: 235, radiusY: 150, color: '#94a3b8', strokeWidth: 3 },
+    { id: 'crest-1', type: 'polyline', points: [{ x: 485, y: 115 }, { x: 520, y: 155 }, { x: 555, y: 120 }, { x: 585, y: 155 }], color: '#94a3b8', strokeWidth: 3 },
+    { id: 'crest-2', type: 'polyline', points: [{ x: 690, y: 115 }, { x: 720, y: 160 }, { x: 755, y: 125 }, { x: 785, y: 165 }], color: '#94a3b8', strokeWidth: 3 },
+    { id: 'crest-3', type: 'polyline', points: [{ x: 680, y: 365 }, { x: 715, y: 325 }, { x: 750, y: 365 }, { x: 785, y: 325 }], color: '#94a3b8', strokeWidth: 3 },
+    { id: 'matrix-label', type: 'text', x: 625, y: 92, text: 'Matrice', color: '#86efac', fontSize: 20, align: 'middle' },
+  ];
+  const carbon = (id: string, x: number, y: number, count: number, color: string, label: string): RoughSVGElementSpec[] => {
+    const result: RoughSVGElementSpec[] = [];
+    for (let i = 0; i < count; i += 1) {
+      result.push({ id: `${id}-c${i}`, type: 'circle', x: x + i * 38, y, radius: 17, color, fill: '#0f172a' });
+      result.push({ id: `${id}-t${i}`, type: 'text', x: x + i * 38, y: y + 6, text: 'C', color: 'white', fontSize: 16, align: 'middle' });
+    }
+    result.push({ id: `${id}-label`, type: 'text', x: x + (count - 1) * 19, y: y + 47, text: label, color, fontSize: 18, align: 'middle' });
+    return result;
+  };
+  const messages = [
+    '1 · La glycolyse fournit un pyruvate à 3 carbones dans le cytoplasme.',
+    '2 · Le pyruvate se dirige vers la mitochondrie.',
+    '3 · Il franchit les membranes grâce à des protéines de transport.',
+    '4 · Le pyruvate atteint la matrice mitochondriale.',
+    '5 · Décarboxylation : un carbone quitte la molécule sous forme de CO₂.',
+    '6 · Oxydation : NAD⁺ capte des électrons et devient NADH,H⁺.',
+    '7 · La coenzyme A se fixe au groupement acétyle à 2 carbones.',
+    '8 · L’acétyl-CoA est prêt à alimenter le cycle de Krebs.',
+    'Bilan par pyruvate : 1 acétyl-CoA + 1 CO₂ + 1 NADH,H⁺.',
+  ];
+
+  if (current === 0) elements.push(...carbon('pyr-cyto', 115, 230, 3, '#fb7185', 'Pyruvate · 3C'));
+  if (current === 1) {
+    elements.push({ id: 'travel-1', type: 'arrow', points: [{ x: 215, y: 230 }, { x: 330, y: 230 }], color: '#fb7185', strokeWidth: 4 });
+    elements.push(...carbon('pyr-outer', 270, 230, 3, '#fb7185', 'Pyruvate · 3C'));
+  }
+  if (current === 2) {
+    elements.push({ id: 'transport', type: 'rect', x: 345, y: 190, width: 65, height: 82, color: '#22d3ee', fill: '#164e63' });
+    elements.push({ id: 'transport-label', type: 'text', x: 377, y: 180, text: 'transporteur', color: '#67e8f9', fontSize: 16, align: 'middle' });
+    elements.push({ id: 'travel-2', type: 'arrow', points: [{ x: 290, y: 230 }, { x: 450, y: 230 }], color: '#fb7185', strokeWidth: 4 });
+    elements.push(...carbon('pyr-cross', 395, 230, 3, '#fb7185', 'Pyruvate · 3C'));
+  }
+  if (current === 3) elements.push(...carbon('pyr-matrix', 480, 230, 3, '#fb7185', 'Pyruvate dans la matrice'));
+  if (current >= 4) {
+    elements.push(...carbon('acetyl-2c', 500, 230, 2, '#fbbf24', current >= 6 ? 'Acétyl-CoA · 2C' : 'Résidu à 2C'));
+    elements.push({ id: 'co2-arrow', type: 'arrow', points: [{ x: 560, y: 205 }, { x: 625, y: 145 }], color: '#f97316', strokeWidth: 3 });
+    elements.push({ id: 'co2', type: 'circle', x: 650, y: 125, radius: 28, color: '#f97316', fill: '#7c2d12' });
+    elements.push({ id: 'co2-label', type: 'text', x: 650, y: 132, text: 'CO₂', color: 'white', fontSize: 18, align: 'middle' });
+  }
+  if (current >= 5) {
+    elements.push({ id: 'nad', type: 'text', x: 500, y: 340, text: 'NAD⁺', color: '#c084fc', fontSize: 20, align: 'middle' });
+    elements.push({ id: 'nad-arrow', type: 'arrow', points: [{ x: 540, y: 334 }, { x: 650, y: 334 }], color: '#c084fc', strokeWidth: 3 });
+    elements.push({ id: 'nadh', type: 'text', x: 720, y: 340, text: 'NADH,H⁺', color: '#e9d5ff', fontSize: 20, align: 'middle' });
+  }
+  if (current >= 6) {
+    elements.push({ id: 'coa', type: 'text', x: 455, y: 170, text: 'CoA', color: '#22c55e', fontSize: 21, align: 'middle' });
+    elements.push({ id: 'coa-arrow', type: 'arrow', points: [{ x: 470, y: 180 }, { x: 505, y: 207 }], color: '#22c55e', strokeWidth: 3 });
+  }
+  if (current >= 7) {
+    elements.push({ id: 'to-krebs', type: 'arrow', points: [{ x: 610, y: 250 }, { x: 745, y: 250 }], color: '#22c55e', strokeWidth: 4 });
+    elements.push({ id: 'krebs-ring', type: 'circle', x: 790, y: 250, radius: 54, color: '#22c55e', dashed: true });
+    elements.push({ id: 'krebs-label', type: 'text', x: 790, y: 245, text: 'Cycle de', color: '#bbf7d0', fontSize: 18, align: 'middle' });
+    elements.push({ id: 'krebs-label-2', type: 'text', x: 790, y: 270, text: 'Krebs', color: '#bbf7d0', fontSize: 20, align: 'middle' });
+  }
+  elements.push({ id: 'message', type: 'text', x: 450, y: 455, text: messages[current], color: '#f8fafc', fontSize: 20, align: 'middle' });
+  return {
+    engine: 'roughsvg', title: 'Du pyruvate cytoplasmique à l’acétyl-CoA matriciel', width: 900, height: 480,
+    description: 'Le pyruvate traverse les membranes mitochondriales puis subit une décarboxylation oxydative dans la matrice avant le cycle de Krebs.',
+    elements,
+    legend: [{ color: '#fb7185', label: 'Pyruvate · 3C' }, { color: '#fbbf24', label: 'Acétyle · 2C' }, { color: '#22c55e', label: 'CoA / Krebs' }],
+  };
 }
 
 function fluxProtonsSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
@@ -874,22 +1438,90 @@ function fluxProtonsSpec(_variant: string, step: number, _maxStep: number): Roug
   el.push({ type: 'polyline', color: ORANGE, strokeWidth: 4,
     points: courbe.slice(0, shown + 1).map(([t, h]) => ({ x: px(t), y: py(h) })) });
 
-  if (step >= 6) el.push({ type: 'text', x: px(95), y: 94, align: 'start',
-    text: 'montée rapide : les H⁺ sortent de la matrice', color: ORANGE, fontSize: 18 });
-  if (step >= 7) el.push({ type: 'text', x: px(150), y: py(44), align: 'start',
-    text: 'décroissance lente : ils regagnent la matrice', color: '#67e8f9', fontSize: 18 });
-  if (step >= 8) el.push({ type: 'text', x: px(60), y: py(6), align: 'start',
-    text: 'sans O₂, aucun flux : la chaîne est à l’arrêt', color: '#4ade80', fontSize: 18 });
+  // Les trois commentaires ne s'ecrivent plus par-dessus la courbe : ils sont
+  // devenus des zones a interroger, et la narration passe sous la figure.
+  const recits = [
+    'Concentration en protons du milieu, mesurée en continu.',
+    'Avant l’injection, la mesure ne bouge pas.',
+    'Toujours rien : sans dioxygène, la chaîne n’a pas d’accepteur final.',
+    'Injection du dioxygène à t = 40 s.',
+    'La concentration s’envole : les H⁺ quittent la matrice.',
+    'Le pic est atteint.',
+    'Montée rapide : la chaîne respiratoire pompe les H⁺ vers l’extérieur.',
+    'Décroissance lente : les H⁺ regagnent la matrice par l’ATP synthase.',
+    'Sans dioxygène, aucun flux : le pulse est bien la cause de tout.',
+  ];
+  const recit = recits[Math.max(0, Math.min(recits.length - 1, Math.round(step)))];
 
   return { engine: 'roughsvg', title: 'Flux de protons après un pulse de dioxygène', width: 960, height: 500,
-    description: 'Concentration en protons du milieu avant et après une injection de dioxygène.', elements: el };
+    description: recit, elements: el,
+    hotspots: [
+      { id: 'avant', x: 152, y: 340, width: 76, height: 70, color: '#4ade80',
+        label: 'Avant l’injection', value: '[H⁺] stable', lines: ['sans O₂, la chaîne est à l’arrêt'] },
+      { id: 'pulse', x: 220, y: 118, width: 42, height: 312, color: GOLD,
+        label: 'Pulse de dioxygène', value: 't = 40 s', lines: ['c’est la seule chose qui change'] },
+      { id: 'montee', x: 264, y: 130, width: 62, height: 260, color: ORANGE,
+        label: 'Montée rapide', value: '≈ +48 unités en 25 s', lines: ['les H⁺ sortent de la matrice'] },
+      { id: 'descente', x: 340, y: 140, width: 170, height: 130, color: '#67e8f9',
+        label: 'Décroissance lente', value: 'retour vers l’état initial', lines: ['les H⁺ rentrent par l’ATP synthase'] },
+    ],
+    hotspotPanel: panneauQuestion(570, 96, 360, 124) };
 }
 
-function moleculesGlucoseAtpSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+function moleculesGlucoseAtpSpec(variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
   const phosphate = (x: number, text: string): RoughSVGElementSpec[] => [
     { type: 'circle', x, y: 210, radius: 34, color: '#22d3ee', fill: '#0c4a6e' },
     { type: 'text', x, y: 218, text, color: '#e0f2fe', fontSize: 22, align: 'middle' },
   ];
+  if (variant === 'glucose') {
+    const glucose: RoughSVGElementSpec[] = [
+      { type: 'text', x: 450, y: 45, text: 'Glucose : le substrat de départ', color: '#fef08a', fontSize: 29, align: 'middle' },
+      { type: 'polygon', points: [{ x: 270, y: 145 }, { x: 370, y: 90 }, { x: 470, y: 145 }, { x: 470, y: 265 }, { x: 370, y: 320 }, { x: 270, y: 265 }], color: '#22c55e', fill: '#14532d' },
+      { type: 'text', x: 370, y: 215, text: 'Glucose', color: 'white', fontSize: 31, align: 'middle' },
+      { type: 'text', x: 370, y: 360, text: 'C₆H₁₂O₆ · molécule à 6 carbones', color: '#bbf7d0', fontSize: 21, align: 'middle' },
+      { type: 'circle', x: 295, y: 145, radius: 17, color: '#86efac', fill: '#166534' },
+      { type: 'text', x: 295, y: 152, text: '1', color: 'white', fontSize: 16, align: 'middle' },
+      { type: 'circle', x: 445, y: 145, radius: 17, color: '#86efac', fill: '#166534' },
+      { type: 'text', x: 445, y: 152, text: '6', color: 'white', fontSize: 16, align: 'middle' },
+      { type: 'arrow', points: [{ x: 535, y: 180 }, { x: 650, y: 180 }], color: '#fbbf24', strokeWidth: 4 },
+      { type: 'circle', x: 705, y: 180, radius: 37, color: '#22d3ee', fill: '#0c4a6e' },
+      { type: 'text', x: 705, y: 188, text: 'P', color: 'white', fontSize: 25, align: 'middle' },
+      { type: 'text', x: 450, y: 415, text: 'Première réaction : glucose + ATP → glucose-6-phosphate + ADP', color: '#fef08a', fontSize: 22, align: 'middle' },
+    ];
+    const n = [1, 3, 4, 7, 10, glucose.length][Math.max(0, Math.min(5, Math.round(step)))] || glucose.length;
+    const zones: RoughSVGHotspotSpec[] = [];
+    if (n >= 3) zones.push({ id: 'hexose', x: 268, y: 88, width: 204, height: 234, color: '#22c55e',
+      label: 'Glucose', value: 'C₆H₁₂O₆', lines: ['six carbones : toute l’énergie du repas', 'il entre dans la glycolyse'] });
+    if (n >= 10) zones.push({ id: 'phosphate', x: 666, y: 141, width: 78, height: 78, color: '#22d3ee',
+      label: 'Phosphate fourni par l’ATP', value: 'glucose-6-phosphate', lines: ['il active la molécule', 'et la piège dans la cellule'] });
+    return { engine: 'roughsvg', title: 'Glucose : substrat à six carbones de la glycolyse', width: 900, height: 470, description: 'Le glucose reçoit un phosphate fourni par l’ATP au début de la glycolyse.', elements: glucose.slice(0, n),
+      hotspots: zones, hotspotPanel: zones.length ? panneauQuestion(36, 92, 216, 124) : undefined };
+  }
+  if (variant === 'atp') {
+    const atp: RoughSVGElementSpec[] = [
+      { type: 'text', x: 450, y: 45, text: 'ATP : donneur d’énergie et de phosphate', color: '#fef08a', fontSize: 29, align: 'middle' },
+      { type: 'rect', x: 90, y: 145, width: 130, height: 120, color: '#c084fc', fill: '#581c87' },
+      { type: 'text', x: 155, y: 212, text: 'Adénine', color: 'white', fontSize: 21, align: 'middle' },
+      { type: 'polygon', points: [{ x: 250, y: 150 }, { x: 335, y: 175 }, { x: 315, y: 265 }, { x: 235, y: 265 }, { x: 215, y: 185 }], color: '#fbbf24', fill: '#78350f' },
+      { type: 'text', x: 275, y: 218, text: 'Ribose', color: 'white', fontSize: 20, align: 'middle' },
+      ...phosphate(410, 'P'), ...phosphate(520, 'P'), ...phosphate(630, 'P'),
+      { type: 'arrow', points: [{ x: 630, y: 165 }, { x: 630, y: 95 }], color: '#fb7185', strokeWidth: 4 },
+      { type: 'text', x: 630, y: 75, text: 'phosphate terminal transférable', color: '#fb7185', fontSize: 18, align: 'middle' },
+      { type: 'arrow', points: [{ x: 690, y: 210 }, { x: 795, y: 210 }], color: '#22d3ee', strokeWidth: 4 },
+      { type: 'text', x: 745, y: 185, text: 'hydrolyse', color: '#bae6fd', fontSize: 17, align: 'middle' },
+      { type: 'text', x: 805, y: 220, text: 'ADP + Pi', color: 'white', fontSize: 23, align: 'middle' },
+      { type: 'text', x: 450, y: 340, text: 'ATP + H₂O → ADP + Pi + énergie utilisable', color: '#fef08a', fontSize: 24, align: 'middle' },
+    ];
+    const n = [1, 3, 5, 11, 15, atp.length][Math.max(0, Math.min(5, Math.round(step)))] || atp.length;
+    const zones: RoughSVGHotspotSpec[] = [];
+    if (n >= 5) zones.push({ id: 'fixe', x: 86, y: 141, width: 253, height: 128, color: '#c084fc',
+      label: 'Adénine + ribose', value: 'la partie fixe', lines: ['elle identifie la molécule', 'mais ne porte pas l’énergie'] });
+    if (n >= 11) zones.push({ id: 'terminal', x: 592, y: 168, width: 78, height: 86, color: '#fb7185',
+      label: 'Phosphate terminal', value: 'liaison riche en énergie', lines: ['c’est celui que l’ATP cède', 'la glycolyse en consomme 2 par glucose'] });
+    return { engine: 'roughsvg', title: 'ATP : intermédiaire énergétique et donneur de phosphate', width: 900,
+      height: zones.length ? 500 : 450, description: 'L’ATP cède un phosphate et devient ADP pendant la phase d’investissement de la glycolyse.', elements: atp.slice(0, n),
+      hotspots: zones, hotspotPanel: zones.length ? panneauQuestion(40, 366, 350, 124) : undefined };
+  }
   const all: RoughSVGElementSpec[] = [
     { type: 'polygon', points: [{ x: 80, y: 120 }, { x: 155, y: 80 }, { x: 230, y: 120 }, { x: 230, y: 210 }, { x: 155, y: 250 }, { x: 80, y: 210 }], color: '#22c55e', fill: '#14532d' },
     { type: 'text', x: 155, y: 170, text: 'Glucose', color: 'white', fontSize: 26, align: 'middle' },
@@ -905,36 +1537,40 @@ function moleculesGlucoseAtpSpec(_variant: string, step: number, _maxStep: numbe
     { type: 'text', x: 595, y: 370, text: 'hydrolyse exoénergétique · phosphorylation endoénergétique', color: '#bae6fd', fontSize: 16, align: 'middle' },
   ];
   const countByStep = [3, 5, 9, 13, 15, all.length][Math.max(0, Math.min(5, Math.round(step)))] || all.length;
-  return { engine: 'roughsvg', title: 'Le glucose stocke l’énergie ; l’ATP la transfère', width: 900, height: 430, elements: all.slice(0, countByStep) };
+  const zones: RoughSVGHotspotSpec[] = [];
+  if (countByStep >= 3) zones.push({ id: 'glc', x: 76, y: 76, width: 158, height: 178, color: '#22c55e',
+    label: 'Glucose', value: 'la réserve', lines: ['il stocke beaucoup d’énergie', 'mais la cellule ne la dépense pas ainsi'] });
+  if (countByStep >= 9) zones.push({ id: 'base', x: 326, y: 141, width: 113, height: 128, color: '#c084fc',
+    label: 'Adénine + ribose', value: 'la partie fixe', lines: ['elle ne porte pas l’énergie'] });
+  if (countByStep >= 13) zones.push({ id: 'phos', x: 560, y: 168, width: 262, height: 86, color: '#22d3ee',
+    label: 'Les trois phosphates', value: 'ATP → ADP + Pi', lines: ['la dernière liaison est riche en énergie', 'c’est elle que la cellule dépense'] });
+  return { engine: 'roughsvg', title: 'Le glucose stocke l’énergie ; l’ATP la transfère', width: 900, height: 430, elements: all.slice(0, countByStep),
+    hotspots: zones, hotspotPanel: zones.length ? panneauQuestion(36, 300, 310, 118) : undefined };
 }
 
-function rendementEnergetiqueSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
-  const lines = [
-    'Glycolyse : 2 ATP + 2 NADH,H⁺',
-    'Matrice : 2 ATP + 8 NADH,H⁺ + 2 FADH₂',
-    'Total avant chaîne : 4 ATP + 10 NADH,H⁺ + 2 FADH₂',
-    '1 NADH,H⁺ → 3 ATP ; 1 FADH₂ → 2 ATP',
-    '4 + (10 × 3) + (2 × 2) = 38 ATP',
-    'Navettes : 38 ATP (cœur, foie) ou 36 ATP (muscle, cerveau)',
-    'Fermentation : 2 ATP', 'R = (E′ / 2860) × 100',
-    'Même échelle : 2860 kJ par mole de glucose',
-    'Respiration : 1159 kJ en ATP → 40,5 %',
-    'Fermentation : 61 kJ en ATP → 2,13 %',
+function rendementEnergetiqueSpec(variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  // Repli statique compact : le lecteur React offre les cinq vues contextuelles.
+  const b = energyBalance(variant);
+  const elements: RoughSVGElementSpec[] = step < 9 ? [
+    { type: 'text', x: 450, y: 45, text: 'ATP par glucose · convention du cours', color: '#bae6fd', fontSize: 25, align: 'middle' },
+    ...['Glycolyse', 'Matrice', 'Chaîne'].flatMap((label, i): RoughSVGElementSpec[] => [
+      { type: 'text', x: 150 + i * 300, y: 135, text: label, color: '#e2e8f0', fontSize: 25, align: 'middle' },
+      { type: 'text', x: 150 + i * 300, y: 205, text: `${i === 2 ? b.chainATP : 2} ATP`, color: '#6ee7ad', fontSize: 32, align: 'middle' },
+      { type: 'arrow', points: [{ x: 150 + i * 300, y: 240 }, { x: 450, y: 300 }], color: '#7dd3fc' },
+    ]),
+    { type: 'text', x: 450, y: 350, text: `${b.totalATP} ATP`, color: '#6ee7ad', fontSize: 40, align: 'middle' },
+  ] : [
+    { type: 'text', x: 450, y: 40, text: 'Même départ : 2 860 kJ/mol de glucose', color: '#bae6fd', fontSize: 25, align: 'middle' },
+    ...[{ label: 'Respiration', y: 120, percent: b.respirationPercent }, { label: 'Fermentation', y: 260, percent: b.fermentationPercent }]
+      .flatMap((row, i): RoughSVGElementSpec[] => [
+        { type: 'text', x: 55, y: row.y - 20, text: row.label, color: '#e2e8f0', fontSize: 25 },
+        { type: 'rect', x: 55, y: row.y, width: 600, height: 55, color: '#64748b', fill: '#334155' },
+        { type: 'rect', x: 55, y: row.y, width: 600 * row.percent / 100, height: 55, color: '#6ee7ad', fill: '#6ee7ad' },
+        { type: 'text', x: 690, y: row.y + 37, text: `${energyNumber(row.percent, i === 0 ? 1 : 2)} %`, color: '#6ee7ad', fontSize: 30 },
+      ]),
   ];
-  const n = Math.max(1, Math.min(lines.length, Math.round(step) + 1));
-  const elements: RoughSVGElementSpec[] = lines.slice(0, n).map((text, i) => ({
-    type: 'text', x: 40, y: 45 + i * 28, text, color: i === n - 1 ? '#fef08a' : '#e2e8f0', fontSize: 17,
-  }));
-  if (step >= 8) elements.push(
-    { type: 'rect', x: 500, y: 85, width: 330, height: 70, color: '#64748b' },
-    { type: 'rect', x: 500, y: 85, width: 134, height: 70, color: '#22c55e', fill: '#166534' },
-    { type: 'text', x: 665, y: 180, text: 'Respiration : 2860 kJ', color: 'white', fontSize: 16, align: 'middle' },
-    { type: 'rect', x: 500, y: 250, width: 330, height: 70, color: '#64748b' },
-    { type: 'rect', x: 500, y: 250, width: 7, height: 70, color: '#22c55e', fill: '#166534' },
-    { type: 'text', x: 665, y: 345, text: 'Fermentation : 2860 kJ', color: 'white', fontSize: 16, align: 'middle' },
-  );
-  return { engine: 'roughsvg', title: 'Respiration et fermentation à la même échelle énergétique', width: 900, height: 410, elements,
-    legend: [{ color: '#22c55e', label: 'Énergie conservée dans l’ATP' }, { color: '#64748b', label: 'Chaleur ou énergie résiduelle' }] };
+  return { engine: 'roughsvg', title: 'Bilan visuel de l’énergie', width: 900, height: 400, elements,
+    legend: step >= 9 ? [{ color: '#6ee7ad', label: 'Énergie en ATP' }, { color: '#64748b', label: 'Chaleur / énergie restante' }] : undefined };
 }
 
 function schemaBilanAnnoteSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
@@ -964,102 +1600,160 @@ function schemaBilanAnnoteSpec(_variant: string, step: number, _maxStep: number)
   return { engine: 'roughsvg', title: step === 0 ? 'Repères à identifier' : 'Correction progressive du schéma-bilan', width: 900, height: 520, elements };
 }
 
-function vesiculesAtpSynthaseSpec(_variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+function vesiculesAtpSynthaseSpec(variant: string, step: number, _maxStep: number): RoughSVGVisualSpec {
+  // Repli statique du même montage pour les consommateurs sans contrôles React.
+  const parameters = initialVesicleState({ engine: 'preset', presetId: 'svt_ch1_vesicules_atp_synthase', variant, step });
+  const result = vesicleResult(parameters);
   const elements: RoughSVGElementSpec[] = [
-    { type: 'text', x: 70, y: 45, text: 'Mitochondrie', color: 'white', fontSize: 18 },
-    { type: 'arrow', points: [{ x: 155, y: 42 }, { x: 250, y: 42 }], color: '#22d3ee' },
-    { type: 'text', x: 280, y: 45, text: 'Ultrasons → fragments → vésicules retournées', color: '#bae6fd', fontSize: 18 },
+    { type: 'text', x: 450, y: 45, text: 'Une vésicule, plusieurs gradients de pH', color: '#bae6fd', fontSize: 24, align: 'middle' },
+    { type: 'rect', x: 80, y: 80, width: 310, height: 310, color: '#cbd5e1' },
+    { type: 'text', x: 235, y: 115, text: `Solution tampon · pHe ${parameters.pHe}`, color: '#67e8f9', fontSize: 22, align: 'middle' },
+    { type: 'circle', x: 235, y: 265, radius: 80, color: '#c4b5fd' },
+    { type: 'circle', x: 235, y: 265, radius: 72, color: '#8b7bb4' },
+    { type: 'text', x: 235, y: 270, text: `pHi ${parameters.pHi}`, color: '#fde68a', fontSize: 25, align: 'middle' },
+    { type: 'text', x: 465, y: 155, text: result.atpSynthesis ? 'ATP synthétisé' : 'Pas d’ATP synthétisé', color: result.atpSynthesis ? '#86efac' : '#fda4af', fontSize: 26 },
+    { type: 'text', x: 465, y: 210, text: `ΔpH = pHe − pHi = ${result.deltaPH}`, color: '#fde68a', fontSize: 23 },
+    { type: 'text', x: 465, y: 265, text: 'Sphères vers l’extérieur', color: '#93c5fd', fontSize: 22 },
+    { type: 'text', x: 465, y: 320, text: 'ADP + Pi disponibles', color: '#bbf7d0', fontSize: 22 },
+    { type: 'text', x: 450, y: 445, text: 'Modèle qualitatif : membrane et ATP synthase intactes', color: '#cbd5e1', fontSize: 20, align: 'middle' },
   ];
-  const experiments = [
-    ['pHi 6 · pHe 4', 'Pas d’ATP', '#ef4444'], ['pHi 7 · pHe 7', 'Pas d’ATP', '#ef4444'], ['pHi 6 · pHe 9', 'ATP synthétisé', '#22c55e'],
-  ];
-  experiments.forEach((exp, i) => {
-    if (step < 4 + i) return;
-    const x = 185 + i * 270;
-    elements.push(
-      { type: 'circle', x, y: 220, radius: 82, color: '#c084fc' },
-      { type: 'circle', x, y: 220, radius: 55, color: '#64748b' },
-      { type: 'text', x, y: 215, text: exp[0], color: 'white', fontSize: 17, align: 'middle' },
-      { type: 'text', x, y: 330, text: exp[1], color: exp[2], fontSize: 18, align: 'middle' },
-    );
-    for (let k = 0; k < 7; k += 1) elements.push({ type: 'circle', x: x - 60 + k * 20, y: 125, radius: 6, color: '#fb7185', fill: '#fb7185' });
-    if (i === 2) elements.push({ type: 'arrow', points: [{ x, y: 195 }, { x, y: 120 }], color: '#fb7185', strokeWidth: 4 });
-  });
-  if (step >= 7) elements.push({ type: 'text', x: 450, y: 390, text: 'ATP seulement si pHi < pHe : [H⁺]i > [H⁺]e', color: '#fef08a', fontSize: 22, align: 'middle' });
-  if (step >= 8) elements.push({ type: 'text', x: 450, y: 435, text: 'ADP + Pi · gradient de H⁺ sortant · ATP synthase', color: '#bbf7d0', fontSize: 19, align: 'middle' });
-  return { engine: 'roughsvg', title: 'Les sphères pédonculées utilisent le gradient de protons', width: 900, height: 480, elements };
+  for (let k = 0; k < 12; k++) {
+    const angle = k * Math.PI / 6;
+    elements.push({ type: 'line', points: [{ x: 235 + 80 * Math.cos(angle), y: 265 + 80 * Math.sin(angle) }, { x: 235 + 96 * Math.cos(angle), y: 265 + 96 * Math.sin(angle) }], color: '#93c5fd' });
+    elements.push({ type: 'circle', x: 235 + 100 * Math.cos(angle), y: 265 + 100 * Math.sin(angle), radius: 5, color: '#93c5fd', fill: '#93c5fd' });
+  }
+  return { engine: 'roughsvg', title: 'Vésicule retournée — expérience de pH', width: 900, height: 480, elements };
 }
 
-function chimiosmoseSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  return processSpec(
-    'Chaîne respiratoire de la membrane interne mitochondriale', 'breadthfirst',
+function chimiosmoseSpec(variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  const isFadh2 = variant === 'fadh2';
+  return rubanSpec(
+    'Chaîne respiratoire de la membrane interne mitochondriale',
     [
-      ['nadh', 'NADH,H⁺'], ['ci', 'CI · 4 H⁺'], ['fadh2', 'FADH₂'], ['cii', 'CII · 0 H⁺'],
-      ['q', 'Coenzyme Q'], ['ciii', 'CIII · 4 H⁺'], ['cytc', 'Cytochrome c'], ['civ', 'CIV · 2 H⁺'],
-      ['o2', '½ O₂ + 2 H⁺'], ['h2o', 'H₂O'], ['gradient', 'Gradient de H⁺'],
-      ['atpsynthase', 'ATP synthase · 3 H⁺/ATP'], ['atp', 'NADH → 3 ATP · FADH₂ → 2 ATP'],
+      { id: 'donor', label: isFadh2 ? 'FADH₂' : 'NADH,H⁺', court: isFadh2 ? 'FADH₂' : 'NADH,H⁺',
+        detail: { value: 'une paire d’électrons', lines: [isFadh2 ? 'Convention scolaire : 2 ATP' : 'Convention scolaire : 3 ATP'] } },
+      { id: 'entry', label: isFadh2 ? 'Complexe II' : 'Complexe I', court: isFadh2 ? 'CII · 0 H⁺' : 'CI · 4 H⁺',
+        detail: { value: isFadh2 ? '0 H⁺ pompé' : '4 H⁺ pompés', lines: [isFadh2 ? 'le FADH₂ lié à CII contourne CI' : 'entrée des électrons du NADH'] } },
+      { id: 'q', label: 'Coenzyme Q', court: 'Q',
+        detail: { value: 'le passeur mobile', lines: ['reçoit les électrons de CI ou CII'] } },
+      { id: 'ciii', label: 'Complexe III', court: 'CIII · 4 H⁺',
+        detail: { value: '4 H⁺ pompés', lines: ['il transmet les électrons au cytochrome c'] } },
+      { id: 'cytc', label: 'Cytochrome c', court: 'cyt c',
+        detail: { value: 'le second passeur', lines: ['il circule sur la face externe de la membrane'] } },
+      { id: 'civ', label: 'Complexe IV', court: 'CIV · 2 H⁺',
+        detail: { value: '2 H⁺ pompés', lines: ['c’est lui qui réduit le dioxygène'] } },
+      { id: 'o2', label: '½ O₂ + 2 H⁺', court: 'O₂',
+        detail: { value: 'accepteur final', lines: ['sans lui, toute la chaîne se bloque'] } },
+      { id: 'h2o', label: 'H₂O', court: 'H₂O',
+        detail: { value: 'l’eau métabolique', lines: ['le dioxygène respiré finit en eau'] } },
+      { id: 'gradient', label: 'Gradient de H⁺', court: 'gradient H⁺',
+        detail: { value: 'H⁺ concentrés dans l’espace intermembranaire', lines: ['pH plus bas dans l’espace ; plus haut dans la matrice', 'après arrêt du pompage, le retour des H⁺ réduit le gradient'] } },
+      { id: 'atpsynthase', label: 'ATP synthase', court: 'ATP synthase',
+        detail: { value: 'F₁ côté matrice', lines: ['le retour des H⁺ entraîne le rotor', 'la sphère pédonculée catalyse ADP + Pi → ATP'] } },
+      { id: 'atp', label: 'ATP', court: 'ATP',
+        detail: { value: isFadh2 ? 'FADH₂ → 2 ATP' : 'NADH,H⁺ → 3 ATP', lines: ['Bilan selon la convention scolaire'] } },
     ],
     [
-      ['nadh', 'ci', '2 e⁻'], ['ci', 'q'], ['fadh2', 'cii', '2 e⁻'], ['cii', 'q'],
-      ['q', 'ciii'], ['ciii', 'cytc'], ['cytc', 'civ'], ['civ', 'o2'], ['o2', 'h2o'],
-      ['ci', 'gradient', '4 H⁺'], ['ciii', 'gradient', '4 H⁺'], ['civ', 'gradient', '2 H⁺'],
-      ['gradient', 'atpsynthase', 'retour des H⁺'], ['atpsynthase', 'atp', 'ADP + Pi'],
+      '2 e⁻ cédés', isFadh2 ? 'aucun H⁺ pompé' : '4 H⁺ pompés', 'les e⁻ passent', '4 H⁺ pompés',
+      'les e⁻ passent', '2 H⁺ pompés', '½ O₂ + 2 H⁺', 'pendant ce temps',
+      'les H⁺ reviennent', 'ADP + Pi → ATP',
     ],
-    ['nadh', 'ci', 'q', 'ciii', 'cytc', 'civ', 'o2', 'h2o', 'gradient', 'atpsynthase', 'atp'], step, maxStep,
+    step, maxStep,
   );
 }
 
-function metabolicSpec(_variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const nodes: Array<[string, string]> = [
-    ['glucose', 'Glucose'], ['glycolyse', 'Glycolyse : 2 ATP + 2 NADH,H⁺'], ['pyruvate', '2 pyruvates'],
-    ['respiration', 'Respiration mitochondriale'], ['lactate', '2 acides lactiques'],
-    ['acetaldehyde', '2 acétaldéhydes + 2 CO₂'], ['ethanol', '2 éthanols'],
-    ['nad_resp', 'NAD⁺ régénéré'], ['nad_lac', 'NAD⁺ régénéré'], ['nad_eth', 'NAD⁺ régénéré'],
-    ['conclusion', 'Sans régénération du NAD⁺, la glycolyse s’arrête'],
-  ];
-  const edges: Array<[string, string, string?]> = [
-    ['glucose', 'glycolyse'], ['glycolyse', 'pyruvate'], ['pyruvate', 'respiration', 'avec O₂'],
-    ['pyruvate', 'lactate', 'fermentation lactique'], ['pyruvate', 'acetaldehyde', 'décarboxylation'],
-    ['acetaldehyde', 'ethanol', 'NADH,H⁺ → NAD⁺'], ['respiration', 'nad_resp'],
-    ['lactate', 'nad_lac'], ['ethanol', 'nad_eth'], ['nad_resp', 'conclusion'], ['nad_lac', 'conclusion'], ['nad_eth', 'conclusion'],
-  ];
-  return processSpec('Trois devenirs du pyruvate, une même nécessité : régénérer le NAD⁺', 'breadthfirst', nodes, edges,
-    nodes.map(([id]) => id), step, maxStep);
+function metabolicSpec(_variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  return carrefourSpec(
+    'Trois devenirs du pyruvate, une même nécessité : régénérer le NAD⁺',
+    { id: 'pyruvate', label: '2 pyruvates, issus de la glycolyse', court: 'Pyruvate',
+      detail: { value: 'le carrefour', lines: ['la suite dépend de la présence de dioxygène'] } },
+    [
+      {
+        etiquette: 'avec O₂',
+        stations: [
+          { id: 'respiration', label: 'Respiration mitochondriale', court: 'Respiration',
+            detail: { value: '36 à 38 ATP', lines: ['le glucose est dégradé jusqu’au CO₂ et à l’eau'] } },
+          { id: 'nad_resp', label: 'NAD⁺ régénéré', court: 'NAD⁺',
+            detail: { value: 'par la chaîne respiratoire', lines: ['le NADH y dépose ses électrons'] } },
+        ],
+      },
+      {
+        etiquette: 'sans O₂ · lactique',
+        stations: [
+          { id: 'lactate', label: '2 acides lactiques', court: 'Lactate',
+            detail: { value: '2 ATP seulement', lines: ['le carbone reste piégé dans une molécule à 3C'] } },
+          { id: 'nad_lac', label: 'NAD⁺ régénéré', court: 'NAD⁺',
+            detail: { value: 'par la réduction du pyruvate', lines: ['c’est le seul intérêt de la fermentation'] } },
+        ],
+      },
+      {
+        etiquette: 'sans O₂ · alcoolique',
+        stations: [
+          { id: 'ethanol', label: '2 éthanols + 2 CO₂', court: 'Éthanol',
+            detail: { value: '2 ATP seulement', lines: ['fermentation alcoolique de la levure'] } },
+          { id: 'nad_eth', label: 'NAD⁺ régénéré', court: 'NAD⁺',
+            detail: { value: 'par la réduction de l’acétaldéhyde', lines: ['même logique que la voie lactique'] } },
+        ],
+      },
+    ],
+    { id: 'conclusion', label: 'Sans NAD⁺ régénéré, la glycolyse s’arrête', court: 'Conclusion',
+      detail: { value: 'le NAD⁺ est le vrai enjeu', lines: ['les trois voies n’existent que pour lui'] } },
+    step, maxStep,
+  );
 }
 
-function respirationMitochondrialeSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
+function respirationMitochondrialeSpec(variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  const chemins: Record<string, string[]> = {
     krebs: ['pyruvate', 'acetyl', 'krebs', 'co2', 'coenzymes'],
     chaine_respiratoire: ['coenzymes', 'chaine', 'o2', 'h2o', 'gradient', 'atp'],
     bilan: ['glucose', 'glycolyse', 'pyruvate', 'acetyl', 'krebs', 'coenzymes', 'chaine', 'gradient', 'atp'],
   };
-  return processSpec(
+  const table: Record<string, StationRuban> = {
+    glucose: { id: 'glucose', label: 'Glucose', court: 'Glucose',
+      detail: { value: '2860 kJ par mole', lines: ['toute l’énergie du repas est là'] } },
+    glycolyse: { id: 'glycolyse', label: 'Glycolyse', court: 'Glycolyse',
+      detail: { value: 'dans le cytosol', lines: ['2 ATP nets et 2 NADH,H⁺', 'elle n’a pas besoin de dioxygène'] } },
+    pyruvate: { id: 'pyruvate', label: 'Pyruvate', court: 'Pyruvate',
+      detail: { value: 'le carrefour', lines: ['avec O₂ il entre dans la mitochondrie'] } },
+    acetyl: { id: 'acetyl', label: 'Acétyl-CoA', court: 'Acétyl-CoA',
+      detail: { value: '3C → 2C + 1 CO₂', lines: ['décarboxylation, dans la matrice'] } },
+    krebs: { id: 'krebs', label: 'Cycle de Krebs', court: 'Krebs',
+      detail: { value: 'dans la matrice', lines: ['par tour : 2 CO₂, 3 NADH,H⁺, 1 FADH₂'] } },
+    co2: { id: 'co2', label: 'CO₂ rejeté', court: 'CO₂',
+      detail: { value: '6 CO₂ par glucose', lines: ['tout le carbone du glucose finit là'] } },
+    coenzymes: { id: 'coenzymes', label: 'NADH,H⁺ et FADH₂', court: 'Coenzymes',
+      detail: { value: 'les porteurs d’électrons', lines: ['ils transportent l’énergie vers les crêtes'] } },
+    chaine: { id: 'chaine', label: 'Chaîne respiratoire', court: 'Chaîne',
+      detail: { value: 'sur les crêtes', lines: ['c’est là que se fabrique l’essentiel de l’ATP'] } },
+    o2: { id: 'o2', label: 'Dioxygène', court: 'O₂',
+      detail: { value: 'accepteur final', lines: ['sans lui, toute la chaîne se bloque'] } },
+    h2o: { id: 'h2o', label: 'H₂O', court: 'H₂O',
+      detail: { value: 'l’eau métabolique', lines: ['le dioxygène respiré finit en eau'] } },
+    gradient: { id: 'gradient', label: 'Gradient de H⁺', court: 'gradient H⁺',
+      detail: { value: 'l’énergie mise en réserve', lines: ['il fait tourner l’ATP synthase'] } },
+    atp: { id: 'atp', label: 'ATP et chaleur', court: 'ATP',
+      detail: { value: '36 à 38 ATP', lines: ['le reste part en chaleur : rendement 40,5 %'] } },
+  };
+  const libelles: Record<string, string> = {
+    'glucose>glycolyse': 'oxydation partielle', 'glycolyse>pyruvate': 'dans le cytosol',
+    'pyruvate>acetyl': 'entrée en matrice', 'acetyl>krebs': 'il rejoint le cycle',
+    'krebs>co2': 'décarboxylations', 'krebs>coenzymes': 'électrons + H⁺',
+    'co2>coenzymes': 'et aussi', 'coenzymes>chaine': 'vers les crêtes',
+    'chaine>o2': 'les e⁻ arrivent', 'o2>h2o': 'réduction', 'h2o>gradient': 'pendant ce temps',
+    'chaine>gradient': 'H⁺ pompés', 'gradient>atp': 'ATP synthase',
+  };
+  const chemin = chemins[variant] || chemins.bilan;
+  return rubanSpec(
     'Matrice : Krebs · membrane interne et crêtes : chaîne respiratoire',
-    'breadthfirst',
-    [
-      ['glucose', 'Glucose'], ['glycolyse', 'Glycolyse (cytosol)'],
-      ['pyruvate', 'Pyruvate'], ['acetyl', 'Acétyl-CoA'],
-      ['krebs', 'Krebs (matrice)'], ['co2', 'CO₂ rejeté'],
-      ['coenzymes', 'NADH,H⁺ / FADH₂'], ['chaine', 'Chaîne respiratoire (crêtes)'],
-      ['o2', 'O₂'], ['h2o', 'H₂O'], ['gradient', 'Gradient de H⁺'],
-      ['atp', 'ATP + chaleur'],
-    ],
-    [
-      ['glucose', 'glycolyse', 'oxydation partielle'], ['glycolyse', 'pyruvate'],
-      ['pyruvate', 'acetyl'], ['acetyl', 'krebs'], ['krebs', 'co2'],
-      ['krebs', 'coenzymes', 'électrons + H⁺'], ['coenzymes', 'chaine'],
-      ['chaine', 'o2', 'accepteur final'], ['o2', 'h2o'],
-      ['chaine', 'gradient', 'pompage des H⁺'], ['gradient', 'atp', 'ATP synthase'],
-    ],
-    paths[variant] || paths.bilan,
-    step,
-    maxStep,
+    chemin.map(id => table[id]),
+    transitionsSuivant(chemin, libelles),
+    step, maxStep,
   );
 }
 
 function sarcomereElements(prefix: string, contraction: number, y: number): JSXGraphElementSpec[] {
-  const leftZ = 0.9 + 1.8 * contraction;
-  const rightZ = 11.1 - 1.8 * contraction;
+  const leftZ = 0.9 + 1.0 * contraction;
+  const rightZ = 11.1 - 1.0 * contraction;
   const leftActinEnd = leftZ + 4.1;
   const rightActinEnd = rightZ - 4.1;
   return [
@@ -1069,7 +1763,10 @@ function sarcomereElements(prefix: string, contraction: number, y: number): JSXG
     { id: `${prefix}-actin-left-down`, type: 'segment', points: [{ x: leftZ, y: y - 0.42 }, { x: leftActinEnd, y: y - 0.42 }], color: 'cyan' },
     { id: `${prefix}-actin-right-up`, type: 'segment', points: [{ x: rightActinEnd, y: y + 0.42 }, { x: rightZ, y: y + 0.42 }], color: 'cyan' },
     { id: `${prefix}-actin-right-down`, type: 'segment', points: [{ x: rightActinEnd, y: y - 0.42 }, { x: rightZ, y: y - 0.42 }], color: 'cyan' },
-    { id: `${prefix}-myosin`, type: 'segment', points: [{ x: 4.1, y }, { x: 7.9, y }], color: 'orange', label: 'myosine : longueur constante' },
+    { id: `${prefix}-myosin`, type: 'segment', points: [{ x: 4.1, y }, { x: 7.9, y }], color: 'orange', label: 'Myosine' },
+    { id: `${prefix}-band-a`, type: 'segment', points: [{ x: 4.1, y: y - 1.05 }, { x: 7.9, y: y - 1.05 }], color: 'orange', label: 'A' },
+    { id: `${prefix}-band-i`, type: 'segment', points: [{ x: leftZ, y: y - 1.05 }, { x: 4.1, y: y - 1.05 }], color: 'cyan', label: '½ I' },
+    ...(contraction < 0.9 ? [{ id: `${prefix}-zone-h`, type: 'segment' as const, points: [{ x: leftActinEnd, y: y + 0.8 }, { x: rightActinEnd, y: y + 0.8 }], color: 'yellow', label: 'H' }] : []),
     { id: `${prefix}-left-slide`, type: 'arrow', points: [{ x: 3.4, y: y + 1.15 }, { x: 5.1, y: y + 1.15 }], color: 'green' },
     { id: `${prefix}-right-slide`, type: 'arrow', points: [{ x: 8.6, y: y + 1.15 }, { x: 6.9, y: y + 1.15 }], color: 'green' },
   ];
@@ -1098,88 +1795,126 @@ function glissementSarcomereSpec(variant: string, step: number, maxStep: number)
   };
 }
 
-function couplageExcitationContractionSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
+function couplageExcitationContractionSpec(variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  const chemins: Record<string, string[]> = {
     liberation_calcium: ['message', 'tubule', 'reticulum', 'calcium'],
     contraction: ['calcium', 'troponine', 'ponts', 'glissement', 'contraction'],
     relaxation: ['fin_message', 'pompe', 'reticulum', 'sites_masques', 'relaxation'],
-    cycle_complet: ['message', 'tubule', 'reticulum', 'calcium', 'troponine', 'ponts', 'glissement', 'contraction', 'fin_message', 'pompe', 'reticulum', 'sites_masques', 'relaxation'],
+    cycle_complet: ['message', 'tubule', 'reticulum', 'calcium', 'troponine', 'ponts',
+      'glissement', 'contraction', 'fin_message', 'pompe', 'sites_masques', 'relaxation'],
   };
-  return processSpec(
+  const table: Record<string, StationRuban> = {
+    message: { id: 'message', label: 'Potentiel d’action', court: 'Message',
+      detail: { value: 'le signal électrique de la fibre', lines: ['déclenché à la jonction neuromusculaire'] } },
+    tubule: { id: 'tubule', label: 'Tubule T', court: 'Tubule T',
+      detail: { value: 'il porte le signal au cœur', lines: ['sinon la fibre se contracterait en surface'] } },
+    reticulum: { id: 'reticulum', label: 'Réticulum sarcoplasmique', court: 'Réticulum',
+      detail: { value: 'la réserve de Ca²⁺', lines: ['il le libère, puis il le repompe'] } },
+    calcium: { id: 'calcium', label: 'Ca²⁺ cytosolique', court: 'Ca²⁺',
+      detail: { value: 'le messager', lines: ['il fait le lien entre l’électrique et le mécanique'] } },
+    troponine: { id: 'troponine', label: 'Troponine', court: 'Troponine',
+      detail: { value: 'elle fixe le Ca²⁺', lines: ['la tropomyosine se déplace', 'les sites de l’actine deviennent accessibles'] } },
+    ponts: { id: 'ponts', label: 'Ponts actine–myosine', court: 'Ponts',
+      detail: { value: 'l’ATP est indispensable', lines: ['c’est lui qui détache la tête de myosine'] } },
+    glissement: { id: 'glissement', label: 'Glissement des filaments', court: 'Glissement',
+      detail: { value: 'ils ne raccourcissent pas', lines: ['c’est leur chevauchement qui augmente'] } },
+    contraction: { id: 'contraction', label: 'Contraction', court: 'Contraction',
+      detail: { value: 'les stries Z se rapprochent', lines: ['la bande A garde sa longueur'] } },
+    fin_message: { id: 'fin_message', label: 'Fin du message', court: 'Fin signal',
+      detail: { value: 'plus de potentiel d’action', lines: ['le réticulum cesse de libérer du Ca²⁺'] } },
+    pompe: { id: 'pompe', label: 'Pompes à Ca²⁺', court: 'Pompes',
+      detail: { value: 'elles consomment de l’ATP', lines: ['se relâcher coûte de l’énergie, aussi'] } },
+    sites_masques: { id: 'sites_masques', label: 'Sites de l’actine masqués', court: 'Sites masqués',
+      detail: { value: 'la tropomyosine recouvre', lines: ['plus aucun pont ne peut se former'] } },
+    relaxation: { id: 'relaxation', label: 'Relaxation', court: 'Relaxation',
+      detail: { value: 'le muscle se rallonge', lines: ['sous l’effet des forces extérieures'] } },
+  };
+  const libelles: Record<string, string> = {
+    'message>tubule': 'il pénètre', 'tubule>reticulum': 'déclenche',
+    'reticulum>calcium': 'libération', 'calcium>troponine': 'fixation',
+    'troponine>ponts': 'sites exposés', 'ponts>glissement': 'cycles à ATP',
+    'glissement>contraction': 'raccourcissement', 'contraction>fin_message': 'fin de l’excitation',
+    'fin_message>pompe': 'recapture', 'pompe>reticulum': 'Ca²⁺ stocké',
+    'pompe>sites_masques': 'Ca²⁺ retiré', 'reticulum>sites_masques': 'plus de Ca²⁺',
+    'sites_masques>relaxation': 'plus de ponts',
+  };
+  const chemin = chemins[variant] || chemins.cycle_complet;
+  return rubanSpec(
     'Le Ca²⁺ relie le message électrique au mouvement mécanique',
-    'breadthfirst',
-    [
-      ['message', 'Potentiel d’action'], ['tubule', 'Tubule T'],
-      ['reticulum', 'Réticulum sarcoplasmique'], ['calcium', 'Ca²⁺ cytosolique'],
-      ['troponine', 'Troponine : sites exposés'], ['ponts', 'Ponts actine–myosine + ATP'],
-      ['glissement', 'Glissement des filaments'], ['contraction', 'Contraction'],
-      ['fin_message', 'Fin du message'], ['pompe', 'Pompes Ca²⁺ + ATP'],
-      ['sites_masques', 'Sites de l’actine masqués'], ['relaxation', 'Relaxation'],
-    ],
-    [
-      ['message', 'tubule'], ['tubule', 'reticulum', 'déclenche'],
-      ['reticulum', 'calcium', 'libération'], ['calcium', 'troponine'],
-      ['troponine', 'ponts'], ['ponts', 'glissement', 'cycles ATP'],
-      ['glissement', 'contraction'], ['contraction', 'fin_message', 'fin de l’excitation'], ['fin_message', 'pompe'],
-      ['pompe', 'reticulum', 'recapture du Ca²⁺'], ['reticulum', 'sites_masques'],
-      ['sites_masques', 'relaxation'],
-    ],
-    paths[variant] || paths.cycle_complet,
-    step,
-    maxStep,
+    chemin.map(id => table[id]),
+    transitionsSuivant(chemin, libelles),
+    step, maxStep,
   );
 }
 
-function actomyosineSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
+function actomyosineSpec(variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
   const cycle = ['ca', 'fixation', 'pivotement', 'detachement', 'reactivation'];
-  const single: Record<string, string[]> = {
+  const chemins: Record<string, string[]> = {
     fixation: ['ca', 'fixation'], pivotement: ['fixation', 'pivotement'],
     detachement: ['pivotement', 'detachement'], reactivation: ['detachement', 'reactivation'],
     cycle_complet: cycle,
   };
-  return processSpec(
-    'Le Ca²⁺ autorise le cycle ; l’ATP détache puis réactive la myosine', 'circle',
-    [
-      ['ca', 'Ca²⁺ : sites de l’actine exposés'],
-      ['fixation', 'Tête de myosine–ADP–Pi fixée'],
-      ['pivotement', 'Pivotement : filaments glissent'],
-      ['detachement', 'ATP fixé : détachement'],
-      ['reactivation', 'ATP hydrolysé : tête réarmée'],
-    ],
-    [
-      ['ca', 'fixation', 'Formation du pont'], ['fixation', 'pivotement', 'Pi puis ADP libérés'],
-      ['pivotement', 'detachement', 'Fixation d’ATP'], ['detachement', 'reactivation', 'Hydrolyse de l’ATP'],
-      ['reactivation', 'fixation', 'Nouveau cycle si Ca²⁺'],
-    ],
-    single[variant] || cycle, step, maxStep,
+  const table: Record<string, StationRuban> = {
+    ca: { id: 'ca', label: 'Ca²⁺ : sites exposés', court: 'Ca²⁺',
+      detail: { value: 'le feu vert', lines: ['sans Ca²⁺, aucun pont ne peut se former'] } },
+    fixation: { id: 'fixation', label: 'Tête de myosine fixée', court: 'Fixation',
+      detail: { value: 'le pont se forme', lines: ['la tête portait déjà ADP et Pi'] } },
+    pivotement: { id: 'pivotement', label: 'Pivotement de la tête', court: 'Pivotement',
+      detail: { value: 'le filament glisse', lines: ['Pi puis ADP sont libérés'] } },
+    detachement: { id: 'detachement', label: 'ATP fixé : détachement', court: 'Détachement',
+      detail: { value: '1 ATP fixé', lines: ['sans ATP la tête reste collée', 'c’est la rigidité cadavérique'] } },
+    reactivation: { id: 'reactivation', label: 'Tête réarmée', court: 'Réactivation',
+      detail: { value: 'ATP hydrolysé', lines: ['la tête est prête pour un nouveau cycle'] } },
+  };
+  const libelles: Record<string, string> = {
+    'ca>fixation': 'formation du pont', 'fixation>pivotement': 'Pi puis ADP libérés',
+    'pivotement>detachement': 'fixation d’ATP', 'detachement>reactivation': 'hydrolyse de l’ATP',
+    'reactivation>ca': 'si le Ca²⁺ est encore là',
+  };
+  const chemin = chemins[variant] || cycle;
+  const boucle = chemin === cycle;
+  const suite = boucle ? [...chemin, chemin[0]] : chemin;
+  return rubanSpec(
+    'Le Ca²⁺ autorise le cycle ; l’ATP détache puis réactive la myosine',
+    chemin.map(id => table[id]),
+    transitionsSuivant(suite, libelles),
+    step, maxStep, boucle,
   );
 }
 
-function filieresSpec(variant: string, step: number, maxStep: number): CytoscapeVisualSpec {
-  const paths: Record<string, string[]> = {
-    effort_bref: ['stock_atp', 'contraction'],
-    effort_intense: ['glycogene', 'glycolyse', 'atp', 'contraction'],
-    effort_prolonge: ['substrats', 'respiration', 'atp', 'contraction'],
-    recuperation: ['o2', 'respiration', 'pc', 'atp'],
-    vue_ensemble: ['substrats', 'respiration', 'atp', 'contraction'],
-  };
-  return processSpec(
-    'Les filières régénèrent le même ATP à des vitesses et capacités différentes', 'breadthfirst',
+function filieresSpec(_variant: string, step: number, maxStep: number): RoughSVGVisualSpec {
+  return carrefourSpec(
+    'Les filières régénèrent le même ATP à des vitesses et capacités différentes',
+    { id: 'besoin', label: 'Le muscle a besoin d’ATP', court: 'Besoin',
+      detail: { value: '2 à 3 secondes de stock', lines: ['il faut le régénérer sans arrêt'] } },
     [
-      ['stock_atp', 'Faible stock d’ATP'], ['pc', 'Phosphocréatine'],
-      ['glycogene', 'Glycogène / glucose'], ['glycolyse', 'Glycolyse anaérobie'],
-      ['substrats', 'Glucose + lipides + O₂'], ['o2', 'O₂ de récupération'],
-      ['respiration', 'Respiration mitochondriale'], ['atp', 'ATP régénéré'],
-      ['contraction', 'Contraction musculaire'], ['lactate', 'Lactate'],
+      {
+        etiquette: 'effort bref',
+        stations: [
+          { id: 'pc', label: 'Phosphocréatine', court: 'Phosphocréatine',
+            detail: { value: 'dominante au début d’un effort maximal', lines: ['très rapide, réserves limitées ; sans O₂ direct'] } },
+        ],
+      },
+      {
+        etiquette: 'effort intense',
+        stations: [
+          { id: 'glycolyse', label: 'Glycolyse anaérobie', court: 'Glycolyse',
+            detail: { value: 'forte contribution aux efforts intenses', lines: ['production rapide d’ATP', 'avec formation de lactate'] } },
+          { id: 'lactate', label: 'Lactate', court: 'Lactate',
+            detail: { value: 'produit même en présence d’O₂', lines: ['il peut être réutilisé comme combustible'] } },
+        ],
+      },
+      {
+        etiquette: 'effort prolongé',
+        stations: [
+          { id: 'respiration', label: 'Respiration mitochondriale', court: 'Respiration',
+            detail: { value: 'soutient les efforts durables', lines: ['contribution progressive ; nécessite O₂'] } },
+        ],
+      },
     ],
-    [
-      ['stock_atp', 'contraction', 'Immédiat'], ['pc', 'atp'],
-      ['glycogene', 'glycolyse', 'Sans O₂'], ['glycolyse', 'atp'],
-      ['glycolyse', 'lactate'], ['substrats', 'respiration', 'Avec O₂'],
-      ['o2', 'respiration', 'Récupération'], ['respiration', 'atp'],
-      ['atp', 'contraction', 'Hydrolyse'], ['respiration', 'pc', 'Reconstitution'],
-    ],
-    paths[variant] || paths.vue_ensemble, step, maxStep,
+    { id: 'atp', label: 'ATP régénéré · contraction musculaire', court: 'ATP',
+      detail: { value: 'le même ATP dans les trois cas', lines: ['les trois filières contribuent simultanément'] } },
+    step, maxStep,
   );
 }
 
@@ -1207,6 +1942,7 @@ export function resolveScientificPreset(
     case 'svt_ch1_cycle_atp': return atpSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_levures_exao': return levuresSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_glycolyse_etapes': return glycolyseEtapesSpec(safeVariant, step, meta.maxStep);
+    case 'svt_ch1_pyruvate_acetyl_coa': return pyruvateAcetylCoaSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_krebs_detaille': return krebsDetailleSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_echelle_redox': return echelleRedoxSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_ultrastructure_mitochondrie': return ultrastructureMitochondrieSpec(safeVariant, step, meta.maxStep);
@@ -1215,6 +1951,10 @@ export function resolveScientificPreset(
     case 'svt_ch1_rendement_energetique': return rendementEnergetiqueSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_schema_bilan_annote': return schemaBilanAnnoteSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_vesicules_atp_synthase': return vesiculesAtpSynthaseSpec(safeVariant, step, meta.maxStep);
+    // Le composant photo dédié assure le rendu ; ce schéma reste le repli statique accessible.
+    case 'svt_ch1_isolement_cretes_ultrasons': return vesiculesAtpSynthaseSpec(safeVariant, step, meta.maxStep);
+    // Le composant photo dédié assure le rendu ; la carte métabolique reste le repli statique.
+    case 'svt_ch1_fermentations_photos': return metabolicSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_chimiosmose': return chimiosmoseSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_carte_metabolique': return metabolicSpec(safeVariant, step, meta.maxStep);
     case 'svt_ch1_myogrammes': return myogramSpec(safeVariant, step, meta.maxStep);

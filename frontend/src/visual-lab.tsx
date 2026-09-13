@@ -82,6 +82,25 @@ const SIMULATION: ScientificVisualSpec = {
 };
 
 function Lab() {
+  if (new URLSearchParams(window.location.search).get('scene') === 'muscle-backgrounds') {
+    const musclePresets = ['svt_ch1_myogrammes', 'svt_ch1_glissement_sarcomere', 'svt_ch1_cycle_actomyosine', 'svt_ch1_chaleurs_muscle', 'svt_ch1_filieres_effort', 'svt_ch1_couplage_excitation_contraction'] as const;
+    return <main style={{ background: '#10271d', padding: 16 }}>
+      {musclePresets.map(presetId => <section key={presetId} style={{ height: 520, marginBottom: 20 }}>
+        <ScientificVisual spec={{ engine: 'preset', presetId, step: 8, autoplay: false }} />
+      </section>)}
+      <section style={{ height: 520 }}><ScientificVisual spec={{ engine: 'three', model: 'muscle_excitation_contraction', step: 6, autoplay: false }} /></section>
+    </main>;
+  }
+  if (new URLSearchParams(window.location.search).get('scene') === 'muscle-structure') {
+    return <div style={{ width: '100%', height: '100dvh', padding: 8, background: '#10271d' }}>
+      <ScientificVisual spec={{ engine: 'three', model: 'muscle_excitation_contraction', step: 0, labels: true, autoplay: false }} />
+    </div>;
+  }
+  if (new URLSearchParams(window.location.search).get('scene') === 'glucose-journey') {
+    return <div style={{ width: '100%', height: '100dvh', padding: 8 }}>
+      <ScientificVisual spec={{ engine: 'preset', presetId: 'svt_ch1_schema_bilan_annote', step: 0, autoplay: false }} />
+    </div>;
+  }
   return (
     <div style={{ padding: 16, maxWidth: 820, margin: '0 auto' }}>
       {[...CAS, SIMULATION].map((spec, index) => (

@@ -189,7 +189,7 @@ Failed to connect to WebSocket
 cat backend/.env | grep GEMINI_API_KEY
 
 # Devrait afficher:
-GEMINI_API_KEY=AIzaSyAHnoDj3VGQUxKb5HFLguSiPyyiOesm8AQ
+GEMINI_API_KEY=YOUR_GOOGLE_API_KEY
 ```
 
 **Si vide:**
@@ -228,7 +228,7 @@ GEMINI_API_KEY=AIzaSyAHnoDj3VGQUxKb5HFLguSiPyyiOesm8AQ
 ### Test direct de l'API Gemini
 ```bash
 curl -X POST \
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=AIzaSyAHnoDj3VGQUxKb5HFLguSiPyyiOesm8AQ" \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=YOUR_GOOGLE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "contents": [{

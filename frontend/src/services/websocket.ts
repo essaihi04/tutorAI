@@ -2,13 +2,28 @@
  * WebSocket service for real-time voice pipeline communication.
  */
 
+import { getFreshAccessToken } from './api';
+
 type MessageHandler = (data: any) => void;
+
+/**
+ * Marge de renouvellement du jeton pendant une séance.
+ *
+ * Le jeton Supabase vit une heure. Une séance de tutorat dure plus longtemps
+ * que ça : sans renouvellement, le backend refusait le message suivant et
+ * fermait la connexion (code 4001), ce que l'élève voyait comme « session
+ * expirée » au milieu de son cours.
+ */
+const TOKEN_KEEPALIVE_MS = 5 * 60 * 1000;
+const TOKEN_MARGIN_SECONDS = 15 * 60;
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
   private handlers: Map<string, MessageHandler[]> = new Map();
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectGeneration = 0;
+  private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  private currentToken: string | null = null;
 
   connect(token: string, retries = 2): Promise<void> {
     // Cancel any pending connect from a previous call
@@ -23,6 +38,7 @@ export class WebSocketService {
         if (gen !== this.connectGeneration) return; // stale call
 
         // Close previous connection and wait briefly for backend cleanup
+        this.stopTokenKeepalive();
         if (this.ws) {
           try {
             this.ws.onclose = null;
@@ -49,6 +65,8 @@ export class WebSocketService {
               try { this.ws?.close(); } catch {}
               return;
             }
+            this.currentToken = token;
+            this.startTokenKeepalive();
             resolve();
           };
 
@@ -79,6 +97,7 @@ export class WebSocketService {
           };
 
           this.ws.onclose = (event) => {
+            this.stopTokenKeepalive();
             // Surface the close code/reason so the UI can differentiate
             // normal disconnects from auth expirations (code 4001).
             const payload = { code: event.code, reason: event.reason };
@@ -97,6 +116,32 @@ export class WebSocketService {
 
       attempt(retries);
     });
+  }
+
+  /**
+   * Renouvelle le jeton porté par la connexion avant qu'il n'expire et pousse
+   * le nouveau au backend, qui revalide le compte à chaque message.
+   */
+  private startTokenKeepalive(): void {
+    this.stopTokenKeepalive();
+    this.keepaliveTimer = setInterval(async () => {
+      if (this.ws?.readyState !== WebSocket.OPEN) return;
+      try {
+        const fresh = await getFreshAccessToken(TOKEN_MARGIN_SECONDS);
+        if (!fresh || fresh === this.currentToken) return;
+        this.currentToken = fresh;
+        this.sendJson({ type: 'auth_refresh', token: fresh });
+      } catch (err) {
+        console.warn('[WebSocket] Token refresh failed', err);
+      }
+    }, TOKEN_KEEPALIVE_MS);
+  }
+
+  private stopTokenKeepalive(): void {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
   }
 
   on(type: string, handler: MessageHandler): void {
@@ -138,6 +183,7 @@ export class WebSocketService {
   disconnect(): void {
     // Invalidate any in-flight connect attempts
     this.connectGeneration++;
+    this.stopTokenKeepalive();
     if (this.connectTimer) {
       clearTimeout(this.connectTimer);
       this.connectTimer = null;

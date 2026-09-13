@@ -20,6 +20,7 @@ export function MediaViewer({ media, onClose, onSimulationUpdate }: MediaViewerP
 
   useEffect(() => {
     const handleSimulationMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow || !event.data || typeof event.data !== 'object') return;
       if (event.data.type === 'simulation_state') {
         console.log('[MediaViewer] Simulation state received:', event.data);
         if (onSimulationUpdate) {
@@ -103,6 +104,7 @@ export function MediaViewer({ media, onClose, onSimulationUpdate }: MediaViewerP
             <div className="space-y-4">
               <iframe
                 ref={iframeRef}
+              sandbox="allow-scripts"
                 src={media.url}
                 className="w-full h-[600px] rounded-lg border-2 border-gray-200"
                 title="Simulation interactive"
@@ -450,6 +452,7 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
 
   useEffect(() => {
     const handleSimulationMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow || !event.data || typeof event.data !== 'object') return;
       const data = event.data;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'simulation_state' || data.type === 'simulation_manifest') {
@@ -485,7 +488,15 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
     '/media/simulations/svt/ch4_geodynamique_interne/',
     '/media/simulations/physics/advanced/',
     '/media/simulations/svt/ch1_consommation_matiere_organique/documents/',
+    '/media/simulations/svt/ch1_consommation_matiere_organique/glycolyse/',
+    '/media/simulations/svt/ch1_consommation_matiere_organique/exercices/ordre-respiration/',
   ].some((path) => cleanUrl.includes(path));
+  const usesTransparentSimulationSurface = usesNativeSimulationViewport || [
+    '/media/simulations/svt/ch1_consommation_matiere_organique/muscle/',
+    '/media/simulations/svt/ch1_consommation_matiere_organique/labs/muscle-energie/',
+    '/media/simulations/svt/ch1_consommation_matiere_organique/exercices/reconnaitre-myogrammes/',
+    '/media/simulations/svt/ch1_consommation_matiere_organique/exercices/filieres-effort/',
+  ].some(path => cleanUrl.includes(path));
 
   const handleSimulationLoad = () => {
     if (media.type !== 'simulation' || !iframeRef.current?.contentWindow) return;
@@ -584,7 +595,7 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
       )}
 
       {media.type === 'simulation' && (
-        <div className={usesNativeSimulationViewport
+        <div className={usesTransparentSimulationSurface
           ? 'h-full w-full overflow-hidden rounded-lg bg-transparent'
           : 'h-full w-full overflow-hidden rounded-lg border bg-white'}>
           <div className={usesNativeSimulationViewport
@@ -592,6 +603,7 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
             : 'w-[145%] h-[145%] origin-top-left scale-[0.68]'}>
             <iframe
               ref={iframeRef}
+              sandbox="allow-scripts"
               src={simulationHtml ? undefined : media.url}
               srcDoc={simulationHtml ?? undefined}
               className="w-full h-full border-0"

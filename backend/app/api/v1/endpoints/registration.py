@@ -62,7 +62,7 @@ async def create_registration_request(payload: RegistrationRequestCreate):
         raise
     except Exception as e:
         logger.exception("Registration insert failed")
-        raise HTTPException(500, f"Erreur serveur: {e}")
+        raise HTTPException(500, "Enregistrement temporairement indisponible")
 
 
 # ─── ADMIN ─────────────────────────────────────────────────────────────
@@ -135,7 +135,6 @@ async def activate_registration_request(
       - **test**: expires in 24 hours (expires_at set on student row)
     """
     sb = get_supabase_admin()
-    sb_public = get_supabase()
 
     # 1. Fetch the registration request
     req_res = sb.table(TABLE).select("*").eq("id", request_id).execute()
@@ -203,7 +202,7 @@ async def activate_registration_request(
 
     # 4. Create Supabase Auth user
     try:
-        auth_res = sb_public.auth.sign_up({"email": email, "password": payload.password})
+        auth_res = sb.auth.admin.create_user({"email": email, "password": payload.password, "email_confirm": True})
         if not auth_res.user:
             raise HTTPException(500, "Échec de création du compte Auth")
         user_id = str(auth_res.user.id)

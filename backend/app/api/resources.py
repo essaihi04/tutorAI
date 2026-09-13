@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 from app.admin_auth import verify_admin_token
+from app.utils.safe_paths import safe_child_path
 from app.supabase_client import get_supabase_admin
 
 router = APIRouter()
@@ -171,7 +172,8 @@ async def delete_resource(
                 print(f"[DELETE] Error deleting file from storage: {e}")
         # Legacy: Delete local files if they exist
         elif file_path.startswith("/media/"):
-            local_file_path = Path("frontend/public") / file_path.lstrip("/")
+            public_dir = Path(__file__).resolve().parents[3] / "frontend" / "public"
+            local_file_path = safe_child_path(public_dir, file_path.lstrip("/"))
             if local_file_path.exists():
                 try:
                     local_file_path.unlink()
@@ -218,7 +220,11 @@ async def upload_file(
     lesson = lesson_result.data[0]
     
     # Generate unique filename
-    file_ext = Path(file.filename).suffix
+    file_ext = {
+        'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
+        'image/svg+xml': '.svg', 'image/webp': '.webp', 'video/mp4': '.mp4',
+        'video/webm': '.webm', 'video/ogg': '.ogv',
+    }[file.content_type]
     unique_filename = f"{uuid.uuid4()}{file_ext}"
     
     # Build storage path: type/lesson_id/filename
@@ -229,7 +235,9 @@ async def upload_file(
     # Upload to Supabase Storage
     try:
         # Read file content
-        file_content = await file.read()
+        file_content = await file.read(25 * 1024 * 1024 + 1)
+        if len(file_content) > 25 * 1024 * 1024:
+            raise HTTPException(413, 'Fichier trop volumineux')
         
         # Upload to storage bucket
         result = supabase.storage.from_("pedagogical-resources").upload(
@@ -255,9 +263,10 @@ async def upload_file(
             "storage_path": storage_path
         }
         
-    except Exception as e:
-        print(f"[UPLOAD] Error uploading to Supabase Storage: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Impossible de charger le fichier")
 
 
 @router.get("/lessons")

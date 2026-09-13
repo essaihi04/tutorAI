@@ -1,71 +1,56 @@
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.supabase_client import get_supabase
-from jose import jwt, JWTError
-from app.config import get_settings
+from starlette.concurrency import run_in_threadpool
 
 security = HTTPBearer()
-settings = get_settings()
 
 
 def _expired_error() -> HTTPException:
-    """401 that tells the frontend to call /auth/refresh and retry."""
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="token_expired",
-        headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="The access token expired"'},
-    )
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='token_expired',
+        headers={'WWW-Authenticate': 'Bearer error="invalid_token"'})
 
 
-async def get_current_student(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> dict:
-    token = credentials.credentials
-    supabase = get_supabase()
+def ensure_student_active(student: dict) -> dict:
+    if student.get('is_active') is not True:
+        raise HTTPException(403, 'account_disabled')
+    expires_at = student.get('expires_at')
+    if expires_at:
+        try:
+            expiry = datetime.fromisoformat(str(expires_at).replace('Z', '+00:00'))
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(403, 'account_expired') from exc
+        if datetime.now(timezone.utc) >= expiry:
+            raise HTTPException(403, 'account_expired')
+    return student
 
+
+def _lookup_student(token: str) -> dict:
+    sb = get_supabase()
     try:
-        # Verify token with Supabase Auth
-        user_response = supabase.auth.get_user(token)
-
-        if not user_response or not user_response.user:
+        response = sb.auth.get_user(token)
+        if not response or not response.user:
             raise _expired_error()
-
-        user_id = user_response.user.id
-
-        # Get student from database
-        result = supabase.table('students').select('*').eq('id', str(user_id)).execute()
-
+        result = sb.table('students').select('*').eq('id', str(response.user.id)).execute()
         if not result.data:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Student not found")
-
-        student = result.data[0]
-
-        # Block expired test accounts
-        expires_at = student.get("expires_at")
-        if expires_at:
-            from datetime import datetime as _dt
-            try:
-                exp = _dt.fromisoformat(expires_at.replace("Z", "+00:00"))
-                if _dt.now(exp.tzinfo) > exp:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="account_expired",
-                    )
-            except HTTPException:
-                raise
-            except Exception:
-                pass  # malformed date → let through, don't block
-
-        return student
-
+            raise HTTPException(401, 'Student not found')
+        return ensure_student_active(result.data[0])
     except HTTPException:
         raise
-    except Exception as e:
-        err = str(e).lower()
-        # Supabase / GoTrue / PostgREST all raise these phrasings when the JWT is expired
-        if any(tok in err for tok in ("expired", "jwt expired", "invalid jwt", "invalid claims")):
-            raise _expired_error()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}",
-        )
+    except Exception as exc:
+        if 'expired' in str(exc).lower():
+            raise _expired_error() from exc
+        raise HTTPException(401, 'Authentication failed') from exc
+
+
+async def student_from_token(token: str) -> dict:
+    if not isinstance(token, str) or not token or len(token) > 8192:
+        raise HTTPException(401, 'Authentication failed')
+    return await run_in_threadpool(_lookup_student, token)
+
+
+async def get_current_student(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    return await student_from_token(credentials.credentials)

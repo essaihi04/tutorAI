@@ -110,9 +110,9 @@ Voir la page d'accueil
 ## 🔑 Clés API configurées
 
 ✅ **Supabase** : Configuré  
-✅ **DeepSeek** : `sk-2ee85b6898e64811bca013babc6daace`  
+✅ **DeepSeek** : `YOUR_PROVIDER_API_KEY`
 ✅ **Google Cloud** : Projet `analytical-rain-472320-j4`  
-✅ **Gemini** : `AIzaSyCas6Clc7vN25p6qx_uIqNtflQRvHN_KrI`  
+✅ **Gemini** : `YOUR_GOOGLE_API_KEY`
 
 ---
 

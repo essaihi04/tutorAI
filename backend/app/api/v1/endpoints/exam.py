@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 from app.dependencies import get_current_student
+from app.utils.safe_paths import safe_child_path
 from app.services.exam_service import exam_service
 from app.services.subject_access_service import (
     canonical_subject_key,
@@ -145,7 +146,7 @@ async def get_asset(exam_id: str, filename: str):
     assets_dir = exam_service.get_assets_dir(exam_id)
     if not assets_dir:
         raise HTTPException(status_code=404, detail="Assets introuvables")
-    file_path = assets_dir / filename
+    file_path = safe_child_path(assets_dir, filename)
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Fichier introuvable")
     return FileResponse(str(file_path), media_type="image/png")
@@ -224,7 +225,7 @@ async def extract_text_from_image(
             "extracted_text": "",
             "elements": "",
             "curve_analysis": None,
-            "error": str(e),
+            "error": "Impossible de lire cette image. Réessayez plus tard.",
         }
 
 
@@ -480,7 +481,7 @@ async def list_extracted_exams(
 
     result = supabase_admin.table("exam_documents").select(
         "id, created_at, is_published"
-    ).order("year", desc=True).execute()
+    ).eq("is_published", True).order("year", desc=True).execute()
 
     exams = []
     for row in result.data or []:
@@ -514,13 +515,19 @@ async def get_extracted_exam(doc_id: str, student: dict = Depends(get_current_st
     
     result = supabase_admin.table("exam_documents").select("*").eq("id", doc_id).single().execute()
     
-    if not result.data:
+    if not result.data or not result.data.get("is_published"):
         raise HTTPException(status_code=404, detail="Examen introuvable")
 
     structured = result.data.get("structured_content") or {}
     subject = structured.get("subject") or result.data.get("subject") or ""
     _require_exam_subject(student, str(subject))
     return result.data
+
+
+def _require_published_job(sb, job_id: str):
+    documents = sb.table("exam_documents").select("id").eq("job_id", job_id).eq("is_published", True).limit(1).execute()
+    if not documents.data:
+        raise HTTPException(404, "Image introuvable")
 
 
 @router.get("/extracted-page-image/{job_id}/{page_number}")
@@ -530,6 +537,7 @@ async def get_extracted_page_image(job_id: str, page_number: int):
     from app.supabase_client import supabase_admin
     import base64
 
+    _require_published_job(supabase_admin, job_id)
     result = supabase_admin.table("exam_extraction_pages") \
         .select("image_base64") \
         .eq("job_id", job_id) \
@@ -551,6 +559,7 @@ async def get_extracted_figure_image(job_id: str, page_number: int, image_index:
     from app.supabase_client import supabase_admin
     from pathlib import Path
 
+    _require_published_job(supabase_admin, job_id)
     result = supabase_admin.table("exam_extraction_pages") \
         .select("extracted_images") \
         .eq("job_id", job_id) \
@@ -569,4 +578,10 @@ async def get_extracted_figure_image(job_id: str, page_number: int, image_index:
     if not img_path or not Path(img_path).exists():
         raise HTTPException(status_code=404, detail="Fichier image introuvable")
 
-    return FileResponse(img_path, media_type="image/png")
+    resolved = Path(img_path).resolve()
+    data_root = Path(__file__).resolve().parents[4] / "data"
+    if not resolved.is_relative_to(data_root.resolve()):
+        raise HTTPException(404, "Image introuvable")
+    return FileResponse(resolved, media_type="image/png", headers={
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'",
+    })

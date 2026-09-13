@@ -336,8 +336,9 @@ function splitContext(text: string): { mainContext: string; parentStem: string |
 }
 
 function markdownTableToHtml(md: string): string {
+  const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   const lines = md.trim().split('\n');
-  if (lines.length < 2) return `<p>${md}</p>`;
+  if (lines.length < 2) return `<p>${escape(md)}</p>`;
 
   let html = '<table class="w-full border-collapse border border-slate-200 text-xs rounded-lg overflow-hidden">';
   lines.forEach((line, i) => {
@@ -349,7 +350,7 @@ function markdownTableToHtml(md: string): string {
     const bgClass = i === 0 ? 'bg-slate-100 font-semibold text-slate-700' : 'text-slate-600';
     html += '<tr>';
     cells.forEach((cell) => {
-      html += `<${tag} class="border border-slate-200 px-3 py-2 ${bgClass}">${cell.trim()}</${tag}>`;
+      html += `<${tag} class="border border-slate-200 px-3 py-2 ${bgClass}">${escape(cell.trim())}</${tag}>`;
     });
     html += '</tr>';
   });

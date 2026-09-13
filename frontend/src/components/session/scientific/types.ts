@@ -34,6 +34,17 @@ export interface JSXGraphVisualSpec {
   elements: JSXGraphElementSpec[];
 }
 
+/**
+ * Ce qu'un élément de figure raconte quand l'élève l'interroge. Le détail
+ * chiffré n'encombre pas le schéma : il attend la question.
+ */
+export interface ScientificDetailSpec {
+  /** La grandeur mise en avant, écrite en grand. */
+  value?: string;
+  /** Deux lignes de commentaire au plus. */
+  lines?: string[];
+}
+
 export interface CytoscapeNodeSpec {
   id: string;
   label: string;
@@ -159,6 +170,35 @@ export interface RoughSVGElementSpec {
   dashed?: boolean;
 }
 
+/**
+ * Une zone de la figure que l'eleve peut interroger. Le detail chiffre ne
+ * s'ecrit pas sur le dessin : il attend qu'on le demande, ce qui laisse le
+ * schema lisible et rend l'eleve actif.
+ */
+export interface RoughSVGHotspotSpec {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Titre de l'encart une fois la zone choisie. */
+  label: string;
+  /** La grandeur mise en avant, ecrite en grand. */
+  value?: string;
+  /** Deux lignes de commentaire au plus : au-dela, l'encart deborde. */
+  lines?: string[];
+  color?: string;
+}
+
+/** L'encart fixe qui recoit la reponse, et le mot qui invite a cliquer. */
+export interface RoughSVGHotspotPanelSpec {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  hint: string;
+}
+
 export interface RoughSVGLegendItem {
   color: string;
   label: string;
@@ -179,6 +219,8 @@ export interface RoughSVGVisualSpec {
   background?: string;
   elements: RoughSVGElementSpec[];
   legend?: RoughSVGLegendItem[];
+  hotspots?: RoughSVGHotspotSpec[];
+  hotspotPanel?: RoughSVGHotspotPanelSpec;
 }
 
 export type Mitochondrion3DPart =
@@ -225,7 +267,7 @@ export type MuscleExcitation3DPart =
   | 'sarcomere';
 
 /**
- * Modèle 3D procédural et versionné du couplage excitation–contraction.
+ * Structure 3D procédurale (étapes 0–3 et 5) et planches guidées du couplage.
  * Le LLM choisit uniquement l'étape et le repère ; la géométrie reste dans
  * le composant pédagogique audité.
  */
@@ -253,12 +295,15 @@ export type ScientificPresetId =
   | 'svt_ch1_cycle_atp'
   | 'svt_ch1_levures_exao'
   | 'svt_ch1_glycolyse_etapes'
+  | 'svt_ch1_pyruvate_acetyl_coa'
   | 'svt_ch1_krebs_detaille'
   | 'svt_ch1_echelle_redox'
   | 'svt_ch1_molecules_glucose_atp'
   | 'svt_ch1_rendement_energetique'
   | 'svt_ch1_schema_bilan_annote'
   | 'svt_ch1_vesicules_atp_synthase'
+  | 'svt_ch1_isolement_cretes_ultrasons'
+  | 'svt_ch1_fermentations_photos'
   | 'svt_ch1_ultrastructure_mitochondrie'
   | 'svt_ch1_flux_protons'
   | 'svt_ch1_chimiosmose'
@@ -273,6 +318,22 @@ export type ScientificPresetId =
  * un état ; le navigateur résout ensuite la scène vers JSXGraph/Cytoscape.
  * Aucun code, HTML ou URL n'est accepté dans ce contrat.
  */
+/** `scene` reste un alias historique de NADH dans le catalogue chimiosmose. */
+export type RespiratoryChainVariant = 'nadh' | 'fadh2';
+
+export interface RespiratoryGradientState {
+  intermembrane_ph: number;
+  matrix_ph: number;
+  delta_pH: number;
+  concentration_ratio: number;
+  proton_pumping: boolean;
+  atp_synthesis: boolean;
+  school_atp_yield: number;
+}
+
+/** Réglages bornés de l'expérience des vésicules (pH 4–10, pas 0,5). */
+export interface VesicleParameters { pHi: number; pHe: number }
+
 export interface ScientificPresetVisualSpec {
   engine: 'preset';
   /** Facultatif pour les consommateurs génériques ; le catalogue reste source de vérité. */
@@ -281,17 +342,19 @@ export interface ScientificPresetVisualSpec {
   variant?: string;
   autoplay?: boolean;
   step?: number;
+  /** Autorisé uniquement pour svt_ch1_vesicules_atp_synthase. */
+  parameters?: Partial<VesicleParameters>;
 }
 
 export type ScientificControlName =
-  | 'start' | 'pause' | 'reset' | 'next' | 'previous' | 'set_variant' | 'highlight';
+  | 'start' | 'pause' | 'reset' | 'next' | 'previous' | 'set_variant' | 'highlight' | 'set_parameters';
 
 export interface ScientificControlCommand {
   /** Permet de rejouer deux commandes identiques reçues à la suite. */
   sequence: number;
   presetId: ScientificPresetId;
   command: ScientificControlName;
-  parameters?: { variant?: string; step?: number };
+  parameters?: { variant?: string; step?: number } & Partial<VesicleParameters>;
 }
 
 /** État compact renvoyé au tuteur pour qu'il puisse suivre la scène. */
@@ -304,11 +367,20 @@ export interface ScientificSimulationUpdate {
     variant: string;
     step: number;
     max_step: number;
+    respiratory_gradient?: RespiratoryGradientState;
+    pHi?: number;
+    pHe?: number;
+    delta_pH?: number;
+    proton_direction?: 'outward' | 'inward' | 'none';
+    atp_synthesis?: boolean;
+    variants_completed?: string[];
   };
   student_actions: Array<{
     action: string;
     variant: string;
     step: number;
+    pHi?: number;
+    pHe?: number;
   }>;
   objective_progress: number;
   timestamp: string;

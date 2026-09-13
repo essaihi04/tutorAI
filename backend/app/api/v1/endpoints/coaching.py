@@ -617,6 +617,10 @@ async def get_bac_diagnostic_questions():
     questions = bac_diagnostic_service.get_questions(n_svt=7, n_pc=7, n_math=6)
     session_id = str(_uuid.uuid4())
     # Store with correct answers server-side
+    # Bound abandoned public diagnostic sessions; otherwise they accumulate
+    # forever even without a matching submit request.
+    if len(_bac_diag_sessions) >= 1000:
+        _bac_diag_sessions.pop(next(iter(_bac_diag_sessions)))
     _bac_diag_sessions[session_id] = questions
     # Strip _correct before sending to client
     client_questions = [{k: v for k, v in q.items() if k != "_correct"} for q in questions]

@@ -563,6 +563,12 @@ class CoursePlayerService:
         for secret in ("answer_key", "accepted_answers", "evaluation_regex"):
             question.pop(secret, None)
         public["question"] = question
+        # Les exercices cliquables de fin d'étape sont rangés dans `metadata`
+        # faute de colonne dédiée ; le navigateur, lui, les attend à la racine
+        # de la diapositive, là où le manifeste local les pose déjà.
+        metadata = public.get("metadata") or {}
+        if not public.get("exercises") and isinstance(metadata, dict) and metadata.get("exercises"):
+            public["exercises"] = metadata["exercises"]
         speech_text = slide.get("speech_text") or {}
 
         def is_current(audio: dict) -> bool:

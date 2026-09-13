@@ -1,3 +1,4 @@
+import { evaluateMathExpression } from '../../utils/mathExpression';
 /**
  * Le rendu des lignes de tableau — un seul rendu, un seul endroit.
  *
@@ -18,6 +19,8 @@ import katex from 'katex';
 import MindMap from './MindMap';
 import ScientificVisual from './scientific/ScientificVisual';
 import type { ScientificVisualSpec } from './scientific/types';
+import SVGSchemaViewer from './schemas/SVGSchemaViewer';
+import { getSchemaById } from './schemas';
 
 interface MindMapNode {
   id: string;
@@ -29,7 +32,7 @@ interface MindMapNode {
 }
 
 export interface BoardLine {
-  type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association' | 'illustration' | 'scientific';
+  type: 'title' | 'subtitle' | 'text' | 'math' | 'step' | 'separator' | 'box' | 'note' | 'warning' | 'tip' | 'table' | 'graph' | 'diagram' | 'mindmap' | 'qcm' | 'vrai_faux' | 'association' | 'illustration' | 'scientific' | 'schema';
   content: string;
   color?: string;
   label?: string;
@@ -56,6 +59,7 @@ export interface BoardLine {
   edges?: { from: string; to: string; label?: string }[];
   // Specialized, lazy-loaded scientific renderer (SVT / physics / chemistry)
   scientific?: ScientificVisualSpec;
+  schema_id?: string;
   // Interactive exercise data
   choices?: string[];
   correct?: number | number[] | boolean;
@@ -354,25 +358,7 @@ function AnimatedGraph({ line }: { line: BoardLine }) {
   }, [curves.length]);
 
   // Evaluate a math function string safely
-  const evalFn = (fnStr: string, x: number): number | null => {
-    try {
-      const safeExpr = fnStr
-        .replace(/\bsin\b/g, 'Math.sin')
-        .replace(/\bcos\b/g, 'Math.cos')
-        .replace(/\btan\b/g, 'Math.tan')
-        .replace(/\babs\b/g, 'Math.abs')
-        .replace(/\bsqrt\b/g, 'Math.sqrt')
-        .replace(/\bln\b/g, 'Math.log')
-        .replace(/\blog\b/g, 'Math.log10')
-        .replace(/\bexp\b/g, 'Math.exp')
-        .replace(/\bpi\b/gi, 'Math.PI')
-        .replace(/\^/g, '**');
-      const result = new Function('x', `"use strict"; return (${safeExpr})`)(x);
-      return typeof result === 'number' && isFinite(result) ? result : null;
-    } catch {
-      return null;
-    }
-  };
+  const evalFn = evaluateMathExpression;
 
   // Build path for a curve
   const buildPath = (curve: typeof curves[0], pct: number): string => {
@@ -1278,7 +1264,7 @@ function InteractiveAssociation({ line }: { line: BoardLine }) {
  */
 export const TYPES_EN_BLOC = new Set([
   'table', 'graph', 'diagram', 'mindmap',
-  'qcm', 'vrai_faux', 'association', 'illustration', 'scientific',
+  'qcm', 'vrai_faux', 'association', 'illustration', 'scientific', 'schema',
 ]);
 
 /** Rend une ligne de tableau — le même rendu partout, un seul endroit. */
@@ -1313,6 +1299,20 @@ function renderLine(line: BoardLine) {
   ) : null;
 
   switch (type) {
+    case 'schema': {
+      const schema = line.schema_id ? getSchemaById(line.schema_id) : undefined;
+      if (!schema) {
+        return <p className="text-sm text-amber-300/80">Croquis indisponible.</p>;
+      }
+      return (
+        <figure className="mx-auto my-3 w-full max-w-3xl">
+          <div className="h-[min(42vh,360px)] min-h-[260px] overflow-hidden rounded-2xl border border-white/10 bg-black/10">
+            <SVGSchemaViewer schema={schema} autoAnimate handDrawn className="h-full w-full" />
+          </div>
+          {content && <figcaption className="pt-1.5 text-center text-xs text-white/55">{content}</figcaption>}
+        </figure>
+      );
+    }
     case 'title':
       return (
         <h2
@@ -1521,4 +1521,3 @@ function renderLine(line: BoardLine) {
       );
   }
 }
-

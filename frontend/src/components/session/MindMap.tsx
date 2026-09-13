@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import 'katex/dist/katex.min.css';
-import katex from 'katex';
+import { renderMixedLatexToHtml } from '../exam/LatexRenderer';
 
 interface MindMapNode {
   id: string;
@@ -37,22 +37,9 @@ function truncateLabel(label: string, maxChars: number = 30): string {
   return truncated + '...';
 }
 
-function renderLatex(text: string): string {
-  if (!text) return '';
-  
-  // Render inline LaTeX $...$
-  const parts = text.split(/(\$[^$]+\$)/g);
-  return parts.map(part => {
-    if (part.startsWith('$') && part.endsWith('$')) {
-      const latex = part.slice(1, -1);
-      try {
-        return katex.renderToString(latex, { throwOnError: false, displayMode: false });
-      } catch (e) {
-        return part;
-      }
-    }
-    return part;
-  }).join('');
+export function renderMindMapLabel(text: string): string {
+  // Labels may originate from an LLM or stored lesson content.
+  return renderMixedLatexToHtml(text);
 }
 
 // Diverse color palette for branches
@@ -616,7 +603,7 @@ export default function MindMap({ title, nodes, centerNode }: MindMapProps) {
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                       }}
-                      dangerouslySetInnerHTML={{ __html: renderLatex(truncateLabel(node.label, node.level === 0 ? 25 : 20)) }} 
+                      dangerouslySetInnerHTML={{ __html: renderMindMapLabel(truncateLabel(node.label, node.level === 0 ? 25 : 20)) }}
                     />
                   </div>
                 </foreignObject>

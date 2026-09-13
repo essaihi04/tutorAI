@@ -223,6 +223,71 @@ def test_commandes_llm_des_presets_sont_bornees():
     }) is None
 
 
+def test_tuteur_peut_ouvrir_directement_un_compartiment_mitochondrial():
+    assert normalize_scientific_control({
+        "presetId": "svt_ch1_ultrastructure_mitochondrie",
+        "command": "highlight",
+        "parameters": {"variant": "scene", "step": 3},
+    }) == {
+        "presetId": "svt_ch1_ultrastructure_mitochondrie",
+        "command": "highlight",
+        "parameters": {"variant": "scene", "step": 3},
+    }
+    assert "3=espace intermembranaire et gradient de H+" in SCIENTIFIC_VISUAL_PROMPT
+
+
+def test_tuteur_peut_piloter_experience_isolement_cretes():
+    visual = normalize_scientific_visual({
+        "engine": "preset",
+        "presetId": "svt_ch1_isolement_cretes_ultrasons",
+        "variant": "scene",
+        "step": 3,
+        "autoplay": False,
+    })
+
+    assert visual is not None
+    assert visual["presetId"] == "svt_ch1_isolement_cretes_ultrasons"
+    assert visual["step"] == 3
+    assert "3=vésicules retournées : face matricielle externe" in SCIENTIFIC_VISUAL_PROMPT
+    assert "côté intermembranaire interne" in SCIENTIFIC_VISUAL_PROMPT
+
+
+@pytest.mark.parametrize("step", range(9))
+def test_preparation_vesicules_et_comparaisons_restent_pilotables(step):
+    preset_id = "svt_ch1_vesicules_atp_synthase"
+    visual = normalize_scientific_visual({
+        "engine": "preset", "presetId": preset_id,
+        "variant": "scene", "step": step, "autoplay": False,
+    })
+    assert visual is not None
+    assert visual["step"] == step
+    command = normalize_scientific_control({
+        "presetId": preset_id, "command": "highlight",
+        "parameters": {"variant": "scene", "step": step},
+    })
+    assert command is not None
+    assert command["parameters"]["step"] == step
+    assert "0=préparation : mitochondrie isolée" in SCIENTIFIC_VISUAL_PROMPT
+    assert "3=solution tampon : pHi interne et pHe externe" in SCIENTIFIC_VISUAL_PROMPT
+    assert "4=comparaison pHi 6 et pHe 4" in SCIENTIFIC_VISUAL_PROMPT
+
+
+def test_tuteur_peut_piloter_comparaison_photographique_des_fermentations():
+    visual = normalize_scientific_visual({
+        "engine": "preset",
+        "presetId": "svt_ch1_fermentations_photos",
+        "variant": "scene",
+        "step": 2,
+        "autoplay": False,
+    })
+
+    assert visual is not None
+    assert visual["presetId"] == "svt_ch1_fermentations_photos"
+    assert visual["step"] == 2
+    assert "muscle : pyruvate transformé en lactate" in SCIENTIFIC_VISUAL_PROMPT
+    assert "levure : pyruvate transformé en éthanol et CO2" in SCIENTIFIC_VISUAL_PROMPT
+
+
 def test_presets_transparents_physique_chimie_svt_sont_fermes_et_pilotables():
     assert normalize_scientific_visual({
         "engine": "preset",
@@ -283,13 +348,18 @@ def test_presets_transparents_physique_chimie_svt_sont_fermes_et_pilotables():
     ("svt_ch1_couplage_excitation_contraction", "relaxation", 8),
     ("svt_ch1_chaleurs_muscle", "sans_oxygene", 36),
     ("svt_ch1_glycolyse_etapes", "scene", 9),
-    ("svt_ch1_krebs_detaille", "scene", 10),
+    ("svt_ch1_pyruvate_acetyl_coa", "scene", 8),
+    ("svt_ch1_krebs_detaille", "scene", 8),
     ("svt_ch1_echelle_redox", "scene", 8),
+    ("svt_ch1_molecules_glucose_atp", "glucose", 5),
+    ("svt_ch1_molecules_glucose_atp", "atp", 5),
     ("svt_ch1_molecules_glucose_atp", "scene", 5),
     ("svt_ch1_rendement_energetique", "scene", 10),
     ("svt_ch1_schema_bilan_annote", "scene", 21),
     ("svt_ch1_vesicules_atp_synthase", "scene", 8),
-    ("svt_ch1_chimiosmose", "scene", 12),
+    ("svt_ch1_chimiosmose", "scene", 18),
+    ("svt_ch1_chimiosmose", "nadh", 18),
+    ("svt_ch1_chimiosmose", "fadh2", 18),
     ("svt_ch1_carte_metabolique", "scene", 10),
 ])
 def test_presets_des_notions_difficiles_sont_valides_et_bornes(preset_id, variant, max_step):

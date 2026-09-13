@@ -1,3 +1,4 @@
+from app.utils.safe_paths import safe_child_path
 """
 Mock Exam Service — AI-powered exam blanc generator.
 
@@ -2174,7 +2175,7 @@ Réponds avec ce JSON:
         matching ``{doc_id}.*`` exists in ``assets/``, the ``src`` is filled
         in on-the-fly so the frontend / printable HTML can render it.
         """
-        exam_dir = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id
+        exam_dir = safe_child_path(MOCK_EXAMS_DIR, self._normalize_subject(subject), exam_id)
         path = exam_dir / "exam.json"
         if not path.exists():
             return None
@@ -2187,14 +2188,14 @@ Réponds avec ce JSON:
 
     def get_image_prompts(self, subject: str, exam_id: str) -> list[dict]:
         """Load image prompts for a mock exam."""
-        path = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id / "image_prompts.json"
+        path = safe_child_path(MOCK_EXAMS_DIR, self._normalize_subject(subject), exam_id, "image_prompts.json")
         if path.exists():
             return _load_json(path)
         return []
 
     def update_mock_exam_status(self, subject: str, exam_id: str, status: str) -> bool:
         """Update the status of a mock exam (draft → published)."""
-        path = MOCK_EXAMS_DIR / self._normalize_subject(subject) / exam_id / "exam.json"
+        path = safe_child_path(MOCK_EXAMS_DIR, self._normalize_subject(subject), exam_id, "exam.json")
         if not path.exists():
             return False
         exam = _load_json(path)

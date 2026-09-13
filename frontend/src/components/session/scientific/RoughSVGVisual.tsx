@@ -1,7 +1,10 @@
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import RoughShape from './RoughShape';
 import { poserLesTextes, type PoseTexte } from '../boardTextLayout';
-import type { RoughSVGElementSpec, RoughSVGVisualSpec, ScientificPoint } from './types';
+import type {
+  RoughSVGElementSpec, RoughSVGHotspotPanelSpec, RoughSVGHotspotSpec,
+  RoughSVGVisualSpec, ScientificPoint,
+} from './types';
 
 interface RoughSVGVisualProps {
   spec: RoughSVGVisualSpec;
@@ -101,6 +104,85 @@ function RenderElement({ element, index, pose }: {
 }
 
 
+
+const MAIN = "'Patrick Hand', 'Segoe Print', system-ui";
+
+/**
+ * Une zone interrogeable. Le seul repere permanent est la pastille « ? » :
+ * un cadre allume en continu sur chaque zone salirait le dessin.
+ */
+function Hotspot({ spot, active, onChoose }: {
+  spot: RoughSVGHotspotSpec;
+  active: boolean;
+  onChoose: (id: string) => void;
+}) {
+  const [survole, setSurvole] = useState(false);
+  const teinte = resolveColor(spot.color, '#fde047');
+  const montre = active || survole;
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-pressed={active}
+      aria-label={`${spot.label} — afficher le detail`}
+      style={{ cursor: 'pointer', outline: 'none' }}
+      onClick={() => onChoose(spot.id)}
+      onKeyDown={event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onChoose(spot.id);
+      }}
+      onPointerEnter={() => setSurvole(true)}
+      onPointerLeave={() => setSurvole(false)}
+      onFocus={() => setSurvole(true)}
+      onBlur={() => setSurvole(false)}
+    >
+      <rect x={spot.x} y={spot.y} width={spot.width} height={spot.height} rx={10}
+        fill="transparent" stroke={montre ? teinte : 'transparent'} strokeWidth={montre ? 2.5 : 0}
+        strokeDasharray="6 5" />
+      <circle cx={spot.x + spot.width - 8} cy={spot.y + 10} r={11}
+        fill={active ? teinte : '#0b1220'} stroke={teinte} strokeWidth={2} />
+      <text x={spot.x + spot.width - 8} y={spot.y + 16} textAnchor="middle"
+        fontSize={16} fontWeight={700} fontFamily={MAIN}
+        fill={active ? '#0b1220' : teinte} style={{ pointerEvents: 'none' }}>?</text>
+    </g>
+  );
+}
+
+/** L'encart qui repond. Trace en SVG net, pas au crayon : c'est de l'interface. */
+function PanneauHotspot({ panel, spot, transparent }: {
+  panel: RoughSVGHotspotPanelSpec;
+  spot: RoughSVGHotspotSpec | null;
+  transparent?: boolean;
+}) {
+  const teinte = spot ? resolveColor(spot.color, '#fde047') : '#64748b';
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <rect x={panel.x} y={panel.y} width={panel.width} height={panel.height} rx={14}
+        fill={transparent ? 'none' : '#0b1220'} fillOpacity={0.88} stroke={teinte} strokeWidth={2} strokeOpacity={spot ? 1 : 0.45} />
+      {!spot && (
+        <text x={panel.x + panel.width / 2} y={panel.y + panel.height / 2 + 6} textAnchor="middle"
+          fontSize={18} fontFamily={MAIN} fill="#94a3b8">{panel.hint}</text>
+      )}
+      {spot && (
+        <>
+          <text x={panel.x + 18} y={panel.y + 28} fontSize={19} fontWeight={700}
+            fontFamily={MAIN} fill={teinte}>{spot.label}</text>
+          {spot.value && (
+            <text x={panel.x + 18} y={panel.y + 62} fontSize={26} fontWeight={700}
+              fontFamily={MAIN} fill="#fde047">{spot.value}</text>
+          )}
+          {(spot.lines || []).slice(0, 2).map((ligne, i) => (
+            <text key={ligne} x={panel.x + 18} y={panel.y + 90 + i * 23} fontSize={17}
+              fontFamily={MAIN} fill="#e0f2fe">{ligne}</text>
+          ))}
+        </>
+      )}
+    </g>
+  );
+}
+
+
 /**
  * Le cadre de la figure. Sur le tableau il n'y en a pas : la figure est
  * dessinee sur l'ardoise, pas collee dessus.
@@ -113,6 +195,10 @@ function CADRE_FIGURE(transparent?: boolean): string {
 
 export default function RoughSVGVisual({ spec, transparent }: RoughSVGVisualProps) {
   const titleId = `rough-title-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const [choisi, setChoisi] = useState<string | null>(null);
+  // La zone choisie se relit dans le spec courant : si l'etape suivante ne la
+  // propose plus, l'encart redevient muet au lieu d'afficher un fantome.
+  const spotActif = spec.hotspots?.find(spot => spot.id === choisi) || null;
   const width = spec.width || 800;
   const height = spec.height || 440;
 
@@ -145,6 +231,17 @@ export default function RoughSVGVisual({ spec, transparent }: RoughSVGVisualProp
             element={element}
             index={index}
             pose={places[index]?.pose || null}
+          />
+        ))}
+        {spec.hotspotPanel && (
+          <PanneauHotspot panel={spec.hotspotPanel} spot={spotActif} transparent={transparent} />
+        )}
+        {spec.hotspots?.map(spot => (
+          <Hotspot
+            key={spot.id}
+            spot={spot}
+            active={spot.id === choisi}
+            onChoose={id => setChoisi(current => (current === id ? null : id))}
           />
         ))}
       </svg>

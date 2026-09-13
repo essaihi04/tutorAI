@@ -4,6 +4,8 @@ Concours API endpoints — catalog, simulator, admin updates, orientation chat.
 Public endpoints (no auth):
 - GET  /concours/catalog       — catalog of post-BAC concours communs
 - POST /concours/simulate      — compute admission score + eligibility per concours
+
+Student endpoints (active account required):
 - POST /concours/chat          — Moalim orientation chatbot (DeepSeek-powered)
 
 Admin endpoints (admin token):
@@ -14,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date
-from typing import Optional
+from typing import Optional, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
+from app.dependencies import get_current_student
 from app.services import concours_service
 
 logger = logging.getLogger(__name__)
@@ -147,12 +150,12 @@ async def update_catalog(
 
 
 class ChatMessage(BaseModel):
-    role: str  # "user" | "assistant"
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
 
 
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage] = Field(..., description="Conversation history")
+    messages: list[ChatMessage] = Field(..., min_length=1, max_length=20, description="Conversation history")
 
 
 def _build_moalim_system_prompt() -> str:
@@ -215,7 +218,7 @@ Tu es prêt. L'élève va te parler — sois utile, précis et bienveillant.
 
 
 @router.post("/chat")
-async def orientation_chat(req: ChatRequest):
+async def orientation_chat(req: ChatRequest, student: dict = Depends(get_current_student)):
     """Moalim orientation chatbot — streams DeepSeek responses as SSE."""
     if not settings.deepseek_api_key:
         raise HTTPException(status_code=503, detail="Chatbot indisponible (clé API manquante).")

@@ -5,6 +5,13 @@ import pdfjsWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
 const API = '/api/v1/exam-extract';
+const adminFetch = (url: string, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  const token = localStorage.getItem('admin_token');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(url, { ...init, headers });
+};
+
 const SCALE = 2.0;
 
 // ── Types ────────────────────────────────────────────────────
@@ -176,7 +183,7 @@ export default function ExamExtractor() {
   const fetchPublishedExams = async () => {
     setLoadingExams(true);
     try {
-      const r = await fetch(`${API}/published-exams`);
+      const r = await adminFetch(`${API}/published-exams`);
       const d = await r.json();
       setPublishedExams(d.exams || []);
     } catch { /* ignore */ } finally { setLoadingExams(false); }
@@ -186,7 +193,7 @@ export default function ExamExtractor() {
     if (!confirm(`Supprimer l'examen "${id}" ? Cette action est irréversible.`)) return;
     setDeletingId(id);
     try {
-      const r = await fetch(`${API}/published-exams/${id}`, { method: 'DELETE' });
+      const r = await adminFetch(`${API}/published-exams/${id}`, { method: 'DELETE' });
       if (r.ok) {
         setPublishedExams(prev => prev.filter(e => e.id !== id));
       }
@@ -196,7 +203,7 @@ export default function ExamExtractor() {
   const saveEditExam = async () => {
     if (!editingExam) return;
     try {
-      const r = await fetch(`${API}/published-exams/${editingExam.id}`, {
+      const r = await adminFetch(`${API}/published-exams/${editingExam.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editFields),
       });
@@ -224,7 +231,7 @@ export default function ExamExtractor() {
 
   // ── API calls ─────────────────────────────────────────
   const ocrPage = async (base64: string, pageNum: number): Promise<{ text: string; markdown: string }> => {
-    const r = await fetch(`${API}/ocr-page`, {
+    const r = await adminFetch(`${API}/ocr-page`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_base64: base64, page_number: pageNum, subject }),
     });
@@ -234,7 +241,7 @@ export default function ExamExtractor() {
   };
 
   const detectZones = async (base64: string, pageNum: number): Promise<DetectedZone[]> => {
-    const r = await fetch(`${API}/detect-zones`, {
+    const r = await adminFetch(`${API}/detect-zones`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_base64: base64, page_number: pageNum }),
     });
@@ -243,7 +250,7 @@ export default function ExamExtractor() {
   };
 
   const describeDoc = async (dataUrl: string, docName: string): Promise<string> => {
-    const r = await fetch(`${API}/describe-doc`, {
+    const r = await adminFetch(`${API}/describe-doc`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_base64: dataUrl, doc_name: docName, subject }),
     });
@@ -553,7 +560,7 @@ export default function ExamExtractor() {
     setStructureError('');
     setStructuredExam(null);
     try {
-      const r = await fetch(`${API}/structure-exam`, {
+      const r = await adminFetch(`${API}/structure-exam`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sujet_text: sujet.ocrPages.filter(p => p.status === 'done').map(p => p.text).join('\n\n---\n\n'),
@@ -591,7 +598,7 @@ export default function ExamExtractor() {
     const sessionSlug = pubSession.toLowerCase().replace(/ /g, '_');
     const examId = `${subject}_${pubYear}_${sessionSlug}`;
     try {
-      const r = await fetch(`${API}/publish`, {
+      const r = await adminFetch(`${API}/publish`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           exam_id: examId, subject, year: pubYear, session: pubSession,

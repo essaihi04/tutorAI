@@ -19,6 +19,34 @@ export interface CourseQuestion {
   advance_on_timeout?: boolean;
 }
 
+/**
+ * Un exercice CLIQUABLE posé sur le tableau, à la fin d'une étape.
+ *
+ * `question` interroge à l'oral : le tableau pose l'énoncé, attend une
+ * réponse, puis corrige et poursuit. C'est une vérification au passage, une
+ * seule, et elle bloque le fil. Une fin d'étape demande autre chose : plusieurs
+ * exercices posés ensemble, que l'élève manipule à son rythme et qui se
+ * corrigent tout seuls sous ses doigts — QCM à choisir, paires à relier.
+ *
+ * Ils sont rendus par les mêmes blocs interactifs que le tableau du tuteur
+ * (`boardLines`), donc la correction voyage avec l'énoncé : ces exercices
+ * s'auto-corrigent dans le navigateur, ils ne notent pas.
+ */
+export interface CourseExercise {
+  type: 'qcm' | 'vrai_faux' | 'association';
+  /** L'énoncé. Pour une association, la consigne de mise en relation. */
+  prompt: string;
+  /** `qcm` : les propositions, et l'index de la bonne. */
+  choices?: string[];
+  correct?: number;
+  /** `vrai_faux` : les affirmations à trancher une par une. */
+  statements?: { text: string; correct: boolean; explanation?: string }[];
+  /** `association` : les paires à reformer (la colonne de droite est battue). */
+  pairs?: { left: string; right: string }[];
+  /** Le mot de la fin, affiché une fois l'élève fixé. */
+  explanation?: string;
+}
+
 export interface CourseVisual {
   /**
    * `scientific` couvre les figures que personne n'a dessinées à l'avance :
@@ -33,6 +61,11 @@ export interface CourseVisual {
   caption?: string;
   alt?: string;
   required_interaction?: boolean;
+  /**
+   * `inline` place un croquis dans le fil du texte. C'est utile quand la
+   * figure fait partie de l'explication et ne mérite pas un tableau séparé.
+   */
+  placement?: 'side' | 'inline';
 }
 
 export interface PublishedSlideAudio {
@@ -55,10 +88,16 @@ export interface CourseSlide {
     student_trace?: string;
     caption?: string;
     alt?: string;
+    table?: {
+      headers: string[];
+      rows: string[][];
+    };
   };
   visual?: CourseVisual;
   speech_text?: Record<string, string>;
   question?: CourseQuestion;
+  /** Les exercices cliquables posés au tableau après la correction écrite. */
+  exercises?: CourseExercise[];
   timing?: {
     auto_advance?: boolean;
     reading_seconds?: number;

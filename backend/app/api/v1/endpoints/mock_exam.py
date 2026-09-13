@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.services.mock_exam_service import mock_exam_service, MOCK_EXAMS_DIR
 from app.dependencies import get_current_student
+from app.utils.safe_paths import safe_child_path
 from app.services.subject_access_service import subject_access_service
 from app.services.mock_exam_printable import render_printable_html
 
@@ -83,7 +84,7 @@ async def get_mock_exam(
     if not subject_access_service.is_exam_allowed(student, subject):
         raise HTTPException(status_code=403, detail="Cette matière n'est pas incluse dans votre accès")
     exam = mock_exam_service.get_mock_exam(subject, exam_id)
-    if not exam:
+    if not exam or exam.get("status") != "published":
         raise HTTPException(status_code=404, detail="Mock exam not found")
     return exam
 
@@ -94,6 +95,7 @@ async def get_printable(
     exam_id: str,
     type: str = Query("sujet", pattern="^(sujet|corrige)$"),
     autoprint: int = Query(0),
+    admin: bool = Depends(_get_admin_dep()),
 ):
     """Render a mock exam as a print-ready HTML page (BAC paper layout).
 
@@ -105,7 +107,7 @@ async def get_printable(
     if not exam:
         raise HTTPException(status_code=404, detail="Mock exam not found")
     subj_norm = mock_exam_service._normalize_subject(subject)
-    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
+    assets_dir = safe_child_path(MOCK_EXAMS_DIR, subj_norm, exam_id, "assets")
     html_str = render_printable_html(exam, subj_norm, variant=type, assets_dir=assets_dir, autoprint=bool(autoprint))
     return HTMLResponse(content=html_str)
 
@@ -186,14 +188,16 @@ async def upload_image(
     # upload lands in the SAME directory the loader/serving code reads from —
     # e.g. "Physique-Chimie" → "physique", not "physique-chimie").
     subj_norm = mock_exam_service._normalize_subject(subject)
-    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
+    assets_dir = safe_child_path(MOCK_EXAMS_DIR, subj_norm, exam_id, "assets")
     assets_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{doc_id}{ext}"
-    filepath = assets_dir / filename
+    filepath = safe_child_path(assets_dir, filename)
 
     # Remove any existing image for this doc_id (incl. different extension)
     # so a PNG → JPG replacement doesn't leave orphan files that confuse the
     # listing endpoint.
+    if any(c in doc_id for c in "*?[]/\\") or doc_id in (".", ".."):
+        raise HTTPException(400, "Identifiant document invalide")
     for old in assets_dir.glob(f"{doc_id}.*"):
         if old.is_file() and old.name != filename:
             try:
@@ -209,7 +213,7 @@ async def upload_image(
     src_path = f"assets/{filename}"
     _update_doc_src(exam, doc_id, src_path)
     from app.services.mock_exam_service import _save_json
-    exam_path = MOCK_EXAMS_DIR / subj_norm / exam_id / "exam.json"
+    exam_path = safe_child_path(MOCK_EXAMS_DIR, subj_norm, exam_id, "exam.json")
     _save_json(exam_path, exam)
     
     # Return the public URL for serving
@@ -231,12 +235,14 @@ async def delete_image(
     Removes all files matching ``{doc_id}.*`` in the assets directory and
     clears the ``src`` field in ``exam.json`` for that doc_id.
     """
+    if any(c in doc_id for c in "*?[]/\\:") or not doc_id or doc_id in (".", ".."):
+        raise HTTPException(400, "Identifiant document invalide")
     exam = mock_exam_service.get_mock_exam(subject, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Mock exam not found")
 
     subj_norm = mock_exam_service._normalize_subject(subject)
-    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
+    assets_dir = safe_child_path(MOCK_EXAMS_DIR, subj_norm, exam_id, "assets")
     removed: list[str] = []
     if assets_dir.exists():
         for f in assets_dir.glob(f"{doc_id}.*"):
@@ -250,7 +256,7 @@ async def delete_image(
     # Clear the src field in exam.json for this doc_id
     _update_doc_src(exam, doc_id, "")
     from app.services.mock_exam_service import _save_json
-    exam_path = MOCK_EXAMS_DIR / subj_norm / exam_id / "exam.json"
+    exam_path = safe_child_path(MOCK_EXAMS_DIR, subj_norm, exam_id, "exam.json")
     _save_json(exam_path, exam)
 
     logger.info(f"[MockExam] Deleted image(s) for {doc_id}: {removed}")
@@ -265,7 +271,7 @@ async def list_uploaded_images(
 ):
     """List all uploaded images for a mock exam. Admin-only."""
     subj_norm = mock_exam_service._normalize_subject(subject)
-    assets_dir = MOCK_EXAMS_DIR / subj_norm / exam_id / "assets"
+    assets_dir = safe_child_path(MOCK_EXAMS_DIR, subj_norm, exam_id, "assets")
     if not assets_dir.exists():
         return []
     

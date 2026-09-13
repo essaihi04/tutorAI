@@ -347,7 +347,7 @@ function SlidePreview({ slide }: { slide: EditorSlide }) {
           <img src={visual.url} alt={visual.alt || slide.title} className="max-h-72 w-full rounded-xl bg-white object-contain" />
         )}
         {visual.kind === 'simulation' && visual.url && (
-          <iframe title={slide.title} src={visual.url} className="h-72 w-full rounded-xl bg-white" sandbox="allow-scripts allow-same-origin" />
+          <iframe title={slide.title} src={visual.url} className="h-72 w-full rounded-xl bg-white" sandbox="allow-scripts" />
         )}
         {schema && (
           <div className="overflow-hidden rounded-xl bg-slate-950 p-1">

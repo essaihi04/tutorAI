@@ -3,6 +3,12 @@
 Usage, depuis ``backend``::
 
     python -m scripts.sync_course_decks
+    python -m scripts.sync_course_decks svt_ch1_energy_course_v1.json
+
+Sans argument, tous les manifestes du dossier sont poussés. Nommer un ou
+plusieurs fichiers restreint la synchronisation : un manifeste modifié fait
+retomber son deck en brouillon, et rien n'oblige à déclasser au passage des
+cours publiés que l'on n'a pas touchés.
 
 La synchronisation laisse les decks en brouillon. La publication est effectuée
 par ``generate_course_audio.py verify`` après contrôle humain de tous les sons.
@@ -137,7 +143,14 @@ def sync_manifest(admin, manifest_path: Path) -> tuple[int, int]:
                 "question": slide.get("question") or {},
                 "timing": slide.get("timing") or {},
                 "order_index": slide_index,
-                "metadata": {"manifest_id": slide["id"]},
+                # `exercises` voyage dans `metadata` : la table n'a pas de
+                # colonne pour lui, et une migration pour un champ facultatif
+                # coûterait plus que ce qu'elle rapporte. Le service le
+                # remonte à la racine de la diapositive avant l'envoi.
+                "metadata": {
+                    "manifest_id": slide["id"],
+                    **({"exercises": slide["exercises"]} if slide.get("exercises") else {}),
+                },
             }, on_conflict="activity_id,stable_id").execute()
             slide_count += 1
 
@@ -163,8 +176,24 @@ def sync_manifest(admin, manifest_path: Path) -> tuple[int, int]:
 def main() -> None:
     if not MANIFESTS:
         raise SystemExit("Aucun manifest de cours trouvé")
+    # Un manifeste modifié fait retomber son deck en brouillon : synchroniser
+    # tout le dossier pour une seule leçon retirerait de la circulation des
+    # cours publiés que personne n'a touchés. On peut donc nommer les
+    # manifestes à pousser.
+    demandes = sys.argv[1:]
+    if demandes:
+        connus = {path.name: path for path in MANIFESTS}
+        inconnus = [nom for nom in demandes if nom not in connus]
+        if inconnus:
+            raise SystemExit(
+                "Manifeste introuvable : %s\nDisponibles : %s"
+                % (", ".join(inconnus), ", ".join(sorted(connus)))
+            )
+        cibles = [connus[nom] for nom in demandes]
+    else:
+        cibles = list(MANIFESTS)
     admin = get_supabase_admin()
-    totals = [sync_manifest(admin, path) for path in MANIFESTS]
+    totals = [sync_manifest(admin, path) for path in cibles]
     print(f"Total : {sum(a for a, _ in totals)} activités, {sum(s for _, s in totals)} diapositives")
 
 

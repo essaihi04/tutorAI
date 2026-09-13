@@ -34,6 +34,7 @@ from app.schemas.admin_visual_library import (
 from datetime import datetime
 from typing import Optional
 import logging
+import secrets
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin-dashboard"])
@@ -60,7 +61,9 @@ _verify_admin_token = verify_admin_token
 @router.post("/login")
 async def admin_login(data: AdminLogin):
     """Login with admin password, returns JWT."""
-    if data.password != settings.admin_password:
+    from app.admin_auth import admin_signing_key
+    admin_signing_key()
+    if not secrets.compare_digest(data.password.encode(), settings.admin_password.encode()):
         raise HTTPException(status_code=401, detail="Invalid admin password")
     token = _create_admin_token()
     return {"access_token": token, "token_type": "bearer"}

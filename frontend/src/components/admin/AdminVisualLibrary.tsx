@@ -206,7 +206,7 @@ function VisualPreview({ item, full = false }: { item: AdminVisualLibraryItem; f
         src={preview.url}
         title={item.title}
         className={`${height} w-full bg-white`}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
         referrerPolicy="no-referrer"
       />
     );

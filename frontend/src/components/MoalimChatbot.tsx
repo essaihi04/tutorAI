@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Send, X, Sparkles, Loader2, Bot } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getFreshAccessToken } from '../services/api';
 
 /**
  * Moalim — Orientation Chatbot
@@ -50,6 +51,10 @@ export default function MoalimChatbot() {
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
     if (!content || streaming) return;
+    if (!localStorage.getItem('token')) {
+      setMessages((previous) => [...previous, { role: 'assistant', content: 'Connectez-vous à votre compte pour discuter avec Moalim. Le catalogue et le simulateur restent accessibles librement.' }]);
+      return;
+    }
     setInput('');
     const next: Msg[] = [...messages, { role: 'user', content }, { role: 'assistant', content: '' }];
     setMessages(next);
@@ -59,11 +64,12 @@ export default function MoalimChatbot() {
     abortRef.current = controller;
 
     try {
+      const token = await getFreshAccessToken();
       const res = await fetch('/api/v1/concours/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
         body: JSON.stringify({
-          messages: next.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+          messages: next.slice(0, -1).slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
         }),
         signal: controller.signal,
       });
