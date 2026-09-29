@@ -1,0 +1,31 @@
+# =============================================================
+# Moalim — surcouche au docker-compose.yml officiel de Supabase
+# Copié par install.sh dans /opt/supabase et activé via COMPOSE_FILE (.env)
+#
+# Rien n'est exposé sur Internet : Docker contourne le pare-feu,
+# donc chaque port publié est lié explicitement à 127.0.0.1.
+# - Kong (API Supabase)  : 127.0.0.1:54321  (nginx → sb.moalim.online)
+# Le port 8000 reste au backend FastAPI.
+#
+# Services coupés (~0,7-1 Go de RAM économisés) : le backend n'utilise
+# ni Realtime, ni les Edge Functions, et parle à la base via l'API REST
+# (restore.sh / backup.sh passent par docker exec). Pour en réactiver un :
+#   docker compose --profile optional up -d <service>
+# =============================================================
+
+services:
+  kong:
+    ports: !override
+      - "127.0.0.1:${KONG_HTTP_PORT}:8000/tcp"
+
+  realtime:
+    profiles: ["optional"]
+
+  functions:
+    profiles: ["optional"]
+
+  supavisor:
+    profiles: ["optional"]
+    ports: !override
+      - "127.0.0.1:55432:5432"
+      - "127.0.0.1:56543:6543"
