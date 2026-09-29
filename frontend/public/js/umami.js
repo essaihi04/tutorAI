@@ -15,7 +15,9 @@
 
 (function () {
   // ⚠️ REMPLACE CETTE VALEUR PAR TON UMAMI WEBSITE ID
-  var WEBSITE_ID = "e059c2f2-e7f0-49e7-9961-66fbc057927f";
+  // Désactivé le 29/09/2026 : Umami n'est pas installé sur le nouveau VPS.
+  // Pour réactiver, remettre l'ID : "e059c2f2-e7f0-49e7-9961-66fbc057927f"
+  var WEBSITE_ID = "";
 
   // URL du serveur Umami self-hosted
   var UMAMI_URL = "https://analytics.moalim.online";

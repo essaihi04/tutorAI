@@ -648,7 +648,8 @@ export default function AdminDashboard() {
     { key: 'courses', label: 'Cours', icon: BookOpen },
     { key: 'visuals', label: 'Bibliothèque', icon: Image },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
-    { key: 'visits', label: 'Visites', icon: Globe },
+    // Onglet « Visites » masqué tant qu'Umami n'est pas réinstallé (cf. /js/umami.js)
+    // { key: 'visits', label: 'Visites', icon: Globe },
   ];
 
   return (
