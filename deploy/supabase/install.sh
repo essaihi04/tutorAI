@@ -211,8 +211,14 @@ fi
 
 # Déjà présents si moalim.online / analytics ont été installés ; sinon on les crée
 if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
-    curl -fsSL https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf \
-         -o /etc/letsencrypt/options-ssl-nginx.conf
+    # Copie livrée avec le paquet python3-certbot-nginx, sinon la version en ligne
+    PKG_OPTS=$(find /usr/lib/python3*/ -path '*certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf' 2>/dev/null | head -1)
+    if [[ -n "$PKG_OPTS" ]]; then
+        cp "$PKG_OPTS" /etc/letsencrypt/options-ssl-nginx.conf
+    else
+        curl -fsSL https://raw.githubusercontent.com/certbot/certbot/main/certbot-nginx/src/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf \
+             -o /etc/letsencrypt/options-ssl-nginx.conf
+    fi
 fi
 if [[ ! -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
     log "Génération des paramètres DH (1-2 min)…"
