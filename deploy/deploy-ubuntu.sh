@@ -120,13 +120,15 @@ if [[ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
 else
     # Même config que la prod, servie en HTTP sur le domaine ET l'IP publique,
     # avec le challenge ACME pour pouvoir émettre le certificat après bascule DNS.
+    # ^~ obligatoire : sinon la regex « location ~ (^|/)\. » (fichiers cachés)
+    # l'emporte et renvoie 403 sur /.well-known/ → certbot échoue.
     PUBLIC_IP=$(curl -s4 --max-time 5 https://api.ipify.org || hostname -I | awk '{print $1}')
     log "Nginx HTTP provisoire (pas encore de certificat) — test : http://${PUBLIC_IP}"
     sed -e '/# ── HTTP → HTTPS redirect/,/^}/d' \
         -e 's/listen 443 ssl http2;/listen 80 default_server;/' \
         -e 's/listen \[::\]:443 ssl http2;/listen [::]:80 default_server;/' \
         -e '/ssl_certificate/d; /options-ssl-nginx/d; /ssl_dhparam/d; /Strict-Transport-Security/d' \
-        -e "s/server_name ${DOMAIN} www.${DOMAIN};/server_name ${DOMAIN} www.${DOMAIN} ${PUBLIC_IP};\n\n    location \/.well-known\/acme-challenge\/ { root \/var\/www\/certbot; }/" \
+        -e "s/server_name ${DOMAIN} www.${DOMAIN};/server_name ${DOMAIN} www.${DOMAIN} ${PUBLIC_IP};\n\n    location ^~ \/.well-known\/acme-challenge\/ { root \/var\/www\/certbot; }/" \
         "$APP_DIR/deploy/nginx.conf" > "$NGINX_CONF"
     rm -f /etc/nginx/sites-enabled/default
 fi
