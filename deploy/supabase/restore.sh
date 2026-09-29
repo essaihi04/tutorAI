@@ -183,8 +183,9 @@ fi
 log "Vérification des volumes (source → cible)"
 DIFF=0
 while read -r t; do
-    s=$(src_psql -c "select count(*) from $t")
-    d=$(dst_psql -c "select count(*) from $t" 2>/dev/null || echo "ABSENTE")
+    # < /dev/null : docker exec -i avalerait sinon la liste des tables de la boucle
+    s=$(src_psql -c "select count(*) from $t" < /dev/null)
+    d=$(dst_psql -c "select count(*) from $t" < /dev/null 2>/dev/null || echo "ABSENTE")
     if [[ "$s" != "$d" ]]; then
         printf "  ${RED}%-40s %8s → %s${NC}\n" "$t" "$s" "$d"; DIFF=1
     elif [[ "$s" != "0" ]]; then
