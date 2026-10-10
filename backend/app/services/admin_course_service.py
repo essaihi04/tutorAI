@@ -36,6 +36,10 @@ _LIBRARY_IMAGE_SUFFIXES = _ALLOWED_IMAGE_SUFFIXES | {".svg"}
 _ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _QUESTION_TYPES = {"qcm", "prediction", "true_false", "select", "open", "ordering", "association"}
+_SLIDE_TYPES = (
+    "diagnostic", "situation", "concept", "image", "schema",
+    "simulation", "exercise", "synthesis", "evaluation",
+)
 _VISUAL_KINDS = {"none", "image", "schema", "simulation", "scientific"}
 
 
@@ -292,10 +296,7 @@ class AdminCourseService:
                 "images": sorted(image_urls),
                 "simulations": sorted(simulation_urls),
             },
-            "slide_types": [
-                "diagnostic", "situation", "concept", "image", "schema",
-                "simulation", "exercise", "synthesis", "evaluation",
-            ],
+            "slide_types": list(_SLIDE_TYPES),
             "question_types": sorted(_QUESTION_TYPES),
         }
 
@@ -430,6 +431,8 @@ class AdminCourseService:
                 slide_stable = str(slide.get("stable_id") or "")
                 if not _STABLE_ID_RE.fullmatch(slide_stable):
                     add("error", f"{slide_path}.stable_id", "Identifiant de diapositive invalide.")
+                if (slide.get("slide_type") or "concept") not in _SLIDE_TYPES:
+                    add("error", f"{slide_path}.slide_type", "Type de diapositive non reconnu.")
                 if slide_stable in slide_ids:
                     add("error", f"{slide_path}.stable_id", "Identifiant de diapositive dupliqué dans le cours.")
                 slide_ids.add(slide_stable)
