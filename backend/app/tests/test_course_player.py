@@ -126,7 +126,7 @@ def test_first_physics_chemistry_and_math_courses_are_complete_and_timed():
     for manifest in manifests:
         waves = manifest["stable_id"] == "phys_ch1_waves"
         assert manifest["estimated_minutes"] == sum(a["duration_minutes"] for a in manifest["activities"])
-        assert manifest["status"] == "draft"
+        assert manifest["status"] == ("published" if waves else "draft")
         assert manifest["lesson_match"]
         assert manifest["intent_aliases"]
         for activity in manifest["activities"]:
