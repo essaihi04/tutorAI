@@ -454,7 +454,7 @@ class AdminCourseService:
                 if for_publish and (timeout < 5 or timeout > 180):
                     add("error", f"{slide_path}.question.timeout_seconds", "Le délai doit être compris entre 5 et 180 secondes.")
                 if for_publish and question.get("advance_on_timeout") is not True:
-                    add("error", f"{slide_path}.question.advance_on_timeout", "Le passage automatique sans réponse doit être activé.")
+                    add("warning", f"{slide_path}.question.advance_on_timeout", "Passage automatique désactivé : l'élève devra répondre pour avancer.")
                 if for_publish and qtype in {"qcm", "prediction", "true_false", "select", "ordering", "association"}:
                     answer_key = question.get("answer_key")
                     if answer_key is None or answer_key == "" or answer_key == []:

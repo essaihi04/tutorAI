@@ -144,8 +144,8 @@ export const PHYS_CROQUIS_SUPERPOSITION: ScientificSchema = {
       <path d="M315 55 L430 55" stroke="${P.positive}" stroke-width="3" marker-end="url(#phys-sup-green-arrow)"/><path d="M685 175 L570 175" stroke="${P.positive}" stroke-width="3" marker-end="url(#phys-sup-green-arrow)"/>` },
     { id: 'pendant', label: 'Pendant', delay: 500, svgContent: `
       <text x="65" y="275" font-size="21" fill="${P.muted}" font-family="${FONT}">pendant</text><line x1="160" y1="270" x2="840" y2="270" stroke="${P.muted}" stroke-width="2"/>
-      <path d="M250 270 L390 270 Q430 235 450 270 Q470 305 510 270 L650 270" fill="none" stroke="${P.control}" stroke-width="5"/>
-      <text x="700" y="240" font-size="19" fill="${P.control}" font-family="${FONT}">somme algébrique</text>` },
+      <path d="M250 270 L650 270" fill="none" stroke="${P.control}" stroke-width="5"/>
+      <text x="700" y="240" font-size="19" fill="${P.control}" font-family="${FONT}">compensation exacte</text>` },
     { id: 'apres', label: 'Après', delay: 1000, svgContent: `
       <text x="75" y="445" font-size="21" fill="${P.muted}" font-family="${FONT}">après</text><line x1="160" y1="440" x2="840" y2="440" stroke="${P.muted}" stroke-width="2"/>
       <path d="M180 440 L300 440 Q330 505 360 440 L480 440" fill="none" stroke="${P.alert}" stroke-width="4"/>

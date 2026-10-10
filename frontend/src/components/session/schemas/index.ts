@@ -5,6 +5,7 @@ import * as svtModule from './schemas_svt';
 import * as svtEnergySketchModule from './schemas_svt_energy_sketches';
 import * as physModule from './schemas_physics';
 import * as physSketchModule from './schemas_physics_sketches';
+import * as physWavesModule from './schemas_physics_waves_reference';
 import * as chemModule from './schemas_chemistry';
 import * as chemSketchModule from './schemas_chemistry_sketches';
 import * as mathModule from './schemas_math';
@@ -30,6 +31,7 @@ const ALL_SCHEMAS: ScientificSchema[] = [
   ...collectSchemas(svtEnergySketchModule),
   ...collectSchemas(physModule),
   ...collectSchemas(physSketchModule),
+  ...collectSchemas(physWavesModule),
   ...collectSchemas(chemModule),
   ...collectSchemas(chemSketchModule),
   ...collectSchemas(mathModule),

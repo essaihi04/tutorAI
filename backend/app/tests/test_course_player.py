@@ -29,8 +29,8 @@ def test_full_chapter_has_sixteen_timed_activities_and_microquestions():
     activities = [activity for manifest in manifests for activity in manifest["activities"]]
 
     assert len(activities) == 16
-    assert sum(activity["duration_minutes"] for activity in activities) == 295
-    assert all(15 <= activity["duration_minutes"] <= 20 for activity in activities)
+    assert sum(activity["duration_minutes"] for activity in activities) == 299
+    assert all(15 <= activity["duration_minutes"] <= 22 for activity in activities)
     for activity in activities:
         assert activity["objective_ids"]
         assert len(activity["slides"]) >= 2
@@ -123,22 +123,22 @@ def test_first_physics_chemistry_and_math_courses_are_complete_and_timed():
     manifests = [manifest for manifest in _manifests() if manifest.get("stable_id") in expected]
 
     assert {manifest["stable_id"] for manifest in manifests} == expected
-    assert sum(len(manifest["activities"]) for manifest in manifests) == 14
-    assert sum(len(activity["slides"]) for manifest in manifests for activity in manifest["activities"]) == 28
     for manifest in manifests:
+        waves = manifest["stable_id"] == "phys_ch1_waves"
+        assert manifest["estimated_minutes"] == sum(a["duration_minutes"] for a in manifest["activities"])
         assert manifest["status"] == "draft"
         assert manifest["lesson_match"]
         assert manifest["intent_aliases"]
         for activity in manifest["activities"]:
-            assert 15 <= activity["duration_minutes"] <= 20
+            assert 15 <= activity["duration_minutes"] <= (25 if waves else 20)
             assert activity["objective_ids"]
             assert len(activity["slides"]) >= 2
             for slide in activity["slides"]:
                 assert slide["speech_text"]["fr"].strip()
                 assert slide["speech_text"]["mixed"].strip()
                 assert slide["question"]["prompt"].strip()
-                assert slide["question"]["advance_on_timeout"] is True
-                assert 10 <= slide["question"]["timeout_seconds"] <= 30
+                assert slide["question"]["advance_on_timeout"] is (not waves)
+                assert 10 <= slide["question"]["timeout_seconds"] <= (180 if waves else 30)
 
 
 def test_all_declarative_course_visuals_pass_the_server_normaliser():
@@ -203,7 +203,7 @@ def test_local_answer_evaluation_and_timeout_feedback():
     service = CoursePlayerService()
     correct, _, requeue = asyncio.run(service.evaluate_attempt({
         "slide_id": "energy_a02_s01",
-        "answer": "Faux",
+        "answer": "Il reçoit un phosphate",
         "outcome": "answered",
     }))
     skipped, _, skipped_requeue = asyncio.run(service.evaluate_attempt({

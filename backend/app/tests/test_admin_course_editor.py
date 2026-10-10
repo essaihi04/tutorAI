@@ -50,7 +50,8 @@ def test_all_authored_manifests_are_publishable_by_the_admin_editor():
     assert paths
     for path in paths:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        assert service.validate_payload(payload, for_publish=True) == [], path.name
+        issues = service.validate_payload(payload, for_publish=True)
+        assert [issue for issue in issues if issue["level"] == "error"] == [], path.name
 
 
 def test_publish_validation_requires_darija_question_and_auto_advance():
@@ -63,10 +64,13 @@ def test_publish_validation_requires_darija_question_and_auto_advance():
 
     issues = service.validate_payload(payload, for_publish=True)
     paths = {issue["path"] for issue in issues if issue["level"] == "error"}
+    warnings = {issue["path"] for issue in issues if issue["level"] == "warning"}
 
     assert "activities[0].slides[0].speech_text.mixed" in paths
     assert "activities[0].slides[0].question.prompt" in paths
-    assert "activities[0].slides[0].question.advance_on_timeout" in paths
+    # Le passage automatique est un choix pédagogique (désactivable dans l'éditeur) : avertissement, pas blocage.
+    assert "activities[0].slides[0].question.advance_on_timeout" in warnings
+    assert "activities[0].slides[0].question.advance_on_timeout" not in paths
 
 
 def test_editor_rejects_unknown_schema_and_non_persistent_simulation():
