@@ -53,12 +53,20 @@ def load_manifest(deck_stable_id: str) -> tuple[Path, dict]:
 
 
 def load_db_deck(admin, manifest: dict) -> dict:
-    rows = admin.table("course_decks").select("*").eq(
-        "version", int(manifest.get("version") or 1)
-    ).execute().data or []
-    for row in rows:
-        if (row.get("metadata") or {}).get("stable_id") == manifest.get("stable_id"):
+    """Deck en base pour ce manifeste : même stable_id et même version, sinon (repli) la version
+    la plus récente de même stable_id. Le repli est sûr car l'audio est rattaché par empreinte du
+    texte : import-ledger refuse toute ligne dont le texte ne correspond pas à la diapositive en base."""
+    rows = admin.table("course_decks").select("*").execute().data or []
+    same = [row for row in rows if (row.get("metadata") or {}).get("stable_id") == manifest.get("stable_id")]
+    wanted = int(manifest.get("version") or 1)
+    for row in same:
+        if int(row.get("version") or 0) == wanted:
             return row
+    if same:
+        row = max(same, key=lambda r: int(r.get("version") or 0))
+        print(f"ATTENTION version manifeste v{wanted} ≠ base v{row['version']} : deck de base utilisé "
+              f"(textes vérifiés diapositive par diapositive).")
+        return row
     raise RuntimeError("Deck non synchronisé. Lancez d'abord scripts.sync_course_decks.")
 
 
@@ -195,8 +203,12 @@ async def generate_offline(deck_stable_id: str, language: str) -> None:
         audio_bytes = base64.b64decode(result.audio_b64)
         extension = ".wav" if result.mime == "audio/wav" else ".mp3"
         version = int(latest.get("version") or 0) + 1 if latest else 1
-        relative_path = Path("media") / "audio" / "courses" / manifest["stable_id"] / language / f"{stable_id}_v{version}{extension}"
-        output_path = PROJECT_ROOT / "frontend" / "public" / relative_path
+        while True:  # un fichier déjà présent mais absent du registre (ancienne génération) n'est jamais écrasé
+            relative_path = Path("media") / "audio" / "courses" / manifest["stable_id"] / language / f"{stable_id}_v{version}{extension}"
+            output_path = PROJECT_ROOT / "frontend" / "public" / relative_path
+            if not output_path.exists():
+                break
+            version += 1
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(audio_bytes)
         for row in history:
@@ -241,7 +253,13 @@ def import_ledger(deck_stable_id: str, language: str) -> None:
             "slide_id", db_slide["id"]
         ).eq("language", language).execute().data or []
         known = {(int(row["version"]), row.get("speech_hash")) for row in existing}
+        db_speech = ((db_slide.get("speech_text") or {}).get(language) or "").strip()
+        db_hash = hashlib.sha256(db_speech.encode("utf-8")).hexdigest()
         for row in history:
+            if row["speech_hash"] != db_hash and row.get("status") != "stale":
+                print(f"TEXTE DIFFÉRENT {stable_id} v{row['version']} : la diapositive en base a un autre texte, ligne ignorée")
+                missing += 1
+                continue
             local_path = PROJECT_ROOT / "frontend" / "public" / row["file_path"].lstrip("/")
             if not local_path.exists():
                 print(f"FICHIER ABSENT {row['file_path']}")
