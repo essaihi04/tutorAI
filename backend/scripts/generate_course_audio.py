@@ -26,6 +26,7 @@ import base64
 import hashlib
 import json
 import mimetypes
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,8 +173,15 @@ def save_ledger(manifest: dict, language: str, ledger: dict) -> Path:
     return path
 
 
-async def generate_offline(deck_stable_id: str, language: str) -> None:
-    """Comme ``generate`` mais sans base : versions et statuts tenus dans ledger.json."""
+ARABE = re.compile("[\u0600-\u06FF]")
+
+
+async def generate_offline(deck_stable_id: str, language: str, refaire_darija_avant: str | None = None) -> None:
+    """Comme ``generate`` mais sans base : versions et statuts tenus dans ledger.json.
+
+    ``refaire_darija_avant`` (date ISO) : régénère les diapositives dont le texte contient de l'arabe
+    et dont l'audio a été produit avant cette date, même si le texte n'a pas changé (ex. correction
+    de la prononciation des mots français par le serveur TTS)."""
     _, manifest = load_manifest(deck_stable_id)
     ledger = load_ledger(manifest, language)
     generated = reused = failed = 0
@@ -190,7 +198,10 @@ async def generate_offline(deck_stable_id: str, language: str) -> None:
         latest = history[-1] if history else None
         if latest and latest.get("speech_hash") == speech_hash:
             local_path = PROJECT_ROOT / "frontend" / "public" / latest["file_path"].lstrip("/")
-            if local_path.exists() and latest.get("status") in {"generated", "verified", "published"}:
+            a_refaire = bool(refaire_darija_avant and ARABE.search(speech)
+                             and (latest.get("generated_at") or "") < refaire_darija_avant)
+            if (local_path.exists() and latest.get("status") in {"generated", "verified", "published"}
+                    and not a_refaire):
                 reused += 1
                 print(f"RÉUTILISÉ {stable_id} v{latest['version']} ({latest['status']})")
                 continue
@@ -336,6 +347,8 @@ def parse_args() -> argparse.Namespace:
         if command == "generate":
             sub.add_argument("--offline", action="store_true",
                              help="sans base : registre ledger.json à importer ensuite avec import-ledger")
+            sub.add_argument("--refaire-darija-avant", default=None, metavar="DATE_ISO",
+                             help="(--offline) régénère les textes en darija produits avant cette date")
         if command == "verify":
             sub.add_argument("--reviewer", required=True, help="UUID auth de l'administrateur ayant écouté les fichiers")
     return parser.parse_args()
@@ -344,7 +357,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     if args.command == "generate":
-        asyncio.run(generate_offline(args.deck, args.language) if args.offline else generate(args.deck, args.language))
+        asyncio.run(generate_offline(args.deck, args.language, args.refaire_darija_avant) if args.offline
+                    else generate(args.deck, args.language))
     elif args.command == "import-ledger":
         import_ledger(args.deck, args.language)
     else:
