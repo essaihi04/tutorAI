@@ -751,8 +751,20 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
 
   // Moteur de lecture séquentielle du script
   const play = useCallback(async (steps: LiveStep[], runId: number) => {
-    // Le chat annonce, le tableau enchaîne. Jamais les deux ensemble.
-    if (!(await attendreLeSilence(runId))) return;
+    // Un cours rédigé arrive avec sa narration déjà enregistrée (voix du
+    // professeur, vérifiée et publiée). C'est elle qui porte le contenu : le
+    // tableau prend la parole tout de suite, sans attendre que le chat ait
+    // fini d'annoncer — l'élève attendait sinon toute l'ouverture du chat avant
+    // d'entendre le professeur, et les deux voix se chevauchaient.
+    const narrationEnregistree = steps.some(
+      step => step && step.action === 'narrate' && !!step.audio_url,
+    );
+    if (narrationEnregistree) {
+      prendreLaParole();
+    } else if (!(await attendreLeSilence(runId))) {
+      // Le chat annonce, le tableau enchaîne. Jamais les deux ensemble.
+      return;
+    }
     for (let i = 0; i < steps.length; i++) {
       if (runId !== runIdRef.current) return;
       const step = steps[i];
@@ -1012,7 +1024,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       setFinished(true);
       onScriptEndRef.current?.();
     }
-  }, [wait, speakAndReveal, prefetchFrom, prendreLaParole, rendreLaParole]);
+  }, [wait, speakAndReveal, prefetchFrom, prendreLaParole, rendreLaParole, attendreLeSilence]);
 
   // (Re)démarrage quand un nouveau script arrive
   useEffect(() => {
