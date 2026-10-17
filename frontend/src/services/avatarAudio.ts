@@ -65,5 +65,8 @@ export function sampleAvatarAudio() {
   const rms = Math.sqrt(energy / waveform.length);
   const target = Math.min(1, Math.max(0, rms - .003) * 7);
   envelope += (target - envelope) * (1 - Math.exp(-dt / (target > envelope ? .025 : .055)));
-  return { weights, amplitude: envelope };
+  // Le bus d'analyse voit le son avant sa sortie au haut-parleur : la latence permet de s'y caler.
+  const context = analyser?.context as (AudioContext & { outputLatency?: number }) | undefined;
+  const latency = context ? (context.outputLatency || 0) + (context.baseLatency || 0) : 0;
+  return { weights, amplitude: envelope, rms, latency };
 }

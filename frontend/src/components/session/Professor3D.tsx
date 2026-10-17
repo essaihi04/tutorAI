@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { sampleAvatarAudio } from '../../services/avatarAudio';
+import { SyllableEnvelope } from '../../services/syllableEnvelope';
 
 /**
  * Professeur Moalim : personnage rigué aux os humanoïdes standard (Hips, Head, LeftArm, RightHandIndex1…).
@@ -38,6 +39,8 @@ const VIEW_WIDTH = 180, VIEW_HEIGHT = 260;
 /** Le canevas déborde de la boîte de chaque côté : un bras tendu n'est jamais coupé. */
 const CANVAS_MARGIN = 120, CANVAS_WIDTH = VIEW_WIDTH + 2 * CANVAS_MARGIN;
 const CAMERA_FOV = 30;
+/** Ouverture maximale (radians) de la moustache et petit mouvement du nez qui la porte. */
+const MOUSTACHE_OPEN = 0.55, NOSE_OPEN = 0.12;
 /** Marge autour du personnage dans le cadre. */
 const FRAME_MARGIN = 1.12;
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const;
@@ -89,6 +92,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     const clock = new THREE.Clock();
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let speech = 0, talk = 0, think = 0, aim = 0, lean = 0, rise = 0, scribe = 0;
+    const syllables = new SyllableEnvelope();
     let aimSide: 'Left' | 'Right' = 'Right';
     let nextBlink = 2.5, blinkStarted = -10, blinkCount = 0;
     const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
@@ -212,7 +216,9 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       const delta = Math.min(clock.getDelta(), 0.1);
       const time = clock.elapsedTime;
       const ease = (k: number) => 1 - Math.exp(-delta * k);
-      const { weights, amplitude } = sampleAvatarAudio();
+      const { weights, amplitude, rms, latency } = sampleAvatarAudio();
+      // Ouverture syllabe par syllabe, retardée de la latence de sortie : elle tombe avec le son entendu.
+      const mouth = syllables.push(rms, delta, time, latency);
       const speaking = moodRef.current === 'speaking';
       speech += (Math.min(1, amplitude * 4) - speech) * ease(4);
       talk += ((speaking ? 1 : 0) - talk) * ease(2.5);
@@ -243,7 +249,8 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         const moustache = bone('Moustache');
         // Rotation autour de l'axe gauche-droite du monde (il fait face à +Z) : un point situé devant et
         // sous le pivot remonte pour un angle négatif, quel que soit le repère local de l'os.
-        if (moustache) rotateWorld(moustache, X, -Math.min(0.42, amplitude * 1.1));
+        rotateWorld(bone('Nose'), X, -mouth * NOSE_OPEN);
+        if (moustache) rotateWorld(moustache, X, -mouth * MOUSTACHE_OPEN);
         for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -(think * 0.35 + speech * 0.12));
         if (!reducedMotion.matches) {
           // Gestes d'explication : fenêtres alternées, avec des pauses, plus amples quand la voix porte.
@@ -305,7 +312,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       if (time >= nextBlink) { blinkStarted = time; nextBlink = time + 3.1 + (Math.sin(++blinkCount * 2.39) + 1) * 1.8; }
       const blinkAge = time - blinkStarted;
       const blink = blinkAge > 0.2 ? 0 : Math.sin(Math.PI * blinkAge / 0.2);
-      const jaw = Math.min(0.5, amplitude * 0.9);
+      const jaw = mouth * 0.6;
       for (const mesh of faces) {
         const dict = mesh.morphTargetDictionary!, influences = mesh.morphTargetInfluences!;
         for (const [name, index] of Object.entries(dict)) {
