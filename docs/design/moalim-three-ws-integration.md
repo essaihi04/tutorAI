@@ -1,36 +1,44 @@
 # Professeur Moalim animé
 
-**Statut : modèle Avaturn intégré localement, non déployé.** L'ancien modèle reconstruit à partir du portrait (tête FaceBuilder, corps projeté, variantes Blender) a été retiré du projet le 17 octobre 2026 et envoyé à la Corbeille de Windows.
+**Statut : personnage de dessin animé en ligne.** Il remplace le modèle Avaturn (octobre 2026), lui-même successeur du modèle reconstruit à partir du portrait.
 
 ## Modèle
 
-`frontend/public/media/avatar/moalim-professeur.glb` provient de l'archive `professor-wit-felipe-boton.zip` fournie par l'utilisateur, générée par Avaturn puis Blender.
+`frontend/public/media/avatar/moalim-professeur.glb` (0,98 Mo) est produit par `tools/prepare_moalim_cartoon.py` à partir de `ProfessorManaosTechBehance.blend`, contenu dans l'archive `cartoon-teacher-model.zip` fournie par l'utilisateur. Le fichier source n'est pas versionné ; sa licence d'utilisation doit être confirmée auprès de son auteur avant tout usage commercial.
 
-- Corps entier en costume, lunettes, chaussures ; 4 Mo, fichier autonome.
-- Squelette humanoïde standard de 52 os, dont 30 phalanges (noms Mixamo sans préfixe).
-- Une animation de repos `IdleV4.2`, de 8 secondes, jouée en boucle.
-- **Aucune forme faciale exportée** : la bouche ne suit pas encore la voix, les yeux ne clignent pas. Le composant pilote automatiquement `jawOpen`, `viseme_*` et `eyeBlink*` dès qu'un export Avaturn les contient : il suffit de réexporter avec les blendshapes ARKit ou les visèmes activés et de remplacer le fichier.
+- Vieux professeur à grosses lunettes, cheveux et moustache blancs, gilet ; 11 matériaux en couleurs unies, sans texture.
+- Squelette de 48 os renommés en noms humanoïdes standard (`Hips`, `Head`, `LeftArm`, `RightHandIndex1`…), plus `Nose`, `Moustache`, `BrowLeft`, `BrowRight`. Quatre doigts de trois phalanges par main.
+- Deux animations découpées dans l'animation source, sans l'apparition ni la disparition : `Idle` (4 s, bras le long du corps) et `Talking` (8,4 s, gestes et coucous).
+- Les matériaux sources ont deux sorties ; le script active la sortie Principled, sinon l'export perd les couleurs.
+- Il n'a ni bouche ni lèvres sous la moustache : la voix fait parler la moustache, comme dans un dessin animé.
 
-`moalim-professeur.png` est un rendu Blender du même modèle avec le cadrage de la vue 3D. Il sert pendant le chargement et en secours si WebGL échoue.
+`moalim-professeur.png` est un rendu du même modèle en pose de repos, utilisé pendant le chargement et en secours.
+
+Pour régénérer :
+
+```bash
+blender --background --disable-autoexec --python tools/prepare_moalim_cartoon.py -- chemin/vers/ProfessorManaosTechBehance.blend
+```
 
 ## Comportement
 
 Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx`.
 
-- **Parole** : gestes d'explication sur les vrais os (bras, avant-bras, paumes, doigts), en fenêtres alternées avec des pauses, plus amples quand la voix porte.
-- **Réflexion** : tête inclinée, regard vers le haut.
-- **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend et les autres doigts se replient. La ligne de pointage part du bout de l'index.
-- **Vol** : le professeur se déplace avec un ressort amorti, s'élève et s'incline dans le sens du vol, les jambes traînent. À l'arrêt, il flotte légèrement. Sans cible pendant 1,6 s, il retourne à la place choisie par l'élève.
-- **Écriture au tableau** : quand la plume ✍️ du tableau avance, il vole sous la ligne, la tient de sa main droite et suit le trait. La plume emoji s'efface tant que sa main la remplace.
-- **Simulation** : pour une commande de scène, il vole jusqu'au bouton correspondant (`data-professor-control`), tend l'index et appuie. La scène exécute la commande à ce moment-là, après `PROFESSOR_REACH_MS` (850 ms), et une onde de clic part du bouton. Aucun clic synthétique n'est envoyé.
-- Le corps reste transparent aux clics ; seule sa petite barre d'outils, discrète, est cliquable. Le mode « animations réduites » du système est respecté.
+- **Cadrage** : le personnage est recentré et cadré automatiquement ; ses épaules et la longueur de son bras sont mesurées et transmises à l'enveloppe, qui s'en sert pour viser.
+- **Parole** : fondu vers `Talking`, la moustache se soulève et retombe avec l'amplitude de la voix, les sourcils accompagnent.
+- **Réflexion** : sourcils levés, tête inclinée.
+- **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend.
+- **Vol** : ressort amorti, élévation et inclinaison dans le sens du vol, jambes qui traînent, flottement à l'arrêt, retour à la place choisie par l'élève après 1,6 s sans cible.
+- **Écriture au tableau** : il flotte juste sous la ligne en cours, tête comprise, et écrit au bout d'une fine baguette qui part de sa main jusqu'à la plume ✍️ (masquée tant qu'il écrit).
+- **Simulation** : il vole jusqu'au bouton de la commande (`data-professor-control`), tend l'index et appuie ; la commande part après `PROFESSOR_REACH_MS` (850 ms), avec une onde de clic.
+- À chaque image, tous les os reviennent à leur pose de référence avant l'animation : l'export supprime les pistes constantes, et sans cette remise à zéro les gestes ajoutés s'accumuleraient (la tête finissait par tourner sur elle-même).
 
 ## Synchronisation audio
 
-Le moteur audio est `LipSyncAnalyser` du dépôt https://github.com/nirholas/three.ws, commit `800052ed822a409b6177c61b176a1bd6607fec0f`, sous licence Apache-2.0, copié sans modification dans `frontend/src/vendor/three-ws` avec sa licence. Il analyse l'audio réellement joué sans second lecteur. Son amplitude règle aujourd'hui l'ampleur des gestes ; elle pilotera la bouche dès que le modèle aura ses formes faciales.
+Le moteur audio est `LipSyncAnalyser` du dépôt https://github.com/nirholas/three.ws, commit `800052ed822a409b6177c61b176a1bd6607fec0f`, sous licence Apache-2.0, copié sans modification dans `frontend/src/vendor/three-ws` avec sa licence. Il analyse l'audio réellement joué, sans second lecteur.
 
 ## Vérifications
 
-- `node --test tests/avatar-lipsync.test.mjs` : moteur audio, squelette, phalanges, animation de repos, GLB autonome et léger.
-- Compilation TypeScript et ESLint sur les fichiers touchés.
-- Navigateur Edge sans interface : chargement, gestes de parole, pointage à gauche et à droite, vol, écriture qui suit la plume, retour à la place, appui sur le bouton d'une scène.
+- `node --test tests/avatar-lipsync.test.mjs` : moteur audio ; squelette, doigts, moustache, sourcils, clips `Idle` et `Talking`, GLB autonome de moins de 3 Mo.
+- Compilation TypeScript, ESLint et construction Vite.
+- Navigateur : la voix d'un vrai enregistrement de cours soulève la moustache ; le corps reste droit en parlant et en pointant ; écriture sous la ligne avec la baguette ; vol vers la scène et appui.

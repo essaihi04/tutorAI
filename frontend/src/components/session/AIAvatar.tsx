@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { ScientificControlCommand } from './scientific/types';
 import './AIAvatar.css';
 import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS } from '../../services/professorFocus';
-import type { ProfessorMotion } from './Professor3D';
+import type { ProfessorMotion, ProfessorRig } from './Professor3D';
 const Professor3D = lazy(() => import('./Professor3D'));
 
 interface AIAvatarProps {
@@ -14,10 +14,8 @@ interface AIAvatarProps {
 }
 const WIDTH = 180;
 const HEIGHT = 320;
-/** Repères de la vue 3D (boîte de 180 × 260) : épaules du professeur et portée du bras tendu. */
-const SHOULDER_RIGHT = { x: 61, y: 105 };
-const SHOULDER_LEFT = { x: 119, y: 105 };
-const REACH = 112;
+/** Mesures par défaut, remplacées par celles du modèle dès qu'il est chargé (onRig). */
+const DEFAULT_RIG: ProfessorRig = { shoulderRight: { x: 61, y: 105 }, shoulderLeft: { x: 119, y: 105 }, reach: 112 };
 const clampPosition = (x: number, y: number) => ({
   x: Math.max(-40, Math.min(x, window.innerWidth - WIDTH + 40)),
   y: Math.max(0, Math.min(y, window.innerHeight - HEIGHT)),
@@ -33,16 +31,18 @@ type Point = { x: number; y: number };
 type Focus = { rect: DOMRect; writing: boolean };
 
 /** Place la boîte pour que la main du professeur atteigne `point`. */
-function reachPosition(point: Point, writing: boolean) {
+function reachPosition(point: Point, writing: boolean, rig: ProfessorRig) {
+  const { shoulderRight: right, shoulderLeft: left, reach } = rig;
   if (writing) {
-    // Écriture : le corps flotte sous la ligne, le bras droit monte jusqu'au bout du trait.
-    return clampFlight(point.x - SHOULDER_RIGHT.x + REACH * 0.5, point.y - SHOULDER_RIGHT.y + REACH * 0.86);
+    // Écriture : il flotte juste sous la ligne, tête comprise (le haut du personnage est à ~16 px du
+    // haut de la boîte), sa main droite levée vers le trait ; une baguette relie la main à la plume.
+    return clampFlight(point.x - right.x + reach * 0.75, point.y + 4);
   }
   // Pointage : bras droit si la place existe à droite de la cible, sinon bras gauche depuis la gauche.
-  const fromRight = point.x + REACH - SHOULDER_RIGHT.x + WIDTH < window.innerWidth + 40;
+  const fromRight = point.x + reach - right.x + WIDTH < window.innerWidth + 40;
   return fromRight
-    ? clampFlight(point.x + REACH - SHOULDER_RIGHT.x, point.y - SHOULDER_RIGHT.y + 18)
-    : clampFlight(point.x - REACH - SHOULDER_LEFT.x, point.y - SHOULDER_LEFT.y + 18);
+    ? clampFlight(point.x + reach * 0.92 - right.x, point.y - right.y + reach * 0.16)
+    : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
 export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control }: AIAvatarProps) {
@@ -61,6 +61,8 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
   const home = useRef<Point>(initial);            // sa place de repos, choisie par l'élève
   const current = useRef<Point>({ ...initial });  // là où il est
   const motion = useRef<ProfessorMotion>({ vx: 0, vy: 0 });
+  const rig = useRef<ProfessorRig>(DEFAULT_RIG);
+  const onRig = useCallback((measured: ProfessorRig) => { rig.current = measured; }, []);
   const [side, setSide] = useState<'left' | 'right'>('left');
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const state = isSpeaking ? 'speaking' : isProcessing ? 'thinking' : 'idle';
@@ -132,7 +134,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       const rect = writing ? new DOMRect(penBounds!.left - 2, penBounds!.top + penBounds!.height * 0.55, 4, 4) : bounds;
       if (visible) {
         const point = writing ? { x: rect.left, y: rect.top } : { x: bounds.right - 14, y: bounds.top + bounds.height / 2 };
-        fly(reachPosition(point, writing));
+        fly(reachPosition(point, writing, rig.current));
         aimSide(point);
       }
       setFocus(previous => !visible ? null : previous && previous.writing === writing && same(previous.rect, rect) ? previous : { rect, writing });
@@ -163,7 +165,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       const bounds = element.getBoundingClientRect();
       setFocus({ rect: bounds, writing: false });
       const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
-      fly(reachPosition(point, false));
+      fly(reachPosition(point, false, rig.current));
       aimSide(point);
     };
     update();
@@ -197,7 +199,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
 
   return createPortal(
     <>
-      {end && hand && !writing && active && <svg className="moalim-pointer" aria-hidden="true">
+      {end && hand && active && <svg className={`moalim-pointer${writing ? ' moalim-pointer--chalk' : ''}`} aria-hidden="true">
         <line x1={hand.x} y1={hand.y} x2={end.x} y2={end.y} />
         <circle cx={end.x} cy={end.y} r="5" />
       </svg>}
@@ -210,7 +212,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
         {!minimized && (!animationFailed
           ? <Suspense fallback={<img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Chargement de Moalim" />}>
               <Professor3D mood={state} pointing={!!target && !minimized} pointingSide={side} target={aimPoint} writing={writing}
-                motion={motion} onHandPosition={onHandPosition} onError={onAnimationError} />
+                motion={motion} onHandPosition={onHandPosition} onRig={onRig} onError={onAnimationError} />
             </Suspense>
           : <img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Moalim, ton professeur virtuel" draggable={false} />)}
         <div className="moalim-avatar__toolbar">

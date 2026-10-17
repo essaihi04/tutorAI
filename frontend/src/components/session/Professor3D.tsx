@@ -4,10 +4,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { sampleAvatarAudio } from '../../services/avatarAudio';
 
 /**
- * Professeur Moalim : avatar Avaturn rigué (squelette humanoïde standard, 52 os dont 30 phalanges).
+ * Professeur Moalim : personnage rigué aux os humanoïdes standard (Hips, Head, LeftArm, RightHandIndex1…).
  *
- * - L'animation de repos fournie par le modèle tourne en boucle (AnimationMixer).
- * - Pendant la parole, des gestes d'explication s'ajoutent sur les avant-bras, les mains et la tête.
+ * - Le modèle est recentré et cadré automatiquement, quelle que soit sa taille.
+ * - `Idle` tourne en boucle ; pendant la parole, `Talking` prend le relais en fondu. Sans clip
+ *   `Talking`, des gestes d'explication sont ajoutés sur les avant-bras, les mains et la tête.
+ * - La voix soulève la moustache (os `Moustache`) ; la réflexion lève les sourcils (`Brow*`).
  * - Pour montrer un élément, le bras se tend réellement vers lui et l'index se déplie, les autres
  *   doigts se replient ; la position du bout de l'index sert d'origine à la ligne de pointage.
  * - Si le modèle porte des formes faciales (jawOpen, viseme_*, eyeBlink*), la bouche suit la voix.
@@ -15,6 +17,8 @@ import { sampleAvatarAudio } from '../../services/avatarAudio';
 export type ProfessorMood = 'idle' | 'speaking' | 'thinking';
 /** Vitesse du vol à l'écran (px/s), partagée par l'enveloppe sans re-rendu. */
 export interface ProfessorMotion { vx: number; vy: number; }
+/** Mesures du personnage dans la boîte de 180 × 260 px : épaules et longueur du bras tendu. */
+export interface ProfessorRig { shoulderRight: { x: number; y: number }; shoulderLeft: { x: number; y: number }; reach: number; }
 interface Props {
   mood: ProfessorMood;
   pointing: boolean;
@@ -26,19 +30,24 @@ interface Props {
   writing?: boolean;
   motion?: { current: ProfessorMotion };
   onHandPosition: (point: { x: number; y: number }) => void;
+  onRig?: (rig: ProfessorRig) => void;
   onError: () => void;
 }
 export const PROFESSOR_MODEL_URL = '/media/avatar/moalim-professeur.glb';
 const VIEW_WIDTH = 180, VIEW_HEIGHT = 260;
 /** Le canevas déborde de la boîte de chaque côté : un bras tendu n'est jamais coupé. */
 const CANVAS_MARGIN = 120, CANVAS_WIDTH = VIEW_WIDTH + 2 * CANVAS_MARGIN;
-const CAMERA = { fov: 30, position: new THREE.Vector3(0, 1.36, 2.35), lookAt: new THREE.Vector3(0, 1.3, 0) };
+const CAMERA_FOV = 30;
+/** Marge autour du personnage dans le cadre. */
+const FRAME_MARGIN = 1.12;
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const;
 
-export default function Professor3D({ mood, pointing, pointingSide, target, writing = false, motion, onHandPosition, onError }: Props) {
+export default function Professor3D({ mood, pointing, pointingSide, target, writing = false, motion, onHandPosition, onRig, onError }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const moodRef = useRef(mood), pointRef = useRef(pointing), sideRef = useRef(pointingSide), targetRef = useRef(target), writingRef = useRef(writing);
   const motionRef = useRef(motion);
+  const onRigRef = useRef(onRig);
+  useEffect(() => { onRigRef.current = onRig; }, [onRig]);
   useEffect(() => { writingRef.current = writing; }, [writing]);
   useEffect(() => { motionRef.current = motion; }, [motion]);
   useEffect(() => { moodRef.current = mood; }, [mood]);
@@ -61,9 +70,8 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(CAMERA.fov, CANVAS_WIDTH / VIEW_HEIGHT, 0.05, 50);
-    camera.position.copy(CAMERA.position);
-    camera.lookAt(CAMERA.lookAt);
+    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, CANVAS_WIDTH / VIEW_HEIGHT, 0.01, 50);
+    camera.position.set(0, 1, 3); camera.lookAt(0, 1, 0);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x6b7280, 1.6));
     const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-1.5, 2.8, 2.6); scene.add(key);
     const fill = new THREE.DirectionalLight(0xdbe4ff, 0.9); fill.position.set(1.8, 1.6, 2); scene.add(fill);
@@ -72,7 +80,11 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     let disposed = false, frame = 0;
     let model: THREE.Object3D | null = null;
     let mixer: THREE.AnimationMixer | null = null;
+    let idleAction: THREE.AnimationAction | null = null, talkAction: THREE.AnimationAction | null = null;
+    let talkingShown = false;
     const bones = new Map<string, THREE.Bone>();
+    /** Pose de référence de chaque os : les os sans piste d'animation y reviennent à chaque image. */
+    const rest = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3; s: THREE.Vector3 }>();
     const faces: THREE.Mesh[] = [];
     const clock = new THREE.Clock();
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -128,6 +140,37 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       for (const k of [1, 2, 3]) rotateWorld(bone(`${side}Hand${finger}${k}`), axis, angle * (k === 1 ? 0.8 : 1));
     }
 
+    /** Recentre le personnage (pieds au sol, axe vertical au centre) et cadre la caméra sur lui. */
+    function frameModel(root: THREE.Object3D) {
+      root.updateMatrixWorld(true);
+      const box = new THREE.Box3();
+      root.traverse(object => {
+        if (object instanceof THREE.SkinnedMesh) { object.computeBoundingBox(); box.union(object.boundingBox!.clone().applyMatrix4(object.matrixWorld)); }
+        else if (object instanceof THREE.Mesh) box.expandByObject(object);
+      });
+      const size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
+      root.position.x -= centre.x; root.position.z -= centre.z; root.position.y -= box.min.y;
+      root.updateMatrixWorld(true);
+      const half = Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+      const distance = Math.max(size.y * FRAME_MARGIN / 2 / half, size.x * FRAME_MARGIN / 2 / (half * VIEW_WIDTH / VIEW_HEIGHT)) + size.z / 2;
+      camera.position.set(0, size.y / 2, distance);
+      camera.lookAt(0, size.y / 2, 0);
+      camera.updateMatrixWorld(true);
+      // Mesures transmises à l'enveloppe : position des épaules et portée du bras, en px de la boîte.
+      const pxPerMetre = VIEW_HEIGHT / (2 * (distance - size.z / 2) * half);
+      const toBox = (b: THREE.Bone | undefined) => {
+        if (!b) return { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 3 };
+        const p = b.getWorldPosition(new THREE.Vector3()).project(camera);
+        return { x: (p.x + 1) / 2 * CANVAS_WIDTH - CANVAS_MARGIN, y: (1 - p.y) / 2 * VIEW_HEIGHT };
+      };
+      const length = (...names: string[]) => names.slice(1).reduce((sum, name, i) => {
+        const a = bone(names[i]), b = bone(name);
+        return a && b ? sum + a.getWorldPosition(new THREE.Vector3()).distanceTo(b.getWorldPosition(new THREE.Vector3())) : sum;
+      }, 0);
+      const arm = length('RightArm', 'RightForeArm', 'RightHand', 'RightHandIndex1', 'RightHandIndex3') * 1.1;
+      onRigRef.current?.({ shoulderRight: toBox(bone('RightArm')), shoulderLeft: toBox(bone('LeftArm')), reach: Math.max(40, arm * pxPerMetre) });
+    }
+
     function screenToWorld(point: { x: number; y: number }, anchor: THREE.Vector3, out: THREE.Vector3) {
       const bounds = renderer.domElement.getBoundingClientRect();
       const ndcX = THREE.MathUtils.clamp(((point.x - bounds.left) / bounds.width) * 2 - 1, -4, 4);
@@ -143,7 +186,10 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       if (disposed) { disposeModel(gltf.scene); return; }
       model = gltf.scene;
       model.traverse(object => {
-        if (object instanceof THREE.Bone) bones.set(object.name.replace(/^mixamorig:?/, ''), object);
+        if (object instanceof THREE.Bone) {
+          bones.set(object.name.replace(/^mixamorig:?/, ''), object);
+          rest.set(object, { q: object.quaternion.clone(), p: object.position.clone(), s: object.scale.clone() });
+        }
         if (object instanceof THREE.Mesh) {
           object.frustumCulled = false;
           if (object.morphTargetDictionary && Object.keys(object.morphTargetDictionary).length) faces.push(object);
@@ -153,7 +199,11 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       scene.add(model);
       mixer = new THREE.AnimationMixer(model);
       const idle = gltf.animations.find(clip => /idle/i.test(clip.name)) ?? gltf.animations[0];
-      if (idle) mixer.clipAction(idle).play();
+      const talking = gltf.animations.find(clip => /talk/i.test(clip.name));
+      if (idle) { idleAction = mixer.clipAction(idle); idleAction.play(); }
+      if (talking) { talkAction = mixer.clipAction(talking); talkAction.setEffectiveWeight(0); talkAction.play(); }
+      mixer.update(0);
+      frameModel(model);
       container.dataset.ready = 'true';
     }, undefined, () => { if (!disposed) onError(); });
 
@@ -177,14 +227,31 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
 
       if (mixer && model) {
         mixer.timeScale = reducedMotion.matches ? 0.3 : 1;
+        // Parole : fondu vers l'animation de parole du modèle quand elle existe.
+        if (talkAction && idleAction && speaking !== talkingShown) {
+          talkingShown = speaking;
+          if (speaking) { talkAction.reset(); talkAction.crossFadeFrom(idleAction, 0.45, false); }
+          else { idleAction.reset(); idleAction.crossFadeFrom(talkAction, 0.6, false); }
+          (speaking ? talkAction : idleAction).setEffectiveWeight(1).play();
+        }
+        // Sans cela, les rotations ajoutées ci-dessous s'accumuleraient d'une image à l'autre sur les os
+        // dont l'export a retiré les pistes constantes (tête, moustache, sourcils…).
+        for (const [b, pose] of rest) { b.quaternion.copy(pose.q); b.position.copy(pose.p); b.scale.copy(pose.s); }
         mixer.update(delta);
         model.updateMatrixWorld(true);
+        // Voix : la moustache se soulève et retombe avec chaque syllabe ; les sourcils suivent la réflexion.
+        const moustache = bone('Moustache');
+        // Rotation autour de l'axe gauche-droite du monde (il fait face à +Z) : un point situé devant et
+        // sous le pivot remonte pour un angle négatif, quel que soit le repère local de l'os.
+        if (moustache) rotateWorld(moustache, X, -Math.min(0.42, amplitude * 1.1));
+        for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -(think * 0.35 + speech * 0.12));
         if (!reducedMotion.matches) {
           // Gestes d'explication : fenêtres alternées, avec des pauses, plus amples quand la voix porte.
           const beat = (period: number, offset: number) => { const p = (time + offset) % period; return p < 3.2 ? Math.sin(Math.PI * p / 3.2) ** 2 : 0; };
-          const gestureR = talk * (0.55 + 0.45 * speech) * beat(6.1, 0.3);
-          const gestureL = talk * (0.55 + 0.45 * speech) * beat(7.3, 3.4);
-          const both = talk * 0.35;
+          const procedural = talkAction ? 0 : 1;                                             // le clip Talking suffit
+          const gestureR = procedural * talk * (0.55 + 0.45 * speech) * beat(6.1, 0.3);
+          const gestureL = procedural * talk * (0.55 + 0.45 * speech) * beat(7.3, 3.4);
+          const both = procedural * talk * 0.35;
           // Vol : le corps penche dans le sens du déplacement, les jambes traînent derrière.
           rotateWorld(bone('Hips'), Z, -lean * 0.22);
           rotateWorld(bone('Spine'), X, rise * 0.12);
@@ -194,7 +261,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           rotateWorld(bone('Head'), X, -talk * (0.03 + speech * 0.05) * Math.sin(time * 2.3) + think * -0.12);
           rotateWorld(bone('Head'), Z, think * 0.12 + talk * Math.sin(time * 0.7) * 0.03);
           for (const [side, g, sign] of [['Right', gestureR, -1], ['Left', gestureL, 1]] as const) {
-            if (side === aimSide && aim > 0.02) continue;
+            if ((side === aimSide && aim > 0.02) || both + g < 0.001) continue;
             const lift = Math.min(1, both + g);
             rotateWorld(bone(`${side}Arm`), X, -lift * 0.42);                                 // bras vers l'avant
             rotateWorld(bone(`${side}Arm`), Z, sign * lift * 0.28);                           // et écarté du corps

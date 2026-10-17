@@ -28,22 +28,22 @@ test('silent audio rests; sound opens the mouth; stop returns to rest', () => {
   assert.equal(lips.getAmplitude(), 0);
   assert.equal(lips.sample(), null);
 });
-test('distributed GLB is a self-contained humanoid rig with articulated fingers and an idle clip', () => {
+test('distributed GLB is a light, self-contained professor rig with idle, talking and a moustache', () => {
   const bytes = readFileSync(new URL('../public/media/avatar/moalim-professeur.glb', import.meta.url));
   assert.equal(bytes.toString('ascii', 0, 4), 'glTF');
   const jsonLength = bytes.readUInt32LE(12);
   const model = JSON.parse(bytes.toString('utf8', 20, 20 + jsonLength).trim());
   const names = new Set(model.nodes.map(node => node.name));
   for (const side of ['Left', 'Right']) {
-    for (const name of ['Shoulder', 'Arm', 'ForeArm', 'Hand'])
+    for (const name of ['Shoulder', 'Arm', 'ForeArm', 'Hand', 'UpLeg', 'Leg'])
       assert.ok(names.has(side + name), side + name);
-    for (const finger of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'])
+    for (const finger of ['Thumb', 'Index', 'Middle', 'Pinky'])
       for (const k of [1, 2, 3]) assert.ok(names.has(`${side}Hand${finger}${k}`), `${side}Hand${finger}${k}`);
   }
-  for (const name of ['Hips', 'Spine2', 'Neck', 'Head']) assert.ok(names.has(name), name);
+  for (const name of ['Hips', 'Head', 'Moustache', 'BrowLeft', 'BrowRight']) assert.ok(names.has(name), name);
   assert.ok(model.skins?.length, 'body is rigged');
-  assert.ok(model.animations?.some(clip => /idle/i.test(clip.name)), 'idle clip is included');
+  const clips = model.animations?.map(clip => clip.name) ?? [];
+  for (const clip of ['Idle', 'Talking']) assert.ok(clips.includes(clip), clip);
   assert.ok(!model.buffers.some(buffer => buffer.uri), 'GLB is self-contained');
-  assert.ok(bytes.length < 8e6, 'GLB stays light enough for the session page');
+  assert.ok(bytes.length < 3e6, 'GLB stays light for the session page');
 });
-
