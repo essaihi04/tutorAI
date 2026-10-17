@@ -25,7 +25,7 @@ blender --background --disable-autoexec --python tools/prepare_moalim_cartoon.py
 Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx`.
 
 - **Cadrage** : le personnage est recentré et cadré automatiquement ; ses épaules et la longueur de son bras sont mesurées et transmises à l'enveloppe, qui s'en sert pour viser.
-- **Parole** : fondu vers `Talking`, la moustache se soulève et retombe avec l'amplitude de la voix, les sourcils accompagnent.
+- **Parole** : fondu vers `Talking` ; la moustache (réduite à 85 % pour rester dans le visage) se soulève jusqu'à 0,55 rad à chaque syllabe, calée sur la latence de sortie audio, avec une vitesse plafonnée pour glisser d'une position à l'autre sans saut (`syllableEnvelope.js`) ; les sourcils accompagnent.
 - **Réflexion** : sourcils levés, tête inclinée.
 - **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend.
 - **Vol** : ressort amorti, élévation et inclinaison dans le sens du vol, jambes qui traînent, flottement à l'arrêt, retour à la place choisie par l'élève après 1,6 s sans cible.
@@ -39,6 +39,7 @@ Le moteur audio est `LipSyncAnalyser` du dépôt https://github.com/nirholas/thr
 
 ## Vérifications
 
+- `node --test tests/syllable-envelope.test.mjs` : sur de vrais enregistrements, ouvertures syllabe par syllabe, sans blocage ni saut d'une image à l'autre ; fermeture au silence ; retard de latence.
 - `node --test tests/avatar-lipsync.test.mjs` : moteur audio ; squelette, doigts, moustache, sourcils, clips `Idle` et `Talking`, GLB autonome de moins de 3 Mo.
 - Compilation TypeScript, ESLint et construction Vite.
 - Navigateur : la voix d'un vrai enregistrement de cours soulève la moustache ; le corps reste droit en parlant et en pointant ; écriture sous la ligne avec la baguette ; vol vers la scène et appui.

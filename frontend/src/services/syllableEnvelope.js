@@ -8,16 +8,18 @@
  *   et le souffle, quel que soit le volume de l'enregistrement.
  * - Compensation de latence : l'analyse voit le son avant qu'il ne sorte du haut-parleur
  *   (`AudioContext.outputLatency` + `baseLatency`) ; la valeur rendue est retardée d'autant.
- * - Attaque rapide, fermeture un peu plus lente, comme une mâchoire.
+ * - Attaque rapide, fermeture un peu plus lente, comme une mâchoire ; la vitesse est plafonnée
+ *   (10 ouvertures complètes par seconde au plus) pour qu'aucune image ne saute d'une position à l'autre.
  *
- * Réglages choisis sur les enregistrements des cours : environ 3 ouvertures par seconde de parole,
- * contre 0,6 à 0,9 pour l'ancienne enveloppe, qui restait au maximum 70 à 80 % du temps.
+ * Réglages choisis sur les enregistrements des cours : 2,2 à 2,6 ouvertures par seconde de parole et
+ * au plus 0,17 d'écart entre deux images à 60 i/s, contre 0,6 à 0,9 ouvertures pour l'ancienne
+ * enveloppe, qui restait au maximum 70 à 80 % du temps.
  */
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 export class SyllableEnvelope {
-  constructor({ floor = 0.006, slowTau = 0.12, low = 0.9, high = 1.5, attack = 0.015, release = 0.05, window = 0.6 } = {}) {
-    Object.assign(this, { floor, slowTau, low, high, attack, release, window });
+  constructor({ floor = 0.006, slowTau = 0.12, low = 0.9, high = 1.5, attack = 0.015, release = 0.05, window = 0.6, speed = 10 } = {}) {
+    Object.assign(this, { floor, slowTau, low, high, attack, release, window, speed });
     this.reset();
   }
 
@@ -38,10 +40,13 @@ export class SyllableEnvelope {
     const wanted = now - Math.min(this.window * 0.8, Math.max(0, latency));
     let delayed = this.trail[0][1];
     for (const [t, v] of this.trail) { if (t <= wanted) delayed = v; else break; }
-    const tau = delayed > this.open ? this.attack : this.release;
-    this.open += (delayed - this.open) * (1 - Math.exp(-dt / tau));
+    const tau = delayed > this.goal ? this.attack : this.release;
+    this.goal += (delayed - this.goal) * (1 - Math.exp(-dt / tau));
+    // Vitesse plafonnée : la moustache se déplace d'une position à l'autre au lieu d'y sauter.
+    const step = this.speed * dt;
+    this.open += Math.max(-step, Math.min(step, this.goal - this.open));
     return this.open;
   }
 
-  reset() { this.open = 0; this.trail = []; this.peak = 0.02; this.slow = 0.02; }
+  reset() { this.open = 0; this.goal = 0; this.trail = []; this.peak = 0.02; this.slow = 0.02; }
 }

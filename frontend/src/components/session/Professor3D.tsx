@@ -41,6 +41,8 @@ const CANVAS_MARGIN = 120, CANVAS_WIDTH = VIEW_WIDTH + 2 * CANVAS_MARGIN;
 const CAMERA_FOV = 30;
 /** Ouverture maximale (radians) de la moustache et petit mouvement du nez qui la porte. */
 const MOUSTACHE_OPEN = 0.55, NOSE_OPEN = 0.12;
+/** Taille de la moustache : à 1, ses pointes dépassent un peu des joues. */
+const MOUSTACHE_SCALE = 0.85;
 /** Marge autour du personnage dans le cadre. */
 const FRAME_MARGIN = 1.12;
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const;
@@ -250,7 +252,11 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         // Rotation autour de l'axe gauche-droite du monde (il fait face à +Z) : un point situé devant et
         // sous le pivot remonte pour un angle négatif, quel que soit le repère local de l'os.
         rotateWorld(bone('Nose'), X, -mouth * NOSE_OPEN);
-        if (moustache) rotateWorld(moustache, X, -mouth * MOUSTACHE_OPEN);
+        if (moustache) {
+          rotateWorld(moustache, X, -mouth * MOUSTACHE_OPEN);
+          moustache.scale.multiplyScalar(MOUSTACHE_SCALE);                               // remise à la taille de repos à chaque image
+          moustache.updateMatrixWorld(true);
+        }
         for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -(think * 0.35 + speech * 0.12));
         if (!reducedMotion.matches) {
           // Gestes d'explication : fenêtres alternées, avec des pauses, plus amples quand la voix porte.

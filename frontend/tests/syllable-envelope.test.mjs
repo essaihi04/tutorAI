@@ -50,6 +50,8 @@ test('the moustache opens and closes with the syllables of real course recording
     assert.ok(openings(series) >= 2, `${name}: ${openings(series).toFixed(2)} openings/s`);
     assert.ok(series.filter(v => v > 0.95).length / speaking < 0.3, `${name}: not stuck wide open`);
     assert.ok(Math.max(...series) > 0.9, `${name}: opens fully on stressed syllables`);
+    const jump = Math.max(...series.slice(1).map((v, f) => Math.abs(v - series[f])));
+    assert.ok(jump <= 0.2, `${name}: moves smoothly from frame to frame (largest step ${jump.toFixed(2)})`);
   }
 });
 
