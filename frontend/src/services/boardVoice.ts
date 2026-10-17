@@ -1,3 +1,4 @@
+import { observeAvatarMedia } from './avatarAudio';
 /**
  * Voix du tableau en direct — NOTRE modèle vocal, jamais celui du navigateur.
  *
@@ -207,6 +208,7 @@ class BoardVoiceService {
       this.stop();
 
       audio = new Audio(url);
+      observeAvatarMedia(audio);
       audio.playbackRate = TTS_PLAYBACK_RATE;
       audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
       this.current = audio;

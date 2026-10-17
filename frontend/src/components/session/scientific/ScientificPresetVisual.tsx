@@ -22,6 +22,7 @@ import {
   normalizePresetVariant,
   resolveScientificPreset,
 } from './scientificPresets';
+import { PROFESSOR_REACH_MS } from '../../../services/professorFocus';
 
 interface ScientificPresetVisualProps {
   spec: ScientificPresetVisualSpec;
@@ -32,9 +33,9 @@ interface ScientificPresetVisualProps {
 
 export default function ScientificPresetVisual(props: ScientificPresetVisualProps) {
   const { spec } = props;
-  return spec.presetId === 'svt_ch1_vesicules_atp_synthase'
+  return <div data-professor-target={spec.presetId} style={{ width: '100%', height: '100%' }}>{spec.presetId === 'svt_ch1_vesicules_atp_synthase'
     ? <VesicleExperimentVisual key={`${spec.variant}-${spec.step}-${spec.autoplay}-${spec.parameters?.pHi}-${spec.parameters?.pHe}`} {...props} />
-    : <PresetTimelineVisual {...props} />;
+    : <PresetTimelineVisual {...props} />}</div>;
 }
 
 function PresetTimelineVisual({
@@ -100,7 +101,7 @@ function PresetTimelineVisual({
         setRunning(control.command === 'set_variant');
         setLastAction(`llm_${control.command}`);
       }
-    }, 0);
+    }, PROFESSOR_REACH_MS);   // le professeur vole jusqu'au bouton, la commande part à l'appui
     return () => window.clearTimeout(timer);
   }, [control?.sequence, control, meta, spec.presetId, spec.variant]);
 
@@ -350,6 +351,7 @@ function PresetTimelineVisual({
             ? 'rounded-lg border border-cyan-300/60 bg-transparent px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10'
             : 'rounded-md px-2 py-1 hover:bg-white/10'}
           aria-label={running ? 'Mettre en pause' : 'Démarrer'}
+          data-professor-control="start pause set_variant highlight"
         >
           {running ? '⏸ Pause' : '▶ Démarrer'}
         </button>
@@ -357,6 +359,7 @@ function PresetTimelineVisual({
           type="button"
           onClick={() => { setRunning(false); setStep(0); }}
           className="rounded-md px-2 py-1 hover:bg-white/10"
+          data-professor-control="reset"
         >
           ↺ Revenir au début
         </button>}
@@ -364,6 +367,7 @@ function PresetTimelineVisual({
           type="button"
           onClick={() => { setRunning(false); setStep(current => current >= meta.maxStep ? 0 : current + 1); }}
           className="rounded-md px-2 py-1 text-xs text-slate-100 hover:bg-white/10 disabled:opacity-40"
+          data-professor-control="next previous"
         >
           {step >= meta.maxStep ? 'Recommencer' : 'Étape suivante'}
         </button>}

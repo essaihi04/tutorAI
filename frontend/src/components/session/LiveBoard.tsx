@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { focusProfessor } from '../../services/professorFocus';
 import 'katex/dist/katex.min.css';
 import {
   renderMixedContent, renderDisplayMath, containsArabic,
@@ -407,6 +408,16 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const voiceHandleRef = useRef<BoardSpeakHandle | null>(null);
   const langRef = useRef<'fr' | 'ar' | 'mixed'>('fr');
   const drawZoneRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!playing || finished || erasingZone) { focusProfessor(null); return; }
+    const frame = requestAnimationFrame(() => {
+      const action = script?.steps?.[stepIndex]?.action;
+      const drawing = action === 'draw' || action === 'figure' || (action === 'zoom' && script?.steps?.[stepIndex]?.target !== 'text');
+      const lines = textZoneRef.current?.querySelectorAll<HTMLElement>('.live-line');
+      focusProfessor(drawing ? drawZoneRef.current : lines?.[lines.length - 1] || null);
+    });
+    return () => { cancelAnimationFrame(frame); focusProfessor(null); };
+  }, [written, drawn, figure, stepIndex, playing, finished, erasingZone, script]);
   // Zoom piloté par le prof — via ref car défini après play() dans le fichier.
   const zoomToPointRef = useRef<(x: number, y: number, s: number) => void>(() => {});
   // État de la voix du chat, vu depuis la boucle de lecture (voir plus bas).
@@ -1656,7 +1667,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
            deux doigts pincent pour zoomer. */}
       <div
         ref={viewportRef}
-        className="flex-1 min-h-0 relative overflow-hidden"
+        className="moalim-board-viewport flex-1 min-h-0 relative overflow-hidden"
         style={{
           touchAction: zoom > 1 ? 'none' : 'pan-y',
           cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : undefined,
@@ -1668,7 +1679,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
         onDoubleClick={onDoubleClick}
       >
       <div
-        className={`w-full h-full flex flex-col md:flex-row ${playing ? '' : 'live-paused'}`}
+        className={`moalim-board-content w-full h-full flex flex-col md:flex-row ${playing ? '' : 'live-paused'}`}
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
@@ -1686,6 +1697,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             la colonne est déjà cadrée par elle. */}
         <div
           ref={textZoneRef}
+          onClickCapture={event => {
+            const element = (event.target as HTMLElement).closest<HTMLElement>('tbody tr, .live-line');
+            if (element && event.currentTarget.contains(element)) focusProfessor(element);
+          }}
           className={`flex-1 min-w-0 overflow-y-auto px-5 ${focus ? 'pt-10 pb-16' : 'py-4'} ${hasDrawSteps ? '' : 'md:max-w-4xl md:mx-auto md:w-full'}`}
           style={eraseText ? { animation: `liveEraseWipe ${ERASE_MS}ms ease-in forwards` } : undefined}
         >

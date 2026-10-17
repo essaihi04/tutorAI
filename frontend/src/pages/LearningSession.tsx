@@ -1,3 +1,4 @@
+import { observeAvatarMedia, observeAvatarSource } from '../services/avatarAudio';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -867,6 +868,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     source.buffer = buffer;
     source.playbackRate.value = TTS_PLAYBACK_RATE;
     source.connect(ctx.destination);
+    observeAvatarSource(source);
 
     const maintenant = ctx.currentTime;
     let depart: number;
@@ -895,6 +897,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     sourcesPcmRef.current.push(source);
     source.onended = () => {
+      source.disconnect();
       sourcesPcmRef.current = sourcesPcmRef.current.filter((s) => s !== source);
       // La fin de la voix, c'est le dernier bloc joué APRÈS que le serveur a
       // annoncé la fin — sinon un creux réseau ferait croire que le prof a
@@ -913,6 +916,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const arreterFluxPcm = () => {
     sourcesPcmRef.current.forEach((s) => {
       try { s.onended = null; s.stop(); } catch { /* déjà terminée */ }
+      s.disconnect();
     });
     sourcesPcmRef.current = [];
     prochainDepartRef.current = 0;
@@ -1660,6 +1664,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     const audioBlob = new Blob([byteArray], { type: mimeType || 'audio/wav' });
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
+    observeAvatarMedia(audio);
     audio.playbackRate = TTS_PLAYBACK_RATE;
     audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
     
@@ -1742,6 +1747,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     const audioUrl = URL.createObjectURL(audioBlob);
     audioUrlRef.current = audioUrl;
     const audio = new Audio(audioUrl);
+    observeAvatarMedia(audio);
     audio.playbackRate = TTS_PLAYBACK_RATE;
     audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
     audioRef.current = audio;
@@ -2343,7 +2349,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               {/* Small floating avatar pip — pointer-events-none so its unscaled 220×220 box doesn't block clicks below */}
               <div className="absolute top-2 right-2 z-20 transition-all duration-500 pointer-events-none">
                 <div className="scale-[0.4] origin-top-right">
-                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
+                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 </div>
               </div>
 
@@ -2445,7 +2451,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   the QuickActions / VoiceInput / send-text button on phones, intercepting all taps. */}
               <div className="absolute bottom-3 right-3 z-20 transition-all duration-500 pointer-events-none">
                 <div className="scale-[0.35] origin-bottom-right">
-                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
+                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 </div>
               </div>
 
@@ -2510,7 +2516,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
               {/* Small floating avatar pip — pointer-events-none so its unscaled 220×220 box doesn't block clicks below */}
               <div className="absolute top-2 right-2 z-20 transition-all duration-500 pointer-events-none">
                 <div className="scale-[0.4] origin-top-right">
-                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
+                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 </div>
               </div>
 
@@ -2540,6 +2546,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           ) : courseDeck && !isLibreConnexion ? (
             <div className="flex-1 min-h-0 p-0 md:p-2 animate-[fadeSlideIn_0.4s_ease-out]">
               <div className="h-full w-full overflow-hidden rounded-none border-0 md:rounded-2xl md:border md:border-white/10 shadow-2xl shadow-black/40">
+                <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 <CoursePlayer
                   key={courseDeck.id}
                   deck={courseDeck}
@@ -2564,7 +2571,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             <>
               {/* No media: avatar centered as main element */}
               <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} />
+                <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 {!connected && (
                   <div className="flex items-center gap-2 text-amber-400/60 text-xs animate-pulse">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />

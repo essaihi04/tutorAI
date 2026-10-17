@@ -1,155 +1,245 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { ScientificControlCommand } from './scientific/types';
+import './AIAvatar.css';
+import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS } from '../../services/professorFocus';
+import type { ProfessorMotion } from './Professor3D';
+const Professor3D = lazy(() => import('./Professor3D'));
 
 interface AIAvatarProps {
   isSpeaking: boolean;
   isProcessing: boolean;
   processingStage?: string;
+  control?: ScientificControlCommand | null;
+}
+const WIDTH = 180;
+const HEIGHT = 320;
+/** Repères de la vue 3D (boîte de 180 × 260) : épaules du professeur et portée du bras tendu. */
+const SHOULDER_RIGHT = { x: 61, y: 105 };
+const SHOULDER_LEFT = { x: 119, y: 105 };
+const REACH = 112;
+const clampPosition = (x: number, y: number) => ({
+  x: Math.max(-40, Math.min(x, window.innerWidth - WIDTH + 40)),
+  y: Math.max(0, Math.min(y, window.innerHeight - HEIGHT)),
+});
+/** En vol vers une cible, il peut descendre plus bas : ses jambes peuvent sortir de l'écran. */
+const clampFlight = (x: number, y: number) => ({
+  x: Math.max(-60, Math.min(x, window.innerWidth - WIDTH + 60)),
+  y: Math.max(-20, Math.min(y, window.innerHeight - 150)),
+});
+/** Délai sans cible avant qu'il ne retourne à sa place. */
+const RETURN_HOME_MS = 1600;
+type Point = { x: number; y: number };
+type Focus = { rect: DOMRect; writing: boolean };
+
+/** Place la boîte pour que la main du professeur atteigne `point`. */
+function reachPosition(point: Point, writing: boolean) {
+  if (writing) {
+    // Écriture : le corps flotte sous la ligne, le bras droit monte jusqu'au bout du trait.
+    return clampFlight(point.x - SHOULDER_RIGHT.x + REACH * 0.5, point.y - SHOULDER_RIGHT.y + REACH * 0.86);
+  }
+  // Pointage : bras droit si la place existe à droite de la cible, sinon bras gauche depuis la gauche.
+  const fromRight = point.x + REACH - SHOULDER_RIGHT.x + WIDTH < window.innerWidth + 40;
+  return fromRight
+    ? clampFlight(point.x + REACH - SHOULDER_RIGHT.x, point.y - SHOULDER_RIGHT.y + 18)
+    : clampFlight(point.x - REACH - SHOULDER_LEFT.x, point.y - SHOULDER_LEFT.y + 18);
 }
 
-export default function AIAvatar({ isSpeaking, isProcessing, processingStage }: AIAvatarProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animFrameRef = useRef<number>(0);
-
-  // Determine state for visual
+export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control }: AIAvatarProps) {
+  const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
+  const [minimized, setMinimized] = useState(false);
+  const [animationFailed, setAnimationFailed] = useState(false);
+  const onAnimationError = useCallback(() => setAnimationFailed(true), []);
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const [press, setPress] = useState<{ key: number; x: number; y: number } | null>(null);
+  const [hand, setHand] = useState<Point | null>(null);
+  const onHandPosition = useCallback((next: Point) => setHand(previous =>
+    previous && Math.abs(previous.x - next.x) + Math.abs(previous.y - next.y) < 1 ? previous : next), []);
+  const [portalRoot, setPortalRoot] = useState<Element>(document.fullscreenElement || document.body);
+  const box = useRef<HTMLDivElement>(null);
+  const goal = useRef<Point>(initial);            // là où il vole
+  const home = useRef<Point>(initial);            // sa place de repos, choisie par l'élève
+  const current = useRef<Point>({ ...initial });  // là où il est
+  const motion = useRef<ProfessorMotion>({ vx: 0, vy: 0 });
+  const [side, setSide] = useState<'left' | 'right'>('left');
+  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const state = isSpeaking ? 'speaking' : isProcessing ? 'thinking' : 'idle';
+  const status = isSpeaking ? 'Je parle…' : isProcessing
+    ? processingStage === 'stt' ? 'Je t’écoute…' : processingStage === 'tts' ? 'Préparation audio…' : 'Je réfléchis…'
+    : 'Prêt à t’aider';
+
+  const fly = useCallback((next: Point, immediate = false) => {
+    goal.current = next;
+    if (immediate) { current.current = { ...next }; motion.current.vx = 0; motion.current.vy = 0; }
+  }, []);
+  const aimSide = useCallback((point: Point) => setSide(point.x > goal.current.x + WIDTH / 2 ? 'right' : 'left'), []);
+
+  // Vol : ressort amorti vers la cible, élévation et inclinaison dans le sens du vol, flottement à l'arrêt.
+  useEffect(() => {
+    let frame = 0, last = performance.now();
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const step = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const element = box.current, p = current.current, g = goal.current, m = motion.current;
+      if (reduced.matches) { p.x = g.x; p.y = g.y; m.vx = 0; m.vy = 0; }
+      else {
+        const k = 38, c = 2 * Math.sqrt(k);
+        m.vx += ((g.x - p.x) * k - m.vx * c) * dt;
+        m.vy += ((g.y - p.y) * k - m.vy * c) * dt;
+        p.x += m.vx * dt; p.y += m.vy * dt;
+      }
+      if (element) {
+        const speed = Math.hypot(m.vx, m.vy);
+        const lift = Math.min(26, speed * 0.04);
+        const hover = reduced.matches ? 0 : Math.sin(now / 600) * 3;
+        const tilt = Math.max(-12, Math.min(12, m.vx * 0.012));
+        element.style.transform = `translate(${p.x}px, ${p.y - lift + hover}px) rotate(${tilt}deg)`;
+        element.dataset.flying = speed > 60 ? 'true' : 'false';
+      }
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    const size = 220;
-    canvas.width = size * 2; // retina
-    canvas.height = size * 2;
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
-    ctx.scale(2, 2);
+    const resize = () => { home.current = clampPosition(home.current.x, home.current.y); fly(clampFlight(goal.current.x, goal.current.y)); };
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [fly]);
 
-    const cx = size / 2;
-    const cy = size / 2;
-    let t = 0;
+  useEffect(() => {
+    const update = () => setPortalRoot(document.fullscreenElement || document.body);
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
 
-    const draw = () => {
-      t += 0.02;
-      ctx.clearRect(0, 0, size, size);
-
-      // Color schemes per state
-      const colors = {
-        idle: { core: '#6366f1', ring: '#818cf8', glow: 'rgba(99,102,241,0.15)', particle: '#a5b4fc' },
-        speaking: { core: '#06b6d4', ring: '#22d3ee', glow: 'rgba(6,182,212,0.25)', particle: '#67e8f9' },
-        thinking: { core: '#f59e0b', ring: '#fbbf24', glow: 'rgba(245,158,11,0.2)', particle: '#fcd34d' },
-      };
-      const c = colors[state];
-
-      // Outer glow
-      const glowRadius = state === 'idle' ? 85 : 85 + Math.sin(t * 2) * 8;
-      const glow = ctx.createRadialGradient(cx, cy, 30, cx, cy, glowRadius);
-      glow.addColorStop(0, c.glow);
-      glow.addColorStop(1, 'transparent');
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, size, size);
-
-      // Orbiting rings (3 rings)
-      const ringCount = 3;
-      for (let r = 0; r < ringCount; r++) {
-        const radius = 42 + r * 16;
-        const speed = state === 'idle' ? 0.3 : state === 'speaking' ? 1.2 : 0.7;
-        const waveAmp = state === 'speaking' ? 6 + r * 2 : state === 'thinking' ? 3 + r : 1;
-        const segments = 120;
-
-        ctx.beginPath();
-        for (let i = 0; i <= segments; i++) {
-          const angle = (i / segments) * Math.PI * 2;
-          const wave = Math.sin(angle * (4 + r) + t * speed * (r + 1)) * waveAmp;
-          const wave2 = Math.cos(angle * (3 + r * 2) + t * speed * 1.5) * (waveAmp * 0.5);
-          const dist = radius + wave + wave2;
-          const x = cx + Math.cos(angle) * dist;
-          const y = cy + Math.sin(angle) * dist;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.strokeStyle = c.ring;
-        ctx.globalAlpha = 0.3 + (r === 0 ? 0.3 : 0) + (state === 'speaking' ? 0.15 : 0);
-        ctx.lineWidth = state === 'speaking' ? 2 : 1.2;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+  // Tableau : il vole vers la ligne écrite et, tant que la plume ✍️ avance, il écrit lui-même.
+  useEffect(() => {
+    let element: HTMLElement | null = null;
+    let frame = 0, deadline = 0;
+    const same = (a: DOMRect, b: DOMRect) => Math.abs(a.x - b.x) < .5 && Math.abs(a.y - b.y) < .5 && Math.abs(a.width - b.width) < .5 && Math.abs(a.height - b.height) < .5;
+    const track = () => {
+      if (!element?.isConnected) { setFocus(null); return; }
+      const bounds = element.getBoundingClientRect();
+      const now = performance.now();
+      const visible = bounds.width > 0 && bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight;
+      const penBounds = element.querySelector<HTMLElement>('.live-pen')?.getBoundingClientRect();
+      const writing = !!penBounds && penBounds.width > 0;
+      // Une ligne longue peut s'écrire plus de 6,5 s : tant que la plume avance, il la garde en main.
+      if (writing) deadline = Math.max(deadline, now + 2000);
+      if (now > deadline) { element = null; setFocus(null); return; }
+      const rect = writing ? new DOMRect(penBounds!.left - 2, penBounds!.top + penBounds!.height * 0.55, 4, 4) : bounds;
+      if (visible) {
+        const point = writing ? { x: rect.left, y: rect.top } : { x: bounds.right - 14, y: bounds.top + bounds.height / 2 };
+        fly(reachPosition(point, writing));
+        aimSide(point);
       }
-
-      // Core orb
-      const coreRadius = state === 'speaking' ? 26 + Math.sin(t * 4) * 4 : state === 'thinking' ? 24 + Math.sin(t * 2) * 2 : 24;
-      const coreGrad = ctx.createRadialGradient(cx - 5, cy - 5, 2, cx, cy, coreRadius);
-      coreGrad.addColorStop(0, '#fff');
-      coreGrad.addColorStop(0.3, c.core);
-      coreGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
-      ctx.fillStyle = coreGrad;
-      ctx.fill();
-
-      // Inner glow ring
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreRadius + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = c.ring;
-      ctx.globalAlpha = 0.5 + Math.sin(t * 3) * 0.2;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-
-      // Floating particles
-      const particleCount = state === 'speaking' ? 12 : state === 'thinking' ? 8 : 4;
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (i / particleCount) * Math.PI * 2 + t * 0.5;
-        const dist = 55 + Math.sin(t * 1.5 + i * 1.3) * 20;
-        const px = cx + Math.cos(angle) * dist;
-        const py = cy + Math.sin(angle) * dist;
-        const pSize = 1.5 + Math.sin(t * 2 + i) * 0.8;
-        ctx.beginPath();
-        ctx.arc(px, py, pSize, 0, Math.PI * 2);
-        ctx.fillStyle = c.particle;
-        ctx.globalAlpha = 0.4 + Math.sin(t + i) * 0.3;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-
-      // Speaking wave bars (horizontal waveform at center)
-      if (state === 'speaking') {
-        const barCount = 24;
-        const barWidth = 2;
-        const totalWidth = barCount * (barWidth + 2);
-        const startX = cx - totalWidth / 2;
-        for (let i = 0; i < barCount; i++) {
-          const h = 3 + Math.abs(Math.sin(t * 6 + i * 0.5)) * 10 + Math.random() * 3;
-          const bx = startX + i * (barWidth + 2);
-          ctx.fillStyle = c.ring;
-          ctx.globalAlpha = 0.6;
-          ctx.fillRect(bx, cy - h / 2, barWidth, h);
-        }
-        ctx.globalAlpha = 1;
-      }
-
-      animFrameRef.current = requestAnimationFrame(draw);
+      setFocus(previous => !visible ? null : previous && previous.writing === writing && same(previous.rect, rect) ? previous : { rect, writing });
+      frame = requestAnimationFrame(track);
     };
+    const receive = (event: Event) => {
+      cancelAnimationFrame(frame);
+      const candidate = (event as CustomEvent<unknown>).detail;
+      element = candidate instanceof HTMLElement && candidate.isConnected ? candidate : null;
+      if (!element) { setFocus(null); return; }
+      deadline = performance.now() + 6500;
+      track();
+    };
+    window.addEventListener(PROFESSOR_FOCUS, receive);
+    return () => { window.removeEventListener(PROFESSOR_FOCUS, receive); cancelAnimationFrame(frame); };
+  }, [fly, aimSide]);
 
-    draw();
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, [state]);
+  // Simulation : il vole jusqu'au bouton de la commande, tend l'index et appuie quand elle part.
+  useEffect(() => {
+    if (!control) return;
+    const scene = Array.from(document.querySelectorAll<HTMLElement>('[data-professor-target]'))
+      .find(node => node.dataset.professorTarget === control.presetId && node.getBoundingClientRect().width > 0);
+    if (!scene) return;
+    const button = Array.from(scene.querySelectorAll<HTMLElement>('[data-professor-control]'))
+      .find(node => (node.dataset.professorControl || '').split(/\s+/).includes(control.command) && node.getBoundingClientRect().width > 0);
+    const element = button ?? scene;
+    const update = () => {
+      const bounds = element.getBoundingClientRect();
+      setFocus({ rect: bounds, writing: false });
+      const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+      fly(reachPosition(point, false));
+      aimSide(point);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    const pressTimer = window.setTimeout(() => {
+      const bounds = element.getBoundingClientRect();
+      setPress({ key: control.sequence, x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
+    }, PROFESSOR_REACH_MS);
+    const timer = window.setTimeout(() => { setFocus(null); setPress(null); }, PROFESSOR_REACH_MS + 2400);
+    return () => {
+      window.clearTimeout(timer); window.clearTimeout(pressTimer);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+      setFocus(null);
+    };
+  }, [control, fly, aimSide]);
 
-  const statusLabel = isSpeaking
-    ? 'Je parle...'
-    : isProcessing
-      ? processingStage === 'stt' ? 'Je t\'écoute...' : processingStage === 'tts' ? 'Préparation audio...' : 'Je réfléchis...'
-      : 'Prêt';
+  // Sans rien à montrer, il retourne à sa place (après un court délai, pour enchaîner deux lignes sans aller-retour).
+  useEffect(() => {
+    if (focus) return;
+    const timer = window.setTimeout(() => fly(home.current), RETURN_HOME_MS);
+    return () => window.clearTimeout(timer);
+  }, [focus, fly]);
 
-  const statusColor = isSpeaking ? 'text-cyan-400' : isProcessing ? 'text-amber-400' : 'text-indigo-400';
+  const target = focus?.rect ?? null;
+  const writing = !!focus?.writing;
+  const aimPoint = useMemo(() => target ? { x: target.left + target.width / 2, y: target.top + target.height / 2 } : null, [target]);
+  const end = target && hand ? { x: Math.max(target.left + 4, Math.min(hand.x, target.right - 4)), y: Math.max(target.top + 4, Math.min(hand.y, target.bottom - 4)) } : null;
+  const active = !minimized && !animationFailed;
 
-  return (
-    <div className="flex flex-col items-center select-none">
-      <div className="relative">
-        <canvas ref={canvasRef} className="drop-shadow-2xl" />
+  return createPortal(
+    <>
+      {end && hand && !writing && active && <svg className="moalim-pointer" aria-hidden="true">
+        <line x1={hand.x} y1={hand.y} x2={end.x} y2={end.y} />
+        <circle cx={end.x} cy={end.y} r="5" />
+      </svg>}
+      {target && !writing && <div className={`moalim-target${target.height < 60 ? ' moalim-target--small' : ''}`} aria-hidden="true" style={{ left: target.left, top: target.top, width: target.width, height: target.height }}>
+        <span>☞ Moalim</span>
+      </div>}
+      {press && active && <span key={press.key} className="moalim-press" aria-hidden="true" style={{ left: press.x, top: press.y }} />}
+      <div ref={box} className="moalim-avatar" data-state={state} data-minimized={minimized} data-writing={writing && active}
+        style={{ transform: `translate(${initial.x}px, ${initial.y}px)` }}>
+        {!minimized && (!animationFailed
+          ? <Suspense fallback={<img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Chargement de Moalim" />}>
+              <Professor3D mood={state} pointing={!!target && !minimized} pointingSide={side} target={aimPoint} writing={writing}
+                motion={motion} onHandPosition={onHandPosition} onError={onAnimationError} />
+            </Suspense>
+          : <img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Moalim, ton professeur virtuel" draggable={false} />)}
+        <div className="moalim-avatar__toolbar">
+          <button type="button" className="moalim-avatar__handle" aria-label="Déplacer Moalim avec la souris ou les touches fléchées"
+            onPointerDown={event => {
+              if (event.button !== 0) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              drag.current = { x: event.clientX, y: event.clientY, left: goal.current.x, top: goal.current.y };
+            }}
+            onPointerMove={event => {
+              if (!drag.current) return;
+              home.current = clampPosition(drag.current.left + event.clientX - drag.current.x, drag.current.top + event.clientY - drag.current.y);
+              fly(home.current, true);
+            }}
+            onPointerUp={() => { drag.current = null; }}
+            onPointerCancel={() => { drag.current = null; }}
+            onLostPointerCapture={() => { drag.current = null; }}
+            onKeyDown={event => {
+              const directions: Record<string, [number, number]> = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] };
+              const delta = directions[event.key];
+              if (!delta) return;
+              event.preventDefault();
+              home.current = clampPosition(goal.current.x + delta[0], goal.current.y + delta[1]);
+              fly(home.current);
+            }}>⠿ Moalim</button>
+          <button type="button" onClick={() => setMinimized(value => !value)} aria-label={minimized ? 'Afficher Moalim' : 'Réduire Moalim'}>{minimized ? '+' : '−'}</button>
+        </div>
+        <p className="moalim-avatar__status" role="status">{animationFailed ? 'Animation indisponible · portrait affiché' : status}</p>
       </div>
-      <p className={`mt-1 text-sm font-semibold tracking-wide ${statusColor} transition-colors duration-500`}>
-        {statusLabel}
-      </p>
-    </div>
+    </>, portalRoot,
   );
 }
