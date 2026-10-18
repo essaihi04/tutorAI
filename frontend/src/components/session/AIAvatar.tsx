@@ -111,7 +111,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       x: origin.x + (Math.random() - 0.5) * 70, y: origin.y + (Math.random() - 0.5) * 30,
       dx: (Math.random() - 0.5) * 90, delay: i * 0.12, size: 18 + Math.random() * 14,
     }));
-    setSparks(previous => [...previous, ...batch]);
+    setSparks(previous => [...previous, ...batch].slice(-40));                       // jamais plus de 40 à la fois
     window.setTimeout(() => setSparks(previous => previous.filter(spark => !batch.includes(spark))), 3400);
   }, []);
   useEffect(() => {

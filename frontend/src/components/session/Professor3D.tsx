@@ -38,7 +38,7 @@ interface Props {
   onError: () => void;
 }
 /** Durée de chaque geste d'émotion, en secondes. */
-const GESTURE_LENGTH: Record<ProfessorGestureKind, number> = { wave: 2.4, cheer: 1.8, heart: 2.2, nod: 1.2 };
+const GESTURE_LENGTH: Record<ProfessorGestureKind, number> = { wave: 2.4, cheer: 1.8, heart: 2.2, nod: 1.2, laugh: 1.8, startle: 1.4 };
 const smooth = (a: number, b: number, x: number) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const PROFESSOR_MODEL_URL = '/media/avatar/moalim-professeur.glb';
 const VIEW_WIDTH = 180, VIEW_HEIGHT = 260;
@@ -247,8 +247,15 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       const time = clock.elapsedTime;
       const ease = (k: number) => 1 - Math.exp(-delta * k);
       const { weights, amplitude, rms, latency } = sampleAvatarAudio();
+      // Gestes d'émotion : enveloppe d'entrée/sortie en douceur ; `key` relance le geste.
+      const wantedGesture = gestureRef.current;
+      if (wantedGesture && wantedGesture.key !== gesturePlayed) { gesturePlayed = wantedGesture.key; gestureKind = wantedGesture.kind; gestureStart = time; }
+      const gestureAge = time - gestureStart, gestureLength = gestureKind ? GESTURE_LENGTH[gestureKind] : 0;
+      const env = gestureKind && gestureAge < gestureLength ? smooth(0, 0.35, gestureAge) * smooth(0, 0.45, gestureLength - gestureAge) : 0;
       // Ouverture syllabe par syllabe, retardée de la latence de sortie : elle tombe avec le son entendu.
-      const mouth = syllables.push(rms, delta, time, latency);
+      // Un rire fait trembler la moustache même sans voix.
+      const laughMouth = gestureKind === 'laugh' ? env * (0.45 + 0.55 * Math.abs(Math.sin(time * 11))) : 0;
+      const mouth = Math.max(syllables.push(rms, delta, time, latency), laughMouth);
       const speaking = moodRef.current === 'speaking';
       speech += (Math.min(1, amplitude * 4) - speech) * ease(4);
       talk += ((speaking ? 1 : 0) - talk) * ease(2.5);
@@ -310,12 +317,8 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           const breath = (1 - Math.cos(time * 1.4)) / 2;
           liftWorld(bone('Head'), breath * 0.006);
           for (const shoulder of ['LeftShoulder', 'RightShoulder']) liftWorld(bone(shoulder), breath * 0.004);
-          // Gestes d'émotion : coucou, bras levés, mains sur le cœur, hochement — avec entrée et sortie en douceur.
+          // Gestes d'émotion : coucou, bras levés, mains sur le cœur, hochement, rire, sursaut.
           // Le bras qui pointe ou écrit n'est jamais emprunté.
-          const wantedGesture = gestureRef.current;
-          if (wantedGesture && wantedGesture.key !== gesturePlayed) { gesturePlayed = wantedGesture.key; gestureKind = wantedGesture.kind; gestureStart = time; }
-          const gestureAge = time - gestureStart, gestureLength = gestureKind ? GESTURE_LENGTH[gestureKind] : 0;
-          const env = gestureKind && gestureAge < gestureLength ? smooth(0, 0.35, gestureAge) * smooth(0, 0.45, gestureLength - gestureAge) : 0;
           if (env > 0.001 && gestureKind) {
             const free = (side: 'Left' | 'Right') => !(aim > 0.02 && side === aimSide);
             if (gestureKind === 'wave') {
@@ -345,6 +348,23 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
               for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -env * 0.2);
             } else if (gestureKind === 'nod') {
               rotateWorld(bone('Head'), X, env * 0.16 * Math.max(0, Math.sin(time * 7)));       // deux hochements
+            } else if (gestureKind === 'laugh') {
+              const shake = Math.abs(Math.sin(time * 11));
+              liftWorld(bone('Hips'), env * 0.03 * shake);                                       // le corps saute
+              for (const shoulder of ['LeftShoulder', 'RightShoulder']) liftWorld(bone(shoulder), env * 0.012 * shake);
+              rotateWorld(bone('Head'), X, -env * (0.14 - 0.06 * shake));                        // tête en arrière, secouée
+              rotateWorld(bone('Head'), Z, env * 0.08 * Math.sin(time * 5.5));
+              for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -env * 0.25);
+            } else if (gestureKind === 'startle') {
+              rotateWorld(bone('Head'), X, -env * 0.2);                                           // tête en arrière
+              for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -env * 0.55);   // sourcils très hauts
+              for (const [side, sign] of [['Left', 1], ['Right', -1]] as const) {
+                if (!free(side)) continue;
+                rotateWorld(bone(`${side}Arm`), Z, sign * env * 0.55);                          // mains levées, ouvertes
+                rotateWorld(bone(`${side}ForeArm`), X, -env * 1.3);
+                for (const finger of FINGERS) curlFinger(side, finger, -env * 0.3);
+              }
+              liftWorld(bone('Hips'), env * 0.03 * smooth(0, 0.2, gestureAge) * (1 - smooth(0.3, 0.7, gestureAge)));   // un sursaut
             }
           }
           // Vol : le corps penche dans le sens du déplacement, les jambes traînent derrière.

@@ -361,6 +361,12 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     expressEmotion(kind);
   }, [conversation, expressEmotion]);
   useEffect(() => { if (connected) expressEmotion('greet'); }, [connected, expressEmotion]);
+  // Il réfléchit vraiment : un 🤔 après 1,5 s de traitement, pas pour une réponse immédiate.
+  useEffect(() => {
+    if (!isProcessing) return;
+    const timer = window.setTimeout(() => expressEmotion('think'), 1500);
+    return () => window.clearTimeout(timer);
+  }, [isProcessing, expressEmotion]);
   // À qui appartient la voix : au chat, ou au tableau ?
   //
   // Elle a longtemps appartenu au chat SANS exception, et pour une bonne

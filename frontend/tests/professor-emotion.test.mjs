@@ -10,6 +10,8 @@ test('the tutor\'s words give the professor an emotion', () => {
   assert.equal(detectProfessorEmotion('Je suis fier de toi ❤️'), 'love');
   assert.equal(detectProfessorEmotion('Pas tout à fait : réessaie en regardant le point orange.'), 'encourage');
   assert.equal(detectProfessorEmotion('Au revoir, à bientôt pour la suite !'), 'goodbye');
+  assert.equal(detectProfessorEmotion('Haha, c’est drôle, mais non : la corde ne voyage pas.'), 'laugh');
+  assert.equal(detectProfessorEmotion('Oh ! Incroyable, tu as vu la double amplitude ?'), 'surprise');
   assert.equal(detectProfessorEmotion('La célérité vaut v = √(T/μ).'), null);
   assert.equal(detectProfessorEmotion('Ce n’est pas un bonjour : la vitesse ne change pas.'), null, 'a greeting only counts at the start');
 });
@@ -22,6 +24,8 @@ test('the student\'s words too: thanks, hello, goodbye', () => {
   assert.equal(detectProfessorEmotion('merci prof !', 'student'), 'love');
   assert.equal(detectProfessorEmotion('salut', 'student'), 'greet');
   assert.equal(detectProfessorEmotion('bslama', 'student'), 'goodbye');
+  assert.equal(detectProfessorEmotion('hahaha trop fort', 'student'), 'laugh');
+  assert.equal(detectProfessorEmotion('wow 😮', 'student'), 'surprise');
   assert.equal(detectProfessorEmotion('c’est quoi une onde ?', 'student'), null);
   assert.equal(detectProfessorEmotion('', 'student'), null);
 });
@@ -29,6 +33,6 @@ test('the student\'s words too: thanks, hello, goodbye', () => {
 test('every emotion has emojis and a known gesture', () => {
   for (const [kind, spec] of Object.entries(PROFESSOR_EMOTIONS)) {
     assert.ok(spec.emojis.length >= 1 && spec.count >= 1, kind);
-    assert.ok([null, 'wave', 'cheer', 'heart', 'nod'].includes(spec.gesture), kind);
+    assert.ok([null, 'wave', 'cheer', 'heart', 'nod', 'laugh', 'startle'].includes(spec.gesture), kind);
   }
 });

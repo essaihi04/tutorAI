@@ -3035,8 +3035,9 @@ RÈGLES:
             "\n\n[PROFESSEUR ANIMÉ] Le personnage à l'écran réagit à tes mots : un message qui commence par "
             "« Bonjour / Salut / Salam » → il salue de la main ; « Bravo / Excellent / Mabrouk » → bras levés et "
             "étoiles ; « fier de toi » ou ❤️ → mains sur le cœur et cœurs ; « presque / réessaie / courage » → "
-            "hochement d'encouragement ; « au revoir / à bientôt » → coucou d'adieu. Sois sincère et sobre : "
-            "une réaction par message au plus, jamais de félicitations imméritées."
+            "hochement d'encouragement ; « Haha / c'est drôle » → il rit ; « Oh ! / Incroyable / Waouh » → "
+            "surprise ; « au revoir / à bientôt » → coucou d'adieu. Sois sincère et sobre : une réaction par "
+            "message au plus, jamais de félicitations imméritées."
         )
         system_prompt += self._rappel_accord()
 

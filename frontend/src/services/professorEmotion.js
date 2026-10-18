@@ -7,7 +7,9 @@
  * - `celebrate` : bras levés, 🎉⭐✨👏 — « Bravo », « Excellent », « Mabrouk »…
  * - `love`      : mains sur le cœur, ❤️💖💕 — « Fier de toi », « Je t'adore », un ❤️ ; un « Merci » de l'élève.
  * - `encourage` : hochement de tête, 💪👍 — « Presque », « Réessaie », « Courage »…
- * - `think`     : 🤔 — réservé aux événements de séance (réflexion), pas aux mots.
+ * - `laugh`     : rire (le corps saute, la moustache tremble), 😂🤣😄 — « Haha », « C'est drôle », « Mdr »…
+ * - `surprise`  : sursaut, sourcils hauts, mains levées, 😮❗✨ — « Oh ! », « Incroyable », « Waouh »…
+ * - `think`     : 🤔 — quand le tuteur réfléchit vraiment (traitement de plus de 1,5 s), pas aux mots.
  */
 export const PROFESSOR_EMOTIONS = {
   greet: { gesture: 'wave', emojis: ['👋', '😊'], count: 3 },
@@ -15,6 +17,8 @@ export const PROFESSOR_EMOTIONS = {
   celebrate: { gesture: 'cheer', emojis: ['🎉', '⭐', '✨', '👏'], count: 8 },
   love: { gesture: 'heart', emojis: ['❤️', '💖', '💕'], count: 7 },
   encourage: { gesture: 'nod', emojis: ['💪', '👍'], count: 4 },
+  laugh: { gesture: 'laugh', emojis: ['😂', '🤣', '😄'], count: 6 },
+  surprise: { gesture: 'startle', emojis: ['😮', '❗', '✨'], count: 4 },
   think: { gesture: null, emojis: ['🤔'], count: 1 },
 };
 
@@ -22,6 +26,8 @@ const APOSTROPHE = "['’]";
 const TUTOR_RULES = [
   ['celebrate', new RegExp(`\\b(bravo|excellent|f[ée]licitations?|parfait|g[ée]nial|bien jou[ée]|tr[eè]s bien|exactement|c${APOSTROPHE}est (ça|exact|juste)|mabrou?k|tbarkallah|wa3er)\\b|🎉|👏|🥳`, 'i')],
   ['love', new RegExp(`\\b(je t${APOSTROPHE}adore|je vous adore|fi[eè]re? de (toi|vous)|je t${APOSTROPHE}aime|avec amour|de tout c(œ|oe)ur|mon (petit )?champion|ma (petite )?championne|tu es (formidable|brillante?|g[ée]niale?))\\b|❤|💖|💕|🥰|😍`, 'i')],
+  ['laugh', new RegExp(`\\b(ha ?ha|hihi|h[ée]h[ée])|\\b(mdr|lol|c${APOSTROPHE}est dr[ôo]le|rigolo|une blague|je plaisante)\\b|😂|🤣|😄|😆`, 'i')],
+  ['surprise', /\b(oh ?!|oh l[àa] l[àa]|incroyable|surprenant|[ée]tonnant|tiens ?!|waouh|wow|ouah|pas possible|quelle surprise)|😮|😲|🤯/i],
   ['encourage', new RegExp(`\\b(pas tout [àa] fait|presque|r[ée]essaie|essaie encore|encore un effort|ne t${APOSTROPHE}inqui[èe]te pas|t${APOSTROPHE}inqui[èe]te pas|pas grave|tu (y )?(peux|vas y arriver)|on continue|courage|tu progresses)\\b|💪|👍`, 'i')],
   ['goodbye', /\b(au revoir|[àa] bient[ôo]t|bonne (journ[ée]e|soir[ée]e|chance|continuation)|[àa] la prochaine|bslama|bye)\b/i],
   ['greet', /^\W*(bonjour|salut|bienvenue|bonsoir|coucou|hello|ahlan|salam|ssalam|marhba)\b|👋/i],
@@ -30,6 +36,8 @@ const STUDENT_RULES = [
   ['love', new RegExp(`\\b(merci|chokran|choukran|thanks|je t${APOSTROPHE}adore|je vous adore)\\b|❤|🥰`, 'i')],
   ['greet', /^\W*(bonjour|salut|bonsoir|coucou|hello|ahlan|salam|ssalam|marhba)\b/i],
   ['goodbye', /\b(au revoir|[àa] bient[ôo]t|bye|bslama)\b/i],
+  ['laugh', /\b(ha ?ha|hihi)|\b(mdr|lol|ptdr)\b|😂|🤣|😄/i],
+  ['surprise', /\b(wow|waouh|ouah|s[ée]rieux ?\?|pas possible)\b|😮|😲|🤯/i],
 ];
 
 /**
