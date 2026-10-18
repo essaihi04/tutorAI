@@ -39,9 +39,17 @@ const RETURN_HOME_MS = 1600;
 type Point = { x: number; y: number };
 type Focus = { rect: DOMRect; writing: boolean };
 
-/** Place la boîte pour que la main du professeur atteigne `point`. */
-function reachPosition(point: Point, writing: boolean, rig: ProfessorRig) {
+/**
+ * Place la boîte pour que la main du professeur atteigne `point`. Avec `avoid` (le panneau de simulation
+ * ou la scène montrée), il se tient à côté du panneau, jamais dessus : la baguette fait la liaison.
+ */
+function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?: DOMRect | null) {
   const { shoulderRight: right, shoulderLeft: left, reach } = rig;
+  if (avoid && !writing) {
+    const y = point.y - right.y + reach * 0.16;
+    if (avoid.right + 12 + WIDTH <= window.innerWidth) return clampFlight(avoid.right + 12, y);      // à droite du panneau
+    if (avoid.left - 12 - WIDTH >= 0) return clampFlight(avoid.left - 12 - WIDTH, y);               // à gauche
+  }
   if (writing) {
     // Écriture : il flotte juste sous la ligne, tête comprise (le haut du personnage est à ~16 px du
     // haut de la boîte), sa main droite levée vers le trait ; une baguette relie la main à la plume.
@@ -175,7 +183,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       const bounds = element.getBoundingClientRect();
       setFocus({ rect: bounds, writing: false });
       const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
-      fly(reachPosition(point, false, rig.current));
+      fly(reachPosition(point, false, rig.current, scene.getBoundingClientRect()));
       aimSide(point);
     };
     update();
@@ -218,7 +226,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       const rect = bounds();
       setFocus({ rect, writing: false });
       const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      fly(reachPosition(point, false, rig.current));
+      fly(reachPosition(point, false, rig.current, iframe.getBoundingClientRect()));
       aimSide(point);
     };
     const onRect = (event: MessageEvent) => {
@@ -227,7 +235,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       if (data.rect && data.rect.width > 0) { inner = data.rect; update(); }
     };
     window.addEventListener('message', onRect);
-    iframe.contentWindow.postMessage({ type: 'simulation_locate', command: labControl.command, sequence: labControl.sequence }, '*');
+    iframe.contentWindow.postMessage({ type: 'simulation_locate', command: labControl.command, parameters: labControl.message.parameters ?? {}, sequence: labControl.sequence }, '*');
     update();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);

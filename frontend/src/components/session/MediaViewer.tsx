@@ -167,7 +167,10 @@ function buildSimulationHtml(url: string): string | null {
     return html;
   }
 
+  // Les boutons sont localisés pour le professeur animé par le script partagé du site (voir
+  // media/simulations/professor-locate.js) : un document data: n'a pas d'origine, d'où l'URL absolue.
   const injectedBridge = `
+<script src="${window.location.origin}/media/simulations/professor-locate.js" defer></script>
 <script>
 window.__AI_AUTOSTART_BRIDGE__ = true;
 (function () {
