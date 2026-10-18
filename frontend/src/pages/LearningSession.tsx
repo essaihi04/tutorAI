@@ -2330,7 +2330,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         )}
 
         <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
-          {/* When media is showing: avatar becomes small pip, media fills the zone */}
+          {/* Un seul professeur, monté en permanence (il vole au-dessus de la page via un portail) : le monter
+              dans chaque vue le détruisait et le recréait à chaque changement, d'où un clignotement. */}
+          {!(showExamPanel && examExercises.length > 0) && (
+            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
+          )}
           {showExamPanel && examExercises.length > 0 ? (
             <>
               {/* Exam panel - HIGHEST PRIORITY */}
@@ -2346,13 +2350,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           ) : showExercise && currentExercise ? (
             <>
-              {/* Small floating avatar pip — pointer-events-none so its unscaled 220×220 box doesn't block clicks below */}
-              <div className="absolute top-2 right-2 z-20 transition-all duration-500 pointer-events-none">
-                <div className="scale-[0.4] origin-top-right">
-                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
-                </div>
-              </div>
-
               {/* Close button */}
               <div className="absolute top-2 left-2 z-20">
                 <button
@@ -2447,14 +2444,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           ) : showWhiteboard && (whiteboardData || whiteboardSchemaId || boardContent || liveScript) ? (
             <>
-              {/* Small floating avatar pip — pointer-events-none: its unscaled 220×220 box would otherwise cover
-                  the QuickActions / VoiceInput / send-text button on phones, intercepting all taps. */}
-              <div className="absolute bottom-3 right-3 z-20 transition-all duration-500 pointer-events-none">
-                <div className="scale-[0.35] origin-bottom-right">
-                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
-                </div>
-              </div>
-
               {/* Close button + Return to exam button */}
               <div className="absolute top-2 left-2 z-20 flex items-center gap-2">
                 <button
@@ -2513,13 +2502,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </>
           ) : showMedia && currentMedia ? (
             <>
-              {/* Small floating avatar pip — pointer-events-none so its unscaled 220×220 box doesn't block clicks below */}
-              <div className="absolute top-2 right-2 z-20 transition-all duration-500 pointer-events-none">
-                <div className="scale-[0.4] origin-top-right">
-                  <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
-                </div>
-              </div>
-
               {/* Close button */}
               <div className="absolute top-2 left-2 z-20">
                 <button
@@ -2546,7 +2528,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           ) : courseDeck && !isLibreConnexion ? (
             <div className="flex-1 min-h-0 p-0 md:p-2 animate-[fadeSlideIn_0.4s_ease-out]">
               <div className="h-full w-full overflow-hidden rounded-none border-0 md:rounded-2xl md:border md:border-white/10 shadow-2xl shadow-black/40">
-                <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 <CoursePlayer
                   key={courseDeck.id}
                   deck={courseDeck}
@@ -2569,9 +2550,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </div>
           ) : (
             <>
-              {/* No media: avatar centered as main element */}
               <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
                 {!connected && (
                   <div className="flex items-center gap-2 text-amber-400/60 text-xs animate-pulse">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
