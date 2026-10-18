@@ -46,6 +46,8 @@ test('distributed GLB is a light, self-contained professor rig with idle, talkin
   for (const clip of ['Idle', 'Talking']) assert.ok(clips.includes(clip), clip);
   const targets = new Set(model.meshes.flatMap(mesh => mesh.extras?.targetNames ?? []));
   for (const name of ['eyesClosed', 'lookLeft', 'lookRight', 'lookUp', 'lookDown']) assert.ok(targets.has(name), `morph target ${name}`);
+  for (const name of ['viseme_aa', 'viseme_E', 'viseme_I', 'viseme_O', 'viseme_U', 'viseme_SS']) assert.ok(targets.has(name), `mouth shape ${name}`);
+  assert.ok(model.materials.some(material => material.name === 'MouthInside'), 'the professor has a mouth');
   assert.ok(!model.buffers.some(buffer => buffer.uri), 'GLB is self-contained');
   assert.ok(bytes.length < 3e6, 'GLB stays light for the session page');
 });

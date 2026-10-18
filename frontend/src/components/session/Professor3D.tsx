@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { sampleAvatarAudio } from '../../services/avatarAudio';
 import { SyllableEnvelope } from '../../services/syllableEnvelope';
+import { MouthShaper } from '../../services/mouthShapes';
 import type { ProfessorGestureKind } from '../../services/professorEmotion';
 
 /**
@@ -14,7 +15,8 @@ import type { ProfessorGestureKind } from '../../services/professorEmotion';
  * - La voix soulève la moustache (os `Moustache`) ; la réflexion lève les sourcils (`Brow*`).
  * - Pour montrer un élément, le bras se tend réellement vers lui et l'index se déplie, les autres
  *   doigts se replient ; la position du bout de l'index sert d'origine à la ligne de pointage.
- * - Si le modèle porte des formes faciales (jawOpen, viseme_*, eyeBlink*), la bouche suit la voix.
+ * - La bouche, sous la moustache, prend la forme du son entendu (visèmes « a », « é », « i », « o », « ou »,
+ *   « s », lus dans le spectre de la voix) et s'ouvre à chaque syllabe ; la moustache se soulève moins.
  */
 export type ProfessorMood = 'idle' | 'speaking' | 'thinking';
 /** Vitesse du vol à l'écran (px/s), partagée par l'enveloppe sans re-rendu. */
@@ -47,6 +49,8 @@ const CANVAS_MARGIN = 120, CANVAS_WIDTH = VIEW_WIDTH + 2 * CANVAS_MARGIN;
 const CAMERA_FOV = 30;
 /** Ouverture maximale (radians) de la moustache et petit mouvement du nez qui la porte. */
 const MOUSTACHE_OPEN = 0.55, NOSE_OPEN = 0.12;
+/** Avec une bouche qui s'ouvre dessous, la moustache n'a plus qu'à accompagner. */
+const MOUSTACHE_OPEN_WITH_MOUTH = 0.3;
 /** Taille de la moustache : à 1, ses pointes dépassent un peu des joues. */
 const MOUSTACHE_SCALE = 0.85;
 /** Marge autour du personnage dans le cadre. */
@@ -107,6 +111,8 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let speech = 0, talk = 0, think = 0, aim = 0, lean = 0, rise = 0, scribe = 0;
     const syllables = new SyllableEnvelope();
+    const shaper = new MouthShaper();
+    let hasVisemes = false;
     let aimSide: 'Left' | 'Right' = 'Right';
     let gesturePlayed = 0, gestureStart = -10, gestureKind: ProfessorGestureKind | null = null;
     /** Regard (−1…1, x vers la droite de l'écran, y vers le bas) et coups d'œil de temps en temps. */
@@ -226,6 +232,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         if (object instanceof THREE.Mesh) {
           object.frustumCulled = false;
           if (object.morphTargetDictionary && Object.keys(object.morphTargetDictionary).length) faces.push(object);
+          if (Object.keys(object.morphTargetDictionary ?? {}).some(name => name.startsWith('viseme_'))) hasVisemes = true;
         }
       });
       if (!bones.has('Head') || !bones.has('RightArm') || !bones.has('LeftArm')) { disposeModel(model); model = null; onError(); return; }
@@ -246,7 +253,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       const delta = Math.min(clock.getDelta(), 0.1);
       const time = clock.elapsedTime;
       const ease = (k: number) => 1 - Math.exp(-delta * k);
-      const { weights, amplitude, rms, latency } = sampleAvatarAudio();
+      const { levels, amplitude, rms, latency } = sampleAvatarAudio();
       // Gestes d'émotion : enveloppe d'entrée/sortie en douceur ; `key` relance le geste.
       const wantedGesture = gestureRef.current;
       if (wantedGesture && wantedGesture.key !== gesturePlayed) { gesturePlayed = wantedGesture.key; gestureKind = wantedGesture.kind; gestureStart = time; }
@@ -255,7 +262,10 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       // Ouverture syllabe par syllabe, retardée de la latence de sortie : elle tombe avec le son entendu.
       // Un rire fait trembler la moustache même sans voix.
       const laughMouth = gestureKind === 'laugh' ? env * (0.45 + 0.55 * Math.abs(Math.sin(time * 11))) : 0;
-      const mouth = Math.max(syllables.push(rms, delta, time, latency), laughMouth);
+      const voice = syllables.push(rms, delta, time, latency);
+      const mouth = Math.max(voice, laughMouth);
+      // Forme de la bouche : celle du son entendu ; un rire ouvre grand (« a »).
+      const visemes: Record<string, number> = shaper.push(laughMouth > voice ? null : levels, mouth, delta, time, latency);
       const speaking = moodRef.current === 'speaking';
       speech += (Math.min(1, amplitude * 4) - speech) * ease(4);
       talk += ((speaking ? 1 : 0) - talk) * ease(2.5);
@@ -297,7 +307,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         // sous le pivot remonte pour un angle négatif, quel que soit le repère local de l'os.
         rotateWorld(bone('Nose'), X, -mouth * NOSE_OPEN);
         if (moustache) {
-          rotateWorld(moustache, X, -mouth * MOUSTACHE_OPEN);
+          rotateWorld(moustache, X, -mouth * (hasVisemes ? MOUSTACHE_OPEN_WITH_MOUTH : MOUSTACHE_OPEN));
           moustache.scale.multiplyScalar(MOUSTACHE_SCALE);                               // remise à la taille de repos à chaque image
           moustache.updateMatrixWorld(true);
         }
@@ -459,7 +469,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       for (const mesh of faces) {
         const dict = mesh.morphTargetDictionary!, influences = mesh.morphTargetInfluences!;
         for (const [name, index] of Object.entries(dict)) {
-          if (name.startsWith('viseme_')) influences[index] = weights[name] || 0;
+          if (name.startsWith('viseme_')) influences[index] = visemes[name] ?? 0;
           else if (name === 'jawOpen' || name === 'mouthOpen') influences[index] = jaw;
           else if (name === 'eyeBlinkLeft' || name === 'eyeBlinkRight' || name === 'eyesClosed') influences[index] = blink;
           else if (name === 'lookRight') influences[index] = Math.max(0, gazeX);
@@ -470,6 +480,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         }
       }
       container!.dataset.mouth = String(jaw);
+      container!.dataset.viseme = shaper.dominant() ?? '';
       container!.dataset.aim = aim.toFixed(2);
       container!.dataset.gaze = `${gazeX.toFixed(2)} ${gazeY.toFixed(2)}`;
       renderer.render(scene, camera);
