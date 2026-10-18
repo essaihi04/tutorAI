@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { ScientificControlCommand } from './scientific/types';
 import './AIAvatar.css';
 import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS } from '../../services/professorFocus';
+import { PROFESSOR_EMOTIONS, type ProfessorEmotionKind, type ProfessorGestureKind } from '../../services/professorEmotion';
 import type { ProfessorMotion, ProfessorRig } from './Professor3D';
 const Professor3D = lazy(() => import('./Professor3D'));
 
@@ -20,7 +21,10 @@ interface AIAvatarProps {
   processingStage?: string;
   control?: ScientificControlCommand | null;
   labControl?: LabControlCommand | null;
+  /** Émotion à exprimer (salut, bravo, affection…) : geste du personnage et émoticônes qui s'envolent de lui. */
+  emotion?: { kind: ProfessorEmotionKind; key: number } | null;
 }
+type Spark = { id: number; emoji: string; x: number; y: number; dx: number; delay: number; size: number };
 const WIDTH = 180;
 const HEIGHT = 320;
 /** Mesures par défaut, remplacées par celles du modèle dès qu'il est chargé (onRig). */
@@ -62,7 +66,7 @@ function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
-export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control, labControl }: AIAvatarProps) {
+export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control, labControl, emotion }: AIAvatarProps) {
   const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
@@ -70,6 +74,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
   const [focus, setFocus] = useState<Focus | null>(null);
   const [press, setPress] = useState<{ key: number; x: number; y: number } | null>(null);
   const deliveredLab = useRef(0);
+  const [gesture, setGesture] = useState<{ kind: ProfessorGestureKind; key: number } | null>(null);
+  const [sparks, setSparks] = useState<Spark[]>([]);
+  const sparkId = useRef(0);
   const [hand, setHand] = useState<Point | null>(null);
   const onHandPosition = useCallback((next: Point) => setHand(previous =>
     previous && Math.abs(previous.x - next.x) + Math.abs(previous.y - next.y) < 1 ? previous : next), []);
@@ -93,6 +100,25 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
     if (immediate) { current.current = { ...next }; motion.current.vx = 0; motion.current.vy = 0; }
   }, []);
   const aimSide = useCallback((point: Point) => setSide(point.x > goal.current.x + WIDTH / 2 ? 'right' : 'left'), []);
+
+  // Émotion : le geste part, et les émoticônes jaillissent de sa tête, là où il se trouve à cet instant.
+  const express = useCallback((kind: ProfessorEmotionKind, key: number) => {
+    const spec = PROFESSOR_EMOTIONS[kind];
+    if (spec.gesture) setGesture({ kind: spec.gesture, key });
+    const origin = { x: current.current.x + WIDTH / 2, y: current.current.y + 52 };
+    const batch: Spark[] = Array.from({ length: spec.count }, (_, i) => ({
+      id: ++sparkId.current, emoji: spec.emojis[i % spec.emojis.length],
+      x: origin.x + (Math.random() - 0.5) * 70, y: origin.y + (Math.random() - 0.5) * 30,
+      dx: (Math.random() - 0.5) * 90, delay: i * 0.12, size: 18 + Math.random() * 14,
+    }));
+    setSparks(previous => [...previous, ...batch]);
+    window.setTimeout(() => setSparks(previous => previous.filter(spark => !batch.includes(spark))), 3400);
+  }, []);
+  useEffect(() => {
+    if (!emotion) return;
+    const timer = window.setTimeout(() => express(emotion.kind, emotion.key), 0);
+    return () => window.clearTimeout(timer);
+  }, [emotion, express]);
 
   // Vol : ressort amorti vers la cible, élévation et inclinaison dans le sens du vol, flottement à l'arrêt.
   useEffect(() => {
@@ -278,16 +304,19 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
         <span>☞ Moalim</span>
       </div>}
       {press && active && <span key={press.key} className="moalim-press" aria-hidden="true" style={{ left: press.x, top: press.y }} />}
+      {sparks.length > 0 && <div className="moalim-sparks" aria-hidden="true">
+        {sparks.map(spark => <span key={spark.id} style={{ left: spark.x, top: spark.y, fontSize: spark.size, animationDelay: `${spark.delay}s`, '--dx': `${spark.dx}px` } as CSSProperties}>{spark.emoji}</span>)}
+      </div>}
       <div ref={box} className="moalim-avatar" data-state={state} data-minimized={minimized} data-writing={writing && active}
         style={{ transform: `translate(${initial.x}px, ${initial.y}px)` }}>
         {!minimized && (!animationFailed
           ? <Suspense fallback={<img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Chargement de Moalim" />}>
               <Professor3D mood={state} pointing={!!target && !minimized} pointingSide={side} target={aimPoint} writing={writing}
-                motion={motion} onHandPosition={onHandPosition} onRig={onRig} onError={onAnimationError} />
+                motion={motion} onHandPosition={onHandPosition} onRig={onRig} gesture={gesture} onError={onAnimationError} />
             </Suspense>
           : <img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Moalim, ton professeur virtuel" draggable={false} />)}
         <div className="moalim-avatar__toolbar">
-          <button type="button" className="moalim-avatar__handle" aria-label="Déplacer Moalim avec la souris ou les touches fléchées"
+          <button type="button" className="moalim-avatar__handle" aria-label="Moalim : appuyer pour le saluer, glisser ou touches fléchées pour le déplacer"
             onPointerDown={event => {
               if (event.button !== 0) return;
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -298,7 +327,11 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
               home.current = clampPosition(drag.current.left + event.clientX - drag.current.x, drag.current.top + event.clientY - drag.current.y);
               fly(home.current, true);
             }}
-            onPointerUp={() => { drag.current = null; }}
+            onPointerUp={event => {
+              const start = drag.current; drag.current = null;
+              // Un simple appui sur sa poignée, sans le déplacer : il salue l'élève.
+              if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 4) express('greet', Date.now());
+            }}
             onPointerCancel={() => { drag.current = null; }}
             onLostPointerCapture={() => { drag.current = null; }}
             onKeyDown={event => {

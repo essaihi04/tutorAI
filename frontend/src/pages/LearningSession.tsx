@@ -21,6 +21,7 @@ import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
 import AIAvatar, { type LabControlCommand } from '../components/session/AIAvatar';
 import { PROFESSOR_REACH_MS } from '../services/professorFocus';
+import { detectProfessorEmotion, type ProfessorEmotionKind } from '../services/professorEmotion';
 import ChatHistory from '../components/session/ChatHistory';
 import { SessionMediaDisplay } from '../components/session/MediaViewer';
 import AIWhiteboard from '../components/session/AIWhiteboard';
@@ -335,6 +336,31 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     setLabControl({ sequence: ++labSequence.current, command: String(next.command ?? ''), message: next });
     window.setTimeout(() => { labBusy.current = false; dispatchLabControl(); }, PROFESSOR_REACH_MS + 700);
   }, []);
+
+  // Émotions du professeur : déduites des mots du tuteur et de l'élève, une fois par message et par émotion,
+  // et un salut à la connexion.
+  const [professorEmotion, setProfessorEmotion] = useState<{ kind: ProfessorEmotionKind; key: number } | null>(null);
+  const emotionsFired = useRef<Map<string, Set<string>>>(new Map());
+  const lastGreetAt = useRef(0);
+  const expressEmotion = useCallback((kind: ProfessorEmotionKind) => {
+    if (kind === 'greet') {
+      if (Date.now() - lastGreetAt.current < 10000) return;
+      lastGreetAt.current = Date.now();
+    }
+    setProfessorEmotion({ kind, key: Date.now() });
+  }, []);
+  useEffect(() => {
+    const last = conversation[conversation.length - 1];
+    if (!last) return;
+    const kind = detectProfessorEmotion(last.text, last.speaker === 'ai' ? 'ai' : 'student');
+    if (!kind) return;
+    const fired = emotionsFired.current.get(last.id) ?? new Set<string>();
+    if (fired.has(kind)) return;
+    fired.add(kind);
+    emotionsFired.current.set(last.id, fired);
+    expressEmotion(kind);
+  }, [conversation, expressEmotion]);
+  useEffect(() => { if (connected) expressEmotion('greet'); }, [connected, expressEmotion]);
   // À qui appartient la voix : au chat, ou au tableau ?
   //
   // Elle a longtemps appartenu au chat SANS exception, et pour une bonne
@@ -2339,7 +2365,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           {/* Un seul professeur, monté en permanence (il vole au-dessus de la page via un portail) : le monter
               dans chaque vue le détruisait et le recréait à chaque changement, d'où un clignotement. */}
           {!(showExamPanel && examExercises.length > 0) && (
-            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} labControl={labControl} />
+            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} labControl={labControl} emotion={professorEmotion} />
           )}
           {showExamPanel && examExercises.length > 0 ? (
             <>

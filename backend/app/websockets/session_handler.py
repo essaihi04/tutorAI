@@ -3029,6 +3029,15 @@ RÈGLES:
         # dernière réponse parce qu'elle est le seul exemple de « ce que je
         # dis » qu'il ait sous les yeux (cf. humanisation.py).
         system_prompt += humanisation.bloc_memoire(self.conversation_history)
+        # Le personnage animé réagit aux mots du tuteur (frontend/src/services/professorEmotion.js) :
+        # le lui dire l'aide à saluer, féliciter et encourager avec des mots que l'élève verra incarnés.
+        system_prompt += (
+            "\n\n[PROFESSEUR ANIMÉ] Le personnage à l'écran réagit à tes mots : un message qui commence par "
+            "« Bonjour / Salut / Salam » → il salue de la main ; « Bravo / Excellent / Mabrouk » → bras levés et "
+            "étoiles ; « fier de toi » ou ❤️ → mains sur le cœur et cœurs ; « presque / réessaie / courage » → "
+            "hochement d'encouragement ; « au revoir / à bientôt » → coucou d'adieu. Sois sincère et sobre : "
+            "une réaction par message au plus, jamais de félicitations imméritées."
+        )
         system_prompt += self._rappel_accord()
 
         decision = resource_decision_service.decide(

@@ -30,6 +30,7 @@ Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx
 - **Réflexion** : un sourcil levé, tête inclinée, regard en l'air.
 - **Regard** : vers l'élément montré, sinon vers la souris pendant 8 s après chaque mouvement, sinon vers l'élève avec un coup d'œil de côté toutes les 3 à 7 s ; un grand changement de direction déclenche un clignement ; la tête accompagne un peu le regard. Clignement toutes les 3 à 7 s.
 - **Respiration** : tête et épaules se soulèvent de quelques millimètres en continu.
+- **Émotions** (`services/professorEmotion.js`) : déduites des mots du tuteur et de l'élève, une fois par message. « Bonjour / Salam » en début de message, ou un simple appui sur sa poignée → coucou de la main et 👋 ; « Bravo / Excellent / Mabrouk » → bras levés en V, petit saut, 🎉⭐✨👏 ; « fier de toi », ❤️, un « merci » de l'élève → mains sur le cœur, ❤️💖💕 ; « presque / réessaie / courage » → hochement, 💪👍 ; « au revoir / à bientôt » → coucou d'adieu. Il salue aussi à la connexion. Les émoticônes jaillissent de sa tête, là où il se trouve, et s'envolent (`.moalim-sparks`). Le bras qui pointe ou écrit n'est jamais emprunté par un geste. Le tuteur est informé de ces réactions dans son prompt.
 - **Mains en parlant** : gestes procéduraux à la taille (avant-bras, paumes, doigts), le clip ne bougeant pas les bras ; francs quand il explique sans rien montrer ni écrire, plus discrets pour le bras libre pendant un pointage ou l'écriture.
 - **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend ; la cible glisse d'un élément au suivant et reste en place pendant que le bras redescend.
 - **Vol** : ressort amorti, élévation et inclinaison dans le sens du vol, jambes qui traînent, flottement à l'arrêt, retour à la place choisie par l'élève après 1,6 s sans cible.
@@ -43,6 +44,7 @@ Le moteur audio est `LipSyncAnalyser` du dépôt https://github.com/nirholas/thr
 
 ## Vérifications
 
+- `node --test tests/professor-emotion.test.mjs` : détection des émotions dans les mots du tuteur et de l'élève.
 - `node --test tests/syllable-envelope.test.mjs` : sur de vrais enregistrements, ouvertures syllabe par syllabe, sans blocage ni saut d'une image à l'autre ; fermeture au silence ; retard de latence.
 - `node --test tests/avatar-lipsync.test.mjs` : moteur audio ; squelette, doigts, moustache, sourcils, clips `Idle` et `Talking`, GLB autonome de moins de 3 Mo.
 - Compilation TypeScript, ESLint et construction Vite.

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { sampleAvatarAudio } from '../../services/avatarAudio';
 import { SyllableEnvelope } from '../../services/syllableEnvelope';
+import type { ProfessorGestureKind } from '../../services/professorEmotion';
 
 /**
  * Professeur Moalim : personnage rigué aux os humanoïdes standard (Hips, Head, LeftArm, RightHandIndex1…).
@@ -32,8 +33,13 @@ interface Props {
   motion?: { current: ProfessorMotion };
   onHandPosition: (point: { x: number; y: number }) => void;
   onRig?: (rig: ProfessorRig) => void;
+  /** Geste d'émotion à jouer (coucou, bras levés, mains sur le cœur, hochement) ; `key` relance le geste. */
+  gesture?: { kind: ProfessorGestureKind; key: number } | null;
   onError: () => void;
 }
+/** Durée de chaque geste d'émotion, en secondes. */
+const GESTURE_LENGTH: Record<ProfessorGestureKind, number> = { wave: 2.4, cheer: 1.8, heart: 2.2, nod: 1.2 };
+const smooth = (a: number, b: number, x: number) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const PROFESSOR_MODEL_URL = '/media/avatar/moalim-professeur.glb';
 const VIEW_WIDTH = 180, VIEW_HEIGHT = 260;
 /** Le canevas déborde de la boîte de chaque côté : un bras tendu n'est jamais coupé. */
@@ -47,7 +53,9 @@ const MOUSTACHE_SCALE = 0.85;
 const FRAME_MARGIN = 1.12;
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const;
 
-export default function Professor3D({ mood, pointing, pointingSide, target, writing = false, motion, onHandPosition, onRig, onError }: Props) {
+export default function Professor3D({ mood, pointing, pointingSide, target, writing = false, motion, onHandPosition, onRig, gesture, onError }: Props) {
+  const gestureRef = useRef(gesture);
+  useEffect(() => { gestureRef.current = gesture; }, [gesture]);
   const host = useRef<HTMLDivElement>(null);
   const moodRef = useRef(mood), pointRef = useRef(pointing), sideRef = useRef(pointingSide), targetRef = useRef(target), writingRef = useRef(writing);
   const motionRef = useRef(motion);
@@ -100,6 +108,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     let speech = 0, talk = 0, think = 0, aim = 0, lean = 0, rise = 0, scribe = 0;
     const syllables = new SyllableEnvelope();
     let aimSide: 'Left' | 'Right' = 'Right';
+    let gesturePlayed = 0, gestureStart = -10, gestureKind: ProfessorGestureKind | null = null;
     /** Regard (−1…1, x vers la droite de l'écran, y vers le bas) et coups d'œil de temps en temps. */
     let gazeX = 0, gazeY = 0, gazeGoalX = 0, gazeGoalY = 0, glanceX = 0, glanceY = 0, glanceEnd = 0, nextGlance = 2;
     /** Dernière position de la souris : il la suit des yeux pendant quelques secondes après chaque mouvement. */
@@ -301,6 +310,43 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           const breath = (1 - Math.cos(time * 1.4)) / 2;
           liftWorld(bone('Head'), breath * 0.006);
           for (const shoulder of ['LeftShoulder', 'RightShoulder']) liftWorld(bone(shoulder), breath * 0.004);
+          // Gestes d'émotion : coucou, bras levés, mains sur le cœur, hochement — avec entrée et sortie en douceur.
+          // Le bras qui pointe ou écrit n'est jamais emprunté.
+          const wantedGesture = gestureRef.current;
+          if (wantedGesture && wantedGesture.key !== gesturePlayed) { gesturePlayed = wantedGesture.key; gestureKind = wantedGesture.kind; gestureStart = time; }
+          const gestureAge = time - gestureStart, gestureLength = gestureKind ? GESTURE_LENGTH[gestureKind] : 0;
+          const env = gestureKind && gestureAge < gestureLength ? smooth(0, 0.35, gestureAge) * smooth(0, 0.45, gestureLength - gestureAge) : 0;
+          if (env > 0.001 && gestureKind) {
+            const free = (side: 'Left' | 'Right') => !(aim > 0.02 && side === aimSide);
+            if (gestureKind === 'wave') {
+              const side = free('Left') ? 'Left' : 'Right', sign = side === 'Left' ? 1 : -1;
+              rotateWorld(bone(`${side}Arm`), Z, sign * env * 1.35);                            // bras levé sur le côté
+              rotateWorld(bone(`${side}ForeArm`), Z, sign * env * 1.1);
+              rotateWorld(bone(`${side}Hand`), Z, sign * env * 0.55 * Math.sin(time * 9));      // la main salue
+              rotateWorld(bone('Head'), Z, -sign * env * 0.1);
+            } else if (gestureKind === 'cheer') {
+              for (const [side, sign] of [['Left', 1], ['Right', -1]] as const) {
+                if (!free(side)) continue;
+                rotateWorld(bone(`${side}Arm`), Z, sign * env * 1.5);                           // les deux bras en V
+                rotateWorld(bone(`${side}ForeArm`), Z, sign * env * (0.8 + 0.15 * Math.sin(time * 8)));
+                for (const finger of FINGERS) curlFinger(side, finger, -env * 0.2);
+              }
+              liftWorld(bone('Hips'), env * 0.05 * Math.max(0, Math.sin(time * 7)));            // petit saut de joie
+            } else if (gestureKind === 'heart') {
+              for (const [side, sign] of [['Left', 1], ['Right', -1]] as const) {
+                if (!free(side)) continue;
+                rotateWorld(bone(`${side}Arm`), X, -env * 0.8);                                  // mains ramenées sur le cœur
+                rotateWorld(bone(`${side}Arm`), Z, -sign * env * 0.2);
+                rotateWorld(bone(`${side}ForeArm`), X, -env * 1.7);
+                rotateWorld(bone(`${side}ForeArm`), Y, sign * env * 0.7);
+                for (const finger of FINGERS) curlFinger(side, finger, env * 0.4);
+              }
+              rotateWorld(bone('Head'), Z, env * 0.14);
+              for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -env * 0.2);
+            } else if (gestureKind === 'nod') {
+              rotateWorld(bone('Head'), X, env * 0.16 * Math.max(0, Math.sin(time * 7)));       // deux hochements
+            }
+          }
           // Vol : le corps penche dans le sens du déplacement, les jambes traînent derrière.
           rotateWorld(bone('Hips'), Z, -lean * 0.22);
           rotateWorld(bone('Spine'), X, rise * 0.12);
