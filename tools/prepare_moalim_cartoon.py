@@ -163,6 +163,50 @@ bpy.data.actions.remove(source_action)
 for pb in rig.pose.bones:
     pb.location = (0, 0, 0); pb.rotation_quaternion = (1, 0, 0, 0); pb.scale = (1, 1, 1)
 
+# ---------------------------------------------------------------- facial shape keys
+# The model has no eye bones: the eyes are two flat white discs with a black pupil disc in front, the
+# glasses frame is a black ring around each. Morph targets give the app a blink (`eyesClosed`) and a
+# gaze (`lookLeft`/`lookRight` on screen, `lookUp`/`lookDown`), driven from Professor3D.
+EYE_WHITES = {'Left': 'Material.013', 'Right': 'Material.012'}      # his left eye is on screen right (+X)
+BLACK = 'Material.003'
+PUPIL_RADIUS, GAZE_X, GAZE_Y = 0.07, 0.018, 0.02                    # metres, in world space (the mesh is scaled 0.25)
+mw = body.matrix_world; inv = mw.inverted()
+world = lambda v: mw @ body.data.vertices[v].co
+slots = {m.name: i for i, m in enumerate(body.data.materials) if m}
+def verts_of(material):
+    return {v for p in body.data.polygons if p.material_index == slots[material] for v in p.vertices}
+eyes = {}
+black = verts_of(BLACK)
+for side, material in EYE_WHITES.items():
+    white = verts_of(material)
+    pts = [world(v) for v in white]
+    centre = sum(pts, Vector()) / len(pts)
+    # the pupil: the only black piece in front of the white (he faces -Y), a 3 cm dome of ~90 vertices set
+    # 3-4 cm off the eye's centre; the black lens backing and the frame bits all sit behind the white
+    pupil = {v for v in black if (lambda p: Vector((p.x - centre.x, 0, p.z - centre.z)).length < PUPIL_RADIUS and 0 < centre.y - p.y < 0.03)(world(v))}
+    assert 60 <= len(pupil) <= 120, f'{side} pupil: {len(pupil)} vertices'
+    eyes[side] = (white, pupil, centre)
+    log(side, 'eye', len(white), 'white verts, pupil', len(pupil), 'verts, centre', tuple(round(c, 3) for c in centre))
+body.shape_key_add(name='Basis', from_mix=False)
+def shape(name, move):
+    key = body.shape_key_add(name=name, from_mix=False)
+    for side, (white, pupil, centre) in eyes.items():
+        for v in white | pupil:
+            key.data[v].co = inv @ move(world(v), centre, v in pupil)
+    key.value = 0
+# Blink: the pupil flattens into a wide horizontal dash (cartoon closed eye); the white stays.
+def closed(p, c, pupil):
+    if not pupil: return p
+    cz = eyes_pupil_centre[id(c)]
+    return Vector((cz.x + (p.x - cz.x) * 1.8, p.y, cz.z + (p.z - cz.z) * 0.15))
+eyes_pupil_centre = {id(centre): sum((world(v) for v in pupil), Vector()) / len(pupil) for white, pupil, centre in eyes.values()}
+shape('eyesClosed', closed)
+shape('lookRight', lambda p, c, pupil: p + Vector((GAZE_X, 0, 0)) if pupil else p)
+shape('lookLeft', lambda p, c, pupil: p - Vector((GAZE_X, 0, 0)) if pupil else p)
+shape('lookUp', lambda p, c, pupil: p + Vector((0, 0, GAZE_Y)) if pupil else p)
+shape('lookDown', lambda p, c, pupil: p - Vector((0, 0, GAZE_Y)) if pupil else p)
+log('shape keys', [k.name for k in body.data.shape_keys.key_blocks])
+
 # ---------------------------------------------------------------- materials
 # Each source material has two outputs (Principled and Diffuse); the glTF exporter only understands
 # Principled, so that output becomes the active one, otherwise every colour exports as default grey.
@@ -182,7 +226,7 @@ bpy.ops.object.select_all(action='DESELECT')
 rig.select_set(True); body.select_set(True)
 bpy.context.view_layer.objects.active = rig
 bpy.ops.export_scene.gltf(filepath=str(glb), use_selection=True, export_format='GLB', export_yup=True,
-                          export_skins=True, export_morph=True, export_animations=True,
+                          export_skins=True, export_morph=True, export_morph_normal=False, export_animations=True,
                           export_animation_mode='NLA_TRACKS', export_cameras=False, export_lights=False)
 log('exported', glb, round(glb.stat().st_size / 1e6, 2), 'MB')
 

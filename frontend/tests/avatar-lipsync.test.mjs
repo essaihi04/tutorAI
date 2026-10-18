@@ -44,6 +44,8 @@ test('distributed GLB is a light, self-contained professor rig with idle, talkin
   assert.ok(model.skins?.length, 'body is rigged');
   const clips = model.animations?.map(clip => clip.name) ?? [];
   for (const clip of ['Idle', 'Talking']) assert.ok(clips.includes(clip), clip);
+  const targets = new Set(model.meshes.flatMap(mesh => mesh.extras?.targetNames ?? []));
+  for (const name of ['eyesClosed', 'lookLeft', 'lookRight', 'lookUp', 'lookDown']) assert.ok(targets.has(name), `morph target ${name}`);
   assert.ok(!model.buffers.some(buffer => buffer.uri), 'GLB is self-contained');
   assert.ok(bytes.length < 3e6, 'GLB stays light for the session page');
 });

@@ -100,6 +100,8 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     let speech = 0, talk = 0, think = 0, aim = 0, lean = 0, rise = 0, scribe = 0;
     const syllables = new SyllableEnvelope();
     let aimSide: 'Left' | 'Right' = 'Right';
+    /** Regard (−1…1, x vers la droite de l'écran, y vers le bas) et coups d'œil de temps en temps. */
+    let gazeX = 0, gazeY = 0, gazeGoalX = 0, gazeGoalY = 0, glanceX = 0, glanceY = 0, glanceEnd = 0, nextGlance = 2;
     let nextBlink = 2.5, blinkStarted = -10, blinkCount = 0;
     const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
     const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qId = new THREE.Quaternion();
@@ -124,6 +126,13 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       b.parent!.getWorldQuaternion(qB);
       qA.setFromAxisAngle(axis, angle);
       b.quaternion.premultiply(qB.clone().invert().multiply(qA).multiply(qB));
+      b.updateMatrixWorld(true);
+    }
+    /** Déplace un os verticalement (mètres, repère du monde), par exemple pour la respiration. */
+    function liftWorld(b: THREE.Bone | undefined, dy: number) {
+      if (!b || !dy) return;
+      b.parent!.getWorldQuaternion(qB); b.parent!.getWorldScale(vD);
+      b.position.add(vC.set(0, dy / (vD.y || 1), 0).applyQuaternion(qB.invert()));
       b.updateMatrixWorld(true);
     }
     /** Fait tourner l'os pour que le segment os → enfant pointe vers `goal`, avec un poids 0…1. */
@@ -271,14 +280,20 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           moustache.scale.multiplyScalar(MOUSTACHE_SCALE);                               // remise à la taille de repos à chaque image
           moustache.updateMatrixWorld(true);
         }
-        for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -(think * 0.35 + speech * 0.12));
+        // Sourcils : un seul se lève quand il réfléchit, les deux accompagnent les syllabes appuyées.
+        rotateWorld(bone('BrowLeft'), X, -(think * 0.45 + speech * 0.12 + mouth * 0.06));
+        rotateWorld(bone('BrowRight'), X, -(think * 0.15 + speech * 0.12 + mouth * 0.06));
         if (!reducedMotion.matches) {
           // Gestes d'explication : fenêtres alternées, avec des pauses, plus amples quand la voix porte.
           const beat = (period: number, offset: number) => { const p = (time + offset) % period; return p < 3.2 ? Math.sin(Math.PI * p / 3.2) ** 2 : 0; };
-          const procedural = talkAction ? 0 : 1;                                             // le clip Talking suffit
+          const procedural = talkAction ? 0.3 : 1;                 // le clip Talking garde les bras immobiles : petits gestes de mains à la taille
           const gestureR = procedural * talk * (0.55 + 0.45 * speech) * beat(6.1, 0.3);
           const gestureL = procedural * talk * (0.55 + 0.45 * speech) * beat(7.3, 3.4);
           const both = procedural * talk * 0.35;
+          // Respiration : la tête et les épaules se soulèvent doucement.
+          const breath = (1 - Math.cos(time * 1.4)) / 2;
+          liftWorld(bone('Head'), breath * 0.006);
+          for (const shoulder of ['LeftShoulder', 'RightShoulder']) liftWorld(bone(shoulder), breath * 0.004);
           // Vol : le corps penche dans le sens du déplacement, les jambes traînent derrière.
           rotateWorld(bone('Hips'), Z, -lean * 0.22);
           rotateWorld(bone('Spine'), X, rise * 0.12);
@@ -330,6 +345,32 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
               rotateWorld(bone('Head'), Y, (aimSide === 'Right' ? -1 : 1) * aim * 0.28);                 // le regard suit le bras
             }
           }
+          // Regard : vers l'élément montré, en l'air quand il réfléchit, sinon vers l'élève avec un coup
+          // d'œil de côté de temps en temps ; un grand changement de direction s'accompagne d'un clignement.
+          let goalX = 0, goalY = 0;
+          if (aim > 0.3 && aimGoal) {
+            const head = bone('Head');
+            if (head) {
+              head.getWorldPosition(vA).project(camera);
+              const bounds = renderer.domElement.getBoundingClientRect();
+              const hx = bounds.left + (vA.x + 1) * bounds.width / 2, hy = bounds.top + (1 - vA.y) * bounds.height / 2;
+              goalX = THREE.MathUtils.clamp((aimGoal.x - hx) / 250, -1, 1);
+              goalY = THREE.MathUtils.clamp((aimGoal.y - hy) / 250, -1, 1);
+            }
+          } else if (think > 0.5) { goalX = -0.5; goalY = -0.8; }
+          else {
+            if (time > nextGlance) {
+              glanceX = Math.sin(time * 7.9) * 0.7; glanceY = Math.sin(time * 5.3) * 0.3;
+              glanceEnd = time + 0.5 + Math.abs(Math.sin(time * 3.3)) * 1.2;
+              nextGlance = glanceEnd + 2.5 + Math.abs(Math.sin(time * 2.1)) * 4;
+            }
+            if (time < glanceEnd) { goalX = glanceX; goalY = glanceY; }
+          }
+          if (Math.abs(goalX - gazeGoalX) + Math.abs(goalY - gazeGoalY) > 0.6 && time - blinkStarted > 0.6) blinkStarted = time;
+          gazeGoalX = goalX; gazeGoalY = goalY;
+          gazeX += (goalX - gazeX) * ease(14); gazeY += (goalY - gazeY) * ease(14);
+          rotateWorld(bone('Head'), Y, gazeX * 0.16);                                          // la tête accompagne un peu le regard
+          rotateWorld(bone('Head'), X, gazeY * 0.1);
         }
       }
 
@@ -344,6 +385,10 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           if (name.startsWith('viseme_')) influences[index] = weights[name] || 0;
           else if (name === 'jawOpen' || name === 'mouthOpen') influences[index] = jaw;
           else if (name === 'eyeBlinkLeft' || name === 'eyeBlinkRight' || name === 'eyesClosed') influences[index] = blink;
+          else if (name === 'lookRight') influences[index] = Math.max(0, gazeX);
+          else if (name === 'lookLeft') influences[index] = Math.max(0, -gazeX);
+          else if (name === 'lookUp') influences[index] = Math.max(0, -gazeY);
+          else if (name === 'lookDown') influences[index] = Math.max(0, gazeY);
           else if (name === 'mouthSmile' || name === 'mouthSmileLeft' || name === 'mouthSmileRight') influences[index] = 0.15;
         }
       }
