@@ -232,8 +232,11 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       if (pointingNow && aim < 0.05) aimSide = sideRef.current === 'right' ? 'Left' : 'Right';   // il lui fait face : sa gauche est à droite de l'écran
       aim += ((pointingNow ? 1 : 0) - aim) * ease(5);
       const flight = motionRef.current?.current;
-      lean += (THREE.MathUtils.clamp((flight?.vx ?? 0) / 700, -1, 1) - lean) * ease(6);
-      rise += (THREE.MathUtils.clamp(Math.hypot(flight?.vx ?? 0, flight?.vy ?? 0) / 700, 0, 1) - rise) * ease(6);
+      // Seul un vrai vol penche le corps et fait traîner les jambes : en suivant la plume au tableau, il glisse
+      // lentement, et sans ce seuil ses jambes se pliaient et se dépliaient sans arrêt.
+      const vx = flight?.vx ?? 0, speedPx = Math.hypot(vx, flight?.vy ?? 0), flying = THREE.MathUtils.clamp((speedPx - 180) / 500, 0, 1);
+      lean += (THREE.MathUtils.clamp(vx / 700, -1, 1) * flying - lean) * ease(4);
+      rise += (flying - rise) * ease(4);
       scribe += ((writingRef.current ? 1 : 0) - scribe) * ease(6);
 
       if (mixer && model) {

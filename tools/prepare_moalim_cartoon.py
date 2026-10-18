@@ -19,6 +19,10 @@ TALK_RANGE = (40, 240)        # source frames, after the pop-in and before the p
 IDLE_POSES = (60, 120)        # two calm source frames, arms down
 IDLE_LENGTH = 96              # frames at 24 fps
 import os
+# The source gestures raise both arms to shoulder height and above every second or two (up to 117°
+# from the rest pose), which reads as a flicker in a small floating tutor: the upper arm may move at
+# most this far (degrees) from the rest pose; forearms, hands, fingers and the rest are untouched.
+ARM_CAP = {'Arm': float(os.environ.get('ARM_CAP', 12)), 'Shoulder': 10.0}
 TALK_SMOOTH = float(os.environ.get('TALK_SMOOTH', 3))   # Gaussian sigma, in frames: the source snaps its arms up in one frame
 
 
@@ -109,6 +113,18 @@ for i, pose in enumerate(talk):
     talk_poses.append((i + 1, pose))
 
 
+def cap_arms(pose):
+    out = dict(pose)
+    for side in ('Left', 'Right'):
+        for part, cap in ARM_CAP.items():
+            bone = side + part
+            loc, quat, scale = pose[bone]; rest = idle_a[bone][1]
+            if rest.dot(quat) < 0: quat = -quat
+            angle = math.degrees(rest.rotation_difference(quat).angle)
+            if angle > cap: out[bone] = (loc, rest.slerp(quat, cap / angle), scale)
+    return out
+
+
 def smooth_loop(poses, sigma):
     """Gaussian smoothing over a looping sequence of poses: snappy cartoon moves become quick but continuous."""
     if sigma <= 0: return poses
@@ -132,7 +148,7 @@ def smooth_loop(poses, sigma):
     return out
 
 
-talk_poses = smooth_loop(talk_poses, TALK_SMOOTH)
+talk_poses = smooth_loop([(frame, cap_arms(pose)) for frame, pose in talk_poses], TALK_SMOOTH)
 # Idle: calm pose A → calm pose B → A, eased.
 idle_poses = []
 for f in range(1, IDLE_LENGTH + 2, 4):

@@ -8,7 +8,7 @@
 
 - Vieux professeur à grosses lunettes, cheveux et moustache blancs, gilet ; 11 matériaux en couleurs unies, sans texture.
 - Squelette de 48 os renommés en noms humanoïdes standard (`Hips`, `Head`, `LeftArm`, `RightHandIndex1`…), plus `Nose`, `Moustache`, `BrowLeft`, `BrowRight`. Quatre doigts de trois phalanges par main.
-- Deux animations découpées dans l'animation source, sans l'apparition ni la disparition : `Idle` (4 s, bras le long du corps) et `Talking` (8,4 s, gestes et coucous). Les gestes source montent le bras en une seule image (plus de 900°/s) : `Talking` est lissé (gaussienne de 3 images, en boucle) pour rester sous 480°/s, sinon le personnage semble clignoter.
+- Deux animations découpées dans l'animation source, sans l'apparition ni la disparition : `Idle` (4 s, bras le long du corps) et `Talking` (8,4 s, gestes et coucous). Les gestes source montent le bras en une seule image (plus de 900°/s) : `Talking` est lissé (gaussienne de 3 images, en boucle) pour rester sous 480°/s, sinon le personnage semble clignoter. Ces gestes levaient aussi les deux bras à l'horizontale et au-dessus toutes les une à deux secondes : la rotation du bras (et de l'épaule) est plafonnée à 12° (10°) autour de la pose de repos, ce qui garde les mains sous les épaules ; avant-bras, mains, doigts et reste du corps sont inchangés.
 - Les matériaux sources ont deux sorties ; le script active la sortie Principled, sinon l'export perd les couleurs.
 - Il n'a ni bouche ni lèvres sous la moustache : la voix fait parler la moustache, comme dans un dessin animé.
 
