@@ -102,6 +102,11 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     let aimSide: 'Left' | 'Right' = 'Right';
     /** Regard (−1…1, x vers la droite de l'écran, y vers le bas) et coups d'œil de temps en temps. */
     let gazeX = 0, gazeY = 0, gazeGoalX = 0, gazeGoalY = 0, glanceX = 0, glanceY = 0, glanceEnd = 0, nextGlance = 2;
+    /** Dernière position de la souris : il la suit des yeux pendant quelques secondes après chaque mouvement. */
+    let mouse: { x: number; y: number; at: number } | null = null;
+    const MOUSE_FOLLOW_S = 8;
+    const onPointerMove = (event: PointerEvent) => { mouse = { x: event.clientX, y: event.clientY, at: clock.elapsedTime }; };
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
     let nextBlink = 2.5, blinkStarted = -10, blinkCount = 0;
     const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
     const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qId = new THREE.Quaternion();
@@ -350,16 +355,20 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           // Regard : vers l'élément montré, en l'air quand il réfléchit, sinon vers l'élève avec un coup
           // d'œil de côté de temps en temps ; un grand changement de direction s'accompagne d'un clignement.
           let goalX = 0, goalY = 0;
-          if (aim > 0.3 && aimGoal) {
+          // Direction du regard (−1…1) vers un point de l'écran, depuis la position de la tête à l'écran.
+          const lookAtScreen = (px: number, py: number, range: number) => {
             const head = bone('Head');
-            if (head) {
-              head.getWorldPosition(vA).project(camera);
-              const bounds = renderer.domElement.getBoundingClientRect();
-              const hx = bounds.left + (vA.x + 1) * bounds.width / 2, hy = bounds.top + (1 - vA.y) * bounds.height / 2;
-              goalX = THREE.MathUtils.clamp((aimGoal.x - hx) / 250, -1, 1);
-              goalY = THREE.MathUtils.clamp((aimGoal.y - hy) / 250, -1, 1);
-            }
-          } else if (think > 0.5) { goalX = -0.5; goalY = -0.8; }
+            if (!head) return;
+            head.getWorldPosition(vA).project(camera);
+            const bounds = renderer.domElement.getBoundingClientRect();
+            const hx = bounds.left + (vA.x + 1) * bounds.width / 2, hy = bounds.top + (1 - vA.y) * bounds.height / 2;
+            goalX = THREE.MathUtils.clamp((px - hx) / range, -1, 1);
+            goalY = THREE.MathUtils.clamp((py - hy) / range, -1, 1);
+          };
+          const mouseRecent = mouse && time - mouse.at < MOUSE_FOLLOW_S;
+          if (aim > 0.3 && aimGoal) lookAtScreen(aimGoal.x, aimGoal.y, 250);
+          else if (mouseRecent) lookAtScreen(mouse!.x, mouse!.y, 300);                       // il suit la souris des yeux
+          else if (think > 0.5) { goalX = -0.5; goalY = -0.8; }
           else {
             if (time > nextGlance) {
               glanceX = Math.sin(time * 7.9) * 0.7; glanceY = Math.sin(time * 5.3) * 0.3;
@@ -396,6 +405,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       }
       container!.dataset.mouth = String(jaw);
       container!.dataset.aim = aim.toFixed(2);
+      container!.dataset.gaze = `${gazeX.toFixed(2)} ${gazeY.toFixed(2)}`;
       renderer.render(scene, camera);
 
       if (pointRef.current) {
@@ -415,6 +425,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      window.removeEventListener('pointermove', onPointerMove);
       mixer?.stopAllAction();
       if (model) disposeModel(model);
       renderer.domElement.removeEventListener('webglcontextlost', lost);

@@ -28,7 +28,7 @@ Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx
 - **Cadrage** : le personnage est recentré et cadré automatiquement ; ses épaules et la longueur de son bras sont mesurées et transmises à l'enveloppe, qui s'en sert pour viser.
 - **Parole** : mélange progressif `Idle` → `Talking` (une pause de moins de 0,8 s entre deux phrases ne rebascule pas) ; la moustache (réduite à 85 % pour rester dans le visage) se soulève jusqu'à 0,55 rad à chaque syllabe, calée sur la latence de sortie audio, avec une vitesse plafonnée pour glisser d'une position à l'autre sans saut (`syllableEnvelope.js`) ; les sourcils accompagnent.
 - **Réflexion** : un sourcil levé, tête inclinée, regard en l'air.
-- **Regard** : vers l'élément montré, sinon vers l'élève avec un coup d'œil de côté toutes les 3 à 7 s ; un grand changement de direction déclenche un clignement ; la tête accompagne un peu le regard. Clignement toutes les 3 à 7 s.
+- **Regard** : vers l'élément montré, sinon vers la souris pendant 8 s après chaque mouvement, sinon vers l'élève avec un coup d'œil de côté toutes les 3 à 7 s ; un grand changement de direction déclenche un clignement ; la tête accompagne un peu le regard. Clignement toutes les 3 à 7 s.
 - **Respiration** : tête et épaules se soulèvent de quelques millimètres en continu.
 - **Mains en parlant** : gestes procéduraux à la taille (avant-bras, paumes, doigts), le clip ne bougeant pas les bras ; francs quand il explique sans rien montrer ni écrire, plus discrets pour le bras libre pendant un pointage ou l'écriture.
 - **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend ; la cible glisse d'un élément au suivant et reste en place pendant que le bras redescend.
