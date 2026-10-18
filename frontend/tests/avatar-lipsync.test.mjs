@@ -47,3 +47,25 @@ test('distributed GLB is a light, self-contained professor rig with idle, talkin
   assert.ok(!model.buffers.some(buffer => buffer.uri), 'GLB is self-contained');
   assert.ok(bytes.length < 3e6, 'GLB stays light for the session page');
 });
+test('the talking gestures never snap an arm into place from one frame to the next', () => {
+  const bytes = readFileSync(new URL('../public/media/avatar/moalim-professeur.glb', import.meta.url));
+  const jsonLength = bytes.readUInt32LE(12);
+  const model = JSON.parse(bytes.toString('utf8', 20, 20 + jsonLength).trim());
+  const bin = bytes.subarray(20 + jsonLength + 8);
+  const read = index => {
+    const accessor = model.accessors[index], view = model.bufferViews[accessor.bufferView];
+    const width = { SCALAR: 1, VEC4: 4 }[accessor.type], start = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    return Array.from({ length: accessor.count }, (_, i) => Array.from({ length: width }, (_, k) => bin.readFloatLE(start + 4 * (i * width + k))));
+  };
+  const talking = model.animations.find(clip => clip.name === 'Talking');
+  let fastest = 0;
+  for (const channel of talking.channels) {
+    if (channel.target.path !== 'rotation' || !/Arm|ForeArm|Hand$/.test(model.nodes[channel.target.node].name)) continue;
+    const sampler = talking.samplers[channel.sampler], times = read(sampler.input), rotations = read(sampler.output);
+    for (let i = 1; i < rotations.length; i++) {
+      const dot = Math.abs(rotations[i].reduce((sum, value, k) => sum + value * rotations[i - 1][k], 0));
+      fastest = Math.max(fastest, (2 * Math.acos(Math.min(1, dot)) * 180 / Math.PI) / (times[i][0] - times[i - 1][0]));
+    }
+  }
+  assert.ok(fastest < 480, `arms turn at most ${fastest.toFixed(0)}°/s (8° per frame at 60 fps)`);
+});

@@ -86,7 +86,10 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     let model: THREE.Object3D | null = null;
     let mixer: THREE.AnimationMixer | null = null;
     let idleAction: THREE.AnimationAction | null = null, talkAction: THREE.AnimationAction | null = null;
-    let talkingShown = false;
+    /** Mélange Idle → Talking (0…1) et dernier instant de parole, pour ne pas rebasculer entre deux phrases. */
+    let talkBlend = 0, lastSpoke = -10;
+    /** Cible lissée du pointage, gardée pendant que le bras redescend. */
+    let aimGoal: { x: number; y: number } | null = null;
     const bones = new Map<string, THREE.Bone>();
     /** Pose de référence de chaque os : les os sans piste d'animation y reviennent à chaque image. */
     const rest = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3; s: THREE.Vector3 }>();
@@ -236,11 +239,14 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       if (mixer && model) {
         mixer.timeScale = reducedMotion.matches ? 0.3 : 1;
         // Parole : fondu vers l'animation de parole du modèle quand elle existe.
-        if (talkAction && idleAction && speaking !== talkingShown) {
-          talkingShown = speaking;
-          if (speaking) { talkAction.reset(); talkAction.crossFadeFrom(idleAction, 0.45, false); }
-          else { idleAction.reset(); idleAction.crossFadeFrom(talkAction, 0.6, false); }
-          (speaking ? talkAction : idleAction).setEffectiveWeight(1).play();
+        // Parole : mélange progressif des deux animations, qui tournent en continu. L'ancien fondu
+        // (reset + crossFade suivi de setEffectiveWeight, qui annule le fondu) faisait sauter les bras d'une
+        // pose à l'autre à chaque début et fin de phrase ; une pause de moins de 0,8 s ne rebascule pas.
+        if (speaking) lastSpoke = time;
+        if (talkAction && idleAction) {
+          talkBlend += ((time - lastSpoke < 0.8 ? 1 : 0) - talkBlend) * ease(3);
+          talkAction.setEffectiveWeight(talkBlend);
+          idleAction.setEffectiveWeight(1 - talkBlend);
         }
         // Sans cela, les rotations ajoutées ci-dessous s'accumuleraient d'une image à l'autre sur les os
         // dont l'export a retiré les pistes constantes (tête, moustache, sourcils…).
@@ -290,7 +296,12 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
             for (const finger of FINGERS) curlFinger(side, finger, 0.15 + 0.1 * lift);
           }
           // Pointage réel : épaule puis coude vers la cible, index tendu, autres doigts repliés.
-          const goal = targetRef.current;
+          // La cible glisse vers le nouvel élément au lieu d'y sauter, et reste en place pendant que le bras redescend.
+          const wanted = targetRef.current;
+          if (wanted) aimGoal = aimGoal && aim > 0.01
+            ? { x: aimGoal.x + (wanted.x - aimGoal.x) * ease(9), y: aimGoal.y + (wanted.y - aimGoal.y) * ease(9) }
+            : { ...wanted };
+          const goal = aimGoal;
           if (aim > 0.01 && goal) {
             const shoulder = bone(`${aimSide}Arm`), elbow = bone(`${aimSide}ForeArm`), hand = bone(`${aimSide}Hand`);
             if (shoulder && screenToWorld(goal, shoulder.getWorldPosition(vA).clone(), vB)) {

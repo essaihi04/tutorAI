@@ -18,6 +18,8 @@ OUT = (Path(argv[1]) if len(argv) > 1 else Path(__file__).resolve().parents[1] /
 TALK_RANGE = (40, 240)        # source frames, after the pop-in and before the pop-out
 IDLE_POSES = (60, 120)        # two calm source frames, arms down
 IDLE_LENGTH = 96              # frames at 24 fps
+import os
+TALK_SMOOTH = float(os.environ.get('TALK_SMOOTH', 3))   # Gaussian sigma, in frames: the source snaps its arms up in one frame
 
 
 def log(*a): print('[cartoon]', *a, flush=True)
@@ -105,6 +107,32 @@ for i, pose in enumerate(talk):
     tail = len(talk) - 1 - i
     if tail < 12: pose = mix(pose, talk[0], 1 - tail / 12)
     talk_poses.append((i + 1, pose))
+
+
+def smooth_loop(poses, sigma):
+    """Gaussian smoothing over a looping sequence of poses: snappy cartoon moves become quick but continuous."""
+    if sigma <= 0: return poses
+    radius = int(math.ceil(sigma * 3)); n = len(poses)
+    weights = [math.exp(-(k * k) / (2 * sigma * sigma)) for k in range(-radius, radius + 1)]
+    out = []
+    for i in range(n):
+        frame, centre = poses[i]
+        pose = {}
+        for bone, (_, q0, _) in centre.items():
+            loc, quat, scale = Vector(), Quaternion((0, 0, 0, 0)), Vector()
+            for w, k in zip(weights, range(-radius, radius + 1)):
+                l, q, sc = poses[(i + k) % n][1][bone]
+                if q.dot(q0) < 0: q = -q
+                loc += l * w; scale += sc * w
+                quat = Quaternion([a + b * w for a, b in zip(quat, q)])
+            total = sum(weights)
+            quat.normalize()
+            pose[bone] = (loc / total, quat, scale / total)
+        out.append((frame, pose))
+    return out
+
+
+talk_poses = smooth_loop(talk_poses, TALK_SMOOTH)
 # Idle: calm pose A → calm pose B → A, eased.
 idle_poses = []
 for f in range(1, IDLE_LENGTH + 2, 4):
