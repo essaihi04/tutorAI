@@ -49,6 +49,10 @@ BALISES: tuple[str, ...] = (
     # et surtout de l'historique, sinon le modèle se met à l'imiter. Ce qu'il
     # signifie appartient à `session_mode`, seul juge des transitions.
     "mode",
+    # `eval` est le jugement du modèle sur la réponse de l'élève (correct,
+    # partiel, faux, aucune), lu par skill_professeur pour compter les essais.
+    # Même propriété : adressé au système, jamais à l'élève ni à l'historique.
+    "eval",
 )
 
 #: Les commandes écrites EN CLAIR, sans chevrons. Le prompt les demande ainsi

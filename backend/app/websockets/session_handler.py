@@ -38,6 +38,7 @@ from app.services.prompt_builder import prompt_builder
 from app.services.exercise_evaluator import exercise_evaluator
 from app.services.session_progress_service import session_progress_service
 from app.services.lesson_phase import PhaseLesson
+from app.services.skill_professeur import SkillProfesseur
 from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
 from app.services.scenario_service import Alternance, Progression
@@ -69,7 +70,9 @@ def _safe_log(*parts):
 # ─────────────────────────────────────────────────────────────────────
 # Balises que le LLM émet pour piloter l'affichage : leur contenu part au
 # tableau, JAMAIS dans le fil de discussion.
-_STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions')
+# `eval` est le jugement du modèle sur la réponse de l'élève (skill_professeur) :
+# adressé au système, il ne doit pas plus apparaître dans le fil qu'un tableau.
+_STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions', 'eval')
 
 # Le LLM emballe souvent la balise dans du gras (« **<ui>… »). Une fois le
 # bloc retiré, ces marqueurs restent seuls sur leur ligne dans le chat.
@@ -1009,6 +1012,9 @@ class SessionHandler:
         self.surfaces_du_micro_objectif: list[str] = []
         #: La dernière étape décidée par le routeur, lue par le prompt.
         self.derniere_etape = None
+        #: Le geste de prof du tour : quand expliquer, questionner, laisser
+        #: chercher, donner la réponse (voir skill_professeur.py).
+        self.skill_prof = SkillProfesseur()
         #: La matière du micro-objectif en cours. En changer rouvre toutes
         #: les surfaces.
         self._matiere_du_micro_objectif: str | None = None
@@ -3040,6 +3046,8 @@ RÈGLES:
             "message au plus, jamais de félicitations imméritées."
         )
         system_prompt += self._rappel_accord()
+        # Le geste de prof du tour : décidé ici, avant que le modèle parle.
+        system_prompt += self.skill_prof.consigne(student_text, self.current_phase)
 
         decision = resource_decision_service.decide(
             phase=self.current_phase,
@@ -3181,6 +3189,10 @@ RÈGLES:
                 reste_a_dire.set_result(texte_parle[coupe_ouverture:])
         else:
             asyncio.create_task(self.generate_and_send_audio_chunks(ai_response))
+
+        # Le jugement déclaré (<eval>) compte les essais ; la dernière phrase dit
+        # si une question reste en attente pour le tour suivant.
+        self.skill_prof.lire_reponse(ai_response, self._extract_display_text(ai_response))
 
         # Add AI response to history
         self._append_history("assistant", ai_response)

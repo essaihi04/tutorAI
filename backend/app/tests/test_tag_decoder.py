@@ -62,7 +62,7 @@ def test_le_vocabulaire_est_complet():
     """
     assert set(BALISES) == {
         "ui", "board", "draw", "schema", "live", "exam_exercise", "suggestions",
-        "mode",
+        "mode", "eval",
     }
 
 
