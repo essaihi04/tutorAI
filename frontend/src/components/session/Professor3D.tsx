@@ -286,7 +286,9 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         if (!reducedMotion.matches) {
           // Gestes d'explication : fenêtres alternées, avec des pauses, plus amples quand la voix porte.
           const beat = (period: number, offset: number) => { const p = (time + offset) % period; return p < 3.2 ? Math.sin(Math.PI * p / 3.2) ** 2 : 0; };
-          const procedural = talkAction ? 0.3 : 1;                 // le clip Talking garde les bras immobiles : petits gestes de mains à la taille
+          // Le clip Talking garde les bras immobiles : gestes de mains procéduraux, francs quand il explique
+          // sans rien montrer ni écrire, plus discrets pour le bras libre pendant un pointage ou l'écriture.
+          const procedural = talkAction ? (aim > 0.02 || scribe > 0.02 ? 0.3 : 0.55) : 1;
           const gestureR = procedural * talk * (0.55 + 0.45 * speech) * beat(6.1, 0.3);
           const gestureL = procedural * talk * (0.55 + 0.45 * speech) * beat(7.3, 3.4);
           const both = procedural * talk * 0.35;

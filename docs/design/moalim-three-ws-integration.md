@@ -30,7 +30,7 @@ Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx
 - **Réflexion** : un sourcil levé, tête inclinée, regard en l'air.
 - **Regard** : vers l'élément montré, sinon vers l'élève avec un coup d'œil de côté toutes les 3 à 7 s ; un grand changement de direction déclenche un clignement ; la tête accompagne un peu le regard. Clignement toutes les 3 à 7 s.
 - **Respiration** : tête et épaules se soulèvent de quelques millimètres en continu.
-- **Mains en parlant** : petits gestes procéduraux à la taille (avant-bras, paumes, doigts), le clip ne bougeant pas les bras.
+- **Mains en parlant** : gestes procéduraux à la taille (avant-bras, paumes, doigts), le clip ne bougeant pas les bras ; francs quand il explique sans rien montrer ni écrire, plus discrets pour le bras libre pendant un pointage ou l'écriture.
 - **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend ; la cible glisse d'un élément au suivant et reste en place pendant que le bras redescend.
 - **Vol** : ressort amorti, élévation et inclinaison dans le sens du vol, jambes qui traînent, flottement à l'arrêt, retour à la place choisie par l'élève après 1,6 s sans cible.
 - **Écriture au tableau** : il flotte juste sous la ligne en cours, tête comprise, et écrit au bout d'une fine baguette qui part de sa main jusqu'à la plume ✍️ (masquée tant qu'il écrit).
