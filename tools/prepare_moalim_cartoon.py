@@ -20,10 +20,10 @@ IDLE_POSES = (60, 120)        # two calm source frames, arms down
 IDLE_LENGTH = 96              # frames at 24 fps
 import os
 # The source gestures wave both arms (up to 117° from the rest pose, above the shoulders) every second
-# or two, which reads as a flicker in a small floating tutor: while talking, shoulders, upper arms and
-# forearms stay in the rest pose and the hands only move a little (max degrees from the rest pose).
-# Pointing and writing move the arms from the app, independently of this clip.
-ARM_CAP = {'Shoulder': 0.0, 'Arm': 0.0, 'ForeArm': 0.0, 'Hand': 12.0}
+# or two, which reads as a flicker in a small floating tutor: while talking, shoulders, arms, hands and
+# fingers stay in the rest pose (max degrees from it, by bone-name fragment; last match wins).
+# Pointing and writing move the arm and fingers from the app, independently of this clip.
+ARM_CAP = {'Shoulder': 0.0, 'Arm': 0.0, 'ForeArm': 0.0, 'Hand': 0.0, 'Thumb': 0.0, 'Index': 0.0, 'Middle': 0.0, 'Pinky': 0.0}
 TALK_SMOOTH = float(os.environ.get('TALK_SMOOTH', 3))   # Gaussian sigma, in frames: the source snaps its arms up in one frame
 
 
@@ -116,13 +116,13 @@ for i, pose in enumerate(talk):
 
 def cap_arms(pose):
     out = dict(pose)
-    for side in ('Left', 'Right'):
-        for part, cap in ARM_CAP.items():
-            bone = side + part
-            loc, quat, scale = pose[bone]; rest = idle_a[bone][1]
-            if rest.dot(quat) < 0: quat = -quat
-            angle = math.degrees(rest.rotation_difference(quat).angle)
-            if angle > cap: out[bone] = (loc, rest.slerp(quat, cap / angle), scale)
+    for bone, (loc, quat, scale) in pose.items():
+        caps = [cap for part, cap in ARM_CAP.items() if part in bone]
+        if not caps: continue
+        cap = caps[-1]; rest = idle_a[bone][1]
+        if rest.dot(quat) < 0: quat = -quat
+        angle = math.degrees(rest.rotation_difference(quat).angle)
+        if angle > cap: out[bone] = (loc, rest.slerp(quat, cap / angle), scale)
     return out
 
 

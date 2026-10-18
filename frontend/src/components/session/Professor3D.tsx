@@ -91,8 +91,9 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     /** Cible lissée du pointage, gardée pendant que le bras redescend. */
     let aimGoal: { x: number; y: number } | null = null;
     const bones = new Map<string, THREE.Bone>();
-    /** Pose de référence de chaque os : les os sans piste d'animation y reviennent à chaque image. */
+    /** Dernière pose écrite par le mixeur pour chaque os (pose de référence pour les os sans piste). */
     const rest = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3; s: THREE.Vector3 }>();
+    const remember = () => { for (const [b, pose] of rest) { pose.q.copy(b.quaternion); pose.p.copy(b.position); pose.s.copy(b.scale); } };
     const faces: THREE.Mesh[] = [];
     const clock = new THREE.Clock();
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -212,6 +213,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       if (idle) { idleAction = mixer.clipAction(idle); idleAction.play(); }
       if (talking) { talkAction = mixer.clipAction(talking); talkAction.setEffectiveWeight(0); talkAction.play(); }
       mixer.update(0);
+      remember();
       frameModel(model);
       container.dataset.ready = 'true';
     }, undefined, () => { if (!disposed) onError(); });
@@ -251,10 +253,13 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           talkAction.setEffectiveWeight(talkBlend);
           idleAction.setEffectiveWeight(1 - talkBlend);
         }
-        // Sans cela, les rotations ajoutées ci-dessous s'accumuleraient d'une image à l'autre sur les os
-        // dont l'export a retiré les pistes constantes (tête, moustache, sourcils…).
+        // Les rotations ajoutées ci-dessous ne doivent pas s'accumuler d'une image à l'autre : chaque os
+        // repart de la dernière pose écrite par le mixeur. Surtout pas de la pose de référence (bras en
+        // croix) : three.js ne réécrit un os que si sa valeur animée change, et pendant une pose tenue
+        // l'os restait alors en croix, d'où des bras et des mains qui sautaient par à-coups.
         for (const [b, pose] of rest) { b.quaternion.copy(pose.q); b.position.copy(pose.p); b.scale.copy(pose.s); }
         mixer.update(delta);
+        remember();
         model.updateMatrixWorld(true);
         // Voix : la moustache se soulève et retombe avec chaque syllabe ; les sourcils suivent la réflexion.
         const moustache = bone('Moustache');

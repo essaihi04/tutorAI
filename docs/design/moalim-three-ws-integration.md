@@ -8,7 +8,7 @@
 
 - Vieux professeur à grosses lunettes, cheveux et moustache blancs, gilet ; 11 matériaux en couleurs unies, sans texture.
 - Squelette de 48 os renommés en noms humanoïdes standard (`Hips`, `Head`, `LeftArm`, `RightHandIndex1`…), plus `Nose`, `Moustache`, `BrowLeft`, `BrowRight`. Quatre doigts de trois phalanges par main.
-- Deux animations découpées dans l'animation source, sans l'apparition ni la disparition : `Idle` (4 s, bras le long du corps) et `Talking` (8,4 s, gestes et coucous). Les gestes source montent le bras en une seule image (plus de 900°/s) : `Talking` est lissé (gaussienne de 3 images, en boucle) pour rester sous 480°/s, sinon le personnage semble clignoter. Ces gestes agitaient aussi les deux bras jusqu'au-dessus des épaules toutes les une à deux secondes : en parlant, épaules, bras et avant-bras restent en pose de repos, les mains bougent de 12° au plus ; doigts, corps et jambes gardent l'animation source. Le pointage et l'écriture orientent le bras depuis l'application, indépendamment du clip.
+- Deux animations découpées dans l'animation source, sans l'apparition ni la disparition : `Idle` (4 s, bras le long du corps) et `Talking` (8,4 s, gestes et coucous). Les gestes source montent le bras en une seule image (plus de 900°/s) : `Talking` est lissé (gaussienne de 3 images, en boucle) pour rester sous 480°/s, sinon le personnage semble clignoter. Ces gestes agitaient aussi les deux bras jusqu'au-dessus des épaules toutes les une à deux secondes : en parlant, épaules, bras, avant-bras, mains et doigts restent en pose de repos ; corps, jambes et sourcils gardent l'animation source. Le pointage et l'écriture orientent le bras depuis l'application, indépendamment du clip.
 - Les matériaux sources ont deux sorties ; le script active la sortie Principled, sinon l'export perd les couleurs.
 - Il n'a ni bouche ni lèvres sous la moustache : la voix fait parler la moustache, comme dans un dessin animé.
 
@@ -31,7 +31,7 @@ Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx
 - **Vol** : ressort amorti, élévation et inclinaison dans le sens du vol, jambes qui traînent, flottement à l'arrêt, retour à la place choisie par l'élève après 1,6 s sans cible.
 - **Écriture au tableau** : il flotte juste sous la ligne en cours, tête comprise, et écrit au bout d'une fine baguette qui part de sa main jusqu'à la plume ✍️ (masquée tant qu'il écrit).
 - **Simulation** : il vole jusqu'au bouton de la commande (`data-professor-control`), tend l'index et appuie ; la commande part après `PROFESSOR_REACH_MS` (850 ms), avec une onde de clic.
-- À chaque image, tous les os reviennent à leur pose de référence avant l'animation : l'export supprime les pistes constantes, et sans cette remise à zéro les gestes ajoutés s'accumuleraient (la tête finissait par tourner sur elle-même).
+- À chaque image, tous les os reviennent à la dernière pose écrite par le mixeur avant l'animation, sinon les gestes ajoutés s'accumuleraient (la tête finissait par tourner sur elle-même). Pas à la pose de référence (bras en croix) : three.js ne réécrit un os que si sa valeur animée change, et pendant une pose tenue l'os restait en croix, ce qui faisait sauter bras et mains par à-coups (`tests/avatar-held-pose.test.mjs`).
 
 ## Synchronisation audio
 
