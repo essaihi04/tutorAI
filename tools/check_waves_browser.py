@@ -15,11 +15,22 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':1280,'height':800})
     errors=[]
     page.on('pageerror',lambda e:errors.append(str(e)))
-    page.add_init_script("window.messages=[];addEventListener('message',e=>{if(e.data?.type==='simulation_state')messages.push(e.data);});")
+    page.add_init_script("window.messages=[];window.rects=[];addEventListener('message',e=>{if(e.data?.type==='simulation_state')messages.push(e.data);if(e.data?.type==='simulation_control_rect')rects.push(e.data);});")
     url=base+'/media/simulations/physics/progressive/index.html?variant=progressive&scope=single'
     page.goto(url);page.wait_for_selector('#controls input')
     def advance(n=60):page.evaluate('(n)=>{for(let i=0;i<n;i++)executeAICommand("step")}',n)
     def state():return page.evaluate('messages.at(-1).current_state')
+    # Commandes du tuteur : arrêt à un instant donné, saut dans le temps, localisation des boutons.
+    page.evaluate('executeAICommand("run_until",{time_s:1.2})')
+    page.wait_for_function('messages.at(-1).current_state.simulation_status==="paused"',timeout=4000)
+    assert abs(state()['time_s']-1.2)<.05 and state()['duration_s']>1.2,state()
+    page.evaluate('executeAICommand("set_time",{time_s:0.5})');assert abs(state()['time_s']-.5)<.01 and state()['simulation_status']=='paused',state()
+    page.evaluate("postMessage({type:'simulation_locate',command:'start',sequence:7},'*')")
+    page.wait_for_function('rects.length>0',timeout=2000)
+    located=page.evaluate('rects.at(-1)');assert located['sequence']==7 and located['rect']['width']>0,located
+    button=page.locator('#run').bounding_box();assert abs(located['rect']['x']-button['x'])<1 and abs(located['rect']['y']-button['y'])<1,(located,button)
+    page.evaluate("postMessage({type:'simulation_locate',command:'nope',sequence:8},'*')");page.wait_for_function('rects.length>1',timeout=2000);assert page.evaluate('rects.at(-1).rect') is None
+    page.evaluate('executeAICommand("reset")')
     page.click('#answerTab')
     page.fill('#delayAnswer','1,25');page.fill('#speedAnswer','4')
     page.click('#check');assert 'Lance' in page.inner_text('#feedback')
@@ -28,6 +39,7 @@ with sync_playwright() as p:
     page.click('#record');assert state()['simulation_status']!='finished'
     t=state()['time_s'];page.wait_for_timeout(150);assert state()['time_s']==t
     page.evaluate('executeAICommand("set_parameters",{sensor_2_m:8})');assert page.is_disabled('#record')
+    assert not page.is_hidden('#settings');page.click('#answerTab')   # le tuteur a montré le réglage ; l'élève rouvre « Répondre »
     page.click('#run');advance();page.fill('#delayAnswer','1,50');page.fill('#speedAnswer','40');page.click('#check');assert page.is_disabled('#record')
     page.fill('#speedAnswer','4');page.click('#check');page.click('#record');page.wait_for_function('messages.at(-1).current_state.simulation_status === "finished"',timeout=2000);assert state()['objective_progress']==1
     page.screenshot(path=str(out/'desktop-capteurs.png'))

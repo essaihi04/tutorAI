@@ -25,9 +25,11 @@ L'état final est conservé. Les paramètres sont bornés ; leur modification an
 
 Identifiant conservé : `physics_waves_advanced_lab`.
 
-Contrat du template de plateforme : émission de `simulation_manifest` et `simulation_state` ; réception de `simulation_control` uniquement depuis la fenêtre parente. Statuts : `idle`, `running`, `finished`.
+Contrat du template de plateforme : émission de `simulation_manifest` et `simulation_state` ; réception de `simulation_control` uniquement depuis la fenêtre parente. Statuts : `idle`, `running`, `paused`, `finished`.
 
-Commandes : `start`, `set_variant`, `set_parameters`, `fire_pulse`, `pause`, `step`, `record_measurement`, `check`, `reset`, `reveal_hint`. Le manifeste fournit les limites des paramètres. Aucun code ou URL fourni par le tuteur n'est exécuté.
+Commandes : `start`, `set_variant`, `set_parameters`, `fire_pulse`, `pause`, `step`, `run_until` (`time_s` : lance si besoin puis s'arrête à cet instant), `set_time` (`time_s` : saute à cet instant, en pause), `record_measurement`, `check`, `reset`, `reveal_hint`. Le manifeste fournit les limites des paramètres ; le snapshot donne `duration_s`.
+
+Le professeur animé de la page localise le bouton d'une commande avant de l'appuyer : la page parente envoie `simulation_locate` (`command`, `sequence`) et le laboratoire répond `simulation_control_rect` avec le rectangle de l'élément portant `data-professor-control` (ou `null`). Aucun code ou URL fourni par le tuteur n'est exécuté.
 
 Le snapshot rapporte les paramètres, le temps, les actions, la réponse saisie, les tentatives, les mesures validées et les variantes terminées. Les réponses libres du cours restent à examiner par le tuteur ; le laboratoire ne simule pas une correction automatique de rédaction.
 

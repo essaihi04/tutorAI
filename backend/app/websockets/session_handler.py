@@ -3011,10 +3011,12 @@ TU DOIS OBLIGATOIREMENT:
 
 RÈGLES:
 - Fonde tes observations uniquement sur cet état réel; n'invente aucune manipulation.
-- Si l'élève demande une manipulation disponible, utilise une action UI de contrôle. Exemple générique:
+- Si l'élève demande une manipulation disponible, ou si elle sert ton explication, utilise une action UI de contrôle. Exemple générique:
   {control_example}
-- Choisis exclusivement une commande de available_commands et respecte command_schema.
-- Une seule commande de manipulation par réponse, avec une courte consigne d'observation.
+- Choisis exclusivement des commandes de available_commands et respecte command_schema.
+- Au plus deux commandes par réponse, dans l'ordre d'exécution (par exemple set_parameters puis start), avec une courte consigne d'observation.
+- Pour arrêter la scène à un instant précis (« regarde à t = 2,5 s »), utilise run_until ou set_time avec time_s quand elles figurent dans available_commands ; pause arrête à l'instant courant ; step avance d'un pas.
+- Le professeur à l'écran vole jusqu'au bouton et l'appuie lui-même : annonce en une phrase ce que tu fais (« Je lance la corde et j'arrête à 2,5 s »), puis ce qu'il faut observer.
 - {launch_instruction}
 """
 

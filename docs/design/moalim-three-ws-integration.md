@@ -34,7 +34,7 @@ Tout est dans `frontend/src/components/session/Professor3D.tsx` et `AIAvatar.tsx
 - **Pointage** : l'épaule puis le coude s'orientent vers l'élément montré, l'index se tend ; la cible glisse d'un élément au suivant et reste en place pendant que le bras redescend.
 - **Vol** : ressort amorti, élévation et inclinaison dans le sens du vol, jambes qui traînent, flottement à l'arrêt, retour à la place choisie par l'élève après 1,6 s sans cible.
 - **Écriture au tableau** : il flotte juste sous la ligne en cours, tête comprise, et écrit au bout d'une fine baguette qui part de sa main jusqu'à la plume ✍️ (masquée tant qu'il écrit).
-- **Simulation** : il vole jusqu'au bouton de la commande (`data-professor-control`), tend l'index et appuie ; la commande part après `PROFESSOR_REACH_MS` (850 ms), avec une onde de clic.
+- **Simulation** : il vole jusqu'au bouton de la commande (`data-professor-control`), tend l'index et appuie ; la commande part après `PROFESSOR_REACH_MS` (850 ms), avec une onde de clic. Même chose pour les laboratoires HTML en iframe, qui localisent eux-mêmes leur bouton (voir `moalim-floating-tutor.md`).
 - À chaque image, tous les os reviennent à la dernière pose écrite par le mixeur avant l'animation, sinon les gestes ajoutés s'accumuleraient (la tête finissait par tourner sur elle-même). Pas à la pose de référence (bras en croix) : three.js ne réécrit un os que si sa valeur animée change, et pendant une pose tenue l'os restait en croix, ce qui faisait sauter bras et mains par à-coups (`tests/avatar-held-pose.test.mjs`).
 
 ## Synchronisation audio

@@ -6,11 +6,20 @@ import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS } from '../../services/professorFoc
 import type { ProfessorMotion, ProfessorRig } from './Professor3D';
 const Professor3D = lazy(() => import('./Professor3D'));
 
+/** Commande du tuteur pour un laboratoire HTML (iframe) : le professeur appuie, puis le message part. */
+export interface LabControlCommand {
+  sequence: number;
+  command: string;
+  /** Message `simulation_control` à transmettre à l'iframe une fois le bouton appuyé. */
+  message: Record<string, unknown>;
+}
+
 interface AIAvatarProps {
   isSpeaking: boolean;
   isProcessing: boolean;
   processingStage?: string;
   control?: ScientificControlCommand | null;
+  labControl?: LabControlCommand | null;
 }
 const WIDTH = 180;
 const HEIGHT = 320;
@@ -45,13 +54,14 @@ function reachPosition(point: Point, writing: boolean, rig: ProfessorRig) {
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
-export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control }: AIAvatarProps) {
+export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control, labControl }: AIAvatarProps) {
   const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const onAnimationError = useCallback(() => setAnimationFailed(true), []);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [press, setPress] = useState<{ key: number; x: number; y: number } | null>(null);
+  const deliveredLab = useRef(0);
   const [hand, setHand] = useState<Point | null>(null);
   const onHandPosition = useCallback((next: Point) => setHand(previous =>
     previous && Math.abs(previous.x - next.x) + Math.abs(previous.y - next.y) < 1 ? previous : next), []);
@@ -183,6 +193,59 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
       setFocus(null);
     };
   }, [control, fly, aimSide]);
+
+  // Laboratoire HTML dans une iframe : il vole jusqu'au bouton de la commande, que le laboratoire localise
+  // lui-même (`simulation_locate` → `simulation_control_rect`, en px de l'iframe, remis à l'échelle de la
+  // page), appuie, et la commande part alors vers l'iframe. Sans réponse, il vise l'iframe entière.
+  useEffect(() => {
+    if (!labControl) return;
+    const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Simulation"]');
+    const deliver = () => {
+      if (deliveredLab.current === labControl.sequence) return;
+      deliveredLab.current = labControl.sequence;
+      iframe?.contentWindow?.postMessage(labControl.message, '*');
+    };
+    if (!iframe?.contentWindow || minimized || animationFailed) { deliver(); return; }
+    let inner: { x: number; y: number; width: number; height: number } | null = null;
+    const bounds = () => {
+      const frame = iframe.getBoundingClientRect();
+      const scale = iframe.clientWidth ? frame.width / iframe.clientWidth : 1;
+      return inner
+        ? new DOMRect(frame.left + inner.x * scale, frame.top + inner.y * scale, inner.width * scale, inner.height * scale)
+        : frame;
+    };
+    const update = () => {
+      const rect = bounds();
+      setFocus({ rect, writing: false });
+      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      fly(reachPosition(point, false, rig.current));
+      aimSide(point);
+    };
+    const onRect = (event: MessageEvent) => {
+      const data = event.data as { type?: string; sequence?: number; rect?: { x: number; y: number; width: number; height: number } | null } | null;
+      if (event.source !== iframe.contentWindow || data?.type !== 'simulation_control_rect' || data.sequence !== labControl.sequence) return;
+      if (data.rect && data.rect.width > 0) { inner = data.rect; update(); }
+    };
+    window.addEventListener('message', onRect);
+    iframe.contentWindow.postMessage({ type: 'simulation_locate', command: labControl.command, sequence: labControl.sequence }, '*');
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    const pressTimer = window.setTimeout(() => {
+      const rect = bounds();
+      setPress({ key: -labControl.sequence, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      deliver();
+    }, PROFESSOR_REACH_MS);
+    const timer = window.setTimeout(() => { setFocus(null); setPress(null); }, PROFESSOR_REACH_MS + 2400);
+    return () => {
+      window.clearTimeout(timer); window.clearTimeout(pressTimer);
+      window.removeEventListener('message', onRect);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+      deliver();                                   // une commande suivante ne doit jamais faire perdre celle-ci
+      setFocus(null);
+    };
+  }, [labControl, minimized, animationFailed, fly, aimSide]);
 
   // Sans rien à montrer, il retourne à sa place (après un court délai, pour enchaîner deux lignes sans aller-retour).
   useEffect(() => {

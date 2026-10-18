@@ -19,7 +19,8 @@ import { speechService } from '../services/speechService';
 import { voiceFloor } from '../services/voiceFloor';
 import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
-import AIAvatar from '../components/session/AIAvatar';
+import AIAvatar, { type LabControlCommand } from '../components/session/AIAvatar';
+import { PROFESSOR_REACH_MS } from '../services/professorFocus';
 import ChatHistory from '../components/session/ChatHistory';
 import { SessionMediaDisplay } from '../components/session/MediaViewer';
 import AIWhiteboard from '../components/session/AIWhiteboard';
@@ -321,6 +322,19 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [boardContent, setBoardContent] = useState<any | null>(null);
   const [liveScript, setLiveScript] = useState<any | null>(null);
   const [scientificControl, setScientificControl] = useState<ScientificControlCommand | null>(null);
+  // Commandes du tuteur pour un laboratoire HTML : une à la fois, le professeur vole jusqu'au bouton et appuie.
+  const [labControl, setLabControl] = useState<LabControlCommand | null>(null);
+  const labQueue = useRef<Record<string, unknown>[]>([]);
+  const labBusy = useRef(false);
+  const labSequence = useRef(0);
+  const dispatchLabControl = useCallback(() => {
+    if (labBusy.current) return;
+    const next = labQueue.current.shift();
+    if (!next) return;
+    labBusy.current = true;
+    setLabControl({ sequence: ++labSequence.current, command: String(next.command ?? ''), message: next });
+    window.setTimeout(() => { labBusy.current = false; dispatchLabControl(); }, PROFESSOR_REACH_MS + 700);
+  }, []);
   // À qui appartient la voix : au chat, ou au tableau ?
   //
   // Elle a longtemps appartenu au chat SANS exception, et pour une bonne
@@ -1548,17 +1562,9 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     wsService.on('simulation_control', (data) => {
       console.log('[IA→Simulation] Commande de contrôle reçue:', data);
-      
-      // Trouver l'iframe de simulation active
-      const iframe = document.querySelector('iframe[title="Simulation"]') as HTMLIFrameElement;
-      
-      if (iframe && iframe.contentWindow) {
-        // Relayer la commande à la simulation
-        iframe.contentWindow.postMessage(data, '*');
-        console.log('[IA→Simulation] Commande relayée à l\'iframe:', data.command);
-      } else {
-        console.warn('[IA→Simulation] Aucune iframe de simulation active trouvée');
-      }
+      // Le professeur la porte jusqu'à l'iframe : il vole au bouton, appuie, puis elle est relayée (AIAvatar).
+      labQueue.current.push(data);
+      dispatchLabControl();
     });
 
     wsService.on('scientific_control', (data) => {
@@ -2333,7 +2339,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           {/* Un seul professeur, monté en permanence (il vole au-dessus de la page via un portail) : le monter
               dans chaque vue le détruisait et le recréait à chaque changement, d'où un clignotement. */}
           {!(showExamPanel && examExercises.length > 0) && (
-            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} />
+            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} labControl={labControl} />
           )}
           {showExamPanel && examExercises.length > 0 ? (
             <>
