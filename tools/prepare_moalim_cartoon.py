@@ -19,10 +19,11 @@ TALK_RANGE = (40, 240)        # source frames, after the pop-in and before the p
 IDLE_POSES = (60, 120)        # two calm source frames, arms down
 IDLE_LENGTH = 96              # frames at 24 fps
 import os
-# The source gestures raise both arms to shoulder height and above every second or two (up to 117°
-# from the rest pose), which reads as a flicker in a small floating tutor: the upper arm may move at
-# most this far (degrees) from the rest pose; forearms, hands, fingers and the rest are untouched.
-ARM_CAP = {'Arm': float(os.environ.get('ARM_CAP', 12)), 'Shoulder': 10.0}
+# The source gestures wave both arms (up to 117° from the rest pose, above the shoulders) every second
+# or two, which reads as a flicker in a small floating tutor: while talking, shoulders, upper arms and
+# forearms stay in the rest pose and the hands only move a little (max degrees from the rest pose).
+# Pointing and writing move the arms from the app, independently of this clip.
+ARM_CAP = {'Shoulder': 0.0, 'Arm': 0.0, 'ForeArm': 0.0, 'Hand': 12.0}
 TALK_SMOOTH = float(os.environ.get('TALK_SMOOTH', 3))   # Gaussian sigma, in frames: the source snaps its arms up in one frame
 
 
