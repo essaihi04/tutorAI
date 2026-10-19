@@ -7,6 +7,7 @@
 - The single source action (pop-in, gestures, pop-out) is cut into two loops:
   `Idle` (calm pose, arms down, gentle sway) and `Talking` (the gestures, without the pop-in/out).
 - Exports `moalim-professeur.glb` and renders `moalim-professeur.png` (fallback portrait).
+- Then set PROFESSOR_MODEL_VERSION in Professor3D.tsx to the first 10 hex of the GLB's SHA-256 (cache busting).
 """
 import bpy, math, sys
 from pathlib import Path

@@ -43,7 +43,13 @@ interface Props {
 /** Durée de chaque geste d'émotion, en secondes. */
 const GESTURE_LENGTH: Record<ProfessorGestureKind, number> = { wave: 2.4, cheer: 1.8, heart: 2.2, nod: 1.2, laugh: 1.8, startle: 1.4 };
 const smooth = (a: number, b: number, x: number) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-export const PROFESSOR_MODEL_URL = '/media/avatar/moalim-professeur.glb';
+/**
+ * Version du modèle : les 10 premiers caractères de son SHA-256. L'adresse change avec le fichier, donc un
+ * navigateur ne garde jamais un ancien professeur en cache (le serveur n'envoie pas de consigne de cache).
+ * Après chaque `tools/prepare_moalim_cartoon.py`, mettre à jour cette valeur (le test le vérifie).
+ */
+export const PROFESSOR_MODEL_VERSION = '8b07642460';
+export const PROFESSOR_MODEL_URL = `/media/avatar/moalim-professeur.glb?v=${PROFESSOR_MODEL_VERSION}`;
 const VIEW_WIDTH = 180, VIEW_HEIGHT = 260;
 /** Le canevas déborde de la boîte de chaque côté : un bras tendu n'est jamais coupé. */
 const CANVAS_MARGIN = 120, CANVAS_WIDTH = VIEW_WIDTH + 2 * CANVAS_MARGIN;

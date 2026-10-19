@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { LipSyncAnalyser } from '../src/vendor/three-ws/lip-sync-analyser.js';
 
 class FakeAnalyser {
@@ -70,4 +71,10 @@ test('the talking gestures never snap an arm into place from one frame to the ne
     }
   }
   assert.ok(fastest < 480, `arms turn at most ${fastest.toFixed(0)}°/s (8° per frame at 60 fps)`);
+});
+test('the model address changes with the file, so no browser keeps an old professor in cache', () => {
+  const bytes = readFileSync(new URL('../public/media/avatar/moalim-professeur.glb', import.meta.url));
+  const source = readFileSync(new URL('../src/components/session/Professor3D.tsx', import.meta.url), 'utf8');
+  const version = source.match(/PROFESSOR_MODEL_VERSION = '([0-9a-f]+)'/)?.[1];
+  assert.equal(version, createHash('sha256').update(bytes).digest('hex').slice(0, 10), 'update PROFESSOR_MODEL_VERSION after regenerating the GLB');
 });
