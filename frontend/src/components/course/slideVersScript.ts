@@ -19,9 +19,11 @@
  * L'explication porte l'enregistrement PUBLIÉ de la diapositive quand il y en
  * a un (`slide.audio`) : c'est la voix qu'un auteur a écoutée et validée, et
  * la resynthétiser au moment de la lecture serait plus lent et moins fidèle.
- * Les lignes écrites, elles, sont dites par le tableau lui-même — elles sont
- * courtes, et leur synthèse est mise en cache côté serveur. Sans
- * enregistrement, tout retombe sur la voix du tableau.
+ * Avec un enregistrement, la parole COMMENCE AVEC L'ÉCRITURE : le professeur
+ * parle pendant qu'il écrit, et les lignes s'écrivent en silence sous sa
+ * voix. Si la diapositive interroge l'élève, la parole attend la réponse —
+ * elle contient la correction. Sans enregistrement, chaque ligne est dite
+ * par le tableau en l'écrivant, puis l'explication vient à la fin.
  */
 import type { LiveScript, LiveStep } from '../session/LiveBoard';
 import type { CourseSlide } from './types';
@@ -39,6 +41,14 @@ function textePourLaLangue(
 
 export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveScript {
   const steps: LiveStep[] = [];
+  const parole = textePourLaLangue(slide.speech_text, langue);
+  const pistes = slide.audio || {};
+  const piste = pistes[langue] || pistes.mixed || pistes.fr || Object.values(pistes)[0];
+  const paroleEnregistree = !!(parole && piste?.url);
+  const enonce = (slide.question?.prompt || '').trim();
+  const lancerLaParole = () => {
+    steps.push({ action: 'narrate', text: parole, audio_url: piste?.url, background: true });
+  };
   const contenu = slide.screen_content || {};
   const visuel = slide.visual;
 
@@ -66,7 +76,8 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
     }
   }
 
-  // ── 2. Ce qui s'écrit ──
+  // ── 2. Ce qui s'écrit — sous la parole, quand rien n'est demandé à l'élève ──
+  if (paroleEnregistree && !enonce) lancerLaParole();
   const ecrire = (type: string, contenuLigne?: string | null) => {
     const propre = (contenuLigne || '').trim();
     if (propre) steps.push({ action: 'write', line: { type, content: propre } });
@@ -87,13 +98,14 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
 
   // ── 3. La question vient AVANT toute réponse ou explication ──
   const question = slide.question;
-  const enonce = (question?.prompt || '').trim();
   if (enonce) {
     steps.push({
       action: 'ask',
       text: enonce,
       options: (question?.options || []).filter(option => !!option?.trim()).slice(0, 4),
     });
+    // La réponse est donnée : la correction se dit pendant qu'elle s'écrit.
+    if (paroleEnregistree) lancerLaParole();
   }
 
   // ── 4. Correction écrite, seulement après la réponse de l'élève ──
@@ -160,12 +172,9 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
     }
   });
 
-  // ── 6. Correction orale, devant le tableau maintenant complété ──
-  const parole = textePourLaLangue(slide.speech_text, langue);
-  if (parole) {
-    const pistes = slide.audio || {};
-    const piste = pistes[langue] || pistes.mixed || pistes.fr || Object.values(pistes)[0];
-    steps.push({ action: 'narrate', text: parole, audio_url: piste?.url });
+  // ── 6. Sans enregistrement : correction orale, devant le tableau complété ──
+  if (parole && !paroleEnregistree) {
+    steps.push({ action: 'narrate', text: parole });
   }
 
   // Une diapositive sans rien à écrire ni à dire laisserait un tableau vide et

@@ -40,6 +40,21 @@ const STUDENT_RULES = [
   ['surprise', /\b(wow|waouh|ouah|s[ée]rieux ?\?|pas possible)\b|😮|😲|🤯/i],
 ];
 
+/** Événement émis quand l'élève répond à un exercice du tableau. */
+export const REPONSE_ELEVE_EVENT = 'moalim:reponse-eleve';
+
+/**
+ * L'élève vient de répondre à un exercice (QCM, vrai/faux) : le professeur
+ * réagit — il applaudit une bonne réponse, il encourage après une erreur.
+ * Les exercices vivent au fond du tableau ; un événement de fenêtre leur évite
+ * de faire remonter une callback à travers tous les composants.
+ * @param {boolean} juste
+ */
+export function signalerReponseEleve(juste) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(REPONSE_ELEVE_EVENT, { detail: { juste: !!juste } }));
+}
+
 /**
  * @param {string} text
  * @param {'ai' | 'student'} speaker

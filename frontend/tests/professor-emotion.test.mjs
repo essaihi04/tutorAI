@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROFESSOR_EMOTIONS, detectProfessorEmotion } from '../src/services/professorEmotion.js';
+import { PROFESSOR_EMOTIONS, REPONSE_ELEVE_EVENT, detectProfessorEmotion, signalerReponseEleve } from '../src/services/professorEmotion.js';
 
 test('the tutor\'s words give the professor an emotion', () => {
   assert.equal(detectProfessorEmotion('Bonjour Amine ! Prêt pour les ondes ?'), 'greet');
@@ -35,4 +35,17 @@ test('every emotion has emojis and a known gesture', () => {
     assert.ok(spec.emojis.length >= 1 && spec.count >= 1, kind);
     assert.ok([null, 'wave', 'cheer', 'heart', 'nod', 'laugh', 'startle'].includes(spec.gesture), kind);
   }
+});
+
+test('an answer on the board reaches the professor, right or wrong', () => {
+  const recu = [];
+  globalThis.window = new EventTarget();
+  try {
+    window.addEventListener(REPONSE_ELEVE_EVENT, event => recu.push(event.detail.juste));
+    signalerReponseEleve(true);
+    signalerReponseEleve(false);
+  } finally {
+    delete globalThis.window;
+  }
+  assert.deepEqual(recu, [true, false]);
 });

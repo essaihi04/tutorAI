@@ -21,7 +21,7 @@ import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
 import AIAvatar, { type LabControlCommand } from '../components/session/AIAvatar';
 import { PROFESSOR_REACH_MS } from '../services/professorFocus';
-import { detectProfessorEmotion, type ProfessorEmotionKind } from '../services/professorEmotion';
+import { detectProfessorEmotion, REPONSE_ELEVE_EVENT, type ProfessorEmotionKind } from '../services/professorEmotion';
 import ChatHistory from '../components/session/ChatHistory';
 import { SessionMediaDisplay } from '../components/session/MediaViewer';
 import AIWhiteboard from '../components/session/AIWhiteboard';
@@ -362,6 +362,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     expressEmotion(kind);
   }, [conversation, expressEmotion]);
   useEffect(() => { if (connected) expressEmotion('greet'); }, [connected, expressEmotion]);
+  // L'élève répond à un exercice du tableau : bravo s'il a juste, encouragement sinon.
+  useEffect(() => {
+    const reagir = (event: Event) => {
+      expressEmotion((event as CustomEvent<{ juste: boolean }>).detail?.juste ? 'celebrate' : 'encourage');
+    };
+    window.addEventListener(REPONSE_ELEVE_EVENT, reagir);
+    return () => window.removeEventListener(REPONSE_ELEVE_EVENT, reagir);
+  }, [expressEmotion]);
   // Il réfléchit vraiment : un 🤔 après 1,5 s de traitement, pas pour une réponse immédiate.
   useEffect(() => {
     if (!isProcessing) return;
@@ -2582,7 +2590,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   scientificControl={scientificControl}
                   externalAudioActive={isSpeaking}
                   onSimulationUpdate={handleSimulationUpdate}
-                  onComplete={() => setLessonCompleted(true)}
+                  onComplete={() => { setLessonCompleted(true); expressEmotion('celebrate'); }}
                   onRestart={() => setLessonCompleted(false)}
                 />
               </div>

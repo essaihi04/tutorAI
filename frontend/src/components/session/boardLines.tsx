@@ -20,6 +20,7 @@ import MindMap from './MindMap';
 import ScientificVisual from './scientific/ScientificVisual';
 import type { ScientificVisualSpec } from './scientific/types';
 import SVGSchemaViewer from './schemas/SVGSchemaViewer';
+import { signalerReponseEleve } from '../../services/professorEmotion';
 import { getSchemaById } from './schemas';
 
 interface MindMapNode {
@@ -900,6 +901,7 @@ function InteractiveQCM({ line }: { line: BoardLine }) {
     if (revealed) return;
     setSelected(idx);
     setRevealed(true);
+    signalerReponseEleve(idx === correct);
   };
 
   const isCorrect = selected === correct;
@@ -1005,6 +1007,7 @@ function InteractiveVraiFaux({ line }: { line: BoardLine }) {
   const handleAnswer = (idx: number, answer: boolean) => {
     if (answers[idx] !== undefined && answers[idx] !== null) return;
     setAnswers(prev => ({ ...prev, [idx]: answer }));
+    signalerReponseEleve(answer === statements[idx]?.correct);
   };
 
   const allAnswered = statements.every((_, idx) => answers[idx] !== undefined && answers[idx] !== null);

@@ -162,6 +162,13 @@ export interface LiveStep {
    * pas une resynthèse. Absent, le tableau retombe sur sa propre voix.
    */
   audio_url?: string;
+  /**
+   * `narrate` + `audio_url` : la parole DÉMARRE et le tableau continue
+   * aussitôt — il écrit les lignes suivantes, en silence, pendant qu'elle se
+   * dit. Un professeur parle en écrivant ; il n'écrit pas tout avant d'ouvrir
+   * la bouche. Le script ne se termine qu'à la fin de la parole.
+   */
+  background?: boolean;
   /** zoom : point visé (coordonnées croquis 0-500 × 0-400) + échelle.
    *  scale 1 = retour au tableau entier. */
   x?: number;
@@ -407,6 +414,9 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   // Lecture audio en cours (notre voix) + langue de la session, lues depuis
   // le moteur de lecture sans le faire dépendre du cycle de rendu React.
   const voiceHandleRef = useRef<BoardSpeakHandle | null>(null);
+  /** Parole enregistrée qui se dit PENDANT l'écriture (narrate `background`) :
+   *  tant qu'elle court, le tableau écrit sans prendre la parole lui-même. */
+  const paroleDeFondRef = useRef<Promise<void> | null>(null);
   const langRef = useRef<'fr' | 'ar' | 'mixed'>('fr');
   const drawZoneRef = useRef<HTMLDivElement>(null);
   // Script en cours, avec ou sans voix : le professeur explique avec ses mains.
@@ -533,6 +543,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     // Tableau muet (son coupé, ou narration portée par le chat) : ne pas
     // faire générer un audio qui ne sera jamais joué.
     if (!soundOnRef.current) return;
+    // La parole enregistrée couvre ce qui s'écrit : rien d'autre ne sera dit.
+    if (paroleDeFondRef.current) return;
     let queued = 0;
     for (let j = fromIndex; j < steps.length && queued < 2; j++) {
       for (const fragment of spokenTextOf(steps[j])) {
@@ -782,6 +794,13 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
       // Le chat annonce, le tableau enchaîne. Jamais les deux ensemble.
       return;
     }
+    paroleDeFondRef.current = null;
+    // Une parole de fond doit être finie avant que le tableau ne reprenne la
+    // parole lui-même : `boardVoice.speak` coupe la réplique en cours.
+    const attendreLaParoleDeFond = async (): Promise<boolean> => {
+      if (paroleDeFondRef.current) await paroleDeFondRef.current;
+      return runId === runIdRef.current;
+    };
     for (let i = 0; i < steps.length; i++) {
       if (runId !== runIdRef.current) return;
       const step = steps[i];
@@ -805,7 +824,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           // tableau n'était jamais prononcé, et l'élève devait deviner tout
           // seul le lien entre la ligne française et l'explication en darija.
           const explication = typeof step.say === 'string' ? step.say.trim() : '';
-          const willSpeak = soundOnRef.current && !!toSpokenText(line.content);
+          const willSpeak = soundOnRef.current && !paroleDeFondRef.current && !!toSpokenText(line.content);
 
           const entry: WrittenEntry = {
             key: ++keyRef.current,
@@ -864,6 +883,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const toSayDraw = typeof step.say === 'string' ? step.say.trim() : '';
           const spokenDraw = toSayDraw && soundOnRef.current ? toSpokenText(toSayDraw) : '';
           if (spokenDraw) {
+            if (!(await attendreLaParoleDeFond())) return;
             const handle = boardVoice.speak(spokenDraw, langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
             if (!playingRef.current) handle.pause();
@@ -888,7 +908,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             setWritten(prev => [...prev, { key: ++keyRef.current, line: bloc as any, revealMs: 0 }]);
           }
           const ditBloc = typeof step.say === 'string' ? step.say.trim() : '';
-          if (ditBloc && soundOnRef.current) {
+          if (ditBloc && soundOnRef.current && !paroleDeFondRef.current) {
             const handle = boardVoice.speak(toSpokenText(ditBloc), langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
             if (!playingRef.current) handle.pause();
@@ -922,6 +942,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             || step.scientific?.engine === 'three'
             || !!step.simulation?.url;
           if (dit && soundOnRef.current) {
+            if (!(await attendreLaParoleDeFond())) return;
             const handle = boardVoice.speak(toSpokenText(dit), langRef.current, undefined, prendreLaParole);
             voiceHandleRef.current = handle;
             if (!playingRef.current) handle.pause();
@@ -956,6 +977,22 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           if (typeof step.text === 'string' && step.text.trim()) {
             const text = step.text.trim();
             setNarration(text);
+            if (step.background && step.audio_url) {
+              if (!(await attendreLaParoleDeFond())) return;
+              if (soundOnRef.current) {
+                const handle = boardVoice.speak(
+                  toSpokenText(text) || text, langRef.current, undefined, prendreLaParole, step.audio_url,
+                );
+                voiceHandleRef.current = handle;
+                if (!playingRef.current) handle.pause();
+                const enCours: Promise<void> = handle.done.then(() => {
+                  if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
+                  if (paroleDeFondRef.current === enCours) paroleDeFondRef.current = null;
+                });
+                paroleDeFondRef.current = enCours;
+              }
+              break;
+            }
             const spoke = await speakAndReveal(text, runId, langRef.current, step.audio_url);
             if (runId !== runIdRef.current) return;
             // Son coupé ou voix indisponible : on laisse le temps de lire.
@@ -972,6 +1009,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           const options = Array.isArray(step.options)
             ? step.options.filter((o): o is string => typeof o === 'string' && !!o.trim()).map(o => o.trim()).slice(0, 4)
             : [];
+          if (!(await attendreLaParoleDeFond())) return;
           setPendingAsk({ text, options });
           setAskAnswer(null);
           const toAsk = typeof step.say === 'string' && step.say.trim() ? step.say.trim() : text;
@@ -1023,6 +1061,7 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           }
           const zsay = typeof step.say === 'string' ? step.say.trim() : '';
           if (zsay) {
+            if (!(await attendreLaParoleDeFond())) return;
             const spoke = await speakAndReveal(zsay, runId);
             if (runId !== runIdRef.current) return;
             if (!spoke && !(await wait(narrateDuration(zsay), runId))) return;
@@ -1035,6 +1074,8 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
           break;
       }
     }
+    // Le tableau est écrit ; le professeur finit sa phrase avant de rendre la main.
+    if (!(await attendreLaParoleDeFond())) return;
     // Script terminé : le chat peut de nouveau se faire entendre.
     rendreLaParole();
     if (runId === runIdRef.current) {

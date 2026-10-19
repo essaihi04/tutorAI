@@ -34,9 +34,10 @@ const CACHE_MAX = 40;
 const REQUETE_MAX_MS = 25_000;
 /** Marge accordée à la lecture d'un WAV avant de la déclarer bloquée. */
 const LECTURE_MARGE_MS = 8_000;
-// Ne pas modifier la hauteur de la voix Academy côté navigateur. Les pauses
-// viennent de la ponctuation envoyée au serveur, pas d'un ralentissement WAV.
-const TTS_PLAYBACK_RATE = 1.0;
+// Le professeur parle un peu plus posément que le débit natif du modèle : un
+// élève qui découvre la notion suit mieux à 0,92. La hauteur de la voix reste
+// celle d'Academy — `preservesPitch` ralentit sans rendre la voix plus grave.
+const TTS_PLAYBACK_RATE = 0.92;
 
 class BoardVoiceService {
   /** Fragments déjà synthétisés (clé = langue + texte) → URL d'objet. */
@@ -211,6 +212,7 @@ class BoardVoiceService {
       observeAvatarMedia(audio);
       audio.playbackRate = TTS_PLAYBACK_RATE;
       audio.defaultPlaybackRate = TTS_PLAYBACK_RATE;
+      audio.preservesPitch = true;
       this.current = audio;
 
       return await new Promise<boolean>((resolve) => {
