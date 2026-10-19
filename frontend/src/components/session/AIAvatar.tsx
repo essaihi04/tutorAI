@@ -19,6 +19,8 @@ interface AIAvatarProps {
   isSpeaking: boolean;
   isProcessing: boolean;
   processingStage?: string;
+  /** L'élève parle au micro ou tape sa réponse : le professeur l'écoute. */
+  isListening?: boolean;
   control?: ScientificControlCommand | null;
   labControl?: LabControlCommand | null;
   /** Émotion à exprimer (salut, bravo, affection…) : geste du personnage et émoticônes qui s'envolent de lui. */
@@ -66,7 +68,7 @@ function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
-export default function AIAvatar({ isSpeaking, isProcessing, processingStage, control, labControl, emotion }: AIAvatarProps) {
+export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion }: AIAvatarProps) {
   const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
@@ -90,8 +92,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, co
   const onRig = useCallback((measured: ProfessorRig) => { rig.current = measured; }, []);
   const [side, setSide] = useState<'left' | 'right'>('left');
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const state = isSpeaking ? 'speaking' : isProcessing ? 'thinking' : 'idle';
-  const status = isSpeaking ? 'Je parle…' : isProcessing
+  const listening = isListening || (isProcessing && processingStage === 'stt');
+  const state = isSpeaking ? 'speaking' : listening ? 'listening' : isProcessing ? 'thinking' : 'idle';
+  const status = isSpeaking ? 'Je parle…' : listening ? 'Je t’écoute…' : isProcessing
     ? processingStage === 'stt' ? 'Je t’écoute…' : processingStage === 'tts' ? 'Préparation audio…' : 'Je réfléchis…'
     : 'Prêt à t’aider';
 

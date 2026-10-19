@@ -12,11 +12,14 @@ import type { ProfessorGestureKind } from '../../services/professorEmotion';
  * - `Idle` tourne en boucle ; pendant la parole, `Talking` prend le relais en fondu. Sans clip
  *   `Talking`, des gestes d'explication sont ajoutés sur les avant-bras, les mains et la tête.
  * - La voix soulève la moustache (os `Moustache`) ; la réflexion lève les sourcils (`Brow*`).
+ * - En parlant, les bras expliquent : mains ouvertes, index levé pour un point clé, balayage.
+ * - Quand l'élève parle ou écrit, il écoute : tête penchée, buste en avant, hochements, main
+ *   derrière l'oreille au début.
  * - Pour montrer un élément, le bras se tend réellement vers lui et l'index se déplie, les autres
  *   doigts se replient ; la position du bout de l'index sert d'origine à la ligne de pointage.
  * - Si le modèle porte des formes faciales (jawOpen, viseme_*, eyeBlink*), la bouche suit la voix.
  */
-export type ProfessorMood = 'idle' | 'speaking' | 'thinking';
+export type ProfessorMood = 'idle' | 'speaking' | 'thinking' | 'listening';
 /** Vitesse du vol à l'écran (px/s), partagée par l'enveloppe sans re-rendu. */
 export interface ProfessorMotion { vx: number; vy: number; }
 /** Mesures du personnage dans la boîte de 180 × 260 px : épaules et longueur du bras tendu. */
@@ -105,7 +108,9 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
     const faces: THREE.Mesh[] = [];
     const clock = new THREE.Clock();
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let speech = 0, talk = 0, think = 0, aim = 0, lean = 0, rise = 0, scribe = 0;
+    let speech = 0, talk = 0, think = 0, listen = 0, aim = 0, lean = 0, rise = 0, scribe = 0;
+    /** Début de l'écoute en cours (la main va derrière l'oreille un instant) ; taille du personnage. */
+    let listenStart = -10, height = 1;
     const syllables = new SyllableEnvelope();
     let aimSide: 'Left' | 'Right' = 'Right';
     let gesturePlayed = 0, gestureStart = -10, gestureKind: ProfessorGestureKind | null = null;
@@ -184,6 +189,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       const size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
       root.position.x -= centre.x; root.position.z -= centre.z; root.position.y -= box.min.y;
       root.updateMatrixWorld(true);
+      height = size.y;
       const half = Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
       const distance = Math.max(size.y * FRAME_MARGIN / 2 / half, size.x * FRAME_MARGIN / 2 / (half * VIEW_WIDTH / VIEW_HEIGHT)) + size.z / 2;
       camera.position.set(0, size.y / 2, distance);
@@ -260,6 +266,9 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
       speech += (Math.min(1, amplitude * 4) - speech) * ease(4);
       talk += ((speaking ? 1 : 0) - talk) * ease(2.5);
       think += ((moodRef.current === 'thinking' ? 1 : 0) - think) * ease(2.5);
+      const listening = moodRef.current === 'listening';
+      if (listening && listen < 0.05) listenStart = time;
+      listen += ((listening ? 1 : 0) - listen) * ease(3);
       const pointingNow = pointRef.current && !!targetRef.current;
       if (pointingNow && aim < 0.05) aimSide = sideRef.current === 'right' ? 'Left' : 'Right';   // il lui fait face : sa gauche est à droite de l'écran
       aim += ((pointingNow ? 1 : 0) - aim) * ease(5);
@@ -306,13 +315,19 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
         rotateWorld(bone('BrowRight'), X, -(think * 0.15 + speech * 0.12 + mouth * 0.06));
         if (!reducedMotion.matches) {
           // Gestes d'explication : fenêtres alternées, avec des pauses, plus amples quand la voix porte.
-          const beat = (period: number, offset: number) => { const p = (time + offset) % period; return p < 3.2 ? Math.sin(Math.PI * p / 3.2) ** 2 : 0; };
+          // Chaque fenêtre (3 s, enveloppe sin²) porte un geste : mains ouvertes, index levé (un point clé) ou
+          // balayage. Le geste change seulement entre deux fenêtres, quand le bras est revenu : jamais de saut.
+          const GESTURE_WINDOW = 3;
+          const beat = (period: number, offset: number) => { const p = (time + offset) % period; return p < GESTURE_WINDOW ? Math.sin(Math.PI * p / GESTURE_WINDOW) ** 2 : 0; };
+          const phase = (period: number, offset: number) => ((time + offset) % period) / GESTURE_WINDOW;
+          const kindOf = (period: number, offset: number) => (['open', 'point', 'sweep', 'open', 'sweep', 'point'] as const)[Math.floor((time + offset) / period) % 6];
           // Le clip Talking garde les bras immobiles : gestes de mains procéduraux, francs quand il explique
           // sans rien montrer ni écrire, plus discrets pour le bras libre pendant un pointage ou l'écriture.
-          const procedural = talkAction ? (aim > 0.02 || scribe > 0.02 ? 0.3 : 0.55) : 1;
-          const gestureR = procedural * talk * (0.55 + 0.45 * speech) * beat(6.1, 0.3);
-          const gestureL = procedural * talk * (0.55 + 0.45 * speech) * beat(7.3, 3.4);
-          const both = procedural * talk * 0.35;
+          const procedural = talkAction ? (aim > 0.02 || scribe > 0.02 ? 0.3 : 0.85) : 1;
+          const voiced = 0.6 + 0.4 * speech;
+          const gestureR = procedural * talk * voiced * beat(4.7, 0.3);
+          const gestureL = procedural * talk * voiced * beat(5.6, 3.1);
+          const both = procedural * talk * 0.3;
           // Respiration : la tête et les épaules se soulèvent doucement.
           const breath = (1 - Math.cos(time * 1.4)) / 2;
           liftWorld(bone('Head'), breath * 0.006);
@@ -367,6 +382,32 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
               liftWorld(bone('Hips'), env * 0.03 * smooth(0, 0.2, gestureAge) * (1 - smooth(0.3, 0.7, gestureAge)));   // un sursaut
             }
           }
+          // Écoute : tête penchée, buste un peu en avant, sourcils levés, petits hochements réguliers ; au début,
+          // la main libre va derrière l'oreille (« je t'écoute »), puis redescend.
+          const earSide: 'Left' | 'Right' = aim > 0.02 && aimSide === 'Left' ? 'Right' : 'Left';
+          const listenAge = time - listenStart;
+          const cup = listen * smooth(0.1, 0.7, listenAge) * (1 - smooth(2.4, 3.2, listenAge));
+          if (listen > 0.001) {
+            rotateWorld(bone('Head'), Z, (earSide === 'Left' ? -1 : 1) * listen * 0.14);      // penche l'oreille vers l'élève
+            rotateWorld(bone('Spine'), X, listen * 0.07);
+            const nodPhase = (time + 0.4) % 2.6;
+            rotateWorld(bone('Head'), X, listen * 0.09 * (nodPhase < 0.8 ? Math.sin(Math.PI * nodPhase / 0.8) ** 2 : 0));
+            for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -listen * 0.18);
+          }
+          if (cup > 0.001) {
+            const head = bone('Head'), shoulder = bone(`${earSide}Arm`), elbow = bone(`${earSide}ForeArm`), hand = bone(`${earSide}Hand`);
+            if (head && shoulder && elbow && hand) {
+              const out = earSide === 'Left' ? 1 : -1;                                           // sa gauche est à droite de l'écran
+              head.getWorldPosition(vA);
+              const ear = vA.clone().add(vB.set(out * 0.3 * height, 0.22 * height, 0.02 * height));
+              shoulder.getWorldPosition(vA);
+              const elbowGoal = vA.clone().add(vB.set(out * 0.2 * height, 0.02 * height, 0.06 * height));
+              aimSegment(shoulder, elbow, elbowGoal, cup);
+              aimSegment(elbow, hand, ear, cup);
+              rotateWorld(hand, Y, -out * cup * 0.6);                                           // paume tournée vers l'avant, en cornet
+              for (const finger of FINGERS) curlFinger(earSide, finger, cup * 0.45);
+            }
+          }
           // Vol : le corps penche dans le sens du déplacement, les jambes traînent derrière.
           rotateWorld(bone('Hips'), Z, -lean * 0.22);
           rotateWorld(bone('Spine'), X, rise * 0.12);
@@ -375,21 +416,27 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           rotateWorld(bone('Spine2'), Y, talk * Math.sin(time * 0.9) * 0.05);
           rotateWorld(bone('Head'), X, -talk * (0.03 + speech * 0.05) * Math.sin(time * 2.3) + think * -0.12);
           rotateWorld(bone('Head'), Z, think * 0.12 + talk * Math.sin(time * 0.7) * 0.03);
-          for (const [side, g, sign] of [['Right', gestureR, -1], ['Left', gestureL, 1]] as const) {
+          for (const [side, g, sign, period, offset] of [['Right', gestureR, -1, 4.7, 0.3], ['Left', gestureL, 1, 5.6, 3.1]] as const) {
             if ((side === aimSide && aim > 0.02) || both + g < 0.001) continue;
+            if (side === earSide && cup > 0.02) continue;
             const lift = Math.min(1, both + g);
-            rotateWorld(bone(`${side}Arm`), X, -lift * 0.42);                                 // bras vers l'avant
-            rotateWorld(bone(`${side}Arm`), Z, sign * lift * 0.28);                           // et écarté du corps
+            const kind = kindOf(period, offset), p = phase(period, offset);
+            const pointUp = kind === 'point' ? g : 0;                                         // index levé : un point clé
+            const sweep = kind === 'sweep' ? g * Math.sin(Math.PI * 2 * p) : 0;                // la main balaie de dedans en dehors
+            rotateWorld(bone(`${side}Arm`), X, -lift * 0.5 - pointUp * 0.25);                 // bras vers l'avant
+            rotateWorld(bone(`${side}Arm`), Z, sign * (lift * 0.3 + sweep * 0.32));           // et écarté du corps
             const elbowBone = bone(`${side}ForeArm`);
-            rotateWorld(elbowBone, X, -lift * (1.45 + 0.2 * Math.sin(time * 3.1 + (sign > 0 ? 1 : 0))));   // main à hauteur de poitrine
-            rotateWorld(elbowBone, Y, -sign * lift * 0.35);                                  // avant-bras ouvert vers l'extérieur
+            rotateWorld(elbowBone, X, -lift * (1.45 + 0.22 * Math.sin(time * 3.1 + (sign > 0 ? 1 : 0))) - pointUp * 0.45);   // main à hauteur de poitrine
+            rotateWorld(elbowBone, Y, -sign * (lift * 0.35 + sweep * 0.25));                  // avant-bras ouvert vers l'extérieur
             const handBone = bone(`${side}Hand`);
             if (elbowBone && handBone) {
               elbowBone.getWorldPosition(vA); handBone.getWorldPosition(vB);
-              rotateWorld(handBone, vB.sub(vA).normalize(), -sign * lift * 1.1);              // paume tournée vers le haut
+              rotateWorld(handBone, vB.sub(vA).normalize(), -sign * (lift - pointUp * 0.8) * 1.1);   // paume vers le haut (de côté pour l'index)
             }
-            rotateWorld(handBone, Z, sign * g * 0.3 * Math.sin(time * 2.2));
-            for (const finger of FINGERS) curlFinger(side, finger, 0.15 + 0.1 * lift);
+            rotateWorld(handBone, Z, sign * g * 0.3 * Math.sin(time * 2.2) * (1 - pointUp));
+            if (kind === 'point') rotateWorld(handBone, X, -pointUp * 0.25 * Math.max(0, Math.sin(time * 6)));   // petits coups d'index
+            for (const finger of FINGERS) curlFinger(side, finger, finger === 'Index' ? 0.15 + 0.1 * lift - pointUp * 0.35 : 0.15 + 0.1 * lift + pointUp * 1.1);
+            curlFinger(side, 'Thumb', pointUp * 0.5);
           }
           // Pointage réel : épaule puis coude vers la cible, index tendu, autres doigts repliés.
           // La cible glisse vers le nouvel élément au lieu d'y sauter, et reste en place pendant que le bras redescend.
@@ -434,6 +481,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           const mouseRecent = mouse && time - mouse.at < MOUSE_FOLLOW_S;
           if (aim > 0.3 && aimGoal) lookAtScreen(aimGoal.x, aimGoal.y, 250);
           else if (mouseRecent) lookAtScreen(mouse!.x, mouse!.y, 300);                       // il suit la souris des yeux
+          else if (listen > 0.5) { goalX = 0; goalY = 0.05; }                                 // il regarde l'élève qui parle
           else if (think > 0.5) { goalX = -0.5; goalY = -0.8; }
           else {
             if (time > nextGlance) {

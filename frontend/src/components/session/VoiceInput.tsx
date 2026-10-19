@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { wsService } from '../../services/websocket';
 import { speechService } from '../../services/speechService';
 import { useSessionStore } from '../../stores/sessionStore';
@@ -50,6 +50,27 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
 
   // Browser-native STT (Web Speech API) — primary path on Chrome/Edge/Safari/iOS
   const language = useSessionStore((s) => s.language);
+  // Le professeur écoute pendant que l'élève parle au micro ou tape sa réponse.
+  const setRecordingShared = useSessionStore((s) => s.setRecording);
+  const setStudentTyping = useSessionStore((s) => s.setStudentTyping);
+  const typingTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isRecording) return;
+    setRecordingShared(true);
+    return () => setRecordingShared(false);
+  }, [isRecording, setRecordingShared]);
+  const stopTyping = useCallback(() => {
+    if (typingTimer.current === null) return;
+    window.clearTimeout(typingTimer.current);
+    typingTimer.current = null;
+    setStudentTyping(false);
+  }, [setStudentTyping]);
+  const noteTyping = () => {
+    if (typingTimer.current !== null) window.clearTimeout(typingTimer.current);
+    setStudentTyping(true);
+    typingTimer.current = window.setTimeout(() => { typingTimer.current = null; setStudentTyping(false); }, 2500);
+  };
+  useEffect(() => stopTyping, [stopTyping]);
   const browserSttActiveRef = useRef(false);
   const browserSttDidFinalRef = useRef(false);
 
@@ -364,6 +385,7 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
     if (!textInput.trim() || disabled) return;
     onTextSend(textInput);
     setTextInput('');
+    stopTyping();
   };
 
   return (
@@ -391,7 +413,7 @@ export default function VoiceInput({ onTextSend, disabled = false, injectedText,
               ref={textFieldRef}
               type="text"
               value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
+              onChange={(e) => { setTextInput(e.target.value); noteTyping(); }}
               placeholder="Écris ta réponse..."
               className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 outline-none text-sm transition-all"
               disabled={disabled}

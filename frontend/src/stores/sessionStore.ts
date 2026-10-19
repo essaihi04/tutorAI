@@ -28,6 +28,8 @@ interface SessionState {
   isProcessing: boolean;
   processingStage: string;
   isRecording: boolean;
+  /** L'élève tape sa réponse (dernière frappe il y a moins de 2,5 s) : le professeur l'écoute. */
+  isStudentTyping: boolean;
   isSpeaking: boolean;
   conversation: ConversationMessage[];
   language: SessionLanguage;
@@ -37,6 +39,7 @@ interface SessionState {
   setPhase: (phase: SessionState['currentPhase']) => void;
   setProcessing: (isProcessing: boolean, stage?: string) => void;
   setRecording: (isRecording: boolean) => void;
+  setStudentTyping: (isStudentTyping: boolean) => void;
   setSpeaking: (isSpeaking: boolean) => void;
   addMessage: (speaker: 'student' | 'ai', text: string, streaming?: boolean, examExercises?: any[]) => string;
   updateMessage: (id: string, text: string) => void;
@@ -55,6 +58,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   isProcessing: false,
   processingStage: '',
   isRecording: false,
+  isStudentTyping: false,
   isSpeaking: false,
   conversation: [],
   // Darija par défaut : c'est la langue dans laquelle le prof enseigne, et la
@@ -75,6 +79,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   setPhase: (phase) => set({ currentPhase: phase }),
   setProcessing: (isProcessing, stage = '') => set({ isProcessing, processingStage: stage }),
   setRecording: (isRecording) => set({ isRecording }),
+  setStudentTyping: (isStudentTyping) => set({ isStudentTyping }),
   setSpeaking: (isSpeaking) => set({ isSpeaking }),
   addMessage: (speaker, text, _streaming?, examExercises?) => {
     const id = crypto.randomUUID();
@@ -137,6 +142,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       isProcessing: false,
       processingStage: '',
       isRecording: false,
+      isStudentTyping: false,
       isSpeaking: false,
       conversation: [],
       examPanelState: {

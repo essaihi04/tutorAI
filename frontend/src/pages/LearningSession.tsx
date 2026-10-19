@@ -286,6 +286,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     isProcessing, processingStage, setProcessing,
     isSpeaking, setSpeaking, addMessage, updateMessage, conversation,
     setLanguage, clearSession, language,
+    isRecording, isStudentTyping,
   } = useSessionStore();
 
   const [connected, setConnected] = useState(false);
@@ -2371,7 +2372,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           {/* Un seul professeur, monté en permanence (il vole au-dessus de la page via un portail) : le monter
               dans chaque vue le détruisait et le recréait à chaque changement, d'où un clignotement. */}
           {!(showExamPanel && examExercises.length > 0) && (
-            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} control={scientificControl} labControl={labControl} emotion={professorEmotion} />
+            <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} isListening={isRecording || isStudentTyping} control={scientificControl} labControl={labControl} emotion={professorEmotion} />
           )}
           {showExamPanel && examExercises.length > 0 ? (
             <>
