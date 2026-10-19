@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { ScientificControlCommand } from './scientific/types';
 import './AIAvatar.css';
 import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS } from '../../services/professorFocus';
+import { boardExplaining } from '../../services/boardExplaining';
 import { PROFESSOR_EMOTIONS, type ProfessorEmotionKind, type ProfessorGestureKind } from '../../services/professorEmotion';
 import type { ProfessorMotion, ProfessorRig } from './Professor3D';
 const Professor3D = lazy(() => import('./Professor3D'));
@@ -92,9 +93,12 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   const onRig = useCallback((measured: ProfessorRig) => { rig.current = measured; }, []);
   const [side, setSide] = useState<'left' | 'right'>('left');
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  // Le tableau explique (avec ou sans voix) : il parle avec ses mains, comme quand sa voix joue.
+  const [explaining, setExplaining] = useState(boardExplaining.active);
+  useEffect(() => boardExplaining.subscribe(setExplaining), []);
   const listening = isListening || (isProcessing && processingStage === 'stt');
-  const state = isSpeaking ? 'speaking' : listening ? 'listening' : isProcessing ? 'thinking' : 'idle';
-  const status = isSpeaking ? 'Je parle…' : listening ? 'Je t’écoute…' : isProcessing
+  const state = isSpeaking ? 'speaking' : listening ? 'listening' : explaining ? 'speaking' : isProcessing ? 'thinking' : 'idle';
+  const status = isSpeaking ? 'Je parle…' : listening ? 'Je t’écoute…' : explaining ? 'J’explique…' : isProcessing
     ? processingStage === 'stt' ? 'Je t’écoute…' : processingStage === 'tts' ? 'Préparation audio…' : 'Je réfléchis…'
     : 'Prêt à t’aider';
 

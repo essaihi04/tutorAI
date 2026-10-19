@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { focusProfessor } from '../../services/professorFocus';
+import { boardExplaining } from '../../services/boardExplaining';
 import 'katex/dist/katex.min.css';
 import {
   renderMixedContent, renderDisplayMath, containsArabic,
@@ -408,6 +409,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   const voiceHandleRef = useRef<BoardSpeakHandle | null>(null);
   const langRef = useRef<'fr' | 'ar' | 'mixed'>('fr');
   const drawZoneRef = useRef<HTMLDivElement>(null);
+  // Script en cours, avec ou sans voix : le professeur explique avec ses mains.
+  useEffect(() => {
+    if (!script || !playing || finished || awaitingReply) return;
+    return boardExplaining.begin();
+  }, [script, playing, finished, awaitingReply]);
   useEffect(() => {
     if (!playing || finished || erasingZone) { focusProfessor(null); return; }
     const frame = requestAnimationFrame(() => {
