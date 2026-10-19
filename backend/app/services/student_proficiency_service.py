@@ -189,10 +189,17 @@ class StudentProficiencyService:
         """Record a single student answer in the history table.
         Set skip_update=True when recording in batch (call flush_proficiency after)."""
         try:
+            from app.services.topic_atlas_service import domaine_officiel
+
             row = {
                 "student_id": student_id,
                 "subject": subject,
                 "topic": topic or "Général",
+                # La colonne `chapter` n'était jamais remplie : elle porte
+                # désormais le domaine du cadre de référence officiel, ou
+                # « Non classé ». `topic` garde le titre libre, que lisent
+                # déjà le plan d'études et le calcul de compétences.
+                "chapter": domaine_officiel(subject, topic, question_content),
                 "question_content": question_content[:500],
                 "student_answer": student_answer[:500],
                 "correct_answer": correct_answer[:500],
@@ -208,8 +215,8 @@ class StudentProficiencyService:
             }
             result = self.supabase.table("student_answer_history").insert(row).execute()
             _log.info(f"[Proficiency] Recorded answer: student={student_id[:8]}.. "
-                      f"subject={subject} topic={topic} correct={is_correct} "
-                      f"score={score}/{max_score} source={source}")
+                      f"subject={subject} topic={topic} domaine={row['chapter']} "
+                      f"correct={is_correct} score={score}/{max_score} source={source}")
 
             # After recording, update proficiency summary (unless batching)
             if not skip_update:

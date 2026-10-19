@@ -446,6 +446,42 @@ def classify_topic(text: str, subject: str) -> tuple[str, float, list[str]]:
     return (best_name, best_score, best_hits)
 
 
+NON_CLASSE = "Non classé"
+
+
+def _matiere_du_cadre(subject: str) -> Optional[str]:
+    """La matière telle que la taxonomie la connaît, ou None (Philosophie, « Général »…)."""
+    s = (subject or "").lower()
+    s = s.replace("é", "e").replace("è", "e")
+    if s.strip() == "pc" or "phys" in s or "chim" in s:
+        return "Physique-Chimie"
+    if "math" in s:
+        return "Mathematiques"
+    if "svt" in s or "vie et de la terre" in s:
+        return "SVT"
+    return None
+
+
+def domaine_officiel(subject: str, *textes: str) -> str:
+    """Le domaine du cadre de référence dont relève une réponse, ou « Non classé ».
+
+    Rien n'est deviné : une matière hors des cadres, aucun mot-clé trouvé ou
+    deux domaines à égalité donnent « Non classé ». Mieux vaut une case vide
+    qu'on voit qu'un mauvais domaine qu'on ne voit pas.
+    """
+    matiere = _matiere_du_cadre(subject)
+    texte = _normalize(" ".join(t for t in textes if t))
+    if matiere is None or not texte:
+        return NON_CLASSE
+    scores = sorted(
+        (_score_domain(texte, mots)[0], nom) for nom, mots in SUBJECT_DOMAINS[matiere].items()
+    )
+    meilleur, nom = scores[-1]
+    if meilleur <= 0 or (len(scores) > 1 and scores[-2][0] == meilleur):
+        return NON_CLASSE
+    return nom
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  BUILDER — parcourt data/exams/ et génère l'atlas JSON
 # ══════════════════════════════════════════════════════════════════════════════

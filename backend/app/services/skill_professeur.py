@@ -19,10 +19,13 @@ Les règles viennent d'un professeur de dix ans de métier (octobre 2026) :
     explication, puis une question jumelle pour vérifier.
   • Chaleureux et exigeant : féliciter précisément ce qui est mérité, nommer
     ce qui manque sans détour, ne jamais avancer sur de l'approximatif.
+  • Une réponse qu'on ne peut pas trancher (ambiguë, coupée, mal transcrite)
+    n'est ni juste ni fausse : on demande de préciser, sans indice et sans
+    compter d'essai. Une seule fois : au tour suivant, on tranche.
 
 Le module ne lit ni base ni réseau. Il tient trois faits — une question
 est-elle en attente, combien d'essais l'élève a-t-il faits, combien de tours
-ont passé — et rend une consigne. Le jugement « correct / partiel / faux »
+ont passé — et rend une consigne. Le jugement « correct / partiel / faux / incertain »
 appartient au modèle, qui le déclare en tête de réponse dans une balise
 ``<eval>`` retirée avant l'affichage ; le module le lit pour compter les
 essais. Pas d'état parallèle : ce qui n'est pas dans la réponse n'existe pas.
@@ -32,9 +35,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-EVALUATIONS: tuple[str, ...] = ("correct", "partiel", "faux", "aucune")
+EVALUATIONS: tuple[str, ...] = ("correct", "partiel", "faux", "incertain", "aucune")
 #: Essais accordés avant de donner la réponse.
 ESSAIS_AVANT_REPONSE = 2
+#: Demandes de précision accordées avant de devoir trancher.
+PRECISIONS_AVANT_JUGEMENT = 1
 BALISE_EVAL = re.compile(r"\s*\**\s*<eval>\s*([a-zA-Zé]+)\s*</eval>\s*\**\s*", re.IGNORECASE)
 _SANS_ACCENT = {"é": "e"}
 _DEMANDE_EXPLICATION = re.compile(
@@ -70,6 +75,8 @@ class SkillProfesseur:
 
     question_en_attente: bool = False
     tentatives: int = 0
+    #: Demandes de précision d'affilée sur la question en attente.
+    incertains: int = 0
     tours: int = 0
     reussites: int = 0
     derniere_evaluation: str = "aucune"
@@ -103,6 +110,17 @@ class SkillProfesseur:
                         "Si c'est faux : ne donne pas la réponse. Nomme ce qui est juste s'il y a quelque chose, "
                         "pose le doigt sur la confusion, donne UN indice ciblé et repose la question."
                     )
+            if self.incertains < PRECISIONS_AVANT_JUGEMENT:
+                lignes.append(
+                    "Si tu ne peux pas trancher (réponse ambiguë, coupée, mal transcrite) : ne juge pas et ne "
+                    "donne pas d'indice ; demande-lui de préciser en UNE question courte (« tu veux dire… ? »). "
+                    "Évaluation « incertain »."
+                )
+            else:
+                lignes.append(
+                    "Tu lui as déjà demandé de préciser : cette fois tranche (correct, partiel ou faux), "
+                    "n'emploie pas « incertain »."
+                )
             if _NE_SAIT_PAS.search(demande):
                 lignes.append(
                     "L'élève dit ne pas savoir : compte cela comme un essai « faux », rassure en une phrase et "
@@ -128,8 +146,8 @@ class SkillProfesseur:
                           "l'objectif de la phase.")
         return (
             "\n\n[GESTE DE PROF — ce tour]\n"
-            "Commence ta réponse par la balise <eval>…</eval> : « correct », « partiel » ou « faux » si l'élève "
-            "vient de répondre à ta question, « aucune » sinon. Elle est retirée avant l'affichage ; ne la "
+            "Commence ta réponse par la balise <eval>…</eval> : « correct », « partiel », « faux » ou "
+            "« incertain » si l'élève vient de répondre à ta question, « aucune » sinon. Elle est retirée avant l'affichage ; ne la "
             "commente jamais.\n"
             + "\n".join(f"- {ligne}" for ligne in lignes)
             + f"\n- {RYTHME}\n- {REFORMULATION}\n- {STYLE}\n"
@@ -148,7 +166,14 @@ class SkillProfesseur:
             valeur = "".join(_SANS_ACCENT.get(c, c) for c in valeur)
             if valeur in EVALUATIONS:
                 evaluation = valeur
+        if evaluation == "incertain" and self.incertains >= PRECISIONS_AVANT_JUGEMENT:
+            # Déjà demandé de préciser : rester flou une deuxième fois compte un essai.
+            evaluation = "faux"
         if self.question_en_attente:
+            if evaluation == "incertain":
+                self.incertains += 1
+            else:
+                self.incertains = 0
             if evaluation == "correct":
                 self.reussites += 1
                 self.tentatives = 0
@@ -159,6 +184,7 @@ class SkillProfesseur:
                     self.tentatives = 0
         else:
             self.tentatives = 0
+            self.incertains = 0
         self.derniere_evaluation = evaluation
         self.question_en_attente = se_termine_par_une_question(texte_affiche)
         return evaluation
