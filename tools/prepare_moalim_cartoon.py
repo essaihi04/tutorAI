@@ -6,8 +6,6 @@
   Professor3D.tsx can point, write and fly with them; facial bones become Nose, Moustache, Brow*.
 - The single source action (pop-in, gestures, pop-out) is cut into two loops:
   `Idle` (calm pose, arms down, gentle sway) and `Talking` (the gestures, without the pop-in/out).
-- Facial shape keys: blink and gaze on the eyes; a mouth is built under the moustache (the model has none)
-  with six viseme shapes (`viseme_aa`, `viseme_O`, `viseme_U`, `viseme_E`, `viseme_I`, `viseme_SS`).
 - Exports `moalim-professeur.glb` and renders `moalim-professeur.png` (fallback portrait).
 """
 import bpy, math, sys
@@ -189,107 +187,12 @@ for side, material in EYE_WHITES.items():
     assert 60 <= len(pupil) <= 120, f'{side} pupil: {len(pupil)} vertices'
     eyes[side] = (white, pupil, centre)
     log(side, 'eye', len(white), 'white verts, pupil', len(pupil), 'verts, centre', tuple(round(c, 3) for c in centre))
-
-# ---------------------------------------------------------------- the mouth (built here: the model has none)
-# The moustache covers the whole lower face and the bow tie sits right under it: the mouth lives behind the
-# moustache, in front of the bow tie. Closed, it is a thin line hidden by the moustache; open, the lower lip
-# drops below the moustache's edge and shows the dark inside, the tongue and the upper teeth.
-# Each viseme is the same grids at another (half-width, drop, sag, roundness): blending shape keys stays a
-# plausible mouth. World space: he faces -Y, X across, Z up.
-MOUTH_X, MOUTH_TOP, MOUTH_Y = 0.187, 0.508, -0.528    # centre, upper lip line (under the moustache), depth
-MOUTH_COLS, MOUTH_ROWS = 16, 4
-VISEMES = {             # half-width, drop of the lower lip, sag of the upper lip, roundness (0 flat, 1 oval), teeth share
-    'Basis':      (0.050, 0.004, 0.000, 0.3, 0.3),
-    'viseme_aa':  (0.070, 0.120, 0.004, 0.55, 0.22),
-    'viseme_O':   (0.042, 0.110, 0.010, 1.0, 0.12),
-    'viseme_U':   (0.028, 0.078, 0.008, 1.0, 0.08),
-    'viseme_E':   (0.076, 0.088, 0.002, 0.35, 0.40),
-    'viseme_I':   (0.080, 0.064, 0.000, 0.2, 0.60),
-    'viseme_SS':  (0.076, 0.056, 0.000, 0.15, 0.85),
-}
-MOUTH_PARTS = {         # material colour, depth offset in front of the inside
-    'MouthInside': ((0.20, 0.025, 0.03), 0.0),
-    'MouthTongue': ((0.86, 0.36, 0.40), 0.003),
-    'MouthTeeth':  ((0.97, 0.96, 0.92), 0.004),
-    'MouthLip':    (None, 0.005),                           # the skin material
-}
-
-
-def lips(params, t):
-    """Upper and lower lip heights at t ∈ [-1, 1] across the mouth."""
-    half, drop, sag, round_, _ = params
-    bulge = max(0.0, 1 - t * t)
-    upper = MOUTH_TOP - sag * bulge
-    lower = MOUTH_TOP - 0.004 - drop * bulge ** (1 - 0.5 * round_)
-    return MOUTH_X + half * t, upper, lower
-
-
-def mouth_point(part, params, i, j):
-    """Vertex (i across, j down) of a mouth part, in world space."""
-    teeth = params[4]
-    t = -1 + 2 * i / MOUTH_COLS
-    s = j / MOUTH_ROWS
-    offset = MOUTH_PARTS[part][1]
-    if part == 'MouthInside':
-        x, up, low = lips(params, t)
-        z = up + (low - up) * s
-    elif part == 'MouthTeeth':                            # under the upper lip, a little narrower
-        x, up, low = lips(params, t * 0.78)
-        z = up - min(0.05, (up - low) * teeth) * s
-    elif part == 'MouthTongue':                           # resting on the lower lip
-        x, up, low = lips(params, t * 0.62)
-        z = low + min(0.03, (up - low) * 0.38) * (1 - s)
-    else:                                                 # lower lip and chin: a skin band under the opening
-        x, up, low = lips(params, t * 1.08)
-        z = low - 0.004 - 0.016 * s * (0.6 + 0.4 * max(0.0, 1 - t * t))
-    y = MOUTH_Y - offset + 0.35 * (x - MOUTH_X) ** 2      # follows the face's curve a little
-    return Vector((x, y, z))
-
-
-import bmesh
-skin_slot = slots['Material']
-for name, (colour, _) in MOUTH_PARTS.items():
-    if colour is None: continue
-    material = bpy.data.materials.new(name)
-    material.use_nodes = True
-    next(n for n in material.node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Base Color'].default_value = (*colour, 1)
-    material.use_backface_culling = False
-    body.data.materials.append(material)
-    slots[name] = len(body.data.materials) - 1
-bm = bmesh.new(); bm.from_mesh(body.data)
-deform = bm.verts.layers.deform.verify()
-head_group = body.vertex_groups['Head'].index
-mouth_verts = {}                                          # (part, i, j) -> vertex index
-first_new = len(bm.verts)
-for part in MOUTH_PARTS:
-    grid = {}
-    for i in range(MOUTH_COLS + 1):
-        for j in range(MOUTH_ROWS + 1):
-            vert = bm.verts.new(inv @ mouth_point(part, VISEMES['Basis'], i, j))
-            vert[deform][head_group] = 1.0
-            grid[i, j] = vert
-    for i in range(MOUTH_COLS):
-        for j in range(MOUTH_ROWS):
-            face = bm.faces.new((grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]))
-            face.material_index = skin_slot if part == 'MouthLip' else slots[part]
-            face.smooth = True
-    bm.verts.index_update()
-    mouth_verts.update({(part, i, j): v.index for (i, j), v in grid.items()})
-bm.to_mesh(body.data); bm.free()
-log('mouth', len(mouth_verts), 'vertices,', len(MOUTH_PARTS), 'parts')
-
 body.shape_key_add(name='Basis', from_mix=False)
 def shape(name, move):
     key = body.shape_key_add(name=name, from_mix=False)
     for side, (white, pupil, centre) in eyes.items():
         for v in white | pupil:
             key.data[v].co = inv @ move(world(v), centre, v in pupil)
-    key.value = 0
-for name, params in VISEMES.items():
-    if name == 'Basis': continue
-    key = body.shape_key_add(name=name, from_mix=False)
-    for (part, i, j), v in mouth_verts.items():
-        key.data[v].co = inv @ mouth_point(part, params, i, j)
     key.value = 0
 # Blink: the pupil flattens into a wide horizontal dash (cartoon closed eye); the white stays.
 def closed(p, c, pupil):

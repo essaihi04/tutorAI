@@ -1,12 +1,12 @@
 import { audioUnlock } from './audioUnlock';
-import { bandLevels, type BandLevels } from './mouthShapes';
+import { LipSyncAnalyser } from '../vendor/three-ws/lip-sync-analyser.js';
 
 // A single analysis bus observes the existing playback clock, including scheduled PCM.
 // It is never connected to destination: the original audio plays exactly once.
 let analyser: AnalyserNode | null = null;
+const lips = new LipSyncAnalyser();
 const attached = new WeakSet<HTMLMediaElement>();
 const waveform = new Float32Array(1024);
-const spectrum = new Float32Array(512);
 let envelope = 0;
 let lastSample = 0;
 
@@ -15,6 +15,7 @@ function bus(context: AudioContext) {
     analyser = context.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.35;
+    lips.connect(analyser);
   }
   return analyser;
 }
@@ -51,17 +52,14 @@ export function observeAvatarMedia(media: HTMLMediaElement) {
 }
 
 export function sampleAvatarAudio() {
+  const weights = lips.sample() || {};
   const now = performance.now();
   const dt = Math.min(.1, Math.max(0, (now - lastSample) / 1000));
   lastSample = now;
   let energy = 0;
-  // Spectre de la voix : niveaux par bande, d'où la forme de la bouche (« a », « o », « i », « s »…).
-  let levels: BandLevels | null = null;
   if (analyser && analyser.context.state === 'running') {
     analyser.getFloatTimeDomainData(waveform);
     for (const value of waveform) energy += value * value;
-    analyser.getFloatFrequencyData(spectrum);
-    levels = bandLevels(spectrum, analyser.context.sampleRate / analyser.fftSize);
   }
   // Waveform RMS follows syllables and closures faster than smoothed FFT magnitude.
   const rms = Math.sqrt(energy / waveform.length);
@@ -70,5 +68,5 @@ export function sampleAvatarAudio() {
   // Le bus d'analyse voit le son avant sa sortie au haut-parleur : la latence permet de s'y caler.
   const context = analyser?.context as (AudioContext & { outputLatency?: number }) | undefined;
   const latency = context ? (context.outputLatency || 0) + (context.baseLatency || 0) : 0;
-  return { levels, amplitude: envelope, rms, latency };
+  return { weights, amplitude: envelope, rms, latency };
 }
