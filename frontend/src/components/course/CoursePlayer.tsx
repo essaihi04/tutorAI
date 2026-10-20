@@ -2,6 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LiveBoard from '../session/LiveBoard';
 import { saveCourseProgress } from '../../services/api';
 import { slideVersScript } from './slideVersScript';
+
+/**
+ * Les questions posées à l'élève sur chaque diapositive sont suspendues pour
+ * le moment : le cours se déroule d'une traite, voix et écriture ensemble.
+ * Les remettre : passer à `true` (les manifestes les portent toujours).
+ */
+const QUESTIONS_DES_DIAPOSITIVES = false;
 import type { ScientificControlCommand } from '../session/scientific/types';
 import type {
   CourseActivity,
@@ -77,7 +84,13 @@ export default function CoursePlayer({
 }: CoursePlayerProps) {
   const flatSlides = useMemo<FlatSlide[]>(() =>
     deck.activities.flatMap((activity, activityIndex) =>
-      (activity.slides || []).map((slide, slideIndex) => ({ activity, activityIndex, slide, slideIndex })),
+      (activity.slides || []).map((slide, slideIndex) => ({
+        activity,
+        activityIndex,
+        // Questions suspendues : la diapositive se lit d'une traite.
+        slide: QUESTIONS_DES_DIAPOSITIVES ? slide : { ...slide, question: undefined },
+        slideIndex,
+      })),
     ), [deck.activities]);
 
   const storageKey = `course-player:${deck.id}`;

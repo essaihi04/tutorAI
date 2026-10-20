@@ -952,7 +952,11 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
             ]);
             if (voiceHandleRef.current === handle) voiceHandleRef.current = null;
             if (!waited || runId !== runIdRef.current) return;
-          } else if (!(await wait(animee ? 4500 : 2200, runId))) {
+          } else if (!(await wait(
+            // Le professeur parle déjà : il pose la figure et enchaîne sur l'écrit.
+            paroleDeFondRef.current ? 700 : animee ? 4500 : 2200,
+            runId,
+          ))) {
             return;
           }
           break;

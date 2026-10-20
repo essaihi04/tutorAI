@@ -19,11 +19,14 @@
  * L'explication porte l'enregistrement PUBLIÉ de la diapositive quand il y en
  * a un (`slide.audio`) : c'est la voix qu'un auteur a écoutée et validée, et
  * la resynthétiser au moment de la lecture serait plus lent et moins fidèle.
- * Avec un enregistrement, la parole COMMENCE AVEC L'ÉCRITURE : le professeur
- * parle pendant qu'il écrit, et les lignes s'écrivent en silence sous sa
- * voix. Si la diapositive interroge l'élève, la parole attend la réponse —
- * elle contient la correction. Sans enregistrement, chaque ligne est dite
- * par le tableau en l'écrivant, puis l'explication vient à la fin.
+ * Avec un enregistrement, la parole COMMENCE AVEC L'ÉCRITURE, dès le titre :
+ * le professeur parle pendant qu'il écrit, et tout le tableau s'écrit en
+ * silence sous sa voix. La question de la diapositive vient alors À LA FIN,
+ * une fois la parole terminée : elle vérifie ce qui vient d'être expliqué.
+ * (Toutes les diapositives publiées portent une question ; la placer avant
+ * la parole, c'était faire attendre la voix sur chaque diapositive.)
+ * Sans enregistrement, chaque ligne est dite par le tableau en l'écrivant,
+ * la question précède la correction, et l'explication vient à la fin.
  */
 import type { LiveScript, LiveStep } from '../session/LiveBoard';
 import type { CourseSlide } from './types';
@@ -46,8 +49,13 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
   const piste = pistes[langue] || pistes.mixed || pistes.fr || Object.values(pistes)[0];
   const paroleEnregistree = !!(parole && piste?.url);
   const enonce = (slide.question?.prompt || '').trim();
-  const lancerLaParole = () => {
-    steps.push({ action: 'narrate', text: parole, audio_url: piste?.url, background: true });
+  const poserLaQuestion = () => {
+    if (!enonce) return;
+    steps.push({
+      action: 'ask',
+      text: enonce,
+      options: (slide.question?.options || []).filter(option => !!option?.trim()).slice(0, 4),
+    });
   };
   const contenu = slide.screen_content || {};
   const visuel = slide.visual;
@@ -55,29 +63,35 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
   const figureLaterale = visuel && visuel.placement !== 'inline';
   const figureDansLeTexte = visuel && visuel.placement === 'inline';
 
+  // La parole enregistrée part dès le début, figure comprise : sa légende n'est
+  // alors pas dite par le tableau (elle couperait la voix du professeur).
+  if (paroleEnregistree) {
+    steps.push({ action: 'narrate', text: parole, audio_url: piste?.url, background: true });
+  }
+  const legende = (texte?: string) => (paroleEnregistree ? undefined : texte);
+
   // ── 1. La figure latérale, d'abord ──
   if (figureLaterale) {
     if (visuel.kind === 'schema' && visuel.schema_id) {
-      steps.push({ action: 'figure', schema_id: visuel.schema_id, say: visuel.caption });
+      steps.push({ action: 'figure', schema_id: visuel.schema_id, say: legende(visuel.caption) });
     } else if (visuel.kind === 'scientific' && visuel.scientific) {
-      steps.push({ action: 'figure', scientific: visuel.scientific, say: visuel.caption });
+      steps.push({ action: 'figure', scientific: visuel.scientific, say: legende(visuel.caption) });
     } else if (visuel.kind === 'image' && visuel.url) {
       steps.push({
         action: 'figure',
         image: { url: visuel.url, alt: visuel.alt || contenu.alt, caption: visuel.caption || contenu.caption },
-        say: visuel.caption,
+        say: legende(visuel.caption),
       });
     } else if (visuel.kind === 'simulation' && visuel.url) {
       steps.push({
         action: 'figure',
         simulation: { url: visuel.url, caption: visuel.caption || contenu.caption },
-        say: visuel.caption,
+        say: legende(visuel.caption),
       });
     }
   }
 
-  // ── 2. Ce qui s'écrit — sous la parole, quand rien n'est demandé à l'élève ──
-  if (paroleEnregistree && !enonce) lancerLaParole();
+  // ── 2. Ce qui s'écrit — sous la parole enregistrée, s'il y en a une ──
   const ecrire = (type: string, contenuLigne?: string | null) => {
     const propre = (contenuLigne || '').trim();
     if (propre) steps.push({ action: 'write', line: { type, content: propre } });
@@ -96,17 +110,8 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
   }
   ecrire('subtitle', contenu.lead);
 
-  // ── 3. La question vient AVANT toute réponse ou explication ──
-  const question = slide.question;
-  if (enonce) {
-    steps.push({
-      action: 'ask',
-      text: enonce,
-      options: (question?.options || []).filter(option => !!option?.trim()).slice(0, 4),
-    });
-    // La réponse est donnée : la correction se dit pendant qu'elle s'écrit.
-    if (paroleEnregistree) lancerLaParole();
-  }
+  // ── 3. Sans enregistrement, la question vient AVANT la correction ──
+  if (!paroleEnregistree) poserLaQuestion();
 
   // ── 4. Correction écrite, seulement après la réponse de l'élève ──
   // Le texte essentiel ne se réécrit pas s'il répète le chapeau : deux lignes
@@ -172,7 +177,11 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
     }
   });
 
-  // ── 6. Sans enregistrement : correction orale, devant le tableau complété ──
+  // ── 6. Avec enregistrement, la question vérifie ce qui vient d'être dit ──
+  //    (l'étape `ask` attend la fin de la parole avant de prendre la voix).
+  if (paroleEnregistree) poserLaQuestion();
+
+  // ── 7. Sans enregistrement : correction orale, devant le tableau complété ──
   if (parole && !paroleEnregistree) {
     steps.push({ action: 'narrate', text: parole });
   }
