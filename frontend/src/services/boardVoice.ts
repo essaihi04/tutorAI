@@ -34,10 +34,11 @@ const CACHE_MAX = 40;
 const REQUETE_MAX_MS = 25_000;
 /** Marge accordée à la lecture d'un WAV avant de la déclarer bloquée. */
 const LECTURE_MARGE_MS = 8_000;
-// Le professeur parle un peu plus posément que le débit natif du modèle : un
-// élève qui découvre la notion suit mieux à 0,92. La hauteur de la voix reste
-// celle d'Academy — `preservesPitch` ralentit sans rendre la voix plus grave.
-const TTS_PLAYBACK_RATE = 0.92;
+// Débit natif : les audios de cours portent déjà leur rythme (lent sur
+// l'essentiel, plus vif sur les transitions, pauses avant les points clés),
+// fixé à la génération. Ralentir encore ici l'étirerait au-delà de ce qui a
+// été validé à l'écoute. `preservesPitch` garde la hauteur si l'on y touche.
+const TTS_PLAYBACK_RATE = 1.0;
 
 class BoardVoiceService {
   /** Fragments déjà synthétisés (clé = langue + texte) → URL d'objet. */
