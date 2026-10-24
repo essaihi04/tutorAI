@@ -3049,6 +3049,9 @@ RÈGLES:
         # Les prérequis du chapitre en cours, pour qu'une erreur en amont
         # puisse ouvrir une parenthèse (voir prerequis.py).
         self._proposer_prerequis_du_chapitre()
+        # Le périmètre du programme pour ce chapitre : notions, méthodes,
+        # termes à ne pas employer (voir perimetre.py).
+        system_prompt += getattr(self, "_bloc_perimetre", "")
         # Le geste de prof du tour : décidé ici, avant que le modèle parle.
         system_prompt += self.skill_prof.consigne(student_text, self.current_phase)
 
@@ -3198,6 +3201,9 @@ RÈGLES:
         self.skill_prof.lire_reponse(ai_response, self._extract_display_text(ai_response))
         if self.skill_prof.evenement_parenthese:
             asyncio.create_task(self._signaler_parenthese(dict(self.skill_prof.evenement_parenthese)))
+        # Le périmètre du programme, en observation : on note ce qui dépasse,
+        # on ne corrige pas encore.
+        self._observer_perimetre(ai_response)
 
         # Add AI response to history
         self._append_history("assistant", ai_response)
@@ -4599,6 +4605,7 @@ RÈGLES :
         if getattr(self, "_prerequis_cle", None) == cle:
             return
         self._prerequis_cle = cle
+        chapitre = None
         try:
             from app.services import prerequis
 
@@ -4610,6 +4617,41 @@ RÈGLES :
         self.skill_prof.proposer_prerequis(candidats)
         _safe_log(f"[Prérequis] {matiere} / « {titre[:50]} » → {chapitre or 'chapitre non reconnu'} : "
                   f"{[c.id for c in candidats]}")
+        # Le même chapitre sert au périmètre du programme.
+        self._chapitre_reconnu = chapitre
+        try:
+            from app.services import perimetre
+
+            self._bloc_perimetre = perimetre.bloc_prompt(matiere, chapitre)
+        except Exception as exc:
+            _safe_log(f"[Périmètre] fiche indisponible: {exc}")
+            self._bloc_perimetre = ""
+        if self._bloc_perimetre:
+            _safe_log(f"[Périmètre] fiche injectée pour {chapitre}")
+
+    def _observer_perimetre(self, ai_response: str) -> None:
+        """Relit la réponse du tuteur et note les termes hors programme.
+
+        Mode observation : journal et compteur de séance, aucune correction.
+        Les listes doivent d'abord faire leurs preuves sur des réponses réelles.
+        """
+        try:
+            from app.services import perimetre
+
+            ctx = self.session_context or {}
+            matiere = str(ctx.get("subject") or "")
+            chapitre = getattr(self, "_chapitre_reconnu", None)
+            detections = perimetre.detecter(self._extract_display_text(ai_response), matiere, chapitre)
+            if not detections:
+                return
+            self._depassements_perimetre = getattr(self, "_depassements_perimetre", 0) + len(detections)
+            _safe_log(f"[Périmètre] {len(detections)} terme(s) hors programme ({chapitre or matiere}) : "
+                      f"{[d.terme for d in detections]}")
+            perimetre.journaliser(detections, subject=matiere, chapitre=chapitre,
+                                  student_id=str(getattr(self, "student_id", "") or ""), tour=self.skill_prof.tours,
+                                  chemin=perimetre.JOURNAL)
+        except Exception as exc:
+            _safe_log(f"[Périmètre] observation impossible: {exc}")
 
     async def _signaler_parenthese(self, evenement: dict) -> None:
         """Une parenthèse vient de s'ouvrir ou de se fermer : l'écran le montre,

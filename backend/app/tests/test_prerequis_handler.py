@@ -40,6 +40,31 @@ def test_la_proposition_n_est_refaite_que_si_la_seance_change(monkeypatch):
     assert len(appels) == 2
 
 
+def test_le_chapitre_reconnu_injecte_aussi_son_perimetre():
+    handler = _seance("Physique", "Le dipôle RC : charge d'un condensateur")
+    handler._proposer_prerequis_du_chapitre()
+    assert handler._chapitre_reconnu == "dipole_RC"
+    assert "[PÉRIMÈTRE DU PROGRAMME — Dipôle RC]" in handler._bloc_perimetre
+    handler.session_context["chapter_title"] = "Dipôle RL"
+    handler._proposer_prerequis_du_chapitre()
+    assert handler._bloc_perimetre == "", "pas de fiche, pas de bloc"
+
+
+def test_l_observation_du_perimetre_journalise_sans_corriger(monkeypatch, tmp_path):
+    from app.services import perimetre
+
+    monkeypatch.setattr(perimetre, "JOURNAL", tmp_path / "perimetre.jsonl")
+    handler = _seance("Physique", "Le dipôle RC")
+    handler._proposer_prerequis_du_chapitre()
+    handler._observer_perimetre("<eval>aucune</eval> On peut voir ça comme un filtre passe-bas, avec l'impédance du condensateur. Tu me suis ?")
+    assert handler._depassements_perimetre == 2
+    lignes = (tmp_path / "perimetre.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lignes) == 1 and "passe-bas" in lignes[0]
+    assert handler.websocket.envoyes == [], "observation : rien n'est envoyé à l'élève"
+    handler._observer_perimetre("<eval>correct</eval> Oui : τ = RC. Et si R double ?")
+    assert handler._depassements_perimetre == 2
+
+
 def test_la_fermeture_previent_l_ecran_et_entre_dans_l_historique(monkeypatch):
     handler = _seance("Physique", "Le dipôle RC")
     enregistre = {}
