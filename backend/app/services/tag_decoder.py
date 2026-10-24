@@ -54,6 +54,10 @@ BALISES: tuple[str, ...] = (
     # les essais.
     # Même propriété : adressé au système, jamais à l'élève ni à l'historique.
     "eval",
+    # `prerequis` : le modèle déclare qu'une erreur vient d'une compétence des
+    # années antérieures (identifiant de prerequis.json). Lu par le skill prof,
+    # qui ouvre alors une parenthèse ; retiré de la prose comme `eval`.
+    "prerequis",
 )
 
 #: Les commandes écrites EN CLAIR, sans chevrons. Le prompt les demande ainsi

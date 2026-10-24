@@ -72,7 +72,7 @@ def _safe_log(*parts):
 # tableau, JAMAIS dans le fil de discussion.
 # `eval` est le jugement du modèle sur la réponse de l'élève (skill_professeur) :
 # adressé au système, il ne doit pas plus apparaître dans le fil qu'un tableau.
-_STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions', 'eval')
+_STREAM_TAG_NAMES = ('board', 'draw', 'ui', 'schema', 'live', 'exam_exercise', 'suggestions', 'eval', 'prerequis')
 
 # Le LLM emballe souvent la balise dans du gras (« **<ui>… »). Une fois le
 # bloc retiré, ces marqueurs restent seuls sur leur ligne dans le chat.
@@ -3046,6 +3046,9 @@ RÈGLES:
             "message au plus, jamais de félicitations imméritées."
         )
         system_prompt += self._rappel_accord()
+        # Les prérequis du chapitre en cours, pour qu'une erreur en amont
+        # puisse ouvrir une parenthèse (voir prerequis.py).
+        self._proposer_prerequis_du_chapitre()
         # Le geste de prof du tour : décidé ici, avant que le modèle parle.
         system_prompt += self.skill_prof.consigne(student_text, self.current_phase)
 
@@ -3193,6 +3196,8 @@ RÈGLES:
         # Le jugement déclaré (<eval>) compte les essais ; la dernière phrase dit
         # si une question reste en attente pour le tour suivant.
         self.skill_prof.lire_reponse(ai_response, self._extract_display_text(ai_response))
+        if self.skill_prof.evenement_parenthese:
+            asyncio.create_task(self._signaler_parenthese(dict(self.skill_prof.evenement_parenthese)))
 
         # Add AI response to history
         self._append_history("assistant", ai_response)
@@ -4581,6 +4586,62 @@ RÈGLES :
         if _ecrit_en_arabe(titre):
             titre = "Cours en direct"
         return titre, normalized
+
+    # ── La parenthèse de prérequis ────────────────────────────────────
+    def _proposer_prerequis_du_chapitre(self) -> None:
+        """Donne au skill prof les prérequis du chapitre en cours, une fois par
+        (matière, titre). Sans chapitre reconnu, rien n'est proposé : on ne
+        part pas en parenthèse sur une devinette."""
+        ctx = self.session_context or {}
+        matiere = str(ctx.get("subject") or "")
+        titre = str(ctx.get("chapter_title") or ctx.get("lesson_title") or "")
+        cle = (matiere, titre)
+        if getattr(self, "_prerequis_cle", None) == cle:
+            return
+        self._prerequis_cle = cle
+        try:
+            from app.services import prerequis
+
+            chapitre = prerequis.trouver_chapitre(matiere, titre)
+            candidats = prerequis.pour_chapitre(matiere, chapitre)
+        except Exception as exc:
+            _safe_log(f"[Prérequis] carte indisponible: {exc}")
+            candidats = []
+        self.skill_prof.proposer_prerequis(candidats)
+        _safe_log(f"[Prérequis] {matiere} / « {titre[:50]} » → {chapitre or 'chapitre non reconnu'} : "
+                  f"{[c.id for c in candidats]}")
+
+    async def _signaler_parenthese(self, evenement: dict) -> None:
+        """Une parenthèse vient de s'ouvrir ou de se fermer : l'écran le montre,
+        le journal le garde, et la fermeture compte comme une réponse sur le
+        prérequis (matière et niveau d'origine) dans l'historique de l'élève."""
+        _safe_log(f"[Parenthèse] {evenement}")
+        try:
+            await self.websocket.send_json({"type": "parenthese", **evenement})
+        except Exception as exc:
+            _safe_log(f"[Parenthèse] notification impossible: {exc}")
+        if evenement.get("etat") != "fermee":
+            return
+        try:
+            from app.services import prerequis
+            from app.services.student_proficiency_service import proficiency_service
+
+            p = prerequis.charger().competences.get(evenement["id"])
+            await proficiency_service.record_answer(
+                student_id=self.student_id,
+                subject=p.matiere if p else str(self.session_context.get("subject") or ""),
+                topic=f"Prérequis ({evenement['niveau']}) : {evenement['titre']}",
+                question_content=p.verification if p else "",
+                student_answer="",
+                correct_answer=p.rappel if p else "",
+                is_correct=bool(evenement.get("reussite")),
+                question_type="open",
+                score=1.0 if evenement.get("reussite") else 0.0,
+                max_score=1.0,
+                source="parenthese",
+            )
+        except Exception as exc:
+            _safe_log(f"[Parenthèse] enregistrement impossible: {exc}")
 
     def _adopter_consigne(self, mode: str) -> None:
         """Réécrit le plan de séance pour l'état courant.

@@ -54,6 +54,21 @@ def main() -> None:
     enregistrees, reclassees = decompte(lignes)
     afficher("Classées à l'enregistrement", enregistrees)
     afficher("Anciennes réponses, reclassées pour comparaison", reclassees)
+    afficher_parentheses(lignes)
+
+
+def parentheses(lignes: list[dict]) -> tuple[int, int, Counter]:
+    """(fermées, réussies, par prérequis) : les détours par les années antérieures."""
+    rows = [l for l in lignes if l.get("source") == "parenthese"]
+    par_prerequis = Counter(l.get("topic") or "?" for l in rows)
+    return len(rows), sum(1 for l in rows if l.get("is_correct")), par_prerequis
+
+
+def afficher_parentheses(lignes: list[dict]) -> None:
+    total, reussies, par_prerequis = parentheses(lignes)
+    print(f"\nParenthèses de prérequis — {total} fermées, {reussies} réussies")
+    for titre, n in par_prerequis.most_common():
+        print(f"  {n:4d}  {titre}")
 
 
 if __name__ == "__main__":

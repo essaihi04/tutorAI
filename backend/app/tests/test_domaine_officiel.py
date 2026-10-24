@@ -52,6 +52,13 @@ def test_le_decompte_separe_les_reponses_classees_des_anciennes():
     assert sum(enregistrees.values()) == 2 and enregistrees[("Physique", NON_CLASSE)] == 1
     assert sum(reclassees.values()) == 1
 
+    total, reussies, par_prerequis = script.parentheses([
+        {"source": "parenthese", "topic": "Prérequis (1re bac) : Dériver", "is_correct": True},
+        {"source": "parenthese", "topic": "Prérequis (1re bac) : Dériver", "is_correct": False},
+        {"source": "chat_coaching", "topic": "RC", "is_correct": True},
+    ])
+    assert (total, reussies) == (2, 1) and par_prerequis["Prérequis (1re bac) : Dériver"] == 2
+
 
 def test_record_answer_enregistre_le_domaine():
     from app.services import student_proficiency_service as module

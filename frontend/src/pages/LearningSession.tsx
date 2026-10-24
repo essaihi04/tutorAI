@@ -271,6 +271,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   // anciennes routes étaient déjà ce même composant, seule l'URL différait.
   const isLibreConnexion = mode === 'libre' || mode === 'explain';
   const [activeMode, setActiveMode] = useState<TutorMode>(() => modeDepuisRoute(mode));
+  // Une parenthèse de prérequis : le tuteur a quitté le cours pour réexpliquer
+  // une compétence des années antérieures, et il y reviendra. L'élève doit le
+  // voir, sinon il croit que le cours a changé de sujet.
+  const [parenthese, setParenthese] = useState<{ titre: string; niveau: string } | null>(null);
   const isLibre = activeMode === 'question' || activeMode === 'examen';
 
   const navigate = useNavigate();
@@ -443,12 +447,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   // Le titre suit le mode COURANT : c'est le seul repère qui dit à l'élève ce
   // qui se passe, maintenant qu'il ne change plus d'écran ni d'URL.
   const titreSession =
-    activeMode === 'examen' ? 'Examen'
+    parenthese ? `Parenthèse : ${parenthese.titre}`
+    : activeMode === 'examen' ? 'Examen'
     : activeMode === 'exercice' ? 'Exercices'
     : activeMode === 'question' ? 'Tes questions'
     : (lessonInfo?.title_fr || 'Cours');
   const sousTitreSession =
-    activeMode === 'examen' ? 'Conditions réelles — chrono et note sur 20'
+    parenthese ? `Rappel de ${parenthese.niveau} — on revient au cours juste après`
+    : activeMode === 'examen' ? 'Conditions réelles — chrono et note sur 20'
     : activeMode === 'exercice' ? 'Cherche d’abord, le tuteur corrige ta méthode'
     : activeMode === 'question' ? `Pose tes questions sur ${allowedSubjectNames.length === 1 ? allowedSubjectNames[0] : 'tes matières'}`
     : (lessonInfo?.title_ar || subjectScopeLabel);
@@ -1294,6 +1300,16 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       if (!estUnMode(data?.mode)) return;
       setActiveMode(data.mode);
       if (typeof data.phase === 'string' && data.phase) setPhase(data.phase);
+    });
+
+    // Ouverture ou fermeture d'une parenthèse de prérequis (skill_professeur.py).
+    // Le serveur n'envoie ce message que si la parenthèse a réellement changé d'état.
+    wsService.on('parenthese', (data) => {
+      if (data?.etat === 'ouverte' && typeof data.titre === 'string') {
+        setParenthese({ titre: data.titre, niveau: String(data.niveau || 'années précédentes') });
+      } else if (data?.etat === 'fermee') {
+        setParenthese(null);
+      }
     });
 
     // Handle session initialization with progress data
