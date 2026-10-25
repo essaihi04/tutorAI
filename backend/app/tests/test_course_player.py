@@ -513,8 +513,11 @@ def test_gene_expression_simulation_exposes_automatic_step_by_step_demo():
     assert x_positions["TRNA_SOURCE_X"] > x_positions["RNA_CYTOPLASM_X"]
     assert x_positions["TRNA_EXIT_X"] > x_positions["TRNA_SOURCE_X"]
     assert "Liaison peptidique" in source
-    assert ".topbar { display: none; }" in source
-    assert ".lesson-panel > :not(.controls) { display: none; }" in source
+    # Depuis le 24 octobre 2026, la page est dessinée au tableau (docs/design/labos-au-tableau.md) :
+    # la scène 3D garde tout l'écran, le titre et les explications d'étape s'écrivent à la craie
+    # dans des panneaux posés dessus, et les boutons sont localisables par le professeur animé.
+    assert "/media/simulations/shared/tableau/tableau.css" in source
+    assert 'data-professor-control="start' in source
     assert "PHÉNOMÈNE 1/57" in source
     assert "trnaPairCount" in source
     assert "codon 5′" in source

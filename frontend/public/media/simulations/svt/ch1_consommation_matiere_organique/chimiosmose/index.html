@@ -3,55 +3,137 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>Chaîne respiratoire et chimiosmose</title>
+  <title>Chimiosmose — au tableau</title>
+  <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css" />
   <style>
-    *{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#06151b;color:#e8f7fa}body{display:flex;flex-direction:column;background:radial-gradient(circle at 60% 30%,#124954 0,#06151b 60%)}
-    header{height:9vh;min-height:52px;display:flex;align-items:center;gap:10px;padding:0 18px;background:#071f27;border-bottom:1px solid #24515a}h1{margin:0;font-size:clamp(15px,2.2vw,24px)}.badge{font-size:12px;color:#67e8f9;background:#123a43;border:1px solid #267586;border-radius:999px;padding:4px 9px}
-    main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(200px,27%) 1fr;gap:12px;padding:12px}aside,.stage{background:rgba(5,29,36,.94);border:1px solid #24515a;border-radius:18px;box-shadow:0 18px 55px #0006}aside{padding:14px;display:flex;flex-direction:column;gap:11px}.objective{font-size:13px;line-height:1.45;color:#b8d5da;margin:0}.toggle{display:grid;grid-template-columns:1fr 1fr;background:#092a33;padding:4px;border-radius:12px}.toggle button{border:0;border-radius:9px;padding:9px;background:transparent;color:#aac9cf;font-weight:800;cursor:pointer}.toggle button.active{background:#0891b2;color:white}.control label{font-size:12px;color:#b8d5da;display:flex;justify-content:space-between}.control input{width:100%;accent-color:#22d3ee;margin-top:7px}.buttons{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px}.buttons button{border:0;border-radius:11px;padding:10px;font-weight:900;cursor:pointer}.run{background:#22c55e;color:#06230f}.reset{background:#334155;color:#fff}
-    .stage{display:flex;flex-direction:column;overflow:hidden}.canvas{flex:1;min-height:0;padding:8px;display:grid;place-items:center}svg{width:100%;height:100%;max-height:64vh}.membrane{fill:#14515b}.complex{fill:#0e7490;stroke:#67e8f9;stroke-width:2}.proton{fill:#fb7185;filter:drop-shadow(0 0 5px #fb7185)}.proton.flow{animation:protonFlow 1.7s linear infinite}.electron{fill:#fde047;opacity:0}.running .electron{animation:electron 2.2s linear infinite}.rotor{transform-origin:665px 250px}.running .rotor{animation:spin 1.3s linear infinite}.stopped .proton{opacity:.18}.water{opacity:0}.running.o2 .water{animation:water .8s ease 1.6s forwards}.atp{opacity:.25}.running.o2 .atp{animation:atp 1s ease 1.1s infinite alternate}
-    .caption{min-height:83px;padding:11px 17px;border-top:1px solid #24515a;background:#07222a}.caption strong{color:#67e8f9}.caption p{margin:5px 0;color:#c7e0e4;font-size:14px}.metrics{display:flex;gap:7px;flex-wrap:wrap}.metric{font-size:12px;background:#0d3741;padding:4px 8px;border-radius:8px}.warn{color:#fda4af}
-    @keyframes electron{0%{opacity:0;transform:translateX(0)}15%{opacity:1}85%{opacity:1}100%{opacity:0;transform:translateX(500px)}}@keyframes protonFlow{0%{transform:translateY(-108px)}100%{transform:translateY(112px)}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes water{to{opacity:1}}@keyframes atp{to{opacity:1;transform:translateY(-9px)}}
-    @media(max-width:720px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px}.objective{grid-column:1/-1}.buttons{margin:0}.caption{min-height:70px;padding:8px 12px}}
-    @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+    #legende { max-width: 44%; }
+    #legende .metriques { display: flex; flex-wrap: wrap; gap: .2em .9em; margin-top: .25em; color: var(--craie-faible); font-size: .85em; }
+    #legende .warn { color: var(--rouge); }
+    .barre .curseur { min-width: 11em; }
+    @media (max-width: 720px) { #legende { max-width: 60%; } #legende .metriques { display: none; } .barre .curseur { min-width: 8em; } }
   </style>
 </head>
 <body>
-  <header><h1>Membrane interne mitochondriale : chimiosmose</h1><span class="badge" id="status">Prêt</span></header>
-  <main>
-    <aside>
-      <p class="objective">Objectif : montrer que le transfert d’électrons crée un gradient de H⁺ utilisé par l’ATP synthase, et que O₂ est l’accepteur final.</p>
-      <div class="toggle"><button id="withO2" class="active">Avec O₂</button><button id="withoutO2">Sans O₂</button></div>
-      <div class="control"><label for="gradient"><span>Gradient de H⁺</span><output id="gradientOut">80 %</output></label><input id="gradient" type="range" min="10" max="100" step="10" value="80" /></div>
-      <div class="buttons"><button class="run" id="run">▶ Lancer</button><button class="reset" id="reset">↻ Réinitialiser</button></div>
-    </aside>
-    <section class="stage">
-      <div class="canvas"><svg id="scene" class="o2" viewBox="0 0 850 450" role="img" aria-label="Chaîne respiratoire et ATP synthase dans la membrane interne mitochondriale">
-        <text x="30" y="42" fill="#b8d5da" font-size="18">Espace intermembranaire : concentration élevée en H⁺</text>
-        <rect x="20" y="185" width="810" height="84" rx="28" class="membrane"/><text x="28" y="292" fill="#90c7ce" font-size="16">Matrice mitochondriale</text>
-        <g><rect x="110" y="158" width="75" height="138" rx="18" class="complex"/><text x="148" y="232" text-anchor="middle" fill="white" font-size="18" font-weight="800">I</text><rect x="260" y="158" width="75" height="138" rx="18" class="complex"/><text x="298" y="232" text-anchor="middle" fill="white" font-size="18" font-weight="800">III</text><rect x="410" y="158" width="75" height="138" rx="18" class="complex"/><text x="448" y="232" text-anchor="middle" fill="white" font-size="18" font-weight="800">IV</text></g>
-        <path d="M95 330 H515" stroke="#fde047" stroke-width="4" stroke-dasharray="9 7"/><circle cx="115" cy="330" r="10" class="electron"/><text x="95" y="362" fill="#fde68a" font-size="15">Électrons : NADH,H⁺ / FADH₂ → O₂</text>
-        <g id="protons"><circle cx="130" cy="105" r="10" class="proton"/><circle cx="175" cy="82" r="10" class="proton"/><circle cx="280" cy="105" r="10" class="proton"/><circle cx="325" cy="76" r="10" class="proton"/><circle cx="430" cy="104" r="10" class="proton"/><circle cx="475" cy="78" r="10" class="proton"/></g>
-        <g><path d="M625 150 Q665 110 705 150 L695 265 Q665 302 635 265 Z" fill="#7c3aed" stroke="#c4b5fd" stroke-width="3"/><circle cx="665" cy="250" r="31" fill="#5b21b6" stroke="#ddd6fe" stroke-width="4"/><g class="rotor"><path d="M665 223v54M638 250h54" stroke="#fff" stroke-width="7"/></g><text x="665" y="324" text-anchor="middle" fill="#ddd6fe" font-size="17" font-weight="800">ATP synthase</text></g>
-        <circle cx="665" cy="95" r="10" class="proton flow"/><circle cx="690" cy="72" r="10" class="proton flow" style="animation-delay:.55s"/><circle cx="640" cy="62" r="10" class="proton flow" style="animation-delay:1.05s"/>
-        <g class="atp"><circle cx="748" cy="350" r="34" fill="#22c55e"/><text x="748" y="358" text-anchor="middle" fill="#06230f" font-size="21" font-weight="900">ATP</text></g>
-        <g class="water"><text x="520" y="224" fill="#bae6fd" font-size="17" font-weight="800">O₂ + e⁻ + H⁺ → H₂O</text></g>
-      </svg></div>
-      <div class="caption"><strong id="title">Avec dioxygène</strong><p id="text">La chaîne transfère les électrons jusqu’à O₂. Le gradient de H⁺ entraîne l’ATP synthase et permet la phosphorylation de l’ADP.</p><div class="metrics"><span class="metric" id="electronMetric">Flux d’électrons : actif</span><span class="metric" id="atpMetric">Production relative d’ATP : 80 %</span><span class="metric" id="conclusion">O₂ = accepteur final</span></div></div>
-    </section>
-  </main>
-  <script>
-    const CONFIG={id:'svt_ch1_chimiosmose',variants:[{id:'avec_o2',label:'Avec dioxygène'},{id:'sans_o2',label:'Sans dioxygène'}],objectives:['Relier chaîne respiratoire, gradient de protons, ATP synthase et rôle terminal du dioxygène.'],commands:['start','set_variant','set_parameters','reset','replay']};window.SIMULATION_CONFIG=CONFIG;
-    const S={o2:true,gradient:80,simulationStatus:'idle',variantsCompleted:[],actions:[]};const $=id=>document.getElementById(id);
-    function render(){const scene=$('scene');scene.classList.toggle('o2',S.o2);scene.classList.toggle('stopped',!S.o2&&S.simulationStatus==='running');$('withO2').classList.toggle('active',S.o2);$('withoutO2').classList.toggle('active',!S.o2);$('gradient').value=S.gradient;$('gradientOut').textContent=S.gradient+' %';$('title').textContent=S.o2?'Avec dioxygène':'Sans dioxygène';$('text').textContent=S.o2?'La chaîne transfère les électrons jusqu’à O₂. Le gradient de H⁺ entraîne l’ATP synthase et permet la phosphorylation de l’ADP.':'Sans O₂, le transfert final des électrons s’arrête. Les transporteurs restent réduits, le gradient n’est plus entretenu et la synthèse d’ATP chute.';$('electronMetric').textContent='Flux d’électrons : '+(S.o2?'actif':'bloqué');$('atpMetric').textContent='Production relative d’ATP : '+(S.o2?S.gradient:0)+' %';$('conclusion').textContent=S.o2?'O₂ = accepteur final':'Chaîne arrêtée sans O₂';$('conclusion').classList.toggle('warn',!S.o2)}
-    function setO2(value,report=true){S.o2=!!value;S.simulationStatus='idle';$('scene').classList.remove('running','stopped');render();if(report){S.actions.push({action:'set_variant',variant:S.o2?'avec_o2':'sans_o2'});emit()}}
-    function setParameters(p,report=true){if(typeof p.gradient_percent==='number')S.gradient=Math.max(10,Math.min(100,p.gradient_percent));if(typeof p.oxygen_present==='boolean')S.o2=p.oxygen_present;render();if(report){S.actions.push({action:'set_parameters',oxygen_present:S.o2,gradient_percent:S.gradient});emit()}}
-    function start(){S.simulationStatus='running';$('scene').classList.add('running');$('scene').classList.toggle('stopped',!S.o2);$('status').textContent='En cours';S.actions.push({action:'start',oxygen_present:S.o2,gradient_percent:S.gradient});emit();setTimeout(finish,2600)}
-    function finish(){S.simulationStatus='finished';$('status').textContent='Terminé';const v=S.o2?'avec_o2':'sans_o2';if(!S.variantsCompleted.includes(v))S.variantsCompleted.push(v);S.actions.push({action:'finish',variant:v});emit()}
-    function reset(){S.simulationStatus='idle';S.gradient=80;S.o2=true;$('scene').classList.remove('running','stopped');$('status').textContent='Prêt';S.actions.push({action:'reset'});render();emit()}
-    function emit(){window.parent.postMessage({type:'simulation_state',simulation_id:CONFIG.id,student_actions:S.actions.slice(-12),current_state:{simulation_status:S.simulationStatus,current_variant:S.o2?'avec_o2':'sans_o2',variants_completed:S.variantsCompleted,oxygen_present:S.o2,proton_gradient_percent:S.o2?S.gradient:0,electron_flow:S.o2?'actif':'bloqué',relative_atp_output_percent:S.o2?S.gradient:0,scientific_interpretation:S.o2?'O₂ accepte les électrons en fin de chaîne; le gradient de H⁺ alimente l’ATP synthase.':'Sans O₂, la chaîne se bloque et le gradient de H⁺ n’est plus entretenu.'},objective_progress:S.variantsCompleted.length/2,timestamp:Date.now()},'*')}
-    function manifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:CONFIG.id,capabilities:{commands:CONFIG.commands,config:CONFIG,controls:{oxygen_present:{type:'boolean'},gradient_percent:{type:'range',min:10,max:100,unit:'%'}}},page_text:'Simulation de la chaîne respiratoire, du gradient de protons et de l’ATP synthase avec ou sans dioxygène.'},'*')}
-    $('withO2').onclick=()=>setO2(true);$('withoutO2').onclick=()=>setO2(false);$('gradient').oninput=e=>setParameters({gradient_percent:+e.target.value});$('run').onclick=start;$('reset').onclick=reset;
-    window.executeAICommand=(c,p={})=>{if(c==='start'||c==='replay')start();else if(c==='reset')reset();else if(c==='set_variant')setO2((p.variant_id||p.variant)!=='sans_o2');else if(c==='set_parameters')setParameters(p)};window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='simulation_control'&&(!d.simulation_id||d.simulation_id===CONFIG.id))window.executeAICommand(d.command,d.parameters||{})});render();setTimeout(manifest,250);
-  </script>
-<script src="/media/simulations/professor-locate.js" defer></script></body>
+<!-- Pont tuteur (shared/tableau/tableau.js, Tableau.protocole) : window.parent.postMessage de `simulation_manifest` au chargement et de `simulation_state` à chaque action ; commandes `simulation_control` : start, set_variant, set_parameters, reset, replay. -->
+<div class="tableau">
+  <header class="titre">
+    <div><small>SVT · 2 BAC · membrane interne mitochondriale</small><h1>Chaîne respiratoire et chimiosmose</h1><p class="objectif" id="objectif"></p></div>
+    <nav class="onglets" id="onglets" aria-label="Conditions"></nav>
+  </header>
+  <section class="scene">
+    <canvas id="canvas" role="img" aria-label="Chaîne respiratoire et ATP synthase dans la membrane interne mitochondriale, dessinées à la craie"></canvas>
+    <div class="panneau bas-gauche" id="legende"><h3 id="title"></h3><p id="text"></p><div class="metriques"><span id="electronMetric"></span><span id="atpMetric"></span><span id="conclusion"></span></div></div>
+  </section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start replay">Lancer</button>
+    <button class="craie-btn secondaire" id="reset" data-professor-control="reset">Réinitialiser</button>
+    <span id="gradientBox"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+    <span class="lecture" id="status">Prêt</span>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { Craie, ecrire, bulle, onglets, curseur, protocole } = window.Tableau;
+  const $ = id => document.getElementById(id);
+  const CONFIG = { id: 'svt_ch1_chimiosmose', variants: [{ id: 'avec_o2', label: 'Avec dioxygène' }, { id: 'sans_o2', label: 'Sans dioxygène' }], objectives: ['Relier chaîne respiratoire, gradient de protons, ATP synthase et rôle terminal du dioxygène.'], commands: ['start', 'set_variant', 'set_parameters', 'reset', 'replay'] };
+  const S = { o2: true, gradient: 80, simulationStatus: 'idle', variantsCompleted: [], ouvert: performance.now(), anim: null, dirty: true };
+  const variant = () => S.o2 ? 'avec_o2' : 'sans_o2';
+  const pont = protocole({ id: CONFIG.id, commandes: CONFIG.commands, config: Object.assign(CONFIG, { controls: { oxygen_present: { type: 'boolean' }, gradient_percent: { type: 'range', min: 10, max: 100, unit: '%' } } }), executer,
+    etat: () => ({ simulation_status: S.simulationStatus, current_variant: variant(), variants_completed: S.variantsCompleted, oxygen_present: S.o2, proton_gradient_percent: S.o2 ? S.gradient : 0, electron_flow: S.o2 ? 'actif' : 'bloqué', relative_atp_output_percent: S.o2 ? S.gradient : 0, scientific_interpretation: S.o2 ? 'O₂ accepte les électrons en fin de chaîne; le gradient de H⁺ alimente l’ATP synthase.' : 'Sans O₂, la chaîne se bloque et le gradient de H⁺ n’est plus entretenu.' }),
+    progression: () => S.variantsCompleted.length / 2,
+    texte: 'Chaîne respiratoire, gradient de protons et ATP synthase dessinés au tableau, avec ou sans dioxygène.' });
+  const emit = () => pont.emettre();
+  const redraw = () => { S.dirty = true; };
+  const gradientCtl = curseur({ id: 'gradient', label: 'Gradient de H⁺', min: 10, max: 100, step: 10, valeur: 80, unite: '%', commande: 'set_parameters', onchange: v => setParameters({ gradient_percent: v }) });
+  $('gradientBox').replaceWith(gradientCtl);
+
+  function render() {
+    onglets($('onglets'), CONFIG.variants, variant(), id => setO2(id !== 'sans_o2'), new Set(S.variantsCompleted));
+    gradientCtl.maj(S.gradient);
+    ecrire($('title'), S.o2 ? 'Avec dioxygène' : 'Sans dioxygène');
+    ecrire($('text'), S.o2 ? 'La chaîne transfère les électrons jusqu’à O₂. Le gradient de H⁺ entraîne l’ATP synthase et permet la phosphorylation de l’ADP.' : 'Sans O₂, le transfert final des électrons s’arrête. Les transporteurs restent réduits, le gradient n’est plus entretenu et la synthèse d’ATP chute.', { vitesse: 55 });
+    $('electronMetric').textContent = 'Flux d’électrons : ' + (S.o2 ? 'actif' : 'bloqué');
+    $('atpMetric').textContent = 'Production relative d’ATP : ' + (S.o2 ? S.gradient : 0) + ' %';
+    $('conclusion').textContent = S.o2 ? 'O₂ = accepteur final' : 'Chaîne arrêtée sans O₂'; $('conclusion').classList.toggle('warn', !S.o2);
+    $('status').textContent = { idle: 'Prêt', running: 'En cours', finished: 'Terminé' }[S.simulationStatus];
+    redraw();
+  }
+  function setO2(value, report = true) { S.o2 = !!value; S.simulationStatus = 'idle'; S.anim = null; render(); if (report) { pont.noter('set_variant', { variant: variant() }); emit(); } }
+  function setParameters(p, report = true) { if (typeof p.gradient_percent === 'number') S.gradient = Math.max(10, Math.min(100, p.gradient_percent)); if (typeof p.oxygen_present === 'boolean') S.o2 = p.oxygen_present; render(); if (report) { pont.noter('set_parameters', { oxygen_present: S.o2, gradient_percent: S.gradient }); emit(); } }
+  function start() { S.simulationStatus = 'running'; S.anim = { t0: performance.now(), duree: 2600 }; render(); bulle($('feedback'), S.o2 ? 'Suis les électrons jusqu’à O₂ et les protons dans l’ATP synthase.' : 'Observe : sans accepteur final, les électrons s’arrêtent.'); pont.noter('start', { oxygen_present: S.o2, gradient_percent: S.gradient }); emit(); setTimeout(finish, 2600); }
+  function finish() { if (S.simulationStatus !== 'running') return; S.simulationStatus = 'finished'; const v = variant(); if (!S.variantsCompleted.includes(v)) S.variantsCompleted.push(v); render(); bulle($('feedback'), S.o2 ? 'ADP + Pᵢ → ATP grâce au flux de H⁺ ; O₂ + 4 e⁻ + 4 H⁺ → 2 H₂O' : 'Chaîne bloquée : plus de gradient, presque plus d’ATP.', S.o2 ? 'good' : 'bad'); pont.noter('finish', { variant: v }); emit(); }
+  function reset() { S.simulationStatus = 'idle'; S.gradient = 80; S.o2 = true; S.anim = null; S.ouvert = performance.now(); bulle($('feedback'), 'Conditions initiales.'); pont.noter('reset'); render(); emit(); }
+  function executer(c, p) { if (c === 'start' || c === 'replay') start(); else if (c === 'reset') reset(); else if (c === 'set_variant') setO2((p.variant_id || p.variant) !== 'sans_o2'); else if (c === 'set_parameters') setParameters(p); }
+
+  // ── Dessin à la craie (repère logique 850 × 420) ──────────────────────────
+  const craie = new Craie($('canvas'), { onresize: redraw });
+  const complexes = [[110, 'I'], [260, 'III'], [410, 'IV']];
+  function draw() {
+    const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
+    craie.debut(11, (performance.now() - S.ouvert) / 1000);
+    const c = craie.ctx, s = Math.min(W / 850, H / 420); c.translate((W - 850 * s) / 2, (H - 420 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 11;
+    const running = S.simulationStatus === 'running' || S.simulationStatus === 'finished';
+    const k = S.anim ? Math.min(1, (performance.now() - S.anim.t0) / S.anim.duree) : 0, now = performance.now() / 1000;
+    const g = S.o2 ? S.gradient / 100 : 0;
+    // Espace intermembranaire, membrane, matrice
+    craie.texte('espace intermembranaire : [H⁺] élevée', 30, 40, { couleur: 'rose', taille: 17 });
+    craie.rect(20, 175, 810, 84, { couleur: 'faible', arrondi: 26, fond: 'cyan', fondAlpha: .07, duree: .7 });
+    for (let x = 40; x < 820; x += 22) { craie.cercle(x, 188, 5, { couleur: 'tresfaible', largeur: 1.2, duree: .01 }); craie.cercle(x, 246, 5, { couleur: 'tresfaible', largeur: 1.2, duree: .01 }); }
+    craie.texte('membrane interne', 828, 168, { couleur: 'faible', taille: 14, align: 'right' });
+    craie.texte('matrice mitochondriale', 28, 300, { couleur: 'cyan', taille: 16 });
+    craie.pause(.15);
+    complexes.forEach(([x, nom]) => craie.rect(x, 150, 75, 122, { couleur: 'cyan', arrondi: 16, fond: 'cyan', duree: .35 }).texte(nom, x + 37, 218, { couleur: 'cyan', taille: 20, align: 'center' }));
+    craie.texte('chaîne respiratoire', 298, 135, { couleur: 'cyan', taille: 15, align: 'center' });
+    // Électrons : chemin pointillé sous les complexes, de NADH vers O₂
+    craie.texte('électrons : NADH,H⁺ / FADH₂  →  O₂', 95, 318, { couleur: 'jaune', taille: 15 });
+    craie.ligne(95, 340, 515, 340, { couleur: 'jaune', largeur: 2, pointille: [8, 7], duree: .5 });
+    // ATP synthase
+    craie.trait([[625, 150], [640, 118], [665, 108], [690, 118], [705, 150], [695, 265], [665, 290], [635, 265]], { couleur: 'violet', largeur: 2.6, ferme: true });
+    craie.cercle(665, 250, 30, { couleur: 'violet', fond: 'violet' });
+    craie.texte('ATP synthase', 665, 322, { couleur: 'violet', taille: 17, align: 'center' });
+    craie.texte('H⁺', 605, 95, { couleur: 'rose', taille: 16 });
+    craie.pause(.2);
+    craie.texte('ADP + Pᵢ', 730, 395, { couleur: 'faible', taille: 15 });
+    craie.fleche(735, 385, 740, 372, { couleur: 'vert', largeur: 1.6 });
+    // Parties animées
+    craie.direct(() => {
+      // Protons pompés dans l'espace intermembranaire (plus le gradient est fort, plus il y en a)
+      const nb = Math.round(3 + 9 * (S.o2 ? S.gradient / 100 : .15));
+      for (let i = 0; i < nb; i++) { const x = 60 + (i * 61) % 520, y = 70 + (i * 37) % 60 + (running && S.o2 ? 4 * Math.sin(now * 3 + i) : 0); craie.point(x, y, 6, 'rose'); craie.texte('+', x, y + 4, { couleur: 'blanc', taille: 11, align: 'center' }); }
+      if (running) {
+        // Électron qui parcourt la chaîne ; sans O₂ il s'arrête au complexe IV
+        const ex = 115 + (S.o2 ? 400 : 330) * Math.min(1, (S.anim ? ((now - S.anim.t0 / 1000) % 2.2) / 2.2 : 0)), ey = 340;
+        craie.point(ex, ey, 9, 'jaune'); craie.texte('e⁻', ex, ey + 5, { couleur: '#111', taille: 13, align: 'center', alpha: 1 });
+        if (!S.o2) { craie.texte('✗ pas d’accepteur final', 525, 372, { couleur: 'rouge', taille: 15 }); }
+        // Protons qui traversent l'ATP synthase (seulement avec O₂, débit selon le gradient)
+        if (S.o2) for (let i = 0; i < 3; i++) { const ph = ((now * (0.6 + g) + i / 3) % 1); const py = 90 + 200 * ph, px = 652 + 26 * ((i * 7) % 3) / 2; craie.point(px, py, 6, 'rose'); }
+        // Rotor
+        const a = S.o2 ? now * (2 + 4 * g) : 0;
+        craie.ligne(665 + 26 * Math.cos(a), 250 + 26 * Math.sin(a), 665 - 26 * Math.cos(a), 250 - 26 * Math.sin(a), { couleur: 'blanc', largeur: 4 });
+        craie.ligne(665 + 26 * Math.cos(a + Math.PI / 2), 250 + 26 * Math.sin(a + Math.PI / 2), 665 - 26 * Math.cos(a + Math.PI / 2), 250 - 26 * Math.sin(a + Math.PI / 2), { couleur: 'blanc', largeur: 4 });
+        // Eau formée et ATP produit
+        if (S.o2 && k > .6) craie.texte('O₂ + 4 e⁻ + 4 H⁺ → 2 H₂O', 500, 390, { couleur: 'bleu', taille: 16 });
+        const atpA = S.o2 ? .35 + .65 * g : .15, bounce = S.o2 ? 8 * Math.abs(Math.sin(now * 3)) : 0;
+        craie.cercle(760, 350 - bounce, 32, { couleur: 'vert', fond: 'vert', alpha: atpA }).texte('ATP', 760, 358 - bounce, { couleur: 'vert', taille: 20, align: 'center', alpha: atpA });
+        craie.texte(`${S.o2 ? S.gradient : 0} %`, 760, 300, { couleur: 'vert', taille: 15, align: 'center' });
+      } else {
+        craie.ligne(639, 250, 691, 250, { couleur: 'blanc', largeur: 4 }); craie.ligne(665, 224, 665, 276, { couleur: 'blanc', largeur: 4 });
+        craie.cercle(760, 350, 32, { couleur: 'vert', fond: 'vert', alpha: .3 }).texte('ATP', 760, 358, { couleur: 'vert', taille: 20, align: 'center', alpha: .4 });
+      }
+    });
+    const complet = craie.fin();
+    return complet && !running;
+  }
+  function frame() { if (S.dirty || S.anim || S.simulationStatus !== 'idle') S.dirty = !draw(); requestAnimationFrame(frame); }
+  $('run').onclick = start; $('reset').onclick = reset;
+  $('onglets').addEventListener('click', e => { const b = e.target.closest('[data-variant]'); if (b) setO2(b.dataset.variant !== 'sans_o2'); });
+  ecrire($('objectif'), 'Objectif : montrer que le transfert d’électrons crée un gradient de H⁺ utilisé par l’ATP synthase, et que O₂ est l’accepteur final.', { vitesse: 70 });
+  render(); bulle($('feedback'), 'Choisis la condition, règle le gradient puis lance.'); requestAnimationFrame(frame);
+})();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body>
 </html>

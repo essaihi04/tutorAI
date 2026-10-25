@@ -1,38 +1,65 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Filières énergétiques de l'effort</title>
-  <style>
-    *{box-sizing:border-box}body{margin:0;background:#071426;color:#eef8ff;font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:14px}.app{width:min(900px,100%);background:#0d2038;border:1px solid #294d6d;border-radius:20px;padding:18px}h1{font-size:clamp(18px,3vw,26px);margin:0 0 14px}.scenarios{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.scenario{border:2px solid #37648d;border-radius:15px;background:#173753;color:white;padding:13px 8px;cursor:pointer;text-align:center}.scenario .icon{font-size:40px;display:block}.scenario .time{display:block;color:#9ed7ff;margin-top:5px;font-weight:800}.scenario.selected{background:#235f89;border-color:#8dddff}.timeline{height:18px;background:linear-gradient(90deg,#fbbf24 0 8%,#f97316 8% 28%,#22c55e 28% 100%);border-radius:999px;margin:18px 4px;position:relative}.marker{position:absolute;top:-7px;width:4px;height:32px;background:white;left:2%;transition:left .3s}.pathways{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.pathway{border:0;border-radius:14px;background:#263f5b;color:#fff;padding:13px 8px;cursor:pointer;font-weight:800;min-height:82px}.pathway .symbol{display:block;font-size:27px;margin-bottom:5px}.pathway.selected{outline:3px solid #a7f3d0;background:#17634e}.actions{text-align:center;margin-top:15px}.actions button{border:0;border-radius:12px;background:#34d399;color:#06251b;padding:11px 20px;font-weight:850;cursor:pointer}.feedback{text-align:center;min-height:30px;margin-top:9px;font-weight:800}.ok{color:#6ee7b7}.no{color:#fda4af}@media(max-width:640px){.scenarios,.pathways{grid-template-columns:1fr}.scenario,.pathway{min-height:60px}.scenario .icon,.pathway .symbol{font-size:26px;display:inline;margin-right:8px}}
-  </style>
-<link rel="stylesheet" href="/media/simulations/svt/ch1_consommation_matiere_organique/muscle/transparent-board.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Filières énergétiques de l'effort — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css">
+<style>
+  .pose { position: absolute; transform: translate(-50%, -50%); font-size: .95em; }
+  .pose[aria-pressed="true"] { color: var(--jaune); background: rgba(250, 204, 21, .12); }
+  .pathway[aria-pressed="true"] { color: var(--vert); background: rgba(74, 222, 128, .12); }
+</style>
 </head>
 <body>
-  <main class="app">
-    <h1>Choisis l'effort puis sa filière dominante</h1>
-    <div class="scenarios">
-      <button class="scenario" data-id="sprint"><span class="icon">🏃‍♂️</span>Sprint 60 m<span class="time">≈ 7 s</span></button>
-      <button class="scenario" data-id="tour"><span class="icon">🏃</span>Tour de piste<span class="time">≈ 50 s</span></button>
-      <button class="scenario" data-id="marathon"><span class="icon">🏃‍♀️</span>Marathon<span class="time">≈ 3 h</span></button>
+<div class="tableau">
+  <header class="titre"><div><small>SVT · 2 BAC · exercice</small><h1 id="title"></h1><p class="objectif">Clique sur un effort, puis sur la filière qui fournit surtout l’ATP.</p></div></header>
+  <section class="scene">
+    <canvas id="canvas" role="img" aria-label="Axe des durées d’effort et trois filières énergétiques, à la craie"></canvas>
+    <div class="calque">
+      <button class="craie-btn pose scenario" data-id="sprint" aria-pressed="false">Sprint 60 m · ≈ 7 s</button>
+      <button class="craie-btn pose scenario" data-id="tour" aria-pressed="false">Tour de piste · ≈ 50 s</button>
+      <button class="craie-btn pose scenario" data-id="marathon" aria-pressed="false">Marathon · ≈ 3 h</button>
+      <button class="craie-btn pose pathway" data-id="pcr" aria-pressed="false">⚡ ATP–phosphocréatine</button>
+      <button class="craie-btn pose pathway" data-id="lactique" aria-pressed="false">🔥 Fermentation lactique</button>
+      <button class="craie-btn pose pathway" data-id="respiration" aria-pressed="false">O₂ Respiration</button>
     </div>
-    <div class="timeline" aria-label="Durée de l'effort"><span class="marker" id="marker"></span></div>
-    <div class="pathways">
-      <button class="pathway" data-id="pcr"><span class="symbol">⚡</span>ATP–phosphocréatine</button>
-      <button class="pathway" data-id="lactique"><span class="symbol">🔥</span>Fermentation lactique</button>
-      <button class="pathway" data-id="respiration"><span class="symbol">O₂</span>Respiration</button>
-    </div>
-    <div class="actions"><button id="check">Vérifier</button></div><div class="feedback" id="feedback" aria-live="polite"></div>
-  </main>
-  <script>
-    window.SIMULATION_CONFIG={id:'filieres_effort_svt',variants:[{id:'exercise',label:'Filières selon l’effort'}]};
-    const expected={sprint:'pcr',tour:'lactique',marathon:'respiration'},positions={sprint:'2%',tour:'18%',marathon:'88%'};let scenario=null,pathway=null,actions=[];
-    document.querySelectorAll('.scenario').forEach(button=>button.onclick=()=>{document.querySelectorAll('.scenario').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');scenario=button.dataset.id;document.getElementById('marker').style.left=positions[scenario];actions.push('scenario_'+scenario)});
-    document.querySelectorAll('.pathway').forEach(button=>button.onclick=()=>{document.querySelectorAll('.pathway').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');pathway=button.dataset.id;actions.push('pathway_'+pathway)});
-    function submit(){const correct=scenario&&pathway&&expected[scenario]===pathway;const feedback=document.getElementById('feedback');feedback.className='feedback '+(correct?'ok':'no');feedback.textContent=correct?'✓ Association correcte':'↺ Relie surtout la durée à la vitesse de production d’ATP';actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'filieres_effort_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,scenario,pathway,expected:scenario?expected[scenario]:null,skill:'choisir_filiere_energetique'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
-    function reset(){scenario=null;pathway=null;actions.push('reset');document.querySelectorAll('button').forEach(b=>b.classList.remove('selected'));document.getElementById('marker').style.left='2%';document.getElementById('feedback').textContent=''}
-    window.runVariant=reset;window.executeAICommand=(command)=>{if(command==='reset'||command==='start'||command==='set_variant')reset()};document.getElementById('check').onclick=submit;
-  </script>
-<script src="/media/simulations/professor-locate.js" defer></script></body>
+  </section>
+  <footer class="barre">
+    <button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button>
+    <button class="craie-btn secondaire" id="reset" data-professor-control="reset">Recommencer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+  const { Craie, ecrire, bulle, appuyer } = window.Tableau;
+  window.SIMULATION_CONFIG={id:'filieres_effort_svt',variants:[{id:'exercise',label:'Filières selon l’effort'}],commands:['start','reset','check','set_variant']};
+  const expected={sprint:'pcr',tour:'lactique',marathon:'respiration'},positions={sprint:.06,tour:.3,marathon:.9};let scenario=null,pathway=null,actions=[],verdict=null,verdictAt=null;
+  const $=id=>document.getElementById(id),S={ouvert:performance.now(),dirty:true};const scene=()=>(performance.now()-S.ouvert)/1000;
+  ecrire($('title'),'Choisis l’effort puis sa filière dominante');
+  document.querySelectorAll('.scenario').forEach(b=>b.onclick=()=>{document.querySelectorAll('.scenario').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');scenario=b.dataset.id;actions.push('scenario_'+scenario);verdict=null;S.dirty=true});
+  document.querySelectorAll('.pathway').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pathway').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');pathway=b.dataset.id;actions.push('pathway_'+pathway);verdict=null;S.dirty=true});
+  function submit(){const correct=!!(scenario&&pathway&&expected[scenario]===pathway);verdict=correct;verdictAt=scene();S.dirty=true;bulle($('feedback'),correct?'✓ Association correcte':'↺ Relie surtout la durée à la vitesse de production d’ATP',correct?'good':'bad');actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'filieres_effort_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,scenario,pathway,expected:scenario?expected[scenario]:null,skill:'choisir_filiere_energetique'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
+  function reset(){scenario=null;pathway=null;verdict=null;actions.push('reset');document.querySelectorAll('.pose').forEach(b=>b.setAttribute('aria-pressed','false'));bulle($('feedback'),'');S.ouvert=performance.now();S.dirty=true}
+  window.runVariant=reset;window.executeAICommand=(command)=>{appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;
+  addEventListener('message',e=>{const d=e.data;if(d?.type==='simulation_control'&&(!d.simulation_id||d.simulation_id==='filieres_effort_svt'))window.executeAICommand(d.command,d.parameters||{})});
+  window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'filieres_effort_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,globals:['executeAICommand','runVariant']},page_text:'Exercice au tableau : relier la durée d’un effort (sprint, tour de piste, marathon) à la filière dominante de régénération de l’ATP.'},'*');
+
+  // ── Tableau : axe des durées, trois zones, les boutons posés sur le dessin ──
+  const canvas=$('canvas'),craie=new Craie(canvas,{onresize:()=>{S.dirty=true}});const geom={s:1,ox:0,oy:0};
+  const place=(sel,x,y)=>{const b=document.querySelector(sel);b.style.left=(geom.ox+x*geom.s)+'px';b.style.top=(geom.oy+y*geom.s)+'px'};
+  function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(9,scene());const c=craie.ctx,s=Math.min(W/760,H/380);geom.s=s;geom.ox=(W-760*s)/2;geom.oy=(H-380*s)/2;c.translate(geom.ox,geom.oy);c.scale(s,s);
+    const x0=70,x1=700,y=190;const X=f=>x0+(x1-x0)*f;
+    craie.texte('durée de l’effort →',385,120,{couleur:'faible',taille:15,align:'center'});
+    [[0,.13,'jaune','ATP–PCr','≈ 10 s'],[.13,.42,'orange','glycolyse lactique','10 s – 2 min'],[.42,1,'vert','respiration','> 2 min']].forEach(([a,b,col,l,d])=>{craie.ligne(X(a),y,X(b),y,{couleur:col,largeur:7,alpha:.7});craie.texte(l,(X(a)+X(b))/2,y+40,{couleur:col,taille:15,align:'center'});craie.texte(d,(X(a)+X(b))/2,y+60,{couleur:'faible',taille:12,align:'center'})});
+    craie.axe(x0,y,x1+30,y,[],{});[['7 s',.06],['50 s',.3],['3 h',.9]].forEach(([l,f])=>{craie.ligne(X(f),y-8,X(f),y+8,{largeur:1.6});craie.texte(l,X(f),y+22,{couleur:'faible',taille:12,align:'center'})});
+    craie.direct(()=>{if(scenario){const x=X(positions[scenario]);craie.ligne(x,y-40,x,y+12,{couleur:'jaune',largeur:3,tremble:0});craie.texte('▼',x,y-44,{couleur:'jaune',taille:16,align:'center'})}});
+    place('[data-id=sprint]',130,80);place('[data-id=tour]',385,80);place('[data-id=marathon]',640,80);place('[data-id=pcr]',130,300);place('[data-id=lactique]',385,300);place('[data-id=respiration]',640,300);
+    if(verdict!=null){craie.depuis(verdictAt);const col=verdict?'vert':'rouge';if(scenario&&pathway){const xs={pcr:130,lactique:385,respiration:640}[pathway],xe={sprint:130,tour:385,marathon:640}[scenario];craie.trait([[xe,100],[X(positions[scenario]),y-12]],{couleur:col,largeur:2}).trait([[X(positions[scenario]),y+12],[xs,282]],{couleur:col,largeur:2})}
+      craie.texte(verdict?'✓':'✗',385,370,{couleur:col,taille:26,align:'center'})}
+    return craie.fin()}
+  function frame(){if(S.dirty)S.dirty=!draw();requestAnimationFrame(frame)}requestAnimationFrame(frame);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body>
 </html>

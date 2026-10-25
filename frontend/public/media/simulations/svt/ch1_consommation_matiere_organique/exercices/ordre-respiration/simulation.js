@@ -78,7 +78,7 @@
       'NAD⁺ régénéré : lance maintenant le glucose suivant.',
       'La glycolyse repart ! Essaie l’autre voie pour comparer.'
     ];
-    $('feedback').textContent = message || messages[stage];
+    window.Tableau ? window.Tableau.ecrire($('feedback'), message || messages[stage]) : ($('feedback').textContent = message || messages[stage]);
   }
   function reset(clear = false) {
     stop(); cancelMotion(); stage = 0;
@@ -113,7 +113,10 @@
   $('mitochondria').onclick=()=>changeCondition(()=>mitochondria=!mitochondria,'toggle_mitochondrion');
   $('lactate').onclick=()=>changeCondition(()=>alcoholic=false,'select_lactate');
   $('ethanol').onclick=()=>changeCondition(()=>alcoholic=true,'select_ethanol');
-  $('start').onclick=start; $('next').onclick=()=>{stop();step();}; $('reset').onclick=()=>reset(true); $('recycle').onclick=recycle;
+  $('start').onclick=start; $('next').onclick=()=>{stop();step();};
+  // Le bouton principal vise aussi la commande `pause` du professeur quand la lecture est en cours.
+  const majControle=()=>$('start').dataset.professorControl=playing?'pause start':'start pause';
+  new MutationObserver(majControle).observe($('start'),{childList:true,characterData:true,subtree:true}); $('reset').onclick=()=>reset(true); $('recycle').onclick=recycle;
   function info(open) { $('enzymeInfo').hidden=!open; $('enzyme').setAttribute('aria-expanded',String(open)); if (open) { stop(); render(); $('closeInfo').focus(); } else $('enzyme').focus(); }
   $('enzyme').onclick=()=>info($('enzymeInfo').hidden); $('closeInfo').onclick=()=>info(false);
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('enzymeInfo').hidden)info(false);});
@@ -122,6 +125,7 @@
     reset(); oxygen = id==='respiration'||id==='mitochondrie_inactive'||id==='exercise'; mitochondria=id!=='mitochondrie_inactive'; alcoholic=id==='fermentation_alcoolique'; render(); start();
   };
   window.executeAICommand = (command,params={}) => {
+    if (window.Tableau) window.Tableau.appuyer(command);
     if(command==='start'&&!playing)start();
     else if(command==='pause'){stop();cancelMotion();render();publish('pause');}
     else if(command==='next'){stop();step();}

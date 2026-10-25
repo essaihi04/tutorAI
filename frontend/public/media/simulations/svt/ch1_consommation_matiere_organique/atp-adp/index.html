@@ -3,76 +3,137 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>Cycle ATP–ADP</title>
+  <title>Cycle ATP–ADP — au tableau</title>
+  <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css" />
   <style>
-    *{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#07111f;color:#e5eefb}
-    body{display:flex;flex-direction:column;background:radial-gradient(circle at 40% 20%,#16335d 0,#07111f 58%)}
-    header{height:9vh;min-height:52px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid #29415f;background:#0a1728}
-    h1{font-size:clamp(16px,2.2vw,24px);margin:0}.badge{font-size:12px;color:#8dd7ff;background:#0b3650;border:1px solid #1f6f96;padding:4px 9px;border-radius:999px}
-    main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(190px,28%) 1fr;gap:12px;padding:12px}
-    aside,.stage{border:1px solid #29415f;background:rgba(9,24,42,.92);border-radius:18px;box-shadow:0 16px 50px #0005}
-    aside{padding:14px;display:flex;flex-direction:column;gap:10px}.objective{font-size:13px;line-height:1.45;color:#b8c9dc;margin:0}
-    .variant{width:100%;border:1px solid #35506e;background:#10233a;color:#dcecff;border-radius:12px;padding:10px;text-align:left;font-weight:700;cursor:pointer}.variant.active{border-color:#38bdf8;background:#0b405d}.variant small{display:block;color:#7dd3fc;font-weight:500;margin-top:3px}
-    .controls{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px}.controls button{border:0;border-radius:11px;padding:10px;font-weight:800;cursor:pointer}.run{background:#22c55e;color:#06230f}.reset{background:#334155;color:white}
-    .stage{position:relative;overflow:hidden;display:flex;flex-direction:column;min-width:0}.canvas{flex:1;min-height:0;position:relative;display:grid;place-items:center;padding:10px}
-    svg{width:100%;height:100%;max-height:62vh}.bond{stroke:#facc15;stroke-width:7;stroke-linecap:round}.bond.break{stroke-dasharray:11 9;animation:breakBond .9s ease forwards}.phosphate{transition:transform .9s ease,opacity .6s}.phosphate.leave{transform:translate(120px,95px);opacity:.35}.phosphate.join{animation:joinPi 1s ease both}
-    .energy{opacity:0}.energy.show{animation:energyPulse 1.2s ease both}.machine{transition:transform .8s ease}.machine.work{animation:work .8s ease 2}
-    .caption{min-height:74px;padding:12px 18px;border-top:1px solid #29415f;background:#091a2d}.caption strong{color:#7dd3fc}.caption p{margin:5px 0 0;color:#c8d8e8;font-size:14px}
-    .metrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.metric{font-size:12px;padding:4px 8px;border-radius:8px;background:#102b47;color:#c9eaff}
-    @keyframes breakBond{to{stroke-dashoffset:35;opacity:.2}}@keyframes joinPi{from{transform:translate(120px,95px);opacity:.35}to{transform:translate(0,0);opacity:1}}@keyframes energyPulse{0%{opacity:0;transform:scale(.4)}45%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:translateX(170px) scale(.7)}}@keyframes work{50%{transform:translateY(-18px)}}
-    @media(max-width:720px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{padding:9px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.objective{grid-column:1/-1}.variant{font-size:11px;padding:7px}.variant small{display:none}.controls{grid-column:1/-1;grid-template-columns:1fr 1fr;margin:0}.caption{min-height:65px;padding:8px 12px}}
-    @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+    #legende { max-width: 46%; }
+    #legende .metriques { display: flex; flex-wrap: wrap; gap: .2em .9em; margin-top: .25em; color: var(--craie-faible); font-size: .85em; }
+    #legende .metriques span { white-space: nowrap; }
+    @media (max-width: 720px) { #legende { max-width: 62%; } #legende .metriques { display: none; } }
   </style>
 </head>
 <body>
-  <header><h1>ATP : intermédiaire énergétique renouvelable</h1><span class="badge" id="statusBadge">Prêt</span></header>
-  <main>
-    <aside>
-      <p class="objective">Objectif : relier l’hydrolyse de l’ATP au travail cellulaire et sa phosphorylation à une réaction libératrice d’énergie.</p>
-      <button class="variant active" data-variant="hydrolyse">1. Hydrolyse<small>ATP + H₂O → ADP + Pᵢ</small></button>
-      <button class="variant" data-variant="phosphorylation">2. Phosphorylation<small>ADP + Pᵢ → ATP</small></button>
-      <button class="variant" data-variant="couplage">3. Couplage<small>Respiration → ATP → travail</small></button>
-      <div class="controls"><button class="run" id="run">▶ Observer</button><button class="reset" id="reset">↻ Recommencer</button></div>
-    </aside>
-    <section class="stage">
-      <div class="canvas">
-        <svg viewBox="0 0 820 430" role="img" aria-label="Schéma animé du cycle ATP ADP">
-          <defs><filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-          <text x="250" y="52" text-anchor="middle" fill="#e5eefb" font-size="26" font-weight="800" id="moleculeLabel">ATP</text>
-          <g id="molecule">
-            <rect x="65" y="100" width="145" height="76" rx="20" fill="#2563eb"/><text x="137" y="146" text-anchor="middle" fill="white" font-size="23" font-weight="800">Adénosine</text>
-            <circle cx="260" cy="138" r="34" fill="#0ea5e9"/><text x="260" y="147" text-anchor="middle" fill="white" font-size="25" font-weight="800">P</text>
-            <line x1="210" y1="138" x2="226" y2="138" class="bond"/>
-            <circle cx="352" cy="138" r="34" fill="#0ea5e9"/><text x="352" y="147" text-anchor="middle" fill="white" font-size="25" font-weight="800">P</text>
-            <line x1="294" y1="138" x2="318" y2="138" class="bond"/>
-            <g id="pi" class="phosphate"><circle cx="445" cy="138" r="34" fill="#f59e0b"/><text x="445" y="147" text-anchor="middle" fill="#241400" font-size="25" font-weight="900">P</text></g>
-            <line id="lastBond" x1="386" y1="138" x2="411" y2="138" class="bond"/>
-          </g>
-          <g id="energy" class="energy" filter="url(#glow)"><path d="M480 105 L540 105 L516 148 L556 148 L480 235 L503 170 L468 170 Z" fill="#fde047"/></g>
-          <g id="machine" class="machine"><rect x="625" y="92" width="125" height="96" rx="22" fill="#173a2a" stroke="#4ade80" stroke-width="3"/><circle cx="688" cy="140" r="25" fill="none" stroke="#86efac" stroke-width="8"/><path d="M688 105v18M688 157v18M653 140h18M705 140h18" stroke="#86efac" stroke-width="7"/><text x="688" y="221" text-anchor="middle" fill="#86efac" font-size="18" font-weight="800">Travail cellulaire</text></g>
-          <path d="M190 305 C300 370 485 370 620 305" fill="none" stroke="#38bdf8" stroke-width="5" marker-end="url(#none)"/>
-          <text x="408" y="362" text-anchor="middle" fill="#9cc8e7" font-size="18" id="cycleText">L’ATP est rapidement renouvelé</text>
-        </svg>
-      </div>
-      <div class="caption"><strong id="title">Hydrolyse de l’ATP</strong><p id="interpretation">Le phosphate terminal est détaché. L’énergie transférée peut alimenter un travail cellulaire.</p><div class="metrics"><span class="metric" id="inputMetric">Entrée : ATP + H₂O</span><span class="metric" id="outputMetric">Sortie : ADP + Pᵢ</span><span class="metric" id="energyMetric">Transfert d’énergie : vers le travail</span></div></div>
-    </section>
-  </main>
-  <script>
-    const CONFIG={id:'svt_ch1_atp_adp',variants:[{id:'hydrolyse',label:'Hydrolyse de l’ATP'},{id:'phosphorylation',label:'Phosphorylation de l’ADP'},{id:'couplage',label:'Couplage énergétique'}],objectives:['Expliquer que l’ATP transfère temporairement l’énergie entre réactions libératrices et activités consommatrices.'],commands:['start','set_variant','reset','replay']};
-    window.SIMULATION_CONFIG=CONFIG;
-    const state={variant:'hydrolyse',simulationStatus:'idle',variantsCompleted:[],actions:[]};
-    const $=id=>document.getElementById(id);
-    const content={hydrolyse:{title:'Hydrolyse de l’ATP',text:'Le phosphate terminal est détaché. L’énergie transférée peut alimenter un travail cellulaire.',input:'Entrée : ATP + H₂O',output:'Sortie : ADP + Pᵢ',energy:'Transfert d’énergie : vers le travail'},phosphorylation:{title:'Phosphorylation de l’ADP',text:'Une réaction libératrice d’énergie permet de reformer l’ATP à partir d’ADP et de phosphate inorganique.',input:'Entrée : ADP + Pᵢ',output:'Sortie : ATP + H₂O',energy:'Énergie fournie : respiration/fermentation'},couplage:{title:'Couplage énergétique',text:'L’ATP n’est pas une réserve durable : il est continuellement consommé puis régénéré.',input:'Matière organique → énergie',output:'ATP → travail cellulaire',energy:'Cycle rapide ATP ⇄ ADP'}};
-    function setVariant(id,report=true){if(!content[id])return;state.variant=id;state.simulationStatus='idle';document.querySelectorAll('.variant').forEach(b=>b.classList.toggle('active',b.dataset.variant===id));const c=content[id];$('title').textContent=c.title;$('interpretation').textContent=c.text;$('inputMetric').textContent=c.input;$('outputMetric').textContent=c.output;$('energyMetric').textContent=c.energy;resetVisual();if(report){state.actions.push({action:'set_variant',variant:id});emit()}}
-    function resetVisual(){$('lastBond').classList.remove('break');$('pi').classList.remove('leave','join');$('energy').classList.remove('show');$('machine').classList.remove('work');$('moleculeLabel').textContent=state.variant==='phosphorylation'?'ADP + Pᵢ':'ATP';$('statusBadge').textContent='Prêt'}
-    function start(){resetVisual();state.simulationStatus='running';$('statusBadge').textContent='Observation…';state.actions.push({action:'start',variant:state.variant});requestAnimationFrame(()=>{if(state.variant==='hydrolyse'){$('lastBond').classList.add('break');$('pi').classList.add('leave');$('energy').classList.add('show');$('machine').classList.add('work');setTimeout(()=>$('moleculeLabel').textContent='ADP + Pᵢ',650)}else if(state.variant==='phosphorylation'){$('pi').classList.add('join');$('energy').classList.add('show');setTimeout(()=>$('moleculeLabel').textContent='ATP',780)}else{$('lastBond').classList.add('break');$('pi').classList.add('leave');$('energy').classList.add('show');$('machine').classList.add('work');setTimeout(()=>{$('lastBond').classList.remove('break');$('pi').classList.remove('leave');$('pi').classList.add('join');$('moleculeLabel').textContent='ATP régénéré'},1150)}});setTimeout(finish,state.variant==='couplage'?2300:1500);emit()}
-    function finish(){state.simulationStatus='finished';if(!state.variantsCompleted.includes(state.variant))state.variantsCompleted.push(state.variant);$('statusBadge').textContent='Terminé';state.actions.push({action:'finish',variant:state.variant});emit()}
-    function reset(){state.simulationStatus='idle';state.actions.push({action:'reset'});resetVisual();emit()}
-    function emit(){window.parent.postMessage({type:'simulation_state',simulation_id:CONFIG.id,student_actions:state.actions.slice(-12),current_state:{simulation_status:state.simulationStatus,current_variant:state.variant,variants_completed:state.variantsCompleted,observation:content[state.variant].text,scientific_guardrail:'L’ATP est un intermédiaire énergétique renouvelé, pas une réserve à long terme.'},objective_progress:state.variantsCompleted.length/CONFIG.variants.length,timestamp:Date.now()},'*')}
-    function manifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:CONFIG.id,capabilities:{commands:CONFIG.commands,config:CONFIG,state_schema:{current_variant:'hydrolyse|phosphorylation|couplage',simulation_status:'idle|running|finished',observation:'interprétation scientifique'}},page_text:'Cycle ATP ADP : hydrolyse, phosphorylation et couplage énergétique.'},'*')}
-    document.querySelectorAll('.variant').forEach(b=>b.onclick=()=>setVariant(b.dataset.variant));$('run').onclick=start;$('reset').onclick=reset;
-    window.executeAICommand=(command,p={})=>{if(command==='set_variant')setVariant(p.variant_id||p.variant);else if(command==='start'||command==='replay')start();else if(command==='reset')reset()};window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='simulation_control'&&(!d.simulation_id||d.simulation_id===CONFIG.id))window.executeAICommand(d.command,d.parameters||{})});
-    setVariant('hydrolyse',false);setTimeout(manifest,250);
-  </script>
-<script src="/media/simulations/professor-locate.js" defer></script></body>
+<!-- Pont tuteur (shared/tableau/tableau.js, Tableau.protocole) : window.parent.postMessage de `simulation_manifest` au chargement et de `simulation_state` à chaque action ; commandes `simulation_control` : start, set_variant, reset, replay. -->
+<div class="tableau">
+  <header class="titre">
+    <div><small>SVT · 2 BAC · consommation de la matière organique</small><h1 id="h1"></h1><p class="objectif" id="objectif"></p></div>
+    <nav class="onglets" id="onglets" aria-label="Réactions"></nav>
+  </header>
+  <section class="scene">
+    <canvas id="canvas" role="img" aria-label="Cycle ATP–ADP dessiné à la craie : hydrolyse, phosphorylation, couplage"></canvas>
+    <div class="panneau bas-gauche" id="legende"><h3 id="title"></h3><p id="interpretation"></p><div class="metriques"><span id="inputMetric"></span><span id="outputMetric"></span><span id="energyMetric"></span></div></div>
+  </section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start replay">Observer</button>
+    <button class="craie-btn secondaire" id="reset" data-professor-control="reset">Recommencer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+    <span class="lecture" id="statusBadge">Prêt</span>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { Craie, ecrire, bulle, onglets, protocole } = window.Tableau;
+  const $ = id => document.getElementById(id);
+  const CONFIG = { id: 'svt_ch1_atp_adp', variants: [{ id: 'hydrolyse', label: 'Hydrolyse de l’ATP' }, { id: 'phosphorylation', label: 'Phosphorylation de l’ADP' }, { id: 'couplage', label: 'Couplage énergétique' }], objectives: ['Expliquer que l’ATP transfère temporairement l’énergie entre réactions libératrices et activités consommatrices.'], commands: ['start', 'set_variant', 'reset', 'replay'] };
+  const content = {
+    hydrolyse: { title: 'Hydrolyse de l’ATP', text: 'Le phosphate terminal est détaché. L’énergie transférée peut alimenter un travail cellulaire.', input: 'Entrée : ATP + H₂O', output: 'Sortie : ADP + Pᵢ', energy: 'Transfert d’énergie : vers le travail', equation: 'ATP + H₂O → ADP + Pᵢ + énergie' },
+    phosphorylation: { title: 'Phosphorylation de l’ADP', text: 'Une réaction libératrice d’énergie permet de reformer l’ATP à partir d’ADP et de phosphate inorganique.', input: 'Entrée : ADP + Pᵢ', output: 'Sortie : ATP + H₂O', energy: 'Énergie fournie : respiration/fermentation', equation: 'ADP + Pᵢ + énergie → ATP + H₂O' },
+    couplage: { title: 'Couplage énergétique', text: 'L’ATP n’est pas une réserve durable : il est continuellement consommé puis régénéré.', input: 'Matière organique → énergie', output: 'ATP → travail cellulaire', energy: 'Cycle rapide ATP ⇄ ADP', equation: 'respiration → ATP → travail, puis ADP + Pᵢ → ATP' },
+  };
+  const state = { variant: 'hydrolyse', simulationStatus: 'idle', variantsCompleted: [], ouvert: performance.now(), anim: null, dirty: true };
+  const pont = protocole({ id: CONFIG.id, commandes: CONFIG.commands, config: CONFIG, executer,
+    etat: () => ({ simulation_status: state.simulationStatus, current_variant: state.variant, variants_completed: state.variantsCompleted, observation: content[state.variant].text, scientific_guardrail: 'L’ATP est un intermédiaire énergétique renouvelé, pas une réserve à long terme.' }),
+    progression: () => state.variantsCompleted.length / CONFIG.variants.length,
+    texte: 'Cycle ATP ADP dessiné au tableau : hydrolyse, phosphorylation et couplage énergétique.' });
+  const emit = extra => pont.emettre(extra);
+  const redraw = () => { state.dirty = true; };
+
+  function setVariant(id, report = true) {
+    if (!content[id]) return;
+    state.variant = id; state.simulationStatus = 'idle'; state.anim = null;
+    onglets($('onglets'), CONFIG.variants, id, v => setVariant(v), new Set(state.variantsCompleted));
+    const c = content[id];
+    ecrire($('h1'), c.title); ecrire($('title'), c.title); ecrire($('interpretation'), c.text, { vitesse: 50 });
+    $('inputMetric').textContent = c.input; $('outputMetric').textContent = c.output; $('energyMetric').textContent = c.energy;
+    $('statusBadge').textContent = 'Prêt'; bulle($('feedback'), 'Observe la réaction, puis explique-la au tuteur.');
+    redraw();
+    if (report) { pont.noter('set_variant', { variant: id }); emit(); }
+  }
+  function start() {
+    state.simulationStatus = 'running'; $('statusBadge').textContent = 'Observation…';
+    const duree = state.variant === 'couplage' ? 2600 : 1600;
+    state.anim = { t0: performance.now(), duree };
+    pont.noter('start', { variant: state.variant }); emit(); redraw();
+    setTimeout(finish, duree + 100);
+  }
+  function finish() {
+    if (state.simulationStatus !== 'running') return;
+    state.simulationStatus = 'finished';
+    if (!state.variantsCompleted.includes(state.variant)) state.variantsCompleted.push(state.variant);
+    onglets($('onglets'), CONFIG.variants, state.variant, v => setVariant(v), new Set(state.variantsCompleted));
+    $('statusBadge').textContent = 'Terminé'; bulle($('feedback'), content[state.variant].equation, 'good');
+    pont.noter('finish', { variant: state.variant }); emit(); redraw();
+  }
+  function reset() { state.simulationStatus = 'idle'; state.anim = null; $('statusBadge').textContent = 'Prêt'; bulle($('feedback'), 'Nouvel essai.'); pont.noter('reset'); redraw(); emit(); }
+  function executer(command, p) { if (command === 'set_variant') setVariant(p.variant_id || p.variant); else if (command === 'start' || command === 'replay') start(); else if (command === 'reset') reset(); }
+
+  // ── Dessin à la craie (repère logique 820 × 400) ──────────────────────────
+  const craie = new Craie($('canvas'), { onresize: redraw });
+  const ease = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  function draw() {
+    const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
+    craie.debut(3, (performance.now() - state.ouvert) / 1000);
+    const c = craie.ctx, s = Math.min(W / 820, H / 400); c.translate((W - 820 * s) / 2, (H - 400 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 11;
+    const v = state.variant, raw = state.anim ? Math.min(1, (performance.now() - state.anim.t0) / state.anim.duree) : 0;
+    // Couplage : hydrolyse pendant la première moitié, régénération pendant la seconde.
+    let detach = 0, join = 0, energie = 0, travail = 0;
+    if (v === 'hydrolyse') { detach = ease(raw); energie = raw; travail = raw; }
+    else if (v === 'phosphorylation') { join = ease(raw); energie = raw; detach = 1 - join; }
+    else { const a = Math.min(1, raw * 2), b = Math.max(0, raw * 2 - 1); detach = ease(a) * (1 - ease(b)); energie = a; travail = a; join = b; }
+    const fini = state.simulationStatus === 'finished';
+    const piLoin = v === 'phosphorylation' ? 1 - join : detach; // 0 = lié, 1 = détaché
+    // Molécule
+    craie.texte(v === 'phosphorylation' && !fini ? 'ADP + Pᵢ' : fini && v === 'couplage' ? 'ATP régénéré' : fini && v === 'hydrolyse' ? 'ADP + Pᵢ' : 'ATP', 250, 50, { taille: 26, align: 'center' });
+    craie.rect(60, 100, 150, 76, { couleur: 'bleu', arrondi: 18, fond: 'bleu' }).texte('Adénosine', 135, 146, { couleur: 'bleu', taille: 22, align: 'center' });
+    craie.ligne(210, 138, 226, 138, { couleur: 'jaune', largeur: 4 });
+    craie.cercle(260, 138, 32, { couleur: 'cyan', fond: 'cyan' }).texte('P', 260, 147, { couleur: 'cyan', taille: 24, align: 'center' });
+    craie.ligne(292, 138, 320, 138, { couleur: 'jaune', largeur: 4 });
+    craie.cercle(352, 138, 32, { couleur: 'cyan', fond: 'cyan' }).texte('P', 352, 147, { couleur: 'cyan', taille: 24, align: 'center' });
+    craie.texte('liaisons riches en énergie', 300, 200, { couleur: 'jaune', taille: 15, align: 'center' });
+    craie.pause(.2);
+    // Travail cellulaire (machine) et cycle
+    craie.rect(625, 92, 125, 96, { couleur: 'vert', arrondi: 20, fond: 'vert' }).cercle(688, 140, 24, { couleur: 'vert', largeur: 3 });
+    [[688, 105, 688, 118], [688, 162, 688, 175], [653, 140, 666, 140], [710, 140, 723, 140]].forEach(l => craie.ligne(...l, { couleur: 'vert', largeur: 3 }));
+    craie.texte('travail cellulaire', 688, 221, { couleur: 'vert', taille: 17, align: 'center' });
+    craie.texte('(contraction, transport, synthèses…)', 688, 243, { couleur: 'faible', taille: 13, align: 'center' });
+    craie.courbe(u => [250 + (580 - 250) * u, 215 + 55 * Math.sin(Math.PI * u)], 40, { couleur: 'cyan', largeur: 2.2 });
+    craie.fleche(268, 232, 252, 218, { couleur: 'cyan', largeur: 2.2 });
+    craie.texte(v === 'phosphorylation' ? 'respiration / fermentation → énergie → ADP + Pᵢ → ATP' : 'l’ATP est rapidement renouvelé : ATP ⇄ ADP + Pᵢ', 470, 300, { couleur: 'cyan', taille: 17, align: 'center', max: 470 });
+    // Parties animées : phosphate terminal, éclair d'énergie, machine qui travaille
+    craie.direct(() => {
+      const px = 445 + 55 * piLoin, py = 138 + 125 * piLoin;
+      if (piLoin < .55) craie.ligne(384, 138, 413, 138, { couleur: 'jaune', largeur: 4, pointille: piLoin > .1 ? [8, 6] : null, alpha: 1 - piLoin });
+      craie.cercle(px, py, 32, { couleur: 'orange', fond: 'orange', alpha: 1 - .5 * piLoin }).texte('P', px, py + 9, { couleur: 'orange', taille: 24, align: 'center' });
+      if (piLoin > .5) craie.texte('Pᵢ', px + 40, py + 8, { couleur: 'orange', taille: 18 });
+      if (energie > 0 && energie < 1) {
+        const k = energie, ex = v === 'phosphorylation' ? 560 - 120 * k : 480 + 150 * k, ey = v === 'phosphorylation' ? 300 - 150 * k : 120 + 20 * Math.sin(k * 6);
+        craie.trait([[ex, ey - 30], [ex + 24, ey - 30], [ex + 10, ey - 6], [ex + 30, ey - 6], [ex - 4, ey + 40], [ex + 8, ey + 6], [ex - 10, ey + 6]], { couleur: 'jaune', largeur: 2.6, ferme: true, alpha: .95 });
+        craie.texte('énergie', ex + 40, ey + 10, { couleur: 'jaune', taille: 16 });
+      }
+      if (travail > 0 && travail < 1) { const a = Math.sin(travail * Math.PI * 4); craie.ligne(688 + 18 * Math.cos(a), 140 + 18 * Math.sin(a), 688 - 18 * Math.cos(a), 140 - 18 * Math.sin(a), { couleur: 'vert', largeur: 3 }); }
+      else craie.ligne(670, 140, 706, 140, { couleur: 'vert', largeur: 3 });
+    });
+    const complet = craie.fin(); return complet && (!state.anim || raw >= 1);
+  }
+  function frame() { if (state.dirty || state.anim) state.dirty = !draw(); requestAnimationFrame(frame); }
+  $('run').onclick = start; $('reset').onclick = reset;
+  $('onglets').addEventListener('click', e => { const b = e.target.closest('[data-variant]'); if (b) setVariant(b.dataset.variant); });
+  setVariant('hydrolyse', false); ecrire($('objectif'), 'Objectif : relier l’hydrolyse de l’ATP au travail cellulaire et sa phosphorylation à une réaction libératrice d’énergie.', { vitesse: 70 });
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body>
 </html>

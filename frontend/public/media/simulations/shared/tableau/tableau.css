@@ -1,0 +1,149 @@
+/*
+ * Tableau — style commun des laboratoires « dessinés au tableau ».
+ * Fond vert sombre quadrillé, écriture à la craie (Patrick Hand), peu de boutons.
+ * Même palette que le tableau du cours (LiveBoard) : blanc, cyan, jaune, vert, violet, orange, bleu, rouge, rose.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Caveat:wght@500;700&display=swap');
+
+:root {
+  color-scheme: dark;
+  --tableau: #0f1d18;
+  --tableau-sombre: #0a1410;
+  --grille: rgba(255, 255, 255, .045);
+  --craie: #e2e8f0;
+  --craie-faible: rgba(226, 232, 240, .55);
+  --craie-tres-faible: rgba(226, 232, 240, .22);
+  --cyan: #22d3ee; --jaune: #facc15; --vert: #4ade80; --violet: #c084fc;
+  --orange: #fb923c; --bleu: #60a5fa; --rouge: #f87171; --rose: #f472b6;
+  --police: 'Patrick Hand', 'Caveat', 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', cursive;
+  --taille: clamp(15px, 1.55vw, 20px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  font-family: var(--police); font-size: var(--taille); line-height: 1.25; color: var(--craie);
+  background:
+    linear-gradient(var(--grille) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, var(--grille) 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(ellipse at 50% 35%, #13241e 0, var(--tableau) 55%, var(--tableau-sombre) 100%);
+  display: flex; flex-direction: column;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, p { margin: 0; font-weight: 400; }
+
+/* ── Structure : titre, scène, barre ─────────────────────────────── */
+.tableau { height: 100%; display: flex; flex-direction: column; padding: 1.2vh 1.4vw; gap: .6vh; min-height: 0; }
+.titre { display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; flex: 0 0 auto; }
+.titre small { display: block; font-size: .72em; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+.titre h1 { font-size: 1.45em; line-height: 1.1; color: var(--craie); text-shadow: 0 0 1px rgba(255, 255, 255, .4); }
+.titre .objectif { font-size: .9em; color: var(--craie-faible); margin-top: .15em; max-width: 60ch; }
+.scene { position: relative; flex: 1 1 auto; min-height: 0; }
+.scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.scene .calque { position: absolute; inset: 0; pointer-events: none; }
+.scene .calque > * { pointer-events: auto; }
+.barre { flex: 0 0 auto; display: flex; align-items: center; flex-wrap: wrap; gap: .45em .7em; }
+.barre .espace { flex: 1 1 auto; }
+
+/* ── Onglets d'expériences (une craie soulignée) ─────────────────── */
+.onglets { display: flex; flex-wrap: wrap; gap: .1em .9em; justify-content: flex-end; max-width: 55%; }
+.onglet { background: none; border: 0; padding: .1em .15em; color: var(--craie-faible); font-size: .9em; border-bottom: 2px solid transparent; border-radius: 0; white-space: nowrap; }
+.onglet:hover { color: var(--craie); }
+.onglet[aria-pressed="true"] { color: var(--jaune); border-bottom-color: var(--jaune); }
+.onglet.fait::before { content: '✓ '; color: var(--vert); }
+select.craie-select { background: transparent; border: 0; border-bottom: 2px solid var(--jaune); color: var(--jaune); padding: .1em .3em; max-width: 100%; }
+select.craie-select option { color: #111; }
+
+/* ── Bouton à la craie : un cadre tracé à main levée ─────────────── */
+.craie-btn {
+  position: relative; background: transparent; color: var(--craie);
+  border: 2px solid currentColor; padding: .28em 1em; font-size: 1em; letter-spacing: .02em; white-space: nowrap;
+  border-radius: 14px 10px 13px 9px / 9px 13px 10px 14px;
+  transition: transform .15s, box-shadow .15s, opacity .15s;
+  text-shadow: 0 0 1px rgba(255, 255, 255, .35);
+}
+.craie-btn:hover:not(:disabled) { transform: translateY(-1px) rotate(-.4deg); box-shadow: 0 0 0 2px rgba(255, 255, 255, .07), 0 0 18px rgba(255, 255, 255, .07); }
+.craie-btn:active:not(:disabled), .craie-btn.presse { transform: scale(.95); box-shadow: 0 0 0 3px rgba(255, 255, 255, .12), 0 0 24px currentColor; }
+.craie-btn:disabled { opacity: .3; cursor: default; }
+.craie-btn:focus-visible { outline: 2px dashed var(--jaune); outline-offset: 3px; }
+.craie-btn.principal { color: var(--vert); }
+.craie-btn.attention { color: var(--jaune); }
+.craie-btn.secondaire { color: var(--craie-faible); border-width: 1.5px; font-size: .9em; padding: .2em .8em; }
+.craie-btn[aria-pressed="true"] { background: rgba(255, 255, 255, .08); }
+.craie-btn[hidden] { display: none; }
+.craie-btn.presse { animation: craiePresse .45s ease-out; }
+@keyframes craiePresse { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 14px transparent; } }
+
+/* ── Lectures, formules et bulles écrites à la craie ─────────────── */
+.lecture { font-variant-numeric: tabular-nums; color: var(--craie-faible); white-space: nowrap; }
+.lecture b { font-weight: 400; color: var(--jaune); }
+.formule { color: var(--jaune); font-size: 1.1em; }
+.bulle {
+  flex: 1 1 14em; min-width: 0; min-height: 1.3em; color: var(--jaune); font-size: .95em; line-height: 1.2;
+  padding-left: .8em; border-left: 2px solid var(--craie-tres-faible);
+}
+.bulle[data-kind="bad"], .bulle[data-error="true"] { color: var(--rouge); }
+.bulle[data-kind="good"] { color: var(--vert); }
+.bulle:empty { border-color: transparent; }
+
+/* ── Saisies : une ligne pointillée sous la valeur ───────────────── */
+.craie-champ { display: inline-flex; align-items: baseline; gap: .35em; color: var(--violet); }
+.craie-champ input, .craie-champ select { width: 5.5em; background: transparent; border: 0; border-bottom: 2px dashed var(--craie-faible); color: var(--craie); padding: 0 .2em; text-align: center; font-size: 1.05em; }
+.craie-champ input:focus, .craie-champ select:focus { outline: none; border-bottom-color: var(--jaune); }
+.craie-champ input::placeholder { color: var(--craie-tres-faible); }
+.craie-champ input[type=number] { -moz-appearance: textfield; }
+.craie-champ input::-webkit-outer-spin-button, .craie-champ input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.choix { display: flex; flex-direction: column; gap: .25em; }
+.choix label { display: flex; gap: .5em; align-items: flex-start; cursor: pointer; color: var(--craie); }
+.choix input { appearance: none; width: 1em; height: 1em; margin-top: .2em; flex: none; border: 2px solid var(--craie-faible); border-radius: 50% 45% 50% 48%; }
+.choix input:checked { background: radial-gradient(circle, var(--jaune) 45%, transparent 50%); border-color: var(--jaune); }
+.choix label:hover input { border-color: var(--craie); }
+
+/* ── Curseur : trait de craie et point ───────────────────────────── */
+.curseur { display: flex; flex-direction: column; gap: .1em; min-width: 9em; }
+.curseur span { display: flex; justify-content: space-between; gap: .6em; color: var(--craie-faible); font-size: .9em; }
+.curseur span b { font-weight: 400; color: var(--jaune); font-variant-numeric: tabular-nums; }
+.curseur input[type=range] { appearance: none; width: 100%; height: 1.2em; background: transparent; margin: 0; cursor: pointer; }
+.curseur input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--craie-faible); border-radius: 2px; }
+.curseur input[type=range]::-moz-range-track { height: 2px; background: var(--craie-faible); border-radius: 2px; }
+.curseur input[type=range]::-webkit-slider-thumb { appearance: none; width: 1em; height: 1em; margin-top: calc(-.5em + 1px); border-radius: 50% 45% 50% 48%; background: var(--jaune); box-shadow: 0 0 8px var(--jaune); }
+.curseur input[type=range]::-moz-range-thumb { width: 1em; height: 1em; border: 0; border-radius: 50% 45% 50% 48%; background: var(--jaune); box-shadow: 0 0 8px var(--jaune); }
+.curseur input[type=range]:focus-visible { outline: 2px dashed var(--jaune); outline-offset: 2px; }
+
+/* ── Panneau posé sur la scène (question, réponse, note) ─────────── */
+.panneau {
+  position: absolute; max-width: min(46%, 26em); padding: .4em .8em; font-size: .95em;
+  background: rgba(10, 20, 16, .72); border: 1.5px solid var(--craie-tres-faible); border-radius: 12px 9px 11px 8px / 8px 11px 9px 12px;
+  backdrop-filter: blur(2px);
+}
+.panneau h3 { color: var(--cyan); font-size: 1em; margin-bottom: .2em; }
+.panneau.haut-droite { top: .5em; right: .5em; }
+.panneau.bas-gauche { bottom: .5em; left: .5em; }
+.panneau.bas-droite { bottom: .5em; right: .5em; }
+.panneau.haut-gauche { top: .5em; left: .5em; }
+.panneau p { color: var(--craie-faible); font-size: .9em; }
+.etiquette { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; text-shadow: 0 0 2px #000; }
+.ecrit { animation: craieEcrit .5s ease-out both; }
+@keyframes craieEcrit { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+.legende { color: var(--craie-faible); font-size: .85em; }
+.lecture-table { border-collapse: collapse; font-size: .9em; font-variant-numeric: tabular-nums; }
+.lecture-table th, .lecture-table td { padding: .05em .5em; text-align: right; border-bottom: 1px dashed var(--craie-tres-faible); }
+.lecture-table th { font-weight: 400; color: var(--craie-faible); }
+
+/* ── Petits écrans ───────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  :root { --taille: 14px; }
+  .tableau { padding: 1vh 2vw; }
+  .titre { flex-direction: column; gap: .2em; }
+  .titre .objectif { display: none; }
+  .onglets { max-width: 100%; justify-content: flex-start; }
+  .panneau { max-width: 60%; font-size: .9em; }
+  .barre { gap: .35em .5em; }
+  .craie-btn { padding: .22em .7em; }
+}
+@media (max-height: 460px) { .titre h1 { font-size: 1.15em; } .titre .objectif { display: none; } }
+@media (prefers-reduced-motion: reduce) { .craie-btn, .ecrit { animation: none; transition: none; } }
+
+/* ── Écriture en direct : un bout de craie clignote au bout du texte ── */
+.en-cours::after { content: '▍'; color: var(--craie-faible); animation: craieClignote .5s steps(2) infinite; }
+@keyframes craieClignote { to { opacity: 0; } }

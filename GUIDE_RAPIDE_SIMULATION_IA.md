@@ -4,7 +4,7 @@
 
 ### 1. Copier le template
 ```bash
-cp frontend/public/media/simulations/TEMPLATE_SIMULATION.html \
+cp frontend/public/media/simulations/TEMPLATE_TABLEAU.html \
    frontend/public/media/simulations/votre_matiere/votre_simulation.html
 ```
 
@@ -113,5 +113,5 @@ function executeAICommand(command, params) {
 ## Ressources
 
 - 📄 Protocole complet: `SIMULATION_AI_CONTROL_PROTOCOL.md`
-- 📝 Template: `frontend/public/media/simulations/TEMPLATE_SIMULATION.html`
+- 📝 Template: `frontend/public/media/simulations/TEMPLATE_TABLEAU.html` (style tableau, écriture en direct — voir `docs/design/labos-au-tableau.md`)
 - 🔬 Exemple: `frontend/public/media/simulations/svt/.../respiration/simulation.html`

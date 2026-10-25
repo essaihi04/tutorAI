@@ -486,14 +486,9 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
   }
 
   const simulationHtml = media.type === 'simulation' ? buildSimulationHtml(cleanUrl) : null;
-  const usesNativeSimulationViewport = [
-    '/media/simulations/svt/ch2_information_genetique/expression/',
-    '/media/simulations/svt/ch4_geodynamique_interne/',
-    '/media/simulations/physics/advanced/',
-    '/media/simulations/svt/ch1_consommation_matiere_organique/documents/',
-    '/media/simulations/svt/ch1_consommation_matiere_organique/glycolyse/',
-    '/media/simulations/svt/ch1_consommation_matiere_organique/exercices/ordre-respiration/',
-  ].some((path) => cleanUrl.includes(path));
+  // Les laboratoires du site sont dessinés au tableau (media/simulations/shared/tableau) : ils occupent
+  // l'iframe à sa taille réelle, sans réduction à 68 %, et posent leur propre fond de tableau.
+  const usesNativeSimulationViewport = cleanUrl.includes('/media/simulations/');
   const usesTransparentSimulationSurface = usesNativeSimulationViewport || [
     '/media/simulations/svt/ch1_consommation_matiere_organique/muscle/',
     '/media/simulations/svt/ch1_consommation_matiere_organique/labs/muscle-energie/',

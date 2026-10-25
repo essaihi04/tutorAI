@@ -4,203 +4,74 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Expression génétique 3D — de l’ADN à la protéine</title>
+  <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css">
   <style>
-    :root {
-      --night: #071225;
-      --deep: #0b1d3d;
-      --panel: #f8fafc;
-      --ink: #14213d;
-      --muted: #5e6c84;
-      --line: #dfe6f2;
-      --indigo: #4656dc;
-      --cyan: #41d6c3;
-      --orange: #ff974d;
-      --rose: #f36f91;
-      --green: #1a9b6f;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100vw; height: 100vh; overflow: hidden; }
-    body {
-      font-family: Inter, "Segoe UI", system-ui, sans-serif;
-      color: var(--ink);
-      background: var(--night);
-    }
-    button { font: inherit; }
-    button:focus-visible { outline: 3px solid #7cf5e7; outline-offset: 2px; }
-
-    .app { width: 100%; height: 100%; display: flex; flex-direction: column; }
-    .topbar {
-      flex: 0 0 auto;
-      min-height: 70px;
-      padding: 10px 16px;
-      display: grid;
-      grid-template-columns: minmax(230px, 1fr) minmax(330px, 1.35fr) minmax(150px, .55fr);
-      gap: 16px;
-      align-items: center;
-      color: #fff;
-      background: linear-gradient(90deg, #112454 0%, #1d3271 55%, #102350 100%);
-      border-bottom: 1px solid #ffffff1f;
-    }
-    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-    .brand-icon {
-      flex: 0 0 auto; width: 46px; height: 46px; border-radius: 15px;
-      display: grid; place-items: center; font-size: 25px;
-      background: linear-gradient(145deg, #78f4df, #36b9d7);
-      color: #102350; box-shadow: 0 9px 24px #0003;
-    }
-    .eyebrow { color: #aebdf7; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
-    .brand h1 { margin-top: 2px; font-size: clamp(15px, 1.65vw, 23px); line-height: 1.08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .phase-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-    .phase {
-      position: relative; overflow: hidden; border-radius: 11px; padding: 7px 8px;
-      border: 1px solid #ffffff24; background: #ffffff0e; color: #aeb9dc;
-      font-size: clamp(9px, .72vw, 11px); font-weight: 850; text-align: center;
-    }
-    .phase.active { color: #fff; border-color: #7cf5e7aa; background: #44d7c22b; box-shadow: inset 0 -3px #53e1ce; }
-    .phase.done { color: #bcf6dd; background: #18a16d25; }
-    .phase.done::before { content: "✓ "; }
-    .progress-box { min-width: 0; }
-    .progress-copy { display: flex; justify-content: space-between; color: #cbd6fb; font-size: 10px; font-weight: 850; margin-bottom: 5px; }
-    .progress-track { height: 8px; overflow: hidden; border-radius: 99px; background: #ffffff20; }
-    .progress-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #55dec9, #ffb358); transition: width .35s ease; }
-
-    main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 70fr) minmax(300px, 30fr); }
-    .stage-wrap { min-width: 0; min-height: 0; position: relative; overflow: hidden; background: radial-gradient(circle at 35% 40%, #183b72, #071225 72%); }
+    /* Expression génétique 3D — habillage « tableau » ; la scène three.js reste intacte. */
+    .app { height: 100%; display: flex; flex-direction: column; padding: 1vh 1.2vw; gap: .5vh; }
+    .topbar { flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; }
+    .brand { display: flex; align-items: center; gap: .6em; min-width: 0; }
+    .brand-icon { display: none; }
+    .brand .eyebrow { display: block; font-size: .72em; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+    .brand h1 { font-size: 1.45em; line-height: 1.1; text-shadow: 0 0 1px rgba(255,255,255,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .phase-track { display: flex; flex-wrap: wrap; gap: .1em .9em; justify-content: flex-end; }
+    .phase { color: var(--craie-faible); font-size: .9em; padding: .1em .15em; border-bottom: 2px solid transparent; white-space: nowrap; }
+    .phase.active { color: var(--jaune); border-bottom-color: var(--jaune); }
+    .phase.done { color: var(--vert); } .phase.done::before { content: "✓ "; }
+    .progress-box { display: none; }
+    main { flex: 1 1 auto; min-height: 0; position: relative; }
+    .stage-wrap { position: absolute; inset: 0; overflow: hidden; border-radius: 14px 10px 13px 9px / 9px 13px 10px 14px; border: 1.5px solid var(--craie-tres-faible); }
     #stage { position: absolute; inset: 0; touch-action: none; cursor: grab; }
     #stage:active { cursor: grabbing; }
     #stage canvas { width: 100%; height: 100%; display: block; }
     .stage-vignette { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 90px #020817aa; }
-    .scene-caption {
-      position: absolute; left: 14px; top: 13px; max-width: min(56%, 530px); pointer-events: none;
-      border: 1px solid #ffffff28; background: #07152dcc; color: #fff; border-radius: 14px;
-      padding: 9px 12px; box-shadow: 0 10px 28px #0004; backdrop-filter: blur(8px);
-    }
-    .scene-caption small { display: block; color: #71e7d6; font-size: 9px; font-weight: 950; letter-spacing: .11em; }
-    .scene-caption strong { display: block; margin-top: 2px; font-size: clamp(12px, 1.2vw, 17px); }
-    .scene-caption span { display: block; margin-top: 2px; color: #c9d4f5; font-size: clamp(9px, .75vw, 11px); line-height: 1.3; }
-    .scene-caption em {
-      display: inline-flex; margin-top: 7px; padding: 5px 8px; border: 1px solid #ffcf7b66;
-      border-radius: 999px; background: #ffad4d1f; color: #ffd99e;
-      font-size: clamp(8px, .68vw, 10px); font-style: normal; font-weight: 900; letter-spacing: .04em;
-    }
-    .camera-help {
-      position: absolute; left: 14px; bottom: 13px; pointer-events: none;
-      border: 1px solid #ffffff24; background: #07152dbd; color: #dce6ff;
-      border-radius: 999px; padding: 7px 10px; font-size: 10px; font-weight: 800;
-    }
-    .environment-tags { position: absolute; right: 13px; top: 13px; display: flex; gap: 6px; pointer-events: none; }
-    .environment-tags span { border: 1px solid #ffffff2b; background: #091a39c9; color: #dce6ff; padding: 6px 9px; border-radius: 999px; font-size: 9px; font-weight: 900; }
-    .environment-tags .active { border-color: #62e5d0; color: #71efdc; }
-    .loading, .fallback { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; text-align: center; padding: 30px; color: #e8edff; background: radial-gradient(circle, #173b72, #071225); }
+    .scene-caption { position: absolute; left: .6em; top: .6em; max-width: min(56%, 30em); pointer-events: none; background: rgba(10,20,16,.72); border: 1.5px solid var(--craie-tres-faible); border-radius: 12px 9px 11px 8px / 8px 11px 9px 12px; padding: .4em .8em; backdrop-filter: blur(2px); }
+    .scene-caption small { display: block; color: var(--cyan); font-size: .7em; letter-spacing: .1em; }
+    .scene-caption strong { display: block; font-weight: 400; color: var(--jaune); font-size: 1.1em; }
+    .scene-caption span { display: block; color: var(--craie); font-size: .9em; line-height: 1.25; }
+    .scene-caption em { display: block; margin-top: .2em; color: var(--craie-faible); font-style: normal; font-size: .75em; letter-spacing: .04em; }
+    .camera-help { position: absolute; left: .6em; bottom: .6em; pointer-events: none; color: var(--craie-faible); font-size: .8em; }
+    .environment-tags { position: absolute; right: .6em; top: .6em; display: flex; gap: .8em; pointer-events: none; }
+    .environment-tags span { color: var(--craie-tres-faible); font-size: .8em; letter-spacing: .08em; border-bottom: 2px solid transparent; }
+    .environment-tags .active { color: var(--vert); border-bottom-color: var(--vert); }
+    .loading, .fallback { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; text-align: center; padding: 30px; color: var(--craie); background: var(--tableau); }
     .loading.hidden, .fallback.hidden { display: none; }
-    .loader { width: 50px; height: 50px; margin: 0 auto 14px; border: 5px solid #ffffff25; border-top-color: #65e9d4; border-radius: 50%; animation: spin .8s linear infinite; }
+    .loader { width: 50px; height: 50px; margin: 0 auto 14px; border: 3px solid var(--craie-tres-faible); border-top-color: var(--jaune); border-radius: 50%; animation: spin .8s linear infinite; }
     .fallback img { display: block; width: min(75%, 760px); max-height: 68%; object-fit: contain; margin: 0 auto 14px; border-radius: 18px; }
-
-    .lesson-panel {
-      min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 9px;
-      padding: 12px; background: var(--panel); box-shadow: -14px 0 40px #0003; overflow: hidden;
-    }
-    .lesson-head { flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-    .lesson-kicker { color: var(--indigo); font-size: 10px; font-weight: 950; letter-spacing: .1em; }
-    .lesson-head h2 { margin-top: 2px; font-size: clamp(16px, 1.35vw, 21px); line-height: 1.1; }
-    .status { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #e9edff; color: #3040af; font-size: 9px; font-weight: 900; }
-    .status.running { color: #087352; background: #dcfaef; }
-    .status.finished { color: #83500d; background: #fff0ca; }
-
-    .controls { flex: 0 0 auto; display: grid; grid-template-columns: 1.15fr .85fr .95fr; gap: 7px; }
-    .control {
-      min-width: 0; border: 0; border-radius: 11px; padding: 9px 7px; cursor: pointer;
-      font-size: clamp(10px, .8vw, 12px); font-weight: 900; color: #32405b; background: #e9edf5;
-      transition: transform .15s, filter .15s;
-    }
-    .control:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.03); }
-    .control.primary { color: #fff; background: linear-gradient(135deg, #5364ed, #2839b8); box-shadow: 0 7px 18px #3448c932; }
-    .control.restart { color: #79520a; background: #fff0c8; }
-    .control:disabled { opacity: .38; cursor: not-allowed; }
-
-    .step-card { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 15px; padding: 10px; }
-    .step-top { display: flex; justify-content: space-between; align-items: center; color: #77849a; font-size: 9px; font-weight: 900; }
-    .step-top b { color: var(--indigo); letter-spacing: .07em; }
-    .step-card h3 { margin-top: 5px; font-size: clamp(13px, 1.05vw, 16px); line-height: 1.15; }
-    .step-card p { margin-top: 5px; color: var(--muted); font-size: clamp(10px, .75vw, 12px); line-height: 1.36; }
-    .step-progress { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: #e6eaf2; }
-    .step-progress div { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--indigo)); transition: width .3s ease; }
-
-    .event-card { flex: 0 0 auto; display: grid; grid-template-columns: 44px 1fr; gap: 9px; align-items: center; border: 1px solid #cfd8ef; background: linear-gradient(135deg, #eef2ff, #f9fbff); border-radius: 14px; padding: 8px 9px; }
-    .event-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: #fff; font-size: 21px; background: linear-gradient(145deg, #52d9c4, #3f56d7); box-shadow: inset 0 0 16px #fff3; }
-    .event-card small { display: block; color: #65718a; font-size: 8px; font-weight: 950; letter-spacing: .08em; }
-    .event-card strong { display: block; margin-top: 2px; color: #24336d; font-size: clamp(10px, .8vw, 12px); line-height: 1.25; }
-
-    .molecule-state { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); background: #f1f4f9; border-radius: 15px; padding: 9px; overflow: hidden; }
-    .state-title { flex: 0 0 auto; display: flex; justify-content: space-between; color: #6e7a90; font-size: 9px; font-weight: 900; }
-    .sequence-row { flex: 0 0 auto; display: grid; grid-template-columns: 64px 1fr; gap: 7px; align-items: center; padding: 6px 7px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
-    .sequence-row b { color: #6d788e; font-size: 8px; text-transform: uppercase; }
-    .sequence { min-width: 0; color: #2c399b; font-family: "Cascadia Code", Consolas, monospace; font-size: clamp(9px, .67vw, 11px); font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sequence.empty { color: #a0a9b8; font-family: inherit; font-weight: 700; }
-    .base-legend { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-content: start; }
-    .base-chip { min-width: 0; display: flex; align-items: center; gap: 6px; border-radius: 9px; padding: 5px 6px; background: #fff; color: #526079; font-size: 9px; font-weight: 800; }
-    .base-chip i { flex: 0 0 auto; width: 17px; height: 17px; display: grid; place-items: center; border-radius: 50%; color: #fff; font-style: normal; font-size: 9px; box-shadow: inset 0 -2px #0002; }
-    .legend-line { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 5px; }
-    .legend-line span { padding: 4px 6px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #637089; font-size: 8px; font-weight: 850; }
-    .legend-line i { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; }
-    .ai-guide { position: fixed; z-index: 20; left: 50%; top: 82px; transform: translate(-50%, -12px); max-width: 70vw; opacity: 0; pointer-events: none; transition: .25s; padding: 9px 12px; border: 2px solid #55ddc9; border-radius: 13px; background: #fff; color: #172344; box-shadow: 0 15px 40px #0004; font-size: 11px; font-weight: 850; }
-    .ai-guide.show { opacity: 1; transform: translate(-50%, 0); }
-
+    /* Panneau pédagogique posé sur la scène, en bas à droite ; les commandes dans la barre du bas. */
+    .lesson-panel { position: absolute; right: .6em; bottom: .6em; width: min(38%, 24em); max-height: 62%; overflow: hidden; display: flex; flex-direction: column; gap: .3em; padding: .4em .8em; background: rgba(10,20,16,.72); border: 1.5px solid var(--craie-tres-faible); border-radius: 12px 9px 11px 8px / 8px 11px 9px 12px; backdrop-filter: blur(2px); }
+    .lesson-head { display: flex; justify-content: space-between; gap: .5em; align-items: baseline; }
+    .lesson-kicker { color: var(--cyan); font-size: .7em; letter-spacing: .1em; }
+    .lesson-head h2 { font-size: 1.05em; color: var(--jaune); }
+    .status { color: var(--craie-faible); font-size: .8em; white-space: nowrap; }
+    .status.running { color: var(--vert); } .status.finished { color: var(--jaune); }
+    .controls { display: none; }
+    .step-card .step-top { display: flex; justify-content: space-between; color: var(--craie-faible); font-size: .75em; letter-spacing: .06em; }
+    .step-card h3 { font-size: 1em; color: var(--craie); }
+    .step-card p { color: var(--craie-faible); font-size: .88em; line-height: 1.3; }
+    .step-progress { height: 2px; margin-top: .3em; background: var(--craie-tres-faible); }
+    .step-progress div { width: 0; height: 100%; background: var(--jaune); transition: width .3s ease; }
+    .event-card { display: flex; gap: .5em; align-items: center; border-top: 1px dashed var(--craie-tres-faible); padding-top: .3em; }
+    .event-icon { font-size: 1.2em; }
+    .event-card small { display: block; color: var(--craie-faible); font-size: .65em; letter-spacing: .08em; }
+    .event-card strong { display: block; font-weight: 400; color: var(--violet); font-size: .9em; line-height: 1.25; }
+    .molecule-state { display: flex; flex-direction: column; gap: .2em; border-top: 1px dashed var(--craie-tres-faible); padding-top: .3em; min-height: 0; overflow: hidden; }
+    .state-title { display: flex; justify-content: space-between; color: var(--craie-faible); font-size: .7em; letter-spacing: .08em; }
+    .sequence-row { display: grid; grid-template-columns: 5.5em 1fr; gap: .4em; align-items: baseline; }
+    .sequence-row b { font-weight: 400; color: var(--craie-faible); font-size: .75em; text-transform: uppercase; }
+    .sequence { min-width: 0; color: var(--cyan); font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .04em; }
+    .sequence.empty { color: var(--craie-tres-faible); }
+    .base-legend, .legend-line { display: none; }
+    .barre-expression { flex: 0 0 auto; display: flex; align-items: center; flex-wrap: wrap; gap: .45em .7em; }
+    .ai-guide { flex: 1 1 14em; min-width: 0; min-height: 1.3em; color: var(--jaune); font-size: .95em; padding-left: .8em; border-left: 2px solid var(--craie-tres-faible); opacity: 0; transition: opacity .25s; }
+    .ai-guide.show { opacity: 1; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 800px) {
-      .topbar { min-height: 64px; grid-template-columns: 1fr auto; padding: 8px 10px; }
       .phase-track { display: none; }
-      .progress-box { min-width: 110px; }
-      main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 58fr) minmax(245px, 42fr); }
-      .lesson-panel { padding: 8px 10px; gap: 6px; }
-      .molecule-state { display: none; }
-      .scene-caption { max-width: 72%; }
-      .camera-help { font-size: 8px; }
+      .lesson-panel { width: 55%; max-height: 55%; }
+      .molecule-state, .camera-help { display: none; }
+      .scene-caption { max-width: 60%; }
     }
-    @media (max-height: 620px) and (min-width: 801px) {
-      .topbar { min-height: 54px; padding: 6px 12px; }
-      .brand-icon { width: 39px; height: 39px; border-radius: 12px; font-size: 20px; }
-      .phase { padding: 5px 6px; }
-      .lesson-panel { padding: 7px 9px; gap: 5px; }
-      .lesson-head h2 { font-size: 15px; }
-      .controls .control { padding: 8px 5px; }
-      .step-card { padding: 7px 8px; }
-      .step-card p { max-height: 2.72em; overflow: hidden; }
-      .event-card { grid-template-columns: 34px 1fr; padding: 5px 7px; }
-      .event-icon { width: 32px; height: 32px; font-size: 17px; border-radius: 10px; }
-      .molecule-state { padding: 6px; gap: 4px; }
-      .sequence-row { padding: 4px 6px; }
-      .base-legend, .legend-line { display: none; }
-      .scene-caption { top: 8px; left: 9px; padding: 6px 9px; }
-      .camera-help { left: 9px; bottom: 8px; padding: 5px 8px; }
-    }
-    /* La scène 3D occupe tout l'écran. Le panneau pédagogique reste dans le DOM
-       pour le contrat du tuteur, mais seuls les trois contrôles sont visibles. */
-    .topbar { display: none; }
-    main { position: relative; display: block; width: 100%; height: 100%; }
-    .stage-wrap { width: 100%; height: 100%; }
-    .lesson-panel {
-      position: absolute; z-index: 12; left: 50%; bottom: 14px; width: min(520px, calc(100% - 28px));
-      min-height: 0; padding: 0; overflow: visible; transform: translateX(-50%);
-      background: transparent; box-shadow: none; pointer-events: none;
-    }
-    .lesson-panel > :not(.controls) { display: none; }
-    .controls { width: 100%; pointer-events: auto; }
-    .control {
-      border: 1px solid #ffffff30; color: #e9efff; background: #101f42e8;
-      box-shadow: 0 10px 28px #0005; backdrop-filter: blur(10px);
-    }
-    .control.primary { background: linear-gradient(135deg, #5364edee, #2839b8ee); }
-    .control.restart { color: #ffe2a3; background: #593c13e8; }
-    .camera-help { bottom: 70px; }
-    @media (max-width: 800px) {
-      main { display: block; height: 100%; }
-      .stage-wrap { width: 100%; height: 100%; }
-      .lesson-panel { bottom: 9px; width: calc(100% - 18px); padding: 0; }
-      .scene-caption { max-width: calc(100% - 28px); }
-      .camera-help { bottom: 64px; }
-    }
+    @media (max-height: 620px) { .lesson-panel .step-card p { max-height: 2.72em; overflow: hidden; } .molecule-state { display: none; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
   </style>
 </head>
@@ -209,7 +80,7 @@
     <header class="topbar">
       <div class="brand">
         <div class="brand-icon">🧬</div>
-        <div><div class="eyebrow">LABORATOIRE 3D · SVT</div><h1>Du gène à la protéine</h1></div>
+        <div><span class="eyebrow">SVT · 2 BAC · information génétique · scène 3D</span><h1>Du gène à la protéine</h1></div>
       </div>
       <div class="phase-track" id="phaseTrack">
         <div class="phase active" data-phase="Vue d’ensemble">Vue d’ensemble</div>
@@ -240,7 +111,7 @@
           <span class="status" id="status">Prête</span>
         </div>
 
-        <div class="controls">
+        <div class="controls" hidden>
           <button class="control primary" id="startButton">▶ Démarrer</button>
           <button class="control" id="pauseButton" disabled>Ⅱ Pause</button>
           <button class="control restart" id="restartButton">↻ Relancer</button>
@@ -279,8 +150,15 @@
         </div>
       </aside>
     </main>
+    <footer class="barre-expression">
+      <button class="craie-btn principal" id="playButton" data-professor-control="start">Démarrer</button>
+      <button class="craie-btn secondaire" id="pauseChalk" data-professor-control="pause" disabled>Pause</button>
+      <button class="craie-btn secondaire" id="stepPrev" data-professor-control="previous">← Précédent</button>
+      <button class="craie-btn secondaire" id="stepNext" data-professor-control="next">Suivant →</button>
+      <button class="craie-btn secondaire" id="replayButton" data-professor-control="reset set_variant">Relancer</button>
+      <div class="ai-guide" id="aiGuide" role="status"></div>
+    </footer>
   </div>
-  <div class="ai-guide" id="aiGuide" role="status"></div>
 
   <script>
     window.addEventListener('error', function (event) {
@@ -292,6 +170,7 @@
       console.error('[Gene3D:promise]', window.__GENE_SIM_ERROR__);
     });
   </script>
+  <script src="/media/simulations/shared/tableau/tableau.js"></script>
   <script type="module">
     import * as THREE from './vendor/three.module.min.js';
 
@@ -901,11 +780,13 @@
       if (id === 'protein_fold') return 'Chaîne polypeptidique';
       return 'ADN · ARNm · protéine';
     }
+    // Écrit un texte lettre par lettre, seulement quand il change (updateUI est rappelée souvent).
+    function live(el, text) { if (el.dataset.last === text) return; el.dataset.last = text; window.Tableau ? window.Tableau.ecrire(el, text, { vitesse: 40 }) : (el.textContent = text); }
     function updateUI() {
       const step = STEPS[state.step]; const percent = (state.step + 1) / STEPS.length * 100; const rnaCount = currentRnaCount(); const aaCount = currentAaCount();
       els.progressText.textContent = `${state.step + 1}/${STEPS.length}`; els.progressFill.style.width = `${percent}%`; els.stepProgress.style.width = `${percent}%`;
-      els.scenePhase.textContent = `PHÉNOMÈNE ${state.step + 1}/${STEPS.length} · ${step.stage}`.toUpperCase(); els.sceneTitle.textContent = step.title; els.sceneSubtitle.textContent = step.text; els.sceneActor.textContent = `ACTEURS 3D · ${actorForStep(step)}`;
-      els.lessonPhase.textContent = step.phase.toUpperCase(); els.lessonTitle.textContent = step.stage; els.stepNumber.textContent = `PHÉNOMÈNE ${state.step + 1}/${STEPS.length}`; els.stepTitle.textContent = step.title; els.stepText.textContent = step.text; els.eventIcon.textContent = step.icon; els.eventText.textContent = step.event;
+      els.scenePhase.textContent = `PHÉNOMÈNE ${state.step + 1}/${STEPS.length} · ${step.stage}`.toUpperCase(); live(els.sceneTitle, step.title); live(els.sceneSubtitle, step.text); els.sceneActor.textContent = `ACTEURS 3D · ${actorForStep(step)}`;
+      els.lessonPhase.textContent = step.phase.toUpperCase(); els.lessonTitle.textContent = step.stage; els.stepNumber.textContent = `PHÉNOMÈNE ${state.step + 1}/${STEPS.length}`; live(els.stepTitle, step.title); live(els.stepText, step.text); els.eventIcon.textContent = step.icon; live(els.eventText, step.event);
       els.rnaSequence.className = `sequence${rnaCount ? '' : ' empty'}`; els.rnaSequence.textContent = rnaCount ? `5′ ${RNA.slice(0, rnaCount).join(' ')}${rnaCount === RNA.length ? ' 3′' : ' …'}` : 'Aucun nucléotide assemblé';
       els.proteinSequence.className = `sequence${aaCount ? '' : ' empty'}`; els.proteinSequence.textContent = aaCount ? AMINO_ACIDS.slice(0, aaCount).map(a => a.name).join(' — ') : 'Aucun acide aminé relié';
       const rank = phaseRank(step.phase); els.phases.forEach((el, index) => { el.classList.toggle('active', index === rank); el.classList.toggle('done', index < rank || state.status === 'finished'); });
@@ -913,6 +794,8 @@
       els.status.className = `status${state.status === 'running' ? ' running' : state.status === 'finished' ? ' finished' : ''}`; els.status.textContent = state.status === 'idle' ? 'Prête' : state.status === 'finished' ? 'Terminée' : state.playing ? 'En mouvement' : 'En pause';
       els.stepState.textContent = state.status === 'idle' ? 'Prêt' : state.status === 'finished' ? '✓ Terminé' : state.playing ? '● En mouvement' : 'Ⅱ En pause';
       els.start.textContent = state.status === 'idle' ? '▶ Démarrer' : state.status === 'finished' ? '▶ Rejouer' : state.playing ? '▶ En cours' : '▶ Continuer'; els.start.disabled = state.playing; els.pause.disabled = !state.playing;
+      const play = document.getElementById('playButton'), pauseChalk = document.getElementById('pauseChalk');
+      if (play) { play.textContent = els.start.textContent.replace('▶ ', ''); play.disabled = state.playing; } if (pauseChalk) pauseChalk.disabled = !state.playing;
     }
 
     function setStep(index, recordAction = true) {
@@ -943,8 +826,9 @@
     }
 
     window.executeAICommand = executeAICommand; window.startSimulation = start; window.pauseSimulation = pause; window.nextStep = next; window.previousStep = previous; window.resetSimulation = () => restart(false); window.setSimulationSpeed = setSpeed; window.highlightTarget = highlight; window.getSimulationState = () => snapshot();
-    window.addEventListener('message', event => { const data = event.data || {}; if (data.type === 'simulation_control' && (!data.simulation_id || data.simulation_id === window.SIMULATION_CONFIG.id)) { if (data.guidance_text) showGuidance(data.guidance_text); executeAICommand(data.command, data.parameters || {}); } });
+    window.addEventListener('message', event => { const data = event.data || {}; if (data.type === 'simulation_control' && (!data.simulation_id || data.simulation_id === window.SIMULATION_CONFIG.id)) { if (data.guidance_text) showGuidance(data.guidance_text); if (window.Tableau) window.Tableau.appuyer(data.command); executeAICommand(data.command, data.parameters || {}); } });
     window.addEventListener('resize', resize); els.start.addEventListener('click', start); els.pause.addEventListener('click', pause); els.restart.addEventListener('click', () => restart(true));
+    document.getElementById('playButton').addEventListener('click', start); document.getElementById('pauseChalk').addEventListener('click', pause); document.getElementById('replayButton').addEventListener('click', () => restart(true)); document.getElementById('stepPrev').addEventListener('click', previous); document.getElementById('stepNext').addEventListener('click', next);
     document.addEventListener('keydown', event => {
       if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : start(); }
       else if (event.code === 'ArrowRight') { event.preventDefault(); next(); }

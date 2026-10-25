@@ -1,32 +1,59 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Reconnaître les myogrammes</title>
-  <style>
-    *{box-sizing:border-box}body{margin:0;background:#071426;color:#eef8ff;font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:14px}.app{width:min(940px,100%);background:#0d2038;border:1px solid #294d6d;border-radius:20px;padding:18px}h1{font-size:clamp(18px,3vw,26px);margin:0 0 14px}.curves{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.curve{background:#f9fbfe;color:#15304a;border-radius:15px;padding:9px}.curve strong{display:block;margin-bottom:4px}.curve svg{width:100%;height:auto}.axis{stroke:#8699aa;stroke-width:2}.trace{fill:none;stroke:#7c3aed;stroke-width:5;stroke-linecap:round}.labels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.select{display:flex;gap:6px;flex-wrap:wrap}.select button{flex:1;min-width:78px;border:2px solid #37648d;border-radius:11px;background:#183b5b;color:#fff;padding:9px 5px;font-weight:750;cursor:pointer}.select button.selected{background:#8b5cf6;border-color:#c4b5fd}.actions{text-align:center;margin-top:15px}.actions button{border:0;border-radius:12px;background:#34d399;color:#06251b;padding:11px 20px;font-weight:850;cursor:pointer}.feedback{text-align:center;min-height:30px;margin-top:9px;font-weight:800}.ok{color:#6ee7b7}.no{color:#fda4af}@media(max-width:720px){.curves,.labels{grid-template-columns:1fr}.curve svg{max-height:150px}.select{margin-bottom:8px}}
-  select{max-width:100%;padding:8px;border:1px solid #759e91;border-radius:8px;background:transparent;color:inherit;font:inherit}option{background:#10271d;color:#fff}</style>
-<link rel="stylesheet" href="/media/simulations/svt/ch1_consommation_matiere_organique/muscle/transparent-board.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reconnaître les myogrammes — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css">
+<style>
+  #labels { position: absolute; left: 50%; bottom: .4em; transform: translateX(-50%); display: flex; gap: 1.6em; }
+  #labels .craie-champ { white-space: nowrap; }
+  #labels .craie-champ select { width: 9em; text-align: left; }
+  @media (max-width: 720px) { #labels { gap: .6em; flex-wrap: wrap; justify-content: center; width: 96%; } }
+</style>
 </head>
 <body>
-  <main class="app">
-    <h1>Identifie les trois myogrammes</h1>
-    <p>Tension relative en fonction du temps. Les traits jaunes indiquent les stimulations ; courbes schématiques.</p><div class="curves">
-      <section class="curve"><strong>A</strong><svg viewBox="0 0 300 180" role="img" aria-label="Une seule contraction brève"><path class="axis" d="M20 150H285M25 20V155"/><path class="trace" d="M28 148 L85 148 C100 146 105 60 135 55 C165 62 170 146 190 148 L280 148"/><path fill="none" stroke="#fbbf24" stroke-width="2" d="M75 159v10 "/><text x="28" y="18" fill="currentColor" font-size="12">Tension</text><text x="245" y="179" fill="currentColor" font-size="12">Temps</text></svg></section>
-      <section class="curve"><strong>B</strong><svg viewBox="0 0 300 180" role="img" aria-label="Réponses qui se superposent avant le retour au repos"><path class="axis" d="M20 150H285M25 20V155"/><path class="trace" d="M28 148 L45 148 C55 148 58 102 78 100 C90 100 96 114 104 120 C112 100 117 68 138 66 C149 66 155 80 162 90 C170 64 178 40 198 40 C225 40 235 148 263 148 L280 148"/><path fill="none" stroke="#fbbf24" stroke-width="2" d="M40 159v10 M98 159v10 M157 159v10 "/><text x="28" y="18" fill="currentColor" font-size="12">Tension</text><text x="245" y="179" fill="currentColor" font-size="12">Temps</text></svg></section>
-      <section class="curve"><strong>C</strong><svg viewBox="0 0 300 180" role="img" aria-label="Contraction forte et maintenue"><path class="axis" d="M20 150H285M25 20V155"/><path class="trace" d="M28 148 L45 148 C58 148 60 45 88 45 L240 45 C262 45 265 148 280 148"/><path fill="none" stroke="#fbbf24" stroke-width="2" d="M40 159v10 M52 159v10 M64 159v10 M76 159v10 M88 159v10 M100 159v10 M112 159v10 M124 159v10 M136 159v10 M148 159v10 M160 159v10 M172 159v10 M184 159v10 M196 159v10 M208 159v10 M220 159v10 M232 159v10 "/><text x="28" y="18" fill="currentColor" font-size="12">Tension</text><text x="245" y="179" fill="currentColor" font-size="12">Temps</text></svg></section>
-    </div>
-    <div class="labels" id="labels"></div>
-    <div class="actions"><button id="check">Vérifier</button></div><div class="feedback" id="feedback" aria-live="polite"></div>
-  </main>
-  <script>
-    window.SIMULATION_CONFIG={id:'myogrammes_svt',variants:[{id:'exercise',label:'Reconnaissance de myogrammes'}]};
-    const names=[['secousse','Secousse'],['sommation','Sommation'],['tetanos','Tétanos complet']];const expected={A:'secousse',B:'sommation',C:'tetanos'};let selected={A:null,B:null,C:null},actions=[];
-    function render(){const root=document.getElementById('labels');root.innerHTML='';['A','B','C'].forEach(key=>{const group=document.createElement('div');group.className='select';group.dataset.key=key;const label=document.createElement('label');label.textContent='Tracé '+key+' ';const select=document.createElement('select');select.setAttribute('aria-label','Réponse pour le tracé '+key);select.innerHTML='<option value="">Choisir…</option>';names.forEach(([id,text])=>{const option=document.createElement('option');option.value=id;option.textContent=text;select.appendChild(option)});select.value=selected[key]||'';select.onchange=()=>{selected[key]=select.value||null;actions.push('choose_'+key+'_'+select.value)};label.appendChild(select);group.appendChild(label);root.appendChild(group)})}
-    function submit(){const correct=Object.keys(expected).every(key=>selected[key]===expected[key]);const feedback=document.getElementById('feedback');feedback.className='feedback '+(correct?'ok':'no');feedback.textContent=correct?'✓ Les trois tracés sont reconnus':'↺ Compare durée, amplitude et fusion des secousses';actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'myogrammes_svt',student_actions:actions,current_state:{simulation_status:correct?'finished':'running',correct,answers:selected,skill:'analyser_myogrammes'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
-    function reset(){selected={A:null,B:null,C:null};actions.push('reset');document.getElementById('feedback').textContent='';render()}
-    window.runVariant=reset;window.executeAICommand=(command)=>{if(command==='reset'||command==='start'||command==='set_variant')reset()};document.getElementById('check').onclick=submit;render();
-  </script>
-<script src="/media/simulations/professor-locate.js" defer></script></body>
+<div class="tableau">
+  <header class="titre"><div><small>SVT · 2 BAC · exercice</small><h1 id="title"></h1><p class="objectif">Tension relative en fonction du temps. Les traits jaunes indiquent les stimulations ; courbes schématiques.</p></div></header>
+  <section class="scene">
+    <canvas id="canvas" role="img" aria-label="Trois myogrammes schématiques A, B et C, dessinés à la craie"></canvas>
+    <div id="labels"></div>
+  </section>
+  <footer class="barre">
+    <button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button>
+    <button class="craie-btn secondaire" id="reset" data-professor-control="reset">Recommencer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+  const { Craie, ecrire, bulle, appuyer } = window.Tableau;
+  window.SIMULATION_CONFIG={id:'myogrammes_svt',variants:[{id:'exercise',label:'Reconnaissance de myogrammes'}],commands:['start','reset','check','set_variant']};
+  const names=[['secousse','Secousse'],['sommation','Sommation'],['tetanos','Tétanos complet']];const expected={A:'secousse',B:'sommation',C:'tetanos'};let selected={A:null,B:null,C:null},actions=[],verdict=null,verdictAt=null;
+  const $=id=>document.getElementById(id),S={ouvert:performance.now(),dirty:true};const scene=()=>(performance.now()-S.ouvert)/1000;
+  ecrire($('title'),'Identifie les trois myogrammes');
+  function render(){const root=$('labels');root.innerHTML='';['A','B','C'].forEach(key=>{const label=document.createElement('label');label.className='craie-champ';label.append('Tracé '+key+' : ');const select=document.createElement('select');select.setAttribute('aria-label','Réponse pour le tracé '+key);select.innerHTML='<option value="">choisir…</option>';names.forEach(([id,text])=>{const o=document.createElement('option');o.value=id;o.textContent=text;select.appendChild(o)});select.value=selected[key]||'';select.onchange=()=>{selected[key]=select.value||null;actions.push('choose_'+key+'_'+select.value);verdict=null;S.dirty=true};label.appendChild(select);root.appendChild(label)})}
+  function submit(){const correct=Object.keys(expected).every(key=>selected[key]===expected[key]);verdict=correct;verdictAt=scene();S.dirty=true;bulle($('feedback'),correct?'✓ Les trois tracés sont reconnus':'↺ Compare durée, amplitude et fusion des secousses',correct?'good':'bad');actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'myogrammes_svt',student_actions:actions,current_state:{simulation_status:correct?'finished':'running',correct,answers:selected,skill:'analyser_myogrammes'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
+  function reset(){selected={A:null,B:null,C:null};verdict=null;actions.push('reset');bulle($('feedback'),'');render();S.ouvert=performance.now();S.dirty=true}
+  window.runVariant=reset;window.executeAICommand=(command)=>{appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;render();
+  addEventListener('message',e=>{const d=e.data;if(d?.type==='simulation_control'&&(!d.simulation_id||d.simulation_id==='myogrammes_svt'))window.executeAICommand(d.command,d.parameters||{})});
+  window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'myogrammes_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,globals:['executeAICommand','runVariant']},page_text:'Exercice au tableau : reconnaître secousse, sommation et tétanos sur trois myogrammes.'},'*');
+
+  const canvas=$('canvas'),craie=new Craie(canvas,{onresize:()=>{S.dirty=true}});
+  const twitch=(t,c,w)=>{const x=(t-c)/w;return x>0?x*Math.exp(1-x):0};
+  function trace(x0,titre,fn,stims){const y0=230,y1=70,w=215;
+    craie.texte(titre,x0+8,52,{couleur:'jaune',taille:20});
+    craie.axe(x0,y0,x0+w+8,y0,[],{}).axe(x0,y0,x0,y1-8,[],{}).texte('tension',x0+6,y1-12,{couleur:'faible',taille:12}).texte('temps',x0+w,y0+20,{couleur:'faible',taille:12,align:'right'});
+    stims.forEach(f=>craie.ligne(x0+8+f*(w-16),y0+2,x0+8+f*(w-16),y0+12,{couleur:'jaune',largeur:2,duree:.05}));
+    craie.courbe(u=>[x0+8+u*(w-16),y0-Math.min(1,fn(u))*140],90,{couleur:'violet',largeur:3});
+  }
+  function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(6,scene());const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);
+    trace(30,'A',u=>.55*twitch(u,.2,.09),[.2]);
+    const sB=[.06,.3,.54];trace(275,'B',u=>sB.reduce((a,cc,i)=>a+(.35+i*.08)*twitch(u,cc,.11),0),sB);
+    const sC=Array.from({length:16},(_,i)=>.06+i*.05);trace(520,'C',u=>Math.min(1,sC.reduce((a,cc)=>a+.28*twitch(u,cc,.1),0)),sC);
+    if(verdict!=null){craie.depuis(verdictAt);craie.texte(verdict?'A : une secousse · B : sommation · C : tétanos complet':'Compare la durée, l’amplitude et la fusion des secousses',380,275,{couleur:verdict?'vert':'rouge',taille:16,align:'center',max:700})}
+    return craie.fin()}
+  function frame(){if(S.dirty)S.dirty=!draw();requestAnimationFrame(frame)}requestAnimationFrame(frame);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body>
 </html>

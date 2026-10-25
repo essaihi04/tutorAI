@@ -1,8 +1,17 @@
+/*
+ * Laboratoires de chimie — moteur partagé, dessiné au tableau.
+ * Chaque page fournit window.CHEM_LAB_CONFIG (missions, modèles, paramètres) ; ce script dessine le montage
+ * et la courbe à la craie (shared/tableau/tableau.js), écrit en direct, et garde le pont avec le tuteur :
+ * manifeste, état (variables, measurements, student_prediction, trial_history…) et commandes
+ * start / run_trial / reset / set_variant / set_parameters / highlight / get_state / set_prediction.
+ */
 (function () {
   "use strict";
 
   const cfg = window.CHEM_LAB_CONFIG;
   if (!cfg) throw new Error("CHEM_LAB_CONFIG manquant");
+  const T = window.Tableau;
+  if (!T) throw new Error("Tableau manquant : charger /media/simulations/shared/tableau/tableau.js avant chem-lab.js");
 
   const $ = (s, root = document) => root.querySelector(s);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -13,6 +22,7 @@
     if ((a > 0 && a < 0.001) || a >= 10000) return v.toExponential(2).replace("e+", "e");
     return Number(v.toFixed(digits)).toLocaleString("fr-FR");
   };
+  const graine = T.graine;
   const isotopeData = {
     c14: { name: "Carbone 14", halfLife: 5730, unit: "ans" },
     i131: { name: "Iode 131", halfLife: 8.02, unit: "jours" },
@@ -39,44 +49,43 @@
     model_limits: cfg.modelLimits || "Modèle scolaire idéal : solutions diluées, température uniforme et pertes négligées."
   };
 
-  document.documentElement.style.setProperty("--accent", cfg.accent || "#38bdf8");
-  document.documentElement.style.setProperty("--accent-rgb", cfg.accentRgb || "56, 189, 248");
+
+  const ACCENT = cfg.accent || "#38bdf8";
+  document.documentElement.style.setProperty("--accent", ACCENT);
   document.title = cfg.title;
   document.body.innerHTML = `
-    <div class="app">
-      <header class="topbar">
-        <div class="brand">χ</div>
-        <div class="titleblock"><div class="eyebrow">Laboratoire virtuel · 2e BAC</div><h1>${cfg.title}</h1></div>
-        <div class="chapter-pill">${cfg.chapters.join(" · ")}</div>
+    <div class="tableau">
+      <header class="titre">
+        <div><small>Chimie · 2 BAC · ${cfg.chapters.join(" · ")}</small><h1 id="labTitle"></h1><p class="objectif" id="missionGoal"></p></div>
+        <nav class="onglets" id="missionTabs" aria-label="Missions"></nav>
       </header>
-      <main class="workspace">
-        <section class="stage" data-target="scene">
-          <div class="photo">
-            <img src="${cfg.image}" alt="${cfg.imageAlt || "Montage expérimental de chimie"}">
-            <canvas id="sceneCanvas" aria-hidden="true"></canvas>
-            <div class="photo-label"><span class="live-dot"></span><span id="sceneLabel">Montage prêt</span></div>
-            <div class="instrument" data-target="instrument"><small id="instrumentLabel">Mesure principale</small><strong id="instrumentValue">—</strong><span id="instrumentUnit">Lancer un essai</span></div>
-            <div class="status-note"><div class="status-icon">∿</div><p id="statusText">${cfg.intro}</p></div>
-          </div>
-          <div class="readouts" id="readouts"></div>
-        </section>
-        <aside class="control-panel" data-target="controls">
-          <div class="panel-heading"><h2>Missions expérimentales</h2><span class="progress" id="progress">0 essai</span></div>
-          <div class="mission-tabs" id="missionTabs" style="--mission-count:${cfg.missions.length}"></div>
-          <div class="goal"><div class="number" id="missionNumber">01</div><div><strong id="missionTitle"></strong><p id="missionGoal"></p></div></div>
-          <div><span class="predict-label">Je prédis avant de mesurer</span><div class="prediction-grid" id="predictions"></div></div>
-          <span class="controls-title">Variables manipulables</span>
+      <section class="scene chimie">
+        <aside class="reglages" data-target="controls" data-professor-control="set_parameters">
+          <h3 id="missionTitle"></h3>
+          <p class="legende">Je prédis avant de mesurer :</p>
+          <div class="choix" id="predictions"></div>
           <div class="controls" id="controls"></div>
-          <div class="actions"><button class="run" id="runButton">▶ Lancer l’expérience</button><button class="reset" id="resetButton" title="Réinitialiser">↺</button></div>
+          <p class="legende" id="verdict">Le résultat de ta prédiction s’écrira ici.</p>
         </aside>
-        <section class="data-panel" data-target="graph">
-          <div class="data-copy"><div class="data-head"><h2>Carnet de mesures</h2><span class="badge">IA lisible</span></div><div class="observation" id="observation"><strong>À vérifier :</strong> ${state.scientific_observation}</div><div class="verdict" id="verdict">Le résultat de ta prédiction apparaîtra ici.</div></div>
-          <div class="chart-wrap"><canvas id="chartCanvas"></canvas><span class="axis-caption" id="axisCaption"></span></div>
-        </section>
-      </main>
+        <div class="dessin" data-target="scene">
+          <canvas id="sceneCanvas" role="img" aria-label="Montage expérimental et courbe de mesures dessinés à la craie" data-target="graph"></canvas>
+        </div>
+      </section>
+      <footer class="barre">
+        <button class="craie-btn principal" id="runButton" data-professor-control="start run_trial run">Lancer l’essai</button>
+        <button class="craie-btn secondaire" id="resetButton" data-professor-control="reset">Recommencer</button>
+        <p class="bulle" id="statusText" role="status" aria-live="polite"></p>
+        <span class="lecture" id="progress"></span>
+      </footer>
     </div>`;
 
   function mission() { return cfg.missions[state.missionIndex]; }
+
+  // ── Scène : horloge d'écriture en direct ──────────────────────────────────
+  const scene = { ouvert: performance.now(), marque: null, dirty: true, now: 0 };
+  const redraw = () => { scene.dirty = true; };
+  const rouvrir = () => { scene.ouvert = performance.now(); scene.marque = null; redraw(); };
+  const depuisOuverture = () => (performance.now() - scene.ouvert) / 1000;
 
   function initializeVariables() {
     state.variables = {};
@@ -88,32 +97,36 @@
   }
 
   function buildMissionTabs() {
-    $("#missionTabs").innerHTML = cfg.missions.map((m, i) => `
-      <button class="mission-tab ${i === state.missionIndex ? "active" : ""}" data-mission="${m.id}" aria-label="Mission ${i + 1}: ${m.title}">
-        <span class="ico">${m.icon}</span><span>${m.shortTitle || m.title}</span>
-      </button>`).join("");
-    $("#missionTabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => selectVariant(b.dataset.mission)));
+    T.onglets($("#missionTabs"), cfg.missions.map((m) => ({ id: m.id, label: `${m.icon} ${m.shortTitle || m.title}` })), mission().id, selectVariant,
+      new Set(state.trial_history.map((t) => t.mission_id)));
   }
 
   function buildMission() {
     const m = mission();
-    $("#missionNumber").textContent = String(state.missionIndex + 1).padStart(2, "0");
-    $("#missionTitle").textContent = m.title;
-    $("#missionGoal").textContent = m.goal;
-    $("#sceneLabel").textContent = m.sceneLabel || m.title;
-    $("#predictions").innerHTML = m.predictions.map((p, i) => `<button class="prediction" data-prediction="${i}">${p}</button>`).join("");
-    $("#predictions").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setPrediction(Number(b.dataset.prediction))));
-    $("#controls").innerHTML = m.parameters.map(controlMarkup).join("");
-    $("#controls").querySelectorAll("input,select").forEach((el) => el.addEventListener("input", onParameterInput));
+    T.ecrire($("#labTitle"), cfg.title);
+    T.ecrire($("#missionTitle"), `${String(state.missionIndex + 1).padStart(2, "0")} · ${m.title}`);
+    T.ecrire($("#missionGoal"), m.goal, { vitesse: 60 });
+    $("#predictions").innerHTML = m.predictions.map((p, i) => `<label><input type="radio" name="prediction" value="${i}" data-professor-control="set_prediction"> ${p}</label>`).join("");
+    $("#predictions").querySelectorAll("input").forEach((b) => b.addEventListener("change", () => setPrediction(Number(b.value))));
+    const box = $("#controls"); box.replaceChildren();
+    m.parameters.forEach((p) => box.append(controlElement(p)));
     updateControlOutputs();
     updateDisplay();
   }
 
-  function controlMarkup(p) {
+  function controlElement(p) {
     if (p.type === "select") {
-      return `<label class="control"><span class="control-head"><span>${p.label}</span><output id="out-${p.key}"></output></span><select data-key="${p.key}">${p.options.map(o => `<option value="${o.value}" ${String(o.value) === String(p.value) ? "selected" : ""}>${o.label}</option>`).join("")}</select></label>`;
+      const el = document.createElement("label"); el.className = "craie-champ";
+      el.innerHTML = `<span>${p.label}</span><select class="craie-select" data-key="${p.key}" aria-label="${p.label}">${p.options.map(o => `<option value="${o.value}" ${String(o.value) === String(p.value) ? "selected" : ""}>${o.label}</option>`).join("")}</select>`;
+      el.querySelector("select").addEventListener("input", onParameterInput);
+      return el;
     }
-    return `<label class="control"><span class="control-head"><span>${p.label}</span><output id="out-${p.key}"></output></span><input type="range" data-key="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}"></label>`;
+    const el = T.curseur({ id: `ctl-${p.key}`, label: p.label, min: p.min, max: p.max, step: p.step, valeur: state.variables[p.key], unite: "", decimales: p.digits ?? 2 });
+    el.input.dataset.key = p.key;
+    el.input.addEventListener("input", onParameterInput);
+    el.maj = (v) => { if (v !== undefined) el.input.value = String(v); el.querySelector("b").textContent = displayParam(p, el.input.value); };
+    el.maj();
+    return el;
   }
 
   function displayParam(p, value) {
@@ -124,8 +137,8 @@
 
   function updateControlOutputs() {
     mission().parameters.forEach((p) => {
-      const out = $("#out-" + p.key);
-      if (out) out.textContent = displayParam(p, state.variables[p.key]);
+      const el = $(`[data-key="${p.key}"]`);
+      if (el && el.type === "range") el.closest(".curseur").maj();
     });
   }
 
@@ -134,14 +147,15 @@
     state.variables[p.key] = p.type === "select" ? event.target.value : Number(event.target.value);
     updateControlOutputs();
     state.status = "adjusting";
-    $("#statusText").textContent = "Paramètre modifié. Observe le montage puis relance pour mesurer son effet.";
+    T.bulle($("#statusText"), "Paramètre modifié : observe le montage, puis relance pour mesurer son effet.");
+    redraw();
     syncState();
   }
 
   function setPrediction(index) {
     state.student_prediction = index;
-    $("#predictions").querySelectorAll("button").forEach((b, i) => b.classList.toggle("selected", i === index));
-    $("#verdict").textContent = "Prédiction enregistrée. Lance maintenant l’expérience.";
+    $("#predictions").querySelectorAll("input").forEach((b, i) => { b.checked = i === index; });
+    T.ecrire($("#verdict"), "Prédiction notée. Lance maintenant l’essai.");
     syncState();
   }
 
@@ -318,17 +332,17 @@
     state.status = "running";
     state.animation = 0;
     state.runCount += 1;
-    $(".photo").classList.add("running");
     $("#runButton").disabled = true;
     $("#runButton").textContent = "Mesure en cours…";
     const result = simulate(mission().model, state.variables);
     state.measurements = result.measurements;
     state.scientific_observation = result.observation;
     state.last_result = result;
+    scene.marque = depuisOuverture() + 1.2;   // les mesures s'écrivent une fois la courbe tracée
     const started = performance.now();
     const animate = (now) => {
-      state.animation = clamp((now - started) / 780, 0, 1);
-      drawChart(result.series, result.axis, state.animation);
+      state.animation = clamp((now - started) / 1100, 0, 1);
+      redraw();
       if (state.animation < 1) requestAnimationFrame(animate);
       else finishTrial(result);
     };
@@ -347,47 +361,36 @@
       timestamp: new Date().toISOString()
     });
     if (state.trial_history.length > 12) state.trial_history.shift();
-    $(".photo").classList.remove("running");
     $("#runButton").disabled = false;
-    $("#runButton").textContent = "▶ Refaire une mesure";
+    $("#runButton").textContent = "Refaire une mesure";
+    buildMissionTabs();
     updateDisplay();
     const selected = state.student_prediction;
     const correct = selected !== null && selected === result.verdictIndex;
-    $("#verdict").textContent = selected === null ? "Conseil : formule une prédiction avant le prochain essai." : correct ? "✓ Prédiction confirmée par les mesures." : "↻ Les mesures réfutent la prédiction : compare les valeurs et réessaie.";
+    const verdict = $("#verdict");
+    verdict.dataset.kind = selected === null ? "" : correct ? "good" : "bad";
+    T.ecrire(verdict, selected === null ? "Conseil : formule une prédiction avant le prochain essai." : correct ? "✓ Prédiction confirmée par les mesures." : "↻ Les mesures réfutent la prédiction : compare les valeurs et réessaie.");
     syncState();
   }
 
   function updateDisplay() {
     const result = state.last_result;
-    const values = state.measurements.length ? state.measurements : [
-      {label:"Mesure 1",value:"—",unit:""},{label:"Mesure 2",value:"—",unit:""},{label:"Mesure 3",value:"—",unit:""}
-    ];
-    $("#readouts").innerHTML = values.slice(0,3).map(x => `<div class="reading"><label>${x.label}</label><b>${x.value}</b><em>${x.unit || "mesure"}</em></div>`).join("");
-    $("#observation").innerHTML = `<strong>${state.status === "completed" ? "Observation :" : "À vérifier :"}</strong> ${state.scientific_observation}`;
-    $("#progress").textContent = `${state.runCount} essai${state.runCount === 1 ? "" : "s"}`;
-    if (result) {
-      $("#instrumentLabel").textContent = result.primary.label;
-      $("#instrumentValue").textContent = result.primary.value;
-      $("#instrumentUnit").textContent = result.primary.unit;
-      $("#statusText").textContent = result.observation;
-      $("#axisCaption").textContent = result.axis.x ? `${result.axis.x} →` : "mesure →";
-      drawChart(result.series, result.axis, 1);
-    } else {
-      $("#instrumentLabel").textContent = "Mesure principale";
-      $("#instrumentValue").textContent = "—";
-      $("#instrumentUnit").textContent = "Lancer un essai";
-      $("#statusText").textContent = cfg.intro;
-      drawChart([], {}, 1);
-    }
+    $("#progress").textContent = state.runCount ? `${state.runCount} essai${state.runCount === 1 ? "" : "s"}` : "";
+    const status = $("#statusText");
+    if (result) { status.dataset.kind = "good"; T.bulle(status, result.observation, "good"); }
+    else { delete status.dataset.kind; T.bulle(status, cfg.intro); }
+    redraw();
   }
 
   function resetSimulation() {
     initializeVariables();
     state.last_result = null;
     $("#runButton").disabled = false;
-    $("#runButton").textContent = "▶ Lancer l’expérience";
+    $("#runButton").textContent = "Lancer l’essai";
     buildMission();
-    $("#verdict").textContent = "Le résultat de ta prédiction apparaîtra ici.";
+    $("#verdict").dataset.kind = "";
+    T.ecrire($("#verdict"), "Le résultat de ta prédiction s’écrira ici.");
+    rouvrir();
     syncState();
     return publicState();
   }
@@ -399,10 +402,12 @@
     initializeVariables();
     state.last_result = null;
     $("#runButton").disabled = false;
-    $("#runButton").textContent = "▶ Lancer l’expérience";
+    $("#runButton").textContent = "Lancer l’essai";
     buildMissionTabs();
     buildMission();
-    $("#verdict").textContent = "Nouvelle mission : commence par une prédiction.";
+    $("#verdict").dataset.kind = "";
+    T.ecrire($("#verdict"), "Nouvelle mission : commence par une prédiction.");
+    rouvrir();
     syncState();
     return publicState();
   }
@@ -417,6 +422,7 @@
       if (el) el.value = state.variables[k];
     });
     updateControlOutputs();
+    redraw();
     if (refresh) syncState();
     return publicState();
   }
@@ -481,49 +487,219 @@
     return result;
   }
 
-  function fitCanvas(canvas) {
-    const rect = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-    const w = Math.max(1, Math.round(rect.width*dpr)), h = Math.max(1, Math.round(rect.height*dpr));
-    if (canvas.width !== w || canvas.height !== h) { canvas.width=w; canvas.height=h; }
-    const ctx=canvas.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,w:rect.width,h:rect.height};
-  }
+  // ── Dessin à la craie : montage à gauche, courbe et mesures à droite (repère logique 560 × 400) ──
+  const canvas = $("#sceneCanvas");
+  const craie = new T.Craie(canvas, { onresize: redraw });
+  const LW = 560, LH = 400;
+  const M = { x: 12, y: 8, w: 290, h: 330 };          // montage
+  const G = { x: 352, y: 34, w: 190, h: 130 };         // courbe
+  const accent = () => ACCENT;
 
-  function drawChart(series, axis, progress) {
-    const canvas=$("#chartCanvas"); if(!canvas) return;
-    const {ctx,w,h}=fitCanvas(canvas); ctx.clearRect(0,0,w,h);
-    const pad={l:42,r:18,t:18,b:28}, cw=w-pad.l-pad.r, ch=h-pad.t-pad.b;
-    ctx.strokeStyle="rgba(255,255,255,.08)"; ctx.lineWidth=1;
-    for(let i=0;i<=4;i++){const y=pad.t+ch*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
-    if(!series.length){ctx.fillStyle="rgba(167,180,199,.65)";ctx.font="12px system-ui";ctx.textAlign="center";ctx.fillText("La courbe apparaîtra après la première mesure",w/2,h/2);return;}
-    const visible=Math.max(2,Math.ceil(series.length*progress)), data=series.slice(0,visible);
-    let minX=Math.min(...series.map(p=>p.x)), maxX=Math.max(...series.map(p=>p.x)), minY=Math.min(...series.map(p=>p.y)), maxY=Math.max(...series.map(p=>p.y));
-    if(maxX===minX)maxX=minX+1;if(maxY===minY){maxY+=1;minY-=1;} const yMargin=(maxY-minY)*.08;minY-=yMargin;maxY+=yMargin;
-    const X=x=>pad.l+(x-minX)/(maxX-minX)*cw, Y=y=>pad.t+ch-(y-minY)/(maxY-minY)*ch;
-    const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);grad.addColorStop(0,`rgba(${cfg.accentRgb || "56, 189, 248"},.32)`);grad.addColorStop(1,`rgba(${cfg.accentRgb || "56, 189, 248"},0)`);
-    ctx.beginPath();data.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.lineTo(X(data[data.length-1].x),pad.t+ch);ctx.lineTo(X(data[0].x),pad.t+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-    ctx.beginPath();data.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.strokeStyle=cfg.accent || "#38bdf8";ctx.lineWidth=3;ctx.lineJoin="round";ctx.stroke();
-    const last=data[data.length-1];ctx.beginPath();ctx.arc(X(last.x),Y(last.y),5,0,Math.PI*2);ctx.fillStyle="#fff";ctx.fill();ctx.strokeStyle=cfg.accent;ctx.lineWidth=3;ctx.stroke();
-    ctx.fillStyle="rgba(167,180,199,.9)";ctx.font="9px system-ui";ctx.textAlign="left";ctx.fillText(axis.y || "mesure",pad.l,10);ctx.fillText(fmt(minX,1),pad.l,h-8);ctx.textAlign="right";ctx.fillText(fmt(maxX,1),w-pad.r,h-8);ctx.textAlign="left";ctx.fillText(fmt(maxY,2),5,pad.t+4);ctx.fillText(fmt(minY,2),5,pad.t+ch);
-  }
-
-  let particles=[];
-  function drawScene(time) {
-    const canvas=$("#sceneCanvas");
-    if(canvas){
-      const {ctx,w,h}=fitCanvas(canvas), result=state.last_result, v=result?.visual || {kind:cfg.sceneKind || "kinetics",rate:.4,fraction:0};
-      ctx.clearRect(0,0,w,h);
-      const zone={x:w*.52,y:h*.18,w:w*.44,h:h*.56};
-      if(particles.length!==72) particles=Array.from({length:72},(_,i)=>({x:((i*47)%97)/97,y:((i*61)%89)/89,s:.6+(i%5)/5,phase:i*.71}));
-      if(v.kind==="kinetics"||v.kind==="equilibrium"||v.kind==="organic"){
-        particles.forEach((q,i)=>{const speed=(v.rate||v.speed||.5);const x=zone.x+(((q.x+time*.00002*speed*q.s)%1)*zone.w),y=zone.y+(q.y+Math.sin(time*.001*speed+q.phase)*.025)*zone.h;const converted=v.fraction??v.ratio??v.yield??0;ctx.beginPath();ctx.arc(x,y,2.1+q.s,0,Math.PI*2);ctx.fillStyle=i/particles.length<converted?cfg.accent:"rgba(255,255,255,.62)";ctx.fill();});
-      } else if(v.kind==="nuclear"){
-        particles.forEach((q,i)=>{const x=zone.x+q.x*zone.w,y=zone.y+q.y*zone.h,alive=i/particles.length<(v.alive??1);ctx.beginPath();ctx.arc(x,y,alive?3:1.5,0,Math.PI*2);ctx.fillStyle=alive?cfg.accent:"rgba(251,113,133,.35)";ctx.fill();if(!alive&&i%7===0){ctx.strokeStyle="rgba(251,113,133,.35)";ctx.beginPath();ctx.moveTo(x-5,y);ctx.lineTo(x+5,y);ctx.moveTo(x,y-5);ctx.lineTo(x,y+5);ctx.stroke();}});
-      } else if(v.kind==="electrochem"){
-        for(let i=0;i<16;i++){const t=(time*.00018*(v.speed||1)+i/16)%1,x=zone.x+t*zone.w,y=zone.y+zone.h*.18+Math.sin(t*Math.PI)*-zone.h*.17;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle=cfg.accent;ctx.fill();}
-        for(let i=0;i<(v.bubbles||0);i++){const x=zone.x+zone.w*(.35+(i%6)*.08),y=zone.y+zone.h*(.9-((time*.0001+i*.11)%1)*.65);ctx.beginPath();ctx.arc(x,y,2+i%3,0,Math.PI*2);ctx.strokeStyle="rgba(255,255,255,.55)";ctx.stroke();}
-      }
+  function becher(x, y, w, h, niveau, liquide, o = {}) {
+    craie.trait([[x, y], [x, y + h], [x + w, y + h], [x + w, y]], { couleur: "blanc", largeur: 2.2 });
+    if (niveau > 0) {
+      const ly = y + h - h * clamp(niveau, 0, 1) - 2;
+      const c = craie.ctx; c.globalAlpha = o.alpha ?? .18; c.fillStyle = craie.couleur(liquide); c.fillRect(x + 2, ly, w - 4, y + h - ly - 2); c.globalAlpha = 1;
+      craie.ligne(x + 2, ly, x + w - 2, ly, { couleur: liquide, largeur: 1.6, tremble: .5 });
     }
-    requestAnimationFrame(drawScene);
+    if (o.label) craie.texte(o.label, x + w / 2, y + h + 20, { align: "center", taille: 15, couleur: o.labelCouleur || "faible" });
+  }
+  function thermometre(x, y, h, frac, label) {
+    craie.ligne(x, y, x, y + h, { couleur: "blanc", largeur: 5, alpha: .35 }).cercle(x, y + h + 7, 7, { couleur: "rouge", fond: "rouge", fondAlpha: .6 });
+    craie.direct(() => craie.ligne(x, y + h - h * clamp(frac, 0, 1), x, y + h, { couleur: "rouge", largeur: 3, tremble: .2 }));
+    if (label) craie.texte(label, x + 12, y + 12, { taille: 15, couleur: "rouge" });
+  }
+  function bulles(x, y, w, h, n, vitesse, couleur) {
+    craie.direct(() => { for (let i = 0; i < n; i++) { const f = ((scene.now * .00012 * vitesse) + i * .173) % 1; craie.cercle(x + w * ((i * 37 % 100) / 100), y + h - f * h, 2 + i % 3, { couleur, largeur: 1.2, tremble: .2, alpha: .7 }); } });
+  }
+  function fiole(x, y, w, h, niveau, liquide) {
+    // Erlenmeyer : col étroit, corps conique.
+    const col = w * .3;
+    craie.trait([[x + w / 2 - col / 2, y], [x + w / 2 - col / 2, y + h * .3], [x, y + h], [x + w, y + h], [x + w / 2 + col / 2, y + h * .3], [x + w / 2 + col / 2, y]], { couleur: "blanc", largeur: 2.2 });
+    if (niveau > 0) { const c = craie.ctx; c.globalAlpha = .18; c.fillStyle = craie.couleur(liquide); const ly = y + h - h * .7 * niveau; const k = (ly - (y + h * .3)) / (h * .7); const half = w / 2 - col / 2; const xl = x + w / 2 - col / 2 - half * k, xr = x + w / 2 + col / 2 + half * k; c.beginPath(); c.moveTo(xl, ly); c.lineTo(xr, ly); c.lineTo(x + w - 2, y + h - 2); c.lineTo(x + 2, y + h - 2); c.closePath(); c.fill(); c.globalAlpha = 1; craie.ligne(xl, ly, xr, ly, { couleur: liquide, largeur: 1.6 }); }
+  }
+  function ballon(x, y, r, niveau, liquide) {
+    craie.cercle(x, y, r, { couleur: "blanc", largeur: 2.2, depart: -1.9 });
+    craie.trait([[x - r * .32, y - r * .95], [x - r * .32, y - r * 1.7], [x + r * .32, y - r * 1.7], [x + r * .32, y - r * .95]], { couleur: "blanc", largeur: 2.2 });
+    if (niveau > 0) { const c = craie.ctx; c.globalAlpha = .2; c.fillStyle = craie.couleur(liquide); c.beginPath(); c.arc(x, y, r - 2, Math.PI * (.5 - .5 * niveau) * 0 + Math.asin(clamp(1 - 2 * niveau, -1, 1)), Math.PI - Math.asin(clamp(1 - 2 * niveau, -1, 1))); c.closePath(); c.fill(); c.globalAlpha = 1; }
+  }
+  function fleches2sens(x, y, l, sens) {
+    craie.fleche(x, y - 4, x + l, y - 4, { couleur: sens >= 0 ? "jaune" : "faible", largeur: sens > 0 ? 2.6 : 1.4 });
+    craie.fleche(x + l, y + 6, x, y + 6, { couleur: sens <= 0 ? "jaune" : "faible", largeur: sens < 0 ? 2.6 : 1.4 });
+  }
+
+  function dessinerMontage(model, p, v, result) {
+    const kind = cfg.sceneKind || v.kind, run = state.status === "running", done = !!result;
+    const x = M.x, y = M.y, w = M.w, h = M.h, cx = x + w / 2;
+    if (kind === "kinetics") {
+      if (model === "kinetic_monitor") {
+        craie.rect(x + 10, y + 70, 80, 60, { couleur: "blanc", arrondi: 6 }).texte("lampe", x + 50, y + 150, { align: "center", taille: 14, couleur: "faible" });
+        craie.cercle(x + 50, y + 100, 9, { couleur: "jaune", fond: "jaune", fondAlpha: .5 });
+        craie.fleche(x + 92, y + 100, x + 150, y + 100, { couleur: "jaune", largeur: 2 });
+        becher(x + 152, y + 60, 36, 80, 1, accent(), { label: "cuve" });
+        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .25 * (1 - (v.fraction ?? 0)); c.fillStyle = accent(); c.fillRect(x + 154, y + 62, 32, 76); c.globalAlpha = 1; });
+        craie.fleche(x + 190, y + 100, x + 240, y + 100, { couleur: "jaune", largeur: 1.6, alpha: .6 });
+        craie.rect(x + 242, y + 70, 44, 60, { couleur: "blanc", arrondi: 6 }).texte("détecteur", x + 264, y + 150, { align: "center", taille: 14, couleur: "faible" });
+        craie.texte("spectrophotomètre", cx, y + 30, { align: "center", taille: 19, couleur: accent() });
+        craie.texte(`t = ${fmt(p.time, 0)} s`, x + 20, y + 200, { taille: 17, couleur: "jaune" });
+        craie.texte(`A₀ = ${fmt(p.a0, 2)}   k = ${fmt(p.k, 3)} s⁻¹`, x + 20, y + 228, { taille: 16, couleur: "faible" });
+        craie.texte("A(t) = A₀ · e^(−k t)", x + 20, y + 262, { taille: 18, couleur: "violet" });
+        if (done) { craie.depuis(scene.marque); craie.texte(`A = ${result.primary.value}`, x + 180, y + 200, { taille: 22, couleur: accent() }); }
+      } else {
+        craie.rect(x + 40, y + 120, 200, 110, { couleur: "faible", arrondi: 6 }).texte("bain thermostaté", x + 140, y + 250, { align: "center", taille: 15, couleur: "faible" });
+        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .08; c.fillStyle = craie.couleur("cyan"); c.fillRect(x + 42, y + 150, 196, 78); c.globalAlpha = 1; });
+        becher(x + 100, y + 95, 80, 125, .7, accent(), { label: "" });
+        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .2 * (1 - (v.fraction ?? 0)) + .05; c.fillStyle = accent(); c.fillRect(x + 102, y + 134, 76, 84); c.globalAlpha = 1; });
+        thermometre(x + 250, y + 100, 110, (p.temp - 10) / 50, `${fmt(p.temp, 0)} °C`);
+        craie.cercle(x + 40, y + 60, 22, { couleur: "blanc" }).texte("t", x + 40, y + 66, { align: "center", taille: 16 }).ligne(x + 40, y + 32, x + 40, y + 38, { largeur: 2 });
+        craie.texte(`c₀ = ${fmt(p.c0, 2)} mol·L⁻¹`, x + 80, y + 50, { taille: 16, couleur: "faible" });
+        craie.texte(p.catalyst === "none" ? "sans catalyseur" : p.catalyst === "fe" ? "catalyseur Fe³⁺" : "catalyseur Pt", x + 80, y + 76, { taille: 16, couleur: p.catalyst === "none" ? "faible" : "jaune" });
+        if (run || done) bulles(x + 104, y + 140, 72, 76, Math.round(4 + (v.rate || .5) * 4), v.rate || .5, "blanc");
+        craie.texte("v = k · c   ;   t½ = ln 2 / k", x + 20, y + 300, { taille: 18, couleur: "violet" });
+      }
+    } else if (kind === "nuclear") {
+      if (model === "binding_energy") {
+        const n = p.nucleus === "he4" ? 4 : p.nucleus === "fe56" ? 56 : 235, z = p.nucleus === "he4" ? 2 : p.nucleus === "fe56" ? 26 : 92;
+        craie.cercle(cx, y + 130, 95, { couleur: "faible", largeur: 1.4, pointille: [5, 6] });
+        craie.direct(() => { const r = graine(n); for (let i = 0; i < Math.min(n, 120); i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 82; craie.cercle(cx + d * Math.cos(a), y + 130 + d * Math.sin(a), 7, { couleur: i < z * Math.min(n, 120) / n ? "jaune" : "blanc", fond: i < z * Math.min(n, 120) / n ? "jaune" : "blanc", fondAlpha: .35, largeur: 1.2, tremble: .3 }); } });
+        craie.texte(`A = ${n}   Z = ${z}   N = ${n - z}`, cx, y + 255, { align: "center", taille: 18, couleur: accent() });
+        craie.texte("protons", x + 20, y + 290, { taille: 15, couleur: "jaune" }).texte("neutrons", x + 110, y + 290, { taille: 15, couleur: "blanc" });
+        craie.texte("Eₗ = Δm · c²", x + 190, y + 290, { taille: 18, couleur: "violet" });
+      } else {
+        craie.rect(x + 20, y + 30, 250, 190, { couleur: "faible", arrondi: 8 }).texte("échantillon", x + 145, y + 240, { align: "center", taille: 15, couleur: "faible" });
+        const total = 90, vivants = Math.round(total * (v.alive ?? 1));
+        craie.direct(() => { const r = graine(7); for (let i = 0; i < total; i++) { const px = x + 32 + (i % 15) * 16.5, py = y + 45 + Math.floor(i / 15) * 29; const vif = i < vivants || !done; if (vif) craie.cercle(px, py, 4.5, { couleur: accent(), fond: accent(), fondAlpha: .5, largeur: 1.2, tremble: .2 }); else { craie.ligne(px - 4, py - 4, px + 4, py + 4, { couleur: "rouge", largeur: 1.2, alpha: .5, tremble: .2 }); craie.ligne(px - 4, py + 4, px + 4, py - 4, { couleur: "rouge", largeur: 1.2, alpha: .5, tremble: .2 }); } if (run && r() < .08) craie.ligne(px + 6, py - 6, px + 14, py - 14, { couleur: "jaune", largeur: 1, alpha: .6 }); } });
+        const iso = isotopeData[p.isotope];
+        craie.texte(`${iso.name} · t½ = ${fmt(iso.halfLife, 2)} ${iso.unit}`, cx, y + 262, { align: "center", taille: 17, couleur: accent() });
+        craie.texte(model === "radio_dating" ? `N / N₀ = ${fmt(p.ratio, 3)}` : `N₀ = ${p.n0}   t = ${fmt(p.elapsed, 1)} t½`, x + 20, y + 292, { taille: 17, couleur: "jaune" });
+        craie.texte("N(t) = N₀ · 2^(−t / t½)", x + 20, y + 320, { taille: 18, couleur: "violet" });
+        if (done) { craie.depuis(scene.marque); craie.texte(`${result.primary.value} ${result.primary.unit}`, x + 20, y + 348, { taille: 17, couleur: accent(), max: 270 }); }
+      }
+    } else if (kind === "equilibrium") {
+      if (model === "titration") {
+        craie.rect(cx - 10, y + 10, 20, 120, { couleur: "blanc", arrondi: 2 });
+        for (let i = 1; i < 6; i++) craie.ligne(cx - 10, y + 10 + i * 20, cx - 2, y + 10 + i * 20, { largeur: 1.2, couleur: "faible", duree: .03 });
+        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .25; c.fillStyle = craie.couleur("bleu"); const f = clamp(p.vb / 50, 0, 1); c.fillRect(cx - 8, y + 12 + 116 * f, 16, 116 * (1 - f)); c.globalAlpha = 1; });
+        craie.trait([[cx - 10, y + 130], [cx, y + 145], [cx + 10, y + 130]], { couleur: "blanc", largeur: 2 }).ligne(cx, y + 145, cx, y + 160, { largeur: 2 });
+        craie.texte("burette : base", cx + 20, y + 40, { taille: 15, couleur: "bleu" }).texte(`Vᵦ = ${fmt(p.vb, 1)} mL`, cx + 20, y + 64, { taille: 16, couleur: "jaune" });
+        becher(cx - 45, y + 175, 90, 95, .55, (result?.visual?.ratio ?? 0) > 1 ? "bleu" : "rose", { label: "acide dosé" });
+        if (run) craie.direct(() => { const f = (scene.now * .0015) % 1; craie.cercle(cx, y + 162 + f * 40, 2.5, { couleur: "bleu", fond: "bleu", fondAlpha: .6, largeur: 1 }); });
+        craie.rect(x + 10, y + 180, 70, 44, { couleur: "blanc", arrondi: 6 }).texte("pH-mètre", x + 45, y + 240, { align: "center", taille: 14, couleur: "faible" });
+        craie.ligne(x + 80, y + 202, cx - 20, y + 240, { couleur: "faible", largeur: 1.4 });
+        if (done) { craie.depuis(scene.marque); craie.texte(`pH = ${result.measurements[0].value}`, x + 45, y + 208, { align: "center", taille: 18, couleur: accent() }); }
+        craie.texte("à l’équivalence : n(H₃O⁺) = n(HO⁻)", x + 10, y + 310, { taille: 16, couleur: "violet", max: 280 });
+      } else if (model === "weak_acid") {
+        becher(cx - 60, y + 90, 120, 150, .65, "rose", { label: "solution d’acide AH" });
+        craie.rect(x + 10, y + 20, 110, 50, { couleur: "blanc", arrondi: 6 }).texte("pH-mètre", x + 65, y + 90, { align: "center", taille: 14, couleur: "faible" });
+        craie.ligne(x + 120, y + 45, cx + 20, y + 110, { couleur: "faible", largeur: 1.4 }).ligne(cx + 20, y + 110, cx + 20, y + 200, { couleur: "blanc", largeur: 3, alpha: .5 });
+        if (done) { craie.depuis(scene.marque); craie.texte(`pH = ${result.measurements[0].value}`, x + 65, y + 52, { align: "center", taille: 20, couleur: accent() }); }
+        craie.texte(`c = ${fmt(p.concentration, 3)} mol·L⁻¹`, x + 140, y + 40, { taille: 15, couleur: "jaune", max: 150 });
+        craie.texte("AH + H₂O ⇌ A⁻ + H₃O⁺", cx, y + 290, { align: "center", taille: 19, couleur: "violet" });
+        craie.direct(() => { const alpha = v.ratio ?? 0; const r = graine(3); for (let i = 0; i < 24; i++) { const px = cx - 50 + r() * 100, py = y + 150 + r() * 80; craie.texte(i / 24 < alpha ? "A⁻" : "AH", px, py, { taille: 12, couleur: i / 24 < alpha ? accent() : "faible", alpha: .8 }); } });
+      } else if (model === "precipitation") {
+        const precipite = (result?.visual?.drops ?? 0) > 0;
+        becher(cx - 70, y + 60, 140, 170, .7, "cyan", { label: p.salt === "caf2" ? "Ca²⁺ + F⁻" : "Ag⁺ + Cl⁻" });
+        craie.direct(() => { if (!done) return; const c = craie.ctx; if (precipite) { c.globalAlpha = .5; c.fillStyle = craie.couleur("blanc"); for (let i = 0; i < 40; i++) { const r = graine(i + 1)(); c.fillRect(cx - 66 + (i * 13 % 130), y + 205 + r * 20, 3, 3); } c.globalAlpha = 1; } });
+        craie.texte(`[M] = 10^${p.logM}   [X] = 10^${p.logX}`, cx, y + 40, { align: "center", taille: 16, couleur: "jaune" });
+        if (done) { craie.depuis(scene.marque); craie.texte(precipite ? "précipité : Q > Kₛ" : "limpide : Q < Kₛ", cx, y + 270, { align: "center", taille: 19, couleur: precipite ? accent() : "faible" }); }
+        craie.texte("Q = [M]·[X]  comparé à  Kₛ", cx, y + 310, { align: "center", taille: 17, couleur: "violet" });
+      } else {
+        fiole(cx - 70, y + 40, 140, 170, .6, accent());
+        craie.texte("A + B", x + 30, y + 250, { taille: 20, couleur: "blanc" });
+        fleches2sens(x + 100, y + 244, 70, done ? (v.direction ?? 0) : 0);
+        craie.texte("C", x + 185, y + 250, { taille: 20, couleur: accent() });
+        craie.texte(`K = ${fmt(p.K, 2)}`, x + 220, y + 250, { taille: 17, couleur: "jaune" });
+        craie.direct(() => { const r = graine(5); const ratio = v.ratio ?? (p.c0 / (p.a0 + p.b0 + p.c0)); for (let i = 0; i < 30; i++) { const px = cx - 50 + r() * 100, py = y + 110 + r() * 85; craie.cercle(px, py, 3, { couleur: i / 30 < ratio ? accent() : "faible", fond: i / 30 < ratio ? accent() : "faible", fondAlpha: .5, largeur: 1, tremble: .2 }); } });
+        craie.texte("Qᵣ évolue vers K, puis les deux sens s’équilibrent", x + 20, y + 300, { taille: 15, couleur: "violet", max: 275 });
+      }
+    } else if (kind === "electrochem") {
+      if (model === "electrolysis") {
+        becher(cx - 80, y + 110, 160, 150, .7, "cyan", { label: "électrolyte" });
+        craie.ligne(cx - 40, y + 60, cx - 40, y + 240, { couleur: "blanc", largeur: 4 }).ligne(cx + 40, y + 60, cx + 40, y + 240, { couleur: "orange", largeur: 4 });
+        craie.ligne(cx - 40, y + 60, cx - 40, y + 30, { largeur: 2 }).ligne(cx - 40, y + 30, cx - 14, y + 30, { largeur: 2 }).ligne(cx + 14, y + 30, cx + 40, y + 30, { largeur: 2 }).ligne(cx + 40, y + 30, cx + 40, y + 60, { largeur: 2 });
+        craie.cercle(cx, y + 30, 14, { couleur: "jaune" }).texte("G", cx, y + 36, { align: "center", taille: 15, couleur: "jaune" });
+        craie.texte("−", cx - 40, y + 55, { align: "center", taille: 18, couleur: "cyan" }).texte("+", cx + 40, y + 55, { align: "center", taille: 18, couleur: "orange" });
+        craie.texte(`I = ${fmt(p.current, 2)} A   t = ${fmt(p.time, 0)} min`, cx, y + 305, { align: "center", taille: 16, couleur: "jaune" });
+        if (run || done) bulles(cx - 56, y + 150, 24, 90, v.bubbles ? 10 : 4, v.speed || 1, "blanc");
+        craie.texte("Q = I · t   ;   n(e⁻) = Q / F", x + 20, y + 338, { taille: 17, couleur: "violet" });
+      } else {
+        becher(x + 20, y + 120, 100, 130, .65, "faible", { label: "Zn²⁺ / Zn" });
+        becher(x + 170, y + 120, 100, 130, .65, "bleu", { label: "Cu²⁺ / Cu" });
+        craie.ligne(x + 70, y + 60, x + 70, y + 230, { couleur: "faible", largeur: 5 }).ligne(x + 220, y + 60, x + 220, y + 230, { couleur: "orange", largeur: 5 });
+        craie.trait([[x + 105, y + 175], [x + 105, y + 110], [x + 185, y + 110], [x + 185, y + 175]], { couleur: "jaune", largeur: 6, alpha: .45 }).texte("pont salin", cx, y + 100, { align: "center", taille: 14, couleur: "jaune" });
+        craie.trait([[x + 70, y + 60], [x + 70, y + 30], [x + 125, y + 30]], { largeur: 2 }).trait([[x + 220, y + 60], [x + 220, y + 30], [x + 165, y + 30]], { largeur: 2 });
+        craie.cercle(cx, y + 30, 20, { couleur: "blanc" }).texte("V", cx, y + 37, { align: "center", taille: 18 });
+        craie.texte("Zn", x + 55, y + 55, { taille: 15, couleur: "faible" }).texte("Cu", x + 230, y + 55, { taille: 15, couleur: "orange" });
+        if (done) { craie.depuis(scene.marque); craie.texte(`E = ${fmt(v.voltage, 3)} V`, cx, y + 80, { align: "center", taille: 18, couleur: accent() }); }
+        if (done) craie.direct(() => { for (let i = 0; i < 8; i++) { const f = ((scene.now * .00025 * (v.speed || 1)) + i / 8) % 1; const px = f < .5 ? x + 70 : x + 220, py = f < .5 ? y + 60 - (f * 2) * 30 : y + 30 + ((f - .5) * 2) * 30; const qx = f < .25 ? x + 70 : f < .75 ? x + 70 + (f - .25) * 2 * 150 : x + 220; const qy = f < .25 ? y + 60 - f * 4 * 30 : f < .75 ? y + 30 : y + 30 + (f - .75) * 4 * 30; craie.texte("e⁻", qx, qy - 6, { taille: 12, couleur: "cyan" }); void px; void py; } });
+        craie.texte("Zn → Zn²⁺ + 2e⁻   ;   Cu²⁺ + 2e⁻ → Cu", x + 15, y + 300, { taille: 15, couleur: "violet", max: 280 });
+        craie.texte(`[Zn²⁺] = 10^${p.logZn}   [Cu²⁺] = 10^${p.logCu}`, x + 15, y + 325, { taille: 14, couleur: "jaune", max: 280 });
+      }
+    } else if (kind === "organic") {
+      const rendement = v.yield ?? 0;
+      craie.rect(cx - 55, y + 215, 110, 40, { couleur: "orange", arrondi: 8 }).texte("chauffe-ballon", cx, y + 275, { align: "center", taille: 14, couleur: "orange" });
+      ballon(cx, y + 185, 48, .55, done ? accent() : "jaune");
+      craie.direct(() => { const c = craie.ctx; c.save(); c.globalAlpha = .22; c.fillStyle = accent(); c.beginPath(); c.arc(cx, y + 185, 44, 0, Math.PI * 2); c.clip(); c.fillRect(cx - 48, y + 185 + 44 - 70 * clamp(rendement, 0, 1), 96, 70); c.restore(); });
+      craie.rect(cx - 10, y + 20, 20, 90, { couleur: "cyan", arrondi: 4 }).texte("réfrigérant", cx + 20, y + 50, { taille: 14, couleur: "cyan" });
+      craie.ligne(cx - 10, y + 40, cx - 30, y + 40, { couleur: "cyan", largeur: 1.6 }).ligne(cx - 10, y + 90, cx - 30, y + 90, { couleur: "cyan", largeur: 1.6 });
+      craie.texte("eau", cx - 48, y + 94, { taille: 12, couleur: "cyan" });
+      if (p.temp !== undefined) thermometre(x + 40, y + 120, 90, (p.temp - 40) / 60, `${fmt(p.temp, 0)} °C`);
+      if (run || done) bulles(cx - 30, y + 170, 60, 40, 6, v.speed || .7, "blanc");
+      craie.texte("acide + alcool ⇌ ester + eau", cx, y + 310, { align: "center", taille: 18, couleur: "violet" });
+      if (done) { craie.depuis(scene.marque); craie.texte(`${result.primary.label} : ${result.primary.value} ${result.primary.unit}`, cx, y + 338, { align: "center", taille: 17, couleur: accent(), max: 280 }); }
+      else craie.texte(model === "ester_kinetics" ? (p.catalyst === "acid" ? "avec H₂SO₄ (catalyseur)" : "sans catalyseur") : model === "synthesis_control" ? (p.pathway === "saponification" ? "voie : saponification" : "voie : estérification") : `K = ${fmt(p.K, 1)}`, cx, y + 338, { align: "center", taille: 15, couleur: "jaune" });
+    }
+  }
+
+  function dessinerCourbe(result, axis, progress) {
+    const { x, y, w, h } = G;
+    craie.texte(axis.y || "mesure", x - 4, y - 10, { taille: 14, couleur: "faible" });
+    if (!result) {
+      craie.axe(x, y + h, x + w + 10, y + h, [], { couleur: "faible" }).axe(x, y + h, x, y - 4, [], { couleur: "faible", vertical: true });
+      craie.texte(axis.x || "", x + w + 10, y + h + 20, { align: "right", taille: 14, couleur: "faible" });
+      craie.texte("la courbe se tracera au premier essai", x + w / 2, y + h / 2, { align: "center", taille: 14, couleur: "tresfaible", max: w - 10 });
+      return;
+    }
+    const series = result.series;
+    let minX = Math.min(...series.map(q => q.x)), maxX = Math.max(...series.map(q => q.x)), minY = Math.min(...series.map(q => q.y)), maxY = Math.max(...series.map(q => q.y));
+    if (maxX === minX) maxX = minX + 1; if (maxY === minY) { maxY += 1; minY -= 1; } const m = (maxY - minY) * .08; minY -= m; maxY += m;
+    craie.axe(x, y + h, x + w + 10, y + h, [[0, fmt(minX, 1)], [w / (w + 10), fmt(maxX, 1)]], { couleur: "faible", taille: 12 });
+    craie.axe(x, y + h, x, y - 4, [[(maxY - m - minY) / (maxY - minY), fmt(maxY - m, 2)], [(0 + m) / (maxY - minY) * 0 + (minY + m - minY) / (maxY - minY), fmt(minY + m, 2)]], { couleur: "faible", vertical: true, taille: 12 });
+    craie.texte(axis.x || "", x + w + 10, y + h + 32, { align: "right", taille: 13, couleur: "faible" });
+    const X = q => x + (q - minX) / (maxX - minX) * w, Y = q => y + h - (q - minY) / (maxY - minY) * h;
+    const visible = Math.max(2, Math.ceil(series.length * progress)), data = series.slice(0, visible);
+    craie.direct(() => {
+      craie.trait(data.map(q => [X(q.x), Y(q.y)]), { couleur: accent(), largeur: 2.6, tremble: .5 });
+      const last = data[data.length - 1]; craie.cercle(X(last.x), Y(last.y), 4, { couleur: "blanc", fond: "blanc", fondAlpha: .8, largeur: 1.2 });
+    });
+  }
+
+  function draw() {
+    const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
+    craie.debut(11, depuisOuverture() * 1.8);   // un peu plus vite qu’au tableau : le montage est fourni
+    const s = Math.min(W / LW, H / LH); craie.ctx.translate((W - LW * s) / 2, (H - LH * s) / 2); craie.ctx.scale(s, s);
+    const result = state.last_result, m = mission(), p = state.variables;
+    const v = result?.visual || { kind: cfg.sceneKind || "kinetics", rate: .4, fraction: 0 };
+    craie.texte(m.sceneLabel || m.title, M.x + M.w / 2, 22, { align: "center", taille: 16, couleur: "faible", max: M.w });
+    dessinerMontage(m.model, p, v, result);
+    craie.ligne(322, 20, 322, 380, { couleur: "tresfaible", largeur: 1, pointille: [6, 8] });
+    dessinerCourbe(result, m.axis || {}, state.status === "running" ? state.animation : 1);
+    if (result) {
+      craie.depuis(scene.marque);
+      craie.texte(`${result.primary.label} : ${result.primary.value} ${result.primary.unit}`, 336, 212, { taille: 19, couleur: accent(), max: 215 });
+      result.measurements.forEach((q, i) => craie.texte(`${q.label} = ${q.value} ${q.unit || ""}`, 336, 246 + i * 26, { taille: 15, couleur: "blanc", max: 215 }));
+      craie.texte(state.runCount > 1 ? `essai n° ${state.runCount}` : "premier essai", 336, 340, { taille: 14, couleur: "faible" });
+    } else {
+      craie.texte("carnet de mesures", 336, 212, { taille: 17, couleur: "faible" });
+      ["mesure 1", "mesure 2", "mesure 3"].forEach((t, i) => craie.ligne(336, 250 + i * 26, 540, 250 + i * 26, { couleur: "tresfaible", largeur: 1, pointille: [4, 6] }));
+    }
+    return craie.fin();
+  }
+
+  function boucle(now) {
+    scene.now = now;
+    if (scene.dirty || state.status === "running" || state.last_result) scene.dirty = !draw();
+    requestAnimationFrame(boucle);
   }
 
   window.SIMULATION_CONFIG = {
@@ -547,11 +723,12 @@
     const data=event.data;
     if(!data || data.type!=="simulation_control") return;
     event.stopImmediatePropagation();
-    if (data.guidance_text) $("#statusText").textContent = data.guidance_text;
+    if (data.guidance_text) T.bulle($("#statusText"), data.guidance_text);
+    const payload = data.payload || data;
+    T.appuyer(payload.command || payload.action || data.command);   // le professeur appuie sur le bouton visé
     const result=executeAICommand(data.payload || data.command || data, data.parameters || {});
     event.source?.postMessage?.({type:"simulation_control_result",requestId:data.requestId,simulation_id:cfg.id,simulationId:cfg.id,result},"*");
   });
-  window.addEventListener("resize",()=>{if(state.last_result)drawChart(state.last_result.series,state.last_result.axis,1);});
   $("#runButton").addEventListener("click",()=>runTrial());
   $("#resetButton").addEventListener("click",resetSimulation);
   initializeVariables();
@@ -565,11 +742,11 @@
     capabilities:{
       commands:window.SIMULATION_CONFIG.commands,
       globals:["executeAICommand","getSimulationState","runTrial","resetSimulation","selectVariant"],
-      buttons:cfg.missions.map(m=>({id:m.id,text:m.title,className:"mission-tab"})),
+      buttons:cfg.missions.map(m=>({id:m.id,text:m.title,className:"onglet"})),
       config:window.SIMULATION_CONFIG
     },
-    page_text:`${cfg.title}. ${cfg.intro}`,
+    page_text:`${cfg.title}. ${cfg.intro} Tout est dessiné à la craie au tableau : le montage à gauche, la courbe et le carnet de mesures à droite.`,
     manifest:window.SIMULATION_CONFIG
   },"*");
-  requestAnimationFrame(drawScene);
+  requestAnimationFrame(boucle);
 })();

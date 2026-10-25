@@ -3,21 +3,129 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simulation respiration cellulaire</title>
-  <style>body{font-family:Arial,sans-serif;padding:24px;background:#f8fafc}button{padding:10px 16px;margin:8px}#out{margin-top:20px;padding:16px;background:#fff;border-radius:12px}</style>
+  <title>Respiration cellulaire — au tableau</title>
+  <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css" />
+  <style>
+    #out { max-width: 42%; }
+    #out .grand { color: var(--vert); font-size: 1.6em; line-height: 1.1; }
+    #out.fermentation .grand { color: var(--orange); }
+    #out[hidden] { display: none; }
+    @media (max-width: 720px) { #out { max-width: 60%; } }
+  </style>
 </head>
 <body>
-  <h1>Simulation respiration cellulaire</h1>
-  <p>Choisis la présence de dioxygène pour observer le rendement énergétique.</p>
-  <button onclick="simulate(true)">Avec O2</button>
-  <button onclick="simulate(false)">Sans O2</button>
-  <div id="out">Résultat affiché ici.</div>
-  <script>
-    function simulate(withO2){
-      document.getElementById('out').innerHTML = withO2
-        ? '<strong>Respiration cellulaire</strong><br/>Lieu : mitochondrie<br/>Bilan : 36 à 38 ATP'
-        : '<strong>Pas de respiration complète</strong><br/>Sans O2, la cellule bascule vers une voie fermentaire avec 2 ATP';
+<div class="tableau">
+  <header class="titre">
+    <div><small>SVT · 2 BAC · consommation de la matière organique</small><h1>Respiration cellulaire</h1><p class="objectif" id="objectif"></p></div>
+    <span class="lecture" id="progress"></span>
+  </header>
+  <section class="scene">
+    <canvas id="canvas" role="img" aria-label="Cellule dessinée à la craie : glycolyse dans le cytoplasme, puis cycle de Krebs et chaîne respiratoire dans la mitochondrie, ou fermentation sans dioxygène"></canvas>
+    <div class="panneau haut-droite" id="out" hidden><h3 id="outTitre"></h3><p class="grand" id="outAtp"></p><p id="outLieu"></p><p id="outVoie"></p><p id="outEtapes"></p></div>
+  </section>
+  <footer class="barre">
+    <button class="craie-btn principal btn-o2" id="withO2" data-professor-control="start set_oxygen" onclick="simulate(true)">Avec O₂</button>
+    <button class="craie-btn attention btn-no-o2" id="withoutO2" onclick="simulate(false)">Sans O₂</button>
+    <button class="craie-btn secondaire" id="reset" data-professor-control="reset">Recommencer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+  // Même pont que simulation.html : simulation_id « respiration_cellulaire », commandes start / reset / set_oxygen / highlight_button.
+  const { Craie, ecrire, bulle, appuyer } = window.Tableau;
+  const $ = id => document.getElementById(id);
+  let studentActions = [];
+  const S = { o2: null, ouvert: performance.now(), marque: null, dirty: true };
+  window.SIMULATION_CONFIG = { id: 'respiration_cellulaire', commands: ['start', 'reset', 'set_oxygen', 'highlight_button'], variants: [{ id: 'avec_o2', label: 'Avec dioxygène' }, { id: 'sans_o2', label: 'Sans dioxygène' }] };
+
+  function simulate(withO2) {
+    const action = withO2 ? 'clicked_with_o2' : 'clicked_without_o2';
+    studentActions.push(action);
+    const state = withO2
+      ? { oxygen_present: true, pathway: 'respiration_aerobic', location: 'mitochondrie', atp_produced: 36, steps: ['glycolyse', 'krebs', 'chaine_respiratoire'] }
+      : { oxygen_present: false, pathway: 'fermentation', location: 'cytoplasme', atp_produced: 2, steps: ['glycolyse'] };
+    S.o2 = withO2; S.marque = (performance.now() - S.ouvert) / 1000; S.dirty = true;
+    displayResult(state); sendStateToAI(state);
+  }
+  function displayResult(state) {
+    const out = $('out'); out.hidden = false; out.classList.toggle('fermentation', !state.oxygen_present);
+    ecrire($('outTitre'), state.oxygen_present ? 'Respiration aérobie' : 'Fermentation');
+    ecrire($('outAtp'), state.oxygen_present ? '36 à 38 ATP' : '2 ATP');
+    $('outLieu').textContent = 'Lieu : ' + state.location;
+    $('outVoie').textContent = 'Voie métabolique : ' + state.pathway;
+    $('outEtapes').textContent = 'Étapes : ' + state.steps.join(' → ');
+    bulle($('feedback'), state.oxygen_present ? 'Respiration cellulaire : glucose + O₂ → CO₂ + H₂O + énergie (36 à 38 ATP)' : 'Sans O₂, la cellule bascule vers une voie fermentaire : 2 ATP seulement.', state.oxygen_present ? 'good' : '');
+    $('progress').textContent = calculateProgress() >= 1 ? 'deux conditions comparées' : 'compare les deux conditions';
+  }
+  function sendStateToAI(state) {
+    const message = { type: 'simulation_state', simulation_id: 'respiration_cellulaire', student_actions: studentActions, current_state: state, objective_progress: calculateProgress(), timestamp: Date.now() };
+    window.parent.postMessage(message, '*');
+  }
+  function calculateProgress() { return studentActions.includes('clicked_with_o2') && studentActions.includes('clicked_without_o2') ? 1.0 : 0.5; }
+  function resetAll() { studentActions = []; S.o2 = null; S.marque = null; S.dirty = true; $('out').hidden = true; bulle($('feedback'), 'Choisis la présence de dioxygène pour observer le rendement énergétique.'); $('progress').textContent = ''; }
+  window.addEventListener('message', (event) => {
+    const d = event.data || {};
+    if (d.type === 'simulation_control' && d.simulation_id === 'respiration_cellulaire') {
+      if (d.guidance_text) bulle($('feedback'), d.guidance_text);
+      executeAICommand(d.command, d.parameters);
     }
-  </script>
-<script src="/media/simulations/professor-locate.js" defer></script></body>
+  });
+  function executeAICommand(command, params) {
+    switch (command) {
+      case 'start': appuyer('start'); simulate(true); break;
+      case 'reset': appuyer('reset'); resetAll(); break;
+      case 'set_oxygen': { const withO2 = params?.oxygen_present ?? true; appuyer(withO2 ? 'start' : 'set_oxygen_off'); simulate(withO2); break; }
+      case 'highlight_button': { const b = params?.button === 'with_o2' ? $('withO2') : $('withoutO2'); b.classList.remove('presse'); void b.offsetWidth; b.classList.add('presse'); setTimeout(() => b.classList.remove('presse'), 500); break; }
+      default: console.warn('[Simulation] Commande inconnue:', command);
+    }
+  }
+  $('withoutO2').dataset.professorControl = 'set_oxygen_off';
+  $('reset').onclick = resetAll;
+  window.__SIMULATION_MANIFEST_SENT__ = true;
+  window.parent.postMessage({ type: 'simulation_manifest', simulation_id: 'respiration_cellulaire', capabilities: { commands: window.SIMULATION_CONFIG.commands, config: window.SIMULATION_CONFIG, globals: ['simulate', 'executeAICommand'], command_schema: { set_oxygen: { oxygen_present: 'boolean' }, highlight_button: { button: 'with_o2 | without_o2' } } }, page_text: 'Dessinée au tableau : avec O₂, glycolyse puis cycle de Krebs et chaîne respiratoire dans la mitochondrie (36 à 38 ATP) ; sans O₂, fermentation dans le cytoplasme (2 ATP).' }, '*');
+
+  // ── Dessin à la craie (repère logique 760 × 420) ──────────────────────────
+  const craie = new Craie($('canvas'), { onresize: () => { S.dirty = true; } });
+  function draw() {
+    const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
+    const temps = (performance.now() - S.ouvert) / 1000;
+    craie.debut(9, temps);
+    const c = craie.ctx, s = Math.min(W / 760, H / 420); c.translate((W - 760 * s) / 2, (H - 420 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 11;
+    craie.trait([[30, 70], [150, 30], [430, 28], [620, 60], [730, 160], [720, 330], [560, 405], [220, 410], [50, 350], [20, 200]], { couleur: 'faible', largeur: 2.4, ferme: true, duree: 1 });
+    craie.texte('CYTOPLASME', 70, 110, { couleur: 'cyan', taille: 17 });
+    craie.trait([[470, 150], [560, 140], [640, 190], [640, 290], [560, 340], [470, 330], [430, 240]], { couleur: 'rose', largeur: 2.6, ferme: true, duree: .6 });
+    craie.trait([[485, 162], [560, 155], [625, 198], [625, 282], [560, 325], [485, 318], [450, 240]], { couleur: 'rose', largeur: 1.4, ferme: true, duree: .4 });
+    craie.texte('MITOCHONDRIE', 540, 365, { couleur: 'rose', taille: 15, align: 'center' });
+    craie.cercle(110, 220, 24, { couleur: 'orange', fond: 'orange' }).texte('glucose', 110, 262, { couleur: 'orange', taille: 15, align: 'center' });
+    craie.fleche(140, 220, 215, 220, { couleur: 'faible', largeur: 2 });
+    craie.rect(220, 190, 120, 60, { couleur: 'cyan', arrondi: 14 }).texte('glycolyse', 280, 215, { couleur: 'cyan', taille: 17, align: 'center' }).texte('2 ATP', 280, 240, { couleur: 'jaune', taille: 14, align: 'center' });
+    craie.texte('pyruvate', 385, 205, { couleur: 'rose', taille: 15, align: 'center' });
+    if (S.o2 === null) craie.texte('O₂ présent ou absent ?', 385, 120, { couleur: 'jaune', taille: 18, align: 'center' });
+    if (S.o2 === true) {
+      craie.depuis(S.marque);
+      craie.fleche(345, 220, 445, 235, { couleur: 'rose', largeur: 2 });
+      craie.texte('O₂', 300, 110, { couleur: 'bleu', taille: 20, align: 'center' }).fleche(320, 112, 480, 175, { couleur: 'bleu', largeur: 1.8 });
+      craie.cercle(520, 240, 34, { couleur: 'vert', largeur: 2.2 }).texte('Krebs', 520, 238, { couleur: 'vert', taille: 14, align: 'center' }).texte('CO₂', 520, 256, { couleur: 'faible', taille: 12, align: 'center' });
+      craie.fleche(555, 240, 575, 240, { couleur: 'vert', largeur: 1.8 });
+      craie.rect(578, 205, 50, 70, { couleur: 'violet', arrondi: 8 }).texte('chaîne', 603, 232, { couleur: 'violet', taille: 12, align: 'center' }).texte('resp.', 603, 250, { couleur: 'violet', taille: 12, align: 'center' });
+      craie.texte('H₂O', 660, 300, { couleur: 'bleu', taille: 15 });
+      craie.pause(.2).texte('36 à 38 ATP', 300, 345, { couleur: 'vert', taille: 26, align: 'center' });
+      craie.texte('glucose + O₂ → CO₂ + H₂O + énergie', 60, 395, { couleur: 'faible', taille: 15 });
+    } else if (S.o2 === false) {
+      craie.depuis(S.marque);
+      craie.texte('✗ pas d’O₂ : la mitochondrie ne prend pas le relais', 60, 85, { couleur: 'rouge', taille: 15, max: 340 });
+      craie.fleche(300, 255, 300, 300, { couleur: 'orange', largeur: 2 });
+      craie.rect(220, 305, 160, 56, { couleur: 'orange', arrondi: 14 }).texte('fermentation', 300, 330, { couleur: 'orange', taille: 17, align: 'center' }).texte('cytoplasme', 300, 352, { couleur: 'faible', taille: 13, align: 'center' });
+      craie.texte('lactate ou éthanol + CO₂', 300, 385, { couleur: 'faible', taille: 14, align: 'center' });
+      craie.pause(.2).texte('2 ATP seulement', 120, 330, { couleur: 'orange', taille: 24, align: 'center', max: 190 });
+    }
+    return craie.fin();
+  }
+  function frame() { if (S.dirty) S.dirty = !draw(); requestAnimationFrame(frame); }
+  ecrire($('objectif'), 'Choisis la présence de dioxygène pour observer le rendement énergétique.', { vitesse: 60 });
+  bulle($('feedback'), 'Avec ou sans O₂ ? Compare les deux.'); requestAnimationFrame(frame);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body>
 </html>

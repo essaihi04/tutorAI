@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TITRE — au tableau</title>
+<!-- Gabarit d'un laboratoire dessiné au tableau : voir docs/design/labos-au-tableau.md -->
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"></head>
+<body>
+<div class="tableau">
+  <header class="titre">
+    <div><small>Matière · 2 BAC · chapitre</small><h1 id="title"></h1><p class="objectif" id="objective"></p></div>
+    <nav class="onglets" id="onglets" aria-label="Expériences"></nav>
+  </header>
+  <section class="scene">
+    <canvas id="canvas" role="img" aria-label="Schéma dessiné à la craie"></canvas>
+    <div class="panneau haut-droite"><h3 id="question"></h3><div class="choix" id="response"></div><button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button></div>
+    <div class="panneau bas-gauche" id="settings" data-professor-control="set_parameters"></div>
+  </section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start">Lancer</button>
+    <button class="craie-btn secondaire" id="reset" data-professor-control="reset">Recommencer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+    <button class="craie-btn secondaire" id="hint" data-professor-control="reveal_hint">Un indice</button>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+const { Craie, fr, bulle, ecrire, onglets, curseur, glisser, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const variants = { a: { label: 'Expérience 1', titre: 'Titre 1', objectif: 'Objectif 1', question: 'Question ?', choix: ['Bonne réponse', 'Autre'], bonne: 0 } };
+const S = { variant: 'a', t: 0, running: false, ouvert: performance.now(), dirty: true, completed: new Set(), params: { x: 5 } };
+const commands = ['start', 'set_variant', 'set_parameters', 'check', 'reset', 'reveal_hint'];
+const config = { id: 'IDENTIFIANT_UNIQUE', version: '1.0', title: 'Titre', variants: Object.entries(variants).map(([id, v]) => ({ id, label: v.label })), commands, command_schema: { set_variant: { variant_id: 'a' }, set_parameters: { x: '0..10' } } };
+const pont = protocole({ id: config.id, commandes: commands, config, texte: 'Ce que le tuteur doit savoir de ce laboratoire.',
+  etat: () => ({ simulation_status: S.running ? 'running' : 'idle', current_variant: S.variant, time_s: +S.t.toFixed(2), parameters: { ...S.params }, completed_variants: [...S.completed] }),
+  progression: () => S.completed.size / Object.keys(variants).length, executer });
+const redraw = () => { S.dirty = true; };
+function setVariant(id) { if (!variants[id]) return; S.variant = id; S.ouvert = performance.now(); const v = variants[id]; onglets($('onglets'), config.variants, id, setVariant, S.completed); ecrire($('title'), v.titre); ecrire($('objective'), v.objectif, { vitesse: 60 }); ecrire($('question'), v.question); $('response').innerHTML = v.choix.map((c, i) => `<label><input type="radio" name="choice" value="${i}"> ${c}</label>`).join(''); $('settings').replaceChildren(curseur({ id: 'x', label: 'Réglage x', min: 0, max: 10, step: .5, valeur: S.params.x, unite: 'm', onchange: v => setParameters({ x: v }) })); reset(); pont.noter('set_variant', { variant_id: id }); pont.emettre(); }
+function setParameters(p) { if (Number.isFinite(+p.x)) S.params.x = Math.min(10, Math.max(0, +p.x)); reset(); pont.noter('set_parameters', { ...S.params }); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Lance, puis observe.'); redraw(); pont.emettre(); }
+function start() { S.t = 0; S.running = true; $('run').textContent = 'Pause'; pont.noter('start'); pont.emettre(); }
+function check() { const c = document.querySelector('input[name=choice]:checked'); const ok = c && +c.value === variants[S.variant].bonne; if (ok) S.completed.add(S.variant); bulle($('feedback'), ok ? 'Objectif validé.' : 'Réessaie.', ok ? 'good' : 'bad'); pont.noter('check', { correct: !!ok }); pont.emettre({ correct: !!ok }); }
+function hint() { bulle($('feedback'), 'Un indice…'); pont.noter('reveal_hint'); pont.emettre(); }
+function executer(cmd, p) { ({ start, reset, check, reveal_hint: hint, set_variant: () => setVariant(p.variant_id), set_parameters: () => setParameters(p) })[cmd]?.(); }
+const canvas = $('canvas'), craie = new Craie(canvas, { onresize: redraw });
+function draw() {
+  const W = craie.W, H = craie.H; if (W < 1) return true;
+  craie.debut(7, (performance.now() - S.ouvert) / 1000);
+  const s = Math.min(W / 760, H / 380); craie.ctx.translate((W - 760 * s) / 2, (H - 380 * s) / 2); craie.ctx.scale(s, s);
+  // Parties fixes : écrites en direct, dans l'ordre des appels.
+  craie.fleche(170, 60, 420, 60, { couleur: 'vert' }).texte('sens de propagation', 295, 48, { couleur: 'vert', align: 'center' });
+  craie.ligne(45, 190, 710, 190, { couleur: 'faible', largeur: 1.5 }).texte('S', 23, 196);
+  craie.rect(45 + 66.5 * S.params.x - 11, 156, 22, 68, { couleur: 'cyan' }).texte('A', 45 + 66.5 * S.params.x, 246, { couleur: 'cyan', align: 'center' });
+  // Parties animées : dessinées d'un coup.
+  craie.direct(() => craie.courbe(u => [45 + 665 * u, 190 - 40 * Math.exp(-((u * 10 - 2 * S.t) ** 2) * 4)], 160, { couleur: 'cyan', largeur: 2.6 }));
+  craie.direct(() => craie.texte(`t = ${fr(S.t)} s`, 730, 24, { couleur: 'jaune', align: 'right' }));
+  return craie.fin();
+}
+glisser(canvas, { toucher: (x, y) => { const s = Math.min(craie.W / 760, craie.H / 380), lx = (x - (craie.W - 760 * s) / 2) / s, ly = (y - (craie.H - 380 * s) / 2) / s; return Math.abs(ly - 190) < 40 && Math.abs(lx - (45 + 66.5 * S.params.x)) < 20 ? 'x' : null; },
+  bouger: (id, x) => { const s = Math.min(craie.W / 760, craie.H / 380), lx = (x - (craie.W - 760 * s) / 2) / s; setParameters({ x: Math.round((lx - 45) / 66.5 * 2) / 2 }); } });
+$('run').onclick = () => (S.running ? (S.running = false, $('run').textContent = 'Reprendre') : start()); $('reset').onclick = reset; $('check').onclick = check; $('hint').onclick = hint;
+let prev = performance.now();
+(function frame(now) { const dt = Math.min(.1, (now - prev) / 1000); prev = now; if (S.running) { S.t += dt; S.dirty = true; if (S.t > 6) { S.running = false; $('run').textContent = 'Lancer'; } } if (S.dirty) S.dirty = !draw(); requestAnimationFrame(frame); })(prev);
+setVariant('a');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
