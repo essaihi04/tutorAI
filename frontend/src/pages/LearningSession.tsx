@@ -1,4 +1,5 @@
 import { observeAvatarMedia, observeAvatarSource } from '../services/avatarAudio';
+import { choisirReaction, prechargerReactions } from '../services/reactionVoice';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -872,6 +873,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const sourcesPcmRef = useRef<AudioBufferSourceNode[]>([]);
   const fluxSampleRateRef = useRef(24000);
   const fluxTermineRef = useRef(false);
+  /** Fin (horloge audio) de la réaction immédiate en cours, 0 sinon. */
+  const reactionFinRef = useRef(0);
   const premierBlocRef = useRef(true);
 
   const avanceRef = useRef(AVANCE_MIN_S);
@@ -892,6 +895,10 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       prochainDepartRef.current = 0;
       // Reprise à froid : le silence qui précède n'est pas une coupure, il ne
       // doit donc pas gonfler l'avance visée.
+      premierBlocRef.current = true;
+    } else if (reactionFinRef.current > ctx.currentTime) {
+      // La réaction immédiate est encore en train de sonner : la réponse se
+      // colle derrière elle, et son premier bloc reste un « premier bloc ».
       premierBlocRef.current = true;
     }
     setSpeaking(true);
@@ -976,6 +983,49 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       }
     };
   };
+
+  /**
+   * Le professeur réagit tout de suite au message de l'élève, avec une
+   * courte phrase déjà enregistrée dans sa voix, pendant que la vraie réponse
+   * se prépare. Planifiée sur la même horloge que le flux PCM : la réponse
+   * s'enchaîne derrière, sans chevauchement. Rend le texte dit, ou null.
+   */
+  const direReaction = (texteEleve: string): string | null => {
+    if (tableauParleRef.current) return null;      // le tableau a la parole
+    const ctx = contexteAudio();
+    if (!ctx || ctx.state !== 'running') return null;
+    // Le professeur parle encore : une réaction derrière sa phrase tomberait
+    // à contretemps.
+    if (prochainDepartRef.current > ctx.currentTime + 0.1) return null;
+    const reaction = choisirReaction(texteEleve);
+    if (!reaction) return null;
+    const source = ctx.createBufferSource();
+    source.buffer = reaction.son;
+    source.connect(ctx.destination);
+    observeAvatarSource(source);                   // la moustache bouge avec elle
+    const depart = Math.max(ctx.currentTime + 0.02, prochainDepartRef.current);
+    source.start(depart);
+    reactionFinRef.current = depart + reaction.son.duration;
+    prochainDepartRef.current = reactionFinRef.current;
+    if (sourcesPcmRef.current.length === 0) fluxTermineRef.current = true;  // aucun flux en cours
+    sourcesPcmRef.current.push(source);
+    setSpeaking(true);
+    source.onended = () => {
+      source.disconnect();
+      sourcesPcmRef.current = sourcesPcmRef.current.filter((s) => s !== source);
+      if (fluxTermineRef.current && sourcesPcmRef.current.length === 0) setSpeaking(false);
+    };
+    return reaction.texte;
+  };
+
+  // Les réactions sont chargées et décodées dès la connexion : au premier
+  // message, elles sonnent sans le moindre délai.
+  useEffect(() => {
+    if (!connected) return;
+    const ctx = contexteAudio();
+    if (ctx) void prechargerReactions(ctx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
 
   const terminerFluxPcm = () => {
     fluxTermineRef.current = true;
@@ -1908,9 +1958,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // Un cours scénarisé occupe déjà l'écran central : la réponse du tuteur
     // reste dans la colonne de gauche au lieu de remplacer la diapositive par
     // un tableau ou une image. Même porte que le mode libre, même chat.
+    const reactionDite = direReaction(text);
     wsService.sendJson({
       type: 'text_input',
       text,
+      ...(reactionDite ? { reaction_dite: reactionDite } : {}),
       ...(courseDeck && !isLibreConnexion ? { course_player_question: true } : {}),
     });
   };
@@ -1963,7 +2015,14 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     if (!connected || !propre) return;
     setContextSuggestions([]);
     addMessage('student', propre);
-    wsService.sendJson({ type: 'text_input', text: propre, course_player_question: true });
+    const reactionDite = direReaction(propre);
+    wsService.sendJson({
+      type: 'text_input',
+      text: propre,
+      course_player_question: true,
+      ...(reactionDite ? { reaction_dite: reactionDite } : {}),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addMessage, connected]);
 
   /**

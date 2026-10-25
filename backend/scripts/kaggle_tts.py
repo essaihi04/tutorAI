@@ -5,6 +5,7 @@
     python -m scripts.kaggle_tts journal  # dernières lignes du kernel direct
     python -m scripts.kaggle_tts essai    # réveil réel + mesures (démarrage, premier son, vitesse)
     python -m scripts.kaggle_tts banc     # banc fp32 / fp16 (kernel séparé, ~15 min GPU)
+    python -m scripts.kaggle_tts reactions  # enregistre les réactions immédiates (voix Amine)
 
 Le kernel direct n'est jamais lancé à la main : le backend le pousse quand une
 séance s'ouvre (app/services/kaggle_tts.py). Identifiants : KAGGLE_USERNAME et
@@ -69,11 +70,12 @@ PHRASES_ESSAI = [
 ]
 
 
-def essai():
-    """Réveille un kernel direct comme le ferait une séance, puis mesure.
+def _reveiller_essai():
+    """Pousse le serveur sur le kernel d'essai et attend qu'il soit prêt.
 
-    L'annonce au backend est refusée (clé inconnue de lui) : l'essai ne touche
-    pas à la voix servie aux élèves. Le kernel s'éteint seul après la veille.
+    Rend (url, jeton, étapes) ou None. L'annonce au backend est refusée (clé
+    inconnue de lui) : l'essai ne touche pas à la voix servie aux élèves. Le
+    kernel s'éteint seul après la veille.
     """
     import re
     import secrets
@@ -117,8 +119,21 @@ def essai():
             time.sleep(10)          # le kernel est encore en file : les journaux ne sont pas ouverts
     if not url or not etapes.get("pret"):
         print("pas prêt après 15 min — voir `journal`")
-        return
+        return None
     print(f"\nDÉMARRAGE À FROID : {etapes['pret']:.0f} s (push → voix prête)\n")
+    return url, jeton, etapes
+
+
+def essai():
+    """Réveille un kernel d'essai comme le ferait une séance, puis mesure."""
+    import time
+
+    import httpx
+
+    reveil = _reveiller_essai()
+    if not reveil:
+        return
+    url, jeton, _ = reveil
     h = {"Authorization": f"Bearer {jeton}"}
     with httpx.Client(timeout=120) as c:
         t = time.time()
@@ -159,6 +174,37 @@ def banc():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def reactions(sortie: str = "/tmp/reactions"):
+    """Enregistre les réactions immédiates (kaggle_tts/reactions.json) avec la
+    voix d'Amine, sur le kernel d'essai : un WAV par phrase + manifest.json,
+    à copier dans frontend/public/media/audio/reactions/."""
+    import httpx
+
+    phrases = json.loads((DOSSIER_KERNEL / "reactions.json").read_text(encoding="utf-8"))["reactions"]
+    reveil = _reveiller_essai()
+    if not reveil:
+        return
+    url, jeton, _ = reveil
+    dossier = Path(sortie)
+    dossier.mkdir(parents=True, exist_ok=True)
+    h = {"Authorization": f"Bearer {jeton}"}
+    faites = []
+    with httpx.Client(timeout=120) as c:
+        for r in phrases:
+            rep = c.post(f"{url}/tts", json={"texte": r["texte"], "langue": "fr" if r["lang"] == "fr" else "ma"},
+                         headers=h)
+            if rep.status_code != 200 or not rep.content.startswith(b"RIFF"):
+                print("échec", r["id"], rep.status_code)
+                continue
+            (dossier / f"{r['id']}.wav").write_bytes(rep.content)
+            faites.append({**r, "url": f"/media/audio/reactions/{r['id']}.wav"})
+            print(r["id"], f"{(len(rep.content) - 44) / 2 / 24000:.1f} s", r["texte"])
+    (dossier / "manifest.json").write_text(
+        json.dumps({"voix": "academy-v3-amine", "reactions": faites}, ensure_ascii=False, indent=1),
+        encoding="utf-8")
+    print(len(faites), "/", len(phrases), "réactions dans", dossier)
+
+
 if __name__ == "__main__":
-    {"socle": socle, "statut": statut, "journal": journal, "essai": essai, "banc": banc}.get(sys.argv[1] if len(sys.argv) > 1 else "",
+    {"socle": socle, "statut": statut, "journal": journal, "essai": essai, "banc": banc, "reactions": reactions}.get(sys.argv[1] if len(sys.argv) > 1 else "",
                                                                lambda: print(__doc__))()

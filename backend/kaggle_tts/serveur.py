@@ -24,7 +24,6 @@ import glob
 import io
 import json
 import os
-import queue
 import re
 import shutil
 import subprocess
@@ -230,10 +229,17 @@ def installer():
 BASE, T3, REF = installer()
 say("dépendances prêtes")
 
-import numpy as np  # noqa: E402
-import torch  # noqa: E402
+import multiprocessing as mp  # noqa: E402
 
-# ── 3. Un modèle par carte ──
+# ── 3. Un PROCESSUS par carte ──
+# La génération avance jeton par jeton dans une boucle Python : avec deux fils
+# dans un même processus, les deux cartes se disputaient le verrou de
+# l'interpréteur et chacune ralentissait (banc fp16 : ×1,8 au lieu de ×1,0).
+# Deux processus calculent vraiment en parallèle. Le processus principal ne
+# fait que le HTTP.
+MODULE_TRAVAILLEUR = r'''"""Processus d'une carte T4 (lancé en « spawn » par serveur.py)."""
+import re
+
 AR = re.compile("[؀-ۿ]")
 IMPORTANT = re.compile(
     r"\b(donc|retiens|retenez|c'est-à-dire|autrement dit|attention|important|essentiel|définition|on appelle|"
@@ -256,15 +262,41 @@ def style_de(p):
     return "normal"
 
 
-def charger(k, sortie):
+def nettoyer(w, sr):
+    """Coupe le résidu avant/après la voix (cf. v6), fondus 10/40 ms."""
+    import numpy as np
+    h = int(0.02 * sr)
+    n = len(w) // h
+    if n < 3:
+        return w
+    db = 20 * np.log10(np.sqrt((w[:n * h].reshape(n, h) ** 2).mean(1)) + 1e-9)
+    parole = np.where((db > db.max() - 35) & (db > -45))[0]
+    if not len(parole):
+        return w
+    a = max(0, parole[0] * h - int(0.02 * sr))
+    b = min(len(w), (parole[-1] + 1) * h + int(0.06 * sr))
+    w = w[a:b].copy()
+    fi, fo = min(len(w), int(0.01 * sr)), min(len(w), int(0.04 * sr))
+    w[:fi] *= np.linspace(0, 1, fi, dtype=np.float32)
+    w[len(w) - fo:] *= np.cos(np.linspace(0, np.pi / 2, fo, dtype=np.float32)) ** 2
+    return w
+
+
+def travailleur(k, entree, sortie, conf):
+    """Processus d'une carte : charge le modèle, puis synthétise ce qu'on lui donne."""
+    import os, sys
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(k)   # avant tout import de torch
+    sys.path[:0] = [p for p in conf["chemins"] if p not in sys.path]
+    BASE, T3, REF = conf["base"], conf["t3"], conf["ref"]
     try:
-        torch.cuda.set_device(k)   # le périphérique courant est propre à chaque fil
+        import numpy as np
+        import torch
         from safetensors.torch import load_file
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-        m = ChatterboxMultilingualTTS.from_local(BASE, device=f"cuda:{k}")
+        m = ChatterboxMultilingualTTS.from_local(BASE, device="cuda")
         if T3:
-            m.t3.load_state_dict(load_file(T3, device=f"cuda:{k}"), strict=False)
-        m.t3.to(f"cuda:{k}").eval()
+            m.t3.load_state_dict(load_file(T3, device="cuda"), strict=False)
+        m.t3.to("cuda").eval()
         try:
             m.t3.tfmr.set_attn_implementation("eager")
         except Exception:
@@ -273,49 +305,95 @@ def charger(k, sortie):
         # La voix d'Amine n'est analysée qu'une fois : sinon chaque phrase
         # recalculerait l'empreinte de la référence (~0,3 s perdues).
         m.prepare_conditionals(REF, exaggeration=STYLES["normal"]["ex"])
-        with torch.inference_mode():
-            m.generate("Bonjour.", language_id="fr", exaggeration=0.6, temperature=0.75, cfg_weight=0.35)
-        sortie[k] = m
-        say(f"gpu{k} prêt")
+        demi = bool(conf.get("fp16"))
+
+        def generer(texte, lg, st):
+            with torch.inference_mode():
+                if demi:
+                    with torch.autocast("cuda", dtype=torch.float16):
+                        w = m.generate(texte, language_id=lg, exaggeration=st["ex"], temperature=0.75,
+                                       cfg_weight=st["cfg"])
+                else:
+                    w = m.generate(texte, language_id=lg, exaggeration=st["ex"], temperature=0.75,
+                                   cfg_weight=st["cfg"])
+            return w.float().cpu().numpy()[0]
+
+        generer("Bonjour.", "fr", STYLES["normal"])          # chauffe
+        sortie.put(("pret", k, m.sr))
     except Exception as e:
-        say(f"gpu{k} ÉCHEC", repr(e)[:300])
+        sortie.put(("echec", k, repr(e)[:300]))
+        return
+    while True:
+        tid, texte, langue = entree.get()
+        pcm = b""
+        try:
+            st = STYLES[style_de(texte)]
+            lg = "pl" if (langue != "fr" and AR.search(texte)) else "fr"
+            w = generer(texte, lg, st)
+            # Un morceau coupé à une virgule n'est pas une fin de phrase : souffle court.
+            apres = st["apres"] if texte.rstrip()[-1:] in ".!?؟…" else 0.12
+            w = np.concatenate([nettoyer(w.astype(np.float32), m.sr), np.zeros(int(apres * m.sr), np.float32)])
+            pic = float(np.abs(w).max() or 1)
+            if pic > 0.944:
+                w *= 0.944 / pic
+            pcm = (np.clip(w, -1, 1) * 32767).astype("<i2").tobytes()
+        except Exception as e:
+            print(f"gpu{k} phrase échouée :", repr(e)[:200], flush=True)
+        sortie.put(("fait", tid, pcm))
 
 
-N = max(1, min(2, torch.cuda.device_count()))
-MODELES = {}
-fils = [threading.Thread(target=charger, args=(k, MODELES)) for k in range(N)]
-for f in fils:
-    f.start()
-for f in fils:
-    f.join()
-if not MODELES:
+'''
+
+
+# Un processus NEUF par carte (« spawn ») : `import chatterbox` initialise
+# CUDA dès le chargement, ce qui interdit de forker après lui. Le code des
+# processus vit dans un module écrit sur disque, que chacun importe seul.
+with open(f"{WORK}/travailleur_tts.py", "w", encoding="utf-8") as f:
+    f.write(MODULE_TRAVAILLEUR)
+sys.path.insert(0, WORK)
+from travailleur_tts import travailleur  # noqa: E402
+r = subprocess.run("nvidia-smi -L", shell=True, capture_output=True, text=True)
+N = max(1, min(2, r.stdout.count("GPU ")))
+ctx = mp.get_context("spawn")
+# Un enfant « spawn » réimporte le script principal s'il le trouve sur disque :
+# il relançait alors tout le serveur (tunnel, chargement…) et mourait sur
+# « RuntimeError: … bootstrapping phase ». Sans chemin, il n'importe que
+# travailleur_tts, ce qui est tout ce dont il a besoin.
+import __main__  # noqa: E402
+for attr in ("__file__",):
+    if hasattr(__main__, attr):
+        delattr(__main__, attr)
+__main__.__spec__ = None
+ENTREE, SORTIE = ctx.Queue(), ctx.Queue()
+CONF_TRAVAIL = {"chemins": [p for p in sys.path if p], "base": BASE, "t3": T3, "ref": REF,
+                "fp16": bool(CONF.get("fp16"))}
+for k in range(N):
+    ctx.Process(target=travailleur, args=(k, ENTREE, SORTIE, CONF_TRAVAIL), daemon=True).start()
+CARTES, SR = [], 24000
+for _ in range(N):
+    # Jamais d'attente sans fin : un enfant mort sans message laissait le
+    # kernel tourner (et consommer le quota) jusqu'à sa limite de 3 h.
+    try:
+        etat, k, info = SORTIE.get(timeout=600)
+    except Exception:
+        say("aucune carte n'a répondu en 10 min")
+        break
+    if etat == "pret":
+        CARTES.append(k)
+        SR = info
+        say(f"gpu{k} prêt")
+    else:
+        say(f"gpu{k} ÉCHEC", info)
+if not CARTES:
     annoncer("eteint", raison="aucun modèle chargé")
     os._exit(1)
-SR = next(iter(MODELES.values())).sr
+MODELES = CARTES
 
-
-def nettoyer(w):
-    """Coupe le résidu avant/après la voix (cf. v6), fondus 10/40 ms."""
-    h = int(0.02 * SR)
-    n = len(w) // h
-    if n < 3:
-        return w
-    db = 20 * np.log10(np.sqrt((w[:n * h].reshape(n, h) ** 2).mean(1)) + 1e-9)
-    parole = np.where((db > db.max() - 35) & (db > -45))[0]
-    if not len(parole):
-        return w
-    a = max(0, parole[0] * h - int(0.02 * SR))
-    b = min(len(w), (parole[-1] + 1) * h + int(0.06 * SR))
-    w = w[a:b].copy()
-    fi, fo = min(len(w), int(0.01 * SR)), min(len(w), int(0.04 * SR))
-    w[:fi] *= np.linspace(0, 1, fi, dtype=np.float32)
-    w[len(w) - fo:] *= np.cos(np.linspace(0, np.pi / 2, fo, dtype=np.float32)) ** 2
-    return w
-
-
-# File d'attente commune : chaque carte prend la phrase suivante dès qu'elle
-# est libre, si bien que la phrase 2 se calcule pendant que la 1 est jouée.
-TRAVAUX = queue.Queue()
+# File d'attente commune : chaque carte prend le morceau suivant dès qu'elle
+# est libre, si bien que le morceau 2 se calcule pendant que le 1 est joué.
+EN_COURS = {}
+VERROU = threading.Lock()
+COMPTEUR = [0]
 
 
 class Travail:
@@ -325,32 +403,32 @@ class Travail:
         self.pcm = b""
 
 
-def carte(k):
-    m = MODELES[k]
-    torch.cuda.set_device(k)
+def recevoir():
     while True:
-        t = TRAVAUX.get()
-        try:
-            st = STYLES[style_de(t.texte)]
-            lg = "pl" if (t.langue != "fr" and AR.search(t.texte)) else "fr"
-            with torch.inference_mode():
-                w = m.generate(t.texte, language_id=lg, exaggeration=st["ex"],
-                               temperature=0.75, cfg_weight=st["cfg"]).cpu().numpy()[0]
-            # Un morceau coupé à une virgule n'est pas une fin de phrase : souffle court.
-            apres = st["apres"] if t.texte.rstrip()[-1:] in ".!?؟…" else 0.12
-            w = np.concatenate([nettoyer(w.astype(np.float32)), np.zeros(int(apres * SR), np.float32)])
-            pic = float(np.abs(w).max() or 1)
-            if pic > 0.944:
-                w *= 0.944 / pic
-            t.pcm = (np.clip(w, -1, 1) * 32767).astype("<i2").tobytes()
-        except Exception as e:
-            say(f"gpu{k} phrase échouée :", repr(e)[:200])
-        finally:
+        etat, tid, pcm = SORTIE.get()
+        with VERROU:
+            t = EN_COURS.pop(tid, None)
+        if t:
+            t.pcm = pcm
             t.fini.set()
 
 
-for k in MODELES:
-    threading.Thread(target=carte, args=(k,), daemon=True).start()
+threading.Thread(target=recevoir, daemon=True).start()
+
+
+class _File:
+    """Même interface que queue.Queue.put pour `lancer()`."""
+
+    @staticmethod
+    def put(t):
+        with VERROU:
+            COMPTEUR[0] += 1
+            tid = COMPTEUR[0]
+            EN_COURS[tid] = t
+        ENTREE.put((tid, t.texte, t.langue))
+
+
+TRAVAUX = _File()
 
 FIN = re.compile(r"(?<=[.!?؟…])\s+")
 

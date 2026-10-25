@@ -2182,6 +2182,9 @@ class SessionHandler:
             await self._init_session(message)
         elif msg_type == "text_input":
             self._derniere_entree_eleve = time.time()
+            # Phrase que la page a déjà fait dire au professeur, tout de suite,
+            # pendant que cette réponse se prépare (services/reactionVoice.ts).
+            self._reaction_dite = str(message.get("reaction_dite") or "")[:120]
             from app.services.kaggle_tts import pilote
             pilote.eleve_actif()
             student_text = message.get("text", "")
@@ -3092,6 +3095,14 @@ RÈGLES:
         # La langue du message de l'élève décide de celle de l'oral (choix du
         # 2026-10-25) : darija écrite → réponse en darija, notions en français.
         system_prompt += bloc_langue_du_tour(student_text, self.session_context.get("subject", ""))
+        reaction, self._reaction_dite = getattr(self, "_reaction_dite", ""), ""
+        if reaction:
+            system_prompt += (
+                f"\n\n[DÉJÀ DIT À VOIX HAUTE] Tu viens de dire « {reaction} » en réaction immédiate. "
+                "Enchaîne directement sur le fond : ne recommence pas par un accusé de réception "
+                "(pas de « Bonne question », « مزيان », « D'accord » en tête de réponse). Ne répète pas cette "
+                "phrase. Elle ne jugeait pas la réponse de l'élève : c'est toi qui la juges maintenant.\n"
+            )
         # Et le miroir de ses propres tours : sans lui, le modèle recopie sa
         # dernière réponse parce qu'elle est le seul exemple de « ce que je
         # dis » qu'il ait sous les yeux (cf. humanisation.py).
