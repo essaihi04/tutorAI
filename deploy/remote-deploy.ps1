@@ -9,7 +9,9 @@
 # =============================================================
 
 param(
-    [string]$ServerIp = "87.106.1.128",
+    # Alias du ~/.ssh/config (HostName 217.160.128.247, clé moalim_deploy).
+    # L'ancienne valeur 87.106.1.128 est le serveur d'un autre projet.
+    [string]$ServerIp = "moalim-vps",
     [string]$User     = "root",
     [string]$Branch   = "main",
     [switch]$UpdateOnly,  # use -UpdateOnly for re-deploys (faster)
@@ -62,6 +64,13 @@ if ($UpdateEnv) {
 if ($UpdateOnly) {
     Step "Mode mise à jour (git pull + rebuild)"
     ssh "$User@$ServerIp" "bash /root/moalim/deploy/update.sh"
+    # ssh est un exécutable natif : $ErrorActionPreference ne l'arrête pas.
+    # Sans ce test, un accès refusé affichait quand même « terminée ».
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "✖ Mise à jour NON effectuée (ssh/update.sh a renvoyé $LASTEXITCODE)." -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
     Write-Host ""
     Write-Host "✅ Mise à jour terminée. https://moalim.online" -ForegroundColor Green
     exit 0
