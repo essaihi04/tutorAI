@@ -3284,7 +3284,16 @@ RÈGLES:
         media_already_sent = False
         resource_type_for_suggestion = decision.get("resource_type_for_suggestion")
         # Skip auto-suggest for exams - use exam panel system instead (exam_exercise WebSocket messages)
-        if decision.get("auto_present_resource") and resource_type_for_suggestion and resource_type_for_suggestion != "exam":
+        # Pendant un cours, la question de l'élève se répond DANS le cours
+        # (bulle + voix) : une ressource suggérée — ou son repli en tableau —
+        # remplaçait le lecteur de cours, qui sortait du plein écran et
+        # revenait sur son écran d'accueil « cours déjà validé ».
+        if (
+            decision.get("auto_present_resource")
+            and resource_type_for_suggestion
+            and resource_type_for_suggestion != "exam"
+            and not course_player_question
+        ):
             # Le tableau ne s'efface QU'UNE FOIS la ressource affichée. Le
             # faire avant revenait à parier : quand rien ne venait, l'élève
             # perdait son tableau et ne recevait rien à la place — un panneau
