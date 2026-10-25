@@ -153,8 +153,11 @@ def _reglages_signature(provider: str) -> str:
     sel = str(getattr(settings, "tts_cache_salt", "") or "")
     if provider != "academy":
         return sel
+    from app.services import kaggle_tts
     return "|".join((
-        sel,
+        # Le kernel Kaggle sert une AUTRE voix (Amine, modèle v3) que le Colab :
+        # leurs phrases ne doivent jamais se servir l'une pour l'autre.
+        sel + ("|kaggle-v3-amine" if kaggle_tts.actif() else ""),
         f"e{settings.academy_tts_exaggeration:.3f}",
         f"t{settings.academy_tts_temperature:.3f}",
         f"c{settings.academy_tts_cfg_weight:.3f}",
@@ -339,11 +342,35 @@ _ACADEMY_FAILS = 0
 _ACADEMY_MAX_FAILS = 3
 
 
+def _academy_cible() -> tuple[str, str]:
+    """(url, jeton) du serveur Academy à appeler maintenant.
+
+    Le kernel Kaggle allumé à la demande passe en premier ; sinon l'adresse
+    fixe ACADEMY_TTS_URL (Colab), qui peut être vide.
+    """
+    from app.services.kaggle_tts import pilote
+    cible = pilote.cible()
+    if cible:
+        return cible
+    return (settings.academy_tts_url or "").rstrip("/"), settings.academy_tts_token
+
+
 def _academy_is_available() -> bool:
+    # Toute demande de voix réveille le kernel Kaggle s'il dort : la phrase en
+    # cours part sur le repli, les suivantes auront la voix du prof.
+    from app.services.kaggle_tts import pilote
+    pilote.besoin_de_voix()
     return (
-        bool(settings.academy_tts_url)
+        bool(_academy_cible()[0])
         and time.time() >= _ACADEMY_COOLDOWN_UNTIL
     )
+
+
+def reinitialiser_disjoncteur_academy():
+    """Une nouvelle adresse vient d'être annoncée : l'ancienne panne ne la concerne pas."""
+    global _ACADEMY_COOLDOWN_UNTIL, _ACADEMY_FAILS
+    _ACADEMY_COOLDOWN_UNTIL = 0.0
+    _ACADEMY_FAILS = 0
 
 
 def _academy_note_success():
@@ -379,6 +406,12 @@ def _trip_academy_breaker(
     saturé) plutôt que notre forfait.
     """
     global _ACADEMY_COOLDOWN_UNTIL, _ACADEMY_FAILS
+    from app.services.kaggle_tts import pilote
+    if immediate and pilote.cible():
+        # Le kernel Kaggle est parti (veille, quota…) : on l'oublie, et l'appel
+        # suivant retombe sur l'adresse fixe sans couper tout Academy 2 min.
+        pilote.signaler_injoignable(_academy_cible()[0])
+        return
     _ACADEMY_FAILS += 1
     if not immediate and _ACADEMY_FAILS < _ACADEMY_MAX_FAILS:
         _safe_log(
@@ -410,8 +443,10 @@ def _academy_lang(lang: str) -> str:
 
 async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
     """Appelle l'API Academy TTS. Renvoie les octets WAV, ou None en cas d'échec."""
-    base = (settings.academy_tts_url or "").rstrip("/")
-    if not base or not _academy_is_available():
+    if not _academy_is_available():
+        return None
+    base, jeton = _academy_cible()
+    if not base:
         return None
 
     # Le serveur refuse au-delà de 5 000 caractères : on coupe à une frontière
@@ -436,8 +471,8 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
         # d'avertissement à la place de l'audio.
         "ngrok-skip-browser-warning": "true",
     }
-    if settings.academy_tts_token:
-        headers["Authorization"] = f"Bearer {settings.academy_tts_token}"
+    if jeton:
+        headers["Authorization"] = f"Bearer {jeton}"
 
     try:
         async with _ACADEMY_SEM:
@@ -599,8 +634,10 @@ async def stream_academy_pcm(text: str, lang: str):
     d'un repli — le flux s'arrête simplement plus court, comme le prévoit le
     contrat du serveur.
     """
-    base = (settings.academy_tts_url or "").rstrip("/")
-    if not base or not _academy_is_available() or not settings.academy_tts_stream:
+    if not settings.academy_tts_stream or not _academy_is_available():
+        return
+    base, jeton = _academy_cible()
+    if not base:
         return
 
     text = strip_voice_markers(text)
@@ -629,8 +666,8 @@ async def stream_academy_pcm(text: str, lang: str):
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true",
     }
-    if settings.academy_tts_token:
-        headers["Authorization"] = f"Bearer {settings.academy_tts_token}"
+    if jeton:
+        headers["Authorization"] = f"Bearer {jeton}"
 
     t0 = time.time()
     sr = 24000

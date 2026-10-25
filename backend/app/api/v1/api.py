@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player
+from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts
 from app.api import resources
 
 api_router = APIRouter(prefix="/api/v1")
@@ -17,6 +17,7 @@ api_router.include_router(registration.admin_router)
 api_router.include_router(mock_exam.router)
 api_router.include_router(concours.router)
 api_router.include_router(tts.router)
+api_router.include_router(kaggle_tts.router)
 api_router.include_router(course_player.router)
 
 # Admin resources management

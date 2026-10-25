@@ -108,6 +108,24 @@ class Settings(BaseSettings):
     # sans redéploiement de code.
     academy_tts_stream: int = 1
 
+    # Voix du prof sur Kaggle, allumée à la demande (app/services/kaggle_tts.py).
+    # Le backend pousse le kernel `kaggle_tts_kernel` quand une séance s'ouvre ;
+    # le kernel annonce son tunnel, sert la voix Amine, et s'éteint seul après
+    # `kaggle_tts_veille_s` sans parler. Tant qu'il n'est pas prêt, la voix
+    # retombe sur ACADEMY_TTS_URL (s'il est renseigné) puis sur Google Cloud.
+    kaggle_tts_actif: int = 0
+    kaggle_username: str = ""
+    kaggle_api_token: str = ""            # KAGGLE_API_TOKEN (jamais dans le dépôt)
+    kaggle_tts_kernel: str = "academy-tts-direct"
+    kaggle_tts_modele: str = "academy-entrainement-v3"   # kernel dont la sortie porte les poids fins
+    kaggle_tts_socle: str = ""            # "academy-tts-socle" une fois ce kernel créé (démarrage plus court)
+    kaggle_tts_annonce_url: str = "https://moalim.online/api/v1/tts-kaggle/annonce"
+    kaggle_tts_veille_s: int = 300        # extinction après 5 min sans parler
+    kaggle_tts_duree_max_s: int = 3 * 3600
+    kaggle_tts_demarrage_max_s: int = 600  # au-delà, le lancement est tenu pour raté
+    kaggle_tts_budget_h_semaine: float = 25.0  # quota Kaggle = 30 h GPU / semaine
+    kaggle_tts_etat_path: str = "data/kaggle_tts_etat.json"
+
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1
     tts_cache_dir: str = "data/tts_cache"

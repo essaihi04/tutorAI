@@ -2138,6 +2138,10 @@ class SessionHandler:
         msg_type = message.get("type", "text_input")
 
         if msg_type == "init_session":
+            # Le GPU Kaggle met une à deux minutes à s'allumer : on le réveille
+            # dès l'ouverture, pour que la voix du prof soit prête au 1er mot.
+            from app.services.kaggle_tts import pilote
+            pilote.besoin_de_voix("ouverture de séance")
             await self._init_session(message)
         elif msg_type == "text_input":
             student_text = message.get("text", "")
