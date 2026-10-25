@@ -132,19 +132,20 @@ def bloc_prompt(subject: str, chapitre: Optional[str], carte: Optional[dict] = N
         return ""
     carte = carte or charger()
     generiques = carte[_matiere(subject)]["generiques"]
-    hors = [t for t in list(f.termes_hors_programme) + list(generiques)]
+    # Court, sinon le modèle paraphrase au lieu de suivre : la source est
+    # réduite à son identifiant, les termes génériques sont seulement nommés.
     lignes = [
-        f"\n\n[PÉRIMÈTRE DU PROGRAMME — {f.nom}] ({f.source})",
+        f"\n\n[PÉRIMÈTRE DU PROGRAMME — {f.nom}] ({f.source.split(',')[0]})",
         "Reste dans ce périmètre : un terme ou une méthode qui n'y figure pas n'aide pas l'élève, il l'inquiète.",
         "Notions du chapitre : " + " ; ".join(f.notions) + ".",
         "Méthodes attendues au bac : " + " ; ".join(f.methodes_autorisees) + ".",
     ]
     if f.demonstrations_admises:
         lignes.append("Admis sans démonstration : " + " ; ".join(f.demonstrations_admises) + ".")
-    if hors:
-        lignes.append("N'emploie pas : " + " ; ".join(f"{t.terme} → {t.dire_plutot}" for t in hors[:12]) + ".")
-    if f.niveau:
-        lignes.append("Niveau attendu : " + f.niveau)
+    if f.termes_hors_programme:
+        lignes.append("N'emploie pas : " + " ; ".join(f"{t.terme} → {t.dire_plutot}" for t in f.termes_hors_programme[:6]) + ".")
+    if generiques:
+        lignes.append("Ni, dans toute la matière : " + ", ".join(t.terme.split(" / ")[0].split(" (")[0] for t in generiques) + ".")
     return "\n".join(lignes) + "\n"
 
 

@@ -45,9 +45,9 @@ def test_le_chapitre_reconnu_injecte_aussi_son_perimetre():
     handler._proposer_prerequis_du_chapitre()
     assert handler._chapitre_reconnu == "dipole_RC"
     assert "[PÉRIMÈTRE DU PROGRAMME — Dipôle RC]" in handler._bloc_perimetre
-    handler.session_context["chapter_title"] = "Dipôle RL"
+    handler.session_context["chapter_title"] = "Révision générale"
     handler._proposer_prerequis_du_chapitre()
-    assert handler._bloc_perimetre == "", "pas de fiche, pas de bloc"
+    assert handler._bloc_perimetre == "", "chapitre non reconnu : pas de bloc"
 
 
 def test_l_observation_du_perimetre_journalise_sans_corriger(monkeypatch, tmp_path):
