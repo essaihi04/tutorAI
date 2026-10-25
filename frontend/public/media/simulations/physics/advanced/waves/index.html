@@ -21,7 +21,24 @@ window.LAB = {
   command_schema: { set_variant: { variant_id: 'progressive | periodic | optics' }, set_parameters: { speed_m_s: 'number', frequency_hz: 'number', amplitude: 'number', sensor_1_m: 'number', sensor_2_m: 'number', aperture_m: 'number', wavelength_nm: 'number', slit_um: 'number', screen_distance_m: 'number', optical_mode: 'diffraction | dispersion' }, highlight: { target: 'source | sensor1 | sensor2 | slit | screen | prism' } },
   state_schema: { current_variant: 'id', parameters: 'entrées réglées', derived_values: 'valeurs calculées', measurements: 'mesures enregistrées', student_actions: 'historique', completed_variants: 'compétences validées', objective_progress: '0..1' },
   page_text: 'WaveLab, dessiné au tableau, calcule période, longueur d’onde, diffraction et dispersion ; l’onde progressive et le retard sont dans le laboratoire « Capteurs et retard ». Vibreur, fronts d’onde, fente, écran et prisme s’écrivent à la craie ; le tuteur reçoit paramètres, valeurs dérivées, mesures et erreurs.',
-  aliases: { source: 'source', sensor1: 'source', sensor2: 'ecran', slit: 'fente', screen: 'ecran', prism: 'prisme' }, labels: { source: 'la source', fente: 'la fente', ecran: 'l’écran', prisme: 'le prisme' },
+  aliases: { source: 'source', sensor1: 'source', sensor2: 'ecran', slit: 'fente', screen: 'ecran', prism: 'prisme' },
+  labels: { source: 'la source', fente: 'la fente', ecran: 'l’écran', prisme: 'le prisme', sens: 'le sens de propagation', onde: 'l’onde', longueur_onde: 'la longueur d’onde λ', fronts: 'les fronts diffractés', formules: 'les formules', tache_centrale: 'la tache centrale', angle: 'l’angle de diffraction', spectre: 'le spectre' },
+  explication: {
+    periodic: [
+      { repere: 'source', texte: 'Le vibreur impose la fréquence f : c’est la source qui fixe la période de l’onde.' },
+      { repere: 'onde', texte: 'L’onde sinusoïdale se propage à la célérité v, qui dépend du milieu et non de la source.' },
+      { repere: 'longueur_onde', texte: 'La longueur d’onde λ = v·T = v/f est la distance parcourue pendant une période.' },
+      { repere: 'fente', texte: 'Quand l’ouverture a est du même ordre que λ, l’onde s’étale derrière : c’est la diffraction.' },
+      { repere: 'fronts', texte: 'Les fronts deviennent circulaires ; plus a/λ est petit, plus l’étalement est fort.' },
+    ],
+    optics: [
+      { repere: 'source', texte: 'Le laser émet une lumière monochromatique de longueur d’onde λ.' },
+      { repere: 'fente', texte: 'La fente de largeur a diffracte la lumière : plus elle est étroite, plus la lumière s’étale.' },
+      { repere: 'tache_centrale', texte: 'Sur l’écran, la tache centrale a une largeur L = 2Dθ avec θ ≈ λ/a.' },
+      { repere: 'prisme', texte: 'Dans le prisme, l’indice dépend de la longueur d’onde : le violet est plus dévié que le rouge.' },
+      { repere: 'spectre', texte: 'La lumière blanche est ainsi décomposée en un spectre continu : c’est la dispersion.' },
+    ],
+  },
   onVariant: id => { if (id === 'progressive') { location.replace('../../progressive/index.html?variant=progressive&scope=single'); return false; } },
   runLabel: () => 'Actualiser',
   controls(v, p) {
@@ -52,14 +69,14 @@ window.LAB = {
       const y = 120, L = 40, mur = 440, lambda = d.wavelength_m, amp = p.amplitude * .6;
       // Vibreur, onde sinusoïdale, mur percé d'une ouverture, fronts circulaires derrière
       craie.rect(L - 20, y - 22, 20, 44, { couleur: 'orange', arrondi: 4 }); craie.texte('vibreur', L - 10, y + 44, { couleur: 'orange', taille: 13, align: 'center' }).texte(`f = ${fr(p.frequency, 1)} Hz`, L - 10, y - 32, { couleur: 'orange', taille: 13, align: 'center' }); a.zone('source', L - 24, y - 26, 28, 52);
-      craie.fleche(120, y - 60, 300, y - 60, { couleur: 'vert', largeur: 2 }).texte('sens de propagation', 210, y - 70, { couleur: 'vert', taille: 15, align: 'center' });
-      craie.direct(() => craie.courbe(u => [L + u * (mur - 30 - L), y - amp * Math.sin(2 * Math.PI * u * 10 / lambda)], 300, { couleur: 'cyan', largeur: 2.4 }));
+      craie.fleche(120, y - 60, 300, y - 60, { couleur: 'vert', largeur: 2 }).texte('sens de propagation', 210, y - 70, { couleur: 'vert', taille: 15, align: 'center' }); a.zone('sens', 116, y - 82, 190, 30);
+      craie.direct(() => craie.courbe(u => [L + u * (mur - 30 - L), y - amp * Math.sin(2 * Math.PI * u * 10 / lambda)], 300, { couleur: 'cyan', largeur: 2.4 })); a.zone('onde', L + 10, y - amp - 10, mur - 50 - L, 2 * amp + 20);
       const gap = Math.max(16, Math.min(120, p.aperture / 5 * 120));
       craie.ligne(mur, 30, mur, y - gap / 2, { largeur: 5 }).ligne(mur, y + gap / 2, mur, 210, { largeur: 5 }); craie.texte(`a = ${fr(p.aperture, 1)} m`, mur + 10, y - gap / 2 - 8, { couleur: 'jaune', taille: 14 }); a.zone('fente', mur - 8, y - gap / 2 - 4, 16, gap + 8);
       const nb = d.diffraction === 'forte' ? 1.25 : d.diffraction === 'visible' ? .7 : .3;
       craie.direct(() => { for (let r = 24; r < 230; r += Math.max(14, lambda * 41)) { const pts = []; for (let k = 0; k <= 30; k++) { const ang = -nb + k / 30 * 2 * nb; pts.push([mur + r * Math.cos(ang), y + r * Math.sin(ang)]); } craie.trait(pts, { couleur: 'cyan', largeur: 1.8, tremble: .3 }); } });
-      a.zone('ecran', mur + 20, 30, 250, 180);
-      craie.cote(L + 40, y + 70, L + 40 + lambda * 41, y + 70, 'λ', { couleur: 'jaune', largeur: 1.4, taille: 16, dessous: true });
+      a.zone('ecran', mur + 20, 30, 250, 180); a.zone('fronts', mur + 20, 30, 250, 180);
+      craie.cote(L + 40, y + 70, L + 40 + lambda * 41, y + 70, 'λ', { couleur: 'jaune', largeur: 1.4, taille: 16, dessous: true }); a.zone('longueur_onde', L + 30, y + 56, lambda * 41 + 20, 44); a.zone('formules', 390, 232, 340, 104);
       a.lignes(400, 250, [`T = 1/f = ${fr(d.period_s, 3)} s`, `λ = v·T = ${fr(p.speed, 1)} / ${fr(p.frequency, 1)} = ${fr(d.wavelength_m, 2)} m`, `a / λ = ${fr(d.aperture_over_lambda, 2)} → diffraction ${d.diffraction}`, `θ ≈ λ / a = ${fr(d.theta_rad, 2)} rad`], { pas: 24, max: 330 });
     } else if (p.opticalMode === 'dispersion') {
       // Lumière blanche → prisme → spectre sur l'écran
@@ -68,7 +85,9 @@ window.LAB = {
       craie.trait([[240, 60], [310, 170], [180, 160]], { couleur: 'cyan', largeur: 2.4, ferme: true }); craie.texte('prisme', 245, 190, { couleur: 'cyan', taille: 14, align: 'center' }); a.zone('prisme', 175, 55, 140, 120);
       for (let n = 420; n <= 680; n += 40) craie.ligne(255, 112, 440, 112 + (n - 550) * .5, { couleur: couleurNm(n), largeur: 2.2, duree: .12 });
       craie.ligne(445, 30, 445, 200, { largeur: 3 }); craie.texte('écran', 445, 218, { couleur: 'faible', taille: 13, align: 'center' }); a.zone('ecran', 435, 30, 20, 170);
-      craie.texte('violet', 470, 50, { couleur: 'violet', taille: 14 }).texte('rouge', 470, 182, { couleur: 'rouge', taille: 14 });
+      craie.texte('violet', 470, 50, { couleur: 'violet', taille: 14 }).texte('rouge', 470, 182, { couleur: 'rouge', taille: 14 }); a.zone('spectre', 436, 30, 90, 170); a.zone('formules', 390, 232, 340, 80);
+      // Les repères de l'autre montage renvoient au choix « diffraction » : le professeur montre où changer.
+      window.Tableau.reperes({ fente: { label: 'la fente : choisis « diffraction »', rect: () => document.getElementById('choix-opticalMode') }, tache_centrale: { label: 'la tache centrale : choisis « diffraction »', rect: () => document.getElementById('choix-opticalMode') }, angle: { label: 'l’angle de diffraction : choisis « diffraction »', rect: () => document.getElementById('choix-opticalMode') } });
       a.lignes(400, 250, ['le prisme dévie davantage les courtes longueurs d’onde', 'indice n(λ) plus grand pour le violet que pour le rouge', 'la lumière blanche est polychromatique'], { pas: 24, max: 330 });
     } else {
       // Laser → fente → écran : tache centrale et taches secondaires
@@ -81,6 +100,8 @@ window.LAB = {
       craie.ligne(ex, 30, ex, 190, { largeur: 3 }); craie.texte('écran', ex, 208, { couleur: 'faible', taille: 13, align: 'center' }); a.zone('ecran', ex - 10, 30, 60, 160);
       craie.direct(() => { for (let i = -3; i <= 3; i++) { const h = i === 0 ? 2 * demi : demi * .7, cy = y + i * demi * 1.6; if (cy - h / 2 < 32 || cy + h / 2 > 188) continue; craie.ctx.globalAlpha = i === 0 ? .8 : .35; craie.ctx.fillStyle = craie.couleur(col); craie.ctx.fillRect(ex + 6, cy - h / 2, 22, h); craie.ctx.globalAlpha = 1; } });
       craie.cote(ex + 40, y - demi, ex + 40, y + demi, '', { couleur: 'jaune', largeur: 1.4 }); craie.texte(`L = ${fr(d.central_width_mm, 1)} mm`, ex + 50, y + 6, { couleur: 'jaune', taille: 14 });
+      a.zone('tache_centrale', ex + 2, y - demi - 6, 30, 2 * demi + 12); a.zone('angle', 228, y - demi - 6, ex - 228, 2 * demi + 12); a.zone('formules', 390, 256, 340, 60);
+      window.Tableau.reperes({ prisme: { label: 'le prisme : choisis « dispersion »', rect: () => document.getElementById('choix-opticalMode') }, spectre: { label: 'le spectre : choisis « dispersion »', rect: () => document.getElementById('choix-opticalMode') } });
       craie.cote(228, 230, ex, 230, `D = ${fr(p.distance, 1)} m`, { couleur: 'faible', largeur: 1.2, taille: 13, dessous: true });
       a.lignes(400, 275, [`θ ≈ λ / a = ${p.wavelength}·10⁻⁹ / ${p.slit}·10⁻⁶ = ${fr(d.theta_rad * 1000, 2)} mrad`, `L = 2·D·θ = ${fr(d.central_width_mm, 1)} mm`], { pas: 24, max: 330 });
     }

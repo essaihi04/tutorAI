@@ -8,6 +8,11 @@
  * Priorité : un élément marqué `data-professor-control="cmd1 cmd2"`, puis une variante dont l'identifiant
  * est celui d'un bouton ou d'une option, puis les identifiants habituels des laboratoires, puis le texte
  * des boutons, puis le premier curseur pour `set_parameters`.
+ *
+ * Pointage (`highlight`, `point`, `montrer` avec `parameters.target`) : le professeur ne presse rien, il vole
+ * dans la simulation et montre le repère du doigt. Le repère vient du kit tableau (`Tableau.rectRepere`,
+ * dessiné à la craie), d'un élément `data-professor-point="id"` / `data-repere="id"`, ou `#hot-id`. La réponse
+ * porte alors `mode: 'point'`.
  */
 (function () {
   if (window.__PROFESSOR_LOCATE__) return;
@@ -34,6 +39,23 @@
     if (!(el instanceof Element)) return null;
     var r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+  }
+  var POINTAGE = ['highlight', 'point', 'montrer', 'show'];
+  function cible(parameters) {
+    return parameters && (parameters.target || parameters.repere || parameters.element || parameters.id || parameters.variant_id);
+  }
+  /** Repère à montrer du doigt : rectangle (px de l'iframe) ou null. */
+  function repere(command, parameters) {
+    var cmd = String(command || '').replace(/[^a-z_]/g, '');
+    if (POINTAGE.indexOf(cmd) < 0) return null;
+    var id = String(cible(parameters) || '').replace(/[^\w-]/g, '');
+    if (!id) return null;
+    if (window.Tableau && typeof window.Tableau.rectRepere === 'function') {
+      var r = window.Tableau.rectRepere(id);
+      if (r && r.width > 0) return r;
+    }
+    var el = document.querySelector('[data-professor-point~="' + id + '"], [data-repere="' + id + '"]') || document.getElementById('hot-' + id);
+    return visible(el);
   }
   function find(command, parameters) {
     var cmd = String(command || '').replace(/[^a-z_]/g, '');
@@ -80,12 +102,14 @@
     if (event.source !== window.parent) return;
     var data = event.data;
     if (!data || data.type !== 'simulation_locate') return;
-    var el = find(data.command, data.parameters);
+    var pointe = repere(data.command, data.parameters);
+    var el = pointe ? null : find(data.command, data.parameters);
     window.parent.postMessage({
       type: 'simulation_control_rect',
       sequence: data.sequence,
       command: data.command,
-      rect: visible(el),
+      rect: pointe || visible(el),
+      mode: pointe ? 'point' : 'press',
     }, '*');
   });
 })();

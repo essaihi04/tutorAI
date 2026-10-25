@@ -21,7 +21,7 @@
   </header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Cycle ATP–ADP dessiné à la craie : hydrolyse, phosphorylation, couplage"></canvas>
-    <div class="panneau bas-gauche" id="legende"><h3 id="title"></h3><p id="interpretation"></p><div class="metriques"><span id="inputMetric"></span><span id="outputMetric"></span><span id="energyMetric"></span></div></div>
+    <div class="panneau bas-gauche" id="legende" data-professor-point="legende" data-professor-label="légende de la réaction"><h3 id="title"></h3><p id="interpretation"></p><div class="metriques"><span id="inputMetric"></span><span id="outputMetric"></span><span id="energyMetric"></span></div></div>
   </section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start replay">Observer</button>
@@ -34,7 +34,7 @@
 <script>
 (function () {
   'use strict';
-  const { Craie, ecrire, bulle, onglets, protocole } = window.Tableau;
+  const { Craie, ecrire, bulle, onglets, protocole, explication } = window.Tableau;
   const $ = id => document.getElementById(id);
   const CONFIG = { id: 'svt_ch1_atp_adp', variants: [{ id: 'hydrolyse', label: 'Hydrolyse de l’ATP' }, { id: 'phosphorylation', label: 'Phosphorylation de l’ADP' }, { id: 'couplage', label: 'Couplage énergétique' }], objectives: ['Expliquer que l’ATP transfère temporairement l’énergie entre réactions libératrices et activités consommatrices.'], commands: ['start', 'set_variant', 'reset', 'replay'] };
   const content = {
@@ -43,6 +43,12 @@
     couplage: { title: 'Couplage énergétique', text: 'L’ATP n’est pas une réserve durable : il est continuellement consommé puis régénéré.', input: 'Matière organique → énergie', output: 'ATP → travail cellulaire', energy: 'Cycle rapide ATP ⇄ ADP', equation: 'respiration → ATP → travail, puis ADP + Pᵢ → ATP' },
   };
   const state = { variant: 'hydrolyse', simulationStatus: 'idle', variantsCompleted: [], ouvert: performance.now(), anim: null, dirty: true };
+  // Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+  explication({
+    hydrolyse: [{ repere: 'adenosine', texte: 'L’ATP est formé d’une adénosine et de trois groupements phosphate.' }, { repere: 'liaison_riche', texte: 'La liaison du phosphate terminal est une liaison riche en énergie.' }, { repere: 'phosphate_terminal', texte: 'L’hydrolyse détache ce phosphate : ATP + H₂O → ADP + Pᵢ, avec libération d’énergie.' }, { repere: 'travail', texte: 'Cette énergie est transférée à un travail cellulaire : contraction, transport actif, synthèses.' }],
+    phosphorylation: [{ repere: 'phosphate_terminal', texte: 'On part d’ADP et d’un phosphate inorganique Pᵢ.' }, { repere: 'cycle', texte: 'Une réaction libératrice d’énergie, la respiration ou la fermentation, fournit l’énergie nécessaire.' }, { repere: 'phosphates', texte: 'Le phosphate se rattache à l’ADP : ADP + Pᵢ + énergie → ATP + H₂O.' }, { repere: 'bilan', texte: 'L’ATP est ainsi régénéré en permanence dans la cellule.' }],
+    couplage: [{ repere: 'cycle', texte: 'L’ATP n’est pas une réserve durable : il est consommé puis reformé sans arrêt.' }, { repere: 'travail', texte: 'Son hydrolyse alimente le travail cellulaire…' }, { repere: 'phosphate_terminal', texte: '…puis l’ADP est rephosphorylé grâce à l’énergie tirée de la matière organique.' }, { repere: 'bilan', texte: 'C’est le couplage énergétique : l’ATP sert d’intermédiaire entre réactions libératrices et activités consommatrices.' }],
+  });
   const pont = protocole({ id: CONFIG.id, commandes: CONFIG.commands, config: CONFIG, executer,
     etat: () => ({ simulation_status: state.simulationStatus, current_variant: state.variant, variants_completed: state.variantsCompleted, observation: content[state.variant].text, scientific_guardrail: 'L’ATP est un intermédiaire énergétique renouvelé, pas une réserve à long terme.' }),
     progression: () => state.variantsCompleted.length / CONFIG.variants.length,
@@ -97,6 +103,7 @@
     // Molécule
     craie.texte(v === 'phosphorylation' && !fini ? 'ADP + Pᵢ' : fini && v === 'couplage' ? 'ATP régénéré' : fini && v === 'hydrolyse' ? 'ADP + Pᵢ' : 'ATP', 250, 50, { taille: 26, align: 'center' });
     craie.rect(60, 100, 150, 76, { couleur: 'bleu', arrondi: 18, fond: 'bleu' }).texte('Adénosine', 135, 146, { couleur: 'bleu', taille: 22, align: 'center' });
+    craie.repere('adenosine', 55, 95, 160, 86, 'adénosine').repere('phosphates', 224, 102, 162, 72, 'phosphates liés').repere('liaison_riche', 376, 114, 44, 48, 'liaison riche en énergie');
     craie.ligne(210, 138, 226, 138, { couleur: 'jaune', largeur: 4 });
     craie.cercle(260, 138, 32, { couleur: 'cyan', fond: 'cyan' }).texte('P', 260, 147, { couleur: 'cyan', taille: 24, align: 'center' });
     craie.ligne(292, 138, 320, 138, { couleur: 'jaune', largeur: 4 });
@@ -108,6 +115,7 @@
     [[688, 105, 688, 118], [688, 162, 688, 175], [653, 140, 666, 140], [710, 140, 723, 140]].forEach(l => craie.ligne(...l, { couleur: 'vert', largeur: 3 }));
     craie.texte('travail cellulaire', 688, 221, { couleur: 'vert', taille: 17, align: 'center' });
     craie.texte('(contraction, transport, synthèses…)', 688, 243, { couleur: 'faible', taille: 13, align: 'center' });
+    craie.repere('travail', 618, 86, 140, 165, 'travail cellulaire').repere('cycle', 248, 208, 334, 70, 'cycle ATP ⇄ ADP').repere('bilan', 232, 282, 476, 30, 'bilan');
     craie.courbe(u => [250 + (580 - 250) * u, 215 + 55 * Math.sin(Math.PI * u)], 40, { couleur: 'cyan', largeur: 2.2 });
     craie.fleche(268, 232, 252, 218, { couleur: 'cyan', largeur: 2.2 });
     craie.texte(v === 'phosphorylation' ? 'respiration / fermentation → énergie → ADP + Pᵢ → ATP' : 'l’ATP est rapidement renouvelé : ATP ⇄ ADP + Pᵢ', 470, 300, { couleur: 'cyan', taille: 17, align: 'center', max: 470 });
@@ -116,6 +124,7 @@
       const px = 445 + 55 * piLoin, py = 138 + 125 * piLoin;
       if (piLoin < .55) craie.ligne(384, 138, 413, 138, { couleur: 'jaune', largeur: 4, pointille: piLoin > .1 ? [8, 6] : null, alpha: 1 - piLoin });
       craie.cercle(px, py, 32, { couleur: 'orange', fond: 'orange', alpha: 1 - .5 * piLoin }).texte('P', px, py + 9, { couleur: 'orange', taille: 24, align: 'center' });
+      craie.repere('phosphate_terminal', px - 36, py - 36, 72, 72, 'phosphate terminal (Pᵢ)');
       if (piLoin > .5) craie.texte('Pᵢ', px + 40, py + 8, { couleur: 'orange', taille: 18 });
       if (energie > 0 && energie < 1) {
         const k = energie, ex = v === 'phosphorylation' ? 560 - 120 * k : 480 + 150 * k, ey = v === 'phosphorylation' ? 300 - 150 * k : 120 + 20 * Math.sin(k * 6);

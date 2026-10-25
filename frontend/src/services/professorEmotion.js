@@ -10,6 +10,8 @@
  * - `laugh`     : rire (le corps saute, la moustache tremble), 😂🤣😄 — « Haha », « C'est drôle », « Mdr »…
  * - `surprise`  : sursaut, sourcils hauts, mains levées, 😮❗✨ — « Oh ! », « Incroyable », « Waouh »…
  * - `think`     : 🤔 — quand le tuteur réfléchit vraiment (traitement de plus de 1,5 s), pas aux mots.
+ * - `wrong`     : tête qui dit non et index qui balance, 🤔💡 — une réponse fausse (exercice du tableau,
+ *                 vérification d'un laboratoire, ou `<eval>faux</eval>` déclaré par le tuteur) ; jamais aux mots.
  */
 export const PROFESSOR_EMOTIONS = {
   greet: { gesture: 'wave', emojis: ['👋', '😊'], count: 3 },
@@ -20,6 +22,7 @@ export const PROFESSOR_EMOTIONS = {
   laugh: { gesture: 'laugh', emojis: ['😂', '🤣', '😄'], count: 6 },
   surprise: { gesture: 'startle', emojis: ['😮', '❗', '✨'], count: 4 },
   think: { gesture: null, emojis: ['🤔'], count: 1 },
+  wrong: { gesture: 'shake', emojis: ['🤔', '💡'], count: 3 },
 };
 
 const APOSTROPHE = "['’]";
@@ -44,8 +47,9 @@ const STUDENT_RULES = [
 export const REPONSE_ELEVE_EVENT = 'moalim:reponse-eleve';
 
 /**
- * L'élève vient de répondre à un exercice (QCM, vrai/faux) : le professeur
- * réagit — il applaudit une bonne réponse, il encourage après une erreur.
+ * L'élève vient de répondre à un exercice (QCM, vrai/faux) ou de vérifier une
+ * mesure dans un laboratoire : le professeur réagit — il applaudit une bonne
+ * réponse, il fait non de la tête puis encourage après une erreur.
  * Les exercices vivent au fond du tableau ; un événement de fenêtre leur évite
  * de faire remonter une callback à travers tous les composants.
  * @param {boolean} juste
@@ -60,6 +64,22 @@ export function signalerReponseEleve(juste) {
  * @param {'ai' | 'student'} speaker
  * @returns {keyof typeof PROFESSOR_EMOTIONS | null}
  */
+/** Réaction du professeur à une réponse jugée : bravo si juste, non de la tête sinon. */
+export function emotionPourReponse(juste) { return juste ? 'celebrate' : 'wrong'; }
+
+/**
+ * Réaction déclarée par le tuteur dans sa balise <eval> (serveur → `professor_reaction`).
+ * @param {string} evaluation  correct | partiel | faux | incertain | aucune
+ * @returns {keyof typeof PROFESSOR_EMOTIONS | null}
+ */
+export function emotionPourEvaluation(evaluation) {
+  const e = String(evaluation || '').toLowerCase();
+  if (e === 'correct') return 'celebrate';
+  if (e === 'faux') return 'wrong';
+  if (e === 'partiel') return 'encourage';
+  return null;
+}
+
 export function detectProfessorEmotion(text, speaker = 'ai') {
   const content = String(text || '');
   if (!content.trim()) return null;

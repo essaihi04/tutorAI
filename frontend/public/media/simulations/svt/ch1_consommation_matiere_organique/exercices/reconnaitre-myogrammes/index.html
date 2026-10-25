@@ -16,7 +16,7 @@
   <header class="titre"><div><small>SVT · 2 BAC · exercice</small><h1 id="title"></h1><p class="objectif">Tension relative en fonction du temps. Les traits jaunes indiquent les stimulations ; courbes schématiques.</p></div></header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Trois myogrammes schématiques A, B et C, dessinés à la craie"></canvas>
-    <div id="labels"></div>
+    <div id="labels" data-professor-point="reponses" data-professor-label="tes réponses"></div>
   </section>
   <footer class="barre">
     <button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button>
@@ -26,21 +26,26 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script>
-  const { Craie, ecrire, bulle, appuyer } = window.Tableau;
-  window.SIMULATION_CONFIG={id:'myogrammes_svt',variants:[{id:'exercise',label:'Reconnaissance de myogrammes'}],commands:['start','reset','check','set_variant']};
+  const { Craie, ecrire, bulle, appuyer, surligner, listeReperes, explication } = window.Tableau;
+  window.SIMULATION_CONFIG={id:'myogrammes_svt',variants:[{id:'exercise',label:'Reconnaissance de myogrammes'}],commands:['start','reset','check','set_variant','highlight'],command_schema:{highlight:{target:'repère pointable (voir reperes)'}}};
+  // Script d'explication : une phrase par repère, dans l'ordre d'un professeur au tableau.
+  const EXPLICATION={exercise:[{repere:'stimulations_a',texte:'Les traits jaunes sont les stimulations : en A, une seule.'},{repere:'trace_a',texte:'Une stimulation isolée donne une secousse : contraction brève puis relâchement complet.'},{repere:'stimulations_b',texte:'En B, les stimulations se rapprochent : la secousse suivante arrive avant la fin de la précédente.'},{repere:'trace_b',texte:'Les secousses s’additionnent : c’est la sommation, la tension monte par paliers.'},{repere:'trace_c',texte:'En C, les stimulations sont si rapprochées que le muscle ne se relâche plus : tension maximale et stable, le tétanos complet.'}]};
+  explication(EXPLICATION);
   const names=[['secousse','Secousse'],['sommation','Sommation'],['tetanos','Tétanos complet']];const expected={A:'secousse',B:'sommation',C:'tetanos'};let selected={A:null,B:null,C:null},actions=[],verdict=null,verdictAt=null;
   const $=id=>document.getElementById(id),S={ouvert:performance.now(),dirty:true};const scene=()=>(performance.now()-S.ouvert)/1000;
   ecrire($('title'),'Identifie les trois myogrammes');
   function render(){const root=$('labels');root.innerHTML='';['A','B','C'].forEach(key=>{const label=document.createElement('label');label.className='craie-champ';label.append('Tracé '+key+' : ');const select=document.createElement('select');select.setAttribute('aria-label','Réponse pour le tracé '+key);select.innerHTML='<option value="">choisir…</option>';names.forEach(([id,text])=>{const o=document.createElement('option');o.value=id;o.textContent=text;select.appendChild(o)});select.value=selected[key]||'';select.onchange=()=>{selected[key]=select.value||null;actions.push('choose_'+key+'_'+select.value);verdict=null;S.dirty=true};label.appendChild(select);root.appendChild(label)})}
   function submit(){const correct=Object.keys(expected).every(key=>selected[key]===expected[key]);verdict=correct;verdictAt=scene();S.dirty=true;bulle($('feedback'),correct?'✓ Les trois tracés sont reconnus':'↺ Compare durée, amplitude et fusion des secousses',correct?'good':'bad');actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'myogrammes_svt',student_actions:actions,current_state:{simulation_status:correct?'finished':'running',correct,answers:selected,skill:'analyser_myogrammes'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
   function reset(){selected={A:null,B:null,C:null};verdict=null;actions.push('reset');bulle($('feedback'),'');render();S.ouvert=performance.now();S.dirty=true}
-  window.runVariant=reset;window.executeAICommand=(command)=>{appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;render();
+  window.runVariant=reset;window.executeAICommand=(command,p={})=>{if(command==='highlight'){surligner(p.target);return}appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;render();
   addEventListener('message',e=>{const d=e.data;if(d?.type==='simulation_control'&&(!d.simulation_id||d.simulation_id==='myogrammes_svt'))window.executeAICommand(d.command,d.parameters||{})});
-  window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'myogrammes_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,globals:['executeAICommand','runVariant']},page_text:'Exercice au tableau : reconnaître secousse, sommation et tétanos sur trois myogrammes.'},'*');
+  const manifeste=()=>{window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'myogrammes_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,command_schema:SIMULATION_CONFIG.command_schema,globals:['executeAICommand','runVariant'],reperes:listeReperes(),explication:EXPLICATION},page_text:'Exercice au tableau : reconnaître secousse, sommation et tétanos sur trois myogrammes.'},'*')};
+  manifeste();setTimeout(manifeste,2000);
 
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:()=>{S.dirty=true}});
   const twitch=(t,c,w)=>{const x=(t-c)/w;return x>0?x*Math.exp(1-x):0};
-  function trace(x0,titre,fn,stims){const y0=230,y1=70,w=215;
+  function trace(x0,titre,fn,stims){const y0=230,y1=70,w=215;const k=titre.toLowerCase();
+    const sx=f=>x0+8+f*(w-16);craie.repere('trace_'+k,x0-6,30,w+24,216,'tracé '+titre).repere('stimulations_'+k,sx(Math.min(...stims))-10,y0,sx(Math.max(...stims))-sx(Math.min(...stims))+20,18,'stimulations du tracé '+titre);
     craie.texte(titre,x0+8,52,{couleur:'jaune',taille:20});
     craie.axe(x0,y0,x0+w+8,y0,[],{}).axe(x0,y0,x0,y1-8,[],{}).texte('tension',x0+6,y1-12,{couleur:'faible',taille:12}).texte('temps',x0+w,y0+20,{couleur:'faible',taille:12,align:'right'});
     stims.forEach(f=>craie.ligne(x0+8+f*(w-16),y0+2,x0+8+f*(w-16),y0+12,{couleur:'jaune',largeur:2,duree:.05}));
@@ -50,7 +55,7 @@
     trace(30,'A',u=>.55*twitch(u,.2,.09),[.2]);
     const sB=[.06,.3,.54];trace(275,'B',u=>sB.reduce((a,cc,i)=>a+(.35+i*.08)*twitch(u,cc,.11),0),sB);
     const sC=Array.from({length:16},(_,i)=>.06+i*.05);trace(520,'C',u=>Math.min(1,sC.reduce((a,cc)=>a+.28*twitch(u,cc,.1),0)),sC);
-    if(verdict!=null){craie.depuis(verdictAt);craie.texte(verdict?'A : une secousse · B : sommation · C : tétanos complet':'Compare la durée, l’amplitude et la fusion des secousses',380,275,{couleur:verdict?'vert':'rouge',taille:16,align:'center',max:700})}
+    if(verdict!=null){craie.repere('verdict',40,255,680,30,'verdict');craie.depuis(verdictAt);craie.texte(verdict?'A : une secousse · B : sommation · C : tétanos complet':'Compare la durée, l’amplitude et la fusion des secousses',380,275,{couleur:verdict?'vert':'rouge',taille:16,align:'center',max:700})}
     return craie.fin()}
   function frame(){if(S.dirty)S.dirty=!draw();requestAnimationFrame(frame)}requestAnimationFrame(frame);
 </script>

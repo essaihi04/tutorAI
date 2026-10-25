@@ -39,6 +39,7 @@ from app.services.exercise_evaluator import exercise_evaluator
 from app.services.session_progress_service import session_progress_service
 from app.services.lesson_phase import PhaseLesson
 from app.services.skill_professeur import SkillProfesseur
+from app.services import simulation_explication
 from app.services import session_mode as mode_session
 from app.services.session_mode import ModeSession
 from app.services.scenario_service import Alternance, Progression
@@ -3025,6 +3026,19 @@ RÈGLES:
 - Le professeur à l'écran vole jusqu'au bouton et l'appuie lui-même : annonce en une phrase ce que tu fais (« Je lance la corde et j'arrête à 2,5 s »), puis ce qu'il faut observer.
 - {launch_instruction}
 """
+            # Les laboratoires au tableau annoncent des repères pointables et un script d'explication :
+            # le professeur entre dans la simulation et montre du doigt ce que le tuteur explique.
+            bloc_geste = simulation_explication.bloc_prompt(
+                active_manifest, str(self.simulation_state.get("state", {}).get("current_variant") or "") or None
+            )
+            if bloc_geste:
+                system_prompt += "\n" + bloc_geste + "\n"
+            if simulation_explication.eleve_ne_comprend_pas(student_text):
+                system_prompt += (
+                    "\n[L'ÉLÈVE N'A PAS COMPRIS LA SIMULATION] Relance-la toi-même (commande "
+                    f"{simulation_explication.commande_relance(active_manifest)}), puis ré-explique autrement, "
+                    "repère par repère, en pointant chacun. Pas de nouvelle question avant la fin de la ré-explication.\n"
+                )
 
         # Les réponses vocales très courtes (« passe », « ok », « 7 ») sont
         # faciles à rattacher au mauvais sujet quand le tour précédent
@@ -3198,7 +3212,10 @@ RÈGLES:
 
         # Le jugement déclaré (<eval>) compte les essais ; la dernière phrase dit
         # si une question reste en attente pour le tour suivant.
-        self.skill_prof.lire_reponse(ai_response, self._extract_display_text(ai_response))
+        evaluation_declaree = self.skill_prof.lire_reponse(ai_response, self._extract_display_text(ai_response))
+        # Le professeur animé montre le jugement avant même les mots : bras levés, non de la tête, hochement.
+        if evaluation_declaree in ("correct", "partiel", "faux"):
+            asyncio.create_task(self.websocket.send_json({"type": "professor_reaction", "evaluation": evaluation_declaree}))
         if self.skill_prof.evenement_parenthese:
             asyncio.create_task(self._signaler_parenthese(dict(self.skill_prof.evenement_parenthese)))
         # Le périmètre du programme, en observation : on note ce qui dépasse,
@@ -8192,14 +8209,12 @@ RÈGLES :
         # duplicate manifest when it contains more capabilities.
         existing_orch = self.simulation_orchestration.get(simulation_id)
         if existing_orch and not existing_orch.get('finalized'):
+            # Les laboratoires au tableau renvoient leur manifeste une fois les repères
+            # pointables connus (après le premier dessin) : on fusionne ce qu'il apporte.
             existing_manifest = existing_orch.setdefault('manifest', {})
-            existing_caps = existing_manifest.get('capabilities', {})
-            existing_score = len(existing_caps.get('commands', []) or []) + len(existing_caps.get('globals', []) or [])
-            incoming_score = len(capabilities.get('commands', []) or []) + len(capabilities.get('globals', []) or [])
-            if incoming_score > existing_score:
-                existing_manifest['capabilities'] = capabilities
-                existing_manifest['page_text'] = page_text or existing_manifest.get('page_text', '')
-                _safe_log(f"[Simulation] Enriched duplicate manifest for '{simulation_id}'")
+            if simulation_explication.fusionner_manifeste(existing_manifest, {'capabilities': capabilities, 'page_text': page_text}):
+                _safe_log(f"[Simulation] Enriched duplicate manifest for '{simulation_id}' "
+                          f"(repères={len(simulation_explication.reperes_du_manifeste(existing_manifest))})")
             else:
                 _safe_log(f"[Simulation] Ignored duplicate manifest for '{simulation_id}'")
             return
@@ -8300,6 +8315,12 @@ RÈGLES :
         orch.setdefault('states_seen', []).append(current_state)
         orch['step_count'] = orch.get('step_count', 0) + 1
 
+        # L'élève vient de vérifier une réponse dans le laboratoire : indice en pointant le
+        # repère qui manque, puis relance et ré-explication s'il échoue encore.
+        reaction = simulation_explication.decider_reaction(orch, current_state, student_actions)
+        if reaction:
+            asyncio.create_task(self._sim_reagir_verification(orch, simulation_id, current_state, reaction))
+
         phase = orch.get('phase', 'RUNNING_VARIANT')
         _safe_log(f"[Simulation] Phase={phase} | variant_idx={orch.get('current_variant_index', 0)}")
 
@@ -8329,6 +8350,44 @@ RÈGLES :
 
             # Determine variant info for LLM
             await self._sim_interpret_and_ask(orch, simulation_id, current_state)
+
+    async def _sim_reagir_verification(self, orch: dict, simulation_id: str, state: dict, reaction: str):
+        """Réaction du professeur à une vérification ratée dans le laboratoire.
+
+        ``indice`` : il nomme ce qui est juste et pointe le repère qui manque.
+        ``relance`` : il relance la simulation lui-même et la ré-explique autrement,
+        repère par repère. Le texte est affiché et dit ; les actions ``<ui>`` passent
+        par le circuit habituel (le professeur vole, montre ou appuie).
+        """
+        manifest = orch.get('manifest', {}) or {}
+        variante = str(state.get('current_variant') or '') or None
+        echecs = simulation_explication.nombre_echecs(orch, variante)
+        prompt = simulation_explication.prompt_reexplication(
+            self.session_context or {}, manifest, variante, state, echecs
+        )
+        try:
+            ai_text = await llm_service.chat(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt="Tu es un professeur bienveillant et exigeant. Tu réponds en français simple, "
+                              "avec les actions <ui> demandées, sans balise <eval>.",
+                max_tokens=420,
+            )
+        except Exception as e:
+            _safe_log(f"[Simulation] LLM error in réaction '{reaction}': {e}")
+            return
+        texte = self._extract_display_text(ai_text).strip()
+        if not texte:
+            return
+        _safe_log(f"[Simulation] Réaction '{reaction}' (échecs={echecs}) : {texte[:100]}…")
+        self.conversation_history.append({"role": "assistant", "content": ai_text})
+        await self.websocket.send_json({"type": "ai_response", "text": texte})
+        asyncio.create_task(self.generate_and_send_audio_chunks(texte))
+        try:
+            await self._execute_ai_commands(
+                ai_text, suppress_draw=True, suppress_media=True, suppress_whiteboard=True,
+            )
+        except Exception as e:
+            _safe_log(f"[Simulation] commandes de la réaction non exécutées : {e}")
 
     def _find_simulation_orch(self, simulation_id: str):
         """Find orchestration entry, handling ID mismatches."""

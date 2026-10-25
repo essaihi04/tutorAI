@@ -2,7 +2,7 @@
 // Le modèle physique est dans model.js ; le dessin à la craie et le pont tuteur dans shared/tableau/tableau.js.
 import { pulse, speed, springPosition, arrivals, assess } from './model.js';
 
-const { Craie, fr, nombre, bulle, ecrire, onglets, curseur, glisser, protocole } = window.Tableau;
+const { Craie, fr, nombre, bulle, ecrire, onglets, curseur, glisser, protocole, explication } = window.Tableau;
 const $ = id => document.getElementById(id);
 const variants = {
   cord: ['Corde', 'Un point reste près de sa place', 'Suis le point orange pendant le passage de l’impulsion.', 'Le déplacement du point orange est…', ['Perpendiculaire à la propagation', 'Parallèle à la propagation', 'Un voyage jusqu’au bout de la corde'], 0, 'Compare la flèche horizontale et le mouvement du point.'],
@@ -28,6 +28,17 @@ const commands = ['start', 'set_variant', 'set_parameters', 'fire_pulse', 'pause
 const config = { id, version: '4.0', title: 'Ondes mécaniques progressives', variants: Object.entries(variants).map(([k, v]) => ({ id: k, label: v[0], objective: v[2] })), commands,
   command_schema: { set_variant: { variant_id: Object.keys(variants).join(' | ') }, run_until: { time_s: '0..duration_s (lance si besoin, puis s’arrête à cet instant)' }, set_time: { time_s: '0..duration_s (saute à cet instant, en pause)' }, set_parameters: { speed_m_s: '1..10', sensor_1_m: '1..5', sensor_2_m: '5.5..9', amplitude: '.3..1.5', tension_n: '1..9', mass_density_kg_m: '.1...5', air: '0..100', sign: '-1 | 1' } } };
 
+// Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+explication({
+  cord: [{ repere: 'source', texte: 'La source S crée une petite déformation au bout de la corde.' }, { repere: 'impulsion', texte: 'Cette déformation, l’impulsion, se déplace le long de la corde dans le sens de la flèche.' }, { repere: 'point_materiel', texte: 'Le point orange, lui, monte puis redescend : il ne voyage pas avec l’onde.' }],
+  spring: [{ repere: 'membrane', texte: 'On pousse l’extrémité du ressort : les spires se resserrent.' }, { repere: 'impulsion', texte: 'La zone comprimée avance de proche en proche.' }, { repere: 'point_materiel', texte: 'La spire orange oscille d’avant en arrière, autour de sa position de repos.' }],
+  water: [{ repere: 'source', texte: 'L’impact au point S crée une ride.' }, { repere: 'impulsion', texte: 'Les fronts circulaires s’élargissent dans le plan de la surface : c’est une propagation à deux dimensions.' }],
+  sound: [{ repere: 'membrane', texte: 'La membrane vibre et pousse l’air qui la touche.' }, { repere: 'impulsion', texte: 'Les zones resserrées, les compressions, avancent dans l’air.' }, { repere: 'point_materiel', texte: 'La molécule orange oscille sur place, parallèlement à la propagation : le son est une onde longitudinale.' }],
+  vacuum: [{ repere: 'source', texte: 'La source vibre sous la cloche.' }, { repere: 'jauge', texte: 'La jauge mesure ce qui parvient dehors par l’air.' }, { repere: 'air', texte: 'Quand on retire l’air, il ne reste plus de milieu pour transmettre le son.' }],
+  superposition: [{ repere: 'impulsion_1', texte: 'La première impulsion part de la gauche.' }, { repere: 'impulsion_2', texte: 'La seconde vient à sa rencontre depuis la droite.' }, { repere: 'somme', texte: 'La corde réelle est la somme des deux déplacements : au croisement, ils s’ajoutent ou s’annulent.' }],
+  medium: [{ repere: 'impulsion', texte: 'L’impulsion avance à la célérité v.' }, { repere: 'reglages', texte: 'La tension et la masse linéique de la corde fixent v = √(T/μ).' }, { repere: 'formule', texte: 'Changer l’amplitude ne change pas la célérité.' }],
+  progressive: [{ repere: 'source', texte: 'La source S lance une impulsion sur la corde.' }, { repere: 'capteur_a', texte: 'Le capteur A note la date tA du passage du maximum.' }, { repere: 'capteur_b', texte: 'Le capteur B, plus loin, note tB : il reçoit la même perturbation avec un retard.' }, { repere: 'distance_ab', texte: 'AB est la distance entre les deux capteurs.' }, { repere: 'courbe_a', texte: 'Sur la courbe yA, tu lis tA au sommet.' }, { repere: 'courbe_b', texte: 'Sur yB, tu lis tB ; le retard τ vaut tB − tA.' }, { repere: 'reponse', texte: 'La célérité est v = AB / τ : saisis τ puis v et vérifie.' }],
+});
 const ratio = () => focusOnly ? Number(S.completed.has(S.variant)) : S.completed.size / Object.keys(variants).length;
 const snapshot = () => ({ simulation_status: S.status, current_variant: S.variant, time_s: +S.time.toFixed(2), duration_s: +duration().toFixed(2), parameters: { ...S.params }, acquisition_complete: acquired(), student_observed: S.observed, attempts: S.attempts, hints_used: S.hints, completed_variants: [...S.completed], measurements: S.measurements, student_response: readAnswer(), objective_progress: ratio() });
 const pont = protocole({ id, commandes: commands, config, etat: snapshot, progression: ratio, executer,
@@ -171,6 +182,9 @@ function draw() {
     const v = S.variant === 'medium' ? speed(p.tension, p.density) : p.speed, centre = v * t, y = S.variant === 'progressive' ? 95 : 185;
     craie.fleche(170, y - 70, 420, y - 70, { couleur: 'vert', largeur: 2 }).texte('sens de propagation', 295, y - 80, { couleur: 'vert', taille: 17, align: 'center' });
     craie.ligne(L, y, R, y, { couleur: 'faible', largeur: 1.5 }).texte('S', L - 22, y + 6, { taille: 18 });
+    craie.repere('source', L - 30, y - 30, 50, 60, 'source S').repere('sens', 170, y - 90, 250, 30, 'sens de propagation');
+    craie.repere('impulsion', xOf(Math.max(0, centre - .8)), y - amp - 10, (R - L) * .16, amp + 20, 'impulsion');
+    if (S.variant !== 'progressive') craie.repere('point_materiel', xOf(4) - 14, y - 70, 28, 100, 'point matériel');
     craie.direct(() => {
       craie.courbe(u => [L + (R - L) * u, y - pulse(u * 10, centre) * amp], 180, { couleur: 'cyan', largeur: 2.6 });
       if (S.variant !== 'progressive') { const px = 4; craie.point(xOf(px), y - pulse(px, centre) * amp, 6, 'orange'); craie.ligne(xOf(px), y + 28, xOf(px), y - 65, { couleur: 'orange', largeur: 1, pointille: [4, 5] }); }
@@ -179,11 +193,14 @@ function draw() {
       const a = arrivals(p), dates = S.trial ? arrivals(S.trial) : a;
       [[p.sensor1, 'A', 'cyan'], [p.sensor2, 'B', 'jaune']].forEach(([x, nom, col]) => {
         craie.rect(xOf(x) - 11, y - 34, 22, 68, { couleur: col, arrondi: 7, largeur: 2.2 }).texte(nom, xOf(x), y + 56, { couleur: col, taille: 19, align: 'center' });
+        craie.repere(nom === 'A' ? 'capteur_a' : 'capteur_b', xOf(x) - 16, y - 40, 32, 100, `capteur ${nom}`);
       });
+      craie.repere('distance_ab', xOf(p.sensor1), y + 50, xOf(p.sensor2) - xOf(p.sensor1), 40, 'distance AB');
       craie.cote(xOf(p.sensor1), y + 66, xOf(p.sensor2), y + 66, `AB = ${fr(a.distance)} m`, { couleur: 'blanc', largeur: 1.6, taille: 17, dessous: true });
       const total = 10.7 / p.speed, gx = 95, gw = 560;
       [['yA', dates.a, 'cyan', 'a'], ['yB', dates.b, 'jaune', 'b']].forEach(([nom, arrivee, col, cle], i) => {
         const gy = 262 + i * 70;
+        craie.repere(i ? 'courbe_b' : 'courbe_a', gx - 36, gy - 40, gw + 70, 52, i ? 'courbe yB' : 'courbe yA');
         craie.axe(gx, gy, gx + gw + 30, gy, [0, 1, 2, 3, 4].map(j => [j / 4 * gw / (gw + 30), fr(j * total / 4, 2)]), { taille: 12 }).texte(nom, gx - 30, gy + 5, { couleur: col, taille: 16 }).texte('t (s)', gx + gw + 36, gy + 5, { couleur: 'faible', taille: 13 });
         craie.direct(() => { if (S.trial) craie.courbe(u => [gx + u * gw, gy - (u * total <= t ? pulse(S.trial.speed * u * total, S.trial.speed * arrivee) : 0) * 30], 160, { couleur: col, largeur: 2 }); });
         if (S.trial && t >= arrivee) {
@@ -203,12 +220,16 @@ function draw() {
       craie.texte('point matériel repéré', 285, 290, { couleur: 'orange', taille: 16 });
       craie.axe(L, 232, R + 20, 232, [0, 2, 4, 6, 8, 10].map(m => [(xOf(m) - L) / (R + 20 - L), String(m)]), { taille: 13 }).texte('x (m)', R + 20, 222, { couleur: 'faible', taille: 13, align: 'right' });
       craie.texte(S.variant === 'medium' ? `corde idéale : v = √(T/μ) = ${fr(v)} m·s⁻¹ ; l’amplitude ne change pas v` : 'le point orange monte puis redescend sur place ; la perturbation avance', R + 20, 352, { couleur: 'faible', taille: 15, align: 'right', max: 440 });
+      craie.repere('formule', R + 20 - 440, 334, 440, 26, 'ce qu’il faut retenir');
     }
   } else if (S.variant === 'spring' || S.variant === 'sound') {
     const sound = S.variant === 'sound', y = 185;
     const shift = x => sound ? .2 * p.amplitude * Math.sin(2 * Math.PI * (x / 2 - t)) : springPosition(x, 2 * t, p.amplitude) - x;
     craie.fleche(150, 60, 330, 60, { couleur: 'vert', largeur: 2 }).texte('sens de propagation', 240, 48, { couleur: 'vert', taille: 17, align: 'center' });
     craie.texte(sound ? 'membrane' : 'spires', 18, 110, { taille: 16 });
+    craie.repere('membrane', 14, 95, 60, 160, sound ? 'membrane' : 'extrémité poussée').repere('sens', 150, 40, 180, 30, 'sens de propagation');
+    craie.repere('point_materiel', xOf(4) - 16, sound ? 115 : y - 50, 32, sound ? 130 : 100, sound ? 'molécule repérée' : 'spire repérée');
+    craie.repere('impulsion', xOf(Math.min(8, 2 * t)) - 40, sound ? 115 : y - 50, 90, sound ? 130 : 100, sound ? 'compression' : 'zone comprimée');
     craie.direct(() => {
       for (let row = 0; row < (sound ? 4 : 1); row++) for (let i = 0; i <= 75; i++) {
         const x = i / 75 * 10, xx = xOf(x + shift(x)), yy = sound ? 130 + row * 36 : y;
@@ -222,12 +243,14 @@ function draw() {
     const cx = 350, cy = 180;
     craie.texte('surface vue du dessus', 350, 350, { couleur: 'faible', taille: 16, align: 'center' });
     craie.point(cx, cy, 6, 'bleu').texte('S · impact', cx + 14, cy + 6, { taille: 16 });
+    craie.repere('source', cx - 20, cy - 20, 110, 40, 'point d’impact S').repere('impulsion', cx - 165, cy - 165, 330, 330, 'fronts circulaires');
     craie.fleche(cx, cy, cx + 150, cy, { couleur: 'vert' }).fleche(cx, cy, cx, cy - 120, { couleur: 'vert' });
     craie.direct(() => { for (let r = 0; r < 4; r++) { const radius = 70 * t - r * 28; if (radius > 0 && radius < 165) craie.cercle(cx, cy, radius, { couleur: 'cyan', largeur: 2.6 }); } });
   } else if (S.variant === 'vacuum') {
     craie.trait([[160, 300], [160, 160], [175, 60], [300, 32], [425, 60], [440, 160], [440, 300]], { couleur: 'bleu', largeur: 3 }).ligne(140, 304, 460, 304, { largeur: 6 });
     craie.texte('source vibrante', 300, 335, { taille: 16, align: 'center' }).texte('transmission par l’air', 480, 130, { taille: 16 });
     craie.rect(485, 150, 190, 25, { couleur: 'faible', arrondi: 4 });
+    craie.repere('source', 255, 165, 90, 85, 'source vibrante').repere('jauge', 480, 110, 200, 70, 'transmission par l’air').repere('air', 170, 60, 270, 100, 'air sous la cloche');
     craie.direct(() => {
       for (let i = 0; i < Math.round(p.air * .6); i++) craie.point(185 + (i * 47 % 230), 100 + (i * 31 % 170), 2, 'cyan');
       const w = Math.sin(t * 15) * 4; craie.rect(265 + w, 175, 68, 65, { couleur: 'orange', arrondi: 6 });
@@ -239,6 +262,7 @@ function draw() {
     const a = x => pulse(x, 2 * t, .85), b = x => pulse(x, 10 - 2 * t, .85 * p.sign);
     craie.texte('impulsion 1 →', 55, 32, { couleur: 'bleu', taille: 16 }).texte('← impulsion 2', 55, 127, { couleur: 'orange', taille: 16 }).texte('somme des déplacements', 55, 222, { couleur: 'vert', taille: 16 });
     [85, 180, 285].forEach(y => craie.ligne(L, y, R, y, { couleur: 'tresfaible', largeur: 1 }));
+    craie.repere('impulsion_1', L, 40, R - L, 80, 'impulsion 1').repere('impulsion_2', L, 135, R - L, 80, 'impulsion 2').repere('somme', L, 240, R - L, 80, 'somme des déplacements');
     craie.direct(() => {
       craie.courbe(u => [L + (R - L) * u, 85 - a(u * 10) * 38], 180, { couleur: 'bleu', largeur: 2.4 });
       craie.courbe(u => [L + (R - L) * u, 180 - b(u * 10) * 38], 180, { couleur: 'orange', largeur: 2.4 });

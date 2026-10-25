@@ -21,7 +21,36 @@ window.LAB = {
   command_schema: { set_variant: { variant_id: 'decay | transformations | mass_energy | spectra' }, set_parameters: { isotope: 'C14 | I131 | Ra226 | F18', initial_nuclei: '100..5000', time_half_lives: '0..5', decay_mode: 'alpha | beta_minus | beta_plus', reaction: 'fusion | fission | iron', atom: 'hydrogen | sodium', n_initial: '3..6', n_final: '1..2' }, highlight: { target: 'source | detector | counter | tube | grating | lines' } },
   state_schema: { parameters: 'réglages', derived_values: 'résultats physiques', measurements: 'observations enregistrées', student_actions: 'historique', completed_variants: 'liste', objective_progress: '0..1' },
   page_text: 'NucleoLab, dessiné au tableau, calcule décroissance, conservations nucléaires, bilans masse-énergie et spectres atomiques. Source, détecteur, courbe N(t), diagramme N–Z, équations et raies s’écrivent à la craie ; le tuteur reçoit chaque réglage, mesure et comparaison.',
-  aliases: { source: 'source', detector: 'detecteur', counter: 'courbe', tube: 'source', grating: 'reseau', lines: 'raies' }, labels: { source: 'la source', detecteur: 'le détecteur', courbe: 'la courbe', reseau: 'le réseau', raies: 'les raies' },
+  aliases: { source: 'source', detector: 'detecteur', counter: 'compteur', tube: 'source', grating: 'reseau', lines: 'raies' },
+  labels: { source: 'la source', detecteur: 'le détecteur', courbe: 'la courbe', reseau: 'le réseau', raies: 'les raies', compteur: 'le compteur', demi_vie: 'la demi-vie', formules: 'les formules', parent: 'le noyau père', fils: 'le noyau fils', vallee: 'la vallée de stabilité', equation: 'l’équation', defaut_masse: 'le défaut de masse', energie: 'l’énergie libérée', liaison: 'l’énergie de liaison par nucléon', niveaux: 'les niveaux d’énergie', transition: 'la transition' },
+  explication: {
+    decay: [
+      { repere: 'source', texte: 'La source contient N₀ noyaux radioactifs ; chacun a la même probabilité de se désintégrer à chaque instant.' },
+      { repere: 'detecteur', texte: 'Le détecteur Geiger-Müller compte les désintégrations : le comptage fluctue, c’est un phénomène aléatoire.' },
+      { repere: 'courbe', texte: 'À l’échelle de milliers de noyaux, N(t) suit une décroissance exponentielle N₀·2^(−t/t½).' },
+      { repere: 'demi_vie', texte: 'La demi-vie t½ est la durée au bout de laquelle la moitié des noyaux s’est désintégrée.' },
+      { repere: 'formules', texte: 'Chaque isotope a sa demi-vie : 5 730 ans pour le carbone 14, 8 jours pour l’iode 131.' },
+    ],
+    transformations: [
+      { repere: 'vallee', texte: 'Les noyaux stables se rangent le long de la vallée de stabilité du diagramme N–Z.' },
+      { repere: 'parent', texte: 'Un noyau trop riche en neutrons ou en protons est instable : il se transforme pour s’en rapprocher.' },
+      { repere: 'fils', texte: 'La flèche montre le noyau fils : α retire 2 protons et 2 neutrons, β⁻ change un neutron en proton, β⁺ un proton en neutron.' },
+      { repere: 'equation', texte: 'Dans l’équation, le nombre de nucléons A et la charge Z se conservent : c’est la loi de Soddy.' },
+    ],
+    mass_energy: [
+      { repere: 'equation', texte: 'Voici la réaction nucléaire : compare la masse des noyaux avant et après.' },
+      { repere: 'defaut_masse', texte: 'La masse après est plus petite : la différence Δm est le défaut de masse.' },
+      { repere: 'energie', texte: 'Cette masse disparue est libérée en énergie : ΔE = Δm·c², soit 931,5 MeV par unité de masse atomique.' },
+      { repere: 'liaison', texte: 'Le fer 56 a la plus grande énergie de liaison par nucléon : la fusion des légers et la fission des lourds libèrent de l’énergie.' },
+    ],
+    spectra: [
+      { repere: 'source', texte: 'La lampe excite les atomes ; en retombant sur un niveau plus bas, chaque électron émet un photon.' },
+      { repere: 'reseau', texte: 'Le réseau dévie chaque longueur d’onde d’un angle différent : il sépare les couleurs.' },
+      { repere: 'raies', texte: 'Sur l’écran on n’obtient pas un arc-en-ciel mais des raies : le spectre d’émission est discontinu.' },
+      { repere: 'niveaux', texte: 'Les niveaux d’énergie de l’atome sont quantifiés ; une raie correspond à une transition entre deux niveaux.' },
+      { repere: 'transition', texte: 'L’énergie du photon vaut la différence des niveaux : ΔE = hν = hc/λ.' },
+    ],
+  },
   runLabel: v => v === 'decay' ? 'Compter' : 'Simuler',
   controls(v, p) {
     const isotopes = Object.entries(ISO).map(([k, i]) => [k, i.label]);
@@ -63,12 +92,12 @@ window.LAB = {
       craie.rect(40, 70, 70, 60, { couleur: 'orange', arrondi: 6 }); craie.cercle(75, 100, 10, { couleur: 'orange', fond: 'orange' }); craie.texte('source', 75, 150, { couleur: 'orange', taille: 14, align: 'center' }).texte(ISO[p.isotope].sym, 75, 60, { couleur: 'orange', taille: 15, align: 'center' }); a.zone('source', 40, 70, 70, 60);
       for (let i = 0; i < 3; i++) craie.trait([[115, 85 + i * 15], [130, 80 + i * 15], [145, 90 + i * 15], [160, 85 + i * 15]], { couleur: 'faible', largeur: 1.2 });
       craie.rect(170, 70, 50, 60, { couleur: 'cyan', arrondi: 6 }); craie.texte('GM', 195, 106, { couleur: 'cyan', taille: 14, align: 'center' }).texte('détecteur', 195, 150, { couleur: 'cyan', taille: 14, align: 'center' }); a.zone('detecteur', 170, 70, 50, 60);
-      craie.ligne(220, 100, 260, 100, { largeur: 1.5 }); craie.rect(260, 80, 90, 40, { arrondi: 5 }); craie.texte(a.ran ? String(d.observed_nuclei) : '— —', 305, 108, { couleur: 'jaune', taille: 20, align: 'center' }); craie.texte('compteur', 305, 150, { couleur: 'faible', taille: 14, align: 'center' });
+      craie.ligne(220, 100, 260, 100, { largeur: 1.5 }); craie.rect(260, 80, 90, 40, { arrondi: 5 }); craie.texte(a.ran ? String(d.observed_nuclei) : '— —', 305, 108, { couleur: 'jaune', taille: 20, align: 'center' }); craie.texte('compteur', 305, 150, { couleur: 'faible', taille: 14, align: 'center' }); a.zone('compteur', 260, 80, 90, 40);
       const x0 = 400, y0 = 330, w = 300, h = 160;
       craie.axe(x0, y0, x0 + w + 14, y0, [1, 2, 3, 4, 5].map(k => [k / 5 * w / (w + 14), k === 1 ? 't½' : k + 't½']), { taille: 12 }).axe(x0, y0, x0, y0 - h - 12, [[1, 'N₀'], [.5, 'N₀/2']], { vertical: true, taille: 12 }); craie.texte('N', x0 + 6, y0 - h - 14, { couleur: 'faible', taille: 14 });
       craie.courbe(u => [x0 + u * w, y0 - h * Math.pow(.5, u * 5)], 100, { couleur: 'cyan', largeur: 2.4 });
       craie.ligne(x0, y0 - h / 2, x0 + w / 5, y0 - h / 2, { couleur: 'orange', largeur: 1.2, pointille: [4, 4] }).ligne(x0 + w / 5, y0 - h / 2, x0 + w / 5, y0, { couleur: 'orange', largeur: 1.2, pointille: [4, 4] });
-      a.zone('courbe', x0, y0 - h - 12, w + 14, h + 12);
+      a.zone('courbe', x0, y0 - h - 12, w + 14, h + 12); a.zone('demi_vie', x0 - 4, y0 - h / 2 - 12, w / 5 + 12, h / 2 + 14); a.zone('formules', 30, 182, 350, 110);
       craie.direct(() => { for (const m of a.S.measurements.decay) craie.point(x0 + m.parameters.halfMultiples / 5 * w, y0 - h * m.remaining_ratio, 5, 'jaune'); if (a.ran) craie.point(x0 + p.halfMultiples / 5 * w, y0 - h * d.remaining_ratio, 7, 'orange'); });
       a.lignes(40, 200, [`${d.isotope} : t½ = ${fr(d.half_life, 1)} ${d.unit}`, `t = ${fr(p.halfMultiples, 2)} × t½ = ${fr(d.time, 1)} ${d.unit}`, `N théorique = N₀·2^(−t/t½) = ${fr(d.expected_nuclei, 0)}`, a.ran ? `comptage : ${d.observed_nuclei} noyaux, soit N/N₀ = ${fr(d.remaining_ratio, 2)}` : 'lance le comptage…'], { pas: 24, max: 330 });
     } else if (v === 'transformations') {
@@ -80,7 +109,7 @@ window.LAB = {
       craie.point(px, py, 7, 'cyan'); craie.texte('parent', px + 12, py - 6, { couleur: 'cyan', taille: 14 });
       craie.fleche(px, py, fx + (fx > px ? -8 : fx < px ? 8 : 0), fy + (fy > py ? -8 : fy < py ? 8 : 0), { couleur: 'rouge', largeur: 2.4 });
       craie.point(fx, fy, 7, 'orange'); craie.texte('fils', fx + 12, fy + 18, { couleur: 'orange', taille: 14 });
-      a.zone('source', px - 14, py - 14, 28, 28); a.zone('courbe', x0, y0 - h - 12, w + 14, h + 12);
+      a.zone('source', px - 14, py - 14, 28, 28); a.zone('parent', px - 14, py - 14, 28, 28); a.zone('fils', fx - 14, fy - 14, 28, 28); a.zone('vallee', x0 + 40, y0 - h, 180, h - 20); a.zone('courbe', x0, y0 - h - 12, w + 14, h + 12); a.zone('equation', 390, 210, 340, 116);
       const sym = (A, Z) => `${A}₍${Z}₎X`;
       a.lignes(400, 230, [`${ISO[p.isotope].sym} (A = ${P.A}, Z = ${P.Z}, N = ${P.N})`, `→ fils : A = ${F.A}, Z = ${F.Z}, N = ${F.N}  +  ${d.emitted_particle}`, `loi : ${d.conservation}`, d.mode === 'alpha' ? 'ᴬ₂X → ᴬ⁻⁴₂₋₂Y + ⁴₂He' : d.mode === 'beta_minus' ? 'ᴬ₂X → ᴬ₂₊₁Y + ⁰₋₁e + ν̄' : 'ᴬ₂X → ᴬ₂₋₁Y + ⁰₊₁e + ν'], { pas: 26, max: 330 });
     } else if (v === 'mass_energy') {
@@ -90,7 +119,7 @@ window.LAB = {
       craie.texte(`Δm = ${fr(d.mass_defect_u, 4)} u`, 40, 170, { couleur: 'jaune', taille: 18 });
       craie.texte(`ΔE = Δm·c² = ${fr(d.mass_defect_u, 4)} × 931,5 = ${fr(d.released_energy_mev, 1)} MeV`, 40, 200, { couleur: 'jaune', taille: 18, max: 340 });
       craie.texte(`Eₗ/A = ${fr(d.binding_energy_per_nucleon_mev, 2)} MeV par nucléon`, 40, 230, { couleur: 'violet', taille: 17 });
-      a.zone('source', 30, 45, 340, 40);
+      a.zone('source', 30, 45, 340, 40); a.zone('equation', 30, 45, 340, 40); a.zone('defaut_masse', 30, 152, 220, 26); a.zone('energie', 30, 182, 350, 26); a.zone('liaison', 30, 212, 340, 26);
       const x0 = 430, y0 = 330, w = 270, h = 150; const vals = Object.entries(REACTIONS);
       craie.axe(x0, y0, x0, y0 - h - 12, [[7.07 / 9, '7'], [8 / 9, '8'], [8.79 / 9, '8,8']], { vertical: true, taille: 12 }); craie.texte('Eₗ/A (MeV)', x0 + 6, y0 - h - 14, { couleur: 'faible', taille: 13 }); craie.ligne(x0, y0, x0 + w, y0, { couleur: 'faible', largeur: 1.5 });
       vals.forEach(([id, rr], i) => { const bx = x0 + 30 + i * 85, bh = rr.binding / 9 * h, actif = id === p.reaction; craie.rect(bx, y0 - bh, 50, bh, { couleur: actif ? 'orange' : 'faible', fond: actif ? 'orange' : null, arrondi: 3 }); craie.texte(id === 'iron' ? 'Fe-56' : id, bx + 25, y0 + 20, { couleur: actif ? 'orange' : 'faible', taille: 13, align: 'center' }); craie.texte(fr(rr.binding, 2), bx + 25, y0 - bh - 6, { couleur: actif ? 'orange' : 'faible', taille: 12, align: 'center' }); });
@@ -109,8 +138,9 @@ window.LAB = {
         const nx = 60, ny = 340, lev = n => ny - (1 - 1 / (n * n)) * 140;
         for (let n = 1; n <= 6; n++) { craie.ligne(nx, lev(n), nx + 140, lev(n), { couleur: n === d.n_initial || n === d.n_final ? 'jaune' : 'faible', largeur: n <= 2 ? 2 : 1.2 }); if (n <= 3 || n === 6) craie.texte(`n = ${n}`, nx + 150, lev(n) + 5, { couleur: 'faible', taille: 12 }); }
         craie.fleche(nx + 70, lev(d.n_initial) + 3, nx + 70, lev(d.n_final) - 3, { couleur: couleurNm(d.wavelength_nm), largeur: 2.4 });
+        a.zone('niveaux', nx - 6, lev(6) - 12, 200, lev(1) - lev(6) + 24); a.zone('transition', nx + 54, Math.min(lev(d.n_initial), lev(d.n_final)) - 6, 32, Math.abs(lev(d.n_initial) - lev(d.n_final)) + 12); a.zone('formules', 230, 232, 320, 80);
         a.lignes(240, 250, [`${d.series} : n = ${d.n_initial} → n = ${d.n_final}`, `ΔE = 13,6 (1/n𝒇² − 1/nᵢ²) = ${fr(d.photon_energy_ev, 3)} eV`, `λ = hc/ΔE = 1240 / ${fr(d.photon_energy_ev, 3)} = ${fr(d.wavelength_nm, 1)} nm`], { pas: 24, max: 300 });
-      } else a.lignes(240, 250, ['doublet jaune du sodium : 589,0 et 589,6 nm', `ΔE ≈ ${fr(d.photon_energy_ev, 2)} eV : deux niveaux très proches`], { pas: 24, max: 330 });
+      } else { a.zone('formules', 230, 232, 340, 60); a.lignes(240, 250, ['doublet jaune du sodium : 589,0 et 589,6 nm', `ΔE ≈ ${fr(d.photon_energy_ev, 2)} eV : deux niveaux très proches`], { pas: 24, max: 330 }); }
     }
     if (a.ran && a.resultat != null) { craie.depuis(a.resultat); craie.texte(v === 'decay' ? 'comptage fait ✓' : 'simulation faite ✓', 560, 200, { couleur: 'vert', taille: 16, align: 'center' }); }
   },

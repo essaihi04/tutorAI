@@ -20,7 +20,7 @@
   </header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Glycolyse dessinée à la craie : glucose à six carbones coupé en deux pyruvates dans le cytoplasme, près de la mitochondrie"></canvas>
-    <div class="panneau haut-droite" id="etape"><h3 id="stageTitle"></h3><p id="hint"></p><div class="flux"><span class="entree">entrée : <b id="inputValue"></b></span><span class="sortie">sortie : <b id="outputValue"></b></span></div></div>
+    <div class="panneau haut-droite" id="etape" data-professor-point="etape" data-professor-label="étape en cours"><h3 id="stageTitle"></h3><p id="hint"></p><div class="flux"><span class="entree">entrée : <b id="inputValue"></b></span><span class="sortie">sortie : <b id="outputValue"></b></span></div></div>
   </section>
   <footer class="barre">
     <button class="craie-btn principal" id="startBtn" data-professor-control="start replay pause">Démarrer</button>
@@ -36,6 +36,8 @@
   'use strict';
   const { Craie, ecrire, bulle } = window.Tableau;
   const $ = id => document.getElementById(id);
+  const EXPLICATION = [{ repere: 'cytoplasme', texte: 'La glycolyse se déroule dans le cytoplasme, en dehors de la mitochondrie.' }, { repere: 'glucose', texte: 'Le glucose est une molécule à six atomes de carbone.' }, { repere: 'atp_consommes', texte: 'La cellule investit d’abord deux ATP pour activer le glucose.' }, { repere: 'coupure', texte: 'La chaîne C₆ est coupée en deux chaînes à trois carbones.' }, { repere: 'entrees', texte: 'NAD⁺, ADP et Pᵢ entrent dans la phase de récupération.' }, { repere: 'atp_produits', texte: 'Quatre ATP et deux NADH,H⁺ sont formés : le bilan net est de deux ATP par glucose.' }, { repere: 'pyruvates', texte: 'Les deux pyruvates entreront ensuite dans la mitochondrie si le dioxygène est présent.' }];
+  window.Tableau.explication(EXPLICATION);
   const SIMULATION_CONFIG = { id: 'glycolyse_glucose_cytoplasme', commands: ['start', 'next', 'pause', 'reset', 'set_variant', 'highlight'], variants: [{ id: 'glycolyse', label: 'Glycolyse complète', params: {} }], objectives: ['Suivre les six carbones du glucose', 'Relier ATP consommés, ATP produits et NADH,H⁺', 'Établir le bilan net de la glycolyse'] };
   const labels = [['1 · Glucose dans le cytoplasme', 'La glycolyse commence dans le cytoplasme de la cellule.'], ['2 · Activation', 'Deux ATP entrent ; deux ADP sortent après le transfert des phosphates.'], ['3 · Coupure C₆ → 2 × C₃', 'Une chaîne à six carbones donne deux chaînes à trois carbones.'], ['4 · Formation des pyruvates', 'NAD⁺, ADP et Pi entrent ; deux pyruvates, NADH,H⁺ et ATP sont formés.'], ['5 · Près de la mitochondrie', 'Les deux pyruvates restent représentés dans le cytoplasme, à côté de la mitochondrie.']];
   const flows = [['Glucose (C₆)', 'Glycolyse dans le cytoplasme'], ['Glucose + 2 ATP', 'Molécule activée + 2 ADP'], ['Molécule C₆ activée', '2 molécules C₃'], ['2 C₃ + 2 NAD⁺ + 4 ADP + 4 Pi', '2 pyruvates + 2 NADH,H⁺ + 4 ATP'], ['2 pyruvates dans le cytoplasme', 'À proximité de la mitochondrie']];
@@ -67,12 +69,17 @@
   function reset() { stopTimer(); goTo(0); state.running = false; state.status = 'idle'; state.actions = []; state.marques = [0, null, null, null, null]; state.ouvert = performance.now(); publish('reset_simulation'); render(); bulle($('feedback'), 'Retour au glucose intact.'); }
   $('startBtn').onclick = () => state.running ? pause() : start(); $('resetBtn').onclick = reset; $('nextBtn').onclick = () => { stopTimer(); state.running = false; next(); };
   window.executeAICommand = (command, params = {}) => {
+    if (command === 'highlight') { window.Tableau.surligner(params.target || params.repere || params.id); return; }
     window.Tableau.appuyer(command);
     if (command === 'start' || command === 'replay') start(); else if (command === 'next' || command === 'step') { state.running = false; stopTimer(); next(); } else if (command === 'pause') pause(); else if (command === 'reset') reset(); else if (command === 'set_variant') reset();
   };
   window.addEventListener('message', e => { const d = e.data || {}; if (d.type === 'simulation_control' && d.simulation_id === SIMULATION_CONFIG.id) executeAICommand(d.command, d.parameters || {}); });
   window.SIMULATION_CONFIG = SIMULATION_CONFIG; window.__SIMULATION_MANIFEST_SENT__ = true;
-  window.parent.postMessage({ type: 'simulation_manifest', simulation_id: SIMULATION_CONFIG.id, capabilities: { commands: SIMULATION_CONFIG.commands, config: SIMULATION_CONFIG, buttons: ['startBtn', 'nextBtn', 'resetBtn'] }, page_text: 'Dessiné au tableau : dans le cytoplasme de la cellule, la glycolyse transforme un glucose C6 en exactement 2 pyruvates C3. Les deux pyruvates sont représentés à proximité de la mitochondrie, sans être placés à l’intérieur.' }, '*');
+  // Les repères pointables sont connus après le premier dessin : le manifeste est renvoyé une fois complet.
+  function manifeste() {
+    window.parent.postMessage({ type: 'simulation_manifest', simulation_id: SIMULATION_CONFIG.id, capabilities: { commands: SIMULATION_CONFIG.commands, config: SIMULATION_CONFIG, buttons: ['startBtn', 'nextBtn', 'resetBtn'], command_schema: { highlight: { target: Object.keys(window.Tableau.listeReperes()).join(' | ') } }, reperes: window.Tableau.listeReperes(), explication: EXPLICATION }, page_text: 'Dessiné au tableau : dans le cytoplasme de la cellule, la glycolyse transforme un glucose C6 en exactement 2 pyruvates C3. Les deux pyruvates sont représentés à proximité de la mitochondrie, sans être placés à l’intérieur.' }, '*');
+  }
+  manifeste(); setTimeout(manifeste, 1800);
 
   // ── Dessin à la craie (repère logique 760 × 430) ──────────────────────────
   const craie = new Craie($('canvas'), { onresize: () => { state.dirty = true; } });
@@ -97,6 +104,7 @@
     craie.trait([[575, 160], [640, 155], [685, 195], [685, 275], [640, 315], [575, 310], [540, 240]], { couleur: 'rose', largeur: 1.4, ferme: true, duree: .4 });
     [[585, 170], [615, 165], [645, 170]].forEach(([x, y]) => craie.trait([[x, y], [x + 4, y + 50], [x, y + 100]], { couleur: 'rose', largeur: 1.4, duree: .1 }));
     craie.texte('MITOCHONDRIE', 610, 350, { couleur: 'rose', taille: 15, align: 'center' });
+    craie.repere('cytoplasme', 60, 100, 180, 36, 'cytoplasme').repere('mitochondrie', 515, 132, 195, 232, 'mitochondrie');
     craie.courbe(u => [75 + (480 - 75) * u, 225 - 30 * Math.sin(Math.PI * u)], 30, { couleur: 'tresfaible', largeur: 2, pointille: [8, 10], duree: .6 });
     craie.fleche(470, 219, 490, 227, { couleur: 'tresfaible', largeur: 2, duree: .1 });
     craie.pause(.2);
@@ -107,10 +115,11 @@
       craie.fleche(195, 108, 222, 160, { couleur: 'cyan', largeur: 1.8 }).fleche(245, 108, 252, 160, { couleur: 'cyan', largeur: 1.8 });
       craie.rect(320, 72, 62, 32, { couleur: 'jaune', arrondi: 14 }).texte('2 ADP', 351, 93, { couleur: 'jaune', taille: 13, align: 'center' });
       craie.fleche(296, 168, 346, 111, { couleur: 'jaune', largeur: 1.8 });
+      craie.repere('atp_consommes', 168, 66, 100, 46, '2 ATP consommés').repere('adp', 316, 68, 70, 40, '2 ADP libérés');
       if (step <= 1) craie.texte('activation : 2 ATP consommés', 215, 320, { couleur: 'faible', taille: 15 });
     }
     // Étape 3 : coupure
-    if (step >= 2) { craie.depuis(state.marques[2] ?? temps); craie.ligne(300, 200, 300, 262, { couleur: 'rouge', largeur: 2, pointille: [6, 6] }).texte('C₆ → 2 × C₃', 300, 335, { couleur: 'rose', taille: 16, align: 'center' }); }
+    if (step >= 2) { craie.depuis(state.marques[2] ?? temps); craie.ligne(300, 200, 300, 262, { couleur: 'rouge', largeur: 2, pointille: [6, 6] }).texte('C₆ → 2 × C₃', 300, 335, { couleur: 'rose', taille: 16, align: 'center' }).repere('coupure', 284, 194, 32, 76, 'coupure C₆ → 2 C₃'); }
     // Étape 4 : entrées et sorties de la phase de récupération
     if (step >= 3) {
       craie.depuis(state.marques[3] ?? temps);
@@ -121,6 +130,7 @@
       craie.cercle(235, 305, 17, { couleur: 'jaune', fond: 'jaune' }).texte('A', 235, 311, { couleur: 'jaune', taille: 15, align: 'center' }).texte('4 ATP', 235, 277, { couleur: 'jaune', taille: 13, align: 'center' });
       craie.fleche(318, 215, 172, 296, { couleur: 'vert', largeur: 1.8 }).fleche(318, 268, 258, 296, { couleur: 'jaune', largeur: 1.8 });
       craie.texte('bilan net : 2 ATP + 2 NADH,H⁺', 110, 360, { couleur: 'vert', taille: 16 });
+      craie.repere('entrees', 346, 346, 226, 42, 'NAD⁺, ADP et Pᵢ entrants').repere('nadh', 124, 262, 52, 66, '2 NADH,H⁺ produits').repere('atp_produits', 209, 262, 52, 66, '4 ATP produits').repere('bilan', 106, 342, 262, 26, 'bilan net');
     }
     if (step >= 4) { craie.depuis(state.marques[4] ?? temps); craie.fleche(470, 230, 515, 238, { couleur: 'rose', largeur: 2 }); craie.texte('les pyruvates entrent ensuite dans la mitochondrie', 60, 65, { couleur: 'faible', taille: 14 }); }
     // Chaînes de carbone (animées entre deux étapes)
@@ -133,8 +143,8 @@
         const pas = n === 6 ? 24 : 36, col = n === 6 ? 'orange' : 'rose';
         craie.ligne(x, y, x + pas * (n - 1), y, { couleur: 'jaune', largeur: 7, alpha: .5 * alpha });
         for (let i = 0; i < n; i++) craie.cercle(x + i * pas, y, 17, { couleur: col, fond: col, fondAlpha: .35 * alpha, alpha });
-        if (n === 6 && alpha > .5) craie.texte('Glucose · C₆', x, y + 44, { couleur: 'orange', taille: 16, alpha });
-        if (n === 3) craie.texte(step >= 3 ? 'pyruvate · C₃' : `triose ${which ? 'B' : 'A'} · C₃`, x, y + (which ? 44 : -30), { couleur: 'rose', taille: 15, alpha });
+        if (n === 6 && alpha > .5) { craie.texte('Glucose · C₆', x, y + 44, { couleur: 'orange', taille: 16, alpha }); craie.repere('glucose', x - 20, y - 22, pas * (n - 1) + 40, 70, 'glucose C₆'); }
+        if (n === 3) { craie.texte(step >= 3 ? 'pyruvate · C₃' : `triose ${which ? 'B' : 'A'} · C₃`, x, y + (which ? 44 : -30), { couleur: 'rose', taille: 15, alpha }); if (!which) craie.repere('pyruvates', x - 20, y - 36, pas * 2 + 40, 164, step >= 3 ? 'les deux pyruvates' : 'les deux trioses'); }
       }
     });
     const complet = craie.fin();

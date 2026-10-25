@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { signalerReponseEleve } from '../../services/professorEmotion';
 
 interface MediaResource {
   type: 'image' | 'simulation' | 'video';
@@ -449,8 +450,10 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
     onSimUpdateRef.current = onSimulationUpdate;
   }, [onSimulationUpdate]);
 
+  const lastCheckRef = useRef('');
   useEffect(() => {
     nativeManifestSeenRef.current = false;
+    lastCheckRef.current = '';
   }, [media?.url]);
 
   useEffect(() => {
@@ -461,6 +464,21 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
       if (data.type === 'simulation_state' || data.type === 'simulation_manifest') {
         if (data.type === 'simulation_manifest') {
           nativeManifestSeenRef.current = true;
+        }
+        // L'élève vient de vérifier une réponse ou une mesure (action check) : le professeur applaudit ou fait
+        // non de la tête. Une seule réaction par vérification, même si l'état est renvoyé plusieurs fois.
+        if (data.type === 'simulation_state') {
+          const actions = Array.isArray(data.student_actions) ? data.student_actions : [];
+          const last = actions[actions.length - 1];
+          const lastAction = typeof last === 'string' ? last : String(last?.action ?? '');
+          const correct = data.current_state?.correct;
+          if (typeof correct === 'boolean' && /^(check|verify|check_experiment|verifier)$/.test(lastAction)) {
+            const key = `${actions.length}:${lastAction}:${correct}`;
+            if (key !== lastCheckRef.current) {
+              lastCheckRef.current = key;
+              signalerReponseEleve(correct);
+            }
+          }
         }
         console.log('[SessionMediaDisplay] Simulation message received:', data.type, data);
         if (onSimUpdateRef.current) {

@@ -41,7 +41,7 @@ interface Props {
   onError: () => void;
 }
 /** Durée de chaque geste d'émotion, en secondes. */
-const GESTURE_LENGTH: Record<ProfessorGestureKind, number> = { wave: 2.4, cheer: 1.8, heart: 2.2, nod: 1.2, laugh: 1.8, startle: 1.4 };
+const GESTURE_LENGTH: Record<ProfessorGestureKind, number> = { wave: 2.4, cheer: 1.8, heart: 2.2, nod: 1.2, laugh: 1.8, startle: 1.4, shake: 1.7 };
 const smooth = (a: number, b: number, x: number) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 /**
  * Version du modèle : les 10 premiers caractères de son SHA-256. L'adresse change avec le fichier, donc un
@@ -369,6 +369,14 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
               for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, -env * 0.2);
             } else if (gestureKind === 'nod') {
               rotateWorld(bone('Head'), X, env * 0.16 * Math.max(0, Math.sin(time * 7)));       // deux hochements
+            } else if (gestureKind === 'shake') {
+              rotateWorld(bone('Head'), Y, env * 0.22 * Math.sin(time * 8));                     // non de la tête
+              const side = free('Right') ? 'Right' : 'Left', sign = side === 'Left' ? 1 : -1;
+              rotateWorld(bone(`${side}Arm`), Z, sign * env * 0.7);                              // avant-bras levé devant lui
+              rotateWorld(bone(`${side}ForeArm`), X, -env * 1.6);
+              rotateWorld(bone(`${side}Hand`), Y, env * 0.5 * Math.sin(time * 8));               // l'index balance « non, non »
+              for (const finger of FINGERS) curlFinger(side, finger, finger === 'Index' ? -env * 0.2 : env * 0.9);
+              for (const brow of ['BrowLeft', 'BrowRight']) rotateWorld(bone(brow), X, env * 0.12);   // sourcils un peu froncés
             } else if (gestureKind === 'laugh') {
               const shake = Math.abs(Math.sin(time * 11));
               liftWorld(bone('Hips'), env * 0.03 * shake);                                       // le corps saute

@@ -10,13 +10,16 @@
  *   hints: { variant: [3 indices] }, aliases: { cible: zone },
  *   onVariant(variant) (facultatif), runLabel(variant) (facultatif),
  *   draw(craie, api) : api = { variant, p, d, t (s depuis l'ouverture), zone(nom, x, y, w, h), lignes(x, y, [texte…], o) }
+ *   explication: { variante: [{ repere, texte }, …] }  — le tuteur dit chaque phrase, le professeur montre le repère.
  * }
+ * Chaque zone(nom, …) est aussi un repère pointable (craie.repere) : la commande highlight {target: nom} fait voler
+ * le professeur jusqu'à elle et le kit l'entoure à la craie ; les anciens identifiants passent par `aliases`.
  * Commandes : start, set_variant, set_parameters, run_model, record_measurement, check, reset, reveal_hint, highlight.
  */
 (function () {
   'use strict';
   const LAB = window.LAB; if (!LAB) throw new Error('LAB manquant');
-  const { Craie, fr, bulle, ecrire, onglets, curseur, protocole } = window.Tableau;
+  const { Craie, fr, bulle, ecrire, onglets, curseur, protocole, explication, surligner } = window.Tableau;
   const $ = id => document.getElementById(id);
   const DATA = LAB.DATA, ids = Object.keys(DATA), total = ids.length;
   const query = new URLSearchParams(location.search), requested = query.get('variant');
@@ -31,8 +34,8 @@
   <header class="titre"><div><small>${LAB.eyebrow}</small><h1 id="title"></h1><p class="objectif" id="instruction"></p></div><nav class="onglets" id="onglets" aria-label="Expériences"></nav></header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="${LAB.title} dessiné à la craie"></canvas>
-    <div class="panneau bas-gauche reglages" id="settings" data-professor-control="set_parameters"><div id="controls"></div></div>
-    <div class="panneau haut-droite mesures" id="measures"><h3 id="kicker"></h3><table class="lecture-table" id="table"></table><div class="rangee"><button class="craie-btn" id="record" data-professor-control="record_measurement" disabled>Noter l’essai</button><button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button></div></div>
+    <div class="panneau bas-gauche reglages" id="settings" data-professor-control="set_parameters" data-professor-point="reglages" data-professor-label="les réglages"><div id="controls"></div></div>
+    <div class="panneau haut-droite mesures" id="measures" data-professor-point="reponse" data-professor-label="le carnet de mesures"><h3 id="kicker"></h3><table class="lecture-table" id="table"></table><div class="rangee"><button class="craie-btn" id="record" data-professor-control="record_measurement" disabled>Noter l’essai</button><button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button></div></div>
   </section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start run_model">Lancer</button>
@@ -47,6 +50,7 @@
   const redraw = () => { S.dirty = true; };
   const values = () => LAB.values(S.variant, S.params);
   const snap = (extra = {}) => ({ simulation_status: S.status, current_variant: S.variant, skill: DATA[S.variant].goal, parameters: { ...S.params }, derived_values: values(), measurements: [...S.measurements[S.variant]], attempts: S.attempts, hints_used: S.hints, completed_variants: [...S.completed], expected_answer: DATA[S.variant].goal, ...extra });
+  if (LAB.explication) explication(LAB.explication);
   const pont = protocole({ id: LAB.id, commandes: commands, config, texte: LAB.page_text, etat: snap, progression: () => S.completed.length / total, executer });
   const act = (a, d = {}) => pont.noter(a, { ...d, variant: S.variant });
   const emit = (extra) => { pont.emettre(extra); $('progress').textContent = `${S.completed.length} / ${total}`; };
@@ -118,8 +122,10 @@
     act('request_hint', { level }); feedback('💡 ' + t); emit({ last_hint: t });
   }
   function highlight(target) {
-    const zone = (LAB.aliases || {})[target] || target; S.hl = { target: zone, at: scene() };
-    act('highlight', { target }); feedback('Regarde : ' + (LAB.labels?.[zone] || target)); redraw(); emit({ last_highlight: target });
+    const zone = (LAB.aliases || {})[target] || target;
+    // Le kit entoure le repère à la craie (anneau) ; à défaut, un cadre orange est dessiné sur le tableau.
+    S.hl = surligner(zone) ? null : { target: zone, at: scene() };
+    act('highlight', { target: zone }); feedback('Regarde : ' + (LAB.labels?.[zone] || zone)); redraw(); emit({ last_highlight: zone });
   }
   function reset() { S.measurements[S.variant] = []; S.attempts = 0; act('reset'); setVariant(S.variant); }
   function executer(c, p) {
@@ -144,7 +150,7 @@
     const c = craie.ctx, s = Math.min(W / 760, H / 380); c.translate((W - 760 * s) / 2, (H - 380 * s) / 2); c.scale(s, s);
     for (const k in zones) delete zones[k];
     const api = { variant: S.variant, p: S.params, d: values(), t, ran: S.ran, resultat: S.marques.resultat, S,
-      zone: (nom, x, y, w, h) => { zones[nom] = [x, y, w, h]; },
+      zone: (nom, x, y, w, h) => { zones[nom] = [x, y, w, h]; craie.repere(nom, x, y, w, h, (LAB.labels || {})[nom] || nom); },
       lignes: (x, y, textes, o = {}) => { textes.forEach((tx, i) => craie.texte(tx, x, y + i * (o.pas ?? 22), { couleur: o.couleur ?? 'jaune', taille: o.taille ?? 16, max: o.max })); } };
     LAB.draw(craie, api);
     if (S.hl && zones[S.hl.target]) {

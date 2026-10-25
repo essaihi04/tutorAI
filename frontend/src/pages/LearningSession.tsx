@@ -20,8 +20,8 @@ import { voiceFloor } from '../services/voiceFloor';
 import { audioUnlock } from '../services/audioUnlock';
 import VoiceInput from '../components/session/VoiceInput';
 import AIAvatar, { type LabControlCommand } from '../components/session/AIAvatar';
-import { PROFESSOR_REACH_MS } from '../services/professorFocus';
-import { detectProfessorEmotion, REPONSE_ELEVE_EVENT, type ProfessorEmotionKind } from '../services/professorEmotion';
+import { PROFESSOR_REACH_MS, PROFESSOR_POINT_HOLD_MS, POINTING_COMMANDS } from '../services/professorFocus';
+import { detectProfessorEmotion, emotionPourEvaluation, emotionPourReponse, PROFESSOR_EMOTIONS, REPONSE_ELEVE_EVENT, type ProfessorEmotionKind } from '../services/professorEmotion';
 import ChatHistory from '../components/session/ChatHistory';
 import { SessionMediaDisplay } from '../components/session/MediaViewer';
 import AIWhiteboard from '../components/session/AIWhiteboard';
@@ -338,8 +338,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     const next = labQueue.current.shift();
     if (!next) return;
     labBusy.current = true;
-    setLabControl({ sequence: ++labSequence.current, command: String(next.command ?? ''), message: next });
-    window.setTimeout(() => { labBusy.current = false; dispatchLabControl(); }, PROFESSOR_REACH_MS + 700);
+    const command = String(next.command ?? '');
+    setLabControl({ sequence: ++labSequence.current, command, message: next });
+    // Un pointage (il explique un repère, le doigt dessus) dure le temps d'une phrase ; un appui est bref.
+    const delai = POINTING_COMMANDS.has(command) ? Math.round(PROFESSOR_POINT_HOLD_MS * 0.7) : PROFESSOR_REACH_MS + 700;
+    window.setTimeout(() => { labBusy.current = false; dispatchLabControl(); }, delai);
   }, []);
 
   // Émotions du professeur : déduites des mots du tuteur et de l'élève, une fois par message et par émotion,
@@ -347,11 +350,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   const [professorEmotion, setProfessorEmotion] = useState<{ kind: ProfessorEmotionKind; key: number } | null>(null);
   const emotionsFired = useRef<Map<string, Set<string>>>(new Map());
   const lastGreetAt = useRef(0);
+  const lastEmotionAt = useRef<{ kind: string; at: number }>({ kind: '', at: 0 });
   const expressEmotion = useCallback((kind: ProfessorEmotionKind) => {
     if (kind === 'greet') {
       if (Date.now() - lastGreetAt.current < 10000) return;
       lastGreetAt.current = Date.now();
     }
+    // La même réaction peut arriver deux fois (les mots « Bravo » et la balise <eval>correct</eval>) : une seule suffit.
+    if (lastEmotionAt.current.kind === kind && Date.now() - lastEmotionAt.current.at < 4000) return;
+    lastEmotionAt.current = { kind, at: Date.now() };
     setProfessorEmotion({ kind, key: Date.now() });
   }, []);
   useEffect(() => {
@@ -366,10 +373,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     expressEmotion(kind);
   }, [conversation, expressEmotion]);
   useEffect(() => { if (connected) expressEmotion('greet'); }, [connected, expressEmotion]);
-  // L'élève répond à un exercice du tableau : bravo s'il a juste, encouragement sinon.
+  // L'élève répond à un exercice du tableau ou vérifie une mesure dans un laboratoire : bravo s'il a juste,
+  // non de la tête puis encouragement sinon.
   useEffect(() => {
     const reagir = (event: Event) => {
-      expressEmotion((event as CustomEvent<{ juste: boolean }>).detail?.juste ? 'celebrate' : 'encourage');
+      expressEmotion(emotionPourReponse(!!(event as CustomEvent<{ juste: boolean }>).detail?.juste));
     };
     window.addEventListener(REPONSE_ELEVE_EVENT, reagir);
     return () => window.removeEventListener(REPONSE_ELEVE_EVENT, reagir);
@@ -1300,6 +1308,15 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
       if (!estUnMode(data?.mode)) return;
       setActiveMode(data.mode);
       if (typeof data.phase === 'string' && data.phase) setPhase(data.phase);
+    });
+
+    // Le tuteur a jugé la réponse de l'élève (<eval>, skill_professeur.py) : le professeur le montre
+    // avant même que les mots n'arrivent — bras levés, non de la tête, hochement.
+    wsService.on('professor_reaction', (data) => {
+      const kind = typeof data?.kind === 'string' && data.kind in PROFESSOR_EMOTIONS
+        ? data.kind as ProfessorEmotionKind
+        : emotionPourEvaluation(String(data?.evaluation ?? ''));
+      if (kind) expressEmotion(kind);
     });
 
     // Ouverture ou fermeture d'une parenthèse de prérequis (skill_professeur.py).

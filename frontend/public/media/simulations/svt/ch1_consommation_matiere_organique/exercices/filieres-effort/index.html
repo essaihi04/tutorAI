@@ -16,12 +16,12 @@
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Axe des durées d’effort et trois filières énergétiques, à la craie"></canvas>
     <div class="calque">
-      <button class="craie-btn pose scenario" data-id="sprint" aria-pressed="false">Sprint 60 m · ≈ 7 s</button>
-      <button class="craie-btn pose scenario" data-id="tour" aria-pressed="false">Tour de piste · ≈ 50 s</button>
-      <button class="craie-btn pose scenario" data-id="marathon" aria-pressed="false">Marathon · ≈ 3 h</button>
-      <button class="craie-btn pose pathway" data-id="pcr" aria-pressed="false">⚡ ATP–phosphocréatine</button>
-      <button class="craie-btn pose pathway" data-id="lactique" aria-pressed="false">🔥 Fermentation lactique</button>
-      <button class="craie-btn pose pathway" data-id="respiration" aria-pressed="false">O₂ Respiration</button>
+      <button class="craie-btn pose scenario" data-id="sprint" aria-pressed="false" data-professor-point="effort_sprint" data-professor-label="sprint">Sprint 60 m · ≈ 7 s</button>
+      <button class="craie-btn pose scenario" data-id="tour" aria-pressed="false" data-professor-point="effort_tour" data-professor-label="tour de piste">Tour de piste · ≈ 50 s</button>
+      <button class="craie-btn pose scenario" data-id="marathon" aria-pressed="false" data-professor-point="effort_marathon" data-professor-label="marathon">Marathon · ≈ 3 h</button>
+      <button class="craie-btn pose pathway" data-id="pcr" aria-pressed="false" data-professor-point="filiere_pcr" data-professor-label="ATP–phosphocréatine">⚡ ATP–phosphocréatine</button>
+      <button class="craie-btn pose pathway" data-id="lactique" aria-pressed="false" data-professor-point="filiere_lactique" data-professor-label="fermentation lactique">🔥 Fermentation lactique</button>
+      <button class="craie-btn pose pathway" data-id="respiration" aria-pressed="false" data-professor-point="filiere_respiration" data-professor-label="respiration">O₂ Respiration</button>
     </div>
   </section>
   <footer class="barre">
@@ -32,8 +32,11 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script>
-  const { Craie, ecrire, bulle, appuyer } = window.Tableau;
-  window.SIMULATION_CONFIG={id:'filieres_effort_svt',variants:[{id:'exercise',label:'Filières selon l’effort'}],commands:['start','reset','check','set_variant']};
+  const { Craie, ecrire, bulle, appuyer, surligner, listeReperes, explication } = window.Tableau;
+  window.SIMULATION_CONFIG={id:'filieres_effort_svt',variants:[{id:'exercise',label:'Filières selon l’effort'}],commands:['start','reset','check','set_variant','highlight'],command_schema:{highlight:{target:'repère pointable (voir reperes)'}}};
+  // Script d'explication : une phrase par repère, dans l'ordre d'un professeur au tableau.
+  const EXPLICATION={exercise:[{repere:'axe_duree',texte:'Sur cet axe, la durée de l’effort augmente de gauche à droite.'},{repere:'zone_pcr',texte:'Les dix premières secondes : l’ATP est régénéré par la phosphocréatine, très vite mais la réserve est faible.'},{repere:'zone_lactique',texte:'De dix secondes à deux minutes : la glycolyse lactique domine, rapide, sans O₂, avec production de lactate.'},{repere:'zone_respiration',texte:'Au-delà de deux minutes : la respiration mitochondriale, lente mais durable grâce au dioxygène.'},{repere:'effort_sprint',texte:'Pour répondre : place l’effort sur l’axe, puis choisis la filière qui fournit surtout l’ATP à cette durée.'}]};
+  explication(EXPLICATION);
   const expected={sprint:'pcr',tour:'lactique',marathon:'respiration'},positions={sprint:.06,tour:.3,marathon:.9};let scenario=null,pathway=null,actions=[],verdict=null,verdictAt=null;
   const $=id=>document.getElementById(id),S={ouvert:performance.now(),dirty:true};const scene=()=>(performance.now()-S.ouvert)/1000;
   ecrire($('title'),'Choisis l’effort puis sa filière dominante');
@@ -41,15 +44,18 @@
   document.querySelectorAll('.pathway').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pathway').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');pathway=b.dataset.id;actions.push('pathway_'+pathway);verdict=null;S.dirty=true});
   function submit(){const correct=!!(scenario&&pathway&&expected[scenario]===pathway);verdict=correct;verdictAt=scene();S.dirty=true;bulle($('feedback'),correct?'✓ Association correcte':'↺ Relie surtout la durée à la vitesse de production d’ATP',correct?'good':'bad');actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'filieres_effort_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,scenario,pathway,expected:scenario?expected[scenario]:null,skill:'choisir_filiere_energetique'},objective_progress:correct?1:0.3,timestamp:Date.now()},'*')}
   function reset(){scenario=null;pathway=null;verdict=null;actions.push('reset');document.querySelectorAll('.pose').forEach(b=>b.setAttribute('aria-pressed','false'));bulle($('feedback'),'');S.ouvert=performance.now();S.dirty=true}
-  window.runVariant=reset;window.executeAICommand=(command)=>{appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;
+  window.runVariant=reset;window.executeAICommand=(command,p={})=>{if(command==='highlight'){surligner(p.target);return}appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;
   addEventListener('message',e=>{const d=e.data;if(d?.type==='simulation_control'&&(!d.simulation_id||d.simulation_id==='filieres_effort_svt'))window.executeAICommand(d.command,d.parameters||{})});
-  window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'filieres_effort_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,globals:['executeAICommand','runVariant']},page_text:'Exercice au tableau : relier la durée d’un effort (sprint, tour de piste, marathon) à la filière dominante de régénération de l’ATP.'},'*');
+  const manifeste=()=>{window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'filieres_effort_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,command_schema:SIMULATION_CONFIG.command_schema,globals:['executeAICommand','runVariant'],reperes:listeReperes(),explication:EXPLICATION},page_text:'Exercice au tableau : relier la durée d’un effort (sprint, tour de piste, marathon) à la filière dominante de régénération de l’ATP.'},'*')};
+  manifeste();setTimeout(manifeste,2000);
 
   // ── Tableau : axe des durées, trois zones, les boutons posés sur le dessin ──
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:()=>{S.dirty=true}});const geom={s:1,ox:0,oy:0};
   const place=(sel,x,y)=>{const b=document.querySelector(sel);b.style.left=(geom.ox+x*geom.s)+'px';b.style.top=(geom.oy+y*geom.s)+'px'};
   function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(9,scene());const c=craie.ctx,s=Math.min(W/760,H/380);geom.s=s;geom.ox=(W-760*s)/2;geom.oy=(H-380*s)/2;c.translate(geom.ox,geom.oy);c.scale(s,s);
     const x0=70,x1=700,y=190;const X=f=>x0+(x1-x0)*f;
+    craie.repere('axe_duree',x0-10,y-24,x1-x0+50,52,'axe des durées').repere('zone_pcr',X(0),y+28,X(.13)-X(0),44,'zone ATP–PCr').repere('zone_lactique',X(.13),y+28,X(.42)-X(.13),44,'zone glycolyse lactique').repere('zone_respiration',X(.42),y+28,X(1)-X(.42),44,'zone respiration');
+    if(scenario)craie.repere('effort_choisi',X(positions[scenario])-20,y-52,40,68,'effort choisi');if(verdict!=null)craie.repere('verdict',355,344,60,36,'verdict');
     craie.texte('durée de l’effort →',385,120,{couleur:'faible',taille:15,align:'center'});
     [[0,.13,'jaune','ATP–PCr','≈ 10 s'],[.13,.42,'orange','glycolyse lactique','10 s – 2 min'],[.42,1,'vert','respiration','> 2 min']].forEach(([a,b,col,l,d])=>{craie.ligne(X(a),y,X(b),y,{couleur:col,largeur:7,alpha:.7});craie.texte(l,(X(a)+X(b))/2,y+40,{couleur:col,taille:15,align:'center'});craie.texte(d,(X(a)+X(b))/2,y+60,{couleur:'faible',taille:12,align:'center'})});
     craie.axe(x0,y,x1+30,y,[],{});[['7 s',.06],['50 s',.3],['3 h',.9]].forEach(([l,f])=>{craie.ligne(X(f),y-8,X(f),y+8,{largeur:1.6});craie.texte(l,X(f),y+22,{couleur:'faible',taille:12,align:'center'})});

@@ -7,10 +7,41 @@
   const $ = id => document.getElementById(id);
   const config = window.SIMULATION_CONFIG = {
     id: 'ordre_respiration_svt',
-    commands: ['start', 'pause', 'next', 'recycle', 'reset', 'set_variant'],
+    commands: ['start', 'pause', 'next', 'recycle', 'reset', 'set_variant', 'highlight'],
+    command_schema: { highlight: { target: 'repère pointable (voir reperes)' } },
     variants: [{id:'respiration',label:'O₂ + mitochondrie active'}, {id:'fermentation_lactique',label:'Sans O₂ : lactate'}, {id:'fermentation_alcoolique',label:'Sans O₂ : éthanol'}, {id:'mitochondrie_inactive',label:'O₂ présent, mitochondrie inactive'}],
     objectives: ['Identifier le pyruvate comme carrefour', 'Comparer les deux voies', 'Relier le recyclage du NAD⁺ à la poursuite de la glycolyse']
   };
+  // Script d'explication par condition : le tuteur dit chaque phrase pendant que le professeur montre le repère.
+  const EXPLICATION = {
+    respiration: [
+      { repere: 'glycolyse', texte: 'Dans le cytoplasme, la glycolyse coupe le glucose à 6 carbones en deux pyruvates et donne 2 ATP nets.' },
+      { repere: 'carrefour_pyruvate', texte: 'Le pyruvate est un carrefour : son devenir dépend de l’O₂ et de la mitochondrie.' },
+      { repere: 'porte_o2', texte: 'Avec du dioxygène et une mitochondrie active, la porte est ouverte.' },
+      { repere: 'krebs', texte: 'Dans la matrice, le pyruvate est oxydé en acétyl-CoA, puis le cycle de Krebs libère du CO₂ et charge NADH et FADH₂.' },
+      { repere: 'chaine_respiratoire', texte: 'La chaîne respiratoire transfère leurs électrons à l’O₂, forme de l’eau et produit beaucoup d’ATP ; le NAD⁺ régénéré retourne à la glycolyse.' },
+    ],
+    fermentation_lactique: [
+      { repere: 'glycolyse', texte: 'La glycolyse a lieu quand même : 2 pyruvates, 2 ATP, et 2 NADH chargés.' },
+      { repere: 'porte_o2', texte: 'Sans O₂, la mitochondrie ne peut pas prendre les pyruvates.' },
+      { repere: 'fermentation', texte: 'Le pyruvate est alors réduit dans le cytoplasme : c’est la fermentation.' },
+      { repere: 'produits_fermentation', texte: 'Ici, il devient du lactate ; le bilan reste de 2 ATP seulement.' },
+      { repere: 'recyclage_nad', texte: 'L’intérêt : le NADH redevient NAD⁺, et la glycolyse peut continuer.' },
+    ],
+    fermentation_alcoolique: [
+      { repere: 'glycolyse', texte: 'La glycolyse fournit 2 pyruvates, 2 ATP et 2 NADH.' },
+      { repere: 'fermentation', texte: 'Sans O₂, la levure fait une fermentation alcoolique.' },
+      { repere: 'produits_fermentation', texte: 'Chaque pyruvate perd un carbone sous forme de CO₂ et donne de l’éthanol à 2 carbones.' },
+      { repere: 'recyclage_nad', texte: 'Le NADH est réoxydé en NAD⁺ : la glycolyse repart, avec 2 ATP par glucose.' },
+    ],
+    mitochondrie_inactive: [
+      { repere: 'condition_mitochondrie', texte: 'Le dioxygène est présent, mais la mitochondrie est inactive.' },
+      { repere: 'porte_o2', texte: 'L’O₂ seul ne suffit pas : sans chaîne respiratoire active, la porte reste fermée.' },
+      { repere: 'fermentation', texte: 'Les pyruvates partent donc en fermentation, comme sans O₂.' },
+      { repere: 'nad', texte: 'C’est la seule façon de régénérer le NAD⁺ et de continuer la glycolyse.' },
+    ],
+  };
+  if (window.Tableau) window.Tableau.explication(EXPLICATION);
   let oxygen = true, mitochondria = true, alcoholic = false;
   let stage = 0, playing = false, timer = null, frame = null, generation = 0;
   const completed = new Set(), actions = [];
@@ -125,6 +156,7 @@
     reset(); oxygen = id==='respiration'||id==='mitochondrie_inactive'||id==='exercise'; mitochondria=id!=='mitochondrie_inactive'; alcoholic=id==='fermentation_alcoolique'; render(); start();
   };
   window.executeAICommand = (command,params={}) => {
+    if (command==='highlight') { if (window.Tableau) window.Tableau.surligner(params.target); return; }   // le professeur montre un repère
     if (window.Tableau) window.Tableau.appuyer(command);
     if(command==='start'&&!playing)start();
     else if(command==='pause'){stop();cancelMotion();render();publish('pause');}
@@ -135,6 +167,7 @@
   };
   window.addEventListener('message',event=>{const d=event.data;if(event.source===window.parent&&d&&d.type==='simulation_control'&&d.simulation_id===config.id)window.executeAICommand(d.command,d.parameters||{});});
   window.__SIMULATION_MANIFEST_SENT__=true;
-  window.parent.postMessage({type:'simulation_manifest',simulation_id:config.id,capabilities:{commands:config.commands,config,buttons:['start','next','recycle','reset']},page_text:'Pyruvate carrefour : comparer respiration et fermentation, puis recycler le NADH en NAD⁺ et lancer un deuxième glucose. Modèle simplifié suivant seulement les deux NAD⁺ de la glycolyse.'},'*');
+  const manifeste = () => window.parent.postMessage({type:'simulation_manifest',simulation_id:config.id,capabilities:{commands:config.commands,config,command_schema:config.command_schema,buttons:['start','next','recycle','reset'],reperes:window.Tableau?window.Tableau.listeReperes():{},explication:EXPLICATION},page_text:'Pyruvate carrefour : comparer respiration et fermentation, puis recycler le NADH en NAD⁺ et lancer un deuxième glucose. Modèle simplifié suivant seulement les deux NAD⁺ de la glycolyse.'},'*');
+  manifeste(); setTimeout(manifeste, 2000);
   render(); publish('ready');
 })();

@@ -5,7 +5,7 @@ import {
   reading, percentError, assessPrediction, assessTau, assessCapacitance, duration, niceStep,
 } from './model.js';
 
-const { Craie, fr, nombre, bulle, ecrire, curseur, protocole } = window.Tableau;
+const { Craie, fr, nombre, bulle, ecrire, curseur, protocole, explication } = window.Tableau;
 const $ = id => document.getElementById(id);
 const id = 'physics_rc_tp_lab';
 const RESISTANCES = [100, 220, 470, 1000, 2200, 4700, 10000];
@@ -60,6 +60,20 @@ const config = {
     go_to_step: { step: '0..5' },
   },
 };
+// Script d'explication : une phrase par repère, dans l'ordre du TP ; le professeur montre chaque repère du doigt.
+explication({ tp_rc: [
+  { repere: 'generateur', texte: 'Le générateur impose une tension E constante à ses bornes.' },
+  { repere: 'interrupteur', texte: 'L’interrupteur K choisit le circuit : position 1 pour charger, position 2 pour décharger.' },
+  { repere: 'resistance', texte: 'Le conducteur ohmique R limite le courant : plus R est grand, plus la charge est lente.' },
+  { repere: 'condensateur', texte: 'Le condensateur C accumule des charges ; la tension u_C à ses bornes augmente progressivement.' },
+  { repere: 'voltmetre', texte: 'Le voltmètre, branché aux bornes de C, lit u_C à chaque instant.' },
+  { repere: 'courbe', texte: 'Pendant la charge, u_C = E(1 − e^(−t/τ)) : la courbe monte vite puis tend vers E.' },
+  { repere: 'ligne_63', texte: 'À t = τ, u_C vaut 0,63 E : on lit τ là où la courbe coupe cette ligne.' },
+  { repere: 'tangente', texte: 'La tangente à l’origine coupe l’asymptote u = E exactement en t = τ : seconde méthode.' },
+  { repere: 'asymptote', texte: 'L’asymptote u = E est le palier : le condensateur est chargé, le courant est nul.' },
+  { repere: 'tableau_mesures', texte: 'Avec τ = R·C, on en déduit C = τ / R et on compare à la valeur nominale.' },
+  { repere: 'position_2', texte: 'En position 2, le condensateur se décharge dans R : u_C = U₀·e^(−t/τ), et 0,37 U₀ à t = τ.' },
+] });
 const progress = () => S.done.size / STEPS.length;
 function snapshot() {
   return {
@@ -238,12 +252,12 @@ function renderSteps() {
 }
 function table(list) {
   if (!list.length) return '<p class="hint-text">Aucun point relevé.</p>';
-  return `<div class="table-wrap"><table class="lecture-table"><thead><tr><th>n°</th><th>t (s)</th><th>u_C (V)</th></tr></thead><tbody>${
+  return `<div class="table-wrap" data-professor-point="tableau_mesures" data-professor-label="tableau de mesures"><table class="lecture-table"><thead><tr><th>n°</th><th>t (s)</th><th>u_C (V)</th></tr></thead><tbody>${
     list.map((p, i) => `<tr><td>${i + 1}</td><td>${fmtT(p.t)}</td><td>${fmt(p.u)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function field(key, label, unit) {
   const ok = S.validated[key];
-  return `<div class="champ-ligne"><label class="craie-champ" for="f-${key}">${label} <input id="f-${key}" inputmode="decimal" autocomplete="off" value="${S.answers[key] ?? ''}" ${ok ? 'disabled' : ''}> ${unit}</label>
+  return `<div class="champ-ligne" data-professor-point="reponse_${key}" data-professor-label="${label.replace(/ =$/, '')}"><label class="craie-champ" for="f-${key}">${label} <input id="f-${key}" inputmode="decimal" autocomplete="off" value="${S.answers[key] ?? ''}" ${ok ? 'disabled' : ''}> ${unit}</label>
     <button class="craie-btn ${ok ? 'principal' : 'attention'}" data-check="${key}" data-professor-control="check" ${ok ? 'disabled' : ''}>${ok ? 'Validé ✓' : 'Vérifier'}</button></div>`;
 }
 function measureReady() {
@@ -254,10 +268,10 @@ function renderPanel() {
   const p = S.params;
   const panels = [
     () => `<h2>1. Prédire</h2><p class="question">On double la résistance R, sans changer C. La durée caractéristique de la charge τ…</p>
-      <div class="choix-btn">${[['double', 'double'], ['half', 'est divisée par deux'], ['same', 'ne change pas']]
+      <div class="choix-btn" data-professor-point="prediction" data-professor-label="ta prédiction">${[['double', 'double'], ['half', 'est divisée par deux'], ['same', 'ne change pas']]
         .map(([v, l]) => `<button class="craie-btn" data-predict="${v}" data-professor-control="check">${l}</button>`).join('')}</div>
       <p>Pas de note ici : la mesure tranchera.</p>`,
-    () => `<h2>2. Monter le circuit</h2><p>Règle le générateur et choisis les composants, puis <b>clique sur K</b> pour le mettre en position 1.</p><div id="reglages"></div>`,
+    () => `<h2>2. Monter le circuit</h2><p>Règle le générateur et choisis les composants, puis <b>clique sur K</b> pour le mettre en position 1.</p><div id="reglages" data-professor-point="reglages" data-professor-label="réglages E, R, C"></div>`,
     () => `<h2>3. Mesurer u_C</h2><p>Le voltmètre lit u_C. Relève des points pendant la charge.</p>
       <div class="actions"><button class="craie-btn principal" id="record-btn" data-professor-control="record_measurement" ${S.switchPos === 1 || S.t > 0 ? '' : 'disabled'}>Relever u_C</button>
       <button class="craie-btn secondaire" id="auto-btn" aria-pressed="${S.auto}" data-professor-control="auto_acquire">Acquisition auto</button>
@@ -376,6 +390,10 @@ function draw() {
   craie.rect(260, 30, 60, 20, { arrondi: 3 }).texte('R', 283, 22, { taille: 15 });
   craie.ligne(352, 90, 388, 90, { largeur: 4 }).ligne(352, 120, 388, 120, { largeur: 4 }).texte('C', 394, 110, { taille: 15 });
   craie.cercle(300, 105, 20, { couleur: 'cyan' }).texte('V', 300, 111, { taille: 15, align: 'center', couleur: 'cyan' });
+  craie.repere('generateur', 36, 72, 48, 64, 'générateur E').repere('interrupteur', 128, 16, 98, 86, 'interrupteur K')
+    .repere('position_1', 128, 24, 30, 26, 'position 1 : charge').repere('position_2', 126, 82, 32, 28, 'position 2 : décharge')
+    .repere('resistance', 254, 20, 72, 38, 'conducteur ohmique R').repere('condensateur', 346, 82, 62, 46, 'condensateur C')
+    .repere('voltmetre', 276, 81, 48, 48, 'voltmètre').repere('lecture_uc', 196, 184, 108, 24, 'lecture u_C').repere('circuit', 30, 10, 390, 200, 'le montage');
   craie.trait([[300, 85], [300, 66], [370, 66]], { couleur: 'cyan', largeur: 1.4, pointille: [3, 3] }).trait([[300, 125], [300, 150], [370, 150]], { couleur: 'cyan', largeur: 1.4, pointille: [3, 3] });
   craie.direct(() => {
     const bx = S.switchPos === 1 ? 155 : 154, by = S.switchPos === 1 ? 42 : 86;
@@ -398,6 +416,11 @@ function draw() {
   craie.axe(g.l, g.b, g.r + 14, g.b, gradT, { taille: 12 }).texte('t (s)', g.r + 14, g.b - 8, { taille: 12, couleur: 'faible', align: 'right' });
   craie.axe(g.l, g.b, g.l, g.t - 14, gradU, { taille: 12, vertical: true }).texte('u_C (V)', g.l + 6, g.t - 4, { taille: 12, couleur: 'faible' });
   const top = S.mode === 'charge' ? S.params.emf : S.u0;
+  craie.repere('courbe', g.l, g.t - 14, g.r - g.l + 14, g.b - g.t + 14, 'courbe u_C(t)');
+  { const lvl = S.mode === 'charge' ? 0.63 * top : 0.37 * top; craie.repere('ligne_63', g.l, gy(lvl, uMax) - 12, g.r - g.l, 24, S.mode === 'charge' ? 'ligne 0,63 E' : 'ligne 0,37 U₀'); }
+  { const asym = S.mode === 'charge' ? top : 0; craie.repere('asymptote', g.l, gy(asym, uMax) - 12, g.r - g.l, 24, S.mode === 'charge' ? 'asymptote u = E' : 'asymptote u = 0'); }
+  { const te = Math.min(T, tauV * 1.15); craie.repere('tangente', gx(0), Math.min(gy(top, uMax), gy(0, uMax)) - 6, gx(te) - gx(0), Math.abs(gy(0, uMax) - gy(top, uMax)) + 12, 'tangente à l’origine'); }
+  craie.repere('tau', gx(tauV) - 10, g.t - 14, 20, g.b - g.t + 14, 'instant t = τ');
   if (S.show.model) {
     craie.depuis(S.shownAt.model);
     craie.courbe(u => [gx(u * T), gy(exact(u * T), uMax)], 120, { couleur: 'cyan', largeur: 2.2 });

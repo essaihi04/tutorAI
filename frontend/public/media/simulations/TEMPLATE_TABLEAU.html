@@ -28,6 +28,8 @@ const variants = { a: { label: 'Expérience 1', titre: 'Titre 1', objectif: 'Obj
 const S = { variant: 'a', t: 0, running: false, ouvert: performance.now(), dirty: true, completed: new Set(), params: { x: 5 } };
 const commands = ['start', 'set_variant', 'set_parameters', 'check', 'reset', 'reveal_hint'];
 const config = { id: 'IDENTIFIANT_UNIQUE', version: '1.0', title: 'Titre', variants: Object.entries(variants).map(([id, v]) => ({ id, label: v.label })), commands, command_schema: { set_variant: { variant_id: 'a' }, set_parameters: { x: '0..10' } } };
+// Script d'explication : le tuteur dit chaque phrase en pointant le repère (il part dans le manifeste).
+window.Tableau.explication({ a: [{ repere: 'source', texte: 'La source S crée la perturbation.' }, { repere: 'capteur_a', texte: 'Le capteur A note la date de son passage.' }] });
 const pont = protocole({ id: config.id, commandes: commands, config, texte: 'Ce que le tuteur doit savoir de ce laboratoire.',
   etat: () => ({ simulation_status: S.running ? 'running' : 'idle', current_variant: S.variant, time_s: +S.t.toFixed(2), parameters: { ...S.params }, completed_variants: [...S.completed] }),
   progression: () => S.completed.size / Object.keys(variants).length, executer });
@@ -48,6 +50,8 @@ function draw() {
   craie.fleche(170, 60, 420, 60, { couleur: 'vert' }).texte('sens de propagation', 295, 48, { couleur: 'vert', align: 'center' });
   craie.ligne(45, 190, 710, 190, { couleur: 'faible', largeur: 1.5 }).texte('S', 23, 196);
   craie.rect(45 + 66.5 * S.params.x - 11, 156, 22, 68, { couleur: 'cyan' }).texte('A', 45 + 66.5 * S.params.x, 246, { couleur: 'cyan', align: 'center' });
+  // Repères que le professeur peut montrer du doigt (commande highlight {target}) : le kit les entoure à la craie.
+  craie.repere('source', 15, 160, 50, 60, 'source S').repere('capteur_a', 45 + 66.5 * S.params.x - 16, 150, 32, 100, 'capteur A');
   // Parties animées : dessinées d'un coup.
   craie.direct(() => craie.courbe(u => [45 + 665 * u, 190 - 40 * Math.exp(-((u * 10 - 2 * S.t) ** 2) * 4)], 160, { couleur: 'cyan', largeur: 2.6 }));
   craie.direct(() => craie.texte(`t = ${fr(S.t)} s`, 730, 24, { couleur: 'jaune', align: 'right' }));

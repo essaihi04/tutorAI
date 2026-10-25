@@ -32,13 +32,13 @@
       <button class="craie-btn secondaire hotspot" data-zone="matrice">2 · Matrice</button>
       <button class="craie-btn secondaire hotspot" data-zone="cretes">3 · Crêtes</button>
     </div>
-    <div class="panneau haut-droite" id="predict"><h3>Je prédis avant de mesurer</h3><p id="predictQuestion"></p><div class="choix" id="predictGrid"></div></div>
-    <div class="panneau bas-gauche" id="variables" data-professor-control="set_parameters">
+    <div class="panneau haut-droite" id="predict" data-professor-point="prediction" data-professor-label="ta prédiction"><h3>Je prédis avant de mesurer</h3><p id="predictQuestion"></p><div class="choix" id="predictGrid"></div></div>
+    <div class="panneau bas-gauche" id="variables" data-professor-control="set_parameters" data-professor-point="variables" data-professor-label="les variables">
       <h3>Variables</h3>
       <div class="choix" id="oxygenControl"><label><input type="radio" name="o2" value="true" checked> air renouvelé</label><label><input type="radio" name="o2" value="false"> milieu fermé</label></div>
       <div id="sliders"></div>
     </div>
-    <div class="panneau" id="intro"><h3>Découvrons l’EXAO avec ton tuteur</h3><p>L’EXAO est une <b>expérimentation assistée par ordinateur</b> : des sondes mesurent O₂ et CO₂, l’interface transforme leurs signaux et l’ordinateur trace les courbes en temps réel.</p><ol><li>Sondes : mesurent les gaz dans le bioréacteur.</li><li>Interface EXAO : relie les capteurs à l’ordinateur.</li><li>Ordinateur : affiche et enregistre les courbes.</li></ol><div class="rangee"><button class="craie-btn principal" id="introStart">Entrer dans le laboratoire →</button></div></div>
+    <div class="panneau" id="intro" data-professor-point="decouverte_exao" data-professor-label="l’EXAO"><h3>Découvrons l’EXAO avec ton tuteur</h3><p>L’EXAO est une <b>expérimentation assistée par ordinateur</b> : des sondes mesurent O₂ et CO₂, l’interface transforme leurs signaux et l’ordinateur trace les courbes en temps réel.</p><ol><li>Sondes : mesurent les gaz dans le bioréacteur.</li><li>Interface EXAO : relie les capteurs à l’ordinateur.</li><li>Ordinateur : affiche et enregistre les courbes.</li></ol><div class="rangee"><button class="craie-btn principal" id="introStart">Entrer dans le laboratoire →</button></div></div>
   </section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="run_trial start">Lancer l’acquisition</button>
@@ -51,7 +51,29 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script>
 (() => {
-  const { Craie, fr, bulle, ecrire, onglets, curseur, appuyer } = window.Tableau;
+  const { Craie, fr, bulle, ecrire, onglets, curseur, appuyer, surligner, listeReperes, explication } = window.Tableau;
+  // Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+  const EXPLICATION = {
+    oxygen: [
+      { repere: 'bioreacteur', texte: 'Dans le bioréacteur, des levures baignent dans une solution de glucose.' },
+      { repere: 'arrivee_air', texte: 'Avec l’air renouvelé, le dioxygène est disponible ; en milieu fermé, il manque vite.' },
+      { repere: 'sonde_o2', texte: 'La sonde à O₂ mesure le dioxygène dissous, la sonde à CO₂ le dioxyde de carbone dégagé.' },
+      { repere: 'interface_exao', texte: 'L’interface EXAO transmet les signaux des sondes à l’ordinateur qui trace les courbes.' },
+      { repere: 'graphe', texte: 'Avec O₂, l’O₂ baisse et le CO₂ monte : respiration, 36 ATP ; sans O₂, l’éthanol apparaît : fermentation, 2 ATP.' },
+    ],
+    temperature: [
+      { repere: 'variables', texte: 'On garde le glucose constant et on ne change que la température.' },
+      { repere: 'bioreacteur', texte: 'Les enzymes des levures travaillent plus vite quand la température monte… jusqu’à un optimum.' },
+      { repere: 'graphe', texte: 'Autour de 30 °C, la pente des courbes est la plus forte : l’activité est maximale.' },
+      { repere: 'resultats', texte: 'Au-delà de 40 °C, les enzymes sont dénaturées et les échanges gazeux ralentissent.' },
+    ],
+    locations: [
+      { repere: 'cytoplasme', texte: 'Tout commence dans le cytoplasme : la glycolyse coupe le glucose en deux pyruvates et donne 2 ATP.' },
+      { repere: 'matrice', texte: 'Dans la matrice mitochondriale, le pyruvate est oxydé et le cycle de Krebs libère du CO₂.' },
+      { repere: 'cretes', texte: 'Sur les crêtes, la chaîne respiratoire transfère les électrons jusqu’à l’O₂ et l’ATP synthase produit la majorité des ATP.' },
+    ],
+  };
+  explication(EXPLICATION);
   window.SIMULATION_CONFIG={id:'svt_ch1_biolab_respiration_v2',title:'BioLab Levures — respiration et fermentation',protocol_version:'2.0',learning_objectives:['Identifier les conditions de la respiration et de la fermentation','Exploiter des mesures O2, CO2, éthanol et ATP','Localiser glycolyse, cycle de Krebs et chaîne respiratoire'],commands:['start','reset','set_variant','set_parameters','run_trial','highlight','get_state'],measurements:['oxygen_mg_l','co2_relative','ethanol_relative','atp_per_glucose'],variants:[{id:'oxygen',label:'Enquête 1 · Le rôle de O₂',objective:'Déduire le rôle du dioxygène en comparant deux essais contrôlés.',completion:'Comparer avec et sans dioxygène'},{id:'temperature',label:'Enquête 2 · Effet de la température',objective:'Relier la vitesse métabolique à l’activité enzymatique selon la température.',completion:'Tester basse, optimale et élevée'},{id:'locations',label:'Enquête 3 · Voyage dans la cellule',objective:'Localiser glycolyse, cycle de Krebs et chaîne respiratoire.',completion:'Localiser les trois étapes'}]};
   const missions={oxygen:{title:'Le dioxygène change-t-il le devenir du glucose ?',prompt:'Compare deux cultures identiques : l’une aérée, l’autre privée de O₂.',need:2,predictQ:'Sans O₂, quel produit spécifique apparaîtra ?',answers:[['ethanol','Éthanol'],['oxygen','O₂'],['36atp','36 ATP']]},temperature:{title:'Trouve la zone thermique la plus active',prompt:'Teste une température basse, optimale puis élevée sans changer le glucose.',need:3,predictQ:'À quelle température l’activité sera-t-elle maximale ?',answers:[['15','15 °C'],['30','30 °C'],['50','50 °C']]},locations:{title:'Suis l’énergie du cytoplasme aux crêtes',prompt:'Explore dans l’ordre les zones où le glucose libère son énergie.',need:3,predictQ:'Où débute la dégradation du glucose ?',answers:[['cytoplasme','Cytoplasme'],['matrice','Matrice'],['cretes','Crêtes']]}};
   const S={id:window.SIMULATION_CONFIG.id,variant:'oxygen',oxygen:true,temp:30,glucose:10,prediction:null,trials:[],covered:{oxygen:new Set(),temperature:new Set(),locations:new Set()},route:[],status:'ready',last:null,actions:[],startedAt:Date.now(),
@@ -73,7 +95,7 @@
     $('introStart').onclick=()=>{$('intro').hidden=true;S.actions.push({action:'open_laboratory_after_exao_intro'});emit('intro_completed',{},'idle')};
     $('help').onclick=()=>feedback('Observe → prédis → modifie une seule variable → mesure → compare.');
     document.querySelectorAll('.hotspot').forEach(b=>b.onclick=()=>visitZone(b.dataset.zone));
-    runVariant('oxygen',false);setTimeout(sendManifest,350);
+    runVariant('oxygen',false);setTimeout(sendManifest,350);setTimeout(sendManifest,2000);
   }
   function renderMissions(){onglets($('missions'),variantes,S.variant,id=>runVariant(id),new Set(Object.keys(missions).filter(done)))}
   function runVariant(id,report=true){if(!missions[id])return;cancelAnimation();S.variant=id;S.prediction=null;S.route=[];S.status='ready';S.last=null;S.resultAt=null;S.notes=[];S.ouvert=performance.now();
@@ -98,19 +120,23 @@
   function cancelAnimation(){if(anim){clearInterval(anim);anim=null}S.running=false;$('run').disabled=false}
   function semanticState(status){return{simulation_status:status||S.status,active_mission:S.variant,mission_title:missions[S.variant].title,student_prediction:S.prediction,variables:{oxygen_present:S.oxygen,temperature_c:S.temp,glucose_g_l:S.glucose},measurements:S.last?{oxygen_mg_l:S.last.oxygen_mg_l,co2_relative:S.last.co2_relative,ethanol_relative:S.last.ethanol_relative,atp_per_glucose:S.last.atp_per_glucose,pathway:S.last.pathway}:null,observations:S.last?interpret(S.last):null,route_locations:[...S.route],mission_coverage:[...S.covered[S.variant]],trial_history:S.trials.slice(-8),model_limits:'Valeurs relatives et rendement conventionnel simplifiés pour le programme 2e BAC.'}}
   function emit(action,payload,status){window.parent.postMessage({type:'simulation_state',simulation_id:S.id,student_actions:[...S.actions.slice(-12),{action,...payload}],current_state:semanticState(status),objective_progress:Math.min(1,(S.covered.oxygen.size/2+S.covered.temperature.size/3+S.covered.locations.size/3)/3),timestamp:new Date().toISOString()},'*')}
-  function sendManifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:S.id,capabilities:{commands:window.SIMULATION_CONFIG.commands,globals:['executeAICommand','runVariant','runTrial','resetSimulation','getSimulationState'],config:window.SIMULATION_CONFIG,controls:{oxygen_present:{type:'boolean',meaning:'présence de dioxygène'},temperature_c:{type:'range',min:10,max:50,step:5,unit:'°C'},glucose_g_l:{type:'range',min:2,max:20,step:2,unit:'g/L'}},command_schema:{set_variant:{variant_id:{type:'enum',values:['oxygen','temperature','locations']}},set_parameters:{oxygen_present:'boolean',temperature_c:'number 10..50',glucose_g_l:'number 2..20'},run_trial:{},highlight:{zone:{type:'enum',values:['cytoplasme','matrice','cretes']}},reset:{}},state_contract:{variables:'réglages réellement utilisés',measurements:'mesures du dernier essai',student_prediction:'hypothèse choisie',mission_coverage:'conditions déjà testées',trial_history:'essais comparables',scientific_observation:'interprétation causale issue du modèle'}},page_text:'Laboratoire d’investigation dessiné au tableau : prédire, manipuler, acquérir des courbes et comparer respiration et fermentation chez les levures.'},'*')}
+  function sendManifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:S.id,capabilities:{reperes:listeReperes(),explication:EXPLICATION,commands:window.SIMULATION_CONFIG.commands,globals:['executeAICommand','runVariant','runTrial','resetSimulation','getSimulationState'],config:window.SIMULATION_CONFIG,controls:{oxygen_present:{type:'boolean',meaning:'présence de dioxygène'},temperature_c:{type:'range',min:10,max:50,step:5,unit:'°C'},glucose_g_l:{type:'range',min:2,max:20,step:2,unit:'g/L'}},command_schema:{set_variant:{variant_id:{type:'enum',values:['oxygen','temperature','locations']}},set_parameters:{oxygen_present:'boolean',temperature_c:'number 10..50',glucose_g_l:'number 2..20'},run_trial:{},highlight:{target:'repère pointable (voir reperes)',zone:{type:'enum',values:['cytoplasme','matrice','cretes']}},reset:{}},state_contract:{variables:'réglages réellement utilisés',measurements:'mesures du dernier essai',student_prediction:'hypothèse choisie',mission_coverage:'conditions déjà testées',trial_history:'essais comparables',scientific_observation:'interprétation causale issue du modèle'}},page_text:'Laboratoire d’investigation dessiné au tableau : prédire, manipuler, acquérir des courbes et comparer respiration et fermentation chez les levures.'},'*')}
   window.runVariant=runVariant;window.runTrial=runTrial;window.resetSimulation=resetSimulation;window.getSimulationState=()=>semanticState();
-  window.executeAICommand=(command,p={})=>{appuyer(command);if(command==='set_variant')runVariant(p.variant_id);else if(command==='start'){feedback('À toi : formule une prédiction puis manipule les variables.');emit('guided_start',{},'running')}else if(command==='reset')resetSimulation();else if(command==='set_parameters'||command==='setParameter')setParams({oxygen:p.oxygen_present??p.oxygen,temp:p.temperature_c??p.temp,glucose:p.glucose_g_l??p.glucose,...Object.fromEntries(Object.entries(p).filter(([k])=>['oxygen','temp','glucose'].includes(k)))},true);else if(command==='run_trial'||command==='runSimulation')runTrial();else if(command==='highlight'){const e=document.querySelector(p.selector||`[data-zone="${p.zone}"]`);if(e){e.classList.add('next');appuyer('highlight')}}else if(command==='get_state')emit('state_requested',{},S.status)};
+  window.executeAICommand=(command,p={})=>{appuyer(command);if(command==='set_variant')runVariant(p.variant_id);else if(command==='start'){feedback('À toi : formule une prédiction puis manipule les variables.');emit('guided_start',{},'running')}else if(command==='reset')resetSimulation();else if(command==='set_parameters'||command==='setParameter')setParams({oxygen:p.oxygen_present??p.oxygen,temp:p.temperature_c??p.temp,glucose:p.glucose_g_l??p.glucose,...Object.fromEntries(Object.entries(p).filter(([k])=>['oxygen','temp','glucose'].includes(k)))},true);else if(command==='run_trial'||command==='runSimulation')runTrial();else if(command==='highlight'){if(!(p.target&&surligner(p.target))){const e=document.querySelector(p.selector||`[data-zone="${p.zone||p.target}"]`);if(e){e.classList.add('next');appuyer('highlight')}}}else if(command==='get_state')emit('state_requested',{},S.status)};
   window.addEventListener('message',event=>{const d=event.data||{};if(d.type!=='simulation_control')return;if(d.simulation_id&&d.simulation_id!==S.id)return;if(d.guidance_text)feedback(d.guidance_text);window.executeAICommand(d.command,d.parameters||{})});
 
   // ── Dessin à la craie : dispositif EXAO (gauche), courbes (droite), carnet (bas) ──
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});const geom={s:1,ox:0,oy:0};
   function place(b,x,y){b.style.left=(geom.ox+x*geom.s)+'px';b.style.top=(geom.oy+y*geom.s)+'px'}
   function draw(){
-    const W=craie.W,H=craie.H;if(W<1||H<1)return true;const temps=scene();craie.debut(11,temps);
+    const W=craie.W,H=craie.H;if(W<1||H<1)return true;const temps=scene();craie.debut(11,temps);Object.keys(window.Tableau.REPERES).forEach(k=>delete window.Tableau.REPERES[k]);   // seuls les repères de l'enquête affichée restent pointables
     const c=craie.ctx,s=Math.min(W/760,H/380);geom.s=s;geom.ox=(W-760*s)/2;geom.oy=(H-380*s)/2;c.translate(geom.ox,geom.oy);c.scale(s,s);
     if(S.variant==='locations'){drawCell(temps);return craie.fin()}
     // Bioréacteur
+    craie.repere('bioreacteur',62,100,148,160,'bioréacteur').repere(S.oxygen?'arrivee_air':'milieu_ferme',S.oxygen?16:70,S.oxygen?62:84,S.oxygen?70:130,S.oxygen?60:24,S.oxygen?'arrivée d’air':'milieu fermé');
+    craie.repere('sonde_o2',94,40,32,160,'sonde O₂').repere('sonde_co2',146,40,40,160,'sonde CO₂').repere('interface_exao',228,144,94,48,'interface EXAO').repere('ordinateur',334,114,82,74,'ordinateur');
+    craie.repere('graphe',420,50,322,210,'courbes d’acquisition').repere('legende_courbes',430,238,250,22,'légende des courbes');
+    if(S.last)craie.repere('resultats',426,258,318,66,'mesures de l’essai');if(S.trials.length)craie.repere('carnet',426,324,318,56,'carnet de laboratoire');
     craie.trait([[70,110],[70,250],[200,250],[200,110]],{largeur:2.6}).ligne(60,110,210,110,{largeur:2});
     craie.ligne(72,170,198,170,{couleur:'cyan',largeur:1.4,pointille:[6,5]});
     craie.texte('levures + glucose',135,235,{couleur:'faible',taille:14,align:'center'});
@@ -149,6 +175,7 @@
   }
   function drawCell(temps){
     // Cellule, cytoplasme et mitochondrie ; les trois zones sont des boutons posés sur le dessin
+    craie.repere('cytoplasme',62,42,250,316,'cytoplasme').repere('glucose_pyruvate',112,130,160,66,'glucose → pyruvate').repere('mitochondrie',308,78,246,246,'mitochondrie').repere('matrice',380,172,100,60,'matrice').repere('cretes',480,88,84,44,'crêtes');
     craie.rect(60,40,640,320,{arrondi:60,largeur:2.2}).texte('CYTOPLASME',90,70,{couleur:'faible',taille:14});
     craie.texte('glucose',120,150,{couleur:'jaune',taille:16}).cercle(150,180,14,{couleur:'jaune',largeur:2}).fleche(170,180,250,180,{couleur:'jaune',largeur:1.6}).texte('pyruvate',200,170,{couleur:'jaune',taille:13});
     craie.cercle(430,200,120,{couleur:'vert',largeur:2.8,fond:'vert',fondAlpha:.05});

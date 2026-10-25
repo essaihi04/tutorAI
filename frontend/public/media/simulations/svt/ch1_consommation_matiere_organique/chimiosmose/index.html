@@ -22,7 +22,7 @@
   </header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Chaîne respiratoire et ATP synthase dans la membrane interne mitochondriale, dessinées à la craie"></canvas>
-    <div class="panneau bas-gauche" id="legende"><h3 id="title"></h3><p id="text"></p><div class="metriques"><span id="electronMetric"></span><span id="atpMetric"></span><span id="conclusion"></span></div></div>
+    <div class="panneau bas-gauche" id="legende" data-professor-point="legende" data-professor-label="interprétation"><h3 id="title"></h3><p id="text"></p><div class="metriques"><span id="electronMetric"></span><span id="atpMetric"></span><span id="conclusion"></span></div></div>
   </section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start replay">Lancer</button>
@@ -36,7 +36,7 @@
 <script>
 (function () {
   'use strict';
-  const { Craie, ecrire, bulle, onglets, curseur, protocole } = window.Tableau;
+  const { Craie, ecrire, bulle, onglets, curseur, protocole, explication } = window.Tableau;
   const $ = id => document.getElementById(id);
   const CONFIG = { id: 'svt_ch1_chimiosmose', variants: [{ id: 'avec_o2', label: 'Avec dioxygène' }, { id: 'sans_o2', label: 'Sans dioxygène' }], objectives: ['Relier chaîne respiratoire, gradient de protons, ATP synthase et rôle terminal du dioxygène.'], commands: ['start', 'set_variant', 'set_parameters', 'reset', 'replay'] };
   const S = { o2: true, gradient: 80, simulationStatus: 'idle', variantsCompleted: [], ouvert: performance.now(), anim: null, dirty: true };
@@ -48,7 +48,13 @@
   const emit = () => pont.emettre();
   const redraw = () => { S.dirty = true; };
   const gradientCtl = curseur({ id: 'gradient', label: 'Gradient de H⁺', min: 10, max: 100, step: 10, valeur: 80, unite: '%', commande: 'set_parameters', onchange: v => setParameters({ gradient_percent: v }) });
+  gradientCtl.dataset.professorPoint = 'gradient'; gradientCtl.dataset.professorLabel = 'réglage du gradient';
   $('gradientBox').replaceWith(gradientCtl);
+  // Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+  explication({
+    avec_o2: [{ repere: 'electrons', texte: 'Les électrons apportés par NADH,H⁺ et FADH₂ passent de complexe en complexe le long de la membrane interne.' }, { repere: 'complexe_i', texte: 'En les transférant, les complexes pompent des protons de la matrice vers l’espace intermembranaire.' }, { repere: 'protons', texte: 'Il se crée un gradient de H⁺ : concentration élevée dehors, faible dans la matrice.' }, { repere: 'atp_synthase', texte: 'Les protons redescendent par l’ATP synthase ; sa rotation phosphoryle l’ADP en ATP.' }, { repere: 'o2', texte: 'En bout de chaîne, le dioxygène accepte les électrons et forme de l’eau : c’est l’accepteur final.' }],
+    sans_o2: [{ repere: 'o2', texte: 'Sans dioxygène, il n’y a plus d’accepteur final : les électrons ne peuvent plus sortir de la chaîne.' }, { repere: 'complexe_iv', texte: 'Les transporteurs restent réduits et la chaîne se bloque.' }, { repere: 'protons', texte: 'Le gradient de H⁺ n’est plus entretenu.' }, { repere: 'atp_synthase', texte: 'L’ATP synthase ne tourne presque plus : la production d’ATP s’effondre.' }, { repere: 'atp', texte: 'La cellule ne peut alors compter que sur la glycolyse et la fermentation.' }],
+  });
 
   function render() {
     onglets($('onglets'), CONFIG.variants, variant(), id => setO2(id !== 'sans_o2'), new Set(S.variantsCompleted));
@@ -84,16 +90,19 @@
     for (let x = 40; x < 820; x += 22) { craie.cercle(x, 188, 5, { couleur: 'tresfaible', largeur: 1.2, duree: .01 }); craie.cercle(x, 246, 5, { couleur: 'tresfaible', largeur: 1.2, duree: .01 }); }
     craie.texte('membrane interne', 828, 168, { couleur: 'faible', taille: 14, align: 'right' });
     craie.texte('matrice mitochondriale', 28, 300, { couleur: 'cyan', taille: 16 });
+    craie.repere('espace_intermembranaire', 24, 18, 560, 34, 'espace intermembranaire').repere('protons', 40, 55, 560, 80, 'protons H⁺ accumulés').repere('membrane', 18, 170, 814, 94, 'membrane interne').repere('matrice', 22, 280, 300, 36, 'matrice mitochondriale');
     craie.pause(.15);
-    complexes.forEach(([x, nom]) => craie.rect(x, 150, 75, 122, { couleur: 'cyan', arrondi: 16, fond: 'cyan', duree: .35 }).texte(nom, x + 37, 218, { couleur: 'cyan', taille: 20, align: 'center' }));
+    complexes.forEach(([x, nom]) => craie.rect(x, 150, 75, 122, { couleur: 'cyan', arrondi: 16, fond: 'cyan', duree: .35 }).texte(nom, x + 37, 218, { couleur: 'cyan', taille: 20, align: 'center' }).repere('complexe_' + nom.toLowerCase(), x - 4, 146, 83, 130, 'complexe ' + nom));
     craie.texte('chaîne respiratoire', 298, 135, { couleur: 'cyan', taille: 15, align: 'center' });
     // Électrons : chemin pointillé sous les complexes, de NADH vers O₂
     craie.texte('électrons : NADH,H⁺ / FADH₂  →  O₂', 95, 318, { couleur: 'jaune', taille: 15 });
     craie.ligne(95, 340, 515, 340, { couleur: 'jaune', largeur: 2, pointille: [8, 7], duree: .5 });
+    craie.repere('electrons', 88, 300, 440, 56, 'trajet des électrons');
     // ATP synthase
     craie.trait([[625, 150], [640, 118], [665, 108], [690, 118], [705, 150], [695, 265], [665, 290], [635, 265]], { couleur: 'violet', largeur: 2.6, ferme: true });
     craie.cercle(665, 250, 30, { couleur: 'violet', fond: 'violet' });
     craie.texte('ATP synthase', 665, 322, { couleur: 'violet', taille: 17, align: 'center' });
+    craie.repere('atp_synthase', 618, 100, 96, 232, 'ATP synthase').repere('o2', 494, 362, 236, 40, 'O₂, accepteur final').repere('atp', 720, 282, 82, 110, 'ATP produit');
     craie.texte('H⁺', 605, 95, { couleur: 'rose', taille: 16 });
     craie.pause(.2);
     craie.texte('ADP + Pᵢ', 730, 395, { couleur: 'faible', taille: 15 });

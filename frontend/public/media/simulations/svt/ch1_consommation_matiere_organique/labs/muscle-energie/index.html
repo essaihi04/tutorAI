@@ -22,8 +22,8 @@
   </header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Préparation musculaire, sarcomère, filières énergétiques et myogramme dessinés à la craie"></canvas>
-    <div class="panneau haut-droite" id="hypothese"><h3>Hypothèse</h3><p id="predictQuestion"></p><div class="choix" id="choices"></div></div>
-    <div class="panneau bas-gauche" id="console" data-professor-control="set_parameters">
+    <div class="panneau haut-droite" id="hypothese" data-professor-point="hypothese" data-professor-label="ton hypothèse"><h3>Hypothèse</h3><p id="predictQuestion"></p><div class="choix" id="choices"></div></div>
+    <div class="panneau bas-gauche" id="console" data-professor-control="set_parameters" data-professor-point="console" data-professor-label="console expérimentale">
       <h3>Console expérimentale</h3>
       <div class="row" id="freqRow"></div>
       <div class="row" id="calciumRow"><span>Ca²⁺</span><div class="choix" style="display:inline-flex"><label><input type="radio" name="ca" value="true" checked> avec</label><label><input type="radio" name="ca" value="false"> sans</label></div></div>
@@ -44,7 +44,31 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script>
 (() => {
-const { Craie, fr, bulle, ecrire, onglets, curseur, appuyer } = window.Tableau;
+const { Craie, fr, bulle, ecrire, onglets, curseur, appuyer, surligner, listeReperes, explication } = window.Tableau;
+// Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+const EXPLICATION = {
+  frequency: [
+    { repere: 'stimulateur', texte: 'Le stimulateur envoie des impulsions électriques au nerf, à la fréquence choisie.' },
+    { repere: 'muscle', texte: 'Le muscle isolé se contracte à chaque message nerveux reçu.' },
+    { repere: 'capteur', texte: 'Le capteur enregistre la tension développée : c’est le myogramme.' },
+    { repere: 'myogramme', texte: 'À basse fréquence, une secousse isolée ; en rapprochant les stimulations, les secousses se somment ; très rapprochées, la tension se maintient au maximum : tétanos.' },
+  ],
+  crossbridge: [
+    { repere: 'actine', texte: 'Les filaments fins d’actine sont accrochés aux stries Z.' },
+    { repere: 'myosine', texte: 'Les filaments épais de myosine portent des têtes qui s’accrochent à l’actine et tirent.' },
+    { repere: 'calcium', texte: 'Le Ca²⁺ libéré déplace la tropomyosine et dévoile les sites de fixation sur l’actine.' },
+    { repere: 'atp', texte: 'L’hydrolyse de l’ATP fait pivoter la tête puis la détache : sans ATP, les ponts restent fixés.' },
+    { repere: 'myogramme', texte: 'Le raccourcissement du sarcomère se lit sur le tracé : les stries Z se rapprochent.' },
+  ],
+  energy: [
+    { repere: 'atp_muscle', texte: 'Le muscle n’a que quelques secondes d’ATP en réserve : il doit le régénérer en continu.' },
+    { repere: 'filiere_pcr', texte: 'La phosphocréatine redonne un phosphate à l’ADP : très rapide, mais la réserve dure une dizaine de secondes.' },
+    { repere: 'filiere_lactique', texte: 'La glycolyse lactique fournit vite de l’ATP sans O₂, en produisant du lactate.' },
+    { repere: 'filiere_respiration', texte: 'Avec du dioxygène et du temps, la respiration mitochondriale prend le relais : lente mais durable.' },
+    { repere: 'conditions', texte: 'Durée, intensité et apport en O₂ décident de la filière dominante.' },
+  ],
+};
+explication(EXPLICATION);
 window.SIMULATION_CONFIG={id:'svt_ch1_physiolab_muscle_v2',title:'PhysioLab Muscle — myogramme, sarcomère et filières ATP',protocol_version:'2.0',learning_objectives:['Relier fréquence et forme du myogramme','Expliquer le rôle du Ca2+ et de l’ATP dans le cycle actine-myosine','Choisir la voie de régénération de l’ATP selon l’effort'],commands:['start','reset','set_variant','set_parameters','run_trial','highlight','get_state'],measurements:['tension_relative','heat_relative','lactate_relative','shortening_percent'],variants:[{id:'frequency',label:'Enquête 1 · Du stimulus au tétanos',objective:'Relier la fréquence des stimulations à la sommation puis au tétanos.',completion:'Comparer secousse, sommation et tétanos'},{id:'crossbridge',label:'Enquête 2 · Le moteur actine–myosine',objective:'Distinguer les rôles du Ca2+ et de l’ATP dans le cycle des ponts.',completion:'Tester les rôles du Ca2+ et de l’ATP'},{id:'energy',label:'Enquête 3 · D’où vient l’ATP ?',objective:'Relier durée, intensité et oxygénation à la filière dominante.',completion:'Comparer effort bref, moyen et prolongé'}]};
 const missions={frequency:{title:'Comment la fréquence transforme-t-elle la force ?',prompt:'Enregistre une secousse, une sommation puis un tétanos.',need:3,q:'Avec la fréquence réglée, quel tracé prévois-tu ?',answers:[['twitch','Secousse'],['summation','Sommation'],['tetanus','Tétanos']]},crossbridge:{title:'Quelles conditions permettent le glissement ?',prompt:'Isole les rôles du Ca²⁺ et de l’ATP avec trois essais contrôlés.',need:3,q:'Avec les réglages Ca²⁺ et ATP choisis, que prévois-tu ?',answers:[['none','Aucun pont'],['locked','Ponts bloqués'],['normal','Cycle normal']]},energy:{title:'Quelle voie régénère l’ATP pendant l’effort ?',prompt:'Compare un effort explosif, intense moyen et prolongé.',need:3,q:'Avec cette durée, cette intensité et cet apport en O₂, quelle voie domine ?',answers:[['pcr','Phosphocréatine'],['lactic','Glycolyse lactique'],['respiration','Respiration']]}};
 const S={id:window.SIMULATION_CONFIG.id,variant:'frequency',freq:1,calcium:true,atp:true,duration:10,intensity:70,oxygen:true,prediction:null,trials:[],covered:{frequency:new Set(),crossbridge:new Set(),energy:new Set()},last:null,status:'ready',actions:[],ouvert:performance.now(),progress:0,running:false,resultAt:null,dirty:true};
@@ -61,7 +85,7 @@ function init(){
   $('atpRow').addEventListener('change',e=>setParams({atp_present:e.target.value==='true'},true));
   $('oxygenRow').addEventListener('change',e=>setParams({oxygen_present:e.target.value==='true'},true));
   $('run').onclick=runTrial;$('reset').onclick=resetSimulation;$('help').onclick=()=>feedback('Change une seule variable, prédis le résultat, stimule puis compare les tracés.');
-  runVariant('frequency',false);setTimeout(sendManifest,350)}
+  runVariant('frequency',false);setTimeout(sendManifest,350);setTimeout(sendManifest,2000)}
 function renderMissions(){onglets($('missions'),variantes,S.variant,id=>runVariant(id),new Set(Object.keys(missions).filter(done)))}
 function runVariant(id,report=true){if(!missions[id])return;cancel();S.variant=id;S.last=null;S.prediction=null;S.status='ready';S.resultAt=null;S.ouvert=performance.now();renderMissions();ecrire($('missionTitle'),missions[id].title);ecrire($('missionPrompt'),missions[id].prompt,{vitesse:60});ecrire($('predictQuestion'),missions[id].q);showRows();renderChoices();feedback('Sélectionne une hypothèse avant la mesure.');updateProgress();redraw();if(report)emit('select_variant',{variant:id},'running')}
 function showRows(){const map={frequency:['freqRow'],crossbridge:['calciumRow','atpRow'],energy:['durationRow','intensityRow','oxygenRow']};['freqRow','calciumRow','atpRow','durationRow','intensityRow','oxygenRow'].forEach(id=>$(id).hidden=!map[S.variant].includes(id))}
@@ -84,19 +108,20 @@ function resetSimulation(){cancel();S.trials=[];S.last=null;S.covered={frequency
 function cancel(){$('run').disabled=false;S.running=false;if(anim){clearInterval(anim);anim=null}}
 function semanticState(status){return{simulation_status:status||S.status,active_mission:S.variant,mission_title:missions[S.variant].title,student_prediction:S.prediction,variables:parameters(),measurements:S.last?{tension_relative:S.last.tension_relative,heat_relative:S.last.heat_relative,lactate_relative:S.last.lactate_relative,shortening_percent:S.last.shortening_percent,response_type:S.last.response_type,dominant_atp_pathway:S.last.pathway}:null,scientific_observation:S.last?interpret(S.last):null,mission_coverage:[...S.covered[S.variant]],trial_history:S.trials.slice(-8),model_limits:'Modèle qualitatif : valeurs relatives, contributions simultanées des filières. Seuils de fréquence illustratifs, variables selon le muscle.'}}
 function emit(action,payload,status){window.parent.postMessage({type:'simulation_state',simulation_id:S.id,student_actions:[...S.actions.slice(-12),{action,...payload}],current_state:semanticState(status),objective_progress:Math.min(1,(S.covered.frequency.size/3+S.covered.crossbridge.size/3+S.covered.energy.size/3)/3),timestamp:new Date().toISOString()},'*')}
-function sendManifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:S.id,capabilities:{commands:window.SIMULATION_CONFIG.commands,globals:['executeAICommand','runVariant','runTrial','resetSimulation','getSimulationState'],config:window.SIMULATION_CONFIG,controls:{frequency_hz:{type:'range',min:1,max:50,unit:'Hz'},calcium_present:{type:'boolean'},atp_present:{type:'boolean'},duration_s:{type:'range',min:5,max:180,unit:'s'},intensity_percent:{type:'range',min:20,max:100,unit:'%'},oxygen_present:{type:'boolean'}},command_schema:{set_variant:{variant_id:{type:'enum',values:['frequency','crossbridge','energy']}},set_parameters:{frequency_hz:'number 1..50',calcium_present:'boolean',atp_present:'boolean',duration_s:'number 5..180',intensity_percent:'number 20..100',oxygen_present:'boolean'},run_trial:{},highlight:{control_id:'DOM id facultatif'},reset:{}},state_contract:{variables:'réglages réellement utilisés',measurements:'force, chaleur, lactate, raccourcissement et voie ATP',student_prediction:'hypothèse choisie',mission_coverage:'conditions déjà testées',trial_history:'essais comparables',scientific_observation:'interprétation causale issue du modèle'}},page_text:'Laboratoire d’investigation dessiné au tableau : prédire, stimuler, enregistrer un myogramme et relier contraction, calcium, ATP et filières énergétiques.'},'*')}
+function sendManifest(){window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:S.id,capabilities:{reperes:listeReperes(),explication:EXPLICATION,commands:window.SIMULATION_CONFIG.commands,globals:['executeAICommand','runVariant','runTrial','resetSimulation','getSimulationState'],config:window.SIMULATION_CONFIG,controls:{frequency_hz:{type:'range',min:1,max:50,unit:'Hz'},calcium_present:{type:'boolean'},atp_present:{type:'boolean'},duration_s:{type:'range',min:5,max:180,unit:'s'},intensity_percent:{type:'range',min:20,max:100,unit:'%'},oxygen_present:{type:'boolean'}},command_schema:{set_variant:{variant_id:{type:'enum',values:['frequency','crossbridge','energy']}},set_parameters:{frequency_hz:'number 1..50',calcium_present:'boolean',atp_present:'boolean',duration_s:'number 5..180',intensity_percent:'number 20..100',oxygen_present:'boolean'},run_trial:{},highlight:{target:'repère pointable (voir reperes)',control_id:'DOM id facultatif'},reset:{}},state_contract:{variables:'réglages réellement utilisés',measurements:'force, chaleur, lactate, raccourcissement et voie ATP',student_prediction:'hypothèse choisie',mission_coverage:'conditions déjà testées',trial_history:'essais comparables',scientific_observation:'interprétation causale issue du modèle'}},page_text:'Laboratoire d’investigation dessiné au tableau : prédire, stimuler, enregistrer un myogramme et relier contraction, calcium, ATP et filières énergétiques.'},'*')}
 window.runVariant=runVariant;window.runTrial=runTrial;window.resetSimulation=resetSimulation;window.getSimulationState=()=>semanticState();
-window.executeAICommand=(command,p={})=>{appuyer(command);if(command==='set_variant')runVariant(p.variant_id);else if(command==='start'){feedback('À toi : formule une hypothèse puis règle la console.');emit('guided_start',{},'running')}else if(command==='reset')resetSimulation();else if(command==='set_parameters'||command==='setParameter')setParams(p,true);else if(command==='run_trial'||command==='runSimulation')runTrial();else if(command==='highlight'){const e=document.getElementById(p.control_id||'run');if(e){e.classList.add('presse');setTimeout(()=>e.classList.remove('presse'),2200)}}else if(command==='get_state')emit('state_requested',{},S.status)};
+window.executeAICommand=(command,p={})=>{appuyer(command);if(command==='set_variant')runVariant(p.variant_id);else if(command==='start'){feedback('À toi : formule une hypothèse puis règle la console.');emit('guided_start',{},'running')}else if(command==='reset')resetSimulation();else if(command==='set_parameters'||command==='setParameter')setParams(p,true);else if(command==='run_trial'||command==='runSimulation')runTrial();else if(command==='highlight'){if(!(p.target&&surligner(p.target))){const e=document.getElementById(p.control_id||p.target||'run');if(e){e.classList.add('presse');setTimeout(()=>e.classList.remove('presse'),2200)}}}else if(command==='get_state')emit('state_requested',{},S.status)};
 window.addEventListener('message',event=>{const d=event.data||{};if(d.type!=='simulation_control')return;if(d.simulation_id&&d.simulation_id!==S.id)return;if(d.guidance_text)feedback(d.guidance_text);window.executeAICommand(d.command,d.parameters||{})});
 
 // ── Dessin à la craie ─────────────────────────────────────────────────────
 const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});
 function draw(){
-  const W=craie.W,H=craie.H;if(W<1||H<1)return true;const temps=scene();craie.debut(5,temps);
+  const W=craie.W,H=craie.H;if(W<1||H<1)return true;const temps=scene();craie.debut(5,temps);Object.keys(window.Tableau.REPERES).forEach(k=>delete window.Tableau.REPERES[k]);   // seuls les repères de l'enquête affichée restent pointables
   const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);
   const p=S.progress,r=S.last;
   if(S.variant==='frequency'){
     // Préparation muscle–nerf : muscle fusiforme, nerf, stimulateur et capteur de tension
+    craie.repere('muscle',64,146,212,80,'muscle').repere('nerf',154,104,78,62,'nerf').repere('stimulateur',114,54,92,50,'stimulateur').repere('capteur',324,160,64,70,'capteur de tension').repere('frequence',114,270,124,30,'fréquence réglée');
     craie.ligne(60,250,60,120,{largeur:3}).ligne(40,120,80,120,{largeur:3}).texte('fixe',30,110,{couleur:'faible',taille:13});
     craie.courbe(u=>[70+u*200,185-Math.sin(u*Math.PI)*34],40,{couleur:'rose',largeur:3}).courbe(u=>[70+u*200,185+Math.sin(u*Math.PI)*34],40,{couleur:'rose',largeur:3}).texte('muscle',170,192,{couleur:'rose',taille:16,align:'center'});
     craie.courbe(u=>[160+u*60,120+u*40+Math.sin(u*12)*4],30,{couleur:'jaune',largeur:2}).texte('nerf',205,112,{couleur:'jaune',taille:14});
@@ -107,6 +132,7 @@ function draw(){
   } else if(S.variant==='crossbridge'){
     // Sarcomère : stries Z, actine fine (rose), myosine épaisse (violet) et ses têtes
     const short=r&&r.shortening_percent>8?p*18:0;const z1=70+short,z2=390-short;
+    craie.repere('sarcomere',z1,74,z2-z1,184,'sarcomère').repere('strie_z',z1-12,72,26,186,'strie Z').repere('actine',z1,94,122,22,'filament d’actine').repere('myosine',148,124,166,82,'myosine et ses têtes').repere('calcium',56,274,150,26,'Ca²⁺').repere('atp',226,274,150,26,'ATP');
     craie.ligne(z1,80,z1,250,{largeur:3}).texte('Z',z1-4,70,{taille:14}).ligne(z2,80,z2,250,{largeur:3}).texte('Z',z2-4,70,{taille:14});
     craie.direct(()=>{[105,165,225].forEach(y=>{craie.ligne(z1,y,z1+115,y,{couleur:'rose',largeur:2});craie.ligne(z2-115,y,z2,y,{couleur:'rose',largeur:2})});
       [135,195].forEach(y=>{craie.ligne(150,y,310,y,{couleur:'violet',largeur:5});for(let i=0;i<6;i++){const x=165+i*26;craie.ligne(x,y,x-6,y-12,{couleur:'violet',largeur:2});craie.ligne(x+8,y,x+14,y+12,{couleur:'violet',largeur:2})}});
@@ -116,6 +142,7 @@ function draw(){
   } else {
     // Filières : trois réservoirs vers l'ATP du muscle
     craie.courbe(u=>[60+u*160,62-Math.sin(u*Math.PI)*20],30,{couleur:'rose',largeur:2.6}).courbe(u=>[60+u*160,62+Math.sin(u*Math.PI)*20],30,{couleur:'rose',largeur:2.6}).texte('muscle',140,68,{couleur:'rose',taille:15,align:'center'});
+    craie.repere('muscle',56,36,170,54,'muscle').repere('atp_muscle',110,100,60,32,'ATP du muscle').repere('filiere_pcr',38,156,118,64,'ATP–phosphocréatine').repere('filiere_lactique',163,156,118,64,'glycolyse lactique').repere('filiere_respiration',288,156,118,64,'respiration').repere('conditions',246,44,232,50,'durée, intensité, O₂');
     craie.texte('ATP',140,122,{couleur:'cyan',taille:20,align:'center'}).fleche(140,104,140,92,{couleur:'cyan'});
     const w=r&&r.weights?r.weights:null,tot=w?Object.values(w).reduce((a,b)=>a+b,0):1;
     [['phosphocréatine','PCr → ATP','jaune',40,'très vite, réserve faible'],['glycolyse lactique','glycogène → lactate','orange',165,'vite, sans O₂'],['respiration cellulaire','O₂ → mitochondrie','vert',290,'lent, durable']].forEach(([k,l,col,x,note],i)=>{
@@ -126,6 +153,8 @@ function draw(){
   }
   // Myogramme (ou réponse enregistrée) à droite
   const gx=430,gy=230,gw=290,gh=160;
+  craie.repere('myogramme',gx-10,gy-gh-14,gw+32,gh+34,'myogramme').repere('legende',gx,gy+8,250,22,'légende du tracé');
+  if(r)craie.repere('resultats',gx-4,gy+30,gw+20,48,'mesures de l’essai');if(S.trials.length)craie.repere('carnet',gx-4,gy+84,gw+20,60,'carnet');
   craie.axe(gx,gy,gx+gw,gy,[],{}).axe(gx,gy,gx,gy-gh,[],{}).texte('temps',gx+gw-6,gy+20,{couleur:'faible',taille:13,align:'right'}).texte('réponse relative',gx+6,gy-gh+2,{couleur:'faible',taille:13});
   [['tension','violet'],['stimulus','rose'],['chaleur','orange']].forEach(([l,col],i)=>{craie.ligne(gx+4+i*78,gy+16,gx+18+i*78,gy+16,{couleur:col,largeur:2.5}).texte(l,gx+22+i*78,gy+21,{couleur:col,taille:12})});
   craie.direct(()=>{if(!r)return;

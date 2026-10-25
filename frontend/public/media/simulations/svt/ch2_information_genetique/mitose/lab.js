@@ -6,7 +6,7 @@ import {
   assessIndex, assessDuration, DNA_CHOICES, assessDna, dnaQuantity,
 } from './model.js';
 
-const { Craie, fr, nombre, bulle, ecrire, onglets, curseur, glisser, protocole } = window.Tableau;
+const { Craie, fr, nombre, bulle, ecrire, onglets, curseur, glisser, protocole, explication } = window.Tableau;
 const $ = id => document.getElementById(id);
 const id = 'svt_mitosis_tp_lab';
 const STEPS = ['Préparer', 'Observer', 'Identifier', 'Calculer', 'Interpréter'];
@@ -65,6 +65,17 @@ function snapshot() {
     student_answers: S.answers, validated: S.validated, attempts: S.attempts, hints_used: S.hints, objective_progress: progress(),
   };
 }
+// Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+explication({ tp_mitose: [
+  { repere: 'etapes', texte: 'Le TP suit cinq étapes : préparer la lame, observer, identifier les phases, calculer, interpréter.' },
+  { repere: 'protocole', texte: 'Pour préparer la lame, on fixe les cellules pour arrêter les divisions, on les écrase et on colore les chromosomes à l’orcéine.' },
+  { repere: 'champ', texte: 'Au microscope, le champ montre le méristème de la racine d’oignon : une zone où les cellules se divisent sans cesse.' },
+  { repere: 'objectifs', texte: 'On repère la zone de division à l’objectif ×10, puis on passe au ×40 pour voir les chromosomes.' },
+  { repere: 'mise_au_point', texte: 'La mise au point rend l’image nette à un seul réglage : trop loin ou trop près, tout devient flou.' },
+  { repere: 'cellules_reperees', texte: 'Cinq cellules sont numérotées : l’état de leurs chromosomes dit leur phase, prophase, métaphase, anaphase ou télophase.' },
+  { repere: 'etape', texte: 'L’indice mitotique est le nombre de cellules en division sur le total, multiplié par 100 ; la durée d’une phase est proportionnelle au nombre de cellules qu’on y voit.' },
+  { repere: 'courbe_adn', texte: 'La quantité d’ADN double pendant la phase S de l’interphase, puis la mitose la répartit à l’identique entre les deux cellules filles.' },
+] });
 const pont = protocole({ id, commandes: commands, config, etat: snapshot, progression: progress, executer,
   texte: 'TP en cinq étapes, dessiné au tableau : ordonner le protocole de préparation, observer au microscope (×10 puis ×40, mise au point, lame déplacée en la glissant), identifier cinq cellules repérées, calculer l’indice mitotique et la durée de la métaphase, interpréter la quantité d’ADN.' });
 const log = (action, details = {}) => pont.noter(action, { ...details, step: S.step });
@@ -183,6 +194,8 @@ function renderPanel() {
       ${S.validated.dna ? '<canvas id="dna" role="img" aria-label="Quantité d’ADN par cellule au cours du cycle"></canvas><p class="formule">TP terminé : la mitose conserve l’information génétique, chaque cellule fille reçoit une copie complète de l’ADN.</p>' : ''}`,
   ];
   panel.innerHTML = `<h3 id="panel-title"></h3>${bodies[S.step]()}`;
+  panel.dataset.professorPoint = S.step === 0 ? 'etape protocole' : 'etape';
+  panel.dataset.professorLabel = titles[S.step];
   ecrire($('panel-title'), titles[S.step], { vitesse: 40 });
   const all = sel => panel.querySelectorAll(sel);
   all('[data-protocol]').forEach(b => b.onclick = () => protocolAdd(b.dataset.protocol));
@@ -268,6 +281,7 @@ function draw() {
   craie.debut(3, scene());
   const c = craie.ctx;
   craie.cercle(cx, cy, d / 2, { couleur: 'blanc', largeur: 3, duree: 1 }).texte('champ du microscope', cx, cy + d / 2 + 20, { couleur: 'faible', taille: 14, align: 'center', duree: .6 });
+  craie.repere('champ', cx - d / 2, cy - d / 2, d, d, 'champ du microscope');
   if (!prepared()) { craie.texte('pas encore de lame', cx, cy - 8, { couleur: 'faible', taille: 20, align: 'center' }).texte('prépare-la d’abord', cx, cy + 18, { couleur: 'faible', taille: 16, align: 'center' }); return craie.fin(); }
   craie.depuis(S.lame ?? 0);
   c.save(); c.beginPath(); c.arc(cx, cy, d / 2 - 2, 0, Math.PI * 2); c.clip();
@@ -277,15 +291,21 @@ function draw() {
   for (const cell of field.cells) drawCell(cell, cell.col * CW, cell.row * CH);
   c.filter = 'none';
   c.restore();
+  craie.repere('lame', cx - d / 2 + 8, cy - d / 2 + 8, d - 16, d - 16, S.objective === 40 ? `lame à l’objectif ×40, ${sharp() ? 'nette' : 'floue'}` : 'lame à l’objectif ×10');
   if (S.step >= 2 && S.objective === 40) {
+    const vus = [];
     craie.direct(() => field.marked.forEach((index, i) => {
       const cell = field.cells[index];
       const sx = cx + (cell.col * CW + 9 - view.x) * scale, sy = cy + (cell.row * CH + 9 - view.y) * scale;
       if (Math.hypot(sx - cx, sy - cy) > d / 2 - 12) return;
+      vus.push([sx, sy]);
+      craie.repere('cellule_' + (i + 1), sx - CW * scale / 2 + 6, sy - 14, CW * scale, CH * scale + 8, `cellule ${i + 1}`);
       const ok = S.identified[i + 1]?.correct, col = ok ? 'vert' : S.selected === i + 1 ? 'jaune' : 'cyan';
       craie.cercle(sx, sy, 10, { couleur: col, largeur: 1.6, fond: '#0a1410', fondAlpha: .85 }).texte(String(i + 1), sx, sy + 5, { couleur: col, taille: 15, align: 'center' });
     }));
-  }
+    if (vus.length) { const xs = vus.map(v => v[0]), ys = vus.map(v => v[1]); craie.repere('cellules_reperees', Math.min(...xs) - 24, Math.min(...ys) - 24, Math.max(...xs) - Math.min(...xs) + 48, Math.max(...ys) - Math.min(...ys) + 48, 'cellules repérées'); }
+    else craie.repere('cellules_reperees', cx - d / 2 + 8, cy - d / 2 + 8, d - 16, d - 16, 'cellules repérées (glisse la lame)');
+  } else craie.repere('cellules_reperees', cx - d / 2 + 8, cy - d / 2 + 8, d - 16, d - 16, 'cellules repérées (à ×40)');
   return craie.fin();
 }
 // Glisser la lame (×40) ; un clic sur un numéro sélectionne la cellule.
@@ -317,6 +337,7 @@ function drawDna() {
   k.rect(X(.4), y1, X(.7) - X(.4), y0 - y1, { couleur: 'vert', largeur: 1, fond: 'vert', fondAlpha: .08, arrondi: 2, pointille: [3, 4] }).texte('phase S', X(.55), y0 + 16, { couleur: 'vert', taille: 13, align: 'center' });
   k.rect(X(.8), y1, X(1) - X(.8), y0 - y1, { couleur: 'rose', largeur: 1, fond: 'rose', fondAlpha: .08, arrondi: 2, pointille: [3, 4] }).texte('mitose', X(.9), y0 + 16, { couleur: 'rose', taille: 13, align: 'center' });
   k.courbe(u => [X(u), Y(dnaQuantity(u))], 100, { couleur: 'jaune', largeur: 2.6 });
+  k.repere('courbe_adn', x0, y1, x1 - x0, y0 - y1, 'quantité d’ADN au cours du cycle');
   if (!k.fin()) requestAnimationFrame(drawDna);
 }
 

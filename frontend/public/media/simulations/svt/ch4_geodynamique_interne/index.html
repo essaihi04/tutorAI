@@ -42,7 +42,7 @@
   </header>
   <section class="scene">
     <div class="dessin"><canvas id="canvas" role="img" aria-label="Schéma géologique dessiné à la craie"></canvas></div>
-    <div class="panneau etape" id="workbench"></div>
+    <div class="panneau etape" id="workbench" data-professor-point="atelier" data-professor-label="l’atelier"></div>
   </section>
   <footer class="barre">
     <button class="craie-btn principal" id="checkBtn" data-professor-control="check">Vérifier l’expérience</button>
@@ -57,7 +57,36 @@
 <script>
 (() => {
   'use strict';
-  const { Craie, fr, bulle, ecrire, onglets, curseur, glisser, protocole } = window.Tableau;
+  const { Craie, fr, bulle, ecrire, onglets, curseur, glisser, protocole, explication } = window.Tableau;
+  // Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+  explication({
+    chains: [
+      { repere: 'ridge', texte: 'Tout commence par l’océanisation : à la dorsale, la lithosphère océanique se forme et s’écarte.' },
+      { repere: 'trench', texte: 'Puis la lithosphère océanique, devenue dense, plonge sous l’autre plaque : c’est la subduction, marquée par une fosse.' },
+      { repere: 'arc', texte: 'Au-dessus de la plaque plongeante, la fusion du manteau nourrit un arc volcanique.' },
+      { repere: 'ophiolite', texte: 'Quand un morceau de croûte océanique est charrié sur le continent, c’est l’obduction : on retrouve une ophiolite en altitude.' },
+      { repere: 'root', texte: 'Enfin, les deux continents entrent en collision : la croûte s’épaissit, forme des nappes et une racine crustale.' },
+    ],
+    deformations: [
+      { repere: 'contrainte', texte: 'Dans une chaîne de collision, la contrainte dominante est la compression : les couches sont raccourcies.' },
+      { repere: 'couches', texte: 'Une roche ductile, chaude et en profondeur, se plisse sans se casser : c’est le pli.' },
+      { repere: 'reverse_fault', texte: 'Une roche cassante, froide et superficielle, se rompt : un compartiment chevauche l’autre, c’est la faille inverse.' },
+      { repere: 'nappe', texte: 'Avec un fort raccourcissement, des paquets de roches glissent sur des kilomètres : ce sont les nappes de charriage.' },
+    ],
+    metamorphism: [
+      { repere: 'diagramme', texte: 'Le diagramme pression–température situe chaque roche métamorphique selon les conditions qu’elle a subies.' },
+      { repere: 'schiste_bleu', texte: 'Le schiste bleu, à glaucophane, traduit une haute pression et une basse température : la plaque froide qui plonge en subduction.' },
+      { repere: 'eclogite', texte: 'Plus profond encore, l’éclogite à grenat et jadéite marque une subduction très profonde.' },
+      { repere: 'gneiss_ht', texte: 'Le gneiss, à haute température et pression moyenne, est typique de la racine d’une collision.' },
+      { repere: 'point_pt', texte: 'Glisse le point sur le diagramme : les minéraux index changent avec le domaine traversé.' },
+    ],
+    granitization: [
+      { repere: 'migmatite', texte: 'À la base de la croûte épaissie, les gneiss fondent partiellement : la migmatite mêle parties fondues et parties solides.' },
+      { repere: 'granite_anatexie', texte: 'Cette fusion partielle, l’anatexie, donne un granite qui passe progressivement aux roches encaissantes : la transition est large.' },
+      { repere: 'pluton', texte: 'Le granite intrusif, lui, vient d’un magma monté de plus bas et refroidi en place : le pluton a des limites nettes.' },
+      { repere: 'aureole', texte: 'Sa chaleur cuit les roches voisines sur une auréole limitée : c’est le métamorphisme de contact, avec des cornéennes.' },
+    ],
+  });
   window.SIMULATION_CONFIG={
     id:'svt_internal_geodynamics_advanced_lab',title:'Laboratoire avancé de géodynamique interne',version:'2.0',
     variants:[
@@ -136,7 +165,7 @@
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});const geom={s:1,ox:0,oy:0};
   const toLogical=(x,y)=>[(x-geom.ox)/geom.s,(y-geom.oy)/geom.s];
   const PT={x0:90,x1:720,y0:330,y1:40};const ptX=t=>PT.x0+(t-200)/650*(PT.x1-PT.x0),ptY=p=>PT.y0-(p-.1)/2.4*(PT.y0-PT.y1);
-  function hotspotsDraw(){for(const [id,label,x,y] of HOTSPOTS[state.currentVariant]){const seen=state.observedHotspots.includes(id);craie.texte(label,x,y,{couleur:seen?'vert':'jaune',taille:16,align:'center'});craie.ligne(x-craie.largeurTexte(label,16)/2,y+4,x+craie.largeurTexte(label,16)/2,y+4,{couleur:seen?'vert':'jaune',largeur:1,duree:.08})}
+  function hotspotsDraw(){for(const [id,label,x,y] of HOTSPOTS[state.currentVariant]){const seen=state.observedHotspots.includes(id);const lw=craie.largeurTexte(label,16);craie.repere(id,x-lw/2-8,y-24,lw+16,34,label.toLowerCase());craie.texte(label,x,y,{couleur:seen?'vert':'jaune',taille:16,align:'center'});craie.ligne(x-craie.largeurTexte(label,16)/2,y+4,x+craie.largeurTexte(label,16)/2,y+4,{couleur:seen?'vert':'jaune',largeur:1,duree:.08})}
     if(state.pulse&&performance.now()-state.pulse.at<1600){const h=HOTSPOTS[state.currentVariant].find(x=>x[0]===state.pulse.id);if(h){const k=(performance.now()-state.pulse.at)/1600;craie.direct(()=>craie.cercle(h[2],h[3]-6,30+k*25,{couleur:'jaune',largeur:2,alpha:1-k}));state.dirty=true}}}
   function drawChains(){const y=200;
     craie.texte('coupe : de l’océan à la montagne',380,28,{couleur:'faible',taille:16,align:'center'});
@@ -149,7 +178,8 @@
     craie.trait([[560,y+42],[590,y+5],[630,y-30],[670,y+5],[700,y+42]],{couleur:'blanc',largeur:2.4});
     craie.trait([[560,y+42],[600,y+130],[650,y+150],[700,y+130],[720,y+42]],{couleur:'violet',largeur:2,pointille:[5,5]});
     craie.fleche(735,y+10,700,y+10,{couleur:'rouge',largeur:1.6}).fleche(545,y+90,580,y+90,{couleur:'rouge',largeur:1.6});
-    craie.texte('croûte continentale',640,y+75,{couleur:'faible',taille:13,align:'center'});}
+    craie.texte('croûte continentale',640,y+75,{couleur:'faible',taille:13,align:'center'});
+    craie.repere('ocean',40,y-25,290,30,'océan').repere('lithosphere_plongeante',330,y+60,150,180,'lithosphère océanique plongeante').repere('croute_continentale',560,y-40,170,120,'croûte continentale épaissie');}
   function drawDeformations(){const r=state.lastTest?state.lastTest.structure:deformationResult().structure,p=state.deformationParams;
     craie.texte(state.lastTest?'résultat du test : '+r:'aperçu : '+r,380,28,{couleur:state.lastTest?'vert':'faible',taille:17,align:'center'});
     const L=120,R=640,ys=[120,160,200];
@@ -159,6 +189,7 @@
     else{ys.forEach((y,i)=>{craie.trait([[L,y+40],[380,y+40],[460,y+20],[R,y-40]],{couleur:['orange','cyan','blanc'][i],largeur:2.4})});craie.trait([[360,250],[460,215],[R,150]],{couleur:'rouge',largeur:2,pointille:[7,5]})}
     if(p.constraint==='compression'){craie.fleche(40,160,105,160,{couleur:'rouge',largeur:2.4}).fleche(720,160,655,160,{couleur:'rouge',largeur:2.4});craie.texte('compression',60,140,{couleur:'rouge',taille:14})}else{craie.fleche(105,160,40,160,{couleur:'rouge',largeur:2.4}).fleche(655,160,720,160,{couleur:'rouge',largeur:2.4});craie.texte('extension',60,140,{couleur:'rouge',taille:14})}
     craie.texte(`${p.behavior==='ductile'?'ductile':'cassant'} · raccourcissement ${p.shortening} %`,380,292,{couleur:'faible',taille:14,align:'center'});
+    craie.repere('couches',L,60,R-L,200,'les couches déformées : '+r.toLowerCase()).repere('contrainte',30,135,90,45,p.constraint==='compression'?'compression':'extension').repere('reglages_deformation',200,278,360,24,'réglages du test');
     // Trois croquis de référence, en bas, qui servent de repères.
     [[70,'pli'],[325,'faille'],[580,'nappe']].forEach(([x,kind],i)=>{const y=330;if(kind==='pli')craie.courbe(u=>[x+110*u,y-10*Math.sin(u*Math.PI*3)],40,{couleur:'faible',largeur:1.4});else if(kind==='faille'){craie.ligne(x,y,x+50,y,{couleur:'faible',largeur:1.4}).ligne(x+45,y-12,x+110,y-12,{couleur:'faible',largeur:1.4}).ligne(x+58,y-22,x+40,y+12,{couleur:'rouge',largeur:1.2,pointille:[4,3]})}else{craie.trait([[x,y+4],[x+50,y+4],[x+80,y-6],[x+110,y-14]],{couleur:'faible',largeur:1.4}).trait([[x+40,y+10],[x+80,y+2],[x+110,y-6]],{couleur:'rouge',largeur:1.2,pointille:[4,3]})}})}
   function drawMetamorphism(){craie.texte('diagramme pression – température',400,26,{couleur:'faible',taille:16,align:'center'});
@@ -170,7 +201,8 @@
     craie.trait([[ptX(600),ptY(.5)],[ptX(850),ptY(.5)],[ptX(850),ptY(1.3)],[ptX(600),ptY(1.3)]],{couleur:'orange',largeur:1.6,ferme:true,fond:'orange',fondAlpha:.06,pointille:[5,4]});
     craie.trait([[ptX(580),ptY(.1)],[ptX(850),ptY(.1)],[ptX(850),ptY(.45)],[ptX(580),ptY(.45)]],{couleur:'jaune',largeur:1.6,ferme:true,fond:'jaune',fondAlpha:.06,pointille:[5,4]});
     craie.texte('schiste vert',ptX(350),ptY(.5),{couleur:'vert',taille:14,align:'center'}).texte('schiste bleu',ptX(360),ptY(1.75),{couleur:'cyan',taille:14,align:'center'}).texte('éclogite',ptX(575),ptY(2.15),{couleur:'rose',taille:14,align:'center'}).texte('gneiss / HT',ptX(725),ptY(.9),{couleur:'orange',taille:14,align:'center'}).texte('cornéenne',ptX(715),ptY(.28),{couleur:'jaune',taille:14,align:'center'});
-    craie.direct(()=>{for(const r of state.metamorphicRecords)craie.point(ptX(r.temperature_c),ptY(r.pressure_gpa),4,'vert');const x=ptX(state.pt.t),y=ptY(state.pt.p);craie.cercle(x,y,9,{couleur:'jaune',largeur:2.2,fond:'jaune',fondAlpha:.35});craie.texte(`${fr(state.pt.p,2)} GPa · ${state.pt.t} °C`,x+14,y-12,{couleur:'jaune',taille:14})});}
+    craie.repere('diagramme',PT.x0,PT.y1-10,PT.x1-PT.x0+10,PT.y0-PT.y1+10,'diagramme pression–température').repere('schiste_vert',ptX(200),ptY(.95),ptX(500)-ptX(200),ptY(.1)-ptY(.95),'domaine du schiste vert').repere('schiste_bleu',ptX(200),ptY(2.5),ptX(520)-ptX(200),ptY(1)-ptY(2.5),'domaine du schiste bleu').repere('eclogite',ptX(450),ptY(2.5),ptX(700)-ptX(450),ptY(1.8)-ptY(2.5),'domaine de l’éclogite').repere('gneiss_ht',ptX(600),ptY(1.3),ptX(850)-ptX(600),ptY(.5)-ptY(1.3),'domaine du gneiss (haute température)').repere('corneenne',ptX(580),ptY(.45),ptX(850)-ptX(580),ptY(.1)-ptY(.45),'domaine de la cornéenne');
+    craie.direct(()=>{for(const r of state.metamorphicRecords)craie.point(ptX(r.temperature_c),ptY(r.pressure_gpa),4,'vert');const x=ptX(state.pt.t),y=ptY(state.pt.p);craie.repere('point_pt',x-16,y-16,32,32,`point P–T : ${fr(state.pt.p,2)} GPa, ${state.pt.t} °C`);craie.cercle(x,y,9,{couleur:'jaune',largeur:2.2,fond:'jaune',fondAlpha:.35});craie.texte(`${fr(state.pt.p,2)} GPa · ${state.pt.t} °C`,x+14,y-12,{couleur:'jaune',taille:14})});}
   function drawGranitization(){craie.texte('granite d’anatexie',190,40,{couleur:'cyan',taille:17,align:'center'}).texte('granite intrusif',570,40,{couleur:'orange',taille:17,align:'center'});
     craie.ligne(380,55,380,345,{couleur:'tresfaible',largeur:1,pointille:[6,6]});
     for(let i=0;i<5;i++)craie.courbe(u=>[60+260*u,80+i*22+8*Math.sin(u*9+i)],60,{couleur:'faible',largeur:1.6});
@@ -180,6 +212,7 @@
     craie.fleche(190,275,190,296,{couleur:'rouge',largeur:1.5});
     for(let i=0;i<9;i++)craie.ligne(420,80+i*30,720,80+i*30,{couleur:'faible',largeur:1.6});
     craie.cercle(570,230,70,{couleur:'orange',largeur:2.4,fond:'orange',fondAlpha:.1});craie.cercle(570,230,92,{couleur:'jaune',largeur:1.4,pointille:[5,5]});
+    craie.repere('granite_anatexie',55,290,270,60,'granite d’anatexie (transition large)').repere('gneiss_fondu',55,70,270,120,'gneiss en fusion partielle').repere('encaissant',415,70,310,230,'roches encaissantes stratifiées').repere('contact',500,160,140,140,'contact net du pluton');
     craie.texte('contact net',570,235,{couleur:'orange',taille:13,align:'center'});craie.trait([[560,150],[575,120],[568,95]],{couleur:'orange',largeur:1.6}).fleche(620,320,590,290,{couleur:'rouge',largeur:1.4});}
   function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(11,scene());const c=craie.ctx,s=Math.min(W/760,H/380);geom.s=s;geom.ox=(W-760*s)/2;geom.oy=(H-380*s)/2;c.translate(geom.ox,geom.oy);c.scale(s,s);
     ({chains:drawChains,deformations:drawDeformations,metamorphism:drawMetamorphism,granitization:drawGranitization})[state.currentVariant]();hotspotsDraw();return craie.fin()}

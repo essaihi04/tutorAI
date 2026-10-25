@@ -17,7 +17,35 @@ window.LAB = {
   command_schema: { set_variant: { variant_id: 'rc | rl | rlc | modulation' }, set_parameters: { resistance_ohm: 'number', capacitance_uf: 'number', inductance_h: 'number', voltage_v: 'number', time_in_tau: '0..5', mode: 'charge | discharge', signal_frequency_khz: 'number', carrier_frequency_khz: 'number', modulation_index: '0..1.5' }, highlight: { target: 'generator | circuit | scope | probe' } },
   state_schema: { parameters: 'réglages réels', derived_values: 'τ, courant, énergie, régime ou modulation', measurements: 'acquisitions', student_actions: 'historique', completed_variants: 'liste' },
   page_text: 'CircuitLab, dessiné au tableau, calcule les réponses RC, RL, RLC et AM : constantes de temps, énergies, régimes et défaut de surmodulation. Le circuit et la courbe s’écrivent à la craie ; le tuteur reçoit réglages, acquisitions et vérifications.',
-  aliases: { generator: 'generateur', circuit: 'circuit', scope: 'courbe', probe: 'sonde' }, labels: { generateur: 'le générateur', circuit: 'le circuit', courbe: 'la courbe à l’oscilloscope', sonde: 'la sonde de mesure' },
+  aliases: { generator: 'generateur', circuit: 'circuit', scope: 'courbe', probe: 'sonde' },
+  labels: { generateur: 'le générateur E', circuit: 'le circuit', courbe: 'la courbe à l’oscilloscope', sonde: 'la sonde de mesure', commutateur: 'le commutateur K', resistance: 'le conducteur ohmique R', condensateur: 'le condensateur C', bobine: 'la bobine L', point_mesure: 'le point de mesure à l’instant t', formules: 'les formules', signal: 'le signal s(t)', porteuse: 'la porteuse', multiplieur: 'le multiplieur', enveloppe: 'l’enveloppe' },
+  explication: {
+    rc: [
+      { repere: 'generateur', texte: 'Le générateur impose la tension E ; en position 1 du commutateur K, il charge le condensateur à travers R.' },
+      { repere: 'condensateur', texte: 'Le condensateur accumule des charges : sa tension uC monte progressivement, elle ne peut pas sauter.' },
+      { repere: 'courbe', texte: 'La courbe uC(t) est une exponentielle : à t = τ = RC, uC vaut 63 % de E en charge et 37 % en décharge.' },
+      { repere: 'point_mesure', texte: 'Déplace l’instant t : le point orange donne uC/E à cet instant, c’est la mesure à noter.' },
+      { repere: 'formules', texte: 'τ = R·C est en secondes quand R est en ohms et C en farads.' },
+    ],
+    rl: [
+      { repere: 'bobine', texte: 'La bobine s’oppose aux variations du courant : i ne s’établit pas instantanément à la fermeture de K.' },
+      { repere: 'courbe', texte: 'i(t) croît en exponentielle vers I∞ = E/R ; à t = τ = L/R, i vaut 63 % de I∞.' },
+      { repere: 'sonde', texte: 'L’ampèremètre mesure i ; l’énergie emmagasinée par la bobine vaut ½Li².' },
+      { repere: 'formules', texte: 'Plus L est grande ou R petite, plus τ est long : le courant met plus de temps à s’établir.' },
+    ],
+    rlc: [
+      { repere: 'circuit', texte: 'Le condensateur chargé se décharge dans la bobine : l’énergie passe de C à L, puis revient.' },
+      { repere: 'courbe', texte: 'Sans résistance les oscillations seraient entretenues ; R dissipe de l’énergie et l’amplitude décroît.' },
+      { repere: 'resistance', texte: 'Quand R dépasse 2√(L/C), il n’y a plus d’oscillation : c’est le régime apériodique.' },
+      { repere: 'formules', texte: 'La pulsation propre ω₀ = 1/√(LC) fixe la pseudo-période T₀ = 2π√(LC).' },
+    ],
+    modulation: [
+      { repere: 'signal', texte: 'Le signal s(t), de basse fréquence fs, porte l’information à transmettre.' },
+      { repere: 'porteuse', texte: 'La porteuse de haute fréquence fc est l’onde que l’antenne peut émettre.' },
+      { repere: 'multiplieur', texte: 'Le multiplieur fabrique uAM = Uc(1 + m·s)cos(2πfct) : l’amplitude de la porteuse suit le signal.' },
+      { repere: 'courbe', texte: 'L’enveloppe reproduit s(t) tant que m ≤ 1 ; au-delà, elle se croise : c’est la surmodulation.' },
+    ],
+  },
   onVariant: (id, p) => { if (id === 'rlc' && p.R > 400) p.R = 100; },
   runLabel: () => 'Acquérir',
   controls(v, p) {
@@ -66,9 +94,10 @@ window.LAB = {
       craie.trait([[60, 150], [60, 116]], { largeur: 2 }).trait([[60, 104], [60, 50], [130, 50]], { largeur: 2 }); composants.gene(60, 110);
       craie.point(132, 50, 3.5).point(178, 50, 3.5).ligne(178, 50, 140, 36 + (v === 'rc' && p.mode === 'discharge' ? 26 : 0), { couleur: 'jaune', largeur: 3 });
       craie.texte('K', 155, 26, { couleur: 'jaune', taille: 16 }).texte(v === 'rc' ? (p.mode === 'charge' ? '1 : charge' : '2 : décharge') : 'fermé', 155, 74, { couleur: 'faible', taille: 13, align: 'center' });
-      craie.ligne(178, 50, 220, 50, { largeur: 2 }); composants.resistance(220, 50); craie.trait([[276, 50], [320, 50], [320, 90]], { largeur: 2 });
-      if (v === 'rc') { composants.condensateur(320, 112); craie.trait([[320, 134], [320, 150], [60, 150]], { largeur: 2 }); }
-      else { craie.ligne(320, 90, 320, 100, { largeur: 2 }); const pts = []; for (let i = 0; i < 4; i++) for (let k = 0; k <= 10; k++) { const ang = Math.PI / 2 + k / 10 * Math.PI; pts.push([320 + 8 * Math.cos(ang), 100 + i * 12 + 6 - 6 * Math.sin(ang)]); } craie.trait(pts, { largeur: 2.2 }); craie.texte('L', 340, 128, { couleur: 'jaune', taille: 16 }); craie.trait([[320, 148], [320, 150], [60, 150]], { largeur: 2 }); }
+      a.zone('commutateur', 126, 14, 60, 64);
+      craie.ligne(178, 50, 220, 50, { largeur: 2 }); composants.resistance(220, 50); a.zone('resistance', 216, 30, 64, 40); craie.trait([[276, 50], [320, 50], [320, 90]], { largeur: 2 });
+      if (v === 'rc') { composants.condensateur(320, 112); a.zone('condensateur', 298, 98, 48, 30); craie.trait([[320, 134], [320, 150], [60, 150]], { largeur: 2 }); }
+      else { craie.ligne(320, 90, 320, 100, { largeur: 2 }); const pts = []; for (let i = 0; i < 4; i++) for (let k = 0; k <= 10; k++) { const ang = Math.PI / 2 + k / 10 * Math.PI; pts.push([320 + 8 * Math.cos(ang), 100 + i * 12 + 6 - 6 * Math.sin(ang)]); } craie.trait(pts, { largeur: 2.2 }); craie.texte('L', 340, 128, { couleur: 'jaune', taille: 16 }); a.zone('bobine', 306, 94, 48, 58); craie.trait([[320, 148], [320, 150], [60, 150]], { largeur: 2 }); }
       a.zone('circuit', 50, 30, 300, 130);
       craie.cercle(380, 112, 14, { couleur: 'cyan' }).texte(v === 'rc' ? 'V' : 'A', 380, 118, { couleur: 'cyan', taille: 15, align: 'center' }).ligne(366, 112, 338, 112, { couleur: 'cyan', largeur: 1.2, pointille: [3, 3] }); a.zone('sonde', 362, 96, 36, 32);
       // Oscillogramme
@@ -77,15 +106,16 @@ window.LAB = {
         craie.courbe(u => [x0 + u * w, y0 - f(u) * h], 120, { couleur: 'cyan', largeur: 2.6 });
         const tt = Math.min(5, p.tauTime), r = charge ? 1 - Math.exp(-tt) : Math.exp(-tt);
         craie.ligne(x0 + tt / 5 * w, y0, x0 + tt / 5 * w, y0 - r * h, { couleur: 'orange', largeur: 1.2, pointille: [4, 4] }).ligne(x0, y0 - r * h, x0 + tt / 5 * w, y0 - r * h, { couleur: 'orange', largeur: 1.2, pointille: [4, 4] });
-        craie.point(x0 + tt / 5 * w, y0 - r * h, 6, 'orange');
+        craie.point(x0 + tt / 5 * w, y0 - r * h, 6, 'orange'); a.zone('point_mesure', x0 + tt / 5 * w - 14, y0 - r * h - 14, 28, 28);
         craie.texte(`t = ${fr(p.tauTime, 1)} τ`, x0 + tt / 5 * w, y0 + 32, { couleur: 'orange', taille: 14, align: 'center' });
       }, { xt: [[.2, 'τ'], [.4, '2τ'], [.6, '3τ'], [.8, '4τ'], [1, '5τ']], yt: [[1, v === 'rc' ? 'E' : 'I∞'], [charge ? .632 : .368, charge ? '0,63' : '0,37']], yl: v === 'rc' ? 'uC' : 'i' });
+      a.zone('formules', 50, 178, 350, 80);
       if (v === 'rc') a.lignes(60, 196, [`τ = R·C = ${p.R} × ${p.C} µF = ${fr(d.tau_s, 3)} s`, `uC(${fr(p.tauTime, 1)}τ) = ${fr(d.uc_v, 2)} V  soit  uC/E = ${fr(d.uc_over_e, 2)}`, `Ee = ½·C·uC² = ${fr(d.electric_energy_mj, 2)} mJ`], { pas: 24, max: 330 });
       else a.lignes(60, 196, [`τ = L/R = ${fr(p.L, 1)} / ${p.R} = ${fr(d.tau_s, 4)} s`, `i(${fr(p.tauTime, 1)}τ) = ${fr(d.current_a, 3)} A  soit  i/I∞ = ${fr(d.current_over_final, 2)}`, `Em = ½·L·i² = ${fr(d.magnetic_energy_mj, 2)} mJ`], { pas: 24, max: 330 });
     } else if (v === 'rlc') {
-      craie.trait([[60, 140], [60, 102]], { largeur: 2 }).trait([[60, 88], [60, 50], [130, 50]], { largeur: 2 }); craie.ligne(44, 88, 76, 88, { largeur: 3.5 }).ligne(44, 102, 76, 102, { largeur: 3.5 }); craie.texte('C', 26, 100, { couleur: 'jaune', taille: 16 });
-      composants.resistance(130, 50, 60); craie.trait([[190, 50], [250, 50], [250, 60]], { largeur: 2 });
-      const pts = []; for (let i = 0; i < 4; i++) for (let k = 0; k <= 10; k++) { const ang = Math.PI / 2 + k / 10 * Math.PI; pts.push([250 + 8 * Math.cos(ang), 60 + i * 12 + 6 - 6 * Math.sin(ang)]); } craie.trait(pts, { largeur: 2.2 }); craie.texte('L', 268, 90, { couleur: 'jaune', taille: 16 });
+      craie.trait([[60, 140], [60, 102]], { largeur: 2 }).trait([[60, 88], [60, 50], [130, 50]], { largeur: 2 }); craie.ligne(44, 88, 76, 88, { largeur: 3.5 }).ligne(44, 102, 76, 102, { largeur: 3.5 }); craie.texte('C', 26, 100, { couleur: 'jaune', taille: 16 }); a.zone('condensateur', 20, 80, 62, 30);
+      composants.resistance(130, 50, 60); a.zone('resistance', 126, 30, 68, 40); craie.trait([[190, 50], [250, 50], [250, 60]], { largeur: 2 });
+      const pts = []; for (let i = 0; i < 4; i++) for (let k = 0; k <= 10; k++) { const ang = Math.PI / 2 + k / 10 * Math.PI; pts.push([250 + 8 * Math.cos(ang), 60 + i * 12 + 6 - 6 * Math.sin(ang)]); } craie.trait(pts, { largeur: 2.2 }); craie.texte('L', 268, 90, { couleur: 'jaune', taille: 16 }); a.zone('bobine', 236, 54, 50, 60);
       craie.trait([[250, 108], [250, 140], [60, 140]], { largeur: 2 }); a.zone('circuit', 30, 30, 260, 120); a.zone('generateur', 40, 70, 40, 50);
       craie.cercle(310, 95, 14, { couleur: 'cyan' }).texte('V', 310, 101, { couleur: 'cyan', taille: 15, align: 'center' }); a.zone('sonde', 294, 80, 32, 32);
       const w0 = d.natural_pulsation_rad_s, alpha = d.damping_s_1, T = 2 * Math.PI / w0, tmax = 8 * T;
@@ -95,6 +125,7 @@ window.LAB = {
         craie.courbe(u => [x0 + u * w, mid - .45 * Math.exp(-alpha * u * tmax) * h], 80, { couleur: 'orange', largeur: 1.4, pointille: [5, 5] });
         craie.ligne(x0, mid, x0 + w, mid, { couleur: 'tresfaible', largeur: 1 });
       }, { yl: 'uC' });
+      a.zone('formules', 30, 172, 340, 104);
       a.lignes(40, 190, [`ω₀ = 1/√(LC) = ${fr(d.natural_pulsation_rad_s, 1)} rad·s⁻¹`, `R critique = 2√(L/C) = ${fr(d.critical_resistance_ohm, 0)} Ω`, `R = ${p.R} Ω → régime ${d.regime}`, `E₀ = ½·C·E² = ${fr(d.initial_energy_mj, 2)} mJ`], { pas: 24, max: 320 });
     } else {
       // Chaîne de modulation : signal s(t) → multiplieur ⊗ porteuse → uAM(t)
@@ -103,13 +134,13 @@ window.LAB = {
       craie.fleche(120, 70, 175, 100, { couleur: 'vert' }).fleche(120, 150, 175, 118, { couleur: 'vert' });
       craie.cercle(195, 110, 20, { couleur: 'jaune' }).texte('×', 195, 118, { couleur: 'jaune', taille: 22, align: 'center' });
       craie.fleche(215, 110, 275, 110, { couleur: 'vert' }).texte('uAM(t)', 282, 116, { couleur: 'cyan', taille: 17 });
-      a.zone('generateur', 30, 40, 100, 160); a.zone('circuit', 170, 85, 130, 50);
+      a.zone('generateur', 30, 40, 100, 160); a.zone('circuit', 170, 85, 130, 50); a.zone('signal', 36, 44, 90, 70); a.zone('porteuse', 36, 124, 90, 70); a.zone('multiplieur', 172, 86, 48, 48);
       graphe(400, 300, 300, 200, (x0, y0, w, h) => {
         const mid = y0 - h / 2, amp = h * .42;
         craie.courbe(u => { const t = u * 2, env = 1 + p.m * Math.sin(2 * Math.PI * 2 * t); return [x0 + u * w, mid - amp * .45 * env * Math.cos(2 * Math.PI * 20 * t)]; }, 600, { couleur: 'cyan', largeur: 1.6, tremble: 0 });
         for (const sign of [-1, 1]) craie.courbe(u => [x0 + u * w, mid + sign * amp * .45 * (1 + p.m * Math.sin(2 * Math.PI * 2 * u * 2))], 120, { couleur: 'orange', largeur: 2, pointille: [5, 4] });
       }, { yl: 'uAM' });
-      a.zone('sonde', 400, 100, 60, 30);
+      a.zone('sonde', 400, 100, 60, 30); a.zone('enveloppe', 400, 116, 300, 170); a.zone('formules', 30, 212, 350, 80);
       a.lignes(40, 230, [`m = ${fr(p.m, 2)} → enveloppe entre ${fr(d.envelope_min, 2)} et ${fr(d.envelope_max, 2)} Uc`, `fc / fs = ${fr(d.frequency_ratio, 1)}`, `${d.quality}${d.demodulation_error_percent ? ' : erreur ' + fr(d.demodulation_error_percent, 1) + ' %' : ''}`], { pas: 24, max: 330 });
     }
     if (a.ran && a.resultat != null) { craie.depuis(a.resultat); craie.texte('acquisition faite ✓', 560, 170, { couleur: 'vert', taille: 16, align: 'center' }); }

@@ -33,6 +33,7 @@ const VisualAudit = lazy(() => import('./dev/VisualAudit'));
 const BoardAudit = lazy(() => import('./dev/BoardAudit'));
 const AdminVisualLibraryAudit = lazy(() => import('./dev/AdminVisualLibraryAudit'));
 const CoursePlayerAudit = lazy(() => import('./dev/CoursePlayerAudit'));
+const ProfesseurLaboAudit = lazy(() => import('./dev/ProfesseurLaboAudit'));
 
 function PageLoader() {
   return (
@@ -71,6 +72,7 @@ export default function App() {
           {import.meta.env.DEV && <Route path="/dev/board-audit" element={<BoardAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/admin-visual-library" element={<AdminVisualLibraryAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/course-player" element={<CoursePlayerAudit />} />}
+          {import.meta.env.DEV && <Route path="/dev/professeur-labo" element={<ProfesseurLaboAudit />} />}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />

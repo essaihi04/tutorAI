@@ -60,12 +60,12 @@
         <nav class="onglets" id="missionTabs" aria-label="Missions"></nav>
       </header>
       <section class="scene chimie">
-        <aside class="reglages" data-target="controls" data-professor-control="set_parameters">
+        <aside class="reglages" data-target="controls" data-professor-control="set_parameters" data-professor-point="reglages" data-professor-label="réglages de l’essai">
           <h3 id="missionTitle"></h3>
           <p class="legende">Je prédis avant de mesurer :</p>
-          <div class="choix" id="predictions"></div>
+          <div class="choix" id="predictions" data-professor-point="prediction" data-professor-label="ta prédiction"></div>
           <div class="controls" id="controls"></div>
-          <p class="legende" id="verdict">Le résultat de ta prédiction s’écrira ici.</p>
+          <p class="legende" id="verdict" data-professor-point="verdict" data-professor-label="verdict de ta prédiction">Le résultat de ta prédiction s’écrira ici.</p>
         </aside>
         <div class="dessin" data-target="scene">
           <canvas id="sceneCanvas" role="img" aria-label="Montage expérimental et courbe de mesures dessinés à la craie" data-target="graph"></canvas>
@@ -428,6 +428,7 @@
   }
 
   function highlight(target) {
+    if (T.surligner(target)) return {ok:true,target};   // repère dessiné à la craie ou panneau data-professor-point
     const el = document.querySelector(`[data-target="${target}"]`) || document.querySelector(target);
     if (!el) return {ok:false,error:`Cible inconnue: ${target}`};
     el.classList.remove("highlighted");
@@ -443,6 +444,7 @@
       title: cfg.title,
       status: state.status,
       active_mission: { id: mission().id, title: mission().title, chapter: mission().chapter, learning_goal: mission().goal, model: mission().model },
+      current_variant: mission().id,
       variables: { ...state.variables },
       measurements: state.measurements.map(x => ({...x})),
       student_prediction: state.student_prediction === null ? null : mission().predictions[state.student_prediction],
@@ -541,6 +543,8 @@
         craie.fleche(x + 190, y + 100, x + 240, y + 100, { couleur: "jaune", largeur: 1.6, alpha: .6 });
         craie.rect(x + 242, y + 70, 44, 60, { couleur: "blanc", arrondi: 6 }).texte("détecteur", x + 264, y + 150, { align: "center", taille: 14, couleur: "faible" });
         craie.texte("spectrophotomètre", cx, y + 30, { align: "center", taille: 19, couleur: accent() });
+        craie.repere('lampe', x + 10, y + 70, 80, 60, 'lampe').repere('cuve', x + 148, y + 56, 44, 90, 'cuve de solution').repere('detecteur', x + 242, y + 70, 44, 60, 'détecteur')
+          .repere('spectrophotometre', x + 6, y + 10, w - 12, 150, 'spectrophotomètre').repere('formule', x + 14, y + 240, 240, 32, 'loi A(t)');
         craie.texte(`t = ${fmt(p.time, 0)} s`, x + 20, y + 200, { taille: 17, couleur: "jaune" });
         craie.texte(`A₀ = ${fmt(p.a0, 2)}   k = ${fmt(p.k, 3)} s⁻¹`, x + 20, y + 228, { taille: 16, couleur: "faible" });
         craie.texte("A(t) = A₀ · e^(−k t)", x + 20, y + 262, { taille: 18, couleur: "violet" });
@@ -556,6 +560,8 @@
         craie.texte(p.catalyst === "none" ? "sans catalyseur" : p.catalyst === "fe" ? "catalyseur Fe³⁺" : "catalyseur Pt", x + 80, y + 76, { taille: 16, couleur: p.catalyst === "none" ? "faible" : "jaune" });
         if (run || done) bulles(x + 104, y + 140, 72, 76, Math.round(4 + (v.rate || .5) * 4), v.rate || .5, "blanc");
         craie.texte("v = k · c   ;   t½ = ln 2 / k", x + 20, y + 300, { taille: 18, couleur: "violet" });
+        craie.repere('bain', x + 40, y + 120, 200, 110, 'bain thermostaté').repere('becher', x + 98, y + 92, 84, 130, 'bécher réactionnel').repere('thermometre', x + 236, y + 96, 30, 126, 'thermomètre')
+          .repere('chronometre', x + 16, y + 36, 48, 48, 'chronomètre').repere('catalyseur', x + 76, y + 60, 200, 24, 'catalyseur').repere('formule', x + 14, y + 282, 260, 28, 'vitesse et t½');
       }
     } else if (kind === "nuclear") {
       if (model === "binding_energy") {
@@ -565,6 +571,7 @@
         craie.texte(`A = ${n}   Z = ${z}   N = ${n - z}`, cx, y + 255, { align: "center", taille: 18, couleur: accent() });
         craie.texte("protons", x + 20, y + 290, { taille: 15, couleur: "jaune" }).texte("neutrons", x + 110, y + 290, { taille: 15, couleur: "blanc" });
         craie.texte("Eₗ = Δm · c²", x + 190, y + 290, { taille: 18, couleur: "violet" });
+        craie.repere('noyau', cx - 95, y + 35, 190, 190, 'le noyau').repere('nucleons', x + 14, y + 272, 170, 28, 'protons et neutrons').repere('formule', x + 184, y + 272, 110, 28, 'Eₗ = Δm·c²');
       } else {
         craie.rect(x + 20, y + 30, 250, 190, { couleur: "faible", arrondi: 8 }).texte("échantillon", x + 145, y + 240, { align: "center", taille: 15, couleur: "faible" });
         const total = 90, vivants = Math.round(total * (v.alive ?? 1));
@@ -573,6 +580,7 @@
         craie.texte(`${iso.name} · t½ = ${fmt(iso.halfLife, 2)} ${iso.unit}`, cx, y + 262, { align: "center", taille: 17, couleur: accent() });
         craie.texte(model === "radio_dating" ? `N / N₀ = ${fmt(p.ratio, 3)}` : `N₀ = ${p.n0}   t = ${fmt(p.elapsed, 1)} t½`, x + 20, y + 292, { taille: 17, couleur: "jaune" });
         craie.texte("N(t) = N₀ · 2^(−t / t½)", x + 20, y + 320, { taille: 18, couleur: "violet" });
+        craie.repere('echantillon', x + 20, y + 30, 250, 190, 'échantillon de noyaux').repere('isotope', x + 20, y + 246, 250, 24, 'isotope et demi-vie').repere('formule', x + 14, y + 300, 230, 30, 'loi de décroissance');
         if (done) { craie.depuis(scene.marque); craie.texte(`${result.primary.value} ${result.primary.unit}`, x + 20, y + 348, { taille: 17, couleur: accent(), max: 270 }); }
       }
     } else if (kind === "equilibrium") {
@@ -588,6 +596,7 @@
         craie.ligne(x + 80, y + 202, cx - 20, y + 240, { couleur: "faible", largeur: 1.4 });
         if (done) { craie.depuis(scene.marque); craie.texte(`pH = ${result.measurements[0].value}`, x + 45, y + 208, { align: "center", taille: 18, couleur: accent() }); }
         craie.texte("à l’équivalence : n(H₃O⁺) = n(HO⁻)", x + 10, y + 310, { taille: 16, couleur: "violet", max: 280 });
+        craie.repere('burette', cx - 14, y + 6, 28, 158, 'burette graduée').repere('becher', cx - 48, y + 172, 96, 100, 'bécher d’acide dosé').repere('ph_metre', x + 6, y + 176, 78, 52, 'pH-mètre').repere('formule', x + 6, y + 292, 280, 26, 'relation à l’équivalence');
       } else if (model === "weak_acid") {
         becher(cx - 60, y + 90, 120, 150, .65, "rose", { label: "solution d’acide AH" });
         craie.rect(x + 10, y + 20, 110, 50, { couleur: "blanc", arrondi: 6 }).texte("pH-mètre", x + 65, y + 90, { align: "center", taille: 14, couleur: "faible" });
@@ -595,6 +604,7 @@
         if (done) { craie.depuis(scene.marque); craie.texte(`pH = ${result.measurements[0].value}`, x + 65, y + 52, { align: "center", taille: 20, couleur: accent() }); }
         craie.texte(`c = ${fmt(p.concentration, 3)} mol·L⁻¹`, x + 140, y + 40, { taille: 15, couleur: "jaune", max: 150 });
         craie.texte("AH + H₂O ⇌ A⁻ + H₃O⁺", cx, y + 290, { align: "center", taille: 19, couleur: "violet" });
+        craie.repere('becher', cx - 64, y + 86, 128, 158, 'solution d’acide faible').repere('ph_metre', x + 6, y + 16, 118, 58, 'pH-mètre').repere('sonde', cx + 8, y + 104, 24, 100, 'sonde pH').repere('formule', cx - 120, y + 268, 240, 30, 'équation de la réaction');
         craie.direct(() => { const alpha = v.ratio ?? 0; const r = graine(3); for (let i = 0; i < 24; i++) { const px = cx - 50 + r() * 100, py = y + 150 + r() * 80; craie.texte(i / 24 < alpha ? "A⁻" : "AH", px, py, { taille: 12, couleur: i / 24 < alpha ? accent() : "faible", alpha: .8 }); } });
       } else if (model === "precipitation") {
         const precipite = (result?.visual?.drops ?? 0) > 0;
@@ -603,6 +613,7 @@
         craie.texte(`[M] = 10^${p.logM}   [X] = 10^${p.logX}`, cx, y + 40, { align: "center", taille: 16, couleur: "jaune" });
         if (done) { craie.depuis(scene.marque); craie.texte(precipite ? "précipité : Q > Kₛ" : "limpide : Q < Kₛ", cx, y + 270, { align: "center", taille: 19, couleur: precipite ? accent() : "faible" }); }
         craie.texte("Q = [M]·[X]  comparé à  Kₛ", cx, y + 310, { align: "center", taille: 17, couleur: "violet" });
+        craie.repere('becher', cx - 74, y + 56, 148, 178, 'bécher').repere('precipite', cx - 70, y + 196, 140, 36, 'fond du bécher : précipité').repere('concentrations', cx - 110, y + 22, 220, 26, 'concentrations').repere('formule', cx - 120, y + 288, 240, 30, 'Q comparé à Kₛ');
       } else {
         fiole(cx - 70, y + 40, 140, 170, .6, accent());
         craie.texte("A + B", x + 30, y + 250, { taille: 20, couleur: "blanc" });
@@ -611,6 +622,7 @@
         craie.texte(`K = ${fmt(p.K, 2)}`, x + 220, y + 250, { taille: 17, couleur: "jaune" });
         craie.direct(() => { const r = graine(5); const ratio = v.ratio ?? (p.c0 / (p.a0 + p.b0 + p.c0)); for (let i = 0; i < 30; i++) { const px = cx - 50 + r() * 100, py = y + 110 + r() * 85; craie.cercle(px, py, 3, { couleur: i / 30 < ratio ? accent() : "faible", fond: i / 30 < ratio ? accent() : "faible", fondAlpha: .5, largeur: 1, tremble: .2 }); } });
         craie.texte("Qᵣ évolue vers K, puis les deux sens s’équilibrent", x + 20, y + 300, { taille: 15, couleur: "violet", max: 275 });
+        craie.repere('fiole', cx - 74, y + 36, 148, 178, 'erlenmeyer').repere('fleches', x + 96, y + 226, 78, 36, 'les deux sens ⇌').repere('constante_k', x + 214, y + 230, 70, 28, 'constante K').repere('formule', x + 14, y + 282, 280, 26, 'évolution vers K');
       }
     } else if (kind === "electrochem") {
       if (model === "electrolysis") {
@@ -622,6 +634,8 @@
         craie.texte(`I = ${fmt(p.current, 2)} A   t = ${fmt(p.time, 0)} min`, cx, y + 305, { align: "center", taille: 16, couleur: "jaune" });
         if (run || done) bulles(cx - 56, y + 150, 24, 90, v.bubbles ? 10 : 4, v.speed || 1, "blanc");
         craie.texte("Q = I · t   ;   n(e⁻) = Q / F", x + 20, y + 338, { taille: 17, couleur: "violet" });
+        craie.repere('electrolyseur', cx - 84, y + 106, 168, 158, 'électrolyseur').repere('cathode', cx - 52, y + 56, 24, 190, 'cathode (−)').repere('anode', cx + 28, y + 56, 24, 190, 'anode (+)')
+          .repere('generateur', cx - 18, y + 12, 36, 36, 'générateur').repere('formule', x + 14, y + 320, 270, 28, 'loi de Faraday');
       } else {
         becher(x + 20, y + 120, 100, 130, .65, "faible", { label: "Zn²⁺ / Zn" });
         becher(x + 170, y + 120, 100, 130, .65, "bleu", { label: "Cu²⁺ / Cu" });
@@ -634,6 +648,10 @@
         if (done) craie.direct(() => { for (let i = 0; i < 8; i++) { const f = ((scene.now * .00025 * (v.speed || 1)) + i / 8) % 1; const px = f < .5 ? x + 70 : x + 220, py = f < .5 ? y + 60 - (f * 2) * 30 : y + 30 + ((f - .5) * 2) * 30; const qx = f < .25 ? x + 70 : f < .75 ? x + 70 + (f - .25) * 2 * 150 : x + 220; const qy = f < .25 ? y + 60 - f * 4 * 30 : f < .75 ? y + 30 : y + 30 + (f - .75) * 4 * 30; craie.texte("e⁻", qx, qy - 6, { taille: 12, couleur: "cyan" }); void px; void py; } });
         craie.texte("Zn → Zn²⁺ + 2e⁻   ;   Cu²⁺ + 2e⁻ → Cu", x + 15, y + 300, { taille: 15, couleur: "violet", max: 280 });
         craie.texte(`[Zn²⁺] = 10^${p.logZn}   [Cu²⁺] = 10^${p.logCu}`, x + 15, y + 325, { taille: 14, couleur: "jaune", max: 280 });
+        craie.repere('demi_pile_zn', x + 16, y + 116, 108, 138, 'demi-pile Zn²⁺/Zn').repere('demi_pile_cu', x + 166, y + 116, 108, 138, 'demi-pile Cu²⁺/Cu')
+          .repere('electrode_zn', x + 60, y + 56, 20, 178, 'électrode de zinc').repere('electrode_cu', x + 210, y + 56, 20, 178, 'électrode de cuivre')
+          .repere('pont_salin', x + 100, y + 104, 90, 76, 'pont salin').repere('voltmetre', cx - 22, y + 8, 44, 44, 'voltmètre').repere('fil', x + 70, y + 24, 150, 14, 'fil : circulation des électrons')
+          .repere('equation', x + 10, y + 282, 284, 26, 'demi-équations').repere('concentrations', x + 10, y + 308, 284, 24, 'concentrations');
       }
     } else if (kind === "organic") {
       const rendement = v.yield ?? 0;
@@ -646,6 +664,9 @@
       if (p.temp !== undefined) thermometre(x + 40, y + 120, 90, (p.temp - 40) / 60, `${fmt(p.temp, 0)} °C`);
       if (run || done) bulles(cx - 30, y + 170, 60, 40, 6, v.speed || .7, "blanc");
       craie.texte("acide + alcool ⇌ ester + eau", cx, y + 310, { align: "center", taille: 18, couleur: "violet" });
+      craie.repere('ballon', cx - 52, y + 100, 104, 136, 'ballon réactionnel').repere('refrigerant', cx - 14, y + 16, 28, 98, 'réfrigérant à eau').repere('chauffe_ballon', cx - 58, y + 212, 116, 46, 'chauffe-ballon')
+        .repere('equation', cx - 130, y + 290, 260, 28, 'équation d’estérification');
+      if (p.temp !== undefined) craie.repere('thermometre', x + 26, y + 116, 30, 108, 'thermomètre');
       if (done) { craie.depuis(scene.marque); craie.texte(`${result.primary.label} : ${result.primary.value} ${result.primary.unit}`, cx, y + 338, { align: "center", taille: 17, couleur: accent(), max: 280 }); }
       else craie.texte(model === "ester_kinetics" ? (p.catalyst === "acid" ? "avec H₂SO₄ (catalyseur)" : "sans catalyseur") : model === "synthesis_control" ? (p.pathway === "saponification" ? "voie : saponification" : "voie : estérification") : `K = ${fmt(p.K, 1)}`, cx, y + 338, { align: "center", taille: 15, couleur: "jaune" });
     }
@@ -653,6 +674,7 @@
 
   function dessinerCourbe(result, axis, progress) {
     const { x, y, w, h } = G;
+    craie.repere('courbe', x - 6, y - 16, w + 20, h + 36, 'la courbe');
     craie.texte(axis.y || "mesure", x - 4, y - 10, { taille: 14, couleur: "faible" });
     if (!result) {
       craie.axe(x, y + h, x + w + 10, y + h, [], { couleur: "faible" }).axe(x, y + h, x, y - 4, [], { couleur: "faible", vertical: true });
@@ -684,6 +706,7 @@
     dessinerMontage(m.model, p, v, result);
     craie.ligne(322, 20, 322, 380, { couleur: "tresfaible", largeur: 1, pointille: [6, 8] });
     dessinerCourbe(result, m.axis || {}, state.status === "running" ? state.animation : 1);
+    craie.repere('carnet', 330, 192, 216, 160, 'carnet de mesures').repere('mesure', 330, 192, 216, 30, 'mesure principale').repere('montage', M.x, M.y, M.w, M.h, 'le montage');
     if (result) {
       craie.depuis(scene.marque);
       craie.texte(`${result.primary.label} : ${result.primary.value} ${result.primary.unit}`, 336, 212, { taille: 19, couleur: accent(), max: 215 });
@@ -729,24 +752,39 @@
     const result=executeAICommand(data.payload || data.command || data, data.parameters || {});
     event.source?.postMessage?.({type:"simulation_control_result",requestId:data.requestId,simulation_id:cfg.id,simulationId:cfg.id,result},"*");
   });
+  // Script d'explication par mission (champ `explication` de la configuration) : une phrase par repère pointable.
+  T.explication(Object.fromEntries(cfg.missions.map((m) => [m.id, (m.explication || []).map((e) => ({ repere: e.repere, texte: e.texte }))])));
   $("#runButton").addEventListener("click",()=>runTrial());
   $("#resetButton").addEventListener("click",resetSimulation);
   initializeVariables();
   buildMissionTabs();
   buildMission();
   syncState();
-  if(window.parent!==window) window.parent.postMessage({
-    type:"simulation_manifest",
-    simulation_id:cfg.id,
-    simulationId:cfg.id,
-    capabilities:{
-      commands:window.SIMULATION_CONFIG.commands,
-      globals:["executeAICommand","getSimulationState","runTrial","resetSimulation","selectVariant"],
-      buttons:cfg.missions.map(m=>({id:m.id,text:m.title,className:"onglet"})),
-      config:window.SIMULATION_CONFIG
-    },
-    page_text:`${cfg.title}. ${cfg.intro} Tout est dessiné à la craie au tableau : le montage à gauche, la courbe et le carnet de mesures à droite.`,
-    manifest:window.SIMULATION_CONFIG
-  },"*");
+  const explicationParMission = Object.fromEntries(cfg.missions.map((m) => [m.id, (m.explication || []).map((e) => ({ repere: e.repere, texte: e.texte }))]));
+  function manifeste() {
+    if (window.parent === window) return;
+    const reperes = T.listeReperes();
+    window.__SIMULATION_MANIFEST_SENT__ = true;
+    window.parent.postMessage({
+      type:"simulation_manifest",
+      simulation_id:cfg.id,
+      simulationId:cfg.id,
+      capabilities:{
+        commands:window.SIMULATION_CONFIG.commands,
+        globals:["executeAICommand","getSimulationState","runTrial","resetSimulation","selectVariant"],
+        buttons:cfg.missions.map(m=>({id:m.id,text:m.title,className:"onglet"})),
+        config:window.SIMULATION_CONFIG,
+        command_schema:{ set_variant:{ variant_id: cfg.missions.map(m => m.id).join(" | ") }, highlight:{ target: Object.keys(reperes).join(" | ") || "scene" } },
+        reperes,
+        explication: explicationParMission
+      },
+      page_text:`${cfg.title}. ${cfg.intro} Tout est dessiné à la craie au tableau : le montage à gauche, la courbe et le carnet de mesures à droite. Le professeur peut montrer chaque repère du doigt (highlight) en suivant le script d'explication de la mission.`,
+      manifest:window.SIMULATION_CONFIG
+    },"*");
+  }
+  manifeste();
+  // Les repères dessinés sont connus après la première image : le manifeste est renvoyé une fois complet
+  // (et plus tard encore, au cas où l'iframe n'aurait pas été affichée tout de suite).
+  setTimeout(manifeste, 1800); setTimeout(manifeste, 6000); setTimeout(manifeste, 15000);
   requestAnimationFrame(boucle);
 })();

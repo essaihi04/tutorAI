@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { createPortal } from 'react-dom';
 import type { ScientificControlCommand } from './scientific/types';
 import './AIAvatar.css';
-import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS } from '../../services/professorFocus';
+import { PROFESSOR_FOCUS, PROFESSOR_REACH_MS, PROFESSOR_POINT_HOLD_MS } from '../../services/professorFocus';
 import { boardExplaining } from '../../services/boardExplaining';
 import { PROFESSOR_EMOTIONS, type ProfessorEmotionKind, type ProfessorGestureKind } from '../../services/professorEmotion';
 import type { ProfessorMotion, ProfessorRig } from './Professor3D';
@@ -238,6 +238,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   // Laboratoire HTML dans une iframe : il vole jusqu'au bouton de la commande, que le laboratoire localise
   // lui-même (`simulation_locate` → `simulation_control_rect`, en px de l'iframe, remis à l'échelle de la
   // page), appuie, et la commande part alors vers l'iframe. Sans réponse, il vise l'iframe entière.
+  // Pointage (`mode: 'point'`, commande highlight sur un repère dessiné) : il n'appuie pas, il entre dans la
+  // simulation, montre le repère du doigt pendant qu'il l'explique, et la commande part tout de suite pour que
+  // le laboratoire l'entoure à la craie en même temps.
   useEffect(() => {
     if (!labControl) return;
     const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Simulation"]');
@@ -262,22 +265,29 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       fly(reachPosition(point, false, rig.current, iframe.getBoundingClientRect()));
       aimSide(point);
     };
+    let pressTimer = 0, timer = 0;
     const onRect = (event: MessageEvent) => {
-      const data = event.data as { type?: string; sequence?: number; rect?: { x: number; y: number; width: number; height: number } | null } | null;
+      const data = event.data as { type?: string; sequence?: number; mode?: string; rect?: { x: number; y: number; width: number; height: number } | null } | null;
       if (event.source !== iframe.contentWindow || data?.type !== 'simulation_control_rect' || data.sequence !== labControl.sequence) return;
       if (data.rect && data.rect.width > 0) { inner = data.rect; update(); }
+      if (data.mode === 'point' && data.rect) {
+        // Il montre du doigt, sans appuyer : la commande part maintenant et il garde le bras tendu le temps d'expliquer.
+        window.clearTimeout(pressTimer); window.clearTimeout(timer);
+        deliver();
+        timer = window.setTimeout(() => setFocus(null), PROFESSOR_POINT_HOLD_MS);
+      }
     };
     window.addEventListener('message', onRect);
     iframe.contentWindow.postMessage({ type: 'simulation_locate', command: labControl.command, parameters: labControl.message.parameters ?? {}, sequence: labControl.sequence }, '*');
     update();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
-    const pressTimer = window.setTimeout(() => {
+    pressTimer = window.setTimeout(() => {
       const rect = bounds();
       setPress({ key: -labControl.sequence, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       deliver();
     }, PROFESSOR_REACH_MS);
-    const timer = window.setTimeout(() => { setFocus(null); setPress(null); }, PROFESSOR_REACH_MS + 2400);
+    timer = window.setTimeout(() => { setFocus(null); setPress(null); }, PROFESSOR_REACH_MS + 2400);
     return () => {
       window.clearTimeout(timer); window.clearTimeout(pressTimer);
       window.removeEventListener('message', onRect);

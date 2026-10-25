@@ -12,6 +12,10 @@
  *   Tableau.curseur     : un réglage (trait de craie + point).
  *   Tableau.glisser     : poignées déplaçables directement sur le dessin (moins de boutons).
  *   Tableau.nombre      : lecture d'une saisie « 0,020 » → 0.02 ;  Tableau.fr : format français.
+ *   Repères pointables  : craie.repere(id, x, y, w, h, label) pendant le dessin (ou Tableau.reperes({id: {label, rect}})) ;
+ *                         le professeur animé vole jusqu'au repère et le montre du doigt (commande `highlight`
+ *                         {target: id}), le kit l'entoure à la craie (Tableau.surligner). Tableau.explication(...)
+ *                         donne au tuteur le script d'explication (repère → phrase), envoyé dans le manifeste.
  *
  * Écriture en direct — dans la boucle de rendu :
  *     craie.debut(graine, tempsDepuisOuvertureDeLaScene)   // secondes ; omis = tout est déjà écrit
@@ -65,10 +69,13 @@
       c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, this.W, this.H);
       c.lineCap = 'round'; c.lineJoin = 'round'; c.globalAlpha = 1; this.r = graine(seed);
       this.t = REDUIT || temps === undefined ? Infinity : Math.max(0, temps); this.cur = 0; this.tip = null; this.complet = true;
+      this._reperesImage = new Set();   // les repères de cette image ; ceux de l'image précédente non redessinés seront oubliés à fin()
       return this;
     }
     /** Dessine le bout de craie au point d'écriture ; renvoie true quand tout est écrit. */
     fin() {
+      // Un repère d'une variante précédente, non redessiné dans cette image, n'est plus pointable.
+      if (this._reperesImage) for (const id of Object.keys(REPERES)) { if (REPERES[id].craie === this && !this._reperesImage.has(id)) delete REPERES[id]; }
       if (this.tip) {
         const c = this.ctx, [x, y] = this.tip;
         c.globalAlpha = .9; c.fillStyle = '#fff'; c.shadowColor = '#fff'; c.shadowBlur = 8;
@@ -181,6 +188,16 @@
       c.shadowBlur = 0; c.globalAlpha = 1; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
       return this;
     }
+    /** Déclare un repère pointable par le professeur, en coordonnées du dessin courant (transformées en px de la page). */
+    repere(id, x, y, w, h, label) {
+      const m = this.ctx.getTransform(), d = devicePixelRatio || 1, b = this.canvas.getBoundingClientRect();
+      const p1 = m.transformPoint(new DOMPoint(x, y)), p2 = m.transformPoint(new DOMPoint(x + w, y + h));
+      const r = { x: b.left + Math.min(p1.x, p2.x) / d, y: b.top + Math.min(p1.y, p2.y) / d, width: Math.abs(p2.x - p1.x) / d, height: Math.abs(p2.y - p1.y) / d };
+      const existant = REPERES[id] || {};
+      REPERES[id] = { label: label || existant.label || id, rect: r, craie: this };
+      if (this._reperesImage) this._reperesImage.add(id);
+      return this;
+    }
     largeurTexte(s, taille = 18) { this.ctx.font = `${taille}px ${POLICE}`; return this.ctx.measureText(String(s)).width; }
     /** Axe gradué : de (x0,y0) vers (x1,y1), `graduations` = [[fraction, libellé], …]. */
     axe(x0, y0, x1, y1, graduations = [], o = {}) {
@@ -194,6 +211,53 @@
       return this;
     }
   }
+
+  // ── Repères pointables et script d'explication ───────────────────────────
+  const REPERES = {};           // id → { label, rect: {x,y,width,height} en px de la page | () => rect | HTMLElement }
+  let EXPLICATION = null;       // [{ repere, texte, variante? }] ou { variante: [{ repere, texte }] }
+  /** Enregistre des repères DOM ou calculés : `{ id: { label, rect: () => ({x,y,width,height}) | HTMLElement } }`. */
+  function reperes(defs) { for (const [id, d] of Object.entries(defs || {})) REPERES[id] = { label: d.label || id, rect: d.rect || d.element || d }; }
+  /** Un panneau HTML marqué `data-professor-point="id"` (libellé : data-professor-label, son titre, ou l'id). */
+  function elementRepere(id) {
+    const sel = String(id || '').replace(/[^\w-]/g, '');
+    return sel ? document.querySelector(`[data-professor-point~="${sel}"]`) : null;
+  }
+  /** Rectangle (px de la page) d'un repère dessiné ou d'un panneau HTML, ou null. */
+  function rectRepere(id) {
+    const r = REPERES[String(id || '')];
+    let rect = r ? (typeof r.rect === 'function' ? r.rect() : r.rect) : elementRepere(id);
+    if (rect && rect.getBoundingClientRect) rect = rect.getBoundingClientRect();
+    if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
+    return { x: rect.x ?? rect.left, y: rect.y ?? rect.top, width: rect.width, height: rect.height };
+  }
+  /** Libellés des repères (dessinés et panneaux HTML), pour le manifeste. */
+  function listeReperes() {
+    const out = {};
+    for (const [id, r] of Object.entries(REPERES)) out[id] = r.label;
+    document.querySelectorAll('[data-professor-point]').forEach((el) => {
+      for (const id of el.dataset.professorPoint.split(/\s+/)) {
+        if (id && !out[id]) out[id] = el.dataset.professorLabel || el.querySelector('h2, h3, summary')?.textContent?.trim() || el.getAttribute('aria-label') || id;
+      }
+    });
+    return out;
+  }
+  /** Script d'explication de la simulation pour le tuteur : il dit chaque phrase en pointant le repère. */
+  function explication(script) { EXPLICATION = script; }
+  /** Entoure un repère à la craie pendant `duree` ms : le professeur vient de le montrer. */
+  function surligner(id, duree = 4500) {
+    const rect = rectRepere(id); if (!rect) return false;
+    document.querySelectorAll('.repere-anneau').forEach((el) => el.remove());
+    const el = document.createElement('div'); el.className = 'repere-anneau'; el.setAttribute('aria-hidden', 'true');
+    const marge = 8;
+    Object.assign(el.style, { left: (rect.x - marge + scrollX) + 'px', top: (rect.y - marge + scrollY) + 'px', width: (rect.width + 2 * marge) + 'px', height: (rect.height + 2 * marge) + 'px' });
+    const label = REPERES[id] ? REPERES[id].label : (elementRepere(id)?.dataset.professorLabel || '');
+    if (label && label !== id) { const s = document.createElement('span'); s.textContent = label; el.append(s); }
+    document.body.append(el);
+    setTimeout(() => el.remove(), duree);
+    return true;
+  }
+  const COMMANDES_POINTAGE = ['highlight', 'point', 'montrer', 'show'];
+  const cibleDe = (p) => p && (p.target || p.repere || p.element || p.id || p.variant_id);
 
   /** Écrit `texte` dans `el` lettre par lettre (annule une écriture en cours sur le même élément). */
   function ecrire(el, texte, { vitesse = 28, apres } = {}) {
@@ -281,19 +345,31 @@
     };
     const manifeste = () => {
       window.__SIMULATION_MANIFEST_SENT__ = true;
-      try { parent.postMessage({ type: 'simulation_manifest', simulation_id: id, capabilities: { commands: commandes, config, globals: ['executeAICommand'], command_schema: config.command_schema || {}, state_schema: config.state_schema || {} }, page_text: texte }, '*'); } catch (_) { /* hors iframe */ }
+      const toutes = commandes.includes('highlight') ? commandes : commandes.concat(['highlight']);
+      const schema = { ...(config.command_schema || {}) };
+      if (Object.keys(REPERES).length) schema.highlight = { target: Object.keys(REPERES).join(' | ') };
+      try { parent.postMessage({ type: 'simulation_manifest', simulation_id: id, capabilities: { commands: toutes, config, globals: ['executeAICommand'], command_schema: schema, state_schema: config.state_schema || {}, reperes: listeReperes(), explication: EXPLICATION || undefined }, page_text: texte }, '*'); } catch (_) { /* hors iframe */ }
     };
     window.SIMULATION_CONFIG = config;
-    window.executeAICommand = (cmd, p = {}) => { if (!commandes.includes(cmd)) return; appuyer(cmd); executer(cmd, p || {}); };
+    window.executeAICommand = (cmd, p = {}) => {
+      p = p || {};
+      // Le professeur montre un repère du doigt : le kit l'entoure à la craie, le labo peut en faire plus.
+      const pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
+      if (!commandes.includes(cmd)) { if (pointage) noter('highlight', { target: cibleDe(p) }); return; }
+      if (!pointage) appuyer(cmd);
+      executer(cmd, p);
+    };
     window.addEventListener('message', (e) => {
       if (e.source !== parent) return; const d = e.data;
       if (d && d.type === 'simulation_control' && (!d.simulation_id || d.simulation_id === id)) window.executeAICommand(d.command, d.parameters || {});
     });
-    manifeste(); setTimeout(manifeste, 350);
+    // Les repères sont connus après le premier dessin : le manifeste est renvoyé une fois complet.
+    manifeste(); setTimeout(manifeste, 350); setTimeout(manifeste, 1800);
     return { noter, emettre, manifeste, actions };
   }
   /** Bulle de retour, écrite lettre par lettre (jaune ; rouge si erreur, verte si réussite). */
   function bulle(el, texte, kind = '') { if (kind) el.dataset.kind = kind; else delete el.dataset.kind; ecrire(el, texte); }
 
-  window.Tableau = { Craie, COULEURS, POLICE, ecrire, bouton, boutons, onglets, curseur, glisser, appuyer, protocole, bulle, fr, nombre, graine };
+  window.Tableau = { Craie, COULEURS, POLICE, ecrire, bouton, boutons, onglets, curseur, glisser, appuyer, protocole, bulle, fr, nombre, graine,
+    reperes, rectRepere, listeReperes, explication, surligner, REPERES };
 })();

@@ -1,8 +1,15 @@
 'use strict';
 // Contraction musculaire — sarcomère dessiné à la craie (kit shared/tableau/tableau.js).
-const CONFIG={id:'svt_ch1_contraction_actine_myosine',variants:[{id:'ca_atp',label:'Ca²⁺ et ATP'},{id:'sans_ca',label:'Sans Ca²⁺'},{id:'sans_atp',label:'Sans ATP'},{id:'sans_ca_atp',label:'Sans Ca²⁺ ni ATP'}],objectives:['Distinguer les rôles de Ca²⁺ et ATP et observer le glissement à longueur de filament constante.'],commands:['start','set_variant','set_parameters','reset','replay','next']};
+const CONFIG={id:'svt_ch1_contraction_actine_myosine',variants:[{id:'ca_atp',label:'Ca²⁺ et ATP'},{id:'sans_ca',label:'Sans Ca²⁺'},{id:'sans_atp',label:'Sans ATP'},{id:'sans_ca_atp',label:'Sans Ca²⁺ ni ATP'}],objectives:['Distinguer les rôles de Ca²⁺ et ATP et observer le glissement à longueur de filament constante.'],commands:['start','set_variant','set_parameters','reset','replay','next','highlight']};
 window.SIMULATION_CONFIG=CONFIG;
 const {Craie,ecrire,bulle,appuyer}=window.Tableau;
+// Script d'explication : le tuteur dit chaque phrase pendant que le professeur montre le repère du doigt.
+const EXPLICATION={
+ ca_atp:[{repere:'stries_z',texte:'Le sarcomère est limité par deux stries Z.'},{repere:'actine',texte:'Les filaments fins d’actine sont accrochés aux stries Z.'},{repere:'myosine',texte:'Au centre, le filament épais de myosine porte des têtes mobiles.'},{repere:'tropomyosine',texte:'Avec Ca²⁺, la tropomyosine se déplace et libère les sites de fixation de l’actine.'},{repere:'tetes_myosine',texte:'Les têtes s’accrochent, pivotent et tirent l’actine vers le centre ; un nouvel ATP les détache et son hydrolyse les réarme.'},{repere:'cote_zz',texte:'Les stries Z se rapprochent : le sarcomère raccourcit alors que chaque filament garde sa longueur.'}],
+ sans_ca:[{repere:'tropomyosine',texte:'Sans Ca²⁺, la tropomyosine masque les sites de fixation de l’actine.'},{repere:'tetes_myosine',texte:'Les têtes de myosine, même armées, ne peuvent pas s’accrocher.'},{repere:'cote_zz',texte:'Aucun glissement : la distance Z–Z ne change pas.'}],
+ sans_atp:[{repere:'tetes_myosine',texte:'Les têtes déjà armées s’accrochent à l’actine et tirent une fois…'},{repere:'myosine',texte:'…mais sans nouvel ATP, le pont actine–myosine ne peut pas se détacher.'},{repere:'cote_zz',texte:'Le cycle est bloqué : pas de contraction répétée, le muscle reste rigide.'}],
+ sans_ca_atp:[{repere:'tropomyosine',texte:'Sans Ca²⁺, les sites de l’actine restent masqués.'},{repere:'tetes_myosine',texte:'Et sans ATP, aucun pont formé ne pourrait se détacher.'},{repere:'cote_zz',texte:'Le sarcomère reste immobile.'}]};
+window.Tableau.explication(EXPLICATION);
 const S={calcium:true,atp:true,status:'idle',step:0,completed:new Set(),actions:[],timer:null,ouvert:performance.now(),marques:{},shift:0,shiftFrom:0,shiftTo:0,t0:0,dirty:true};
 const $=id=>document.getElementById(id);
 const steps=[['Prédis le résultat','Avec Ca²⁺ et ATP, les cycles peuvent se répéter. Que se passe-t-il si tu retires l’un des deux ?'],['Le calcium autorise la liaison','Le Ca²⁺ se fixe à la troponine. La tropomyosine se déplace : les sites de l’actine deviennent accessibles.'],['La myosine s’accroche','Une tête déjà armée, portant ADP et Pi, se lie à un site accessible de l’actine.'],['La tête pivote et tire l’actine','La libération de Pi accompagne le coup de force, puis l’ADP est libéré. Les stries Z se rapprochent ; les filaments gardent leur longueur.'],['Un nouvel ATP détache la tête','La fixation d’un nouvel ATP sur la myosine rompt le pont avec l’actine. Fixation et hydrolyse sont deux étapes différentes.'],['L’hydrolyse réarme la tête','ATP + H₂O → ADP + Pi. L’énergie libérée réarme la myosine. Un autre cycle devient possible si le Ca²⁺ reste disponible.']];
@@ -37,7 +44,7 @@ function setParameters(p){stop();if(typeof p.calcium_present==='boolean')S.calci
 function setVariant(id){const choices={ca_atp:[true,true],sans_ca:[false,true],sans_atp:[true,false],sans_ca_atp:[false,false]};if(choices[id])setParameters({calcium_present:choices[id][0],atp_present:choices[id][1]})}
 function reset(){stop();S.calcium=true;S.atp=true;S.step=0;S.status='idle';S.completed.clear();S.actions=[];S.ouvert=performance.now();S.marques={};action('reset');render();bulle($('feedback'),'Conditions initiales : Ca²⁺ et ATP disponibles.');emit()}
 $('calcium').onchange=e=>setParameters({calcium_present:e.target.checked});$('atp').onchange=e=>setParameters({atp_present:e.target.checked});$('run').onclick=start;$('next').onclick=next;$('reset').onclick=reset;
-window.executeAICommand=(command,p={})=>{appuyer(command);if(command==='start'||command==='replay')start();else if(command==='next')next();else if(command==='reset')reset();else if(command==='set_variant')setVariant(p.variant_id||p.variant);else if(command==='set_parameters')setParameters(p)};
+window.executeAICommand=(command,p={})=>{if(command==='highlight'){window.Tableau.surligner(p.target||p.repere||p.id);return}appuyer(command);if(command==='start'||command==='replay')start();else if(command==='next')next();else if(command==='reset')reset();else if(command==='set_variant')setVariant(p.variant_id||p.variant);else if(command==='set_parameters')setParameters(p)};
 window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='simulation_control'&&(!d.simulation_id||d.simulation_id===CONFIG.id))window.executeAICommand(d.command,d.parameters||{})});
 
 // ── Dessin à la craie (repère logique 900 × 350) ────────────────────────────
@@ -55,13 +62,16 @@ function draw(){
  craie.pause(.1);
  craie.ligne(270,190,630,190,{couleur:'bleu',largeur:16,alpha:.85});
  craie.texte('myosine',450,177,{couleur:'bleu',taille:13,align:'center'});
+ craie.repere('myosine',266,176,368,30,'filament de myosine').repere('tetes_myosine',322,132,256,116,'têtes de myosine').repere('centre',440,50,210,40,'centre du sarcomère');
  // Parties mobiles : stries Z, actine, têtes, tropomyosine, cote Z–Z
  craie.direct(()=>{
   for(const [side,sign] of [['g',1],['d',-1]]){
    const zx=side==='g'?110+sh:790-sh;
    craie.ligne(zx,95,zx,285,{couleur:'blanc',largeur:6});craie.texte('Z',zx,308,{taille:17,align:'center'});
+   craie.repere(side==='g'?'strie_z_gauche':'strie_z_droite',zx-14,90,28,230,side==='g'?'strie Z gauche':'strie Z droite');
    const ax=side==='g'?[zx,400+sh]:[zx,500-sh];
    craie.ligne(ax[0],140,ax[1],140,{couleur:'rose',largeur:9});craie.ligne(ax[0],240,ax[1],240,{couleur:'rose',largeur:9});
+   if(side==='g'){craie.repere('actine',ax[0]+10,128,ax[1]-ax[0]-10,124,'filaments d’actine');craie.repere('stries_z',zx-14,90,790-sh-zx+28,230,'les deux stries Z');craie.repere('tropomyosine',276+sh,118,124,24,'tropomyosine')}
    if(!(S.calcium&&S.step>=1)){ // tropomyosine masque les sites
     const mx=side==='g'?[280+sh,395+sh]:[505-sh,620-sh];
     craie.ligne(mx[0],130,mx[1],130,{couleur:'jaune',largeur:4,pointille:[12,9]});craie.ligne(mx[0],250,mx[1],250,{couleur:'jaune',largeur:4,pointille:[12,9]});
@@ -78,6 +88,7 @@ function draw(){
   else if(S.step===5){note='ATP + H₂O → ADP + Pi : tête réarmée';nc='vert'}
   if(note)craie.texte(note,450,275,{couleur:nc,taille:14,align:'center'});
   craie.cote(110+sh,328,790-sh,328,`distance Z–Z : ${Math.round((680-2*sh)/680*100)} % de la longueur initiale`,{couleur:'faible',largeur:1.6,taille:15,dessous:true});
+  craie.repere('cote_zz',110+sh,318,680-2*sh,40,'distance Z–Z');if(note)craie.repere('note',290,258,320,24,'ce qui se passe');
  });
  const complet=craie.fin();
  return complet&&k>=1;
@@ -85,4 +96,7 @@ function draw(){
 function frame(){if(S.dirty||S.status==='running')S.dirty=!draw();requestAnimationFrame(frame)}
 ecrire($('objectif'),'Change une condition, observe, puis explique. Modèle : têtes déjà armées au départ ; sans ATP, un pont formé reste fixé.',{vitesse:70});
 render();bulle($('feedback'),'Avec Ca²⁺ et ATP, les cycles peuvent se répéter. Et sans l’un des deux ?');requestAnimationFrame(frame);
-window.__SIMULATION_MANIFEST_SENT__=true;window.parent.postMessage({type:'simulation_manifest',simulation_id:CONFIG.id,capabilities:{commands:CONFIG.commands,config:CONFIG,controls:{calcium_present:{type:'boolean'},atp_present:{type:'boolean'}},state_schema:{cycle_step:'0..5',sarcomere_shortening:'boolean',scientific_interpretation:'conclusion'}},page_text:'Sarcomère dessiné au tableau : comparer quatre conditions Ca²⁺ / ATP, avancer pas à pas et observer les stries Z sans raccourcir les filaments.'},'*');emit();
+window.__SIMULATION_MANIFEST_SENT__=true;
+// Les repères pointables sont connus après le premier dessin : le manifeste est renvoyé une fois complet.
+function manifeste(){window.parent.postMessage({type:'simulation_manifest',simulation_id:CONFIG.id,capabilities:{commands:CONFIG.commands,config:CONFIG,controls:{calcium_present:{type:'boolean'},atp_present:{type:'boolean'}},command_schema:{highlight:{target:Object.keys(window.Tableau.listeReperes()).join(' | ')}},state_schema:{cycle_step:'0..5',sarcomere_shortening:'boolean',scientific_interpretation:'conclusion'},reperes:window.Tableau.listeReperes(),explication:EXPLICATION},page_text:'Sarcomère dessiné au tableau : comparer quatre conditions Ca²⁺ / ATP, avancer pas à pas et observer les stries Z sans raccourcir les filaments.'},'*')}
+manifeste();setTimeout(manifeste,1800);emit();

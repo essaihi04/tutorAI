@@ -14,8 +14,8 @@
   <header class="titre"><div><small>SVT · 2 BAC · exercice</small><h1 id="title"></h1><p class="objectif">Deux acquisitions EXAO : O₂ et CO₂ au cours du temps. Laquelle est une respiration, laquelle une fermentation ?</p></div></header>
   <section class="scene">
     <canvas id="canvas" role="img" aria-label="Courbe A : O₂ diminue et CO₂ augmente ; courbe B : O₂ reste nul et CO₂ augmente"></canvas>
-    <div class="panneau reponse" style="left:27%"><h3>Courbe A</h3><div class="choix" data-graph="A"><label><input type="radio" name="A" value="respiration"> respiration</label><label><input type="radio" name="A" value="fermentation"> fermentation</label></div></div>
-    <div class="panneau reponse" style="left:73%"><h3>Courbe B</h3><div class="choix" data-graph="B"><label><input type="radio" name="B" value="respiration"> respiration</label><label><input type="radio" name="B" value="fermentation"> fermentation</label></div></div>
+    <div class="panneau reponse" style="left:27%" data-professor-point="reponse_a" data-professor-label="ta réponse pour A"><h3>Courbe A</h3><div class="choix" data-graph="A"><label><input type="radio" name="A" value="respiration"> respiration</label><label><input type="radio" name="A" value="fermentation"> fermentation</label></div></div>
+    <div class="panneau reponse" style="left:73%" data-professor-point="reponse_b" data-professor-label="ta réponse pour B"><h3>Courbe B</h3><div class="choix" data-graph="B"><label><input type="radio" name="B" value="respiration"> respiration</label><label><input type="radio" name="B" value="fermentation"> fermentation</label></div></div>
   </section>
   <footer class="barre">
     <button class="craie-btn attention" id="check" data-professor-control="check">Vérifier</button>
@@ -25,19 +25,24 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script>
-  const { Craie, ecrire, bulle, appuyer } = window.Tableau;
-  window.SIMULATION_CONFIG={id:'lecture_exao_svt',variants:[{id:'exercise',label:'Interprétation EXAO'}],commands:['start','reset','check','set_variant']};
+  const { Craie, ecrire, bulle, appuyer, surligner, listeReperes, explication } = window.Tableau;
+  window.SIMULATION_CONFIG={id:'lecture_exao_svt',variants:[{id:'exercise',label:'Interprétation EXAO'}],commands:['start','reset','check','set_variant','highlight'],command_schema:{highlight:{target:'repère pointable (voir reperes)'}}};
+  // Script d'explication : une phrase par repère, dans l'ordre d'un professeur au tableau.
+  const EXPLICATION={exercise:[{repere:'courbe_a',texte:'Courbe A : regarde d’abord le dioxygène.'},{repere:'o2_a',texte:'L’O₂ diminue au cours du temps : il est consommé par les cellules.'},{repere:'co2_a',texte:'Le CO₂ augmente en même temps : O₂ consommé et CO₂ rejeté, c’est la respiration.'},{repere:'o2_b',texte:'Courbe B : l’O₂ reste nul, il n’y a pas de dioxygène disponible.'},{repere:'co2_b',texte:'Pourtant le CO₂ augmente : du glucose est dégradé sans O₂, c’est une fermentation.'}]};
+  explication(EXPLICATION);
   let selected={A:null,B:null},actions=[],verdict=null,verdictAt=null;const $=id=>document.getElementById(id),S={ouvert:performance.now(),dirty:true};const scene=()=>(performance.now()-S.ouvert)/1000;
   ecrire($('title'),'Associe chaque courbe à la bonne voie');
   document.querySelectorAll('.choix').forEach(g=>g.addEventListener('change',e=>{selected[g.dataset.graph]=e.target.value;actions.push('choose_'+g.dataset.graph+'_'+e.target.value);verdict=null;S.dirty=true}));
   function submit(){const correct=selected.A==='respiration'&&selected.B==='fermentation';verdict=correct;verdictAt=scene();S.dirty=true;bulle($('feedback'),correct?'✓ Bonne interprétation':'↺ Regarde surtout l’évolution de O₂',correct?'good':'bad');actions.push(correct?'correct':'incorrect');window.parent.postMessage({type:'simulation_state',simulation_id:'lecture_exao_svt',student_actions:actions,current_state:{simulation_status:'finished',correct,answers:selected,skill:'interpreter_courbes_exao'},objective_progress:correct?1:0.35,timestamp:Date.now()},'*')}
   function reset(){selected={A:null,B:null};verdict=null;actions.push('reset');document.querySelectorAll('.choix input').forEach(i=>i.checked=false);bulle($('feedback'),'');S.ouvert=performance.now();S.dirty=true}
-  window.runVariant=reset;window.executeAICommand=(command)=>{appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;
+  window.runVariant=reset;window.executeAICommand=(command,p={})=>{if(command==='highlight'){surligner(p.target);return}appuyer(command);if(command==='reset'||command==='start'||command==='set_variant')reset();else if(command==='check')submit()};$('check').onclick=submit;$('reset').onclick=reset;
   addEventListener('message',e=>{const d=e.data;if(d?.type==='simulation_control'&&(!d.simulation_id||d.simulation_id==='lecture_exao_svt'))window.executeAICommand(d.command,d.parameters||{})});
-  window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'lecture_exao_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,globals:['executeAICommand','runVariant']},page_text:'Exercice au tableau : associer deux courbes EXAO (O₂, CO₂) à la respiration et à la fermentation.'},'*');
+  const manifeste=()=>{window.__SIMULATION_MANIFEST_SENT__=true;parent.postMessage({type:'simulation_manifest',simulation_id:'lecture_exao_svt',capabilities:{commands:SIMULATION_CONFIG.commands,config:SIMULATION_CONFIG,command_schema:SIMULATION_CONFIG.command_schema,globals:['executeAICommand','runVariant'],reperes:listeReperes(),explication:EXPLICATION},page_text:'Exercice au tableau : associer deux courbes EXAO (O₂, CO₂) à la respiration et à la fermentation.'},'*')};
+  manifeste();setTimeout(manifeste,2000);
 
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:()=>{S.dirty=true}});
-  function graphe(x0,titre,o2,co2){const y0=250,y1=60,w=300;
+  function graphe(x0,titre,o2,co2){const y0=250,y1=60,w=300;const k=titre.endsWith('A')?'a':'b';
+    craie.repere('courbe_'+k,x0-14,28,w+34,246,'courbe '+titre.slice(-1)).repere('o2_'+k,x0+w-70,y0-o2(1)*170-26,76,32,'O₂ de la courbe '+titre.slice(-1)).repere('co2_'+k,x0+w-70,y0-co2(1)*170-26,76,32,'CO₂ de la courbe '+titre.slice(-1));
     craie.texte(titre,x0+w/2,45,{couleur:'jaune',taille:18,align:'center'});
     craie.axe(x0,y0,x0+w+10,y0,[],{}).axe(x0,y0,x0,y1-10,[],{}).texte('temps',x0+w,y0+22,{couleur:'faible',taille:13,align:'right'}).texte('concentration',x0+6,y1-14,{couleur:'faible',taille:13});
     [1,2,3].forEach(i=>craie.ligne(x0,y0-i*47,x0+w,y0-i*47,{couleur:'tresfaible',largeur:1,tremble:0}));
@@ -47,7 +52,7 @@
   function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(4,scene());const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);
     graphe(50,'Courbe A',u=>.92-.72*(1-Math.exp(-2.2*u))/(1-Math.exp(-2.2)),u=>.08+.8*(1-Math.exp(-2*u))/(1-Math.exp(-2)));
     graphe(410,'Courbe B',u=>.03,u=>.1+.78*(1-Math.exp(-2*u))/(1-Math.exp(-2)));
-    if(verdict!=null){craie.depuis(verdictAt);craie.texte(verdict?'A : O₂ consommé → respiration ; B : O₂ nul → fermentation':'Observe O₂ : consommé en A, nul en B',380,300,{couleur:verdict?'vert':'rouge',taille:16,align:'center',max:700})}
+    if(verdict!=null){craie.repere('verdict',40,280,680,30,'verdict');craie.depuis(verdictAt);craie.texte(verdict?'A : O₂ consommé → respiration ; B : O₂ nul → fermentation':'Observe O₂ : consommé en A, nul en B',380,300,{couleur:verdict?'vert':'rouge',taille:16,align:'center',max:700})}
     return craie.fin()}
   function frame(){if(S.dirty)S.dirty=!draw();requestAnimationFrame(frame)}requestAnimationFrame(frame);
 </script>
