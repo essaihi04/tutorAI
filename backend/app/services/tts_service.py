@@ -334,6 +334,15 @@ _ACADEMY_COOLDOWN_SECONDS = 120.0   # le temps qu'un Colab tombé redémarre
 # Le GPU Colab traite UN job à la fois : sérialiser les appels évite que les
 # segments lancés en parallèle expirent tous dans la file d'attente.
 _ACADEMY_SEM = asyncio.Semaphore(1)
+# Le kernel Kaggle a deux cartes et sa propre file, qui sert les phrases dans
+# l'ordre d'arrivée : à un seul appel à la fois, une lecture longue du tableau
+# (15 s) retardait d'autant le premier son de la réponse du chat.
+_KAGGLE_SEM = asyncio.Semaphore(2)
+
+
+def _academy_sem() -> asyncio.Semaphore:
+    from app.services.kaggle_tts import pilote
+    return _KAGGLE_SEM if pilote.cible() else _ACADEMY_SEM
 
 # Un 500 isolé arrive quand le GPU vient d'enchaîner un autre job : ce n'est
 # PAS une panne. On ne coupe le provider qu'après plusieurs échecs d'affilée,
@@ -475,7 +484,7 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
         headers["Authorization"] = f"Bearer {jeton}"
 
     try:
-        async with _ACADEMY_SEM:
+        async with _academy_sem():
             t0 = time.time()
             # Une tentative, puis UN essai de rattrapage : le GPU renvoie
             # parfois un 500 quand il vient juste de finir un autre segment.
@@ -634,6 +643,8 @@ async def stream_academy_pcm(text: str, lang: str):
     d'un repli — le flux s'arrête simplement plus court, comme le prévoit le
     contrat du serveur.
     """
+    from app.services.kaggle_tts import pilote
+    await pilote.attendre_si_presque_pret()
     if not settings.academy_tts_stream or not _academy_is_available():
         return
     base, jeton = _academy_cible()
@@ -680,7 +691,7 @@ async def stream_academy_pcm(text: str, lang: str):
     try:
         # Le GPU ne traite qu'une synthèse à la fois : deux flux simultanés se
         # hacheraient mutuellement. Le sémaphore est le même que pour /tts.
-        async with _ACADEMY_SEM:
+        async with _academy_sem():
             timeout = httpx.Timeout(300.0, connect=15.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 async with client.stream(
@@ -1296,6 +1307,8 @@ async def stream_synthesize_segments(text: str, language: str = "fr"):
     Perceived latency: ≈ time-to-first-segment (not total) ≈ 2-3 s instead
     of the 10-15 s it used to take when waiting for the whole response.
     """
+    from app.services.kaggle_tts import pilote
+    await pilote.attendre_si_presque_pret()
     if settings.tts_disabled:
         return
     cleaned = clean_for_tts(text)
@@ -1368,6 +1381,8 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     Main entry point. Always returns server-synthesized audio bytes
     (Academy, Gradio ou Google Cloud) — jamais la synthèse du navigateur.
     """
+    from app.services.kaggle_tts import pilote
+    await pilote.attendre_si_presque_pret()
     if settings.tts_disabled:
         return TTSResult(audio_b64=None, mime="", provider="disabled", use_browser=False)
 

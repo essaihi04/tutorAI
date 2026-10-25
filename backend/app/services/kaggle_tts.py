@@ -169,6 +169,17 @@ class PiloteKaggle:
             return
         self._tache = boucle.create_task(self._lancer(raison))
 
+    async def attendre_si_presque_pret(self, max_s: float = 60.0):
+        """Le kernel démarre depuis plus de 90 s (prêt vers 145 s) : mieux vaut
+        que la réplique en cours attende quelques secondes la voix du prof que
+        de partir dans le vide. Plus tôt, on n'attend pas : l'écart serait trop long."""
+        if not actif() or self.etat != "demarrage" or time.time() - self.depuis < 90:
+            return
+        fin = time.time() + max_s
+        while self.etat == "demarrage" and time.time() < fin:
+            await asyncio.sleep(1.0)
+            self._verifier_delais(time.time())
+
     def signaler_injoignable(self, url: str):
         """Le tunnel ne répond plus (502/530, HTML…) : le kernel est parti."""
         if self.etat == "pret" and url and url.rstrip("/") == self.url.rstrip("/"):

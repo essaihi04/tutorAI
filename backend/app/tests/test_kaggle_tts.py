@@ -145,3 +145,24 @@ def test_tts_service_suit_le_kernel(tmp_path, actif, monkeypatch):
                                     "url": "https://h.trycloudflare.com", "jeton": "j"}))
     assert tts_service._academy_cible() == ("https://h.trycloudflare.com", "j")
     assert "kaggle-v3-amine" in tts_service._reglages_signature("academy")
+
+
+def test_attente_courte_si_presque_pret(tmp_path, actif, monkeypatch):
+    p = _pilote(tmp_path)
+    _reveiller(p)
+    # Démarrage récent : pas d'attente.
+    t = time.time()
+    asyncio.run(p.attendre_si_presque_pret(max_s=5))
+    assert time.time() - t < 0.5
+    # Presque prêt : on attend l'annonce.
+    p.depuis = time.time() - 120
+
+    async def scenario():
+        async def annonce():
+            await asyncio.sleep(1.2)
+            await p.recevoir_annonce({"etat": "pret", "cle": p.cle, "lancement": p.lancement,
+                                      "url": "https://h.trycloudflare.com", "jeton": "j"})
+        asyncio.create_task(annonce())
+        await p.attendre_si_presque_pret(max_s=10)
+    asyncio.run(scenario())
+    assert p.cible() == ("https://h.trycloudflare.com", "j")
