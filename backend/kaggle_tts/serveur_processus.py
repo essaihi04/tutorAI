@@ -157,6 +157,21 @@ def ouvrir_tunnel():
 threading.Thread(target=ouvrir_tunnel, daemon=True).start()
 annoncer("demarrage")
 
+# Garde-fou du quota : quoi qu'il arrive au démarrage (installation figée,
+# processus de carte mort sans prévenir…), un kernel qui n'est pas prêt en
+# 15 minutes s'éteint au lieu de tourner jusqu'à la limite de Kaggle.
+PRET = threading.Event()
+
+
+def garde_fou():
+    if not PRET.wait(900):
+        say("pas prêt en 15 min — extinction")
+        annoncer("eteint", raison="démarrage trop long")
+        os._exit(1)
+
+
+threading.Thread(target=garde_fou, daemon=True).start()
+
 
 # ── 2. Dépendances ──
 PAQUETS = ("'transformers==4.57.6' 'tokenizers==0.22.1' 'accelerate==1.12.0' 'huggingface-hub==0.36.0' "
@@ -222,8 +237,11 @@ import multiprocessing as mp  # noqa: E402
 # La génération avance jeton par jeton dans une boucle Python : avec deux fils
 # dans un même processus, les deux cartes se disputaient le verrou de
 # l'interpréteur et chacune ralentissait (banc fp16 : ×1,8 au lieu de ×1,0).
-# Deux processus forkés — avant toute initialisation CUDA ici — calculent
-# vraiment en parallèle. Le processus principal ne fait que le HTTP.
+# Deux processus calculent vraiment en parallèle. Le processus principal ne
+# fait que le HTTP.
+MODULE_TRAVAILLEUR = r'''"""Processus d'une carte T4 (lancé en « spawn » par serveur.py)."""
+import re
+
 AR = re.compile("[؀-ۿ]")
 IMPORTANT = re.compile(
     r"\b(donc|retiens|retenez|c'est-à-dire|autrement dit|attention|important|essentiel|définition|on appelle|"
@@ -266,9 +284,12 @@ def nettoyer(w, sr):
     return w
 
 
-def travailleur(k, entree, sortie):
+def travailleur(k, entree, sortie, conf):
     """Processus d'une carte : charge le modèle, puis synthétise ce qu'on lui donne."""
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(k)
+    import os, sys
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(k)   # avant tout import de torch
+    sys.path[:0] = [p for p in conf["chemins"] if p not in sys.path]
+    BASE, T3, REF = conf["base"], conf["t3"], conf["ref"]
     try:
         import numpy as np
         import torch
@@ -286,7 +307,7 @@ def travailleur(k, entree, sortie):
         # La voix d'Amine n'est analysée qu'une fois : sinon chaque phrase
         # recalculerait l'empreinte de la référence (~0,3 s perdues).
         m.prepare_conditionals(REF, exaggeration=STYLES["normal"]["ex"])
-        demi = bool(CONF.get("fp16"))
+        demi = bool(conf.get("fp16"))
 
         def generer(texte, lg, st):
             with torch.inference_mode():
@@ -323,23 +344,42 @@ def travailleur(k, entree, sortie):
         sortie.put(("fait", tid, pcm))
 
 
-# Imports complets AVANT le fork : transformers charge ses modèles
-# paresseusement, et un enfant forké au milieu de ce chargement ne trouvait
-# plus « LlamaModel ». Importer n'initialise pas CUDA ; les deux enfants
-# héritent des modules déjà chargés.
-import torch  # noqa: E402,F401
-from transformers import LlamaModel, LlamaConfig  # noqa: E402,F401
-from chatterbox.mtl_tts import ChatterboxMultilingualTTS  # noqa: E402,F401
-assert not torch.cuda.is_initialized(), "CUDA initialisé avant le fork"
-r = subprocess.run("nvidia-smi -L", shell=True, capture_output=True, text=True)   # sans initialiser CUDA ici
+'''
+
+
+# Un processus NEUF par carte (« spawn ») : `import chatterbox` initialise
+# CUDA dès le chargement, ce qui interdit de forker après lui. Le code des
+# processus vit dans un module écrit sur disque, que chacun importe seul.
+with open(f"{WORK}/travailleur_tts.py", "w", encoding="utf-8") as f:
+    f.write(MODULE_TRAVAILLEUR)
+sys.path.insert(0, WORK)
+from travailleur_tts import travailleur  # noqa: E402
+r = subprocess.run("nvidia-smi -L", shell=True, capture_output=True, text=True)
 N = max(1, min(2, r.stdout.count("GPU ")))
-ctx = mp.get_context("fork")
+ctx = mp.get_context("spawn")
+# Un enfant « spawn » réimporte le script principal s'il le trouve sur disque :
+# il relançait alors tout le serveur (tunnel, chargement…) et mourait sur
+# « RuntimeError: … bootstrapping phase ». Sans chemin, il n'importe que
+# travailleur_tts, ce qui est tout ce dont il a besoin.
+import __main__  # noqa: E402
+for attr in ("__file__",):
+    if hasattr(__main__, attr):
+        delattr(__main__, attr)
+__main__.__spec__ = None
 ENTREE, SORTIE = ctx.Queue(), ctx.Queue()
+CONF_TRAVAIL = {"chemins": [p for p in sys.path if p], "base": BASE, "t3": T3, "ref": REF,
+                "fp16": bool(CONF.get("fp16"))}
 for k in range(N):
-    ctx.Process(target=travailleur, args=(k, ENTREE, SORTIE), daemon=True).start()
+    ctx.Process(target=travailleur, args=(k, ENTREE, SORTIE, CONF_TRAVAIL), daemon=True).start()
 CARTES, SR = [], 24000
 for _ in range(N):
-    etat, k, info = SORTIE.get()
+    # Jamais d'attente sans fin : un enfant mort sans message laissait le
+    # kernel tourner (et consommer le quota) jusqu'à sa limite de 3 h.
+    try:
+        etat, k, info = SORTIE.get(timeout=600)
+    except Exception:
+        say("aucune carte n'a répondu en 10 min")
+        break
     if etat == "pret":
         CARTES.append(k)
         SR = info
@@ -348,7 +388,7 @@ for _ in range(N):
         say(f"gpu{k} ÉCHEC", info)
 if not CARTES:
     annoncer("eteint", raison="aucun modèle chargé")
-    raise SystemExit("aucun modèle chargé")
+    os._exit(1)
 MODELES = CARTES
 
 # File d'attente commune : chaque carte prend le morceau suivant dès qu'elle
@@ -536,9 +576,10 @@ for _ in range(120):            # le tunnel est presque toujours prêt avant les
     time.sleep(0.5)
 if not URL["v"]:
     annoncer("eteint", raison="tunnel non établi")
-    raise SystemExit("tunnel non établi")
+    os._exit(1)
 time.sleep(1.0)                 # laisser uvicorn ouvrir son port
 ACTIVITE["derniere"] = time.time()
+PRET.set()
 annoncer("pret", url=URL["v"], jeton=CONF["jeton"], gpus=len(MODELES), demarrage_s=round(time.time() - T0, 1))
 say(f"prêt en {time.time() - T0:.0f} s sur {len(MODELES)} carte(s)")
 

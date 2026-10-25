@@ -24,6 +24,7 @@ def actif(monkeypatch):
     async def sante_ok(url, jeton):
         return True
     monkeypatch.setattr(kaggle_tts, "_sante", sante_ok)
+    monkeypatch.setattr(kaggle_tts, "kaggle_cli", lambda *a, **k: 'has status "KernelWorkerStatus.COMPLETE"')
     return pousses
 
 
@@ -193,3 +194,25 @@ def test_replique_muette_rattrapee(tmp_path, actif, monkeypatch):
         await asyncio.sleep(1.5)
     asyncio.run(scenario())
     assert dites == ["Bonjour, on commence."]
+
+
+def test_kernel_cru_eteint_mais_vivant_est_repris(tmp_path, actif):
+    """Après un redémarrage du backend, la veille estimée peut déclarer éteint
+    un kernel qui tourne encore : on le reprend au lieu d'en pousser un autre."""
+    p = _pilote(tmp_path)
+    _reveiller(p)
+    asyncio.run(p.recevoir_annonce({"etat": "pret", "cle": p.cle, "lancement": p.lancement,
+                                    "url": "https://h.trycloudflare.com", "jeton": "j"}))
+    cle = p.cle
+    p.derniere_parole = p.depuis = time.time() - 3600       # « silence » d'une heure
+    assert p.cible() is None and p.etat == "eteint"
+    p.dernier_echec = 0
+    _reveiller(p)
+    assert p.etat == "pret" and len(actif) == 1 and p.cle == cle
+
+
+def test_session_kaggle_encore_en_cours(tmp_path, actif, monkeypatch):
+    monkeypatch.setattr(kaggle_tts, "kaggle_cli", lambda *a, **k: 'has status "KernelWorkerStatus.RUNNING"')
+    p = _pilote(tmp_path)
+    _reveiller(p)
+    assert p.etat == "eteint" and not actif

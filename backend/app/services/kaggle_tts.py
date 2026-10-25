@@ -93,7 +93,7 @@ class PiloteKaggle:
             d = json.loads(self.chemin.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
-        for k in ("etat", "url", "jeton", "cle", "lancement", "depuis", "sessions"):
+        for k in ("etat", "url", "jeton", "cle", "lancement", "depuis", "sessions", "derniere_parole"):
             if k in d:
                 setattr(self, k, d[k])
 
@@ -102,7 +102,7 @@ class PiloteKaggle:
             self.chemin.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.chemin.with_suffix(".tmp")
             tmp.write_text(json.dumps({k: getattr(self, k) for k in
-                                       ("etat", "url", "jeton", "cle", "lancement", "depuis", "sessions")}),
+                                       ("etat", "url", "jeton", "cle", "lancement", "depuis", "sessions", "derniere_parole")}),
                            encoding="utf-8")
             os.replace(tmp, self.chemin)
         except OSError as e:
@@ -111,7 +111,9 @@ class PiloteKaggle:
     def _passer(self, etat: str, maintenant: float):
         self.etat, self.depuis = etat, maintenant
         if etat == "eteint":
-            self.url = self.jeton = ""
+            # L'adresse est GARDÉE : avant tout nouveau lancement on vérifie
+            # qu'elle ne répond vraiment plus (cf. _lancer). `cible()` ne la
+            # rend de toute façon qu'à l'état « pret ».
             if self.sessions and self.sessions[-1][1] == 0:
                 self.sessions[-1][1] = maintenant
         self._sauver()
@@ -247,6 +249,29 @@ class PiloteKaggle:
 
     # ── lancement ──
     async def _lancer(self, raison: str):
+        # Le kernel est peut-être encore vivant alors qu'on le croyait éteint
+        # (redémarrage du backend, horloge de veille approximative). Pousser
+        # une nouvelle version changeait alors les clés : l'ancien kernel se
+        # faisait refuser ses annonces et le nouveau ne démarrait jamais —
+        # plus de voix du tout.
+        if self.url and self.jeton and await _sante(self.url, self.jeton):
+            log.info("[KaggleTTS] kernel toujours vivant : %s, on le reprend", self.url)
+            self.derniere_parole = time.time()
+            self._passer("pret", time.time())
+            import app.services.tts_service as voix
+            voix.reinitialiser_disjoncteur_academy()
+            return
+        try:
+            statut = await asyncio.to_thread(
+                kaggle_cli, "kernels", "status", f"{settings.kaggle_username}/{settings.kaggle_tts_kernel}",
+                timeout=30)
+        except Exception as e:
+            statut = str(e)
+        if "RUNNING" in statut or "QUEUED" in statut:
+            log.warning("[KaggleTTS] une session tourne encore sur Kaggle sans répondre — pas de "
+                        "nouveau lancement, nouvel essai dans 1 min")
+            self.dernier_echec = time.time() - PAUSE_APRES_ECHEC_S + 60
+            return
         maintenant = time.time()
         self.cle = secrets.token_urlsafe(24)
         self.lancement = secrets.token_hex(6)

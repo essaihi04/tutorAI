@@ -156,6 +156,21 @@ def ouvrir_tunnel():
 threading.Thread(target=ouvrir_tunnel, daemon=True).start()
 annoncer("demarrage")
 
+# Garde-fou du quota : quoi qu'il arrive au démarrage (installation figée,
+# processus de carte mort sans prévenir…), un kernel qui n'est pas prêt en
+# 15 minutes s'éteint au lieu de tourner jusqu'à la limite de Kaggle.
+PRET = threading.Event()
+
+
+def garde_fou():
+    if not PRET.wait(900):
+        say("pas prêt en 15 min — extinction")
+        annoncer("eteint", raison="démarrage trop long")
+        os._exit(1)
+
+
+threading.Thread(target=garde_fou, daemon=True).start()
+
 
 # ── 2. Dépendances ──
 PAQUETS = ("'transformers==4.57.6' 'tokenizers==0.22.1' 'accelerate==1.12.0' 'huggingface-hub==0.36.0' "
@@ -275,7 +290,7 @@ for f in fils:
     f.join()
 if not MODELES:
     annoncer("eteint", raison="aucun modèle chargé")
-    raise SystemExit("aucun modèle chargé")
+    os._exit(1)
 SR = next(iter(MODELES.values())).sr
 
 
@@ -481,9 +496,10 @@ for _ in range(120):            # le tunnel est presque toujours prêt avant les
     time.sleep(0.5)
 if not URL["v"]:
     annoncer("eteint", raison="tunnel non établi")
-    raise SystemExit("tunnel non établi")
+    os._exit(1)
 time.sleep(1.0)                 # laisser uvicorn ouvrir son port
 ACTIVITE["derniere"] = time.time()
+PRET.set()
 annoncer("pret", url=URL["v"], jeton=CONF["jeton"], gpus=len(MODELES), demarrage_s=round(time.time() - T0, 1))
 say(f"prêt en {time.time() - T0:.0f} s sur {len(MODELES)} carte(s)")
 
