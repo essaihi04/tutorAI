@@ -7,6 +7,7 @@ import re
 import unicodedata
 import base64
 import asyncio
+import time
 import sys
 from typing import Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
@@ -2144,6 +2145,7 @@ class SessionHandler:
             pilote.besoin_de_voix("ouverture de séance")
             await self._init_session(message)
         elif msg_type == "text_input":
+            self._derniere_entree_eleve = time.time()
             student_text = message.get("text", "")
             exam_context = message.get("exam_context", False)
             exam_question_number = message.get("exam_question_number")
@@ -3317,6 +3319,8 @@ RÈGLES:
             return
 
         lang = self._speech_language_for_tts()
+        self._repliques_dites = getattr(self, "_repliques_dites", 0) + 1
+        tour = self._repliques_dites
 
         try:
             await self.websocket.send_json({"type": "processing", "stage": "tts"})
@@ -3383,6 +3387,35 @@ RÈGLES:
 
         if not envoyes:
             _safe_log("[TTS] No segments produced (empty or all failed)")
+            self._rattraper_replique_muette(ai_response, tour)
+
+    # Une réplique restée muette pendant que la voix Kaggle démarre est dite
+    # quand elle arrive — si rien ne s'est passé entre-temps et qu'elle n'a pas
+    # plus de 3 minutes. Sinon elle reste écrite à l'écran, sans voix.
+    _RATTRAPAGE_MAX_S = 180
+
+    def _rattraper_replique_muette(self, texte: str, tour: int):
+        from app.services.kaggle_tts import pilote
+        if pilote.etat != "demarrage":
+            return
+        emise = time.time()
+
+        async def plus_tard():
+            if not await pilote.attendre_pret(self._RATTRAPAGE_MAX_S):
+                return
+            if getattr(self, "_repliques_dites", 0) != tour:
+                return                      # le prof a déjà dit autre chose
+            if getattr(self, "_derniere_entree_eleve", 0) > emise:
+                return                      # l'élève est passé à autre chose
+            if time.time() - emise > self._RATTRAPAGE_MAX_S:
+                return
+            _safe_log(f"[TTS] rattrapage de la réplique muette ({time.time() - emise:.0f} s plus tard)")
+            try:
+                await self.generate_and_send_audio_chunks(texte)
+            except Exception as e:
+                _safe_log(f"[TTS] rattrapage échoué : {e}")
+
+        asyncio.create_task(plus_tard())
 
     # Longueurs de l'ouverture prononcée pendant que le LLM écrit encore.
     # En dessous de 30 caractères la phrase ne porte aucun sens ; au-delà de

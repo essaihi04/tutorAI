@@ -180,6 +180,14 @@ class PiloteKaggle:
             await asyncio.sleep(1.0)
             self._verifier_delais(time.time())
 
+    async def attendre_pret(self, max_s: float) -> bool:
+        """Attend la fin d'un démarrage en cours ; vrai si la voix est prête."""
+        fin = time.time() + max_s
+        while self.etat == "demarrage" and time.time() < fin:
+            await asyncio.sleep(1.0)
+            self._verifier_delais(time.time())
+        return self.cible() is not None
+
     def signaler_injoignable(self, url: str):
         """Le tunnel ne répond plus (502/530, HTML…) : le kernel est parti."""
         if self.etat == "pret" and url and url.rstrip("/") == self.url.rstrip("/"):

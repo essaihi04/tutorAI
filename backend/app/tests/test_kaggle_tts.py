@@ -166,3 +166,30 @@ def test_attente_courte_si_presque_pret(tmp_path, actif, monkeypatch):
         await p.attendre_si_presque_pret(max_s=10)
     asyncio.run(scenario())
     assert p.cible() == ("https://h.trycloudflare.com", "j")
+
+
+def test_replique_muette_rattrapee(tmp_path, actif, monkeypatch):
+    from app.websockets import session_handler as sh_mod
+    p = _pilote(tmp_path)
+    monkeypatch.setattr(kaggle_tts, "pilote", p)
+    _reveiller(p)
+    dites = []
+
+    class H:
+        _RATTRAPAGE_MAX_S = 30
+        _rattraper_replique_muette = sh_mod.SessionHandler._rattraper_replique_muette
+
+        async def generate_and_send_audio_chunks(self, texte):
+            dites.append(texte)
+
+    h = H()
+    h._repliques_dites = 1
+
+    async def scenario():
+        h._rattraper_replique_muette("Bonjour, on commence.", 1)
+        await asyncio.sleep(0.2)
+        await p.recevoir_annonce({"etat": "pret", "cle": p.cle, "lancement": p.lancement,
+                                  "url": "https://h.trycloudflare.com", "jeton": "j"})
+        await asyncio.sleep(1.5)
+    asyncio.run(scenario())
+    assert dites == ["Bonjour, on commence."]

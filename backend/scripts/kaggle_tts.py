@@ -4,6 +4,7 @@
     python -m scripts.kaggle_tts statut   # état des kernels socle / direct sur Kaggle
     python -m scripts.kaggle_tts journal  # dernières lignes du kernel direct
     python -m scripts.kaggle_tts essai    # réveil réel + mesures (démarrage, premier son, vitesse)
+    python -m scripts.kaggle_tts banc     # banc fp32 / fp16 (kernel séparé, ~15 min GPU)
 
 Le kernel direct n'est jamais lancé à la main : le backend le pousse quand une
 séance s'ouvre (app/services/kaggle_tts.py). Identifiants : KAGGLE_USERNAME et
@@ -135,6 +136,26 @@ def essai():
     print("\nLe kernel s'éteindra seul après", settings.kaggle_tts_veille_s, "s sans parler.")
 
 
+def banc():
+    import base64
+    d = Path(tempfile.mkdtemp(prefix="banc_"))
+    try:
+        ref = base64.b64encode((DOSSIER_KERNEL / "reference_amine.flac").read_bytes()).decode()
+        source = (DOSSIER_KERNEL / "banc_fp16.py").read_text(encoding="utf-8")
+        source = source.replace('"__REF_B64__"', repr(ref), 1).replace('"__MODELE__"', repr(settings.kaggle_tts_modele), 1)
+        (d / "banc.py").write_text(source, encoding="utf-8")
+        u = settings.kaggle_username
+        meta = {"id": f"{u}/academy-tts-banc-fp16", "title": "academy-tts-banc-fp16", "code_file": "banc.py",
+                "language": "python", "kernel_type": "script", "is_private": True, "enable_gpu": True,
+                "enable_internet": True, "machine_shape": "NvidiaTeslaT4", "dataset_sources": [],
+                "competition_sources": [],
+                "kernel_sources": [f"{u}/{settings.kaggle_tts_modele}", f"{u}/{SOCLE}"]}
+        (d / "kernel-metadata.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+        print(kaggle_cli("kernels", "push", "-p", str(d), "-t", "2400"))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
-    {"socle": socle, "statut": statut, "journal": journal, "essai": essai}.get(sys.argv[1] if len(sys.argv) > 1 else "",
+    {"socle": socle, "statut": statut, "journal": journal, "essai": essai, "banc": banc}.get(sys.argv[1] if len(sys.argv) > 1 else "",
                                                                lambda: print(__doc__))()
