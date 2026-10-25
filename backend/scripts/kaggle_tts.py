@@ -22,6 +22,7 @@ from app.services.kaggle_tts import DOSSIER_KERNEL, kaggle_cli
 settings = get_settings()
 
 SOCLE = "academy-tts-socle"
+ESSAI = "academy-tts-essai"
 
 
 def socle():
@@ -84,14 +85,16 @@ def essai():
     from app.services.kaggle_tts import pousser_kernel
     jeton = secrets.token_urlsafe(24)
     t0 = time.time()
-    print(pousser_kernel(secrets.token_urlsafe(24), "essai", jeton).splitlines()[-1])
+    # Kernel à part : pousser une nouvelle version de academy-tts-direct
+    # couperait la voix d'une séance en cours.
+    print(pousser_kernel(secrets.token_urlsafe(24), "essai", jeton, kernel=ESSAI).splitlines()[-1])
     print(f"poussé en {time.time() - t0:.1f} s ; suivi du journal…")
     env = {**__import__("os").environ, "KAGGLE_USERNAME": settings.kaggle_username,
            "KAGGLE_API_TOKEN": settings.kaggle_api_token}
     url, etapes = None, {}
     while not etapes.get("pret") and time.time() - t0 < 900:
         p = subprocess.Popen([sys.executable, "-m", "kaggle", "kernels", "logs", "-f",
-                              f"{settings.kaggle_username}/{settings.kaggle_tts_kernel}"],
+                              f"{settings.kaggle_username}/{ESSAI}"],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
                              encoding="utf-8", errors="replace")
         for ligne in p.stdout:

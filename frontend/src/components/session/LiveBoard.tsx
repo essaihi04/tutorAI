@@ -1470,8 +1470,16 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     replyBaselineRef.current = typeof assistantReply === 'string' ? assistantReply : null;
     setAwaitingReply(true);
     setQuestionText('');
+    // Le cours est en pause et l'élève attend la réponse du professeur : le
+    // tableau rend la parole, sinon la voix de cette réponse (portée par le
+    // chat) était jetée à l'arrivée et la réponse restait muette. Le tableau
+    // la reprend au premier son quand le cours repart.
+    voiceHandleRef.current?.stop();
+    voiceHandleRef.current = null;
+    boardVoice.stop();
+    rendreLaParole();
     onStudentMessage(text);
-  }, [onStudentMessage, assistantReply]);
+  }, [onStudentMessage, assistantReply, rendreLaParole]);
 
   const openAsk = useCallback(() => {
     setPlaying(false); // le professeur s'interrompt et écoute

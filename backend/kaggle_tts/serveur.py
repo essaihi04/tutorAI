@@ -420,6 +420,15 @@ def health():
             "veille_s": CONF["veille_s"], "inactif_s": round(time.time() - ACTIVITE["derniere"])}
 
 
+@app.post("/garder")
+def garder(authorization: str = Header(None)):
+    """L'élève travaille (il écrit, il répond) : la séance est vivante même
+    si le prof se tait. Repousse la veille sans rien calculer."""
+    verifier(authorization)
+    ACTIVITE["derniere"] = time.time()
+    return {"ok": True}
+
+
 @app.get("/voices")
 def voices():
     return ["amine"]

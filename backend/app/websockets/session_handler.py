@@ -2146,6 +2146,8 @@ class SessionHandler:
             await self._init_session(message)
         elif msg_type == "text_input":
             self._derniere_entree_eleve = time.time()
+            from app.services.kaggle_tts import pilote
+            pilote.eleve_actif()
             student_text = message.get("text", "")
             exam_context = message.get("exam_context", False)
             exam_question_number = message.get("exam_question_number")

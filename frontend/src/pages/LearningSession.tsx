@@ -1200,6 +1200,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
     wsService.on('audio_chunk', (data) => {
       if (tableauParleRef.current) {
+        console.log('[Audio] Tableau en cours de lecture — morceau vocal du chat écarté');
         setProcessing(false);
         return;   // le tableau a la parole
       }
@@ -1253,6 +1254,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     // c'est ce même enchaînement qui produisait les bugs d'index.
     wsService.on('audio_stream_start', (data) => {
       if (tableauParleRef.current) {
+        console.log('[Audio] Tableau en cours de lecture — flux vocal du chat écarté');
         setProcessing(false);
         return;   // le tableau a la parole
       }

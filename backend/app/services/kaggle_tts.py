@@ -188,6 +188,21 @@ class PiloteKaggle:
             self._verifier_delais(time.time())
         return self.cible() is not None
 
+    def eleve_actif(self):
+        """L'élève vient d'agir : la séance compte comme active pour la veille
+        (le kernel ne s'éteint pas pendant qu'il lit ou réfléchit), et un
+        kernel éteint est rallumé pour que la réponse ait sa voix."""
+        if not actif():
+            return
+        self.besoin_de_voix("parole")
+        cible = self.cible()
+        if not cible:
+            return
+        try:
+            asyncio.get_running_loop().create_task(_garder(*cible))
+        except RuntimeError:
+            pass
+
     def signaler_injoignable(self, url: str):
         """Le tunnel ne répond plus (502/530, HTML…) : le kernel est parti."""
         if self.etat == "pret" and url and url.rstrip("/") == self.url.rstrip("/"):
@@ -248,12 +263,13 @@ class PiloteKaggle:
             self._passer("eteint", time.time())
 
 
-def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str) -> Path:
+def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str,
+                      kernel: Optional[str] = None) -> Path:
     """Écrit serveur.py (CONF + référence Amine) et kernel-metadata.json."""
     import base64
     conf = {"annonce": settings.kaggle_tts_annonce_url, "cle": cle, "lancement": lancement, "jeton": jeton,
             "modele": settings.kaggle_tts_modele, "veille_s": settings.kaggle_tts_veille_s,
-            "duree_max_s": settings.kaggle_tts_duree_max_s}
+            "duree_max_s": settings.kaggle_tts_duree_max_s, "fp16": bool(settings.kaggle_tts_fp16)}
     source = (DOSSIER_KERNEL / "serveur.py").read_text(encoding="utf-8")
     ref = base64.b64encode((DOSSIER_KERNEL / "reference_amine.flac").read_bytes()).decode()
     source = source.replace('"__CONF__"', repr(json.dumps(conf)), 1).replace('"__REF_B64__"', repr(ref), 1)
@@ -262,7 +278,8 @@ def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str) -> Pa
     sources = [f"{u}/{settings.kaggle_tts_modele}"]
     if settings.kaggle_tts_socle:
         sources.append(f"{u}/{settings.kaggle_tts_socle}")
-    meta = {"id": f"{u}/{settings.kaggle_tts_kernel}", "title": settings.kaggle_tts_kernel,
+    kernel = kernel or settings.kaggle_tts_kernel
+    meta = {"id": f"{u}/{kernel}", "title": kernel,
             "code_file": "serveur.py", "language": "python", "kernel_type": "script",
             "is_private": True, "enable_gpu": True, "enable_internet": True,
             "machine_shape": "NvidiaTeslaT4", "dataset_sources": [], "competition_sources": [],
@@ -282,16 +299,25 @@ def kaggle_cli(*args: str, timeout: float = 120) -> str:
     return sortie
 
 
-def pousser_kernel(cle: str, lancement: str, jeton: str) -> str:
+def pousser_kernel(cle: str, lancement: str, jeton: str, kernel: Optional[str] = None) -> str:
     dossier = Path(tempfile.mkdtemp(prefix="kaggle_tts_"))
     try:
-        construire_kernel(dossier, cle, lancement, jeton)
+        construire_kernel(dossier, cle, lancement, jeton, kernel)
         # Filet de sécurité côté Kaggle : même si la veille du kernel échouait,
         # Kaggle le couperait peu après la durée maximale.
         return kaggle_cli("kernels", "push", "-p", str(dossier),
                           "-t", str(settings.kaggle_tts_duree_max_s + 600))
     finally:
         shutil.rmtree(dossier, ignore_errors=True)
+
+
+async def _garder(url: str, jeton: str):
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            await c.post(f"{url}/garder", headers={"Authorization": f"Bearer {jeton}"})
+    except Exception:
+        pass
 
 
 async def _sante(url: str, jeton: str) -> bool:

@@ -125,6 +125,7 @@ class Settings(BaseSettings):
     kaggle_tts_demarrage_max_s: int = 600  # au-delà, le lancement est tenu pour raté
     kaggle_tts_budget_h_semaine: float = 25.0  # quota Kaggle = 30 h GPU / semaine
     kaggle_tts_etat_path: str = "data/kaggle_tts_etat.json"
+    kaggle_tts_fp16: int = 0              # calcul en demi-précision (cf. banc_fp16.py)
 
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1
