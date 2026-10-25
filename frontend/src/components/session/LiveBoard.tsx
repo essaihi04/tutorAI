@@ -1155,9 +1155,12 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
   useEffect(() => {
     const h = voiceHandleRef.current;
     if (!h) return;
-    if (playing) h.resume();
-    else h.pause();
-  }, [playing]);
+    if (playing) {
+      // Reprise après une question : le tableau reprend la parole qu'il avait rendue.
+      prendreLaParole();
+      h.resume();
+    } else h.pause();
+  }, [playing, prendreLaParole]);
 
   // Couper le son doit faire taire la ligne en cours immédiatement.
   useEffect(() => {
@@ -1472,11 +1475,10 @@ function LiveBoardInner({ script, isVisible, onClose, onStudentMessage, assistan
     setQuestionText('');
     // Le cours est en pause et l'élève attend la réponse du professeur : le
     // tableau rend la parole, sinon la voix de cette réponse (portée par le
-    // chat) était jetée à l'arrivée et la réponse restait muette. Le tableau
-    // la reprend au premier son quand le cours repart.
-    voiceHandleRef.current?.stop();
-    voiceHandleRef.current = null;
-    boardVoice.stop();
+    // chat) était jetée à l'arrivée et la réponse restait muette. La ligne en
+    // cours reste EN PAUSE (surtout pas arrêtée : le script la croirait finie
+    // et filerait jusqu'à la fin du cours) ; la parole est reprise à la reprise.
+    setPlaying(false);
     rendreLaParole();
     onStudentMessage(text);
   }, [onStudentMessage, assistantReply, rendreLaParole]);
