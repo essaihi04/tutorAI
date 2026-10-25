@@ -3,7 +3,8 @@ dépendances), sur CPU : il ne consomme donc pas de quota GPU.
 
 Il prépare dans sa sortie tout ce qui coûte du temps au réveil du kernel
 `academy-tts-direct` :
-  roues/              les paquets pip absents de l'image Kaggle (installés hors ligne en ~10 s)
+  roues/              les paquets pip absents de l'image Kaggle
+  site.tar            les mêmes, déjà installés (extraits en ~3 s au réveil)
   lahgtna-chatterbox/ le code du modèle
   lahgtna_base/       les poids de base (ve, s3gen, t3, tokenizer…)
   cloudflared         le binaire du tunnel
@@ -47,6 +48,10 @@ os.makedirs(f"{W}/roues", exist_ok=True)
 for n, v in sorted(nouveaux.items()):
     sh(f"pip wheel -q --no-deps -w {W}/roues '{n}=={v}'")
 print(len(nouveaux), "paquets ->", len(os.listdir(f"{W}/roues")), "roues", flush=True)
+# Les mêmes paquets déjà installés, en une seule archive : au réveil, une
+# extraction locale (~3 s) remplace pip (~17 s), et une lecture continue d'un
+# seul fichier évite les milliers de petits accès au montage réseau.
+sh(f"pip install -q --no-deps --target /tmp/site {W}/roues/*.whl && tar -C /tmp/site -cf {W}/site.tar .")
 
 sh(f"git clone -q --depth 1 https://github.com/Oddadmix/lahgtna-chatterbox.git {W}/lahgtna-chatterbox")
 shutil.rmtree(f"{W}/lahgtna-chatterbox/.git", ignore_errors=True)

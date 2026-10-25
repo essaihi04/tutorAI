@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import secrets
 import shutil
@@ -38,7 +37,29 @@ from app.config import get_settings
 
 settings = get_settings()
 
-log = logging.getLogger(__name__)
+class _Journal:
+    """Comme tts_service : print, que journalctl affiche (les log.info de
+    l'application ne sortent pas en production)."""
+
+    @staticmethod
+    def _ecrire(niveau, msg, *args):
+        texte = msg % args if args else msg
+        try:
+            print(f"{niveau}{texte}", flush=True)
+        except UnicodeEncodeError:
+            print(f"{niveau}{texte}".encode("ascii", "replace").decode(), flush=True)
+
+    def info(self, msg, *args):
+        self._ecrire("", msg, *args)
+
+    def warning(self, msg, *args):
+        self._ecrire("⚠ ", msg, *args)
+
+    def error(self, msg, *args):
+        self._ecrire("✖ ", msg, *args)
+
+
+log = _Journal()
 
 DOSSIER_KERNEL = Path(__file__).resolve().parents[2] / "kaggle_tts"
 SEMAINE_S = 7 * 24 * 3600

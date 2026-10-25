@@ -26,6 +26,7 @@ import json
 import os
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -73,6 +74,61 @@ def trouver_socle():
 SOCLE = trouver_socle()
 say("socle :", SOCLE or "absent — installation depuis Internet (plus lent)")
 
+# Les poids sont lus en accès aléatoire (mmap) par safetensors et torch.load.
+# Sur /kaggle/input (gcsfuse), cela prenait 9 minutes ; une copie continue sur
+# le disque local va à ~160 Mo/s. On la lance tout de suite, en parallèle de
+# l'installation des dépendances.
+LOCAL = f"{WORK}/base"
+COPIE = threading.Event()
+FICHIERS_BASE = ["ve.pt", "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"]
+
+
+def poids_fins():
+    t3 = [p for p in glob.glob("/kaggle/input/**/t3_mtl23ls_v2.safetensors", recursive=True)
+          if CONF["modele"] in p]
+    return t3[0] if t3 else None
+
+
+def copier():
+    try:
+        os.makedirs(LOCAL, exist_ok=True)
+        fin = poids_fins()
+        cmds = [f"cp '{fin}' {LOCAL}/t3_fin.safetensors"] if fin else []
+        if SOCLE and os.path.isdir(f"{SOCLE}/lahgtna_base"):
+            cmds.append(" && ".join(f"cp '{SOCLE}/lahgtna_base/{f}' {LOCAL}/" for f in FICHIERS_BASE
+                                    if os.path.exists(f"{SOCLE}/lahgtna_base/{f}")))
+        else:
+            cmds.append(f"{sys.executable} -c \"from huggingface_hub import snapshot_download as s; "
+                        f"s('oddadmix/lahgtna-chatterbox-v1', local_dir='{LOCAL}', allow_patterns={FICHIERS_BASE!r})\"")
+        procs = [subprocess.Popen(c, shell=True, executable="/bin/bash") for c in cmds]
+        for p in procs:
+            p.wait()
+        say("poids copiés en local :", sorted(os.listdir(LOCAL)))
+    finally:
+        COPIE.set()
+
+
+SITE = f"{WORK}/site"
+SITE_PRET = threading.Event()
+
+
+def extraire_site():
+    try:
+        if SOCLE and os.path.exists(f"{SOCLE}/site.tar"):
+            os.makedirs(SITE, exist_ok=True)
+            if sh(f"tar -xf '{SOCLE}/site.tar' -C {SITE}"):
+                say("paquets du socle extraits")
+            else:
+                shutil.rmtree(SITE, ignore_errors=True)
+        if SOCLE and os.path.isdir(f"{SOCLE}/lahgtna-chatterbox"):
+            sh(f"cp -r '{SOCLE}/lahgtna-chatterbox' {WORK}/")   # code importé en local, pas via le réseau
+    finally:
+        SITE_PRET.set()
+
+
+threading.Thread(target=copier, daemon=True).start()
+threading.Thread(target=extraire_site, daemon=True).start()
+
 
 # ── 1. Tunnel : lancé tout de suite, il s'établit pendant le chargement ──
 URL = {"v": None}
@@ -107,8 +163,11 @@ PAQUETS = ("'transformers==4.57.6' 'tokenizers==0.22.1' 'accelerate==1.12.0' 'hu
 
 
 def installer():
+    SITE_PRET.wait()
     roues = glob.glob(f"{SOCLE}/roues/*.whl") if SOCLE else []
-    if roues:
+    if os.path.isdir(SITE):
+        sys.path.insert(0, SITE)
+    elif roues:
         ok = sh("pip -q install --no-index --no-deps " + " ".join(f"'{r}'" for r in roues))
         say("roues du socle :", len(roues), "ok" if ok else "ÉCHEC")
     try:
@@ -118,31 +177,43 @@ def installer():
         say("dépendances incomplètes (", repr(e)[:80], ") — pip en ligne")
         sh("pip -q install " + PAQUETS)
 
-    code = f"{SOCLE}/lahgtna-chatterbox" if SOCLE and os.path.isdir(f"{SOCLE}/lahgtna-chatterbox") else None
-    if not code:
-        code = f"{WORK}/lahgtna-chatterbox"
+    code = f"{WORK}/lahgtna-chatterbox"
+    if not os.path.isdir(code):
         sh(f"git clone -q --depth 1 https://github.com/Oddadmix/lahgtna-chatterbox.git {code}")
     sys.path.insert(0, f"{code}/src")
 
-    base = f"{SOCLE}/lahgtna_base" if SOCLE and os.path.isdir(f"{SOCLE}/lahgtna_base") else None
-    if not base:
-        from huggingface_hub import snapshot_download
-        base = f"{WORK}/lahgtna_base"
-        snapshot_download("oddadmix/lahgtna-chatterbox-v1", local_dir=base,
-                          allow_patterns=["ve.pt", "s3gen.pt", "t3_mtl23ls_v2.safetensors",
-                                          "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"])
-    t3 = [p for p in glob.glob("/kaggle/input/**/t3_mtl23ls_v2.safetensors", recursive=True)
-          if CONF["modele"] in p]
-    if not t3:
-        raise SystemExit(f"poids fins introuvables (kernel {CONF['modele']} non attaché ?)")
     ref = f"{WORK}/reference_amine.flac"
     with open(ref, "wb") as f:
         f.write(base64.b64decode(REF_B64))
-    return base, t3[0], ref
+    COPIE.wait()
+    fin = f"{LOCAL}/t3_fin.safetensors"
+    if not os.path.exists(fin):
+        raise SystemExit(f"poids fins introuvables (kernel {CONF['modele']} non attaché ?)")
+    # Les poids fins remplacent ceux de base : s'ils portent exactement les
+    # mêmes clés, on les charge directement à leur place (2 Go de moins à lire
+    # et à charger). Sinon, repli sur la méthode des cours : base + surcharge.
+    from safetensors import safe_open
+    from huggingface_hub import hf_hub_download
+    with safe_open(fin, "pt") as f:
+        cles_fin = set(f.keys())
+    base_t3 = (f"{SOCLE}/lahgtna_base/t3_mtl23ls_v2.safetensors" if SOCLE else None)
+    if not base_t3 or not os.path.exists(base_t3):
+        base_t3 = hf_hub_download("oddadmix/lahgtna-chatterbox-v1", "t3_mtl23ls_v2.safetensors",
+                                  local_dir=f"{WORK}/hf")
+    with safe_open(base_t3, "pt") as f:
+        cles_base = set(f.keys())
+    direct = cles_fin == cles_base
+    if direct:
+        os.replace(fin, f"{LOCAL}/t3_mtl23ls_v2.safetensors")
+    else:
+        sh(f"cp '{base_t3}' {LOCAL}/t3_mtl23ls_v2.safetensors")
+    say(f"poids fins : {len(cles_fin & cles_base)}/{len(cles_base)} clés communes ->",
+        "chargement direct" if direct else "base + surcharge")
+    return LOCAL, (None if direct else fin), ref
 
 
 BASE, T3, REF = installer()
-say("dépendances prêtes ; poids fins :", T3)
+say("dépendances prêtes")
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
@@ -176,7 +247,8 @@ def charger(k, sortie):
         from safetensors.torch import load_file
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS
         m = ChatterboxMultilingualTTS.from_local(BASE, device=f"cuda:{k}")
-        m.t3.load_state_dict(load_file(T3, device=f"cuda:{k}"), strict=False)
+        if T3:
+            m.t3.load_state_dict(load_file(T3, device=f"cuda:{k}"), strict=False)
         m.t3.to(f"cuda:{k}").eval()
         try:
             m.t3.tfmr.set_attn_implementation("eager")
@@ -249,7 +321,9 @@ def carte(k):
             with torch.inference_mode():
                 w = m.generate(t.texte, language_id=lg, exaggeration=st["ex"],
                                temperature=0.75, cfg_weight=st["cfg"]).cpu().numpy()[0]
-            w = np.concatenate([nettoyer(w.astype(np.float32)), np.zeros(int(st["apres"] * SR), np.float32)])
+            # Un morceau coupé à une virgule n'est pas une fin de phrase : souffle court.
+            apres = st["apres"] if t.texte.rstrip()[-1:] in ".!?؟…" else 0.12
+            w = np.concatenate([nettoyer(w.astype(np.float32)), np.zeros(int(apres * SR), np.float32)])
             pic = float(np.abs(w).max() or 1)
             if pic > 0.944:
                 w *= 0.944 / pic
@@ -266,24 +340,31 @@ for k in MODELES:
 FIN = re.compile(r"(?<=[.!?؟…])\s+")
 
 
+# Longueur maximale des morceaux successifs. Le modèle calcule à peu près en
+# temps réel sur un T4 : le premier son attend tout le premier morceau, donc il
+# est court ; pendant qu'il est joué, l'autre carte prépare le suivant, qui
+# peut alors être plus long sans créer de blanc.
+PALIERS = (45, 90, 150, 200)
+
+
 def phrases(texte):
-    """Phrases de ≤ 200 caractères ; la toute première est raccourcie à la
-    première virgule si elle est longue : c'est elle qui fixe le premier son."""
     out = []
     for p in FIN.split(texte.strip()):
         p = p.strip()
-        limite = 90 if not out else 200
-        while len(p) > limite:
-            q = max(p.rfind(",", 25, limite), p.rfind("،", 25, limite))
+        while p:
+            limite = PALIERS[min(len(out), len(PALIERS) - 1)]
+            if len(p) <= limite + 15:     # ne pas laisser un bout de 2 mots derrière
+                out.append(p)
+                break
+            q = max(p.rfind(",", 15, limite), p.rfind("،", 15, limite), p.rfind(";", 15, limite),
+                    p.rfind(":", 15, limite))
             if q <= 0:
-                q = p.rfind(" ", 25, limite)
+                q = p.rfind(" ", 15, limite)
             if q <= 0:
+                out.append(p)
                 break
             out.append(p[:q + 1].strip())
             p = p[q + 1:].strip()
-            limite = 200
-        if p:
-            out.append(p)
     return out
 
 
