@@ -954,6 +954,43 @@ def _matiere_du_chemin(resource: dict) -> str | None:
     return _normaliser_matiere(trouve.group(1)) if trouve else None
 
 
+_LETTRE_ARABE = re.compile(r"[\u0600-\u06FF]")
+_LETTRE_LATINE = re.compile(r"[A-Za-zÀ-ÿ]")
+
+
+def bloc_langue_du_tour(student_text: str, matiere: str = "") -> str:
+    """Dit au modèle dans quelle langue l'élève vient d'écrire.
+
+    L'oral suit l'élève : darija ou arabe → darija en alphabet arabe, avec
+    toutes les notions en français (la voix d'Amine est entraînée sur ce
+    mélange) ; français → français simple. Le tableau reste en français.
+    Philosophie (arabe) et anglais gardent leurs règles propres.
+    """
+    m = (matiere or "").lower()
+    if "philo" in m or "anglais" in m or "english" in m:
+        return ""
+    texte = student_text or ""
+    arabe = len(_LETTRE_ARABE.findall(texte))
+    latin = len(_LETTRE_LATINE.findall(texte))
+    if arabe == 0 and latin == 0:
+        return ""
+    if arabe >= latin * 0.5:
+        return (
+            "\n\n[LANGUE DE CE TOUR — PRIORITAIRE] L'élève a écrit en darija/arabe. Réponds-lui à l'oral "
+            "EN DARIJA, écrite en alphabet arabe (jamais d'Arabizi, jamais d'arabe classique). Toutes les "
+            "notions restent en FRANÇAIS, en lettres latines, glissées dans la phrase : lois, principes, "
+            "grandeurs (la célérité, la tension…), objets mathématiques, unités, nombres (en toutes lettres "
+            "françaises), mots de classe (le cahier, la réponse) et « le tableau ». Exemple : « مزيان، دابا "
+            "غادي نحسبو la célérité ديال l'onde : كنقسمو la distance على la durée. » Le tableau (<ui>) reste "
+            "entièrement en français. Pour ce tour, cette consigne passe avant toute règle qui imposerait "
+            "le français à l'oral.\n"
+        )
+    return (
+        "\n\n[LANGUE DE CE TOUR] L'élève a écrit en français : explique en français simple ; quelques "
+        "mots de darija (alphabet arabe) restent possibles pour une transition ou un encouragement.\n"
+    )
+
+
 class SessionHandler:
     """Handles a single tutoring session's voice pipeline."""
 
@@ -1307,12 +1344,11 @@ class SessionHandler:
     def _prompt_language(self) -> str:
         if self.language == "mixed":
             return (
-                "français simple pour le chat LLM : les explications scientifiques, les mots simples, les "
-                "consignes, les nombres, les unités, les méthodes et les règles. N'emploie pas de mots arabes "
-                "courants dans le chat pour le matériel ou les étapes de classe (pas de lettres latines, pas "
-                "d'Arabizi type '3la' ou 'ghadi'). "
-                "Le contenu pédagogique DOIT rester en français, avec les termes techniques/scientifiques "
-                "écrits en lettres latines "
+                "la langue de l'élève à l'oral (voir [LANGUE DE CE TOUR]) : français simple s'il écrit en "
+                "français, darija en alphabet arabe s'il écrit en darija ou en arabe. Dans les deux cas, les "
+                "notions, les consignes de classe, les nombres, les unités, les méthodes et les règles sont "
+                "nommés en français (jamais d'Arabizi type '3la' ou 'ghadi'). "
+                "Les termes techniques/scientifiques restent en français, écrits en lettres latines "
                 "(ex : la vitesse, l'accélération, la force, l'énergie cinétique, la dérivée, la fonction, "
                 "le vecteur, la molécule, la mitose, l'équation). Les abréviations doivent être séparées et "
                 "séparées pour le TTS en français pour pH : pH devient P H, tandis que ADN devient آ دي إن, "
@@ -1323,8 +1359,8 @@ class SessionHandler:
                 "l'entraînement et les ajouter dégrade la prononciation au lieu de la corriger. "
                 "Un mot arabe qu'il faudrait vocaliser pour qu'il soit bien dit s'écrit DIRECTEMENT "
                 "en français, seul, sans l'arabe à côté ni parenthèses (pas de « مُعَادِل (équivalent) », "
-                "mais « équivalent »). Dans le chat, l'arabe est réservé au prénom transcrit pour le TTS "
-                "ou à une demande explicite de l'élève; les mots courants restent en français. "
+                "mais « équivalent »). Les mots de classe (cahier, tableau, exercice…) restent en français, "
+                "même glissés dans une phrase en darija. "
                 "SE DISENT TOUJOURS EN FRANÇAIS, sans exception : toute LOI, tout PRINCIPE, tout "
                 "THÉORÈME (« la loi de Newton », « la loi d'Ohm », « les lois de Mendel », « le "
                 "principe d'inertie » — jamais قانون نيوتن ni مبدأ القصور) ; toute GRANDEUR (la "
@@ -3053,6 +3089,9 @@ RÈGLES:
         # contenait plusieurs explications. Donner au modèle une indication
         # déterministe du dernier tour évite les répétitions et les inventions.
         system_prompt += self._build_turn_guidance(student_text, self.conversation_history)
+        # La langue du message de l'élève décide de celle de l'oral (choix du
+        # 2026-10-25) : darija écrite → réponse en darija, notions en français.
+        system_prompt += bloc_langue_du_tour(student_text, self.session_context.get("subject", ""))
         # Et le miroir de ses propres tours : sans lui, le modèle recopie sa
         # dernière réponse parce qu'elle est le seul exemple de « ce que je
         # dis » qu'il ait sous les yeux (cf. humanisation.py).
