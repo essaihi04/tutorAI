@@ -8,6 +8,7 @@ build et que nginx sert tel quel :
   d'accueil générée ici, qui liste les manips par matière ;
 - le menu « 📚 Manips… » de chaque page pointait vers les liens claude.ai : il pointe désormais
   vers les pages du site et s'ouvre dans le même onglet, avec un retour au sommaire ;
+- chaque page reçoit le squelette que claude.ai ajoutait (doctype, charset UTF-8, viewport) ;
 - seules les pages HTML partent (les .py, .js de queue et .md restent dans le dossier de travail :
   les queues sont déjà assemblées dans les pages).
 
@@ -46,6 +47,18 @@ _OUVERTURE = re.compile(
     r'const w = window\.open\(l\.u, "_blank", "noopener"\); if \(!w\) \{ try \{ window\.top\.location\.href = l\.u; \} '
     r'catch \(e\) \{ location\.href = l\.u; \} \}'
 )
+
+
+def squelette(page: str) -> str:
+    """Les manips sont des fragments d'artefact : claude.ai les enveloppait d'un doctype et d'un charset.
+
+    Servies telles quelles, le navigateur lit l'UTF-8 comme du Latin-1 (« PrÃ©parer ») et passe en
+    mode quirks. On ajoute donc le même squelette en tête ; head et body restent implicites.
+    """
+    if page.lstrip().lower().startswith("<!doctype"):
+        return page
+    return ('<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">\n' + page)
 
 
 def titre(page: str) -> str:
@@ -101,6 +114,7 @@ def main() -> None:
             )
             if "claude.ai/artifact" in sortie:
                 sys.exit(f"{nom} : un lien claude.ai reste dans la page")
+        sortie = squelette(sortie)
         io.open(CIBLE / PAGES[nom], "w", encoding="utf-8", newline="\n").write(sortie)
         print(f"{nom:32s} -> labo/{PAGES[nom]}  ({len(sortie) // 1024} Ko)")
 
