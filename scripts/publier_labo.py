@@ -9,6 +9,7 @@ build et que nginx sert tel quel :
 - le menu « 📚 Manips… » de chaque page pointait vers les liens claude.ai : il pointe désormais
   vers les pages du site et s'ouvre dans le même onglet, avec un retour au sommaire ;
 - chaque page reçoit le squelette que claude.ai ajoutait (doctype, charset UTF-8, viewport) ;
+- three.js r128 et OrbitControls sont chargés depuis le site (`labo/vendor/`) au lieu des CDN ;
 - seules les pages HTML partent (les .py, .js de queue et .md restent dans le dossier de travail :
   les queues sont déjà assemblées dans les pages).
 
@@ -59,6 +60,27 @@ def squelette(page: str) -> str:
         return page
     return ('<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">\n' + page)
+
+
+#: three.js r128 et OrbitControls, servis par le site (frontend/public/labo/vendor, cache d'un an dans nginx :
+#: la version est dans le nom du fichier). Évite deux connexions vers deux CDN au premier chargement.
+_CDN_LOCAL = {
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>':
+        '<script src="vendor/three-r128.min.js"></script>',
+    '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>':
+        '<script src="vendor/OrbitControls-r128.js"></script>',
+}
+_SECOURS_UNPKG = re.compile(r'<script>if \(window\.THREE && !THREE\.OrbitControls\) document\.write\([^\n]*?</script>\n?')
+
+
+def bibliotheques_locales(page: str, nom: str) -> str:
+    # Une page sans 3D (physique-5-stations) n'en charge aucun ; une page 3D doit charger les deux.
+    trouves = [page.count(cdn) for cdn in _CDN_LOCAL]
+    if trouves not in ([0, 0], [1, 1]):
+        sys.exit(f"{nom} : scripts three.js inattendus {trouves}")
+    for cdn, local in _CDN_LOCAL.items():
+        page = page.replace(cdn, local)
+    return _SECOURS_UNPKG.sub("", page)
 
 
 def titre(page: str) -> str:
@@ -114,6 +136,7 @@ def main() -> None:
             )
             if "claude.ai/artifact" in sortie:
                 sys.exit(f"{nom} : un lien claude.ai reste dans la page")
+        sortie = bibliotheques_locales(sortie, nom)
         sortie = squelette(sortie)
         io.open(CIBLE / PAGES[nom], "w", encoding="utf-8", newline="\n").write(sortie)
         print(f"{nom:32s} -> labo/{PAGES[nom]}  ({len(sortie) // 1024} Ko)")

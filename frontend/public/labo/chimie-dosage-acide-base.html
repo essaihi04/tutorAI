@@ -192,9 +192,8 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   if (document.getElementById("top")) mount(); else document.addEventListener("DOMContentLoaded", mount);
 })();
 </script><!--/labnav-->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script>if (window.THREE && !THREE.OrbitControls) document.write('<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');</script>
+<script src="vendor/three-r128.min.js"></script>
+<script src="vendor/OrbitControls-r128.js"></script>
 <script>
 /* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
 if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
@@ -810,10 +809,39 @@ function openCurve() { $("#exao").hidden = false; drawCurve($("#exaoC")); }
 
 /* ------------------------------------------------------------ rendu, caméra, souris */
 const L = {};
+/* ------------------------------------------------------------ rendu à la demande (performance)
+   L'image n'est redessinée que si quelque chose a changé à l'écran : caméra, taille de la fenêtre, position ou visibilité
+   d'un objet, couleur, opacité ou texture d'un matériau (afficheurs, liquides, indicateurs), géométrie modifiée (filets).
+   L'ombre portée n'est recalculée que si un objet qui projette une ombre a bougé ou changé de visibilité.
+   Paillasse immobile : le processeur graphique ne travaille plus ; une image de sécurité part toutes les 1,5 s.
+   Pour une capture en test, appeler R.render(scene, cam) directement reste possible. */
+const RD = { a: new Float64Array(8192), s: new Float64Array(4096), n: 0, ns: 0, np: -1, nsp: -1, ch: false, chS: false, last: 0 };
+function rdW(x) { if (RD.n >= RD.a.length) { const b = new Float64Array(RD.a.length * 2); b.set(RD.a); RD.a = b; } if (RD.a[RD.n] !== x) { RD.a[RD.n] = x; RD.ch = true; } RD.n++; }
+function rdS(x) { if (RD.ns >= RD.s.length) { const b = new Float64Array(RD.s.length * 2); b.set(RD.s); RD.s = b; } if (RD.s[RD.ns] !== x) { RD.s[RD.ns] = x; RD.chS = true; } RD.ns++; }
+function rdTex(t) { if (!t) return; rdW(t.id); rdW(t.version); rdW(t.offset.x); rdW(t.offset.y); rdW(t.rotation); }
+function rdMat(m) { if (!m) return; rdW(m.id); rdW(m.version); rdW(m.opacity); rdW(m.visible ? 1 : 0); if (m.color) { rdW(m.color.r); rdW(m.color.g); rdW(m.color.b); } if (m.emissive) { rdW(m.emissive.r); rdW(m.emissive.g); rdW(m.emissive.b); rdW(m.emissiveIntensity); } rdTex(m.map); rdTex(m.emissiveMap); rdTex(m.alphaMap); }
+function aRedessiner(R, scene, cam) {
+  RD.n = 0; RD.ns = 0; RD.ch = false; RD.chS = false;
+  scene.updateMatrixWorld(); cam.updateMatrixWorld();
+  const c = cam.matrixWorld.elements, pj = cam.projectionMatrix.elements; for (let i = 0; i < 16; i++) { rdW(c[i]); rdW(pj[i]); }
+  rdW(R.domElement.width); rdW(R.domElement.height);
+  scene.traverseVisible((o) => {
+    rdW(o.id); const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) rdW(e[i]);
+    if (o.isLight) { rdW(o.intensity); return; }
+    if (!o.material) return;
+    const g = o.geometry, p = g && g.attributes && g.attributes.position;
+    if (g) { rdW(g.id); if (p) { rdW(p.version); rdW(p.count); } if (g.index) rdW(g.index.version); rdW(g.drawRange.start); rdW(g.drawRange.count); }
+    if (Array.isArray(o.material)) o.material.forEach(rdMat); else rdMat(o.material);
+    if (o.castShadow) { rdS(o.id); for (let i = 0; i < 16; i++) rdS(e[i]); if (p) rdS(p.version); }
+  });
+  if (RD.n !== RD.np) RD.ch = true; if (RD.ns !== RD.nsp) RD.chS = true; RD.np = RD.n; RD.nsp = RD.ns;
+  if (RD.chS) R.shadowMap.needsUpdate = true;
+  const now = performance.now(); if (RD.ch || now - RD.last > 1500) { RD.last = now; return true; } return false;
+}
 function init3d() {
   const el = $("#scene3d");
   const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; el.append(R.domElement);
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true; el.append(R.domElement);
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dee4); const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(envScene(), 0.04).texture; pm.dispose();
   const cam = new THREE.PerspectiveCamera(40, 1.6, 0.02, 40); cam.position.set(0.1, BENCH + 0.9, 1.6);
   const ctl = new THREE.OrbitControls(cam, R.domElement); Object.assign(ctl, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.2, maxDistance: 2.6, maxPolarAngle: Math.PI * 0.48, enablePan: true, screenSpacePanning: true, panSpeed: 0.5, rotateSpeed: 0.6 }); ctl.target.set(0, BENCH + 0.15, -0.15);
@@ -832,7 +860,7 @@ function init3d() {
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); $("#exao").hidden = true; } });
   R.domElement.addEventListener("dblclick", () => { if (ST.cur && ST.cur.cam) focusCam(CAMS[ST.cur.cam]); });
   let pend = false; const raf = (f) => { if (pend) return; pend = true; requestAnimationFrame((t) => { pend = false; f(t); }); };
-  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt); ctl.update(); R.render(scene, cam); placeLabels(); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
+  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt); ctl.update(); if (aRedessiner(R, scene, cam)) R.render(scene, cam); placeLabels(); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
 }
 function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
 
