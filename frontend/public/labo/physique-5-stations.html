@@ -1,0 +1,765 @@
+<title>Labo Physique 2BAC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : cahier de TP — paillasse + graphique à gauche, réglages et objectif à droite ; une colonne sur téléphone */
+:root{
+  --paper:#f2f5f9; --card:#ffffff; --well:#e9eff6; --ink:#14213a; --muted:#56667f;
+  --line:#d3dce8; --grid:#dfe7f1; --grid2:#c4d1e2; --accent:#2150c8; --accent-ink:#ffffff;
+  --red:#c4382d; --good:#16805a; --good-bg:#e1f3ea; --bad-bg:#fbe8e5; --info-bg:#e6ecfb;
+  --liq:rgba(33,80,200,.10);
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0d1320; --card:#151e2f; --well:#101827; --ink:#e3e9f4; --muted:#93a1ba;
+  --line:#26324a; --grid:#1a2437; --grid2:#2a3852; --accent:#7ea3ff; --accent-ink:#0a1120;
+  --red:#ff7d70; --good:#4bc991; --good-bg:#11301f; --bad-bg:#3a1915; --info-bg:#16223d;
+  --liq:rgba(126,163,255,.12); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#0d1320; --card:#151e2f; --well:#101827; --ink:#e3e9f4; --muted:#93a1ba;
+  --line:#26324a; --grid:#1a2437; --grid2:#2a3852; --accent:#7ea3ff; --accent-ink:#0a1120;
+  --red:#ff7d70; --good:#4bc991; --good-bg:#11301f; --bad-bg:#3a1915; --info-bg:#16223d;
+  --liq:rgba(126,163,255,.12); color-scheme:dark;
+}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;padding-block:18px 8px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand b{font-family:var(--f-display);font-weight:800;font-size:22px;letter-spacing:-.01em}
+.brand span{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.score{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-family:var(--f-mono);font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-variant-numeric:tabular-nums}
+nav.tabs{display:flex;gap:6px;overflow-x:auto;padding-block:6px 16px;scrollbar-width:thin}
+.tab{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:7px 12px 7px 8px;font:inherit;font-size:14px;cursor:pointer}
+.tab .n{font-family:var(--f-mono);font-weight:700;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--well);font-size:12px}
+.tab[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tab.done .n{background:var(--good);color:var(--card)}
+.head{margin-bottom:14px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0}
+h1,h2{font-family:var(--f-display);font-weight:800;line-height:1.1;text-wrap:balance;letter-spacing:-.015em}
+h1{font-size:clamp(26px,3.4vw,36px);margin:4px 0 0}
+h2{font-size:20px;margin:0}
+.cols{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:start}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+canvas{display:block;width:100%;max-width:100%;background:var(--well);border-radius:12px}
+#scene{aspect-ratio:16/9;border:1px solid var(--line)}
+#graph{aspect-ratio:16/10}
+.cap{font-size:13px;color:var(--muted);margin:8px 0 0}
+.goal p{margin:6px 0 0;font-size:17px}
+.target{font-family:var(--f-mono);color:var(--accent);white-space:nowrap;font-weight:700}
+.data{font-family:var(--f-mono);font-size:13px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+#ctrls{display:flex;flex-direction:column;gap:16px}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.ctl-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.ctl label{font-weight:700;font-size:15px}
+output{font-family:var(--f-mono);font-weight:700;font-size:16px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ctl-row{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:30px;margin:0}
+.step{flex:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--well);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;font-family:var(--f-mono)}
+.ctl.off{opacity:.45}
+.btn{width:100%;padding:14px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;font-size:17px;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.ghost{background:var(--well);color:var(--ink);border:1px solid var(--line)}
+#go{margin-top:18px}
+.fb{border-radius:12px;padding:12px 14px;margin-top:14px}
+.fb.good{background:var(--good-bg)} .fb.bad{background:var(--bad-bg)} .fb.info{background:var(--info-bg)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px}
+.good .tag{background:var(--good);color:var(--card)} .bad .tag{background:var(--red);color:var(--card)} .info .tag{background:var(--accent);color:var(--accent-ink)}
+.fb p{margin:6px 0 0}
+.fb .hint{font-size:14px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:700}
+details p{margin:10px 0 0}
+.eq{font-family:var(--f-mono);font-size:14px;background:var(--well);padding:8px 10px;border-radius:8px;overflow-x:auto;white-space:nowrap}
+.q{font-weight:700;margin:6px 0 0}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.opt{text-align:left;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+.opt:disabled{cursor:default}
+.opt.right{border-color:var(--good);background:var(--good-bg);font-weight:700}
+.opt.wrong{border-color:var(--red);background:var(--bad-bg);animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.qfb{margin:10px 0 0;font-size:15px}
+#qnext{margin-top:12px}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* accueil */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start}
+.hero h1{font-size:clamp(32px,5vw,52px)}
+.lead{font-size:18px;max-width:58ch;color:var(--muted);margin:12px 0 0}
+.start{display:flex;flex-direction:column;gap:10px;margin-top:22px;max-width:420px}
+.start input{font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.small{font-size:13px;color:var(--muted);margin:0}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.list li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 10px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.list li:last-child{border-bottom:0}
+.list .n{grid-row:span 2;font-family:var(--f-mono);font-weight:700;color:var(--accent);font-size:18px}
+.list b{font-size:16px} .list span{font-size:13px;color:var(--muted)}
+/* bilan */
+.rep-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.grade{text-align:right}
+.grade b{display:block;font-family:var(--f-display);font-size:56px;line-height:1;font-variant-numeric:tabular-nums}
+.grade span{font-size:13px;color:var(--muted)}
+.tbl{overflow-x:auto;margin-top:16px}
+table{width:100%;border-collapse:collapse;font-size:15px;min-width:460px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.ideas{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.ideas code{font-family:var(--f-mono);font-size:14px}
+.rep-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.rep-actions .btn{width:auto;padding:12px 18px}
+@media (max-width:860px){
+  .cols{display:flex;flex-direction:column}
+  .col{display:contents}
+  .o1{order:1}.o2{order:2}.o3{order:3}.o4{order:4}.o5{order:5}.o6{order:6}
+  .hero{grid-template-columns:minmax(0,1fr)}
+  #graph{aspect-ratio:4/3}
+}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><b>Labo Physique</b><span>2ᵉ Bac PC · BIOF</span></div>
+    <div class="score"><span class="chip" id="prog">0/5 stations</span><span class="chip" id="note">Note : –/20</span></div>
+  </header>
+  <nav class="tabs" id="tabs" aria-label="Stations"></nav>
+
+  <section id="welcome">
+    <div class="hero">
+      <div>
+        <p class="eyebrow">Travaux pratiques simulés</p>
+        <h1>Cinq manipulations du programme, une note sur 20</h1>
+        <p class="lead">Pour chaque station : un objectif chiffré, un ou deux réglages, un graphique à exploiter comme à l'examen national, puis une question de cours.</p>
+        <form class="start" id="startForm">
+          <label for="name" class="eyebrow">Ton prénom (pour le bilan)</label>
+          <input id="name" maxlength="40" autocomplete="given-name" placeholder="Ex. Salma">
+          <button class="btn" type="submit">Commencer le TP →</button>
+          <p class="small">Les valeurs visées changent à chaque partie : chaque élève a son propre objectif.</p>
+        </form>
+      </div>
+      <div class="panel">
+        <p class="eyebrow">Au programme</p>
+        <ul class="list" id="plan"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="station" hidden>
+    <div class="head"><p class="eyebrow" id="chap"></p><h1 id="titre"></h1></div>
+    <div class="cols">
+      <div class="col">
+        <canvas id="scene" class="o2" aria-label="Animation de l'expérience"></canvas>
+        <div class="panel o5"><p class="eyebrow">Graphique</p><canvas id="graph" style="margin-top:10px" aria-label="Graphique de l'expérience"></canvas><p class="cap" id="gcap"></p></div>
+      </div>
+      <div class="col">
+        <div class="panel goal o1"><p class="eyebrow">Objectif</p><p id="goal"></p><div class="data" id="data"></div></div>
+        <div class="panel o3">
+          <p class="eyebrow" style="margin-bottom:12px">Réglages</p>
+          <div id="ctrls"></div>
+          <button class="btn" id="go" type="button"></button>
+          <div class="fb" id="fb" hidden></div>
+        </div>
+        <div class="panel o4" id="qcm" hidden></div>
+        <div class="panel o6"><details id="coursBox"><summary>Rappel du cours</summary><div id="cours"></div></details></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="report" hidden>
+    <div class="panel">
+      <div class="rep-top">
+        <div><p class="eyebrow">Bilan du TP</p><h1>Forces, oscillations, RC et radioactivité</h1><p class="small" id="who" style="margin-top:8px"></p></div>
+        <div class="grade"><b id="gradeN"></b><span>note sur 20</span></div>
+      </div>
+      <div class="tbl"><table><thead><tr><th>Station</th><th>Essais ratés</th><th>Question</th><th>Points</th></tr></thead><tbody id="repRows"></tbody></table></div>
+      <p class="small" style="margin-top:10px">Barème par station : 3 points pour la manipulation (−0,5 par essai raté, minimum 1), 1 point si la question est juste du premier coup.</p>
+      <h2 style="margin-top:22px">À retenir</h2>
+      <ul class="ideas">
+        <li>Chute avec frottement fluide : <code>vₗ = m·g / k</code> et <code>τ = m / k</code></li>
+        <li>Projectile : <code>P = v₀²·sin(2α) / g</code>, maximale pour α = 45°</li>
+        <li>Pendule élastique : <code>T₀ = 2π·√(m / K)</code></li>
+        <li>Dipôle RC : <code>τ = R·C</code> et u_C(τ) = 0,63·E</li>
+        <li>Radioactivité : <code>N(t) = N₀·e^(−λt)</code> et <code>t½ = ln 2 / λ</code></li>
+      </ul>
+      <div class="rep-actions">
+        <button class="btn" id="again" type="button">Refaire avec de nouvelles valeurs</button>
+        <button class="btn ghost" id="back" type="button">Revenir aux stations</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+const g = 9.8;
+const $ = (s) => document.querySelector(s);
+const fmt = (x, d = 2) => { if (Math.abs(x) < 1e-9) x = 0; return (Math.round(x * 10 ** d) / 10 ** d).toFixed(d).replace(".", ","); };
+const rnd = (a, b, s) => +(a + s * Math.floor(Math.random() * (Math.round((b - a) / s) + 1))).toFixed(4);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const DEG = Math.PI / 180;
+
+/* ------------------------------------------------------------ dessin */
+let K = {};
+function readColors() {
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ["ink", "muted", "grid", "grid2", "accent", "accent-ink", "red", "good", "card", "well", "line", "liq"]) K[k] = s.getPropertyValue("--" + k).trim();
+}
+function setup(cv) {
+  const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const c = cv.getContext("2d");
+  c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, r.width, r.height); c.setLineDash([]);
+  return { c, W: r.width, H: r.height };
+}
+function txt(c, s, x, y, o = {}) {
+  c.font = (o.b ? "700 " : "500 ") + (o.s || 12) + "px " + (o.mono === false ? '"Atkinson Hyperlegible",system-ui,sans-serif' : '"JetBrains Mono",ui-monospace,monospace');
+  c.fillStyle = o.col || K.ink; c.textAlign = o.al || "left"; c.textBaseline = "alphabetic"; c.fillText(s, x, y);
+}
+function arrow(c, x1, y1, x2, y2, col, w = 2) {
+  const a = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1);
+  if (L < 3) return;
+  const hl = Math.min(9, L * 0.45);
+  c.setLineDash([]); c.strokeStyle = col; c.fillStyle = col; c.lineWidth = w;
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2 - Math.cos(a) * hl * 0.8, y2 - Math.sin(a) * hl * 0.8); c.stroke();
+  c.beginPath(); c.moveTo(x2, y2);
+  c.lineTo(x2 - hl * Math.cos(a - 0.4), y2 - hl * Math.sin(a - 0.4));
+  c.lineTo(x2 - hl * Math.cos(a + 0.4), y2 - hl * Math.sin(a + 0.4));
+  c.closePath(); c.fill();
+}
+const nice = (v) => { const p = 10 ** Math.floor(Math.log10(v)), n = v / p; return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p; };
+const decs = (s) => Math.max(0, Math.ceil(-Math.log10(s) - 1e-9));
+
+/* graphique sur papier millimétré */
+function plot(cv, o) {
+  const { c, W, H } = setup(cv);
+  const L = 50, R = 14, T = 16, B = 36, pw = W - L - R, ph = H - T - B;
+  const x0 = o.xmin || 0, x1 = o.xmax || 1, y0 = o.ymin || 0, y1 = o.ymax || 1;
+  const X = (x) => L + ((x - x0) / (x1 - x0)) * pw, Y = (y) => T + (1 - (y - y0) / (y1 - y0)) * ph;
+  const sx = nice((x1 - x0) / 5), sy = nice((y1 - y0) / 4);
+  c.lineWidth = 1; c.strokeStyle = K.grid; c.beginPath();
+  for (let i = Math.ceil(x0 / (sx / 5)); i * (sx / 5) <= x1 + 1e-9; i++) { const px = Math.round(X(i * sx / 5)) + 0.5; c.moveTo(px, T); c.lineTo(px, T + ph); }
+  for (let i = Math.ceil(y0 / (sy / 5)); i * (sy / 5) <= y1 + 1e-9; i++) { const py = Math.round(Y(i * sy / 5)) + 0.5; c.moveTo(L, py); c.lineTo(L + pw, py); }
+  c.stroke();
+  c.strokeStyle = K.grid2; c.beginPath();
+  for (let i = Math.ceil(x0 / sx); i * sx <= x1 + 1e-9; i++) { const x = i * sx, px = Math.round(X(x)) + 0.5; c.moveTo(px, T); c.lineTo(px, T + ph); txt(c, fmt(x, decs(sx)), px, T + ph + 15, { al: "center", col: K.muted, s: 11 }); }
+  for (let i = Math.ceil(y0 / sy); i * sy <= y1 + 1e-9; i++) { const y = i * sy, py = Math.round(Y(y)) + 0.5; c.moveTo(L, py); c.lineTo(L + pw, py); txt(c, fmt(y, decs(sy)), L - 6, py + 4, { al: "right", col: K.muted, s: 11 }); }
+  c.stroke();
+  c.strokeStyle = K.ink; c.lineWidth = 1.5; c.beginPath();
+  const ya = y0 <= 0 && y1 >= 0 ? Y(0) : T + ph;
+  c.moveTo(L, ya); c.lineTo(L + pw, ya); c.moveTo(L, T); c.lineTo(L, T + ph); c.stroke();
+  txt(c, o.xl || "", L + pw, T + ph + 31, { al: "right", col: K.muted, s: 12, mono: false, b: true });
+  txt(c, o.yl || "", L + 6, T + 13, { col: K.muted, s: 12, mono: false, b: true });
+
+  c.save(); c.beginPath(); c.rect(L, T, pw, ph); c.clip();
+  for (const h of o.hl || []) {
+    const py = Y(h.y); c.strokeStyle = h.color; c.lineWidth = 1.5; c.setLineDash(h.dash || []);
+    c.beginPath(); c.moveTo(L, py); c.lineTo(L + pw, py); c.stroke(); c.setLineDash([]);
+    if (h.label) txt(c, h.label, h.side === "left" ? L + 70 : L + pw - 6, py - 6, { al: h.side === "left" ? "left" : "right", col: h.color, s: 11, b: true });
+  }
+  for (const v of o.vl || []) {
+    const px = X(v.x); c.strokeStyle = v.color; c.lineWidth = 1.5; c.setLineDash(v.dash || []);
+    c.beginPath(); c.moveTo(px, T); c.lineTo(px, T + ph); c.stroke(); c.setLineDash([]);
+    if (v.label) { const right = px > L + pw - 90; txt(c, v.label, right ? px - 5 : px + 5, T + 30 + (v.row || 0) * 15, { al: right ? "right" : "left", col: v.color, s: 11, b: true }); }
+  }
+  for (const s of o.segs || []) {
+    if (s.arrows) {
+      arrow(c, (X(s.x1) + X(s.x2)) / 2, Y(s.y1), X(s.x1), Y(s.y1), s.color, 1.5);
+      arrow(c, (X(s.x1) + X(s.x2)) / 2, Y(s.y1), X(s.x2), Y(s.y2), s.color, 1.5);
+    } else {
+      c.strokeStyle = s.color; c.lineWidth = s.w || 1.5; c.setLineDash(s.dash || []);
+      c.beginPath(); c.moveTo(X(s.x1), Y(s.y1)); c.lineTo(X(s.x2), Y(s.y2)); c.stroke(); c.setLineDash([]);
+    }
+    if (s.label) txt(c, s.label, (X(s.x1) + X(s.x2)) / 2, Y(s.y1) - 7, { al: "center", col: s.color, s: 11, b: true });
+  }
+  for (const cu of o.curves || []) {
+    if (!(cu.to > cu.from)) continue;
+    c.strokeStyle = cu.color; c.lineWidth = cu.w || 2; c.setLineDash(cu.dash || []); c.beginPath();
+    const n = 240;
+    for (let i = 0; i <= n; i++) { const x = cu.from + ((cu.to - cu.from) * i) / n, px = X(x), py = Y(cu.f(x)); i ? c.lineTo(px, py) : c.moveTo(px, py); }
+    c.stroke(); c.setLineDash([]);
+  }
+  for (const p of o.pts || []) {
+    const px = X(p.x), py = Y(p.y);
+    c.fillStyle = p.color; c.beginPath(); c.arc(px, py, p.r || 3, 0, 7); c.fill();
+    if (p.label) { const right = px > L + pw - 80; txt(c, p.label, right ? px - 8 : px + 8, py - 7, { al: right ? "right" : "left", col: p.color, s: 12, b: true }); }
+  }
+  c.restore();
+}
+
+/* ------------------------------------------------------------ station 1 : chute verticale */
+const S1 = {
+  id: "chute", num: 1, chap: "Mécanique · Chute verticale d'un solide", titre: "Chute d'une bille dans un liquide", short: "Chute verticale",
+  init() { this.k = 0.2; this.vT = +((rnd(10, 28, 0.5) / 1000) * g / this.k).toFixed(2); this.p = { m: 20 }; },
+  controls() { return [{ id: "m", label: "Masse de la bille", min: 5, max: 40, step: 0.5, unit: "g", d: 1 }]; },
+  vl(m) { return (m / 1000) * g / this.k; },
+  tau(m) { return m / 1000 / this.k; },
+  y(t, vl, tau) { return vl * (t - tau * (1 - Math.exp(-t / tau))); },
+  goal() { return `Règle la masse de la bille pour que sa vitesse limite soit <span class="target">vₗ = ${fmt(this.vT)} m/s</span> (à ±3 %).`; },
+  data() { return "k = 0,20 kg/s · g = 9,8 m/s² · tube de 1,5 m · Archimède négligée"; },
+  cap: "Courbe v(t). La tangente à l'origine coupe l'asymptote v = vₗ à l'instant t = τ.",
+  action() {
+    const m = this.p.m, vl = this.vl(m), tau = this.tau(m);
+    let t = 0; while (this.y(t, vl, tau) < 1.5 && t < 20) t += 0.001;
+    this.run = { m, vl, tau, tEnd: t };
+    return { anim: t, speed: 1 };
+  },
+  evaluate() {
+    const r = this.run;
+    if (Math.abs(r.vl - this.vT) / this.vT <= 0.03) return { ok: true, msg: `vₗ = ${fmt(r.vl)} m/s et τ = ${fmt(r.tau, 3)} s. En régime permanent, le poids et le frottement se compensent : le mouvement est rectiligne uniforme.` };
+    return { ok: false, msg: `vₗ = ${fmt(r.vl)} m/s : la bille est ${r.vl < this.vT ? "trop lente. Augmente la masse." : "trop rapide. Diminue la masse."}` };
+  },
+  hint() { return "En régime permanent, dv/dt = 0, donc m·g = k·vₗ. Isole m et calcule-la avec la valeur visée."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run;
+    const m = r ? r.m : this.p.m, vl = r ? r.vl : this.vl(m), tau = r ? r.tau : this.tau(m), t = r ? this.t : 0;
+    const top = 22, bot = H - 16, cx = clamp(W * 0.3, 96, 170), tw = 52, rad = 6 + (m / 40) * 8;
+    c.fillStyle = K.liq; c.fillRect(cx - tw / 2, top, tw, bot - top);
+    c.strokeStyle = K.muted; c.lineWidth = 2; c.beginPath();
+    c.moveTo(cx - tw / 2, top - 10); c.lineTo(cx - tw / 2, bot); c.lineTo(cx + tw / 2, bot); c.lineTo(cx + tw / 2, top - 10); c.stroke();
+    for (let i = 0; i <= 15; i++) {
+      const y = top + rad + (i / 15) * (bot - top - 2 * rad);
+      c.strokeStyle = K.muted; c.lineWidth = 1; c.beginPath(); c.moveTo(cx - tw / 2 - (i % 5 ? 6 : 12), y); c.lineTo(cx - tw / 2, y); c.stroke();
+      if (i % 5 === 0) txt(c, fmt(i / 10, 1) + " m", cx - tw / 2 - 16, y + 4, { al: "right", col: K.muted, s: 11 });
+    }
+    const d = r ? Math.min(1.5, this.y(t, vl, tau)) : 0, v = r ? vl * (1 - Math.exp(-t / tau)) : 0;
+    const by = top + rad + (d / 1.5) * (bot - top - 2 * rad);
+    c.fillStyle = K.ink; c.beginPath(); c.arc(cx, by, rad, 0, 7); c.fill();
+    const lp = Math.min(48, H * 0.2);
+    arrow(c, cx, by, cx, by + lp, K.red, 2.5); txt(c, "P", cx + 9, by + lp, { col: K.red, b: true, mono: false, s: 14 });
+    const lf = lp * (v / vl);
+    if (lf > 4) { arrow(c, cx, by, cx, by - lf, K.good, 2.5); txt(c, "f", cx + 9, by - lf + 10, { col: K.good, b: true, mono: false, s: 14 }); }
+    const rx = cx + tw / 2 + 28;
+    txt(c, "t = " + fmt(t) + " s", rx, 40, { s: 14, b: true });
+    txt(c, "v = " + fmt(v) + " m/s", rx, 62, { s: 14, b: true, col: K.accent });
+    txt(c, "a = " + (r ? fmt(g * Math.exp(-t / tau)) : "9,80") + " m/s²", rx, 84, { s: 13, col: K.muted });
+    txt(c, "m = " + fmt(m, 1) + " g", rx, H - 40, { s: 13, col: K.muted });
+    txt(c, "f = k·v", rx, H - 20, { s: 13, col: K.good });
+  },
+  graph(cv) {
+    const r = this.run;
+    const o = { xmax: r ? r.tEnd : 1.5 / this.vT, ymax: Math.max(this.vT, r ? r.vl : 0) * 1.35, xl: "t (s)", yl: "v (m/s)", hl: [{ y: this.vT, label: "vₗ visée", color: K.accent, dash: [6, 4] }], vl: [], segs: [], curves: [] };
+    if (r) {
+      o.curves.push({ f: (t) => r.vl * (1 - Math.exp(-t / r.tau)), from: 0, to: this.t, color: K.ink, w: 2.5 });
+      if (!this.running) {
+        o.hl.push({ y: r.vl, label: "vₗ = " + fmt(r.vl) + " m/s", color: K.red, dash: [3, 3], side: "left" });
+        o.segs.push({ x1: 0, y1: 0, x2: r.tau * 1.25, y2: r.vl * 1.25, color: K.red, dash: [5, 4] });
+        o.vl.push({ x: r.tau, label: "τ = " + fmt(r.tau, 3) + " s", color: K.red, dash: [2, 3] });
+      }
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Forces sur la bille : le poids <b>P = m·g</b> et la force de frottement fluide <b>f = k·v</b> (poussée d'Archimède négligée).</p>
+<p class="eq">m·dv/dt = m·g − k·v  ⟹  dv/dt + (k/m)·v = g</p>
+<p>Régime permanent : dv/dt = 0, donc <b>vₗ = m·g / k</b>. Temps caractéristique : <b>τ = m / k</b>.</p>`,
+  qcm: { q: "En régime permanent, l'accélération de la bille est…", opts: ["égale à g", "nulle", "égale à k/m"], ok: 1, ex: "La vitesse est constante (v = vₗ), donc a = dv/dt = 0 : le poids et la force de frottement se compensent." },
+};
+
+/* ------------------------------------------------------------ station 2 : projectile */
+const S2 = {
+  id: "projectile", num: 2, chap: "Mécanique · Mouvement plan dans le champ de pesanteur", titre: "Tir d'un projectile", short: "Projectile",
+  init() { this.D = rnd(6, 14, 0.5); this.p = { v0: 8, a: 40 }; this.trails = []; },
+  controls() { return [{ id: "v0", label: "Vitesse initiale v₀", min: 3, max: 15, step: 0.1, unit: "m/s", d: 1 }, { id: "a", label: "Angle de tir α", min: 15, max: 75, step: 1, unit: "°", d: 0 }]; },
+  btn() { return "▶ Tirer"; },
+  goal() { return `Atteins la cible placée à <span class="target">D = ${fmt(this.D, 1)} m</span> du point de lancement (à ±0,3 m).`; },
+  data() { return "g = 9,8 m/s² · frottements de l'air négligés"; },
+  cap: "Composantes de la vitesse : vₓ reste constante (aucune force horizontale), v_y diminue linéairement car a_y = −g.",
+  action() {
+    const v0 = this.p.v0, a = this.p.a * DEG;
+    this.run = { v0, a, T: (2 * v0 * Math.sin(a)) / g, P: (v0 * v0 * Math.sin(2 * a)) / g };
+    return { anim: this.run.T, speed: 1 };
+  },
+  evaluate() {
+    const r = this.run;
+    this.trails.push(r); if (this.trails.length > 4) this.trails.shift();
+    if (Math.abs(r.P - this.D) <= 0.3) return { ok: true, msg: `Portée P = ${fmt(r.P, 1)} m : dans la cible !` };
+    return { ok: false, msg: `Portée P = ${fmt(r.P, 1)} m, la cible est à ${fmt(this.D, 1)} m : ${r.P < this.D ? "trop court. Augmente v₀ ou rapproche α de 45°." : "trop long. Diminue v₀."}` };
+  },
+  hint() { return "La portée vaut P = v₀²·sin(2α) / g. Fixe α = 45° (sin 90° = 1), puis calcule v₀ = √(g·D)."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run;
+    const s = Math.min((W - 44) / 24, (H - 50) / 11), ox = 24, gy = H - 26;
+    const PX = (x) => ox + x * s, PY = (y) => gy - y * s;
+    c.strokeStyle = K.ink; c.lineWidth = 2; c.beginPath(); c.moveTo(ox - 12, gy); c.lineTo(PX(24) + 6, gy); c.stroke();
+    for (let x = 0; x <= 24; x += 2) {
+      c.strokeStyle = K.muted; c.lineWidth = 1; c.beginPath(); c.moveTo(PX(x), gy); c.lineTo(PX(x), gy + (x % 4 ? 4 : 7)); c.stroke();
+      if (x % 4 === 0) txt(c, x + " m", PX(x), gy + 19, { al: "center", col: K.muted, s: 11 });
+    }
+    const D = this.D;
+    c.fillStyle = K.red; c.fillRect(PX(D - 0.3), gy - 4, 0.6 * s, 6);
+    c.strokeStyle = K.ink; c.lineWidth = 1.5; c.beginPath(); c.moveTo(PX(D), gy - 4); c.lineTo(PX(D), PY(1.6)); c.stroke();
+    c.fillStyle = K.red; c.beginPath(); c.moveTo(PX(D), PY(1.6)); c.lineTo(PX(D) + 16, PY(1.6) + 6); c.lineTo(PX(D), PY(1.6) + 12); c.fill();
+    const path = (tr, to) => { c.beginPath(); for (let i = 0; i <= 80; i++) { const t = (to * i) / 80, x = tr.v0 * Math.cos(tr.a) * t, y = tr.v0 * Math.sin(tr.a) * t - 0.5 * g * t * t; i ? c.lineTo(PX(x), PY(y)) : c.moveTo(PX(x), PY(y)); } c.stroke(); };
+    c.lineWidth = 1.5; c.strokeStyle = K.grid2; c.setLineDash([4, 4]);
+    for (const tr of this.trails) if (tr !== r) path(tr, tr.T);
+    c.setLineDash([]);
+    const v0 = r ? r.v0 : this.p.v0, a = r ? r.a : this.p.a * DEG;
+    c.strokeStyle = K.ink; c.lineWidth = 7; c.lineCap = "round"; c.beginPath(); c.moveTo(PX(0), PY(0)); c.lineTo(PX(0) + 18 * Math.cos(a), PY(0) - 18 * Math.sin(a)); c.stroke(); c.lineCap = "butt";
+    if (r) {
+      c.strokeStyle = K.accent; c.lineWidth = 2.5; path(r, this.t);
+      const t = this.t, x = v0 * Math.cos(a) * t, y = v0 * Math.sin(a) * t - 0.5 * g * t * t, vx = v0 * Math.cos(a), vy = v0 * Math.sin(a) - g * t;
+      c.fillStyle = K.ink; c.beginPath(); c.arc(PX(x), PY(y), 6, 0, 7); c.fill();
+      if (this.running) arrow(c, PX(x), PY(y), PX(x) + vx * s * 0.12, PY(y) - vy * s * 0.12, K.good, 2);
+      if (!this.running) txt(c, "P = " + fmt(r.P, 1) + " m", clamp(PX(r.P), 60, W - 60), gy - 14, { al: "center", s: 12, b: true, col: K.accent });
+    } else {
+      c.strokeStyle = K.accent; c.lineWidth = 1.5; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(PX(0), PY(0)); c.lineTo(PX(0) + 70 * Math.cos(a), PY(0) - 70 * Math.sin(a)); c.stroke(); c.setLineDash([]);
+    }
+    txt(c, "v₀ = " + fmt(v0, 1) + " m/s   α = " + Math.round(a / DEG) + "°", 14, 22, { s: 13, b: true });
+  },
+  graph(cv) {
+    const r = this.run, v0 = r ? r.v0 : this.p.v0, a = r ? r.a : this.p.a * DEG, T = (2 * v0 * Math.sin(a)) / g, vm = Math.ceil(v0 * 1.15);
+    const o = { xmax: T, ymin: -vm, ymax: vm, xl: "t (s)", yl: "v (m/s)", curves: [], pts: [] };
+    if (r) {
+      const t = this.t;
+      o.curves.push({ f: () => v0 * Math.cos(a), from: 0, to: t, color: K.good, w: 2.5 });
+      o.curves.push({ f: (x) => v0 * Math.sin(a) - g * x, from: 0, to: t, color: K.accent, w: 2.5 });
+      o.pts.push({ x: t, y: v0 * Math.cos(a), color: K.good, label: "vₓ" });
+      o.pts.push({ x: t, y: v0 * Math.sin(a) - g * t, color: K.accent, label: "v_y" });
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Seule force : le poids. D'après la 2ᵉ loi de Newton, a⃗ = g⃗, donc aₓ = 0 et a_y = −g.</p>
+<p class="eq">x(t) = v₀·cos α·t     y(t) = −½·g·t² + v₀·sin α·t</p>
+<p class="eq">y = −g / (2·v₀²·cos²α) · x² + tan α · x</p>
+<p>Portée horizontale : <b>P = v₀²·sin(2α) / g</b>.</p>`,
+  qcm: { q: "Pour une même vitesse v₀, quel angle de tir donne la portée maximale ?", opts: ["30°", "45°", "60°"], ok: 1, ex: "P = v₀²·sin(2α)/g est maximale quand sin(2α) = 1, c'est-à-dire α = 45°." },
+};
+
+/* ------------------------------------------------------------ station 3 : pendule élastique */
+const S3 = {
+  id: "ressort", num: 3, chap: "Mécanique · Systèmes oscillants", titre: "Pendule élastique horizontal", short: "Pendule élastique",
+  init() { this.K = pick([10, 16, 20, 25, 40]); this.TT = +this.Tof(rnd(100, 450, 10)).toFixed(2); this.p = { m: 250 }; },
+  Tof(m) { return 2 * Math.PI * Math.sqrt(m / 1000 / this.K); },
+  controls() { return [{ id: "m", label: "Masse du solide", min: 50, max: 500, step: 5, unit: "g", d: 0 }]; },
+  btn() { return "▶ Lâcher le solide"; },
+  goal() { return `Choisis la masse du solide pour obtenir une période propre <span class="target">T₀ = ${fmt(this.TT)} s</span> (à ±2 %).`; },
+  data() { return `K = ${this.K} N/m · amplitude Xₘ = 5 cm · frottements négligés`; },
+  cap: "Courbe x(t). En pointillés : l'oscillation visée. La période T₀ se lit entre deux maximums successifs.",
+  action() { const T = this.Tof(this.p.m); this.run = { T, m: this.p.m }; return { anim: 3 * T, speed: Math.min(1, (3 * T) / 2.5) }; },
+  evaluate() {
+    const T = this.run.T;
+    if (Math.abs(T - this.TT) / this.TT <= 0.02) return { ok: true, msg: `T₀ = ${fmt(T, 3)} s : le solide oscille au bon rythme.` };
+    return { ok: false, msg: `T₀ = ${fmt(T, 3)} s : ${T < this.TT ? "oscillations trop rapides. Augmente la masse." : "oscillations trop lentes. Diminue la masse."}` };
+  },
+  hint() { return "T₀ = 2π·√(m/K). Élève au carré : m = K·T₀² / (4π²). Calcule m en kg, puis convertis en grammes."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run;
+    const m = r ? r.m : this.p.m, T = r ? r.T : this.Tof(m), t = r ? this.t : 0, x = 5 * Math.cos((2 * Math.PI * t) / T);
+    const fy = H * 0.66, wallX = 30, eqX = W * 0.52, cm = Math.min(W * 0.028, 12), bw = 60, bh = 42;
+    c.fillStyle = K.grid2; c.fillRect(wallX - 14, fy - 96, 14, 100);
+    c.fillStyle = K.line; c.fillRect(wallX - 14, fy, W - wallX, 5);
+    const bx = eqX + x * cm - bw / 2, sy = fy - bh / 2;
+    c.strokeStyle = K.muted; c.lineWidth = 2; c.beginPath(); c.moveTo(wallX, sy); c.lineTo(wallX + 8, sy);
+    const n = 14, L = bx - wallX - 16;
+    for (let i = 1; i < 2 * n; i++) c.lineTo(wallX + 8 + (L * i) / (2 * n), sy + (i % 2 ? -10 : 10));
+    c.lineTo(bx - 8, sy); c.lineTo(bx, sy); c.stroke();
+    c.fillStyle = K.accent; c.beginPath(); c.roundRect ? c.roundRect(bx, fy - bh, bw, bh, 6) : c.rect(bx, fy - bh, bw, bh); c.fill();
+    txt(c, m + " g", bx + bw / 2, fy - bh / 2 + 5, { al: "center", col: K["accent-ink"], b: true, s: 13 });
+    const F = -x * 7;
+    if (Math.abs(F) > 4) { arrow(c, bx + bw / 2, fy - bh - 12, bx + bw / 2 + F, fy - bh - 12, K.red, 2.5); txt(c, "T", bx + bw / 2 + F + (F > 0 ? 6 : -14), fy - bh - 8, { col: K.red, b: true, mono: false, s: 14 }); }
+    for (let i = -6; i <= 6; i++) {
+      const px = eqX + i * cm; c.strokeStyle = K.muted; c.lineWidth = 1; c.beginPath(); c.moveTo(px, fy + 8); c.lineTo(px, fy + (i % 2 ? 13 : 18)); c.stroke();
+      if (i % 2 === 0) txt(c, i === 0 ? "O" : String(i), px, fy + 31, { al: "center", col: K.muted, s: 11 });
+    }
+    txt(c, "x (cm)", eqX + 6 * cm + 10, fy + 31, { col: K.muted, s: 11 });
+    txt(c, "t = " + fmt(t) + " s", W - 14, 26, { al: "right", s: 14, b: true });
+    txt(c, "x = " + fmt(x, 1) + " cm", W - 14, 48, { al: "right", s: 14, b: true, col: K.accent });
+  },
+  graph(cv) {
+    const r = this.run, T = r ? r.T : this.Tof(this.p.m), TT = this.TT, xmax = 3 * Math.max(T, TT);
+    const o = { xmax, ymin: -7, ymax: 7, xl: "t (s)", yl: "x (cm)", curves: [{ f: (t) => 5 * Math.cos((2 * Math.PI * t) / TT), from: 0, to: xmax, color: K.muted, w: 1.5, dash: [5, 4] }], segs: [] };
+    if (r) {
+      o.curves.push({ f: (t) => 5 * Math.cos((2 * Math.PI * t) / T), from: 0, to: this.t, color: K.accent, w: 2.5 });
+      if (!this.running) o.segs.push({ x1: 0, y1: 6.1, x2: T, y2: 6.1, color: K.red, arrows: true, label: "T₀ = " + fmt(T, 3) + " s" });
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Le solide est soumis à son poids P⃗ et à la réaction R⃗ (qui se compensent), et à la tension du ressort T⃗ = −K·x·i⃗.</p>
+<p class="eq">m·ẍ + K·x = 0  ⟹  x(t) = Xₘ·cos(2π·t / T₀ + φ)</p>
+<p>Période propre : <b>T₀ = 2π·√(m / K)</b>. Elle ne dépend pas de l'amplitude.</p>`,
+  qcm: { q: "On multiplie la masse du solide par 4. La période propre T₀ est…", opts: ["multipliée par 4", "multipliée par 2", "divisée par 2"], ok: 1, ex: "T₀ = 2π·√(m/K) varie comme √m, et √4 = 2." },
+};
+
+/* ------------------------------------------------------------ station 4 : dipôle RC */
+const S4 = {
+  id: "rc", num: 4, chap: "Électricité · Dipôle RC", titre: "Charge d'un condensateur", short: "Dipôle RC",
+  init() {
+    this.C = pick([47, 100, 220]);
+    const Rmin = Math.ceil((300 / this.C) * 2) / 2, Rmax = Math.min(30, Math.floor((2000 / this.C) * 2) / 2);
+    this.TT = +((rnd(Rmin, Rmax, 0.5) * this.C) / 1000).toFixed(2);
+    this.p = { R: 5 };
+  },
+  tauOf(R) { return (R * this.C) / 1000; },
+  controls() { return [{ id: "R", label: "Résistance R", min: 0.5, max: 30, step: 0.1, unit: "kΩ", d: 1 }]; },
+  btn() { return "▶ Fermer l'interrupteur"; },
+  goal() { return `Choisis R pour que la constante de temps du circuit soit <span class="target">τ = ${fmt(this.TT)} s</span> (à ±2 %).`; },
+  data() { return `E = 6 V · C = ${this.C} µF · condensateur déchargé au départ`; },
+  cap: "Courbe u_C(t). On lit τ à 0,63·E, ou là où la tangente à l'origine coupe la droite u = E.",
+  action() { const tau = this.tauOf(this.p.R); this.run = { tau, R: this.p.R }; return { anim: 5 * tau, speed: Math.max(0.4, (5 * tau) / 3) }; },
+  evaluate() {
+    const tau = this.run.tau;
+    if (Math.abs(tau - this.TT) / this.TT <= 0.02) return { ok: true, msg: `τ = R·C = ${fmt(tau, 3)} s. Le condensateur est chargé à 99 % après 5τ = ${fmt(5 * tau)} s.` };
+    return { ok: false, msg: `τ = ${fmt(tau, 3)} s : charge ${tau < this.TT ? "trop rapide. Augmente R." : "trop lente. Diminue R."}` };
+  },
+  hint() { return "τ = R·C, donc R = τ / C. Attention aux unités : C en farads (1 µF = 10⁻⁶ F), R en ohms (1 kΩ = 10³ Ω)."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run, E = 6;
+    const R = r ? r.R : this.p.R, tau = r ? r.tau : this.tauOf(R), t = r ? this.t : 0, u = r ? E * (1 - Math.exp(-t / tau)) : 0, i = r ? ((E - u) / (R * 1000)) * 1000 : 0;
+    const x1 = Math.max(46, W * 0.1), x2 = Math.min(x1 + 300, W * 0.62), y1 = 30, y2 = H - 30, gy = (y1 + y2) / 2, cy = gy;
+    c.strokeStyle = K.ink; c.lineWidth = 2; c.beginPath();
+    c.moveTo(x1, gy - 8); c.lineTo(x1, y1); c.lineTo(x1 + 30, y1);
+    const swx = x1 + 30, rx = x1 + (x2 - x1) * 0.48;
+    c.moveTo(swx + 34, y1); c.lineTo(rx, y1); c.moveTo(rx + 54, y1); c.lineTo(x2, y1); c.lineTo(x2, cy - 6);
+    c.moveTo(x2, cy + 6); c.lineTo(x2, y2); c.lineTo(x1, y2); c.lineTo(x1, gy + 8); c.stroke();
+    c.lineWidth = 3; c.beginPath(); c.moveTo(x1 - 14, gy - 8); c.lineTo(x1 + 14, gy - 8); c.stroke();
+    c.lineWidth = 5; c.beginPath(); c.moveTo(x1 - 7, gy + 8); c.lineTo(x1 + 7, gy + 8); c.stroke();
+    txt(c, "E", x1 - 22, gy + 4, { al: "right", b: true, mono: false, s: 15 });
+    c.lineWidth = 2; c.beginPath(); c.moveTo(swx, y1); r ? c.lineTo(swx + 34, y1) : c.lineTo(swx + 30, y1 - 16); c.stroke();
+    c.fillStyle = K.ink; for (const px of [swx, swx + 34]) { c.beginPath(); c.arc(px, y1, 3, 0, 7); c.fill(); }
+    txt(c, "K", swx + 17, y1 - 20, { al: "center", b: true, mono: false, s: 13 });
+    c.fillStyle = K.card; c.fillRect(rx, y1 - 9, 54, 18); c.strokeRect(rx, y1 - 9, 54, 18);
+    txt(c, "R", rx + 27, y1 - 15, { al: "center", b: true, mono: false, s: 13 });
+    c.lineWidth = 3; c.beginPath(); c.moveTo(x2 - 20, cy - 6); c.lineTo(x2 + 20, cy - 6); c.moveTo(x2 - 20, cy + 6); c.lineTo(x2 + 20, cy + 6); c.stroke();
+    const nq = Math.round((u / E) * 5);
+    for (let k = 0; k < nq; k++) { txt(c, "+", x2 - 16 + k * 8, cy - 11, { col: K.red, b: true, s: 12 }); txt(c, "−", x2 - 16 + k * 8, cy + 20, { col: K.accent, b: true, s: 12 }); }
+    txt(c, "C", x2 - 28, cy + 4, { al: "right", b: true, mono: false, s: 13 });
+    const vx = Math.min(x2 + 58, W - 50);
+    c.strokeStyle = K.muted; c.lineWidth = 1.5; c.beginPath();
+    c.moveTo(x2, cy - 30); c.lineTo(vx, cy - 30); c.lineTo(vx, cy - 15); c.moveTo(vx, cy + 15); c.lineTo(vx, cy + 30); c.lineTo(x2, cy + 30); c.stroke();
+    c.beginPath(); c.arc(vx, cy, 15, 0, 7); c.stroke();
+    txt(c, "V", vx, cy + 5, { al: "center", b: true, mono: false, s: 14 });
+    txt(c, "u_C = " + fmt(u) + " V", vx, cy + 52, { al: "center", b: true, s: 13, col: K.accent });
+    if (r && i > 0.005) { arrow(c, rx + 64, y1 + 12, rx + 90, y1 + 12, K.good, 2); txt(c, "i = " + fmt(i) + " mA", rx + 64, y1 + 30, { col: K.good, s: 12, b: true }); }
+    txt(c, "t = " + fmt(t) + " s", W - 12, H - 12, { al: "right", s: 13, b: true });
+  },
+  graph(cv) {
+    const r = this.run, tau = r ? r.tau : this.tauOf(this.p.R), xmax = 5 * Math.max(tau, this.TT);
+    const o = { xmax, ymax: 7, xl: "t (s)", yl: "u_C (V)", hl: [{ y: 6, label: "E = 6 V", color: K.muted, dash: [2, 3] }, { y: 0.63 * 6, label: "0,63·E", color: K.muted, dash: [5, 4] }], vl: [{ x: this.TT, label: "τ visée", color: K.accent, dash: [5, 4] }], curves: [], segs: [] };
+    if (r) {
+      o.curves.push({ f: (t) => 6 * (1 - Math.exp(-t / r.tau)), from: 0, to: this.t, color: K.ink, w: 2.5 });
+      if (!this.running) { o.segs.push({ x1: 0, y1: 0, x2: r.tau, y2: 6, color: K.red, dash: [5, 4] }); o.vl.push({ x: r.tau, label: "τ = " + fmt(r.tau, 3) + " s", color: K.red, dash: [2, 3], row: 1 }); }
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Loi d'additivité des tensions : u_R + u_C = E, avec u_R = R·i et i = C·du_C/dt.</p>
+<p class="eq">R·C·du_C/dt + u_C = E  ⟹  u_C(t) = E·(1 − e^(−t/τ))</p>
+<p>Constante de temps : <b>τ = R·C</b>. À t = τ, u_C = 0,63·E. Le condensateur est chargé à 99 % après 5τ.</p>`,
+  qcm: { q: "À l'instant t = τ, la tension aux bornes du condensateur vaut…", opts: ["37 % de E", "63 % de E", "100 % de E"], ok: 1, ex: "u_C(τ) = E·(1 − e⁻¹) ≈ 0,63·E." },
+};
+
+/* ------------------------------------------------------------ station 5 : décroissance radioactive */
+const ISOS = [
+  { n: "Iode 131", th: 8.0, u: "jours" }, { n: "Phosphore 32", th: 14.3, u: "jours" }, { n: "Radon 222", th: 3.8, u: "jours" },
+  { n: "Cobalt 60", th: 5.3, u: "ans" }, { n: "Césium 137", th: 30.1, u: "ans" },
+];
+const S5 = {
+  id: "nucleaire", num: 5, chap: "Transformations nucléaires · Décroissance radioactive", titre: "Mesure d'une demi-vie", short: "Radioactivité", keepRun: true,
+  init() {
+    this.iso = pick(ISOS); this.th = this.iso.th; this.counted = false; this.p = { t: 0 };
+    const lam = Math.LN2 / this.th; this.dec = Array.from({ length: 400 }, () => -Math.log(1 - Math.random()) / lam);
+  },
+  count(t) { let n = 0; for (const d of this.dec) if (d > t) n++; return n; },
+  controls() { return [{ id: "t", label: "Curseur de lecture t", min: 0, max: +(5 * this.th).toFixed(1), step: 0.1, unit: this.iso.u, d: 1, dis: () => !this.counted }]; },
+  btn() { return this.counted ? `Valider t½ ≈ ${fmt(this.p.t, 1)} ${this.iso.u}` : "▶ Lancer le comptage"; },
+  goal() { return `Mesure la demi-vie <span class="target">t½</span> de l'échantillon de ${this.iso.n.toLowerCase()} sur la courbe N(t) (à ±3 %).`; },
+  data() { return `${this.iso.n} · N₀ = 400 noyaux à t = 0`; },
+  cap: "Points : noyaux comptés. Courbe : loi N(t) = N₀·e^(−λt). La demi-vie est la date où N = N₀/2.",
+  action() {
+    if (!this.counted) return { anim: 5 * this.th, speed: this.th };
+    return this.check();
+  },
+  evaluate() { this.counted = true; this.p.t = 0; return { info: true, refresh: true, msg: "Comptage terminé. Déplace le curseur jusqu'à N = N₀/2 = 200 noyaux, puis valide ta lecture." }; },
+  check() {
+    const t = this.p.t, N = 400 * Math.exp((-Math.LN2 / this.th) * t), u = this.iso.u;
+    if (Math.abs(t - this.th) / this.th <= 0.03) return { ok: true, msg: `t½ ≈ ${fmt(t, 1)} ${u}, donc λ = ln 2 / t½ ≈ ${fmt(Math.LN2 / t, 3)} ${u}⁻¹.` };
+    return { ok: false, msg: `À t = ${fmt(t, 1)} ${u}, il reste N ≈ ${Math.round(N)} noyaux. Il en faut 200 : ${t < this.th ? "avance" : "recule"} le curseur.` };
+  },
+  hint() { return "Trace mentalement la droite horizontale N = 200 (pointillés) : la demi-vie est l'abscisse de son intersection avec la courbe."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv);
+    const t = this.running ? this.t : this.counted ? this.p.t : 0;
+    const size = Math.min(H - 28, W * 0.55), cell = size / 20, ox = 14, oy = (H - size) / 2;
+    let n = 0;
+    for (let k = 0; k < 400; k++) {
+      const x = ox + (k % 20) * cell + cell / 2, y = oy + Math.floor(k / 20) * cell + cell / 2, alive = this.dec[k] > t;
+      c.beginPath(); c.arc(x, y, cell * 0.32, 0, 7);
+      if (alive) { c.fillStyle = K.accent; c.fill(); n++; } else { c.strokeStyle = K.grid2; c.lineWidth = 1; c.stroke(); }
+    }
+    const rx = ox + size + 22;
+    txt(c, this.iso.n, rx, oy + 18, { b: true, mono: false, s: 15 });
+    txt(c, "N = " + n, rx, oy + 52, { b: true, s: 22, col: K.accent });
+    txt(c, "t = " + fmt(t, 1) + " " + this.iso.u, rx, oy + 78, { s: 14, b: true });
+    txt(c, "● noyau intact", rx, oy + size - 24, { s: 11, col: K.accent });
+    txt(c, "○ désintégré", rx, oy + size - 6, { s: 11, col: K.muted });
+  },
+  graph(cv) {
+    const th = this.th, lam = Math.LN2 / th, tmax = 5 * th, tt = this.running ? this.t : this.counted ? tmax : 0;
+    const o = { xmax: tmax, ymax: 440, xl: "t (" + this.iso.u + ")", yl: "N (noyaux)", hl: [{ y: 200, label: "N₀/2 = 200", color: K.muted, dash: [5, 4] }], vl: [], curves: [], pts: [] };
+    if (tt > 0) o.curves.push({ f: (t) => 400 * Math.exp(-lam * t), from: 0, to: tt, color: K.accent, w: 2.5 });
+    for (let k = 0; (k * th) / 2 <= tt + 1e-9; k++) o.pts.push({ x: (k * th) / 2, y: this.count((k * th) / 2), color: K.ink, r: 3 });
+    if (this.counted && !this.running) {
+      const N = 400 * Math.exp(-lam * this.p.t);
+      o.vl.push({ x: this.p.t, label: "t = " + fmt(this.p.t, 1), color: K.red });
+      o.pts.push({ x: this.p.t, y: N, color: K.red, r: 5, label: "N ≈ " + Math.round(N) });
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Loi de décroissance radioactive :</p>
+<p class="eq">N(t) = N₀·e^(−λ·t)</p>
+<p>Demi-vie : durée au bout de laquelle la moitié des noyaux initiaux s'est désintégrée. <b>t½ = ln 2 / λ</b>. Activité : a(t) = λ·N(t).</p>`,
+  qcm: { q: "Après une durée égale à 2·t½, il reste…", opts: ["N₀/2 noyaux", "N₀/4 noyaux", "aucun noyau"], ok: 1, ex: "Chaque demi-vie divise N par 2 : N₀ → N₀/2 → N₀/4." },
+};
+
+/* ------------------------------------------------------------ application */
+const S = [S1, S2, S3, S4, S5];
+let cur = -1, raf = 0, who = "";
+const cvS = $("#scene"), cvG = $("#graph");
+
+function resetStation(st) { st.fails = 0; st.done = false; st.qcmDone = false; st.qcmFirst = null; st.fb = null; st.run = null; st.t = 0; st.running = false; st.init(); }
+function points(st) { return (st.done ? clamp(3 - 0.5 * st.fails, 1, 3) : 0) + (st.qcmDone && st.qcmFirst ? 1 : 0); }
+function show(id) { for (const s of ["welcome", "station", "report"]) $("#" + s).hidden = s !== id; }
+function draw() { if (cur < 0) return; readColors(); const st = S[cur]; st.scene(cvS); st.graph(cvG); }
+
+function renderTabs() {
+  const nav = $("#tabs"); nav.innerHTML = "";
+  S.forEach((st, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab" + (st.done && st.qcmDone ? " done" : "");
+    b.setAttribute("aria-current", String(i === cur && !$("#station").hidden));
+    b.innerHTML = `<span class="n">${st.done && st.qcmDone ? "✓" : st.num}</span><span>${st.short}</span>`;
+    b.onclick = () => openStation(i); nav.append(b);
+  });
+  const r = document.createElement("button");
+  r.type = "button"; r.className = "tab"; r.setAttribute("aria-current", String(!$("#report").hidden));
+  r.innerHTML = `<span class="n">20</span><span>Bilan</span>`; r.onclick = openReport; nav.append(r);
+  const done = S.filter((s) => s.done && s.qcmDone).length, tot = S.reduce((a, s) => a + points(s), 0);
+  $("#prog").textContent = done + "/5 stations";
+  $("#note").textContent = "Note : " + (S.some((s) => s.done) ? fmt(tot, tot % 1 ? 1 : 0) : "–") + "/20";
+}
+
+function stop() { cancelAnimationFrame(raf); if (cur >= 0 && S[cur].running) { S[cur].running = false; S[cur].run = null; } }
+
+function openStation(i) {
+  stop(); cur = i; show("station");
+  const st = S[i];
+  $("#chap").textContent = st.chap; $("#titre").textContent = st.num + ". " + st.titre;
+  $("#goal").innerHTML = st.goal(); $("#data").textContent = st.data();
+  $("#cours").innerHTML = st.cours; $("#gcap").textContent = st.cap;
+  buildCtrls(st); renderFb(st); renderQcm(st); renderTabs(); updBtn();
+  requestAnimationFrame(draw);
+}
+
+function buildCtrls(st) {
+  const box = $("#ctrls"); box.innerHTML = ""; st._ctrls = st.controls();
+  for (const k of st._ctrls) {
+    const id = st.id + "-" + k.id, w = document.createElement("div");
+    w.className = "ctl";
+    w.innerHTML = `<div class="ctl-top"><label for="${id}">${k.label}</label><output for="${id}"></output></div>
+      <div class="ctl-row"><button type="button" class="step" data-d="-1" aria-label="Diminuer ${k.label}">−</button><input type="range" id="${id}" min="${k.min}" max="${k.max}" step="${k.step}"><button type="button" class="step" data-d="1" aria-label="Augmenter ${k.label}">+</button></div>`;
+    box.append(w);
+    const inp = w.querySelector("input"), out = w.querySelector("output");
+    inp.value = st.p[k.id];
+    const sync = () => { out.textContent = fmt(st.p[k.id], k.d) + " " + k.unit; };
+    const set = (v) => { st.p[k.id] = v; inp.value = v; sync(); if (!st.keepRun) st.run = null; updBtn(); draw(); };
+    sync();
+    inp.addEventListener("input", () => set(+inp.value));
+    w.querySelectorAll(".step").forEach((b) => b.addEventListener("click", () => set(clamp(+(st.p[k.id] + +b.dataset.d * k.step).toFixed(4), k.min, k.max))));
+  }
+  setLock(false);
+}
+function setLock(b) {
+  const st = S[cur];
+  $("#ctrls").querySelectorAll(".ctl").forEach((w, i) => {
+    const k = st._ctrls[i], d = b || (k.dis ? k.dis() : false);
+    w.querySelectorAll("input,button").forEach((e) => (e.disabled = d)); w.classList.toggle("off", d);
+  });
+  $("#go").disabled = b;
+}
+function updBtn() { const st = S[cur]; $("#go").textContent = st.btn ? st.btn() : "▶ Lancer l'expérience"; }
+
+function play(st, dur, speed) {
+  st.t = 0; st.running = true; setLock(true);
+  $("#fb").hidden = true;
+  let last = performance.now();
+  const f = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    st.t = Math.min(dur, st.t + dt * speed); draw();
+    if (st.t < dur) raf = requestAnimationFrame(f);
+    else { st.running = false; finish(st, st.evaluate()); }
+  };
+  raf = requestAnimationFrame(f);
+}
+function finish(st, res) {
+  if (res.info) st.fb = { kind: "info", msg: res.msg };
+  else if (res.ok) { st.done = true; st.fb = { kind: "good", msg: res.msg }; }
+  else { if (!st.done) st.fails++; st.fb = { kind: "bad", msg: res.msg, hint: st.fails >= 2 && !st.done ? st.hint() : null }; }
+  setLock(false); updBtn(); renderFb(st); renderQcm(st); renderTabs(); draw();
+}
+function renderFb(st) {
+  const el = $("#fb"), f = st.fb;
+  el.hidden = !f; if (!f) return;
+  el.className = "fb " + f.kind;
+  const tag = { good: "Réussi", bad: "Pas encore", info: "À toi" }[f.kind];
+  el.innerHTML = `<span class="tag">${tag}</span><p>${f.msg}</p>` + (f.hint ? `<p class="hint"><b>Indice :</b> ${f.hint}</p>` : "");
+}
+function renderQcm(st) {
+  const box = $("#qcm"); box.hidden = !st.done; if (!st.done) return;
+  const q = st.qcm;
+  box.innerHTML = `<p class="eyebrow">Question de cours</p><p class="q">${q.q}</p><div class="opts"></div><p class="qfb" hidden></p><button class="btn" id="qnext" type="button" hidden></button>`;
+  const opts = box.querySelector(".opts"), qfb = box.querySelector(".qfb"), next = box.querySelector("#qnext");
+  q.opts.forEach((o, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "opt"; b.textContent = o;
+    if (st.qcmDone) { b.disabled = true; if (i === q.ok) b.classList.add("right"); }
+    b.onclick = () => {
+      if (i === q.ok) { if (st.qcmFirst === null) st.qcmFirst = true; st.qcmDone = true; renderQcm(st); renderTabs(); }
+      else { st.qcmFirst = false; b.classList.add("wrong"); b.disabled = true; qfb.hidden = false; qfb.textContent = "Pas tout à fait. Relis le rappel du cours et réessaie."; }
+    };
+    opts.append(b);
+  });
+  if (st.qcmDone) {
+    qfb.hidden = false; qfb.innerHTML = "<b>Exact.</b> " + q.ex;
+    next.hidden = false;
+    const nextIdx = S.findIndex((s, i) => i > cur && !(s.done && s.qcmDone));
+    next.textContent = nextIdx >= 0 ? "Station suivante →" : "Voir mon bilan →";
+    next.onclick = () => (nextIdx >= 0 ? openStation(nextIdx) : openReport());
+  }
+}
+function openReport() {
+  stop(); show("report"); cur = Math.max(cur, 0);
+  const tot = S.reduce((a, s) => a + points(s), 0);
+  $("#gradeN").textContent = fmt(tot, tot % 1 ? 1 : 0);
+  $("#who").textContent = (who ? who + " · " : "") + new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const tb = $("#repRows"); tb.innerHTML = "";
+  for (const s of S) {
+    const tr = document.createElement("tr");
+    const cells = [s.num + ". " + s.titre, s.done ? String(s.fails) : "non faite", s.qcmDone ? (s.qcmFirst ? "juste" : "juste au 2ᵉ essai") : "–", fmt(points(s), points(s) % 1 ? 1 : 0) + " / 4"];
+    cells.forEach((t, i) => { const td = document.createElement("td"); td.textContent = t; if (i === 1 || i === 3) td.className = "num"; tr.append(td); });
+    tb.append(tr);
+  }
+  renderTabs();
+}
+
+$("#startForm").addEventListener("submit", (e) => { e.preventDefault(); who = $("#name").value.trim(); openStation(0); });
+$("#go").addEventListener("click", () => { const st = S[cur]; if (st.running) return; const r = st.action(); if (r.anim != null) play(st, r.anim, r.speed || 1); else finish(st, r); });
+$("#again").addEventListener("click", () => { S.forEach(resetStation); openStation(0); });
+$("#back").addEventListener("click", () => openStation(Math.max(0, S.findIndex((s) => !(s.done && s.qcmDone)))));
+
+const plan = $("#plan");
+const units = ["Mécanique", "Mécanique", "Mécanique", "Électricité", "Nucléaire"];
+S.forEach((s, i) => { const li = document.createElement("li"); li.innerHTML = `<span class="n">${s.num}</span><b>${s.titre}</b><span>${units[i]} · ${s.chap.split("·")[1].trim()}</span>`; plan.append(li); });
+
+S.forEach(resetStation); renderTabs();
+new ResizeObserver(() => draw()).observe(cvS);
+new ResizeObserver(() => draw()).observe(cvG);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>

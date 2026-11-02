@@ -1,0 +1,1069 @@
+<title>Labo Sciences 2BAC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : cahier de TP — paillasse + graphique à gauche, réglages et objectif à droite ; une colonne sur téléphone */
+:root{
+  --paper:#f2f5f9; --card:#ffffff; --well:#e9eff6; --ink:#14213a; --muted:#56667f;
+  --line:#d3dce8; --grid:#dfe7f1; --grid2:#c4d1e2; --accent:#2150c8; --accent-ink:#ffffff;
+  --red:#c4382d; --good:#16805a; --good-bg:#e1f3ea; --bad-bg:#fbe8e5; --info-bg:#e6ecfb;
+  --liq:rgba(33,80,200,.10); --pink:#d93a8e; --muscle:#c75b55;
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0d1320; --card:#151e2f; --well:#101827; --ink:#e3e9f4; --muted:#93a1ba;
+  --line:#26324a; --grid:#1a2437; --grid2:#2a3852; --accent:#7ea3ff; --accent-ink:#0a1120;
+  --red:#ff7d70; --good:#4bc991; --good-bg:#11301f; --bad-bg:#3a1915; --info-bg:#16223d;
+  --liq:rgba(126,163,255,.12); --pink:#f27bbb; --muscle:#e07d73; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#0d1320; --card:#151e2f; --well:#101827; --ink:#e3e9f4; --muted:#93a1ba;
+  --line:#26324a; --grid:#1a2437; --grid2:#2a3852; --accent:#7ea3ff; --accent-ink:#0a1120;
+  --red:#ff7d70; --good:#4bc991; --good-bg:#11301f; --bad-bg:#3a1915; --info-bg:#16223d;
+  --liq:rgba(126,163,255,.12); --pink:#f27bbb; --muscle:#e07d73; color-scheme:dark;
+}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;padding-block:18px 8px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand b{font-family:var(--f-display);font-weight:800;font-size:22px;letter-spacing:-.01em}
+.brand span{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.score{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-family:var(--f-mono);font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-variant-numeric:tabular-nums}
+nav.tabs{display:flex;gap:6px;overflow-x:auto;padding-block:6px 16px;scrollbar-width:thin}
+.tab{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:7px 12px 7px 8px;font:inherit;font-size:14px;cursor:pointer}
+.tab .n{font-family:var(--f-mono);font-weight:700;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--well);font-size:12px}
+.tab[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tab.done .n{background:var(--good);color:var(--card)}
+.head{margin-bottom:14px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0}
+h1,h2{font-family:var(--f-display);font-weight:800;line-height:1.1;text-wrap:balance;letter-spacing:-.015em}
+h1{font-size:clamp(26px,3.4vw,36px);margin:4px 0 0}
+h2{font-size:20px;margin:0}
+.cols{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:start}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+canvas{display:block;width:100%;max-width:100%;background:var(--well);border-radius:12px}
+#scene{aspect-ratio:16/9;border:1px solid var(--line)}
+#stage{position:relative;min-width:0}
+#scene3d{position:relative;width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--well);touch-action:none;cursor:grab}
+#scene3d:empty{display:none}
+#scene3d canvas{position:absolute;inset:0;border-radius:0;width:100%!important;height:100%!important;background:transparent}
+.navhint{position:absolute;left:10px;bottom:10px;margin:0;font-size:12px;line-height:1.3;padding:5px 9px;border-radius:8px;background:rgba(12,18,28,.62);color:#f3f6fb;pointer-events:none;max-width:calc(100% - 20px)}
+#graph{aspect-ratio:16/10}
+.cap{font-size:13px;color:var(--muted);margin:8px 0 0}
+.goal p{margin:6px 0 0;font-size:17px}
+.target{font-family:var(--f-mono);color:var(--accent);white-space:nowrap;font-weight:700}
+.data{font-family:var(--f-mono);font-size:13px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+#ctrls{display:flex;flex-direction:column;gap:16px}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.ctl-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.ctl label{font-weight:700;font-size:15px}
+output{font-family:var(--f-mono);font-weight:700;font-size:16px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ctl-row{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:30px;margin:0}
+.step{flex:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--well);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;font-family:var(--f-mono)}
+.ctl.off{opacity:.45}
+.btn{width:100%;padding:14px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;font-size:17px;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.ghost{background:var(--well);color:var(--ink);border:1px solid var(--line)}
+#go{margin-top:18px}
+.fb{border-radius:12px;padding:12px 14px;margin-top:14px}
+.fb.good{background:var(--good-bg)} .fb.bad{background:var(--bad-bg)} .fb.info{background:var(--info-bg)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px}
+.good .tag{background:var(--good);color:var(--card)} .bad .tag{background:var(--red);color:var(--card)} .info .tag{background:var(--accent);color:var(--accent-ink)}
+.fb p{margin:6px 0 0}
+.fb .hint{font-size:14px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:700}
+details p{margin:10px 0 0}
+.eq{font-family:var(--f-mono);font-size:14px;background:var(--well);padding:8px 10px;border-radius:8px;overflow-x:auto;white-space:nowrap}
+.q{font-weight:700;margin:6px 0 0}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.opt{text-align:left;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+.opt:disabled{cursor:default}
+.opt.right{border-color:var(--good);background:var(--good-bg);font-weight:700}
+.opt.wrong{border-color:var(--red);background:var(--bad-bg);animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.qfb{margin:10px 0 0;font-size:15px}
+#qnext{margin-top:12px}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* accueil */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start}
+.hero h1{font-size:clamp(32px,5vw,52px)}
+.lead{font-size:18px;max-width:58ch;color:var(--muted);margin:12px 0 0}
+.start{display:flex;flex-direction:column;gap:10px;margin-top:22px;max-width:420px}
+.start input{font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.small{font-size:13px;color:var(--muted);margin:0}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.list li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 10px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.list li:last-child{border-bottom:0}
+.list .n{grid-row:span 2;font-family:var(--f-mono);font-weight:700;color:var(--accent);font-size:18px}
+.list b{font-size:16px} .list span{font-size:13px;color:var(--muted)}
+/* bilan */
+.rep-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.grade{text-align:right}
+.grade b{display:block;font-family:var(--f-display);font-size:56px;line-height:1;font-variant-numeric:tabular-nums}
+.grade span{font-size:13px;color:var(--muted)}
+.tbl{overflow-x:auto;margin-top:16px}
+table{width:100%;border-collapse:collapse;font-size:15px;min-width:460px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.ideas{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.ideas code{font-family:var(--f-mono);font-size:14px}
+.rep-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.rep-actions .btn{width:auto;padding:12px 18px}
+@media (max-width:860px){
+  .cols{display:flex;flex-direction:column;align-items:stretch}
+  .col{display:contents}
+  .o1{order:1}.o2{order:2}.o3{order:3}.o4{order:4}.o5{order:5}.o6{order:6}
+  .hero{grid-template-columns:minmax(0,1fr)}
+  #graph,#scene,#scene3d{aspect-ratio:4/3}
+}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><b>Labo Sciences</b><span>2ᵉ Bac PC · BIOF</span></div>
+    <div class="score"><span class="chip" id="prog">0/3 manips</span><span class="chip" id="note">Note : –/20</span></div>
+  </header>
+  <nav class="tabs" id="tabs" aria-label="Stations"></nav>
+
+  <section id="welcome">
+    <div class="hero">
+      <div>
+        <p class="eyebrow">Travaux pratiques simulés</p>
+        <h1>Physique, chimie, SVT : une manip de chaque, une note sur 20</h1>
+        <p class="lead">Pour chaque manipulation : un objectif, un ou deux réglages, un graphique à exploiter comme à l'examen national, puis une question de cours.</p>
+        <form class="start" id="startForm">
+          <label for="name" class="eyebrow">Ton prénom (pour le bilan)</label>
+          <input id="name" maxlength="40" autocomplete="given-name" placeholder="Ex. Salma">
+          <button class="btn" type="submit">Commencer le TP →</button>
+          <p class="small">Les valeurs visées changent à chaque partie : chaque élève a son propre objectif.</p>
+        </form>
+      </div>
+      <div class="panel">
+        <p class="eyebrow">Au programme</p>
+        <ul class="list" id="plan"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="station" hidden>
+    <div class="head"><p class="eyebrow" id="chap"></p><h1 id="titre"></h1></div>
+    <div class="cols">
+      <div class="col">
+        <div id="stage" class="o2">
+          <div id="scene3d" aria-label="Paillasse en 3D : glisse pour tourner autour du matériel"></div>
+          <canvas id="scene" hidden aria-label="Animation de l'expérience"></canvas>
+          <p class="navhint" id="navhint" hidden>Glisse pour tourner · molette ou pincement pour zoomer · double-clic pour recentrer</p>
+        </div>
+        <div class="panel o5"><p class="eyebrow">Graphique</p><canvas id="graph" style="margin-top:10px" aria-label="Graphique de l'expérience"></canvas><p class="cap" id="gcap"></p></div>
+      </div>
+      <div class="col">
+        <div class="panel goal o1"><p class="eyebrow">Objectif</p><p id="goal"></p><div class="data" id="data"></div></div>
+        <div class="panel o3">
+          <p class="eyebrow" style="margin-bottom:12px">Réglages</p>
+          <div id="ctrls"></div>
+          <button class="btn" id="go" type="button"></button>
+          <div class="fb" id="fb" hidden></div>
+        </div>
+        <div class="panel o4" id="qcm" hidden></div>
+        <div class="panel o6"><details id="coursBox"><summary>Rappel du cours</summary><div id="cours"></div></details></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="report" hidden>
+    <div class="panel">
+      <div class="rep-top">
+        <div><p class="eyebrow">Bilan du TP</p><h1>Dipôle RC, dosage acide-base et myogramme</h1><p class="small" id="who" style="margin-top:8px"></p></div>
+        <div class="grade"><b id="gradeN"></b><span>note sur 20</span></div>
+      </div>
+      <div class="tbl"><table><thead><tr><th>Station</th><th>Essais ratés</th><th>Question</th><th>Points</th></tr></thead><tbody id="repRows"></tbody></table></div>
+      <p class="small" style="margin-top:10px">Barème par manip : 3 points pour la manipulation (−0,5 par essai raté, minimum 1), 1 point si la question est juste du premier coup. Le total est ramené sur 20.</p>
+      <h2 style="margin-top:22px">À retenir</h2>
+      <ul class="ideas">
+        <li>Physique, dipôle RC : <code>τ = R·C</code> et u_C(τ) = 0,63·E</li>
+        <li>Chimie, dosage : <code>C_A·V_A = C_B·V_E</code> et pH = pKa à la demi-équivalence</li>
+        <li>SVT, muscle : recrutement des fibres avec l'intensité, tétanos parfait au-delà de la fréquence de fusion, énergie fournie par l'ATP</li>
+      </ul>
+      <div class="rep-actions">
+        <button class="btn" id="again" type="button">Refaire avec de nouvelles valeurs</button>
+        <button class="btn ghost" id="back" type="button">Revenir aux stations</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+"use strict";
+const g = 9.8;
+const $ = (s) => document.querySelector(s);
+const fmt = (x, d = 2) => { if (Math.abs(x) < 1e-9) x = 0; return (Math.round(x * 10 ** d) / 10 ** d).toFixed(d).replace(".", ","); };
+const rnd = (a, b, s) => +(a + s * Math.floor(Math.random() * (Math.round((b - a) / s) + 1))).toFixed(4);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const DEG = Math.PI / 180;
+
+/* ------------------------------------------------------------ dessin */
+let K = {};
+function readColors() {
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ["ink", "muted", "grid", "grid2", "accent", "accent-ink", "red", "good", "card", "well", "line", "liq", "pink", "muscle"]) K[k] = s.getPropertyValue("--" + k).trim();
+}
+function setup(cv) {
+  const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const c = cv.getContext("2d");
+  c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, r.width, r.height); c.setLineDash([]);
+  return { c, W: r.width, H: r.height };
+}
+function txt(c, s, x, y, o = {}) {
+  c.font = (o.b ? "700 " : "500 ") + (o.s || 12) + "px " + (o.mono === false ? '"Atkinson Hyperlegible",system-ui,sans-serif' : '"JetBrains Mono",ui-monospace,monospace');
+  c.fillStyle = o.col || K.ink; c.textAlign = o.al || "left"; c.textBaseline = "alphabetic"; c.fillText(s, x, y);
+}
+function arrow(c, x1, y1, x2, y2, col, w = 2) {
+  const a = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1);
+  if (L < 3) return;
+  const hl = Math.min(9, L * 0.45);
+  c.setLineDash([]); c.strokeStyle = col; c.fillStyle = col; c.lineWidth = w;
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2 - Math.cos(a) * hl * 0.8, y2 - Math.sin(a) * hl * 0.8); c.stroke();
+  c.beginPath(); c.moveTo(x2, y2);
+  c.lineTo(x2 - hl * Math.cos(a - 0.4), y2 - hl * Math.sin(a - 0.4));
+  c.lineTo(x2 - hl * Math.cos(a + 0.4), y2 - hl * Math.sin(a + 0.4));
+  c.closePath(); c.fill();
+}
+const nice = (v) => { const p = 10 ** Math.floor(Math.log10(v)), n = v / p; return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p; };
+const decs = (s) => Math.max(0, Math.ceil(-Math.log10(s) - 1e-9));
+
+/* graphique sur papier millimétré */
+function plot(cv, o) {
+  const { c, W, H } = setup(cv);
+  const L = 50, R = 14, T = 16, B = 36, pw = W - L - R, ph = H - T - B;
+  const x0 = o.xmin || 0, x1 = o.xmax || 1, y0 = o.ymin || 0, y1 = o.ymax || 1;
+  const X = (x) => L + ((x - x0) / (x1 - x0)) * pw, Y = (y) => T + (1 - (y - y0) / (y1 - y0)) * ph;
+  const sx = nice((x1 - x0) / 5), sy = nice((y1 - y0) / 4);
+  c.lineWidth = 1; c.strokeStyle = K.grid; c.beginPath();
+  for (let i = Math.ceil(x0 / (sx / 5)); i * (sx / 5) <= x1 + 1e-9; i++) { const px = Math.round(X(i * sx / 5)) + 0.5; c.moveTo(px, T); c.lineTo(px, T + ph); }
+  for (let i = Math.ceil(y0 / (sy / 5)); i * (sy / 5) <= y1 + 1e-9; i++) { const py = Math.round(Y(i * sy / 5)) + 0.5; c.moveTo(L, py); c.lineTo(L + pw, py); }
+  c.stroke();
+  c.strokeStyle = K.grid2; c.beginPath();
+  for (let i = Math.ceil(x0 / sx); i * sx <= x1 + 1e-9; i++) { const x = i * sx, px = Math.round(X(x)) + 0.5; c.moveTo(px, T); c.lineTo(px, T + ph); txt(c, fmt(x, decs(sx)), px, T + ph + 15, { al: "center", col: K.muted, s: 11 }); }
+  for (let i = Math.ceil(y0 / sy); i * sy <= y1 + 1e-9; i++) { const y = i * sy, py = Math.round(Y(y)) + 0.5; c.moveTo(L, py); c.lineTo(L + pw, py); txt(c, fmt(y, decs(sy)), L - 6, py + 4, { al: "right", col: K.muted, s: 11 }); }
+  c.stroke();
+  c.strokeStyle = K.ink; c.lineWidth = 1.5; c.beginPath();
+  const ya = y0 <= 0 && y1 >= 0 ? Y(0) : T + ph;
+  c.moveTo(L, ya); c.lineTo(L + pw, ya); c.moveTo(L, T); c.lineTo(L, T + ph); c.stroke();
+  txt(c, o.xl || "", L + pw, T + ph + 31, { al: "right", col: K.muted, s: 12, mono: false, b: true });
+  txt(c, o.yl || "", L + 6, T + 13, { col: K.muted, s: 12, mono: false, b: true });
+
+  c.save(); c.beginPath(); c.rect(L, T, pw, ph); c.clip();
+  for (const h of o.hl || []) {
+    const py = Y(h.y); c.strokeStyle = h.color; c.lineWidth = 1.5; c.setLineDash(h.dash || []);
+    c.beginPath(); c.moveTo(L, py); c.lineTo(L + pw, py); c.stroke(); c.setLineDash([]);
+    if (h.label) txt(c, h.label, h.side === "left" ? L + 70 : L + pw - 6, py - 6, { al: h.side === "left" ? "left" : "right", col: h.color, s: 11, b: true });
+  }
+  for (const v of o.vl || []) {
+    const px = X(v.x); c.strokeStyle = v.color; c.lineWidth = 1.5; c.setLineDash(v.dash || []);
+    c.beginPath(); c.moveTo(px, T); c.lineTo(px, T + ph); c.stroke(); c.setLineDash([]);
+    if (v.label) { const right = px > L + pw - 90; txt(c, v.label, right ? px - 5 : px + 5, T + 30 + (v.row || 0) * 15, { al: right ? "right" : "left", col: v.color, s: 11, b: true }); }
+  }
+  for (const s of o.segs || []) {
+    if (s.arrows) {
+      arrow(c, (X(s.x1) + X(s.x2)) / 2, Y(s.y1), X(s.x1), Y(s.y1), s.color, 1.5);
+      arrow(c, (X(s.x1) + X(s.x2)) / 2, Y(s.y1), X(s.x2), Y(s.y2), s.color, 1.5);
+    } else {
+      c.strokeStyle = s.color; c.lineWidth = s.w || 1.5; c.setLineDash(s.dash || []);
+      c.beginPath(); c.moveTo(X(s.x1), Y(s.y1)); c.lineTo(X(s.x2), Y(s.y2)); c.stroke(); c.setLineDash([]);
+    }
+    if (s.label) txt(c, s.label, (X(s.x1) + X(s.x2)) / 2, Y(s.y1) - 7, { al: "center", col: s.color, s: 11, b: true });
+  }
+  for (const cu of o.curves || []) {
+    if (!(cu.to > cu.from)) continue;
+    c.strokeStyle = cu.color; c.lineWidth = cu.w || 2; c.setLineDash(cu.dash || []); c.beginPath();
+    const n = cu.n || 240;
+    for (let i = 0; i <= n; i++) { const x = cu.from + ((cu.to - cu.from) * i) / n, px = X(x), py = Y(cu.f(x)); i ? c.lineTo(px, py) : c.moveTo(px, py); }
+    c.stroke(); c.setLineDash([]);
+  }
+  for (const p of o.pts || []) {
+    const px = X(p.x), py = Y(p.y);
+    c.fillStyle = p.color; c.beginPath(); c.arc(px, py, p.r || 3, 0, 7); c.fill();
+    if (p.label) { const right = px > L + pw - 80; txt(c, p.label, right ? px - 8 : px + 8, py - 7, { al: right ? "right" : "left", col: p.color, s: 12, b: true }); }
+  }
+  c.restore();
+}
+
+/* ------------------------------------------------------------ physique : dipôle RC */
+const PH = {
+  id: "rc", num: 1, subj: "Physique", chap: "Physique · Électricité · Dipôle RC", titre: "Charge d'un condensateur", short: "Physique · RC",
+  init() {
+    this.C = pick([47, 100, 220]);
+    const Rmin = Math.ceil((300 / this.C) * 2) / 2, Rmax = Math.min(30, Math.floor((2000 / this.C) * 2) / 2);
+    this.TT = +((rnd(Rmin, Rmax, 0.5) * this.C) / 1000).toFixed(2);
+    this.p = { R: 5 };
+  },
+  tauOf(R) { return (R * this.C) / 1000; },
+  controls() { return [{ id: "R", label: "Résistance R", min: 0.5, max: 30, step: 0.1, unit: "kΩ", d: 1 }]; },
+  btn() { return "▶ Fermer l'interrupteur"; },
+  goal() { return `Choisis R pour que la constante de temps du circuit soit <span class="target">τ = ${fmt(this.TT)} s</span> (à ±2 %).`; },
+  data() { return `E = 6 V · C = ${this.C} µF · condensateur déchargé au départ`; },
+  cap: "Courbe u_C(t). On lit τ à 0,63·E, ou là où la tangente à l'origine coupe la droite u = E.",
+  action() { const tau = this.tauOf(this.p.R); this.run = { tau, R: this.p.R }; return { anim: 5 * tau, speed: Math.max(0.4, (5 * tau) / 3) }; },
+  evaluate() {
+    const tau = this.run.tau;
+    if (Math.abs(tau - this.TT) / this.TT <= 0.02) return { ok: true, msg: `τ = R·C = ${fmt(tau, 3)} s. Le condensateur est chargé à 99 % après 5τ = ${fmt(5 * tau)} s.` };
+    return { ok: false, msg: `τ = ${fmt(tau, 3)} s : charge ${tau < this.TT ? "trop rapide. Augmente R." : "trop lente. Diminue R."}` };
+  },
+  hint() { return "τ = R·C, donc R = τ / C. Attention aux unités : C en farads (1 µF = 10⁻⁶ F), R en ohms (1 kΩ = 10³ Ω)."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run, E = 6;
+    const R = r ? r.R : this.p.R, tau = r ? r.tau : this.tauOf(R), t = r ? this.t : 0, u = r ? E * (1 - Math.exp(-t / tau)) : 0, i = r ? ((E - u) / (R * 1000)) * 1000 : 0;
+    const x1 = Math.max(46, W * 0.1), x2 = Math.min(x1 + 300, W * 0.62), y1 = 30, y2 = H - 30, gy = (y1 + y2) / 2, cy = gy;
+    c.strokeStyle = K.ink; c.lineWidth = 2; c.beginPath();
+    c.moveTo(x1, gy - 8); c.lineTo(x1, y1); c.lineTo(x1 + 30, y1);
+    const swx = x1 + 30, rx = x1 + (x2 - x1) * 0.48;
+    c.moveTo(swx + 34, y1); c.lineTo(rx, y1); c.moveTo(rx + 54, y1); c.lineTo(x2, y1); c.lineTo(x2, cy - 6);
+    c.moveTo(x2, cy + 6); c.lineTo(x2, y2); c.lineTo(x1, y2); c.lineTo(x1, gy + 8); c.stroke();
+    c.lineWidth = 3; c.beginPath(); c.moveTo(x1 - 14, gy - 8); c.lineTo(x1 + 14, gy - 8); c.stroke();
+    c.lineWidth = 5; c.beginPath(); c.moveTo(x1 - 7, gy + 8); c.lineTo(x1 + 7, gy + 8); c.stroke();
+    txt(c, "E", x1 - 22, gy + 4, { al: "right", b: true, mono: false, s: 15 });
+    c.lineWidth = 2; c.beginPath(); c.moveTo(swx, y1); r ? c.lineTo(swx + 34, y1) : c.lineTo(swx + 30, y1 - 16); c.stroke();
+    c.fillStyle = K.ink; for (const px of [swx, swx + 34]) { c.beginPath(); c.arc(px, y1, 3, 0, 7); c.fill(); }
+    txt(c, "K", swx + 17, y1 - 20, { al: "center", b: true, mono: false, s: 13 });
+    c.fillStyle = K.card; c.fillRect(rx, y1 - 9, 54, 18); c.strokeRect(rx, y1 - 9, 54, 18);
+    txt(c, "R", rx + 27, y1 - 15, { al: "center", b: true, mono: false, s: 13 });
+    c.lineWidth = 3; c.beginPath(); c.moveTo(x2 - 20, cy - 6); c.lineTo(x2 + 20, cy - 6); c.moveTo(x2 - 20, cy + 6); c.lineTo(x2 + 20, cy + 6); c.stroke();
+    const nq = Math.round((u / E) * 5);
+    for (let k = 0; k < nq; k++) { txt(c, "+", x2 - 16 + k * 8, cy - 11, { col: K.red, b: true, s: 12 }); txt(c, "−", x2 - 16 + k * 8, cy + 20, { col: K.accent, b: true, s: 12 }); }
+    txt(c, "C", x2 - 28, cy + 4, { al: "right", b: true, mono: false, s: 13 });
+    const vx = Math.min(x2 + 58, W - 50);
+    c.strokeStyle = K.muted; c.lineWidth = 1.5; c.beginPath();
+    c.moveTo(x2, cy - 30); c.lineTo(vx, cy - 30); c.lineTo(vx, cy - 15); c.moveTo(vx, cy + 15); c.lineTo(vx, cy + 30); c.lineTo(x2, cy + 30); c.stroke();
+    c.beginPath(); c.arc(vx, cy, 15, 0, 7); c.stroke();
+    txt(c, "V", vx, cy + 5, { al: "center", b: true, mono: false, s: 14 });
+    txt(c, "u_C = " + fmt(u) + " V", vx, cy + 52, { al: "center", b: true, s: 13, col: K.accent });
+    if (r && i > 0.005) { arrow(c, rx + 64, y1 + 12, rx + 90, y1 + 12, K.good, 2); txt(c, "i = " + fmt(i) + " mA", rx + 64, y1 + 30, { col: K.good, s: 12, b: true }); }
+    txt(c, "t = " + fmt(t) + " s", W - 12, H - 12, { al: "right", s: 13, b: true });
+  },
+  graph(cv) {
+    const r = this.run, tau = r ? r.tau : this.tauOf(this.p.R), xmax = 5 * Math.max(tau, this.TT);
+    const o = { xmax, ymax: 7, xl: "t (s)", yl: "u_C (V)", hl: [{ y: 6, label: "E = 6 V", color: K.muted, dash: [2, 3] }, { y: 0.63 * 6, label: "0,63·E", color: K.muted, dash: [5, 4] }], vl: [{ x: this.TT, label: "τ visée", color: K.accent, dash: [5, 4] }], curves: [], segs: [] };
+    if (r) {
+      o.curves.push({ f: (t) => 6 * (1 - Math.exp(-t / r.tau)), from: 0, to: this.t, color: K.ink, w: 2.5 });
+      if (!this.running) { o.segs.push({ x1: 0, y1: 0, x2: r.tau, y2: 6, color: K.red, dash: [5, 4] }); o.vl.push({ x: r.tau, label: "τ = " + fmt(r.tau, 3) + " s", color: K.red, dash: [2, 3], row: 1 }); }
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Loi d'additivité des tensions : u_R + u_C = E, avec u_R = R·i et i = C·du_C/dt.</p>
+<p class="eq">R·C·du_C/dt + u_C = E  ⟹  u_C(t) = E·(1 − e^(−t/τ))</p>
+<p>Constante de temps : <b>τ = R·C</b>. À t = τ, u_C = 0,63·E. Le condensateur est chargé à 99 % après 5τ.</p>`,
+  qcm: { q: "À l'instant t = τ, la tension aux bornes du condensateur vaut…", opts: ["37 % de E", "63 % de E", "100 % de E"], ok: 1, ex: "u_C(τ) = E·(1 − e⁻¹) ≈ 0,63·E." },
+};
+
+/* ------------------------------------------------------------ chimie : dosage acide faible / base forte */
+const CH = {
+  id: "dosage", num: 2, subj: "Chimie", chap: "Chimie · Dosages acide-base", titre: "Dosage de l'acide éthanoïque par la soude", short: "Chimie · Dosage",
+  init() { this.CA = rnd(0.06, 0.11, 0.001); this.VE = (this.CA * 20) / 0.1; this.p = { V: 5 }; },
+  /* pH exact du mélange : électroneutralité [H3O+] + [Na+] = [HO-] + [CH3COO-] */
+  pH(V) {
+    const Ka = 10 ** -4.8, Kw = 1e-14, tot = 20 + V, Ct = (this.CA * 20) / tot, Na = (0.1 * V) / tot;
+    let lo = -14, hi = 0;
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2, h = 10 ** m; if (h + Na - Kw / h - (Ct * Ka) / (Ka + h) > 0) hi = m; else lo = m; }
+    return -(lo + hi) / 2;
+  },
+  pink(pH) { return 1 / (1 + Math.exp(-(pH - 9.1) * 2.2)); },
+  controls() { return [{ id: "V", label: "Volume de soude à verser V_B", min: 0, max: 30, step: 0.1, unit: "mL", d: 1 }]; },
+  btn() { return "▶ Verser " + fmt(this.p.V, 1) + " mL"; },
+  goal() { return `Verse la soude jusqu'à l'<span class="target">équivalence</span> (virage de la phénolphtaléine au rose pâle), à ±0,2 mL près. Tu en déduiras la concentration C_A de l'acide.`; },
+  data() { return "V_A = 20,0 mL d'acide éthanoïque (C_A inconnue) · C_B = 0,100 mol/L · phénolphtaléine (zone de virage 8,2 – 10)"; },
+  cap: "Courbe pH = f(V_B). Le saut de pH signale l'équivalence ; à la demi-équivalence, pH = pKa.",
+  action() { const V = this.p.V; this.run = { V }; return { anim: V, speed: Math.max(6, V / 2.5) }; },
+  evaluate() {
+    const V = this.run.V, pH = this.pH(V), e = V - this.VE;
+    if (pH >= 8.2 && e <= 0.2) return { ok: true, msg: `Virage à V_E ≈ ${fmt(V, 1)} mL (pH = ${fmt(pH, 1)}) : rose pâle persistant. À l'équivalence C_A·V_A = C_B·V_E, donc C_A ≈ ${fmt((0.1 * V) / 20, 3)} mol/L.` };
+    if (pH < 8.2) return { ok: false, msg: `pH = ${fmt(pH, 1)} : la solution reste incolore, l'équivalence n'est pas atteinte. Verse davantage de soude.` };
+    return { ok: false, msg: `pH = ${fmt(pH, 1)} : rose vif, l'équivalence est dépassée. Recommence avec moins de soude.` };
+  },
+  hint() { return "Repère le saut de pH sur la courbe. Verse jusqu'au pied du saut, puis augmente V_B de 0,1 mL à la fois : le virage se produit au milieu du saut."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run, V = r ? this.t : 0, pH = this.pH(V);
+    const bx = clamp(W * 0.3, 90, 190);
+    const bkW = Math.min(120, W * 0.27), bkH = H * 0.3, bkTop = H - 26 - bkH, bkL = bx - bkW / 2;
+    const bTop = 14, bBot = Math.min(H * 0.5, bkTop - 30), bw = 16, gy = (v) => bTop + 8 + (v / 30) * (bBot - bTop - 16);
+    c.fillStyle = K.liq; c.fillRect(bx - bw / 2, gy(V), bw, bBot - gy(V));
+    c.strokeStyle = K.muted; c.lineWidth = 1.5; c.strokeRect(bx - bw / 2, bTop, bw, bBot - bTop);
+    for (let v = 0; v <= 30; v++) {
+      const y = gy(v); c.beginPath(); c.moveTo(bx + bw / 2, y); c.lineTo(bx + bw / 2 + (v % 5 ? 4 : 8), y); c.stroke();
+      if (v % 10 === 0) txt(c, String(v), bx + bw / 2 + 11, y + 4, { s: 10, col: K.muted });
+    }
+    c.beginPath(); c.moveTo(bx - 3, bBot); c.lineTo(bx - 1.5, bBot + 22); c.lineTo(bx + 1.5, bBot + 22); c.lineTo(bx + 3, bBot); c.stroke();
+    c.fillStyle = K.ink; c.fillRect(bx - 11, bBot + 6, 22, 5);
+    txt(c, "soude", bx - bw / 2 - 8, bTop + 14, { al: "right", s: 11, col: K.muted, mono: false });
+    const fill = 0.45 + (V / 30) * 0.25, ly = bkTop + bkH * (1 - fill);
+    if (this.running) { const k = (performance.now() / 140) % 1; c.fillStyle = K.accent; c.beginPath(); c.arc(bx, bBot + 26 + k * Math.max(0, ly - bBot - 26), 2.5, 0, 7); c.fill(); }
+    c.fillStyle = K.liq; c.fillRect(bkL, ly, bkW, bkTop + bkH - ly);
+    const pk = this.pink(pH);
+    if (pk > 0.02) { c.globalAlpha = Math.min(0.85, pk * 0.85); c.fillStyle = K.pink; c.fillRect(bkL, ly, bkW, bkTop + bkH - ly); c.globalAlpha = 1; }
+    c.strokeStyle = K.muted; c.lineWidth = 2; c.beginPath(); c.moveTo(bkL, bkTop); c.lineTo(bkL, bkTop + bkH); c.lineTo(bkL + bkW, bkTop + bkH); c.lineTo(bkL + bkW, bkTop); c.stroke();
+    c.fillStyle = K.grid2; c.fillRect(bkL - 14, bkTop + bkH + 3, bkW + 28, 12);
+    c.fillStyle = K.ink; c.fillRect(bx - 10, bkTop + bkH - 6, 20, 4);
+    const px = bkL + bkW * 0.8;
+    c.strokeStyle = K.ink; c.lineWidth = 3; c.beginPath(); c.moveTo(px, bkTop - 34); c.lineTo(px, bkTop + bkH - 16); c.stroke();
+    const mx = Math.min(W - 116, bkL + bkW + 36), my = Math.max(20, bkTop - 70);
+    c.strokeStyle = K.muted; c.lineWidth = 1.5; c.beginPath(); c.moveTo(px, bkTop - 34); c.quadraticCurveTo(px, my + 26, mx, my + 26); c.stroke();
+    c.fillStyle = K.card; c.strokeStyle = K.line; c.lineWidth = 1.5; c.fillRect(mx, my, 104, 54); c.strokeRect(mx, my, 104, 54);
+    txt(c, "pH-mètre", mx + 8, my + 16, { s: 10, col: K.muted });
+    txt(c, fmt(pH, 2), mx + 96, my + 44, { al: "right", s: 22, b: true, col: K.accent });
+    txt(c, "V_B = " + fmt(V, 1) + " mL", W - 12, H - 12, { al: "right", s: 13, b: true });
+  },
+  graph(cv) {
+    const r = this.run, V = r ? this.t : 0;
+    const o = { xmax: 30, ymax: 14, xl: "V_B (mL)", yl: "pH", hl: [{ y: 8.2, color: K.grid2, dash: [3, 3] }, { y: 10, label: "zone de virage", color: K.muted, dash: [3, 3] }], vl: [], pts: [], curves: [] };
+    if (V > 0) o.curves.push({ f: (v) => this.pH(v), from: 0, to: V, color: K.ink, w: 2.5 });
+    o.pts.push({ x: V, y: this.pH(V), color: K.accent, r: 4 });
+    if (r && !this.running && this.pH(r.V) >= 8.2 && r.V - this.VE <= 0.2) {
+      o.vl.push({ x: r.V, label: "V_E ≈ " + fmt(r.V, 1) + " mL", color: K.red, dash: [4, 3] });
+      o.pts.push({ x: r.V / 2, y: this.pH(r.V / 2), color: K.good, r: 5, label: "demi-équivalence : pH = pKa" });
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Réaction de dosage (rapide et totale) :</p>
+<p class="eq">CH₃COOH(aq) + HO⁻(aq) → CH₃COO⁻(aq) + H₂O(l)</p>
+<p>À l'équivalence, les réactifs ont été mélangés dans les proportions stœchiométriques : <b>C_A·V_A = C_B·V_E</b>. On repère V_E par la méthode des tangentes parallèles, ou par un indicateur coloré dont la zone de virage contient le pH à l'équivalence.</p>
+<p>À la demi-équivalence (V_B = V_E/2) : <b>pH = pKa</b>, soit environ 4,8 pour le couple CH₃COOH/CH₃COO⁻.</p>`,
+  qcm: { q: "À l'équivalence d'un dosage acide-base…", opts: ["le pH vaut toujours 7", "les réactifs ont été mélangés dans les proportions stœchiométriques", "l'acide est encore en excès"], ok: 1, ex: "À l'équivalence, n(CH₃COOH) initial = n(HO⁻) versé, donc C_A·V_A = C_B·V_E. Pour un acide faible, le pH à l'équivalence est supérieur à 7." },
+};
+
+/* ------------------------------------------------------------ SVT : myogramme */
+const SV = {
+  id: "muscle", num: 3, subj: "SVT", chap: "SVT · Consommation de la matière organique et flux d'énergie", titre: "Myogramme du muscle gastrocnémien", short: "SVT · Myogramme",
+  init() {
+    this.Is = rnd(0.8, 1.4, 0.1); this.Im = +(this.Is + rnd(1.2, 2.0, 0.1)).toFixed(1); this.tc = rnd(0.03, 0.045, 0.005);
+    this.p = { I: 1.0, f: 5 }; this.ff = this.findFus();
+  },
+  frac(I) { return clamp((I - this.Is) / (this.Im - this.Is), 0, 1); },
+  tw(t) { const tc = this.tc; return t > 0 ? (t / tc) * Math.exp(1 - t / tc) : 0; },
+  /* amplitude en mm : somme des secousses avec saturation (une secousse = 10 mm) */
+  y(t, I, f) {
+    const fr = this.frac(I); if (fr <= 0) return 0;
+    let u = 0; for (let k = 0; k < f && k / f <= t; k++) u += this.tw(t - k / f);
+    return (10 * fr * (1 - Math.exp(-u / 3.5))) / (1 - Math.exp(-1 / 3.5));
+  },
+  kind(f) {
+    if (this.tw(1 / f) < 0.08) return "iso";
+    let mx = 0, mn = 1e9; const a = (f - 2) / f, b = (f - 1) / f;
+    for (let i = 0; i <= 200; i++) { const v = this.y(a + ((b - a) * i) / 200, this.Im, f); mx = Math.max(mx, v); mn = Math.min(mn, v); }
+    return (mx - mn) / mx <= 0.03 ? "parfait" : "imparfait";
+  },
+  findFus() { for (let f = 1; f <= 80; f++) if (this.kind(f) === "parfait") return f; return 80; },
+  controls() { return [{ id: "I", label: "Intensité de stimulation", min: 0, max: 5, step: 0.1, unit: "V", d: 1 }, { id: "f", label: "Fréquence des stimulations", min: 1, max: 80, step: 1, unit: "Hz", d: 0 }]; },
+  btn() { return "▶ Stimuler pendant 1 s"; },
+  goal() { return `Obtiens un <span class="target">tétanos parfait d'amplitude maximale</span>, avec la fréquence la plus basse possible (à 5 Hz près).`; },
+  data() { return "Muscle gastrocnémien de grenouille · train de stimulations de 1 s · enregistrement ExAO"; },
+  cap: "Myogramme : amplitude de la contraction au cours du temps. Les traits rouges sous l'axe marquent les stimulations.",
+  action() { this.run = { I: this.p.I, f: this.p.f }; return { anim: 1.4, speed: 0.5 }; },
+  evaluate() {
+    const { I, f } = this.run, fr = this.frac(I), k = this.kind(f);
+    if (fr <= 0) return { ok: false, msg: "Aucune contraction : l'intensité est inférieure au seuil d'excitation. Augmente l'intensité." };
+    if (fr < 1) return { ok: false, msg: `Seulement ${Math.round(fr * 100)} % des fibres répondent : le recrutement est incomplet. Augmente l'intensité.` };
+    if (k === "iso") return { ok: false, msg: "Secousses isolées : chaque contraction se termine avant la stimulation suivante. Augmente la fréquence." };
+    if (k === "imparfait") return { ok: false, msg: "Tétanos imparfait : les secousses fusionnent en partie, le plateau reste dentelé. Augmente la fréquence." };
+    if (f > this.ff + 5) return { ok: false, msg: `Tétanos parfait, mais ${f} Hz est plus que nécessaire. Cherche la fréquence la plus basse qui donne un plateau lisse.` };
+    return { ok: true, msg: `Tétanos parfait à ${f} Hz : les secousses fusionnent en un plateau lisse. Toutes les fibres sont recrutées, l'amplitude est maximale.` };
+  },
+  hint() { return "Procède en deux temps. À 1 Hz, augmente l'intensité jusqu'à ce que l'amplitude des secousses ne grandisse plus. Puis augmente la fréquence de 5 Hz en 5 Hz jusqu'à obtenir un plateau lisse."; },
+  scene(cv) {
+    const { c, W, H } = setup(cv), r = this.run, t = r ? this.t : 0;
+    const I = r ? r.I : this.p.I, f = r ? r.f : this.p.f, y = r ? this.y(t, I, f) : 0;
+    const px = W * 0.36, py = H * 0.74, dl = W * 0.7, dr = W - 12, Ll = dl - px - 26, th = (v) => (v / 40) * 0.42;
+    const A = [px + 44 * Math.cos(th(y)), py - 44 * Math.sin(th(y))], Tp = [px + Ll * Math.cos(th(y)), py - Ll * Math.sin(th(y))];
+    c.fillStyle = K.grid2; c.fillRect(A[0] - 40, 14, 80, 8);
+    const top = 22, len = A[1] - top, rx = 16 + (y / 40) * 7;
+    c.fillStyle = K.muscle; c.beginPath(); c.ellipse(A[0], top + len * 0.45, rx, len * 0.38, 0, 0, 7); c.fill();
+    c.strokeStyle = K.ink; c.lineWidth = 2; c.beginPath(); c.moveTo(A[0], top); c.lineTo(A[0], top + len * 0.08); c.moveTo(A[0], top + len * 0.82); c.lineTo(A[0], A[1]); c.stroke();
+    c.lineWidth = 4; c.lineCap = "round"; c.beginPath(); c.moveTo(px, py); c.lineTo(Tp[0], Tp[1]); c.stroke(); c.lineCap = "butt";
+    c.fillStyle = K.ink; c.beginPath(); c.arc(px, py, 5, 0, 7); c.fill();
+    c.fillStyle = K.ink; c.fillRect(Tp[0] - 4, Tp[1] - 8, 16, 16);
+    c.strokeStyle = K.muted; c.lineWidth = 1; c.beginPath(); c.moveTo(Tp[0] + 12, Tp[1]); c.quadraticCurveTo(dl - 6, Tp[1], dl, py - 40); c.stroke();
+    const mt = py - 100, mb = py + 10;
+    c.fillStyle = K.card; c.strokeStyle = K.line; c.lineWidth = 1.5; c.fillRect(dl, mt, dr - dl, mb - mt); c.strokeRect(dl, mt, dr - dl, mb - mt);
+    if (r) {
+      const sx = (dr - dl - 8) / 1.4, sy = (mb - mt - 14) / 40;
+      c.strokeStyle = K.accent; c.lineWidth = 1.5; c.beginPath();
+      for (let i = 0; i <= 500; i++) { const tau = (t * i) / 500, xx = dl + 4 + tau * sx, yy = mb - 6 - this.y(tau, I, f) * sy; i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }
+      c.stroke();
+    }
+    txt(c, "capteur → écran ExAO", (dl + dr) / 2, mb + 18, { al: "center", s: 10, col: K.muted, mono: false });
+    const sw = Math.min(110, px - 40);
+    c.fillStyle = K.card; c.strokeStyle = K.line; c.fillRect(12, 30, sw, 76); c.strokeRect(12, 30, sw, 76);
+    txt(c, "Stimulateur", 20, 46, { s: 10, col: K.muted });
+    txt(c, fmt(I, 1) + " V", 20, 68, { s: 14, b: true });
+    txt(c, f + " Hz", 20, 90, { s: 14, b: true });
+    const flash = r && this.running && t < 1 && t - Math.floor(t * f) / f < 0.02;
+    c.fillStyle = flash ? K.red : K.grid2; c.beginPath(); c.arc(12 + sw - 12, 44, 5, 0, 7); c.fill();
+    c.strokeStyle = K.muted; c.lineWidth = 1; c.beginPath(); c.moveTo(12 + sw, 60); c.quadraticCurveTo(A[0] - 50, 60, A[0] - rx, top + len * 0.35); c.moveTo(12 + sw, 76); c.quadraticCurveTo(A[0] - 50, 90, A[0] - rx, top + len * 0.55); c.stroke();
+    txt(c, "t = " + fmt(t) + " s", 12, H - 12, { s: 13, b: true });
+  },
+  graph(cv) {
+    const r = this.run, t = r ? this.t : 0;
+    const o = { xmax: 1.4, ymin: -6, ymax: 46, xl: "t (s)", yl: "amplitude (mm)", curves: [], segs: [], hl: [] };
+    if (r) {
+      o.curves.push({ f: (x) => this.y(x, r.I, r.f), from: 0, to: t, color: K.accent, w: 2, n: 900 });
+      for (let k = 0; k < r.f && k / r.f <= t; k++) o.segs.push({ x1: k / r.f, y1: -5, x2: k / r.f, y2: -2, color: K.red, w: 1.5 });
+      if (!this.running && this.done) o.hl.push({ y: this.y(0.99, r.I, r.f), label: "plateau du tétanos parfait", color: K.good, dash: [4, 3] });
+    }
+    plot(cv, o);
+  },
+  cours: `<p>Une stimulation isolée d'intensité supérieure au seuil provoque une <b>secousse musculaire</b> : temps de latence, phase de contraction, phase de relâchement.</p>
+<p>L'amplitude augmente avec l'intensité jusqu'à un maximum : c'est le <b>recrutement</b> progressif des fibres musculaires.</p>
+<p>Si les stimulations se rapprochent, les secousses se fusionnent : <b>tétanos imparfait</b> (plateau dentelé), puis <b>tétanos parfait</b> (plateau lisse) au-delà d'une fréquence de fusion.</p>
+<p class="eq">ATP + H₂O → ADP + Pi + énergie (utilisée pour le glissement actine/myosine)</p>`,
+  qcm: { q: "La source d'énergie directement utilisée par les fibres pour se contracter est…", opts: ["le glucose", "l'ATP", "le dioxygène"], ok: 1, ex: "L'hydrolyse de l'ATP par les têtes de myosine fournit l'énergie du glissement des filaments d'actine. Le glucose et le dioxygène servent à régénérer l'ATP (respiration)." },
+};
+
+/* ------------------------------------------------------------ application */
+const S = [PH, CH, SV];
+let cur = -1, raf = 0, who = "";
+const cvS = $("#scene"), cvG = $("#graph");
+
+/* ------------------------------------------------------------ salle de TP en 3D (Three.js) */
+const L3 = { ok: false };
+const BENCH = 0.92;
+let T3 = {}, M = {};
+const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; }
+function box(w, h, d, mat, parent, x, y, z) { return mesh(new THREE.BoxGeometry(w, h, d), mat, parent, x, y, z); }
+function cyl(rt, rb, h, mat, parent, x, y, z, seg = 28, open = false) { return mesh(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), mat, parent, x, y, z); }
+function sph(r, mat, parent, x, y, z) { return mesh(new THREE.SphereGeometry(r, 20, 14), mat, parent, x, y, z); }
+function rod(a, b, r, mat, parent) {
+  const A = V3(a), B = V3(b), d = B.clone().sub(A), m = cyl(r, r, d.length(), mat, parent, 0, 0, 0, 16);
+  m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m;
+}
+function std(color, rough = 0.5, metal = 0, extra = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough, metalness: metal }, extra)); }
+function canvasTex(w, h, draw, rep, srgb = true) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c); if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
+  return t;
+}
+function grain(ctx, w, h, amp) { const d = ctx.getImageData(0, 0, w, h); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * amp; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } ctx.putImageData(d, 0, 0); }
+/* fil électrique souple posé sur la paillasse */
+function wire(a, b, mat, parent, drop = 0.05, r = 0.0021) {
+  const pts = [];
+  for (let i = 0; i <= 8; i++) { const s = i / 8; pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * s, Math.max(r + 0.001, a[1] + (b[1] - a[1]) * s - drop * Math.sin(Math.PI * s)), a[2] + (b[2] - a[2]) * s + 0.02 * Math.sin(Math.PI * s))); }
+  return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, r, 8, false), mat, parent);
+}
+/* afficheur à cristaux liquides, texte mis à jour à la demande */
+function lcd(w, h, parent, x, y, z, fg = "#8ef58b", bg = "#07110a") {
+  const cw = 256, ch = Math.max(40, Math.round((cw * h) / w)), c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const ctx = c.getContext("2d"), t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: t, roughness: 0.2 }));
+  m.position.set(x, y, z); parent.add(m);
+  let last = "";
+  m.set = (a, b = "") => {
+    const k = a + "|" + b; if (k === last) return; last = k;
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = fg; ctx.textBaseline = "middle";
+    const us = Math.min(ch * 0.32, 34), uw = b ? us * 1.5 + 8 : 0, fs = Math.min(ch * 0.62, (cw - 24 - uw) / (a.length * 0.62));
+    ctx.font = `700 ${Math.round(fs)}px "JetBrains Mono", Consolas, monospace`; ctx.textAlign = "right"; ctx.fillText(a, cw - 12 - uw, ch * 0.55);
+    if (b) { ctx.font = `700 ${Math.round(us)}px Arial, sans-serif`; ctx.textAlign = "left"; ctx.fillText(b, cw - uw - 2, ch * 0.6); }
+    t.needsUpdate = true;
+  };
+  return m;
+}
+/* texte imprimé (sérigraphie, étiquettes) */
+function print(w, h, parent, x, y, z, lines, bg = null, fg = "#f1f1ee") {
+  const cw = 512, ch = Math.round((cw * h) / w), c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const ctx = c.getContext("2d"); if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); }
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(ch * (l.s || 0.42))}px Arial, sans-serif`; ctx.fillStyle = l.c || fg; ctx.fillText(l.t, cw / 2, ch * (l.y != null ? l.y : (i + 0.5) / lines.length)); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, transparent: !bg, roughness: 0.6 }));
+  m.position.set(x, y, z); m.receiveShadow = true; parent.add(m); return m;
+}
+/* étiquette enroulée autour d'un flacon */
+function wrapLabel(r, h, parent, x, y, z, lines, bg) {
+  const c = document.createElement("canvas"); c.width = 512; c.height = Math.round(512 * h / (2.4 * r)); const ctx = c.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(c.height * (l.s || 0.2))}px Arial, sans-serif`; ctx.fillStyle = l.c || "#1b1b1b"; ctx.fillText(l.t, c.width / 2, c.height * (i + 0.5) / lines.length); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
+}
+function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
+
+function initMats() {
+  T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
+  T3.floor = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#9aa1a8"; x.fillRect(0, 0, w, h); for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { x.fillStyle = `hsl(210,7%,${66 + Math.random() * 7}%)`; x.fillRect(i * 256 + 2, j * 256 + 2, 252, 252); } grain(x, w, h, 16); }, [24, 24]);
+  T3.tiles = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#c3c9ce"; x.fillRect(0, 0, w, h); const s = w / 4; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.fillStyle = `hsl(200,12%,${92 + Math.random() * 4}%)`; x.fillRect(i * s + 3, j * s + 3, s - 6, s - 6); } grain(x, w, h, 5); }, [30, 2.25]);
+  T3.sky = canvasTex(512, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#7fb0e6"); g.addColorStop(0.65, "#d8e8f6"); g.addColorStop(1, "#e9f0f5"); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5; i++) { x.fillStyle = "rgba(255,255,255,.55)"; x.beginPath(); x.ellipse(Math.random() * w, 40 + Math.random() * 80, 50 + Math.random() * 40, 12, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#9db7a1"; x.beginPath(); x.moveTo(0, h * 0.78); for (let i = 0; i <= 10; i++) x.lineTo((w * i) / 10, h * (0.7 + Math.random() * 0.06)); x.lineTo(w, h); x.lineTo(0, h); x.fill();
+    for (let i = 0; i < 14; i++) { x.fillStyle = `hsl(${120 + Math.random() * 25},30%,${30 + Math.random() * 12}%)`; const tx = Math.random() * w, ty = h * 0.78; x.beginPath(); x.ellipse(tx, ty, 18 + Math.random() * 16, 30 + Math.random() * 20, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#c9c2b5"; x.fillRect(0, h * 0.86, w, h * 0.14);
+  });
+  T3.board = canvasTex(512, 320, (x, w, h) => {
+    x.fillStyle = "#f4f3ee"; x.fillRect(0, 0, w, h);
+    for (const yy of [14, 30, h - 30, h - 14]) { x.fillStyle = yy < h / 2 === (yy === 14 || yy === h - 30) ? "#d13b32" : "#2e5fb8"; x.fillRect(16, yy - 1, w - 32, 2); }
+    x.fillStyle = "#3b3b3b"; for (let i = 0; i < 40; i++) for (let j = 0; j < 12; j++) x.fillRect(22 + i * 12, 52 + j * 18 + (j > 5 ? 14 : 0), 4, 4);
+  });
+  T3.muscle = canvasTex(256, 512, (x, w, h) => {
+    x.fillStyle = "#a93b33"; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 260; i++) { x.strokeStyle = `hsla(${2 + Math.random() * 10},${50 + Math.random() * 25}%,${28 + Math.random() * 22}%,.55)`; x.lineWidth = 1 + Math.random() * 3; const px = Math.random() * w; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + 6, h * 0.3, px - 6, h * 0.7, px + 3, h); x.stroke(); }
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "rgba(240,225,210,.75)"); g.addColorStop(0.12, "rgba(240,225,210,0)"); g.addColorStop(0.86, "rgba(240,225,210,0)"); g.addColorStop(1, "rgba(240,225,210,.85)"); x.fillStyle = g; x.fillRect(0, 0, w, h);
+  });
+  T3.burette = canvasTex(128, 2048, (x, w, h) => {
+    x.clearRect(0, 0, w, h); x.fillStyle = "#14181c"; x.font = "bold 22px Arial"; x.textAlign = "left";
+    const y0 = (0.02 / 0.56) * h, k = (0.01 / 0.56) * h;
+    for (let v = 0; v <= 50; v++) { const y = y0 + v * k, L = v % 5 === 0 ? 34 : v % 1 === 0 ? 18 : 10; x.fillRect(64 - L / 2, y - 1, L, 2.4); if (v % 5 === 0) x.fillText(String(v), 86, y + 8); }
+    for (let v = 0; v < 50; v += 0.5) if (v % 1) x.fillRect(60, y0 + v * k - 0.6, 8, 1.4);
+  }, null);
+  T3.beaker = canvasTex(256, 256, (x, w, h) => {
+    x.clearRect(0, 0, w, h); x.fillStyle = "rgba(255,255,255,.95)"; x.font = "bold 22px Arial"; x.textAlign = "left";
+    for (let i = 1; i <= 5; i++) { const y = h - i * 40; x.fillRect(90, y, i % 2 ? 30 : 46, 3); x.fillText(String(i * 50), 142, y + 8); }
+    x.font = "bold 20px Arial"; x.fillText("250 mL", 92, 26);
+  }, null);
+  T3.keys = canvasTex(512, 256, (x, w, h) => { x.fillStyle = "#2b2f35"; x.fillRect(0, 0, w, h); x.fillStyle = "#14171b"; for (let j = 0; j < 5; j++) for (let i = 0; i < 14; i++) x.fillRect(16 + i * 34, 14 + j * 30, 30, 26); x.fillRect(150, 170, 210, 60); });
+  T3.poster = canvasTex(1024, 640, (x, w, h) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = "#1d2b44"; x.font = "bold 38px Arial"; x.textAlign = "center"; x.fillText("Tableau périodique des éléments", w / 2, 52);
+    const cols = ["#f4a7a3", "#f7cf8f", "#fdf1a2", "#b8e3b0", "#a9d4f2", "#cdbcf0", "#e6e6e6"], s = 50, ox = 62, oy = 90;
+    const shape = [[0, 17], [0, 1, 12, 13, 14, 15, 16, 17], [0, 1, 12, 13, 14, 15, 16, 17]];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 18; c++) { if (r < 3 && !shape[r].includes(c)) continue; x.fillStyle = cols[(c < 2 ? 0 : c < 12 ? 1 + (r % 2) : c < 17 ? 3 + (c % 2) : 5)]; x.fillRect(ox + c * s, oy + r * s, s - 4, s - 4); }
+    for (let r = 0; r < 2; r++) for (let c = 2; c < 17; c++) { x.fillStyle = cols[6]; x.fillRect(ox + c * s, oy + 380 + r * s, s - 4, s - 4); }
+  });
+  M.epoxy = std(0xffffff, 0.3, 0, { map: T3.epoxy });
+  M.cabinet = std(0xeef1f4, 0.55); M.gap = std(0x8b939b, 0.7);
+  M.steel = std(0xd9dde2, 0.22, 1); M.alu = std(0xbcc3cb, 0.35, 0.9); M.chrome = std(0xffffff, 0.08, 1);
+  M.black = std(0x1b1d20, 0.42); M.dark = std(0x30353b, 0.5); M.grey = std(0x8a9199, 0.5); M.white = std(0xf3f3ef, 0.38);
+  M.beige = std(0xdcd4c3, 0.5); M.blue = std(0x2b59aa, 0.4); M.yellow = std(0xefbe2a, 0.42); M.red = std(0xc42f29, 0.42);
+  M.standPaint = std(0x3a4a57, 0.45, 0.2); M.wireR = std(0xc0201c, 0.5); M.wireB = std(0x161616, 0.5); M.ptfe = std(0x2f6fd6, 0.35);
+  M.glass = new THREE.MeshPhysicalMaterial({ color: 0xf5fbff, roughness: 0.03, metalness: 0, transparent: true, opacity: 0.2, clearcoat: 1, clearcoatRoughness: 0.02, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 1.8 });
+  M.muscle = new THREE.MeshPhysicalMaterial({ map: T3.muscle, bumpMap: T3.muscle, bumpScale: 0.0008, roughness: 0.42, clearcoat: 0.8, clearcoatRoughness: 0.18, side: THREE.DoubleSide });
+  M.tendon = std(0xece4d4, 0.4);
+}
+function liquidMat(color, op = 0.42) { return new THREE.MeshPhysicalMaterial({ color, roughness: 0.06, transparent: true, opacity: op, clearcoat: 1, depthWrite: false, envMapIntensity: 1.2 }); }
+
+function envScene() {
+  const s = new THREE.Scene(), bright = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), side: THREE.DoubleSide });
+  const room = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 10), new THREE.MeshBasicMaterial({ color: 0x9aa0a8, side: THREE.BackSide })); room.position.y = 1.6; s.add(room);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshBasicMaterial({ color: 0x4a4e54 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.39; s.add(fl);
+  for (const x of [-4, -1.3, 1.3, 4]) for (const z of [-2, 1.5]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), bright(7, 7, 6.6)); p.rotation.x = Math.PI / 2; p.position.set(x, 3.55, z); s.add(p); }
+  for (const x of [-2, 2]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), bright(2.6, 3, 3.6)); w.position.set(x, 2, -4.95); s.add(w); }
+  return s;
+}
+
+function buildRoom(scene) {
+  const floor = mesh(new THREE.PlaneGeometry(24, 24), std(0xffffff, 0.72, 0, { map: T3.floor }), scene); floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+  const wz = -0.64;
+  mesh(new THREE.PlaneGeometry(18, 1.35), std(0xffffff, 0.3, 0, { map: T3.tiles }), scene, 0, 0.675, wz).castShadow = false;
+  mesh(new THREE.PlaneGeometry(18, 2.1), std(0xe6e9ec, 0.92), scene, 0, 2.4, wz).castShadow = false;
+  const ceil = mesh(new THREE.PlaneGeometry(24, 24), std(0xf2f3f4, 0.9), scene, 0, 3.4, 0); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+  for (const x of [-3.3, -1.1, 1.1, 3.3]) { const p = box(1.2, 0.02, 0.6, new THREE.MeshBasicMaterial({ color: 0xffffff }), scene, x, 3.39, 0.2); p.castShadow = false; }
+  for (const wx of [-1.1, 1.1, 3.3, -3.3]) {
+    const sky = mesh(new THREE.PlaneGeometry(1.5, 1.05), new THREE.MeshBasicMaterial({ map: T3.sky }), scene, wx, 2.05, wz + 0.004); sky.castShadow = false;
+    for (const [w, h, x, y] of [[1.6, 0.05, 0, 0.55], [1.6, 0.05, 0, -0.55], [0.05, 1.15, -0.78, 0], [0.05, 1.15, 0.78, 0], [0.035, 1.05, 0, 0]]) box(w, h, 0.05, M.white, scene, wx + x, 2.05 + y, wz + 0.02);
+    box(1.7, 0.035, 0.14, M.white, scene, wx, 1.47, wz + 0.06);
+  }
+  const bl = 7.6;
+  box(bl, 0.04, 0.84, M.epoxy, scene, 0, BENCH - 0.02, -0.22);
+  box(bl - 0.08, BENCH - 0.14, 0.74, M.cabinet, scene, 0, (BENCH - 0.14) / 2 + 0.1, -0.25);
+  box(bl - 0.1, 0.1, 0.7, M.dark, scene, 0, 0.05, -0.28);
+  for (let i = 0; i <= 12; i++) { const x = -bl / 2 + 0.05 + i * ((bl - 0.1) / 12); box(0.006, BENCH - 0.16, 0.004, M.gap, scene, x, (BENCH - 0.14) / 2 + 0.1, 0.122); if (i < 12) box(0.18, 0.014, 0.02, M.steel, scene, x + (bl - 0.1) / 24, BENCH - 0.14, 0.135); }
+  box(bl, 0.14, 0.05, M.cabinet, scene, 0, BENCH + 0.07, -0.6);
+  for (let x = -3.4; x <= 3.4; x += 0.85) { box(0.08, 0.08, 0.012, M.white, scene, x, BENCH + 0.07, -0.57); for (const dx of [-0.012, 0.012]) cyl(0.004, 0.004, 0.004, M.black, scene, x + dx, BENCH + 0.07, -0.5635, 10).rotation.x = Math.PI / 2; }
+  mesh(new THREE.PlaneGeometry(1.5, 0.94), std(0xffffff, 0.7, 0, { map: T3.poster }), scene, -2.2, 2.25, wz + 0.006).castShadow = false;
+  const clk = cyl(0.17, 0.17, 0.03, M.white, scene, 2.2, 2.6, wz + 0.02, 40); clk.rotation.x = Math.PI / 2;
+  const face = canvasTex(256, 256, (x, w) => { x.fillStyle = "#fff"; x.fillRect(0, 0, w, w); x.strokeStyle = "#222"; x.lineWidth = 10; x.beginPath(); x.arc(128, 128, 120, 0, 7); x.stroke(); for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; x.lineWidth = 6; x.beginPath(); x.moveTo(128 + Math.sin(a) * 96, 128 - Math.cos(a) * 96); x.lineTo(128 + Math.sin(a) * 110, 128 - Math.cos(a) * 110); x.stroke(); } x.lineWidth = 8; x.beginPath(); x.moveTo(128, 128); x.lineTo(128, 60); x.moveTo(128, 128); x.lineTo(180, 150); x.stroke(); });
+  mesh(new THREE.CircleGeometry(0.155, 40), std(0xffffff, 0.5, 0, { map: face }), scene, 2.2, 2.6, wz + 0.036).castShadow = false;
+}
+
+/* ---- physique : circuit RC sur la paillasse */
+PH.x3 = -2.2;
+PH.cam3 = { p: [-0.02, 0.5, 0.78], t: [-0.02, 0.04, -0.16] };
+PH.build3d = function (g) {
+  const loc = (o, x, y, z) => { o.updateMatrixWorld(true); const v = o.localToWorld(new THREE.Vector3(x, y, z)); g.worldToLocal(v); return [v.x, v.y, v.z]; };
+  const ps = new THREE.Group(); ps.position.set(-0.38, 0, -0.26); ps.rotation.y = 0.18; g.add(ps);
+  box(0.26, 0.13, 0.22, std(0x45556a, 0.45, 0.3), ps, 0, 0.068, 0);
+  box(0.25, 0.12, 0.004, M.black, ps, 0, 0.068, 0.111);
+  this.lcdE = lcd(0.1, 0.034, ps, -0.055, 0.098, 0.1135, "#ff6b4a", "#160705"); this.lcdE.set("6.00", "V");
+  print(0.11, 0.014, ps, -0.055, 0.067, 0.1135, [{ t: "ALIMENTATION  0 – 30 V", b: true, s: 0.7 }]);
+  knob(ps, 0.045, 0.098, 0.12, 0.012); knob(ps, 0.088, 0.098, 0.12, 0.012);
+  cyl(0.0065, 0.0065, 0.016, M.red, ps, 0.035, 0.032, 0.118, 16).rotation.x = Math.PI / 2;
+  cyl(0.0065, 0.0065, 0.016, M.black, ps, 0.085, 0.032, 0.118, 16).rotation.x = Math.PI / 2;
+  const db = new THREE.Group(); db.position.set(-0.02, 0, -0.27); g.add(db);
+  box(0.3, 0.08, 0.15, std(0x2a2d31, 0.5), db, 0, 0.04, 0);
+  box(0.29, 0.004, 0.14, std(0xd8d2c2, 0.55), db, 0, 0.0815, 0);
+  for (const x of [-0.09, 0, 0.09]) knob(db, x, 0.095, 0, 0.016).rotation.x = 0;
+  print(0.27, 0.02, db, 0, 0.0838, 0.052, [{ t: "×1 kΩ       ×100 Ω       ×10 Ω", b: true, s: 0.6, c: "#2a2d31" }]).rotation.x = -Math.PI / 2;
+  this.lcdR = lcd(0.11, 0.032, db, -0.06, 0.042, 0.0756);
+  print(0.08, 0.02, db, 0.07, 0.05, 0.0756, [{ t: "BOÎTE À DÉCADES", b: true, s: 0.5 }]);
+  for (const [x, m] of [[0.06, M.red], [0.1, M.black]]) cyl(0.006, 0.006, 0.014, m, db, x, 0.02, 0.082, 16).rotation.x = Math.PI / 2;
+  const bb = new THREE.Group(); bb.position.set(0.07, 0, -0.03); g.add(bb);
+  box(0.26, 0.012, 0.16, std(0xffffff, 0.6, 0, { map: T3.board }), bb, 0, 0.006, 0);
+  const cap = cyl(0.012, 0.012, 0.036, std(0x1d4ea6, 0.32), bb, 0.07, 0.03, -0.02, 32);
+  cyl(0.0115, 0.0115, 0.002, M.alu, bb, 0.07, 0.049, -0.02, 32);
+  box(0.004, 0.034, 0.0025, std(0xdfe5ee, 0.4), cap, 0, 0, 0.0115);
+  const sw = new THREE.Group(); sw.position.set(-0.06, 0.012, 0.035); bb.add(sw);
+  box(0.05, 0.016, 0.026, M.black, sw, 0, 0.008, 0);
+  this.lever = new THREE.Group(); this.lever.position.set(0, 0.018, 0); sw.add(this.lever);
+  cyl(0.0028, 0.0028, 0.042, M.chrome, this.lever, 0, 0.021, 0, 12); sph(0.005, M.red, this.lever, 0, 0.043, 0);
+  const mm = new THREE.Group(); mm.position.set(0.34, 0, -0.2); mm.rotation.set(-0.32, -0.38, 0); g.add(mm);
+  box(0.095, 0.175, 0.042, M.yellow, mm, 0, 0.09, 0);
+  box(0.082, 0.16, 0.004, M.black, mm, 0, 0.092, 0.022);
+  this.lcdV = lcd(0.066, 0.034, mm, 0, 0.142, 0.0245, "#15190f", "#b9c7a3");
+  knob(mm, 0, 0.088, 0.026, 0.019, M.grey);
+  print(0.07, 0.012, mm, 0, 0.115, 0.0245, [{ t: "MULTIMÈTRE · V ⎓", b: true, s: 0.7 }]);
+  for (const [x, m] of [[-0.025, M.black], [0, M.red], [0.025, M.red]]) cyl(0.005, 0.005, 0.006, m, mm, x, 0.03, 0.025, 14).rotation.x = Math.PI / 2;
+  const P = { psR: loc(ps, 0.035, 0.032, 0.126), psB: loc(ps, 0.085, 0.032, 0.126), sA: loc(sw, -0.02, 0.012, 0), sB: loc(sw, 0.02, 0.012, 0), dR: loc(db, 0.06, 0.02, 0.09), dB: loc(db, 0.1, 0.02, 0.09), cP: loc(bb, 0.05, 0.013, -0.045), cN: loc(bb, 0.1, 0.013, -0.045), mC: loc(mm, -0.025, 0.03, 0.028), mV: loc(mm, 0, 0.03, 0.028) };
+  wire(P.psR, P.sA, M.wireR, g, 0.03); wire(P.sB, P.dR, M.wireR, g, 0.03); wire(P.dB, P.cP, M.wireR, g, 0.04);
+  wire(P.cN, P.psB, M.wireB, g, 0.04); wire(P.cP, P.mV, M.wireR, g, 0.03); wire(P.cN, P.mC, M.wireB, g, 0.03);
+};
+PH.sync3d = function () {
+  const r = this.run, E = 6, R = r ? r.R : this.p.R, tau = r ? r.tau : this.tauOf(R), t = r ? this.t : 0, u = r ? E * (1 - Math.exp(-t / tau)) : 0;
+  this.lcdR.set(fmt(R, 1), "kΩ"); this.lcdV.set(fmt(u, 2), "V"); this.lever.rotation.z = r ? 0 : 0.7;
+};
+
+/* ---- chimie : poste de dosage */
+CH.x3 = 0;
+CH.cam3 = { p: [0.18, 0.64, 0.98], t: [0.02, 0.38, -0.15] };
+CH.build3d = function (g) {
+  const bz = -0.15;
+  const st = new THREE.Group(); st.position.set(0, 0, bz + 0.02); g.add(st);
+  box(0.2, 0.07, 0.24, M.white, st, 0, 0.035, 0); box(0.17, 0.006, 0.17, std(0xd3d8de, 0.3), st, 0, 0.073, -0.015);
+  knob(st, -0.05, 0.035, 0.122, 0.012); knob(st, 0.05, 0.035, 0.122, 0.012);
+  sph(0.004, std(0x22cc55, 0.3, 0, { emissive: 0x22cc55, emissiveIntensity: 1.5 }), st, 0, 0.05, 0.121);
+  print(0.06, 0.012, st, 0, 0.018, 0.1205, [{ t: "AGITATEUR", b: true, s: 0.7, c: "#4a5058" }]);
+  const bk = new THREE.Group(); bk.position.set(0, 0.076, bz); g.add(bk); this.bk = bk;
+  const prof = [[0, 0], [0.041, 0], [0.043, 0.002], [0.043, 0.112], [0.047, 0.115], [0.046, 0.117], [0.0415, 0.114], [0.0415, 0.003], [0, 0.003]].map((p) => new THREE.Vector2(p[0], p[1]));
+  const glass = mesh(new THREE.LatheGeometry(prof, 48), M.glass, bk); glass.castShadow = false; glass.renderOrder = 3;
+  const pr = mesh(new THREE.CylinderGeometry(0.0433, 0.0433, 0.1, 32, 1, true, -0.6, 1.2), new THREE.MeshStandardMaterial({ map: T3.beaker, transparent: true, depthWrite: false, roughness: 0.4 }), bk, 0, 0.055, 0); pr.castShadow = false; pr.renderOrder = 4;
+  this.cClear = new THREE.Color(0xe9f3ff); this.cPink = new THREE.Color(0xf2318f);
+  this.liq = cyl(0.0405, 0.0405, 1, liquidMat(0xe9f3ff), bk, 0, 0, 0, 40); this.liq.castShadow = false; this.liq.renderOrder = 2;
+  this.bar = cyl(0.0042, 0.0042, 0.026, M.white, bk, 0, 0.008, 0, 12); this.bar.rotation.z = Math.PI / 2;
+  const sd = new THREE.Group(); sd.position.set(-0.12, 0, -0.38); g.add(sd);
+  box(0.24, 0.016, 0.15, M.standPaint, sd, 0.03, 0.008, 0); cyl(0.0065, 0.0065, 1.0, M.steel, sd, 0, 0.5, 0, 16);
+  const B = [0, 0, bz], rodP = [-0.12, 0, -0.38];
+  for (const yy of [0.66, 0.3]) {
+    box(0.03, 0.03, 0.03, M.alu, g, rodP[0], yy, rodP[2]);
+    const tx = yy > 0.5 ? B[0] : 0.026, tz = yy > 0.5 ? B[2] - 0.012 : bz + 0.01;
+    rod([rodP[0] + 0.012, yy, rodP[2] + 0.01], [tx, yy, tz - 0.008], 0.005, M.steel, g);
+    box(0.022, 0.014, 0.012, M.alu, g, tx, yy, tz - 0.004);
+  }
+  const bu = cyl(0.0068, 0.0068, 0.56, M.glass, g, 0, 0.54, bz, 24, true); bu.castShadow = false; bu.renderOrder = 3;
+  const gr = mesh(new THREE.CylinderGeometry(0.0071, 0.0071, 0.56, 24, 1, true), new THREE.MeshStandardMaterial({ map: T3.burette, transparent: true, depthWrite: false, roughness: 0.5 }), g, 0, 0.54, bz); gr.rotation.y = Math.PI; gr.castShadow = false; gr.renderOrder = 4;
+  const lip = mesh(new THREE.TorusGeometry(0.0075, 0.0013, 8, 24), M.glass, g, 0, 0.82, bz); lip.rotation.x = Math.PI / 2;
+  this.bliq = cyl(0.006, 0.006, 1, liquidMat(0xd9e9ff, 0.5), g, 0, 0, bz, 16); this.bliq.castShadow = false; this.bliq.renderOrder = 2;
+  cyl(0.0068, 0.0068, 0.03, M.glass, g, 0, 0.245, bz, 16).castShadow = false;
+  this.tap = new THREE.Group(); this.tap.position.set(0, 0.245, bz); g.add(this.tap);
+  cyl(0.0042, 0.0042, 0.03, M.ptfe, this.tap, 0, 0, 0, 12).rotation.z = Math.PI / 2;
+  box(0.006, 0.026, 0.004, M.ptfe, this.tap, 0.016, 0, 0);
+  const tip = cyl(0.0045, 0.0015, 0.05, M.glass, g, 0, 0.205, bz, 16); tip.castShadow = false;
+  this.drop = sph(0.0022, liquidMat(0xd9e9ff, 0.8), g, 0, 0.17, bz); this.drop.castShadow = false;
+  const el = cyl(0.0058, 0.0058, 0.2, std(0x1d2024, 0.3), g, 0.026, 0.19, bz + 0.012, 16);
+  sph(0.0065, M.glass, g, 0.026, 0.09, bz + 0.012);
+  const pm = new THREE.Group(); pm.position.set(0.25, 0, -0.14); pm.rotation.y = -0.4; g.add(pm);
+  box(0.17, 0.05, 0.13, std(0x2b3036, 0.45), pm, 0, 0.025, 0);
+  const face = new THREE.Group(); face.position.set(0, 0.051, 0.0); face.rotation.x = -Math.PI / 2 + 0.0; pm.add(face);
+  box(0.16, 0.12, 0.003, M.black, face, 0, 0, 0);
+  this.lcdPH = lcd(0.11, 0.046, face, 0, 0.025, 0.002, "#8ef58b", "#07110a");
+  print(0.11, 0.014, face, 0, -0.012, 0.002, [{ t: "pH-MÈTRE", b: true, s: 0.7 }]);
+  for (const x of [-0.04, 0, 0.04]) box(0.026, 0.014, 0.004, M.grey, face, x, -0.04, 0.003);
+  wire([0.026, 0.29, bz + 0.012], [0.19, 0.03, -0.17], M.wireB, g, 0.12, 0.0018);
+  const nb = new THREE.Group(); nb.position.set(-0.33, 0, -0.1); g.add(nb);
+  cyl(0.035, 0.035, 0.13, std(0xf4f6f8, 0.25, 0, { transparent: true, opacity: 0.85 }), nb, 0, 0.065, 0, 32);
+  cyl(0.014, 0.02, 0.02, std(0xf4f6f8, 0.25), nb, 0, 0.14, 0, 24); cyl(0.016, 0.016, 0.022, M.blue, nb, 0, 0.16, 0, 24);
+  wrapLabel(0.0355, 0.06, nb, 0, 0.065, 0, [{ t: "NaOH", b: true, s: 0.32 }, { t: "0,100 mol/L", s: 0.2 }, { t: "⚠ corrosif", s: 0.16, c: "#b3261e" }], "#ffffff");
+  const ph = new THREE.Group(); ph.position.set(-0.24, 0, 0.02); g.add(ph);
+  cyl(0.016, 0.016, 0.06, std(0x7a3b12, 0.2, 0, { transparent: true, opacity: 0.9 }), ph, 0, 0.03, 0, 24);
+  cyl(0.008, 0.008, 0.02, M.black, ph, 0, 0.07, 0, 16); sph(0.009, M.black, ph, 0, 0.085, 0);
+  wrapLabel(0.0163, 0.03, ph, 0, 0.03, 0, [{ t: "Phénolphtaléine", b: true, s: 0.24 }], "#ffffff");
+  const wb = new THREE.Group(); wb.position.set(0.36, 0, 0.04); g.add(wb);
+  cyl(0.03, 0.034, 0.14, std(0xf2f2ee, 0.45, 0, { transparent: true, opacity: 0.92 }), wb, 0, 0.07, 0, 28);
+  cyl(0.014, 0.014, 0.02, M.ptfe, wb, 0, 0.15, 0, 16); rod([0, 0.16, 0], [0.05, 0.19, 0.02], 0.002, std(0xf2f2ee, 0.4), wb);
+  wrapLabel(0.0325, 0.05, wb, 0, 0.07, 0, [{ t: "Eau distillée", b: true, s: 0.24 }], "#dfeefb");
+};
+CH.sync3d = function () {
+  const r = this.run, V = r ? this.t : 0, pH = this.pH(V), pk = this.pink(pH);
+  const top = 0.8 - V * 0.01; this.bliq.scale.y = top - 0.262; this.bliq.position.y = (top + 0.262) / 2;
+  const h = 0.045 + V * 0.0006; this.liq.scale.y = h; this.liq.position.y = 0.004 + h / 2;
+  this.liq.material.color.copy(this.cClear).lerp(this.cPink, pk); this.liq.material.opacity = 0.3 + 0.58 * pk;
+  this.bar.rotation.y = performance.now() * 0.012;
+  this.tap.rotation.y = this.running ? Math.PI / 2 : 0;
+  if (this.running) { const k = (performance.now() / 170) % 1, s = 0.076 + 0.004 + h; this.drop.visible = true; this.drop.position.y = 0.178 - k * (0.178 - s); } else this.drop.visible = false;
+  this.lcdPH.set(fmt(pH, 2), "pH");
+};
+
+/* ---- SVT : myographe et ExAO */
+SV.x3 = 2.2;
+SV.cam3 = { p: [0.08, 0.5, 0.78], t: [0.0, 0.26, -0.15] };
+SV.build3d = function (g) {
+  const mz = -0.16, mx = 0.02;
+  const sd = new THREE.Group(); sd.position.set(-0.1, 0, -0.32); g.add(sd);
+  box(0.24, 0.016, 0.16, M.standPaint, sd, 0.04, 0.008, 0); cyl(0.007, 0.007, 0.7, M.steel, sd, 0, 0.35, 0, 16);
+  box(0.03, 0.03, 0.03, M.alu, g, -0.1, 0.5, -0.32); rod([-0.088, 0.5, -0.31], [mx, 0.5, mz], 0.005, M.steel, g); box(0.02, 0.016, 0.018, M.alu, g, mx, 0.5, mz);
+  const prof = []; for (let i = 0; i <= 28; i++) { const s = i / 28, r = 0.0032 + 0.0148 * Math.pow(Math.sin(Math.PI * Math.min(1, s * 1.06)), 0.8) * (1 - 0.3 * s); prof.push(new THREE.Vector2(Math.max(0.0022, r), -s * 0.1)); }
+  this.mus = mesh(new THREE.LatheGeometry(prof, 40), M.muscle, g, mx, 0.488, mz);
+  cyl(0.0022, 0.0022, 0.014, M.tendon, g, mx, 0.493, mz, 10);
+  this.ten = cyl(0.0018, 0.0018, 1, M.tendon, g, mx, 0, mz, 10);
+  box(0.03, 0.03, 0.03, M.alu, g, -0.1, 0.33, -0.32); rod([-0.088, 0.33, -0.31], [-0.06, 0.33, mz], 0.005, M.steel, g);
+  cyl(0.004, 0.004, 0.02, M.chrome, g, -0.06, 0.33, mz, 12).rotation.x = Math.PI / 2;
+  this.lev = new THREE.Group(); this.lev.position.set(-0.06, 0.33, mz); g.add(this.lev);
+  box(0.36, 0.004, 0.006, M.alu, this.lev, 0.17, 0, 0); cyl(0.008, 0.008, 0.012, M.dark, this.lev, -0.015, 0, 0, 16).rotation.x = Math.PI / 2;
+  box(0.035, 0.022, 0.022, M.black, this.lev, 0.34, 0, 0);
+  for (const [y1, y2] of [[0.455, 0.448], [0.43, 0.42]]) rod([-0.05, y1 + 0.01, mz + 0.05], [mx - 0.008, y2, mz + 0.004], 0.0012, M.chrome, g);
+  const sm = new THREE.Group(); sm.position.set(-0.34, 0, -0.14); sm.rotation.y = 0.32; g.add(sm);
+  box(0.22, 0.1, 0.17, M.beige, sm, 0, 0.05, 0); box(0.21, 0.09, 0.004, M.black, sm, 0, 0.05, 0.0855);
+  this.lcdS = lcd(0.13, 0.036, sm, -0.03, 0.071, 0.088, "#ffb347", "#170d02");
+  print(0.13, 0.013, sm, -0.03, 0.038, 0.088, [{ t: "STIMULATEUR", b: true, s: 0.75 }]);
+  knob(sm, 0.065, 0.072, 0.092, 0.011); knob(sm, 0.065, 0.032, 0.092, 0.011);
+  this.led = sph(0.0045, std(0x330000, 0.3, 0, { emissive: 0xff2a1a, emissiveIntensity: 0.1 }), sm, 0.03, 0.03, 0.089);
+  const out1 = (() => { sm.updateMatrixWorld(true); const v = sm.localToWorld(new THREE.Vector3(-0.08, 0.02, 0.09)); g.worldToLocal(v); return [v.x, v.y, v.z]; })();
+  wire(out1, [-0.05, 0.465, mz + 0.05], M.wireR, g, 0.08, 0.0016); wire([out1[0] + 0.02, out1[1], out1[2]], [-0.05, 0.44, mz + 0.05], M.wireB, g, 0.08, 0.0016);
+  const pd = new THREE.Group(); pd.position.set(0.1, 0, 0.06); g.add(pd);
+  mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.014, 40, 1, true), M.glass, pd, 0, 0.007, 0).castShadow = false;
+  cyl(0.044, 0.044, 0.008, liquidMat(0xf7f3e6, 0.35), pd, 0, 0.005, 0, 40).castShadow = false;
+  const lp = new THREE.Group(); lp.position.set(0.32, 0, -0.18); lp.rotation.y = -0.5; g.add(lp);
+  const lapMat = std(0x9aa1a9, 0.35, 0.7);
+  box(0.32, 0.014, 0.22, lapMat, lp, 0, 0.007, 0);
+  mesh(new THREE.PlaneGeometry(0.3, 0.15), std(0xffffff, 0.6, 0, { map: T3.keys }), lp, 0, 0.0145, -0.02).rotation.x = -Math.PI / 2;
+  const lid = new THREE.Group(); lid.position.set(0, 0.014, -0.108); lid.rotation.x = -0.28; lp.add(lid);
+  box(0.32, 0.21, 0.008, lapMat, lid, 0, 0.105, 0);
+  this.scrC = document.createElement("canvas"); this.scrC.width = 640; this.scrC.height = 400;
+  this.scrT = new THREE.CanvasTexture(this.scrC); this.scrT.encoding = THREE.sRGBEncoding;
+  const scr = mesh(new THREE.PlaneGeometry(0.296, 0.185), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: this.scrT, roughness: 0.25 }), lid, 0, 0.106, 0.0045); scr.castShadow = false;
+  const ib = new THREE.Group(); ib.position.set(0.14, 0, -0.32); g.add(ib);
+  box(0.12, 0.045, 0.09, M.blue, ib, 0, 0.0225, 0); print(0.1, 0.014, ib, 0, 0.03, 0.0455, [{ t: "INTERFACE ExAO", b: true, s: 0.7 }]);
+  wire([0.28 + 0.035, 0.33, mz], [0.12, 0.03, -0.275], M.wireB, g, 0.15, 0.0018);
+  wire([0.2, 0.02, -0.3], [0.25, 0.01, -0.2], M.wireB, g, 0.01, 0.0018);
+  this._scrKey = "";
+};
+SV.drawScreen = function (t, I, f, has) {
+  const c = this.scrC.getContext("2d"), W = 640, H = 400;
+  c.fillStyle = "#eef2f7"; c.fillRect(0, 0, W, H);
+  c.fillStyle = "#2a5cb8"; c.fillRect(0, 0, W, 34); c.fillStyle = "#fff"; c.font = "bold 18px Arial"; c.textAlign = "left"; c.fillText("ExAO · Myogramme — force (mN) en fonction du temps", 12, 23);
+  const L = 48, T = 52, pw = W - 66, ph = H - 92;
+  c.fillStyle = "#fff"; c.fillRect(L, T, pw, ph);
+  c.strokeStyle = "#dde3ea"; c.lineWidth = 1; c.beginPath(); for (let i = 0; i <= 14; i++) { c.moveTo(L + (i * pw) / 14, T); c.lineTo(L + (i * pw) / 14, T + ph); } for (let j = 0; j <= 8; j++) { c.moveTo(L, T + (j * ph) / 8); c.lineTo(L + pw, T + (j * ph) / 8); } c.stroke();
+  c.strokeStyle = "#333"; c.lineWidth = 2; c.strokeRect(L, T, pw, ph);
+  c.fillStyle = "#333"; c.font = "15px Arial"; c.textAlign = "center"; for (let i = 0; i <= 7; i++) c.fillText(fmt(i * 0.2, 1), L + (i * pw) / 7, T + ph + 20);
+  c.fillText("t (s)", L + pw - 20, H - 6);
+  if (has) {
+    c.strokeStyle = "#c8302b"; c.lineWidth = 2; c.beginPath(); for (let k = 0; k < f && k / f <= t; k++) { const x = L + ((k / f) / 1.4) * pw; c.moveTo(x, T + ph - 2); c.lineTo(x, T + ph - 12); } c.stroke();
+    c.strokeStyle = "#1f56c9"; c.lineWidth = 2.5; c.beginPath();
+    for (let i = 0; i <= 600; i++) { const tau = (t * i) / 600, x = L + (tau / 1.4) * pw, y = T + ph - 16 - (this.y(tau, I, f) / 40) * (ph - 26); i ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.stroke();
+  } else { c.fillStyle = "#6b7685"; c.font = "18px Arial"; c.fillText("En attente de la stimulation…", L + pw / 2, T + ph / 2); }
+  this.scrT.needsUpdate = true;
+};
+SV.sync3d = function () {
+  const r = this.run, t = r ? this.t : 0, I = r ? r.I : this.p.I, f = r ? r.f : this.p.f, y = r ? this.y(t, I, f) : 0, c = y / 40;
+  this.mus.scale.set(1 + 0.16 * c, 1 - 0.22 * c, 1 + 0.16 * c);
+  const bot = 0.488 - 0.1 * (1 - 0.22 * c), ang = c * 0.32, ay = 0.33 + 0.08 * Math.sin(ang);
+  this.lev.rotation.z = ang; this.ten.scale.y = Math.max(0.001, bot - ay); this.ten.position.y = (bot + ay) / 2; this.ten.position.x = -0.06 + 0.08 * Math.cos(ang);
+  const flash = r && this.running && t < 1 && t - Math.floor(t * f) / f < 0.025;
+  this.led.material.emissiveIntensity = flash ? 4 : 0.1;
+  this.lcdS.set(fmt(I, 1) + "V " + f + "Hz");
+  const key = r ? fmt(t, 3) + "|" + I + "|" + f : "idle";
+  if (key !== this._scrKey) { this._scrKey = key; this.drawScreen(t, I, f, !!r); }
+};
+
+function init3d() {
+  if (!window.THREE || !THREE.OrbitControls) return false;
+  try {
+    const el = $("#scene3d");
+    const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
+    R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
+    el.append(R.domElement);
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dee4);
+    const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(envScene(), 0.04).texture; pm.dispose();
+    const cam = new THREE.PerspectiveCamera(38, 1.6, 0.02, 40);
+    const ctl = new THREE.OrbitControls(cam, R.domElement);
+    Object.assign(ctl, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.25, maxDistance: 2.4, maxPolarAngle: Math.PI * 0.48, enablePan: true, screenSpacePanning: true, panSpeed: 0.5, rotateSpeed: 0.6 });
+    scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x6f6b66, 0.55));
+    const sun = new THREE.DirectionalLight(0xfff3e4, 1.45); sun.position.set(1.4, 4.4, 2.4); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -3.6, right: 3.6, top: 1.6, bottom: -1.6, near: 1, far: 9 });
+    sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.012; sun.shadow.radius = 4; sun.target.position.set(0, BENCH, -0.2);
+    scene.add(sun, sun.target);
+    const back = new THREE.DirectionalLight(0xdbe7ff, 0.35); back.position.set(0, 2.6, -3); scene.add(back);
+    initMats(); buildRoom(scene);
+    for (const st of S) { const gp = new THREE.Group(); gp.position.set(st.x3, BENCH, 0); scene.add(gp); gp.updateMatrixWorld(true); st.build3d(gp); st.g3 = gp; }
+    Object.assign(L3, { ok: true, R, scene, cam, ctl, el, tw: null, first: true });
+    const fit = () => { const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); };
+    new ResizeObserver(fit).observe(el); fit();
+    R.domElement.addEventListener("dblclick", () => { if (cur >= 0) focus3(S[cur]); });
+    R.domElement.addEventListener("pointerdown", () => { $("#navhint").hidden = true; }, { once: true });
+    $("#navhint").hidden = false; cvS.hidden = true;
+    const loop = () => {
+      requestAnimationFrame(loop);
+      if ($("#station").hidden || cur < 0) return;
+      if (L3.tw) {
+        const k = Math.min(1, (performance.now() - L3.tw.t0) / 1100), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+        cam.position.lerpVectors(L3.tw.p0, L3.tw.p1, e); ctl.target.lerpVectors(L3.tw.q0, L3.tw.q1, e); if (k >= 1) L3.tw = null;
+      }
+      ctl.update(); S[cur].sync3d(); R.render(scene, cam);
+    };
+    loop();
+    return true;
+  } catch (e) { console.warn("3D indisponible :", e); L3.ok = false; $("#scene3d").innerHTML = ""; cvS.hidden = false; return false; }
+}
+function focus3(st) {
+  if (!L3.ok) return;
+  const p1 = new THREE.Vector3(st.x3 + st.cam3.p[0], BENCH + st.cam3.p[1], st.cam3.p[2]), q1 = new THREE.Vector3(st.x3 + st.cam3.t[0], BENCH + st.cam3.t[1], st.cam3.t[2]);
+  if (L3.first) { L3.first = false; L3.cam.position.copy(p1).add(new THREE.Vector3(-0.5, 0.25, 0.6)); L3.ctl.target.copy(q1); }
+  L3.tw = { t0: performance.now(), p0: L3.cam.position.clone(), p1, q0: L3.ctl.target.clone(), q1 };
+}
+
+function resetStation(st) { st.fails = 0; st.done = false; st.qcmDone = false; st.qcmFirst = null; st.fb = null; st.run = null; st.t = 0; st.running = false; st.init(); }
+function points(st) { return (st.done ? clamp(3 - 0.5 * st.fails, 1, 3) : 0) + (st.qcmDone && st.qcmFirst ? 1 : 0); }
+function note20() { return Math.round((S.reduce((a, s) => a + points(s), 0) * 20) / (4 * S.length) * 2) / 2; }
+function show(id) { for (const s of ["welcome", "station", "report"]) $("#" + s).hidden = s !== id; }
+function draw() { if (cur < 0) return; readColors(); const st = S[cur]; if (L3.ok) st.sync3d(); else st.scene(cvS); st.graph(cvG); }
+
+function renderTabs() {
+  const nav = $("#tabs"); nav.innerHTML = "";
+  S.forEach((st, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab" + (st.done && st.qcmDone ? " done" : "");
+    b.setAttribute("aria-current", String(i === cur && !$("#station").hidden));
+    b.innerHTML = `<span class="n">${st.done && st.qcmDone ? "✓" : st.num}</span><span>${st.short}</span>`;
+    b.onclick = () => openStation(i); nav.append(b);
+  });
+  const r = document.createElement("button");
+  r.type = "button"; r.className = "tab"; r.setAttribute("aria-current", String(!$("#report").hidden));
+  r.innerHTML = `<span class="n">20</span><span>Bilan</span>`; r.onclick = openReport; nav.append(r);
+  const done = S.filter((s) => s.done && s.qcmDone).length, tot = note20();
+  $("#prog").textContent = done + "/" + S.length + " manips";
+  $("#note").textContent = "Note : " + (S.some((s) => s.done) ? fmt(tot, tot % 1 ? 1 : 0) : "–") + "/20";
+}
+
+function stop() { cancelAnimationFrame(raf); if (cur >= 0 && S[cur].running) { S[cur].running = false; S[cur].run = null; } }
+
+function openStation(i) {
+  stop(); cur = i; show("station");
+  const st = S[i];
+  $("#chap").textContent = st.chap; $("#titre").textContent = st.num + ". " + st.titre;
+  $("#goal").innerHTML = st.goal(); $("#data").textContent = st.data();
+  $("#cours").innerHTML = st.cours; $("#gcap").textContent = st.cap;
+  buildCtrls(st); renderFb(st); renderQcm(st); renderTabs(); updBtn();
+  focus3(st);
+  requestAnimationFrame(draw);
+}
+
+function buildCtrls(st) {
+  const box = $("#ctrls"); box.innerHTML = ""; st._ctrls = st.controls();
+  for (const k of st._ctrls) {
+    const id = st.id + "-" + k.id, w = document.createElement("div");
+    w.className = "ctl";
+    w.innerHTML = `<div class="ctl-top"><label for="${id}">${k.label}</label><output for="${id}"></output></div>
+      <div class="ctl-row"><button type="button" class="step" data-d="-1" aria-label="Diminuer ${k.label}">−</button><input type="range" id="${id}" min="${k.min}" max="${k.max}" step="${k.step}"><button type="button" class="step" data-d="1" aria-label="Augmenter ${k.label}">+</button></div>`;
+    box.append(w);
+    const inp = w.querySelector("input"), out = w.querySelector("output");
+    inp.value = st.p[k.id];
+    const sync = () => { out.textContent = fmt(st.p[k.id], k.d) + " " + k.unit; };
+    const set = (v) => { st.p[k.id] = v; inp.value = v; sync(); if (!st.keepRun) st.run = null; updBtn(); draw(); };
+    sync();
+    inp.addEventListener("input", () => set(+inp.value));
+    w.querySelectorAll(".step").forEach((b) => b.addEventListener("click", () => set(clamp(+(st.p[k.id] + +b.dataset.d * k.step).toFixed(4), k.min, k.max))));
+  }
+  setLock(false);
+}
+function setLock(b) {
+  const st = S[cur];
+  $("#ctrls").querySelectorAll(".ctl").forEach((w, i) => {
+    const k = st._ctrls[i], d = b || (k.dis ? k.dis() : false);
+    w.querySelectorAll("input,button").forEach((e) => (e.disabled = d)); w.classList.toggle("off", d);
+  });
+  $("#go").disabled = b;
+}
+function updBtn() { const st = S[cur]; $("#go").textContent = st.btn ? st.btn() : "▶ Lancer l'expérience"; }
+
+function play(st, dur, speed) {
+  st.t = 0; st.running = true; setLock(true);
+  $("#fb").hidden = true;
+  let last = performance.now();
+  const f = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    st.t = Math.min(dur, st.t + dt * speed); draw();
+    if (st.t < dur) raf = requestAnimationFrame(f);
+    else { st.running = false; finish(st, st.evaluate()); }
+  };
+  raf = requestAnimationFrame(f);
+}
+function finish(st, res) {
+  if (res.info) st.fb = { kind: "info", msg: res.msg };
+  else if (res.ok) { st.done = true; st.fb = { kind: "good", msg: res.msg }; }
+  else { if (!st.done) st.fails++; st.fb = { kind: "bad", msg: res.msg, hint: st.fails >= 2 && !st.done ? st.hint() : null }; }
+  setLock(false); updBtn(); renderFb(st); renderQcm(st); renderTabs(); draw();
+}
+function renderFb(st) {
+  const el = $("#fb"), f = st.fb;
+  el.hidden = !f; if (!f) return;
+  el.className = "fb " + f.kind;
+  const tag = { good: "Réussi", bad: "Pas encore", info: "À toi" }[f.kind];
+  el.innerHTML = `<span class="tag">${tag}</span><p>${f.msg}</p>` + (f.hint ? `<p class="hint"><b>Indice :</b> ${f.hint}</p>` : "");
+}
+function renderQcm(st) {
+  const box = $("#qcm"); box.hidden = !st.done; if (!st.done) return;
+  const q = st.qcm;
+  box.innerHTML = `<p class="eyebrow">Question de cours</p><p class="q">${q.q}</p><div class="opts"></div><p class="qfb" hidden></p><button class="btn" id="qnext" type="button" hidden></button>`;
+  const opts = box.querySelector(".opts"), qfb = box.querySelector(".qfb"), next = box.querySelector("#qnext");
+  q.opts.forEach((o, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "opt"; b.textContent = o;
+    if (st.qcmDone) { b.disabled = true; if (i === q.ok) b.classList.add("right"); }
+    b.onclick = () => {
+      if (i === q.ok) { if (st.qcmFirst === null) st.qcmFirst = true; st.qcmDone = true; renderQcm(st); renderTabs(); }
+      else { st.qcmFirst = false; b.classList.add("wrong"); b.disabled = true; qfb.hidden = false; qfb.textContent = "Pas tout à fait. Relis le rappel du cours et réessaie."; }
+    };
+    opts.append(b);
+  });
+  if (st.qcmDone) {
+    qfb.hidden = false; qfb.innerHTML = "<b>Exact.</b> " + q.ex;
+    next.hidden = false;
+    const nextIdx = S.findIndex((s, i) => i > cur && !(s.done && s.qcmDone));
+    next.textContent = nextIdx >= 0 ? "Manip suivante →" : "Voir mon bilan →";
+    next.onclick = () => (nextIdx >= 0 ? openStation(nextIdx) : openReport());
+  }
+}
+function openReport() {
+  stop(); show("report"); cur = Math.max(cur, 0);
+  const tot = note20();
+  $("#gradeN").textContent = fmt(tot, tot % 1 ? 1 : 0);
+  $("#who").textContent = (who ? who + " · " : "") + new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const tb = $("#repRows"); tb.innerHTML = "";
+  for (const s of S) {
+    const tr = document.createElement("tr");
+    const cells = [s.num + ". " + s.titre, s.done ? String(s.fails) : "non faite", s.qcmDone ? (s.qcmFirst ? "juste" : "juste au 2ᵉ essai") : "–", fmt(points(s), points(s) % 1 ? 1 : 0) + " / 4"];
+    cells.forEach((t, i) => { const td = document.createElement("td"); td.textContent = t; if (i === 1 || i === 3) td.className = "num"; tr.append(td); });
+    tb.append(tr);
+  }
+  renderTabs();
+}
+
+$("#startForm").addEventListener("submit", (e) => { e.preventDefault(); who = $("#name").value.trim(); openStation(0); });
+$("#go").addEventListener("click", () => { const st = S[cur]; if (st.running) return; const r = st.action(); if (r.anim != null) play(st, r.anim, r.speed || 1); else finish(st, r); });
+$("#again").addEventListener("click", () => { S.forEach(resetStation); openStation(0); });
+$("#back").addEventListener("click", () => openStation(Math.max(0, S.findIndex((s) => !(s.done && s.qcmDone)))));
+
+const plan = $("#plan");
+S.forEach((s) => { const li = document.createElement("li"); li.innerHTML = `<span class="n">${s.num}</span><b>${s.titre}</b><span>${s.chap}</span>`; plan.append(li); });
+
+S.forEach(resetStation); init3d(); renderTabs();
+new ResizeObserver(() => draw()).observe(cvS);
+new ResizeObserver(() => draw()).observe(cvG);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>

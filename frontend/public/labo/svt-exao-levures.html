@@ -1,0 +1,734 @@
+<title>Labo SVT ExAO 2BAC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : la paillasse occupe tout l'écran ; les consignes sont des étiquettes accrochées aux objets ; une fine barre en haut */
+:root{
+  --bg:#1a2230; --fg:#f1f4f8; --muted:#aab4c3; --glass:rgba(10,15,24,.72); --line:rgba(255,255,255,.14);
+  --accent:#ffc54d; --accent-ink:#1a1400; --good:#5fd39a; --bad:#ff7a6b;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.4;overflow:hidden}
+#scene3d{position:fixed;inset:0;touch-action:none;cursor:grab}
+#scene3d canvas{display:block;width:100%!important;height:100%!important}
+#scene3d.hot{cursor:pointer}
+#scene3d.holding{cursor:grabbing}
+#top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;align-items:center;gap:12px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(8,12,20,.85),rgba(8,12,20,0));pointer-events:none;z-index:5}
+#top>*{pointer-events:auto}
+#top>div:first-child{white-space:nowrap;flex:none}
+#top b{font-size:17px;letter-spacing:-.01em}
+#top .sub{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+#stepbar{margin-left:auto;display:flex;align-items:center;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 8px;max-width:60vw;backdrop-filter:blur(8px)}
+#stepno{font-family:var(--f-mono);font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 8px;white-space:nowrap}
+#steptxt{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{background:var(--glass);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:14px;border-radius:999px;padding:7px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+.ib:hover{border-color:var(--accent)}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:4}
+.ring{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid var(--accent);box-shadow:0 0 0 4px rgba(255,197,77,.18),0 0 18px rgba(255,197,77,.55);animation:pulse 1.4s ease-in-out infinite}
+.ring.target{border-color:var(--good);box-shadow:0 0 0 4px rgba(95,211,154,.18),0 0 18px rgba(95,211,154,.5)}
+@keyframes pulse{50%{transform:scale(1.25);opacity:.6}}
+.chip{position:absolute;transform:translate(-50%,calc(-100% - 24px));background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-family:var(--f-mono);font-size:12px;color:var(--accent);white-space:nowrap;backdrop-filter:blur(8px)}
+.chip .k{color:var(--fg);font-family:var(--f-body);font-weight:700}
+#instr{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(560px,calc(100vw - 24px));display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:10px 14px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:5}
+#instr .n{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 9px;align-self:start}
+#instr .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#instr .t{font-size:15px;line-height:1.3}
+#instr .v{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:20px;color:var(--accent);white-space:nowrap;text-align:right}
+#instr .v:empty{display:none}
+#instr .h{grid-column:2/4;font-size:12px;color:var(--muted)}
+#instr .h:empty{display:none}
+#instr .b{grid-column:2/4;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sb{background:transparent;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13px;border-radius:999px;padding:4px 10px;cursor:pointer}
+.sb:hover{border-color:var(--accent)}
+#panel{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(400px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(12px);box-shadow:0 20px 50px rgba(0,0,0,.45);z-index:7;display:flex;flex-direction:column;overflow:hidden}
+#panel header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+#panel header b{font-size:15px;flex:1}
+#panel .body{overflow:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:14px}
+#panel h3{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.diag{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
+.diag b{font-family:var(--f-mono);color:var(--accent);text-align:right}
+.ev{border-left:3px solid var(--line);padding:4px 10px;font-size:14px}
+.ev.warn{border-color:var(--bad)} .ev.good{border-color:var(--good)} .ev.info{border-color:var(--accent)}
+.ev .t{color:var(--muted);font-family:var(--f-mono);font-size:11px;margin-right:6px}
+.ev button{background:none;border:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;padding:0 0 0 6px;text-decoration:underline}
+.ev .why{display:none;margin-top:6px;color:var(--muted);font-size:13px;line-height:1.4}
+.ev.open .why{display:block}
+.why p{margin:4px 0}
+.why .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:5px 8px;border-radius:6px;display:inline-block}
+.tool-list{display:flex;flex-direction:column;gap:6px}
+.tool-list details{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.tool-list summary{cursor:pointer;font-weight:700}
+.tool-list p{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+#menu{position:fixed;z-index:8;min-width:220px;max-width:min(320px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);padding:6px;display:flex;flex-direction:column;gap:2px}
+#menu .mh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#menu .mh button{background:none;border:1px solid var(--line);color:var(--accent);border-radius:999px;font:inherit;font-size:12px;padding:1px 8px;cursor:pointer;text-transform:none;letter-spacing:0}
+#menu .mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;font-size:15px;padding:9px 10px;border-radius:9px;cursor:pointer}
+#menu .mi:hover,#menu .mi:focus-visible{background:rgba(255,255,255,.08)}
+#menu .mi.hold{background:rgba(255,197,77,.12)} #menu .mi.hold:active{background:rgba(255,197,77,.3)}
+#menu .mi .ic{width:22px;text-align:center;flex:none}
+#menu .mi small{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+#menu .mi.danger{color:var(--bad)}
+#exao{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.6);backdrop-filter:blur(6px);z-index:9;padding:16px}
+#toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:15px;max-width:min(520px,calc(100vw - 32px));opacity:0;transition:.25s;z-index:6;backdrop-filter:blur(8px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.good{border-color:var(--good)} #toast.bad{border-color:var(--bad)}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.55);backdrop-filter:blur(6px);z-index:10;padding:16px}
+.card{width:100%;max-width:520px;background:#121a27;border:1px solid var(--line);border-radius:18px;padding:22px 22px 18px;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.card h1{margin:0 0 6px;font-size:24px;line-height:1.15;letter-spacing:-.01em}
+.card p{margin:8px 0;color:var(--muted)}
+.card ul{margin:10px 0 0;padding-left:20px;color:var(--muted)}
+.card li{margin:3px 0}
+.card .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700;font-size:16px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.res{display:grid;grid-template-columns:1fr auto;gap:6px 14px;margin-top:10px;font-size:15px}
+.res b{font-family:var(--f-mono);color:var(--accent)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:900px){#top .sub{display:none}#stepbar{display:none}}
+@media (max-width:640px){#top b{font-size:15px}#instr .t{font-size:14px}#instr .v{font-size:16px}#panel{top:auto;height:70vh;left:12px;right:12px;width:auto}}
+@media (prefers-reduced-motion:reduce){.ring{animation:none}}
+/* guide vertical à gauche, du haut vers le bas (nov. 2026) */
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}#instr{left:max(14px,env(safe-area-inset-left,0px));transform:none}#instr.min{bottom:auto}
+</style>
+
+<div id="scene3d" aria-label="Paillasse en 3D. Glisse pour tourner, clique sur les objets pour manipuler."></div>
+<div id="labels"></div>
+<header id="top">
+  <div><b>Labo SVT</b> <span class="sub">· 2ᵉ Bac PC · BIOF · ExAO</span></div>
+  <div id="stepbar"><span id="stepno">·</span><span id="steptxt"></span></div>
+  <button class="ib" id="btnPanel" type="button">Carnet</button>
+  <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
+  <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
+</header>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnGuide" type="button">Masquer le guide</button></span></div>
+<aside id="panel" hidden aria-label="Carnet de manipulation">
+  <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
+  <div class="body">
+    <section><h3>État réel de la paillasse</h3><div class="diag" id="diag"></div></section>
+    <section><h3>Journal des gestes</h3><div id="events"></div></section>
+    <section><h3>Le matériel et son usage</h3><div class="tool-list" id="toolHelp"></div></section>
+  </div>
+</aside>
+<div id="menu" hidden role="menu"></div>
+<div id="toast" role="status"></div>
+<div id="exao" hidden><div class="card" style="max-width:860px"><p class="sub" style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">Écran ExAO · temps accéléré ×6</p><canvas id="exaoC" width="800" height="500" style="width:100%;height:auto;border-radius:10px;background:#eef2f7"></canvas><div class="row"><button class="btn" id="exaoEval" type="button">Mesurer les pentes et évaluer</button><button class="btn ghost" id="closeExao" type="button">Fermer</button></div></div></div>
+<div id="overlay">
+  <div class="card">
+    <p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">SVT · Unité 1 · Consommation de la matière organique et flux d'énergie</p>
+    <h1>Respiration et fermentation des levures (ExAO)</h1>
+    <p>Mesure avec des sondes O₂ et CO₂ les échanges gazeux d'une suspension de levures, injecte du glucose et compare les vitesses avant et après.</p>
+    <ul>
+      <li>Clique sur un objet : s'il n'a qu'un usage, le geste se fait aussitôt ; sinon un menu te laisse choisir. Tout est permis, dans l'ordre que tu veux ; la paillasse réagit comme au vrai labo.</li>
+      <li>Un guide conseille la prochaine étape en bas de l'écran. Tu peux le masquer.</li>
+      <li>Le <b>Carnet</b> note chaque geste et explique ses conséquences. Le bac à déchets permet de recommencer.</li>
+    </ul>
+    <div class="row"><button class="btn" id="start" type="button">Entrer au labo →</button></div>
+  </div>
+</div>
+
+<!--labnav--><style>
+.labnav{position:relative;display:flex;align-items:center;gap:6px;margin-left:6px}
+.labnav select{appearance:none;-webkit-appearance:none;background:var(--glass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffc54d' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13.5px;border-radius:999px;padding:6px 28px 6px 12px;max-width:min(330px,42vw);cursor:pointer;backdrop-filter:blur(8px)}
+.labnav select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.labnav select optgroup{background:#121a27;color:var(--accent);font-style:normal}
+.labnav select option{background:#121a27;color:var(--fg)}
+.labnav{flex:none}.labnav select{max-width:250px}
+#top>*{flex:none}#top #stepbar{flex:1 1 0;min-width:0;max-width:none}#top #steptxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+@media (max-width:1500px){#top .sub{display:none}}
+@media (max-width:640px){.labnav select{max-width:40vw;font-size:12.5px}}
+</style>
+<script>
+/* navigation entre les manips : une liste déroulante classée par matière et niveau, dans la barre du haut.
+   Pour une nouvelle manip : ajouter une ligne ici, relancer inject-nav.py, régénérer les manips des sols, republier toutes les manips. */
+(function () {
+  "use strict";
+  const LABS = [
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Labo Sciences 2BAC", n: "Préparer 100 mL de NaOH à 0,10 mol/L (conductimètre)", u: "solution-naoh.html" },
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Dosage acide-base 2BAC", n: "Dosage acide éthanoïque / soude (indicateur, pH-métrie)", u: "chimie-dosage-acide-base.html" },
+    { g: "SVT · 2ᵉ Bac PC BIOF", t: "Labo SVT ExAO 2BAC", n: "Respiration et fermentation des levures (ExAO)", u: "svt-exao-levures.html" },
+    { g: "SVT · Tronc commun", t: "Rétention et perméabilité des sols", n: "Facteurs édaphiques (1) : rétention en eau et perméabilité", u: "svt-sol-retention.html" },
+    { g: "SVT · Tronc commun", t: "Propriétés chimiques du sol", n: "Facteurs édaphiques (2) : pH, calcaire, complexe argilo-humique", u: "svt-sol-chimie.html" },
+  ];
+  function mount() {
+    const top = document.getElementById("top"); if (!top || top.querySelector(".labnav")) return;
+    const wrap = document.createElement("label"); wrap.className = "labnav"; wrap.title = "Changer de manip";
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Changer de manip");
+    const cur = LABS.findIndex((l) => l.t === document.title), head = document.createElement("option");
+    head.textContent = "📚 Manips…"; head.value = ""; if (cur < 0) head.selected = true; sel.append(head); const home = document.createElement("option"); home.value = "home"; home.textContent = "🏠 Toutes les manips"; sel.append(home);
+    const groups = {};
+    LABS.forEach((l, i) => { let og = groups[l.g]; if (!og) { og = groups[l.g] = document.createElement("optgroup"); og.label = l.g; sel.append(og); } const o = document.createElement("option"); o.value = String(i); o.textContent = (i === cur ? "✓ " : "") + l.n; if (i === cur) o.selected = true; og.append(o); });
+    sel.addEventListener("change", () => {
+      if (sel.value === "home") { location.href = "./"; return; } const l = LABS[+sel.value]; if (!l || +sel.value === cur) return;
+      location.href = l.u;
+      sel.value = cur >= 0 ? String(cur) : "";
+    });
+    wrap.append(sel); const first = top.firstElementChild; if (first) first.after(wrap); else top.prepend(wrap);
+  }
+  if (document.getElementById("top")) mount(); else document.addEventListener("DOMContentLoaded", mount);
+})();
+</script><!--/labnav-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>if (window.THREE && !THREE.OrbitControls) document.write('<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');</script>
+<script>
+/* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
+if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
+  constructor(cam, el) { this.object = cam; this.el = el; this.target = new THREE.Vector3(); this.enabled = true; this.enableDamping = false; this.minDistance = 0.1; this.maxDistance = 10; this.maxPolarAngle = Math.PI; this.rotateSpeed = 1; this.panSpeed = 1;
+    let drag = null; el.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, b: e.button }; el.setPointerCapture(e.pointerId); });
+    el.addEventListener("pointermove", (e) => { if (!drag || !this.enabled) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; const o = this.object.position.clone().sub(this.target), s = new THREE.Spherical().setFromVector3(o); s.theta -= dx * 0.005 * this.rotateSpeed; s.phi = Math.max(0.05, Math.min(this.maxPolarAngle, s.phi - dy * 0.005 * this.rotateSpeed)); this.object.position.copy(this.target).add(o.setFromSpherical(s)); });
+    const up = () => (drag = null); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", (e) => { if (!this.enabled) return; e.preventDefault(); const o = this.object.position.clone().sub(this.target), d = Math.max(this.minDistance, Math.min(this.maxDistance, o.length() * (e.deltaY > 0 ? 1.1 : 0.9))); this.object.position.copy(this.target).add(o.setLength(d)); }, { passive: false });
+  }
+  update() { this.object.lookAt(this.target); }
+};
+</script>
+<script>
+(function(){
+"use strict";
+const $ = (s) => document.querySelector(s);
+const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d).replace(".", ",");
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const BENCH = 0.92;
+const T3 = {}, M = {};
+
+/* ------------------------------------------------------------ briques 3D */
+const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; }
+function box(w, h, d, mat, parent, x, y, z) { return mesh(new THREE.BoxGeometry(w, h, d), mat, parent, x, y, z); }
+function cyl(rt, rb, h, mat, parent, x, y, z, seg = 28, open = false) { return mesh(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), mat, parent, x, y, z); }
+function sph(r, mat, parent, x, y, z) { return mesh(new THREE.SphereGeometry(r, 20, 14), mat, parent, x, y, z); }
+function rod(a, b, r, mat, parent) { const A = V3(a), B = V3(b), d = B.clone().sub(A), m = cyl(r, r, d.length(), mat, parent, 0, 0, 0, 16); m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m; }
+function std(color, rough = 0.5, metal = 0, extra = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough, metalness: metal }, extra)); }
+function canvasTex(w, h, draw, rep) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; }
+function grain(ctx, w, h, amp) { const d = ctx.getImageData(0, 0, w, h); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * amp; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } ctx.putImageData(d, 0, 0); }
+function wire(a, b, mat, parent, drop = 0.05, r = 0.0021) { const pts = []; for (let i = 0; i <= 8; i++) { const s = i / 8; pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * s, Math.max(r + 0.001, a[1] + (b[1] - a[1]) * s - drop * Math.sin(Math.PI * s)), a[2] + (b[2] - a[2]) * s + 0.02 * Math.sin(Math.PI * s))); } return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, r, 8, false), mat, parent); }
+function lcd(w, h, parent, x, y, z, fg = "#8ef58b", bg = "#07110a") {
+  const cw = 256, ch = Math.max(40, Math.round((cw * h) / w)), c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const ctx = c.getContext("2d"), t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: t, roughness: 0.2 }));
+  m.position.set(x, y, z); parent.add(m); let last = "";
+  m.set = (a, b = "") => {
+    const k = a + "|" + b; if (k === last) return; last = k;
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = fg; ctx.textBaseline = "middle";
+    const us = Math.min(ch * 0.32, 34), uw = b ? us * b.length * 0.62 + 10 : 0, fs = Math.min(ch * 0.62, (cw - 24 - uw) / (a.length * 0.62));
+    ctx.font = `700 ${Math.round(fs)}px "JetBrains Mono", Consolas, monospace`; ctx.textAlign = "right"; ctx.fillText(a, cw - 12 - uw, ch * 0.55);
+    if (b) { ctx.font = `700 ${Math.round(us)}px Arial, sans-serif`; ctx.textAlign = "left"; ctx.fillText(b, cw - uw - 2, ch * 0.6); }
+    t.needsUpdate = true;
+  };
+  return m;
+}
+function print(w, h, parent, x, y, z, lines, bg = null, fg = "#f1f1ee") {
+  const cw = 512, ch = Math.round((cw * h) / w), c = document.createElement("canvas"); c.width = cw; c.height = ch; const ctx = c.getContext("2d");
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); } ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(ch * (l.s || 0.42))}px Arial, sans-serif`; ctx.fillStyle = l.c || fg; ctx.fillText(l.t, cw / 2, ch * (l.y != null ? l.y : (i + 0.5) / lines.length)); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, transparent: !bg, roughness: 0.6 })); m.position.set(x, y, z); m.receiveShadow = true; parent.add(m); return m;
+}
+function wrapLabel(r, h, parent, x, y, z, lines, bg) {
+  const c = document.createElement("canvas"); c.width = 512; c.height = Math.round(512 * h / (2.4 * r)); const ctx = c.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(c.height * (l.s || 0.2))}px Arial, sans-serif`; ctx.fillStyle = l.c || "#1b1b1b"; ctx.fillText(l.t, c.width / 2, c.height * (i + 0.5) / lines.length); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
+}
+function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
+function liquidMat(color, op = 0.42) { return new THREE.MeshPhysicalMaterial({ color, roughness: 0.06, transparent: true, opacity: op, clearcoat: 1, depthWrite: false, envMapIntensity: 1.2 }); }
+
+function initMats() {
+  T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
+  T3.floor = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#9aa1a8"; x.fillRect(0, 0, w, h); for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { x.fillStyle = `hsl(210,7%,${66 + Math.random() * 7}%)`; x.fillRect(i * 256 + 2, j * 256 + 2, 252, 252); } grain(x, w, h, 16); }, [24, 24]);
+  T3.tiles = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#1b1f24"; x.fillRect(0, 0, w, h); const s = w / 4; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.fillStyle = `hsl(210,9%,${24 + Math.random() * 4}%)`; x.fillRect(i * s + 3, j * s + 3, s - 6, s - 6); } grain(x, w, h, 5); }, [30, 2.4]);
+  T3.sky = canvasTex(512, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#7fb0e6"); g.addColorStop(0.65, "#d8e8f6"); g.addColorStop(1, "#e9f0f5"); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5; i++) { x.fillStyle = "rgba(255,255,255,.55)"; x.beginPath(); x.ellipse(Math.random() * w, 40 + Math.random() * 80, 50 + Math.random() * 40, 12, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#9db7a1"; x.beginPath(); x.moveTo(0, h * 0.78); for (let i = 0; i <= 10; i++) x.lineTo((w * i) / 10, h * (0.7 + Math.random() * 0.06)); x.lineTo(w, h); x.lineTo(0, h); x.fill();
+    for (let i = 0; i < 14; i++) { x.fillStyle = `hsl(${120 + Math.random() * 25},30%,${30 + Math.random() * 12}%)`; x.beginPath(); x.ellipse(Math.random() * w, h * 0.78, 18 + Math.random() * 16, 30 + Math.random() * 20, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#c9c2b5"; x.fillRect(0, h * 0.86, w, h * 0.14);
+  });
+  T3.beaker = canvasTex(256, 256, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#1d2b3a"; x.strokeStyle = "rgba(255,255,255,.9)"; x.lineWidth = 5; x.lineJoin = "round"; x.font = "bold 22px Arial"; x.textAlign = "left"; for (let i = 1; i <= 5; i++) { const y = h - i * 40; x.fillRect(90, y, i % 2 ? 30 : 46, 3); x.strokeText(String(i * 50), 142, y + 8); x.fillText(String(i * 50), 142, y + 8); } x.font = "bold 20px Arial"; x.strokeText("250 mL", 92, 26); x.fillText("250 mL", 92, 26); });
+  T3.poster = canvasTex(1024, 640, (x, w, h) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = "#1d2b44"; x.font = "bold 38px Arial"; x.textAlign = "center"; x.fillText("Tableau périodique des éléments", w / 2, 52);
+    const cols = ["#f4a7a3", "#f7cf8f", "#fdf1a2", "#b8e3b0", "#a9d4f2", "#cdbcf0", "#e6e6e6"], s = 50, ox = 62, oy = 90, shape = [[0, 17], [0, 1, 12, 13, 14, 15, 16, 17], [0, 1, 12, 13, 14, 15, 16, 17]];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 18; c++) { if (r < 3 && !shape[r].includes(c)) continue; x.fillStyle = cols[(c < 2 ? 0 : c < 12 ? 1 + (r % 2) : c < 17 ? 3 + (c % 2) : 5)]; x.fillRect(ox + c * s, oy + r * s, s - 4, s - 4); }
+    for (let r = 0; r < 2; r++) for (let c = 2; c < 17; c++) { x.fillStyle = cols[6]; x.fillRect(ox + c * s, oy + 380 + r * s, s - 4, s - 4); }
+  });
+  T3.safety = canvasTex(512, 640, (x, w, h) => {
+    x.fillStyle = "#fff4d6"; x.fillRect(0, 0, w, h); x.fillStyle = "#c8302b"; x.fillRect(0, 0, w, 70); x.fillStyle = "#fff"; x.font = "bold 40px Arial"; x.textAlign = "center"; x.fillText("SÉCURITÉ AU LABO", w / 2, 48);
+    x.fillStyle = "#222"; x.font = "bold 28px Arial"; x.textAlign = "left"; ["Lunettes et blouse obligatoires", "Soude : corrosif, gants", "Ne jamais pipeter à la bouche", "Rincer à l'eau en cas de projection", "Déchets dans le bac prévu"].forEach((t, i) => { x.fillStyle = "#c8302b"; x.beginPath(); x.arc(44, 130 + i * 90, 12, 0, 7); x.fill(); x.fillStyle = "#222"; x.fillText(t, 72, 140 + i * 90); });
+  });
+  M.epoxy = std(0xffffff, 0.55, 0, { map: T3.epoxy }); M.cabinet = std(0xeef1f4, 0.55); M.gap = std(0x8b939b, 0.7);
+  M.steel = std(0xd9dde2, 0.22, 1); M.alu = std(0xbcc3cb, 0.35, 0.9); M.chrome = std(0xffffff, 0.08, 1);
+  M.black = std(0x1b1d20, 0.42); M.dark = std(0x30353b, 0.5); M.grey = std(0x8a9199, 0.5); M.white = std(0xf3f3ef, 0.38); M.beige = std(0xdcd4c3, 0.5);
+  M.blue = std(0x2b59aa, 0.4); M.red = std(0xc42f29, 0.42); M.standPaint = std(0x3a4a57, 0.45, 0.2); M.wireB = std(0x161616, 0.5); M.ptfe = std(0xf4f4f0, 0.35);
+  M.glass = new THREE.MeshPhysicalMaterial({ color: 0xe6f4ff, roughness: 0.03, transparent: true, opacity: 0.17, clearcoat: 1, clearcoatRoughness: 0.02, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 1.8 });
+  M.pellet = std(0xf7f7f2, 0.55); M.plasticW = std(0xf4f6f8, 0.3, 0, { transparent: true, opacity: 0.9 });
+}
+function envScene() {
+  const s = new THREE.Scene(), bright = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), side: THREE.DoubleSide });
+  const room = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 10), new THREE.MeshBasicMaterial({ color: 0x9aa0a8, side: THREE.BackSide })); room.position.y = 1.6; s.add(room);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshBasicMaterial({ color: 0x4a4e54 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.39; s.add(fl);
+  for (const x of [-4, -1.3, 1.3, 4]) for (const z of [-2, 1.5]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), bright(7, 7, 6.6)); p.rotation.x = Math.PI / 2; p.position.set(x, 3.55, z); s.add(p); }
+  for (const x of [-2, 2]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), bright(2.6, 3, 3.6)); w.position.set(x, 2, -4.95); s.add(w); }
+  return s;
+}
+function buildRoom(scene) {
+  const floor = mesh(new THREE.PlaneGeometry(24, 24), std(0xffffff, 0.72, 0, { map: T3.floor }), scene); floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+  const wz = -0.64;
+  mesh(new THREE.PlaneGeometry(18, 1.45), std(0xffffff, 0.35, 0, { map: T3.tiles }), scene, 0, 0.725, wz).castShadow = false;
+  mesh(new THREE.PlaneGeometry(18, 2.0), std(0x3e444b, 0.9), scene, 0, 2.45, wz).castShadow = false;
+  const ceil = mesh(new THREE.PlaneGeometry(24, 24), std(0xf2f3f4, 0.9), scene, 0, 3.4, 0); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+  for (const x of [-3.3, -1.1, 1.1, 3.3]) box(1.2, 0.02, 0.6, new THREE.MeshBasicMaterial({ color: 0xffffff }), scene, x, 3.39, 0.2).castShadow = false;
+  for (const wx of [-1.1, 1.1, 3.3, -3.3]) {
+    mesh(new THREE.PlaneGeometry(1.5, 1.05), new THREE.MeshBasicMaterial({ map: T3.sky }), scene, wx, 2.05, wz + 0.004).castShadow = false;
+    for (const [w, h, x, y] of [[1.6, 0.05, 0, 0.55], [1.6, 0.05, 0, -0.55], [0.05, 1.15, -0.78, 0], [0.05, 1.15, 0.78, 0], [0.035, 1.05, 0, 0]]) box(w, h, 0.05, M.white, scene, wx + x, 2.05 + y, wz + 0.02);
+    box(1.7, 0.035, 0.14, M.white, scene, wx, 1.47, wz + 0.06);
+  }
+  const bl = 7.6;
+  box(bl, 0.04, 0.84, M.epoxy, scene, 0, BENCH - 0.02, -0.22);
+  box(bl - 0.08, BENCH - 0.14, 0.74, M.cabinet, scene, 0, (BENCH - 0.14) / 2 + 0.1, -0.25);
+  box(bl - 0.1, 0.1, 0.7, M.dark, scene, 0, 0.05, -0.28);
+  for (let i = 0; i <= 12; i++) { const x = -bl / 2 + 0.05 + i * ((bl - 0.1) / 12); box(0.006, BENCH - 0.16, 0.004, M.gap, scene, x, (BENCH - 0.14) / 2 + 0.1, 0.122); if (i < 12) box(0.18, 0.014, 0.02, M.steel, scene, x + (bl - 0.1) / 24, BENCH - 0.14, 0.135); }
+  box(bl, 0.14, 0.05, std(0x3e444b, 0.5), scene, 0, BENCH + 0.07, -0.6);
+  for (let x = -3.4; x <= 3.4; x += 0.85) { box(0.08, 0.08, 0.012, M.white, scene, x, BENCH + 0.07, -0.57); for (const dx of [-0.012, 0.012]) cyl(0.004, 0.004, 0.004, M.black, scene, x + dx, BENCH + 0.07, -0.5635, 10).rotation.x = Math.PI / 2; }
+  mesh(new THREE.PlaneGeometry(1.5, 0.94), std(0xffffff, 0.7, 0, { map: T3.poster }), scene, -2.2, 2.25, wz + 0.006).castShadow = false;
+  mesh(new THREE.PlaneGeometry(0.5, 0.62), std(0xffffff, 0.7, 0, { map: T3.safety }), scene, 1.0, 2.15, wz + 0.006).castShadow = false;
+  // paillasse voisine : verrerie en attente, pour donner de la vie à la salle
+  for (const [x, r, h, m] of [[-1.6, 0.04, 0.11, M.glass], [-1.48, 0.03, 0.09, M.glass], [1.9, 0.035, 0.13, M.glass], [2.05, 0.02, 0.2, M.glass]]) cyl(r, r, h, m, scene, x, BENCH + h / 2, -0.35, 28, true).castShadow = false;
+}
+
+/* ------------------------------------------------------------ matériel de la manip (tout dans le groupe g, origine = dessus de la paillasse) */
+const TOOLS = {};
+function tool(name, obj, anchor = [0, 0, 0], grab = false) { obj.userData.tool = name; obj.traverse((o) => (o.userData.tool = name)); TOOLS[name] = { obj, anchor: V3(anchor), grab, home: obj.position.clone(), homeRot: obj.rotation.clone() }; return obj; }
+const X = {};
+function rboxGeo(w, h, d, r, seg = 3) {
+  r = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
+  const s = new THREE.Shape(), x = -w / 2 + r, y = -h / 2 + r, W = w - 2 * r, H = h - 2 * r, c = Math.min(r, W / 2, H / 2);
+  s.moveTo(x + c, y); s.lineTo(x + W - c, y); s.quadraticCurveTo(x + W, y, x + W, y + c); s.lineTo(x + W, y + H - c); s.quadraticCurveTo(x + W, y + H, x + W - c, y + H);
+  s.lineTo(x + c, y + H); s.quadraticCurveTo(x, y + H, x, y + H - c); s.lineTo(x, y + c); s.quadraticCurveTo(x, y, x + c, y);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: seg, curveSegments: 6 }); g.center(); return g;
+}
+function rbox(w, h, d, r, mat, parent, x, y, z) { return mesh(rboxGeo(w, h, d, r), mat, parent, x, y, z); }
+function knurlCap(parent, r, h, mat, x, y, z, n = 28) { const cap = cyl(r, r, h, mat, parent, x, y, z, 48); for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, b = box(0.0024, h * 0.86, 0.0022, mat, cap, Math.cos(a) * r, 0, Math.sin(a) * r); b.rotation.y = -a; } cyl(r * 0.92, r * 0.92, 0.0015, mat, cap, 0, h / 2 + 0.0007, 0, 48); return cap; }
+function lathe(prof, mat, parent, x, y, z, seg = 48) { return mesh(new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(p[0], p[1])), seg), mat, parent, x, y, z); }
+function tube(pts, r, mat, parent, seg = 48) { return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(V3)), seg, r, 12, false), mat, parent); }
+function feet(parent, w, d, y = 0, r = 0.006) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(r, r * 1.1, 0.006, M.rubber, parent, (sx * w) / 2, y + 0.003, (sz * d) / 2, 16); }
+function key(parent, w, h, x, y, z, label, mat = M.keyGrey, fg = "#f1f1ee") { const k = rbox(w, h, 0.006, 0.0015, mat, parent, x, y, z); if (label) print(w * 0.9, h * 0.6, k, 0, 0, 0.0032, [{ t: label, b: true, s: 0.95, c: fg }]); return k; }
+function knobDial(parent, x, y, z, r, mat = M.black) {
+  const k = cyl(r, r * 1.06, r * 1.1, mat, parent, x, y, z, 32); k.rotation.x = Math.PI / 2;
+  box(r * 0.22, r * 0.85, 0.0015, M.white, k, 0, r * 0.5, r * 0.56).rotation.x = -Math.PI / 2;
+  const tex = canvasTex(256, 256, (c, w) => { c.clearRect(0, 0, w, w); c.strokeStyle = "#e9e9e4"; c.lineWidth = 6; for (let i = 0; i <= 10; i++) { const a = -Math.PI * 0.75 + (i / 10) * Math.PI * 1.5; c.beginPath(); c.moveTo(128 + Math.cos(a) * 92, 128 + Math.sin(a) * 92); c.lineTo(128 + Math.cos(a) * (i % 5 ? 104 : 114), 128 + Math.sin(a) * (i % 5 ? 104 : 114)); c.stroke(); } });
+  const ring = mesh(new THREE.PlaneGeometry(r * 3.2, r * 3.2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.6 }), parent, x, y, z + 0.0005); ring.castShadow = false; return k;
+}
+function labelTex(title, lines, band = "#2a7d4f", w = 768, h = 384) {
+  return canvasTex(w, h, (x) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = band; x.fillRect(0, 0, w, 54); x.fillRect(0, h - 26, w, 26);
+    x.fillStyle = "#fff"; x.font = "bold 28px Arial"; x.textAlign = "left"; x.fillText("LABOBIO · préparation pour TP", 24, 38);
+    x.fillStyle = "#111"; x.font = "bold 76px Arial"; x.fillText(title, 28, 150); x.font = "30px Arial"; x.fillStyle = "#333"; lines.forEach((l, i) => x.fillText(l, 28, 200 + i * 40));
+  });
+}
+
+// verre lisible : liseré sombre sur les bords vus en rasant (réfraction), comme une vraie paroi de verre
+// couleurs fidèles : les codes hexadécimaux des matériaux sont pensés en sRGB (comme sur une photo) ; three r128 les lit en linéaire, ce qui délave tout
+function linColors(root) {
+  const seen = new Set();
+  root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) { if (seen.has(m) || m.isShaderMaterial || !m.color || m.userData.lin) continue; seen.add(m); m.userData.lin = true; m.color.convertSRGBToLinear(); if (m.sheenColor) m.sheenColor.convertSRGBToLinear(); } });
+}
+
+function glassEdges(root) {
+  const mat = new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(0x3d5468) }, a: { value: 0.75 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: "varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "uniform vec3 c; uniform float a; varying vec3 vN; varying vec3 vV; void main(){ float r = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(c, a * pow(r, 2.5)); }" });
+  const list = []; root.traverse((o) => { if (o.isMesh && o.material === M.glass) list.push(o); });
+  for (const o of list) { const e = new THREE.Mesh(o.geometry, mat); e.renderOrder = (o.renderOrder || 0) + 1; e.castShadow = false; e.raycast = () => {}; o.add(e); }
+}
+
+function buildBench(g) {
+  M.rubber = std(0x15171a, 0.9); M.keyGrey = std(0x4b525b, 0.5); M.ceramic = std(0xd9dde2, 0.5);
+  M.hdpe = new THREE.MeshPhysicalMaterial({ color: 0xf6f7f5, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.3 });
+  M.epoxyBlack = new THREE.MeshPhysicalMaterial({ color: 0x1b1d21, roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.15 });
+  M.probeBlue = new THREE.MeshPhysicalMaterial({ color: 0x1f5fb8, roughness: 0.35, clearcoat: 0.7 }); M.probeGrey = new THREE.MeshPhysicalMaterial({ color: 0x6b7480, roughness: 0.4, clearcoat: 0.5 });
+  M.pp = new THREE.MeshPhysicalMaterial({ color: 0x8e98a3, roughness: 0.55, clearcoat: 0.2 }); M.lcdBezel = std(0x111317, 0.35); M.brushed = std(0xcfd4d9, 0.32, 0.95);
+  M.lapt = std(0x9aa1a9, 0.35, 0.7); M.ifaceBlue = new THREE.MeshPhysicalMaterial({ color: 0x1d4e9c, roughness: 0.4, clearcoat: 0.5 }); M.membrane = std(0xf1e8d0, 0.4);
+  M.yeast = new THREE.MeshPhysicalMaterial({ color: 0xd8c597, roughness: 0.35, transparent: true, opacity: 0.96, clearcoat: 0.6, depthWrite: false }); M.glu = liquidMat(0xeaf2ff, 0.35); M.ppBlack = std(0x202428, 0.55);
+
+  // --- agitateur magnétique (support de l'enceinte)
+  const ag = new THREE.Group(); ag.position.set(0.0, 0, -0.16); g.add(ag);
+  rbox(0.2, 0.07, 0.24, 0.009, std(0xeceef0, 0.4), ag, 0, 0.038, 0); feet(ag, 0.17, 0.21);
+  rbox(0.184, 0.05, 0.002, 0.004, std(0x2f6aa8, 0.45), ag, 0, 0.037, 0.1205); rbox(0.016, 0.022, 0.006, 0.002, M.black, ag, 0, 0.031, 0.1225); box(0.012, 0.009, 0.002, std(0x3a3d42, 0.5), ag, 0, 0.035, 0.1257);
+  rbox(0.17, 0.007, 0.17, 0.002, M.ceramic, ag, 0, 0.0765, -0.015);
+  const agBtn = knobDial(ag, -0.05, 0.034, 0.1222, 0.012); X.agLed = sph(0.003, std(0x330000, 0.3, 0, { emissive: 0x22cc55, emissiveIntensity: 0.05 }), ag, 0, 0.052, 0.1222); knobDial(ag, 0.05, 0.034, 0.1222, 0.012);
+  print(0.13, 0.008, ag, 0, 0.0072, 0.1212, [{ t: "AGITATEUR MAGNÉTIQUE · 1500 tr/min", b: true, s: 0.72, c: "#4a5058" }]);
+  print(0.05, 0.006, ag, -0.05, 0.055, 0.1222, [{ t: "VITESSE", b: true, s: 0.8, c: "#ffffff" }]); print(0.05, 0.006, ag, 0.05, 0.055, 0.1222, [{ t: "CHAUFFAGE", b: true, s: 0.8, c: "#ffffff" }]);
+  tool("agit", agBtn, [0, 0, 0.012]); wire([0.0, 0.02, -0.28], [0.0, 0.01, -0.5], M.wireB, g, 0, 0.0024);
+  // --- enceinte de mesure (bioréacteur) : cuve en verre, couvercle à 3 passages
+  const enc = new THREE.Group(); enc.position.set(0, 0.08, -0.175); g.add(enc); X.enc = enc;
+  const cuve = lathe([[0, 0], [0.046, 0], [0.049, 0.003], [0.049, 0.16], [0.052, 0.163], [0.052, 0.168], [0.0465, 0.168], [0.0465, 0.004], [0, 0.004]], M.glass, enc, 0, 0, 0, 56); cuve.castShadow = false; cuve.renderOrder = 3;
+  const grad = mesh(new THREE.CylinderGeometry(0.0493, 0.0493, 0.14, 32, 1, true, -0.5, 1.0), new THREE.MeshStandardMaterial({ map: canvasTex(256, 512, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#1d2b3a"; x.strokeStyle = "rgba(255,255,255,.9)"; x.lineWidth = 5; x.lineJoin = "round"; x.font = "bold 24px Arial"; for (let i = 1; i <= 7; i++) { const y = h - i * 62; x.fillRect(90, y, i % 2 ? 24 : 40, 3); if (i % 2 === 0) x.strokeText(String(i * 25), 136, y + 9); x.fillText(String(i * 25), 136, y + 9); } x.font = "bold 20px Arial"; x.strokeText("mL", 140, 30); x.fillText("mL", 140, 30); }), transparent: true, depthWrite: false, roughness: 0.4 }), enc, 0, 0.08, 0);  grad.castShadow = false; grad.renderOrder = 4;
+  X.liq = cyl(0.0455, 0.0455, 1, M.yeast, enc, 0, 0, 0, 48); X.liq.castShadow = false; X.liq.renderOrder = 2; X.liq.visible = false;
+  X.bubbles = new THREE.Group(); enc.add(X.bubbles); for (let i = 0; i < 18; i++) { const b = sph(0.0012 + Math.random() * 0.0012, std(0xffffff, 0.2, 0, { transparent: true, opacity: 0.75 }), X.bubbles, (Math.random() - 0.5) * 0.07, Math.random() * 0.1, (Math.random() - 0.5) * 0.07); b.castShadow = false; b.userData.v = 0.01 + Math.random() * 0.02; }
+  X.bar = cyl(0.0038, 0.0038, 0.022, M.ptfe, enc, 0, 0.008, 0, 14); X.bar.rotation.z = Math.PI / 2; sph(0.0038, M.ptfe, X.bar, 0, 0.011, 0); sph(0.0038, M.ptfe, X.bar, 0, -0.011, 0);
+  tool("enc", enc, [0.03, 0.2, 0.04]);
+  X.lid = new THREE.Group(); X.lid.position.set(0, 0.17, 0); enc.add(X.lid);
+  cyl(0.054, 0.054, 0.014, M.ppBlack, X.lid, 0, 0.007, 0, 48); cyl(0.046, 0.046, 0.006, M.ppBlack, X.lid, 0, -0.003, 0, 48);
+  for (const [px, pz, r] of [[-0.02, 0, 0.0085], [0.02, 0, 0.0085], [0, 0.022, 0.0045]]) { cyl(r + 0.003, r + 0.003, 0.012, M.ppBlack, X.lid, px, 0.018, pz, 24); cyl(r, r, 0.03, std(0x0a0a0a, 0.7), X.lid, px, 0.014, pz, 16); }
+  sph(0.005, M.rubber, X.lid, 0, 0.026, 0.022);
+  print(0.05, 0.008, X.lid, 0, 0.0145, -0.03, [{ t: "ENCEINTE 250 mL", b: true, s: 0.8, c: "#cfd3d8" }]).rotation.x = -Math.PI / 2;
+  tool("lid", X.lid, [0, 0.04, -0.03]);
+  // --- sondes O₂ (oxymètre, bleue) et CO₂ (grise), sur une potence à deux pinces
+  const sd = new THREE.Group(); sd.position.set(0.22, 0, -0.33); g.add(sd);
+  rbox(0.12, 0.014, 0.08, 0.004, M.standPaint, sd, 0, 0.007, 0); cyl(0.0055, 0.0055, 0.3, M.chrome, sd, 0, 0.16, 0, 24);
+  for (const [yy, dx] of [[0.26, -0.03], [0.26, 0.03]]) { const boss = rbox(0.022, 0.024, 0.022, 0.003, M.alu, sd, 0, yy, 0); cyl(0.0035, 0.0035, 0.05, M.chrome, sd, dx, yy, 0, 16).rotation.z = Math.PI / 2; for (const z of [-0.009, 0.009]) box(0.012, 0.01, 0.004, M.alu, sd, dx * 1.7, yy, z); }
+  const pO2 = new THREE.Group(); pO2.position.set(0.17, 0.2, -0.33); g.add(pO2);
+  cyl(0.0075, 0.0075, 0.16, M.probeBlue, pO2, 0, 0, 0, 24); cyl(0.0082, 0.0082, 0.014, M.rubber, pO2, 0, 0.085, 0, 24); cyl(0.0078, 0.0078, 0.03, M.epoxyBlack, pO2, 0, -0.09, 0, 24); cyl(0.0068, 0.0068, 0.003, M.membrane, pO2, 0, -0.106, 0, 24);
+  print(0.012, 0.05, pO2, 0.0, 0.02, 0.0078, [{ t: "O₂", b: true, s: 0.5, c: "#fff" }], null, "#fff");
+  X.cabO2 = wire([0.17, 0.28, -0.33], [0.32, 0.03, -0.36], M.wireB, g, 0.1, 0.0018);
+  tool("pO2", pO2, [0, 0.09, 0], true);
+  const pCO2 = new THREE.Group(); pCO2.position.set(0.27, 0.2, -0.33); g.add(pCO2);
+  cyl(0.0075, 0.0075, 0.16, M.probeGrey, pCO2, 0, 0, 0, 24); cyl(0.0082, 0.0082, 0.014, M.rubber, pCO2, 0, 0.085, 0, 24); cyl(0.0078, 0.0078, 0.03, M.epoxyBlack, pCO2, 0, -0.09, 0, 24); cyl(0.0068, 0.0068, 0.003, M.membrane, pCO2, 0, -0.106, 0, 24);
+  print(0.014, 0.05, pCO2, 0.0, 0.02, 0.0078, [{ t: "CO₂", b: true, s: 0.45, c: "#fff" }], null, "#fff");
+  X.cabCO2 = wire([0.27, 0.28, -0.33], [0.34, 0.03, -0.36], M.wireB, g, 0.1, 0.0018);
+  tool("pCO2", pCO2, [0, 0.09, 0], true);
+  // --- interface ExAO
+  const ifc = new THREE.Group(); ifc.position.set(0.36, 0, -0.33); g.add(ifc);
+  rbox(0.16, 0.045, 0.1, 0.006, M.ifaceBlue, ifc, 0, 0.0225, 0); feet(ifc, 0.13, 0.08);
+  [["O₂", -0.05], ["CO₂", -0.017], ["T°", 0.017], ["pH", 0.05]].forEach(([t, x]) => { cyl(0.0055, 0.0055, 0.006, M.black, ifc, x, 0.03, 0.051, 16).rotation.x = Math.PI / 2; print(0.022, 0.006, ifc, x, 0.016, 0.0505, [{ t, b: true, s: 0.9 }]); });
+  X.ifLed = sph(0.003, std(0x002200, 0.3, 0, { emissive: 0x22cc55, emissiveIntensity: 0.1 }), ifc, 0.07, 0.038, 0.05);
+  print(0.09, 0.009, ifc, -0.02, 0.046, 0.0, [{ t: "INTERFACE ExAO · 4 voies", b: true, s: 0.8 }]).rotation.x = -Math.PI / 2;
+  tool("iface", ifc, [0, 0.06, 0]);
+  // --- ordinateur portable avec le logiciel d'acquisition
+  const lp = new THREE.Group(); lp.position.set(0.5, 0, -0.08); lp.rotation.y = -0.55; g.add(lp);
+  rbox(0.32, 0.014, 0.22, 0.004, M.lapt, lp, 0, 0.007, 0); feet(lp, 0.28, 0.18, 0, 0.004);
+  mesh(new THREE.PlaneGeometry(0.3, 0.15), std(0xffffff, 0.6, 0, { map: canvasTex(512, 256, (x, w, h) => { x.fillStyle = "#2b2f35"; x.fillRect(0, 0, w, h); x.fillStyle = "#14171b"; for (let j = 0; j < 5; j++) for (let i = 0; i < 14; i++) x.fillRect(16 + i * 34, 14 + j * 30, 30, 26); x.fillRect(150, 170, 210, 60); }) }), lp, 0, 0.0145, -0.02).rotation.x = -Math.PI / 2;
+  const lid = new THREE.Group(); lid.position.set(0, 0.014, -0.108); lid.rotation.x = -0.3; lp.add(lid);
+  rbox(0.32, 0.21, 0.008, 0.004, M.lapt, lid, 0, 0.105, 0);
+  X.scrC = document.createElement("canvas"); X.scrC.width = 800; X.scrC.height = 500; X.scrT = new THREE.CanvasTexture(X.scrC); X.scrT.encoding = THREE.sRGBEncoding;
+  const scr = mesh(new THREE.PlaneGeometry(0.296, 0.185), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: X.scrT, roughness: 0.25 }), lid, 0, 0.106, 0.0045); scr.castShadow = false;
+  wire([0.43, 0.03, -0.31], [0.42, 0.012, -0.2], M.wireB, g, 0.0, 0.0018);
+  tool("pc", lp, [0, 0.26, -0.1]);
+  // --- flacon de suspension de levures (erlenmeyer), flacon de glucose, seringue
+  const yf = new THREE.Group(); yf.position.set(-0.3, 0, -0.3); g.add(yf);
+  lathe([[0, 0], [0.05, 0], [0.053, 0.004], [0.052, 0.012], [0.02, 0.12], [0.02, 0.15], [0.023, 0.152], [0.023, 0.156], [0.018, 0.156], [0.018, 0.15], [0.017, 0.12], [0.049, 0.012], [0.049, 0.004], [0, 0.004]], M.glass, yf, 0, 0, 0, 56).castShadow = false;
+  X.yeastLiq = lathe([[0, 0.004], [0.048, 0.004], [0.048, 0.012], [0.03, 0.075], [0, 0.075]], M.yeast, yf, 0, 0, 0, 40); X.yeastLiq.castShadow = false; X.yeastLiq.renderOrder = 2;
+  cyl(0.02, 0.02, 0.02, M.rubber, yf, 0, 0.16, 0, 24);
+  mesh(new THREE.CylinderGeometry(0.036, 0.046, 0.045, 48, 1, true, -1.1, 2.2), std(0xffffff, 0.6, 0, { map: labelTex("Levures", ["Saccharomyces cerevisiae", "suspension 10 g/L · eau", "à utiliser le jour même"]) }), yf, 0, 0.045, 0).castShadow = false;
+  tool("yeast", yf, [0, 0.19, 0]);
+  const gf = new THREE.Group(); gf.position.set(-0.28, 0, -0.06); g.add(gf);
+  lathe([[0, 0], [0.028, 0], [0.031, 0.004], [0.031, 0.08], [0.028, 0.09], [0.014, 0.098], [0.014, 0.112], [0, 0.112]], M.glass, gf, 0, 0, 0, 48).castShadow = false;
+  cyl(0.029, 0.029, 0.07, M.glu, gf, 0, 0.04, 0, 32).castShadow = false; knurlCap(gf, 0.0165, 0.018, M.hdpe, 0, 0.118, 0, 24);
+  mesh(new THREE.CylinderGeometry(0.0315, 0.0315, 0.05, 48, 1, true, -1.2, 2.4), std(0xffffff, 0.6, 0, { map: labelTex("Glucose", ["solution à 100 g/L", "C₆H₁₂O₆ · M = 180 g/mol"], "#1e4f9c") }), gf, 0, 0.05, 0).castShadow = false;
+  tool("glu", gf, [0, 0.13, 0]);
+  const sy = new THREE.Group(); sy.position.set(-0.12, 0.008, 0.06); sy.rotation.set(0, 0.35, Math.PI / 2); g.add(sy); X.syr = sy;
+  cyl(0.0055, 0.0055, 0.07, M.glass, sy, 0, 0, 0, 24).castShadow = false; X.syrLiq = cyl(0.0045, 0.0045, 1, M.glu, sy, 0, 0, 0, 16); X.syrLiq.castShadow = false;
+  cyl(0.009, 0.009, 0.002, M.hdpe, sy, 0, 0.035, 0, 24); X.plunger = cyl(0.003, 0.003, 0.06, M.hdpe, sy, 0, 0.06, 0, 12); cyl(0.009, 0.009, 0.003, M.hdpe, X.plunger, 0, 0.03, 0, 24);
+  cyl(0.0035, 0.0025, 0.008, M.hdpe, sy, 0, -0.039, 0, 12); cyl(0.0006, 0.0006, 0.03, M.steel, sy, 0, -0.055, 0, 8);
+  mesh(new THREE.CylinderGeometry(0.0057, 0.0057, 0.05, 24, 1, true, -1, 2), new THREE.MeshStandardMaterial({ map: canvasTex(128, 512, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#222"; for (let i = 0; i <= 10; i++) { x.fillRect(60, 20 + i * 46, i % 5 ? 14 : 26, 3); } x.font = "bold 22px Arial"; x.fillText("1 mL", 40, 500); }), transparent: true, depthWrite: false }), sy, 0, 0.005, 0).castShadow = false;
+  tool("syr", sy, [0.04, 0.02, 0], true);
+  // --- bac à déchets biologiques
+  const bin = new THREE.Group(); bin.position.set(-0.55, 0, 0.06); g.add(bin);
+  lathe([[0, 0], [0.04, 0], [0.042, 0.003], [0.046, 0.088], [0.049, 0.09], [0.049, 0.094], [0.044, 0.094], [0.044, 0.09], [0.04, 0.004], [0, 0.004]], M.pp, bin, 0, 0, 0, 40).castShadow = false;
+  mesh(new THREE.CylinderGeometry(0.0465, 0.044, 0.03, 40, 1, true, -1.2, 2.4), std(0xffffff, 0.6, 0, { map: canvasTex(512, 160, (x, w, h) => { x.fillStyle = "#f2b728"; x.fillRect(0, 0, w, h); x.fillStyle = "#111"; x.font = "bold 44px Arial"; x.textAlign = "center"; x.fillText("DÉCHETS", w / 2, 62); x.font = "bold 30px Arial"; x.fillText("biologiques · évier", w / 2, 108); x.fillRect(0, 140, w, 8); }) }), bin, 0, 0.06, 0).castShadow = false;
+  tool("bin", bin, [0, 0.105, 0]);
+  // --- cahier de TP, stylo
+  const nb = rbox(0.21, 0.008, 0.29, 0.002, std(0x2a6b45, 0.6), g, 0.16, 0.004, 0.16); nb.rotation.y = -0.1;
+  print(0.19, 0.27, nb, 0, 0.0045, 0, [{ t: "TP ExAO · Respiration des levures", b: true, s: 0.045, y: 0.1 }, { t: "C₆H₁₂O₆ + 6 O₂ → 6 CO₂ + 6 H₂O", s: 0.04, y: 0.19 }, { t: "C₆H₁₂O₆ → 2 C₂H₅OH + 2 CO₂ (fermentation)", s: 0.036, y: 0.27 }, { t: "Vitesse = pente de [O₂](t), en mg/L/min", s: 0.036, y: 0.35 }], "#f6f3ea", "#223").rotation.x = -Math.PI / 2;
+  const pen = cyl(0.0035, 0.0035, 0.14, std(0x1b3f8f, 0.35), g, 0.3, 0.0115, 0.2, 16); pen.rotation.z = Math.PI / 2; pen.rotation.y = 0.35; cyl(0.0036, 0.0015, 0.014, M.alu, pen, 0, 0.077, 0, 12);
+  glassEdges(g);
+}
+
+/* ------------------------------------------------------------ état de l'expérience : échanges gazeux d'une suspension de levures */
+const ST = {};
+const SIM = 6; // 1 s réel = 6 s simulé (signalé dans WHY). O₂ saturation à 25 °C ≈ 8,3 mg/L (Benson & Krause 1984).
+function resetState() {
+  Object.assign(ST, { yeast: 0, o2: 8.3, co2: 0.5, glu: 0, eth: 0, lidOn: false, stir: false, o2In: false, co2In: false, cal: false, acq: false, ts: 0, data: [], inj: [], syrFull: true, anaer: false, q: [], busy: false, guide: true, started: performance.now(), attempts: 1, ev: [], flags: {}, rO2: 0, rdO2: 8.3, rdCO2: 0.5, noise: 0 });
+  for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); }
+  X.liq.visible = false; X.lid.position.set(0, 0.17, 0); X.lid.rotation.set(0, 0, 0); X.lid.visible = true; X.agLed.material.emissiveIntensity = 0.05; X.ifLed.material.emissiveIntensity = 0.1; X.syrLiq.scale.y = 0.05; X.syrLiq.position.y = -0.01; X.plunger.position.y = 0.06;
+  X.lidOff = false; $("#events").innerHTML = ""; $("#btnEval").hidden = true; drawScreen();
+}
+const WHY = {
+  sim: `<p>Le temps est accéléré : 1 s à l'écran = ${SIM} s dans l'enceinte. Au vrai labo, une acquisition dure 10 à 15 minutes.</p>`,
+  yeast: `<p>On verse 100 mL de suspension de levures (10 g/L). Les levures sont des cellules vivantes : elles respirent, donc consomment le dioxygène dissous et rejettent du dioxyde de carbone, même sans glucose ajouté (réserves internes, lentement).</p>`,
+  cal: `<p>L'oxymètre doit être <b>étalonné à l'air</b> avant la mesure : dans l'air saturé d'humidité, la sonde doit lire 100 % de saturation (≈ 8,3 mg/L à 25 °C). Sans étalonnage, toutes les valeurs sont décalées (ici +18 %).</p><p class="eq">[O₂]sat(25 °C) ≈ 8,3 mg/L</p>`,
+  noCal: `<p>Sonde O₂ non étalonnée : les valeurs absolues sont fausses (+18 % ici). Les <b>pentes</b> restent comparables entre elles, mais la vitesse en mg/L/min est surestimée.</p>`,
+  probes: `<p>Les sondes passent par les orifices du couvercle, membrane immergée dans la suspension, sans toucher le barreau aimanté. Hors du liquide, elles mesurent l'air : « Err ».</p>`,
+  dry: `<p>Sonde placée dans une enceinte vide : la membrane mesure l'air, l'appareil affiche une erreur. Verse d'abord la suspension.</p>`,
+  lid: `<p>Le couvercle isole la suspension de l'air. Enceinte <b>ouverte</b>, le dioxygène de l'air se redissout en permanence et compense la consommation : la courbe reste presque plate. C'est l'erreur la plus fréquente.</p>`,
+  stir: `<p>L'agitation homogénéise la suspension et renouvelle le liquide au contact des membranes. Sans agitation, les sondes répondent lentement et le signal est bruité.</p>`,
+  acq: `<p>Démarrer l'acquisition avant toute injection : il faut une <b>ligne de base</b> (au moins 30 s) pour comparer la vitesse « avant » et « après » glucose.</p>`,
+  inj: `<p>1 mL de glucose à 100 g/L dans 100 mL : la suspension passe à 1 g/L de glucose. Les levures oxydent ce substrat : la consommation de O₂ et la production de CO₂ augmentent nettement.</p><p class="eq">C₆H₁₂O₆ + 6 O₂ → 6 CO₂ + 6 H₂O</p>`,
+  injEarly: `<p>Glucose injecté sans ligne de base enregistrée : on ne pourra pas comparer « avant » et « après ». Il fallait démarrer l'acquisition et attendre 30 s.</p>`,
+  injNoAcq: `<p>Injection faite alors que l'acquisition n'était pas lancée : rien n'est enregistré. Le glucose agit quand même dans l'enceinte.</p>`,
+  anaer: `<p>Le dioxygène est épuisé : les levures passent en <b>fermentation alcoolique</b>. Le CO₂ continue de monter, de l'éthanol apparaît, mais O₂ reste à 0. Chez la levure, respiration et fermentation sont deux voies de dégradation du glucose.</p><p class="eq">C₆H₁₂O₆ → 2 C₂H₅OH + 2 CO₂</p>`,
+  slope: `<p>La vitesse de consommation du dioxygène est la <b>pente</b> de la courbe [O₂] = f(t), en mg/L/min. On la calcule sur 30 s avant l'injection et sur 60 s après. Le rapport des pentes mesure l'effet du glucose (attendu ≈ 4 à 6).</p>`,
+  refill: `<p>On remplit la seringue avec 1 mL de solution de glucose, en chassant les bulles d'air.</p>`,
+  bin: `<p>Vider l'enceinte permet de recommencer avec une suspension neuve. Les levures vont aux déchets biologiques (ou à l'évier après dilution), puis on rince l'enceinte et les sondes à l'eau distillée.</p>`,
+  noYeast: `<p>Il n'y a pas de levures dans l'enceinte : les courbes restent plates, le glucose n'est pas consommé.</p>`,
+  twice: `<p>Deuxième injection de glucose : la concentration double, mais la vitesse est déjà proche du maximum (les levures sont saturées en substrat). La consommation d'O₂ augmente peu.</p>`,
+  exaoScreen: `<p>L'écran montre [O₂] (bleu) et [CO₂] (rouge) en fonction du temps. Les traits verticaux marquent les injections. Le logiciel calcule les pentes sur les zones choisies.</p>`,
+  open: `<p>Enceinte ouverte pendant l'acquisition : O₂ remonte vers la saturation et le CO₂ s'échappe. La courbe est faussée sur cette période.</p>`,
+};
+const TOOL_HELP = [
+  ["Enceinte de mesure (250 mL)", "Cuve en verre sur l'agitateur. Reçoit la suspension de levures. Se ferme par un couvercle à 3 passages (sonde O₂, sonde CO₂, injection)."],
+  ["Couvercle", "Isole la suspension de l'air. Ouvert : l'oxygène de l'air rentre et fausse la mesure."],
+  ["Flacon de levures", "Suspension de Saccharomyces cerevisiae à 10 g/L. Un clic verse 100 mL dans l'enceinte."],
+  ["Sonde O₂ (oxymètre)", "Mesure le dioxygène dissous (mg/L). À étalonner à l'air avant usage, puis à placer dans l'enceinte."],
+  ["Sonde CO₂", "Mesure le dioxyde de carbone dissous (mg/L). À placer dans l'enceinte."],
+  ["Agitateur magnétique", "Homogénéise la suspension et renouvelle le liquide sur les membranes des sondes."],
+  ["Interface ExAO + ordinateur", "Reçoit les signaux des sondes. Le logiciel trace les courbes, marque les injections et calcule les pentes."],
+  ["Seringue et glucose", "1 mL de glucose à 100 g/L injecté par le passage du couvercle. Se remplit au flacon de glucose."],
+  ["Bac à déchets", "Vider l'enceinte pour recommencer un essai."],
+];
+function log(kind, txt, why) { const w = why ? WHY[why] : ""; ST.ev.push({ kind, txt }); const d = document.createElement("div"); d.className = "ev " + kind; const t = fmt(ST.ts, 0) + " s"; d.innerHTML = `<span class="t">${t}</span>${txt}${w ? '<button type="button">Pourquoi ?</button><div class="why">' + w + "</div>" : ""}`; if (w) d.querySelector("button").onclick = () => d.classList.toggle("open"); $("#events").prepend(d); }
+function once(flag, kind, txt, why) { if (ST.flags[flag]) return; ST.flags[flag] = true; log(kind, txt, why); }
+function toast(msg, kind = "") { const t = $("#toast"); t.textContent = msg; t.className = "show " + kind; clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3200); }
+
+const CAMS = { enc: { p: [0.05, 0.42, 0.46], t: [0.0, 0.18, -0.17] }, pc: { p: [0.5, 0.42, 0.4], t: [0.45, 0.14, -0.14] }, fl: { p: [-0.25, 0.4, 0.4], t: [-0.25, 0.08, -0.15] }, bin: { p: [-0.45, 0.4, 0.5], t: [-0.5, 0.05, 0.0] }, wide: { p: [0.05, 0.62, 0.95], t: [0.0, 0.1, -0.18] } };
+let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
+const look = (k) => { camFocus = k; focusCam(CAMS[k]) };
+const sinceInj = () => (ST.inj.length ? ST.ts - ST.inj[ST.inj.length - 1] : -1);
+function suggest() {
+  if (ST.yeast === 0) return { on: "yeast", k: "Flacon de levures", t: "Clique sur le flacon : il verse 100 mL de suspension dans l'enceinte.", why: "yeast", cam: "fl" };
+  if (!ST.stir) return { on: "agit", k: "Agitateur", t: "Allume l'agitation.", why: "stir", cam: "enc" };
+  if (!ST.cal && !ST.o2In) return { on: "pO2", k: "Sonde O₂", t: "Étalonne la sonde O₂ à l'air (100 %), puis place-la dans l'enceinte.", why: "cal", cam: "enc" };
+  if (!ST.o2In) return { on: "pO2", k: "Sonde O₂", t: "Place la sonde O₂ dans l'enceinte.", why: "probes", cam: "enc" };
+  if (!ST.co2In) return { on: "pCO2", k: "Sonde CO₂", t: "Place la sonde CO₂ dans l'enceinte.", why: "probes", cam: "enc" };
+  if (!ST.lidOn) return { on: "lid", k: "Couvercle", t: "Ferme le couvercle pour isoler la suspension de l'air.", why: "lid", cam: "enc" };
+  if (!ST.acq) return { on: "pc", k: "Ordinateur", t: "Démarre l'acquisition et laisse une ligne de base d'au moins 30 s.", why: "acq", cam: "pc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" };
+  if (ST.inj.length === 0) { const base = ST.data.length ? ST.ts - ST.data[0].t : 0; if (base < 30) return { on: "pc", k: "Ligne de base", t: "Attends 30 s d'enregistrement avant d'injecter.", why: "acq", cam: "pc", v: fmt(base, 0) + " s" }; if (!ST.syrFull) return { on: "glu", k: "Glucose", t: "Remplis la seringue au flacon de glucose (1 mL).", why: "refill", cam: "fl" }; return { on: "syr", k: "Seringue", t: "Injecte 1 mL de glucose par le passage du couvercle.", why: "inj", cam: "enc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" }; }
+  if (sinceInj() < 60) return { on: "pc", k: "Ordinateur", t: "Laisse agir le glucose : observe la pente de O₂ pendant 60 s.", why: "slope", cam: "pc", v: fmt(sinceInj(), 0) + " s" };
+  return { on: "pc", k: "Ordinateur", t: "Arrête l'acquisition et clique sur Évaluer pour comparer les pentes.", why: "slope", cam: "pc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" };
+}
+let lastKey = "";
+function updGuide() {
+  const g = suggest(), el = $("#instr"); ST.cur = g;
+  $("#instr .v").textContent = g.v || ""; $("#stepno").textContent = g.k; $("#steptxt").textContent = g.t;
+  $("#btnEval").hidden = !(ST.inj.length && sinceInj() >= 30);
+  const key = g.on + g.t.slice(0, 20); if (key === lastKey) return; lastKey = key;
+  el.querySelector(".n").textContent = "Guide"; el.querySelector(".k").textContent = g.k; el.querySelector(".t").textContent = g.t; el.querySelector(".h").textContent = g.h || "";
+  if (g.cam && ST.guide) focusCam(CAMS[g.cam]);
+}
+function go(obj, steps) { for (const s of steps) ST.q.push(Object.assign({ obj, dur: 0.5, up: 0.05 }, s)); }
+function runQueue(dt) {
+  const a = ST.q[0]; if (!a) { ST.busy = false; return; } ST.busy = true;
+  if (a.t === undefined) { a.t = 0; a.p0 = a.obj.position.clone(); a.r0 = a.obj.rotation.clone(); a.p1 = V3(a.to); a.r1 = a.rot ? new THREE.Euler(a.rot[0], a.rot[1], a.rot[2]) : a.r0.clone(); }
+  a.t += window.__fast ? 9 : dt; const k = Math.min(1, a.t / a.dur), e = k * k * (3 - 2 * k);
+  a.obj.position.lerpVectors(a.p0, a.p1, e); a.obj.position.y += a.up * Math.sin(Math.PI * e);
+  a.obj.rotation.set(lerp(a.r0.x, a.r1.x, e), lerp(a.r0.y, a.r1.y, e), lerp(a.r0.z, a.r1.z, e));
+  if (k >= 1) { ST.q.shift(); if (a.at) a.at(); }
+}
+const homeOf = (n) => { const t = TOOLS[n]; return { to: [t.home.x, t.home.y, t.home.z], rot: [t.homeRot.x, t.homeRot.y, t.homeRot.z] }; };
+const busyToast = () => { toast("Attends la fin du geste."); return true; };
+
+/* actions */
+function doPourYeast() {
+  if (ST.busy) return busyToast(); if (ST.yeast > 0) return toast("L'enceinte contient déjà la suspension."); if (ST.lidOn) return toast("Ouvre d'abord le couvercle.");
+  look("enc"); const f = TOOLS.yeast.obj;
+  go(f, [{ to: [-0.06, 0.3, -0.19], rot: [0, 0, -1.9], dur: 0.9, up: 0.12, at: () => { ST.yeast = 100; ST.o2 = 8.3; ST.co2 = 0.5; ST.glu = 0; ST.eth = 0; ST.anaer = false; X.yeastLiq.scale.y = 0.35; } }, Object.assign(homeOf("yeast"), { dur: 0.8, up: 0.12, at: () => { log("good", "100 mL de suspension de levures versés dans l'enceinte.", "yeast"); toast("Suspension versée.", "good"); } })]);
+}
+function doLid() {
+  if (ST.busy) return busyToast(); look("enc");
+  if (!ST.lidOn) { if (ST.yeast === 0) once("lidEmpty", "info", "Couvercle fermé sur une enceinte vide.", "lid"); ST.lidOn = true; go(X.lid, [{ to: [0, 0.17, 0], rot: [0, 0, 0], dur: 0.6, up: 0.04, at: () => log("good", "Couvercle fermé : l'enceinte est isolée de l'air.", "lid") }]); }
+  else { ST.lidOn = false; if (ST.acq) ST.flags.open = true; go(X.lid, [{ to: [0.1, 0.0, 0.09], rot: [0, 0, 0], dur: 0.6, up: 0.1, at: () => log(ST.acq ? "warn" : "info", "Couvercle ouvert" + (ST.acq ? " pendant l'acquisition : l'air rentre." : "."), ST.acq ? "open" : "lid") }]); }
+}
+function doStir() { look("enc"); ST.stir = !ST.stir; X.agLed.material.emissiveIntensity = ST.stir ? 2 : 0.05; log("info", ST.stir ? "Agitation allumée." : "Agitation éteinte." + (ST.acq ? " Le signal va devenir bruité." : ""), "stir"); }
+function doCal() { if (ST.busy) return busyToast(); if (ST.o2In) return toast("Retire la sonde de l'enceinte pour l'étalonner à l'air."); look("enc"); const p = TOOLS.pO2.obj; go(p, [{ to: [0.17, 0.26, -0.33], dur: 0.5, up: 0.03 }, { to: [0.17, 0.2, -0.33], dur: 0.9, up: 0.0, at: () => { ST.cal = true; log("good", "Sonde O₂ étalonnée à l'air : 100 % ≈ 8,3 mg/L à 25 °C.", "cal"); toast("Oxymètre étalonné.", "good"); } }]); }
+function placeProbe(name) {
+  if (ST.busy) return busyToast(); look("enc"); const p = TOOLS[name].obj, isO2 = name === "pO2", key = isO2 ? "o2In" : "co2In";
+  if (!ST[key]) {
+    go(p, [{ to: [isO2 ? -0.02 : 0.02, 0.32, -0.175], dur: 0.8, up: 0.08 }, { to: [isO2 ? -0.02 : 0.02, 0.215, -0.175], dur: 0.6, up: 0, at: () => { ST[key] = true; if (ST.yeast === 0) log("warn", "Sonde " + (isO2 ? "O₂" : "CO₂") + " placée dans une enceinte vide : « Err ».", "dry"); else if (isO2 && !ST.cal) log("warn", "Sonde O₂ placée sans étalonnage : valeurs décalées.", "noCal"); else log("good", "Sonde " + (isO2 ? "O₂" : "CO₂") + " en place, membrane immergée.", "probes"); } }]);
+  } else go(p, [{ to: [isO2 ? -0.02 : 0.02, 0.32, -0.175], dur: 0.6, up: 0 }, Object.assign(homeOf(name), { dur: 0.8, up: 0.08, at: () => { ST[key] = false; log("info", "Sonde " + (isO2 ? "O₂" : "CO₂") + " retirée et remise sur la potence.", "probes"); } })]);
+}
+function doAcq() {
+  look("pc");
+  if (!ST.acq) { ST.acq = true; ST.data = []; ST.inj = []; ST.acqT0 = ST.ts; X.ifLed.material.emissiveIntensity = 2.5; log("good", "Acquisition démarrée (1 point / 2 s simulées).", "acq"); toast("Acquisition en cours.", "good"); }
+  else { ST.acq = false; X.ifLed.material.emissiveIntensity = 0.1; log("info", "Acquisition arrêtée : " + ST.data.length + " points enregistrés.", "slope"); }
+}
+function doRefill() { if (ST.busy) return busyToast(); if (ST.syrFull) return toast("La seringue est déjà pleine."); look("fl"); const s = TOOLS.syr.obj; go(s, [{ to: [-0.28, 0.16, -0.06], rot: [0, 0.35, Math.PI], dur: 0.7, up: 0.08, at: () => { ST.syrFull = true; X.syrLiq.scale.y = 0.06; X.syrLiq.position.y = -0.005; X.plunger.position.y = 0.06; } }, Object.assign(homeOf("syr"), { dur: 0.7, up: 0.08, at: () => log("info", "Seringue remplie : 1 mL de glucose à 100 g/L.", "refill") })]); }
+function doInject() {
+  if (ST.busy) return busyToast(); if (!ST.syrFull) return toast("Remplis d'abord la seringue au flacon de glucose."); if (!ST.lidOn) return toast("Ferme le couvercle : on injecte par son passage."); if (ST.yeast === 0) return toast("L'enceinte est vide.");
+  look("enc"); const s = TOOLS.syr.obj;
+  go(s, [{ to: [0, 0.3, -0.153], rot: [0, 0, Math.PI], dur: 0.8, up: 0.1 }, { to: [0, 0.27, -0.153], rot: [0, 0, Math.PI], dur: 0.7, up: 0, at: () => {
+    ST.glu += 1; ST.syrFull = false; X.syrLiq.scale.y = 0.001; X.plunger.position.y = 0.03; const n = ST.inj.length;
+    if (!ST.acq) once("injNoAcq", "warn", "Glucose injecté sans acquisition en cours : rien n'est enregistré.", "injNoAcq");
+    else { const base = ST.ts - ST.acqT0; if (n === 0 && base < 30) log("warn", "Glucose injecté après seulement " + fmt(base, 0) + " s de ligne de base.", "injEarly"); ST.inj.push(ST.ts); }
+    if (n >= 1) log("info", "Deuxième injection : glucose à " + ST.glu + " g/L.", "twice"); else log("good", "1 mL de glucose injecté : suspension à 1 g/L.", "inj");
+    toast("Glucose injecté.", "good");
+  } }, Object.assign(homeOf("syr"), { dur: 0.7, up: 0.1 })]);
+}
+function doEmpty() {
+  if (ST.busy) return busyToast(); look("enc");
+  if (ST.o2In) placeProbe("pO2"); if (ST.co2In) setTimeout(() => placeProbe("pCO2"), 50);
+  if (ST.lidOn) { ST.lidOn = false; go(X.lid, [{ to: [0.1, 0.0, 0.09], rot: [0, 0, 0], dur: 0.6, up: 0.1 }]); }
+  ST.acq = false; X.ifLed.material.emissiveIntensity = 0.1; ST.yeast = 0; ST.glu = 0; ST.eth = 0; ST.o2 = 8.3; ST.co2 = 0.5; ST.anaer = false; ST.data = []; ST.inj = []; ST.attempts++; ST.flags = {}; X.liq.visible = false; X.yeastLiq.scale.y = 1;
+  log("info", "Enceinte vidée et rincée. Nouvel essai nº " + ST.attempts + ".", "bin"); toast("Enceinte vidée : tu peux recommencer.", "");
+}
+function menuFor(name) {
+  const items = [], I = (ic, t, run, o = {}) => items.push(Object.assign({ ic, t, run }, o));
+  if (name === "yeast") I("🧫", "Verser 100 mL dans l'enceinte", doPourYeast);
+  if (name === "enc") { if (!ST.lidOn) I("⬇", "Fermer le couvercle", doLid); else I("⬆", "Ouvrir le couvercle", doLid, { d: ST.acq }); if (ST.yeast > 0) I("🗑", "Vider et rincer l'enceinte", doEmpty, { d: true }); }
+  if (name === "lid") I(ST.lidOn ? "⬆" : "⬇", ST.lidOn ? "Ouvrir le couvercle" : "Fermer le couvercle", doLid, { d: ST.lidOn && ST.acq });
+  if (name === "agit") I(ST.stir ? "⏹" : "▶", ST.stir ? "Éteindre l'agitation" : "Allumer l'agitation", doStir);
+  if (name === "pO2") { if (!ST.o2In) { if (!ST.cal) I("🎯", "Étalonner à l'air (100 %)", doCal); I("⬇", "Placer dans l'enceinte", () => placeProbe("pO2"), { d: !ST.cal }); } else I("⬆", "Retirer de l'enceinte", () => placeProbe("pO2")); }
+  if (name === "pCO2") I(ST.co2In ? "⬆" : "⬇", ST.co2In ? "Retirer de l'enceinte" : "Placer dans l'enceinte", () => placeProbe("pCO2"));
+  if (name === "pc" || name === "iface") { I(ST.acq ? "⏹" : "▶", ST.acq ? "Arrêter l'acquisition" : "Démarrer l'acquisition", doAcq); I("📈", "Agrandir l'écran ExAO", openExao); }
+  if (name === "syr") { if (ST.syrFull) I("💉", "Injecter 1 mL de glucose", doInject); else I("🧪", "Remplir au flacon de glucose", doRefill); }
+  if (name === "glu") I("🧪", "Remplir la seringue (1 mL)", doRefill);
+  if (name === "bin") { if (ST.yeast > 0) I("🗑", "Vider l'enceinte", doEmpty, { d: true }); else I("🗑", "Rien à jeter", () => toast("L'enceinte est vide.")); }
+  return items;
+}
+const NAMES = { yeast: "Flacon de levures", enc: "Enceinte", lid: "Couvercle", agit: "Agitateur", pO2: "Sonde O₂", pCO2: "Sonde CO₂", pc: "Ordinateur ExAO", iface: "Interface ExAO", syr: "Seringue", glu: "Glucose", bin: "Déchets" };
+const HELP_KEY = { enc: 0, lid: 1, yeast: 2, pO2: 3, pCO2: 4, agit: 5, pc: 6, iface: 6, syr: 7, glu: 7, bin: 8 };
+function closeMenu() { $("#menu").hidden = true; }
+function openMenu(name, x, y) {
+  const items = menuFor(name); if (!items.length) return;
+  if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
+  const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name]}</span><button type="button" class="mq">? aide</button></div>`;
+  m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
+  for (const it of items) { const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`; b.onclick = () => { closeMenu(); it.run(); }; m.append(b); }
+  m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
+}
+function onClick(name, x, y) { if (!name) return; openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
+
+/* ------------------------------------------------------------ écran ExAO (texture du portable + vue agrandie) */
+function drawScreen(target) {
+  const c = (target || X.scrC).getContext("2d"), W = 800, H = 500;
+  c.fillStyle = "#eef2f7"; c.fillRect(0, 0, W, H); c.fillStyle = "#2a7d4f"; c.fillRect(0, 0, W, 40);
+  c.fillStyle = "#fff"; c.font = "bold 20px Arial"; c.textAlign = "left"; c.fillText("ExAO · [O₂] et [CO₂] dissous (mg/L) = f(t)", 14, 27);
+  c.textAlign = "right"; c.fillText((ST.acq ? "● ACQUISITION  " : "■ arrêt  ") + "t = " + fmt(ST.ts, 0) + " s", W - 14, 27);
+  const L = 60, T = 60, pw = W - 130, ph = H - 110, tmax = Math.max(300, Math.ceil((ST.data.length ? ST.data[ST.data.length - 1].t - ST.data[0].t : 0) / 60) * 60 + 60);
+  c.fillStyle = "#fff"; c.fillRect(L, T, pw, ph); c.strokeStyle = "#dde3ea"; c.lineWidth = 1; c.beginPath(); for (let i = 0; i <= 10; i++) { c.moveTo(L + (i * pw) / 10, T); c.lineTo(L + (i * pw) / 10, T + ph); } for (let j = 0; j <= 10; j++) { c.moveTo(L, T + (j * ph) / 10); c.lineTo(L + pw, T + (j * ph) / 10); } c.stroke();
+  c.strokeStyle = "#333"; c.lineWidth = 2; c.strokeRect(L, T, pw, ph);
+  c.fillStyle = "#1f56c9"; c.font = "14px Arial"; c.textAlign = "right"; for (let j = 0; j <= 5; j++) c.fillText(fmt(10 - j * 2, 0), L - 8, T + (j * ph) / 5 + 5); c.fillText("O₂ mg/L", L - 4, T - 8);
+  c.fillStyle = "#c8302b"; c.textAlign = "left"; for (let j = 0; j <= 5; j++) c.fillText(fmt(50 - j * 10, 0), L + pw + 8, T + (j * ph) / 5 + 5); c.fillText("CO₂ mg/L", L + pw + 4, T - 8);
+  c.fillStyle = "#333"; c.textAlign = "center"; for (let i = 0; i <= 5; i++) c.fillText(fmt((i * tmax) / 5, 0), L + (i * pw) / 5, T + ph + 20); c.fillText("t (s)", L + pw / 2, H - 14);
+  if (ST.data.length) {
+    const t0 = ST.data[0].t, X_ = (t) => L + ((t - t0) / tmax) * pw;
+    for (const ti of ST.inj) { const x = X_(ti); c.strokeStyle = "#2a7d4f"; c.setLineDash([6, 4]); c.beginPath(); c.moveTo(x, T); c.lineTo(x, T + ph); c.stroke(); c.setLineDash([]); c.fillStyle = "#2a7d4f"; c.textAlign = "left"; c.fillText("glucose", x + 4, T + 16); }
+    c.lineWidth = 2.5; c.strokeStyle = "#1f56c9"; c.beginPath(); ST.data.forEach((d, i) => { const x = X_(d.t), y = T + ph - (clamp(d.o2, 0, 10) / 10) * ph; i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
+    c.strokeStyle = "#c8302b"; c.beginPath(); ST.data.forEach((d, i) => { const x = X_(d.t), y = T + ph - (clamp(d.co2, 0, 50) / 50) * ph; i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
+    if (ST.slopes) { c.fillStyle = "#111"; c.font = "bold 15px Arial"; c.textAlign = "left"; c.fillText("pente avant : " + fmt(ST.slopes.a, 2) + " mg/L/min   ·   après : " + fmt(ST.slopes.b, 2) + " mg/L/min   ·   rapport ×" + fmt(ST.slopes.r, 1), L + 10, T + ph - 10); }
+  } else { c.fillStyle = "#6b7685"; c.font = "18px Arial"; c.textAlign = "center"; c.fillText(ST.acq ? "Enregistrement…" : "En attente du démarrage de l'acquisition", L + pw / 2, T + ph / 2); }
+  if (!target) X.scrT.needsUpdate = true;
+}
+function openExao() { const o = $("#exao"); o.hidden = false; drawScreen($("#exaoC")); }
+function slopes() {
+  if (!ST.inj.length || ST.data.length < 10) return null;
+  const ti = ST.inj[0], fit = (a, b) => { const pts = ST.data.filter((d) => d.t >= a && d.t <= b); if (pts.length < 3) return null; const n = pts.length, sx = pts.reduce((s, p) => s + p.t, 0), sy = pts.reduce((s, p) => s + p.o2, 0), sxx = pts.reduce((s, p) => s + p.t * p.t, 0), sxy = pts.reduce((s, p) => s + p.t * p.o2, 0); return (-(n * sxy - sx * sy) / (n * sxx - sx * sx)) * 60; };
+  const a = fit(ti - 30, ti), b = fit(ti + 10, Math.min(ti + 70, ST.ts)); if (a == null || b == null) return null;
+  return { a, b, r: a > 0.02 ? b / a : b / 0.02 };
+}
+
+/* ------------------------------------------------------------ rendu, caméra, souris */
+const L = {};
+function init3d() {
+  const el = $("#scene3d");
+  const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
+  R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; el.append(R.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dee4);
+  const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(envScene(), 0.04).texture; pm.dispose();
+  const cam = new THREE.PerspectiveCamera(40, 1.6, 0.02, 40); cam.position.set(0.1, BENCH + 0.9, 1.6);
+  const ctl = new THREE.OrbitControls(cam, R.domElement);
+  Object.assign(ctl, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.2, maxDistance: 2.6, maxPolarAngle: Math.PI * 0.48, enablePan: true, screenSpacePanning: true, panSpeed: 0.5, rotateSpeed: 0.6 });
+  ctl.target.set(0, BENCH + 0.1, -0.15);
+  scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x6f6b66, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff3e4, 1.25); sun.position.set(1.8, 4.4, 2.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.2, bottom: -1.2, near: 1, far: 9 }); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.012; sun.shadow.radius = 4; sun.target.position.set(0, BENCH, -0.2); scene.add(sun, sun.target);
+  const back = new THREE.DirectionalLight(0xdbe7ff, 0.35); back.position.set(0, 2.6, -3); scene.add(back);
+  initMats(); buildRoom(scene);
+  const g = new THREE.Group(); g.position.set(0, BENCH, 0); scene.add(g); buildBench(g); linColors(scene); g.updateMatrixWorld(true);
+  Object.assign(L, { R, scene, cam, ctl, el, g, tw: null, ray: new THREE.Raycaster(), ptr: new THREE.Vector2() });
+  const fit = () => { R.setSize(window.innerWidth, window.innerHeight, false); cam.aspect = window.innerWidth / window.innerHeight; cam.updateProjectionMatrix(); }; window.addEventListener("resize", fit); fit();
+  let down = null;
+  const pick = (ev) => { L.ptr.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1); L.ray.setFromCamera(L.ptr, cam); for (const h of L.ray.intersectObjects(g.children, true)) { let o = h.object, vis = true; while (o) { if (o.visible === false) { vis = false; break; } o = o.parent; } if (!vis) continue; if (h.object.userData.tool) return h.object.userData.tool; } return null; };
+  R.domElement.addEventListener("pointerdown", (ev) => { closeMenu(); down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
+  R.domElement.addEventListener("pointermove", (ev) => { if (!down) el.classList.toggle("hot", !!pick(ev)); });
+  const up = (ev) => { if (!down) return; const short = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 8 && performance.now() - down.t < 400; if (short) onClick(pick(ev), ev.clientX, ev.clientY); down = null; };
+  R.domElement.addEventListener("pointerup", up); R.domElement.addEventListener("pointercancel", () => { down = null; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); $("#exao").hidden = true; } });
+  R.domElement.addEventListener("dblclick", () => { if (ST.cur && ST.cur.cam) focusCam(CAMS[ST.cur.cam]); });
+  let prev = performance.now();
+  let pend = false; const raf = (f) => { if (pend) return; pend = true; requestAnimationFrame((t) => { pend = false; f(t); }); }; const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt); ctl.update(); R.render(scene, cam); placeLabels(); };
+  raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
+}
+function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
+
+/* physiologie simulée (valeurs de l'ordre de grandeur des TP ExAO : respiration endogène ≈ 0,25 mg/L/min, avec glucose ≈ 1,2 mg/L/min pour 10 g/L de levures à 25 °C) */
+let sampleT = 0, scrT = 0;
+function tick(dt) {
+  if ($("#overlay").hidden === false) return;
+  if (L.tw) { const k = Math.min(1, (performance.now() - L.tw.t0) / 1200), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; L.cam.position.lerpVectors(L.tw.p0, L.tw.p1, e); L.ctl.target.lerpVectors(L.tw.q0, L.tw.q1, e); if (k >= 1) L.tw = null; }
+  runQueue(dt);
+  if (ST.q[0] && ST.q[0].obj && !L.tw) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); } // fin du geste : la caméra revient sur la vue de l'action en cours
+  const ds = dt * SIM; ST.ts += ds;
+  if (ST.yeast > 0) {
+    const stirF = ST.stir ? 1 : 0.45, sub = ST.glu > 0 ? 1 : 0;
+    let r = (0.25 / 60) * stirF + sub * (1.0 / 60) * stirF * Math.min(1, ST.glu / 0.6);
+    if (ST.o2 > 0.05) { ST.o2 = Math.max(0, ST.o2 - r * ds); ST.co2 += r * 1.1 * ds; ST.rO2 = r; }
+    else { ST.rO2 = 0; if (ST.glu > 0) { ST.co2 += (0.6 / 60) * ds; ST.eth += 0.002 * ds; if (!ST.anaer) { ST.anaer = true; log("warn", "Dioxygène épuisé : les levures passent en fermentation.", "anaer"); } } }
+    if (ST.glu > 0) ST.glu = Math.max(0, ST.glu - 0.0004 * ds);
+    if (!ST.lidOn) { ST.o2 += (8.3 - ST.o2) * 0.012 * ds; ST.co2 += (0.5 - ST.co2) * 0.012 * ds; }
+    X.liq.visible = true; X.liq.scale.y = 0.07; X.liq.position.y = 0.004 + 0.035;
+  }
+  if (ST.stir) X.bar.rotation.y += dt * 18;
+  X.bubbles.visible = ST.yeast > 0 && ST.co2 > 8; X.bubbles.children.forEach((b) => { b.position.y += b.userData.v * dt * (ST.anaer ? 3 : 1); if (b.position.y > 0.07) b.position.y = 0.005; });
+  // lectures des sondes : temps de réponse, bruit sans agitation, décalage sans étalonnage
+  const tau = ST.stir ? 3 : 12, k = 1 - Math.exp(-ds / tau);
+  const o2True = ST.o2In ? (ST.yeast > 0 ? ST.o2 : NaN) : NaN, co2True = ST.co2In ? (ST.yeast > 0 ? ST.co2 : NaN) : NaN;
+  if (!isNaN(o2True)) ST.rdO2 = lerp(ST.rdO2, o2True * (ST.cal ? 1 : 1.18), k) + (ST.stir ? 0 : (Math.random() - 0.5) * 0.12); else ST.rdO2 = NaN;
+  if (!isNaN(co2True)) ST.rdCO2 = lerp(isNaN(ST.rdCO2) ? co2True : ST.rdCO2, co2True, k) + (ST.stir ? 0 : (Math.random() - 0.5) * 0.4); else ST.rdCO2 = NaN;
+  if (isNaN(ST.rdO2)) ST.rdO2 = ST.o2In ? NaN : 8.3;
+  if (ST.acq) { sampleT += ds; if (sampleT >= 2) { sampleT = 0; ST.data.push({ t: ST.ts, o2: isNaN(ST.rdO2) ? 0 : ST.rdO2, co2: isNaN(ST.rdCO2) ? 0 : ST.rdCO2 }); } if (ST.ts - ST.acqT0 > 900) { doAcq(); toast("Acquisition arrêtée automatiquement après 15 min.", ""); } }
+  scrT += dt; if (scrT > 0.25) { scrT = 0; ST.slopes = ST.inj.length ? slopes() : null; drawScreen(); if (!$("#exao").hidden) drawScreen($("#exaoC")); }
+  updGuide();
+}
+function placeLabels() {
+  const box = $("#labels"), g = ST.cur;
+  if (!g || !ST.guide || $("#overlay").hidden === false) { box.innerHTML = ""; return; }
+  if (!box.firstChild) box.innerHTML = '<div class="ring"></div><div class="chip"><span class="k"></span> <span class="v"></span></div>';
+  const [ring, chip] = box.children, t = TOOLS[g.on]; if (!t) { ring.style.display = chip.style.display = "none"; return; }
+  const v = t.anchor.clone(); t.obj.localToWorld(v); v.project(L.cam); if (v.z > 1) { ring.style.display = chip.style.display = "none"; return; }
+  const x = ((v.x + 1) / 2) * window.innerWidth, y = ((1 - v.y) / 2) * window.innerHeight;
+  ring.style.display = chip.style.display = ""; ring.style.left = chip.style.left = x + "px"; ring.style.top = chip.style.top = y + "px";
+  chip.querySelector(".k").textContent = g.k; chip.querySelector(".v").textContent = g.v ? "· " + g.v : "";
+}
+function openPanel() {
+  const d = $("#diag"), rd = (v, u) => (isNaN(v) ? "Err" : fmt(v, 2) + " " + u);
+  const rows = [["Suspension dans l'enceinte", ST.yeast + " mL"], ["Couvercle", ST.lidOn ? "fermé" : "ouvert"], ["Agitation", ST.stir ? "oui" : "non"], ["Sonde O₂", (ST.o2In ? "dans l'enceinte" : "sur la potence") + (ST.cal ? ", étalonnée" : ", NON étalonnée")], ["Sonde CO₂", ST.co2In ? "dans l'enceinte" : "sur la potence"], ["[O₂] réel / lu", fmt(ST.o2, 2) + " / " + rd(ST.rdO2, "") + " mg/L"], ["[CO₂] réel / lu", fmt(ST.co2, 1) + " / " + rd(ST.rdCO2, "") + " mg/L"], ["Glucose", fmt(ST.glu, 2) + " g/L"], ["Éthanol produit", fmt(ST.eth, 2) + " g/L"], ["Vitesse réelle de consommation O₂", fmt(ST.rO2 * 60, 2) + " mg/L/min"], ["Acquisition", (ST.acq ? "en cours, " : "arrêtée, ") + ST.data.length + " points"], ["Injections", ST.inj.length ? ST.inj.map((t) => fmt(t, 0) + " s").join(", ") : "—"], ["Temps simulé", fmt(ST.ts, 0) + " s (×" + SIM + ")"], ["Essai nº", String(ST.attempts)]];
+  d.innerHTML = rows.map((r) => `<span>${r[0]}</span><b>${r[1]}</b>`).join("");
+  if (!$("#toolHelp").firstChild) $("#toolHelp").innerHTML = TOOL_HELP.map((t) => `<details><summary>${t[0]}</summary><p>${t[1]}</p></details>`).join("");
+  $("#panel").hidden = false;
+}
+function evaluate() {
+  const s = slopes(), pts = [];
+  if (!s) { toast("Il faut une acquisition avec une ligne de base et au moins 30 s après l'injection.", "bad"); return; }
+  const ok = s.r >= 2.5 && s.a > 0.05 && ST.lidOn;
+  if (!ST.cal) pts.push("Sonde O₂ non étalonnée : valeurs absolues surestimées de 18 % (pentes comparables, vitesse en mg/L/min fausse).");
+  if (!ST.lidOn || ST.flags.open) pts.push("Enceinte ouverte : le dioxygène de l'air compense la consommation, les pentes sont écrasées.");
+  if (!ST.stir) pts.push("Pas d'agitation : réponse lente et signal bruité, pentes peu fiables.");
+  if (ST.inj[0] - ST.acqT0 < 30) pts.push("Ligne de base trop courte (" + fmt(ST.inj[0] - ST.acqT0, 0) + " s) : la pente « avant » est mal estimée.");
+  if (ST.anaer) pts.push("Le dioxygène a été épuisé : la fin de l'enregistrement correspond à la fermentation (CO₂ seul).");
+  if (ST.inj.length > 1) pts.push("Plusieurs injections : la vitesse était déjà proche du maximum, l'effet de la 2ᵉ est faible.");
+  const o = $("#overlay"); o.hidden = false;
+  o.innerHTML = `<div class="card"><p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">Bilan · essai nº ${ST.attempts}</p><h1>${ok ? "Effet du glucose mis en évidence" : "Résultat peu exploitable"}</h1>
+  <div class="res"><span>Vitesse de consommation d'O₂ avant glucose</span><b>${fmt(s.a, 2)} mg/L/min</b><span>Après glucose</span><b>${fmt(s.b, 2)} mg/L/min</b><span>Rapport après / avant</span><b>× ${fmt(s.r, 1)}</b><span>Attendu (10 g/L de levures, 25 °C)</span><b>≈ 0,25 → 1,2 (× 4 à 6)</b><span>Ligne de base enregistrée</span><b>${fmt(ST.inj[0] - ST.acqT0, 0)} s</b><span>Points enregistrés</span><b>${ST.data.length}</b></div>
+  <p>${ok ? "Les levures consomment le dioxygène et rejettent du CO₂ : elles respirent. Le glucose, substrat de la respiration, multiplie la vitesse par " + fmt(s.r, 1) + "." : "L'effet du glucose n'apparaît pas nettement. Voir les causes ci-dessous."}</p>
+  ${pts.length ? "<p><b>Ce qui a influencé le résultat :</b></p><ul>" + pts.map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p>Aucune erreur de manipulation relevée.</p>"}
+  <div class="row"><button class="btn" id="again" type="button">Vider et recommencer</button><button class="btn ghost" id="look" type="button">Continuer à explorer</button><button class="btn ghost" id="seeLog" type="button">Voir les courbes</button></div></div>`;
+  $("#again").onclick = () => { o.hidden = true; doEmpty(); }; $("#look").onclick = () => { o.hidden = true; }; $("#seeLog").onclick = () => { o.hidden = true; openExao(); };
+}
+$("#start").onclick = () => { $("#overlay").hidden = true; $("#instr").hidden = !ST.guide; log("info", "Entrée au labo. Objectif : montrer que les levures consomment O₂ et rejettent CO₂, et mesurer l'effet du glucose.", "sim"); };
+$("#reset").onclick = () => { resetState(); $("#panel").hidden = true; toast("Paillasse remise en ordre."); };
+$("#btnPanel").onclick = openPanel; $("#closePanel").onclick = () => ($("#panel").hidden = true);
+$("#btnEval").onclick = evaluate; $("#closeExao").onclick = () => ($("#exao").hidden = true); $("#exaoEval").onclick = () => { $("#exao").hidden = true; evaluate(); };
+$("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
+$("#btnGuide").onclick = () => { ST.guide = !ST.guide; $("#btnGuide").textContent = ST.guide ? "Masquer le guide" : "Afficher le guide"; $("#instr").classList.toggle("min", !ST.guide); $("#instr .t").style.display = ST.guide ? "" : "none"; $("#instr .h").style.display = ST.guide ? "" : "none"; };
+init3d(); resetState();
+window.__lab = { onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, doAcq, doInject, slopes };
+})();
+</script>
