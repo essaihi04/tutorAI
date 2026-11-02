@@ -95,6 +95,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.ring{animation:none}}
 /* guide vertical à gauche, du haut vers le bas (nov. 2026) */
 #instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}#instr{left:max(14px,env(safe-area-inset-left,0px));transform:none}#instr.min{bottom:auto}
+.tip{position:fixed;z-index:9;max-width:300px;background:var(--glass);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:7px 10px;font-size:13px;line-height:1.35;pointer-events:none;backdrop-filter:blur(10px);box-shadow:0 10px 28px rgba(0,0,0,.4)}.tip b{color:var(--accent)}#menu .minfo{font-size:12.5px;line-height:1.35;color:var(--muted);padding:2px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}#menu .minfo b{color:var(--fg)}
 </style>
 
 <div id="scene3d" aria-label="Paillasse en 3D. Glisse pour tourner, clique sur les objets pour manipuler."></div>
@@ -749,12 +750,34 @@ function menuFor(name) {
   return items;
 }
 const NAMES = { tare: "Balance", jar: "Flacon de NaOH", lid: "Bouchon", spatula: "Spatule", boat: "Nacelle", beaker: "Bécher 250 mL", wash: "Pissette", agit: "Agitateur", probe: "Sonde", bin: "Déchets", cm: "Conductimètre" };
+const INFO = {
+  tare: "<b>Balance de précision (0,01 g)</b> : pèse la soude à dissoudre. Il faut m = C·V·M = 0,10 × 0,100 × 40,0 = <b>0,40 g</b>. TARE avec la nacelle vide sur le plateau.",
+  jar: "<b>Hydroxyde de sodium NaOH (soude)</b>, pastilles, M = 40,0 g/mol. Dans l'eau il libère les ions <b>Na⁺</b> (1 charge +) et <b>HO⁻</b> (1 charge −) : ce sont eux qui rendent la solution basique et conductrice. Corrosif : gants et lunettes.",
+  lid: "<b>Bouchon du flacon</b> : à revisser après chaque prélèvement, car NaOH absorbe l'eau et le CO₂ de l'air (la masse pesée ne serait plus du NaOH pur).",
+  spatula: "<b>Spatule</b> : prélève une pincée de pastilles (≈ 0,10 g) vers la nacelle, ou retire l'excès vers les déchets. Jamais de retour dans le flacon.",
+  boat: "<b>Nacelle de pesée</b> : reçoit les pastilles sur la balance ; on lit la masse pesée puis on verse tout le solide dans le bécher.",
+  beaker: "<b>Bécher 250 mL</b> : on y dissout les 0,40 g de NaOH dans l'eau distillée jusqu'au trait 100 mL : c = n / V = 0,010 mol / 0,100 L = 0,10 mol/L.",
+  wash: "<b>Pissette d'eau distillée</b> : eau sans ions, elle ne change pas la conductivité. Sert à compléter jusqu'à 100 mL et à rincer la sonde.",
+  agit: "<b>Agitateur magnétique</b> : le barreau aimanté accélère la dissolution des pastilles. On ne mesure que lorsque tout est dissous.",
+  probe: "<b>Sonde de conductimétrie</b> : deux électrodes à immerger entièrement ; le courant y est transporté par les ions Na⁺ et HO⁻. Rincer à l'eau distillée.",
+  cm: "<b>Conductimètre</b> : affiche la conductivité σ en mS/cm. Pour 0,10 mol/L de NaOH à 25 °C, σ ≈ <b>24,9 mS/cm</b> ; une valeur stable signifie que la dissolution est finie.",
+  bin: "<b>Bac à déchets</b> : solution basique et pastilles en trop ; on ne remet jamais rien dans le flacon.",
+};
+
+// info-bulle contextuelle au survol d'un objet : à quoi il sert dans CETTE manip (désactivée si un menu ou une fenêtre est ouvert)
+function showTip(name, x, y) {
+  let t = $("#tip"); if (!t) { t = document.createElement("div"); t.id = "tip"; t.className = "tip"; document.body.append(t); }
+  if (!name || !INFO[name] || !$("#menu").hidden || $("#overlay").hidden === false) { t.hidden = true; return; }
+  if (t.dataset.n !== name) { t.dataset.n = name; t.innerHTML = INFO[name]; }
+  t.hidden = false; const r = t.getBoundingClientRect(), lim = (v, a, b) => Math.max(a, Math.min(b, v));
+  t.style.left = lim(x + 16, 8, window.innerWidth - r.width - 8) + "px"; t.style.top = lim(y + 18, 8, window.innerHeight - r.height - 8) + "px";
+}
 const HELP_KEY = { tare: 0, jar: 2, lid: 2, spatula: 3, boat: 1, beaker: 4, wash: 4, agit: 5, probe: 6, bin: 7, cm: 6 };
 function closeMenu() { $("#menu").hidden = true; }
 function openMenu(name, x, y) {
   const items = menuFor(name); if (!items.length) return;
   if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
-  const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name]}</span><button type="button" class="mq">? aide</button></div>`;
+  const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
   m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
   for (const it of items) {
     const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.hold ? " hold" : "") + (it.d ? " danger" : "");
@@ -792,8 +815,9 @@ function init3d() {
   const fit = () => { R.setSize(window.innerWidth, window.innerHeight, false); cam.aspect = window.innerWidth / window.innerHeight; cam.updateProjectionMatrix(); }; window.addEventListener("resize", fit); fit();
   let down = null;
   const pick = (ev) => { L.ptr.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1); L.ray.setFromCamera(L.ptr, cam); for (const h of L.ray.intersectObjects(g.children, true)) { let o = h.object, vis = true; while (o) { if (o.visible === false) { vis = false; break; } o = o.parent; } if (!vis) continue; if (h.object.userData.tool) return h.object.userData.tool; } return null; };
-  R.domElement.addEventListener("pointerdown", (ev) => { closeMenu(); down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
-  R.domElement.addEventListener("pointermove", (ev) => { if (!down) el.classList.toggle("hot", !!pick(ev)); });
+  R.domElement.addEventListener("pointerdown", (ev) => { closeMenu(); showTip(null); down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
+  R.domElement.addEventListener("pointermove", (ev) => { if (down) return; const n = pick(ev); el.classList.toggle("hot", !!n); showTip(n, ev.clientX, ev.clientY); });
+  R.domElement.addEventListener("pointerleave", () => showTip(null));
   const up = (ev) => { if (!down) return; const short = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 8 && performance.now() - down.t < 400; if (short) onClick(pick(ev), ev.clientX, ev.clientY); down = null; };
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
   R.domElement.addEventListener("pointerup", up); R.domElement.addEventListener("pointercancel", () => { stopPour(false); down = null; });
