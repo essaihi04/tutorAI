@@ -1,0 +1,1410 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Les trois formes d'eau du sol</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : la paillasse occupe tout l'écran ; les consignes sont des étiquettes accrochées aux objets ; une fine barre en haut */
+:root{
+  --bg:#1a2230; --fg:#f1f4f8; --muted:#aab4c3; --glass:rgba(10,15,24,.72); --line:rgba(255,255,255,.14);
+  --accent:#ffc54d; --accent-ink:#1a1400; --good:#5fd39a; --bad:#ff7a6b;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.4;overflow:hidden}
+#scene3d{position:fixed;inset:0;touch-action:none;cursor:grab}
+#scene3d canvas{display:block;width:100%!important;height:100%!important}
+#scene3d.hot{cursor:pointer}
+#scene3d.holding{cursor:grabbing}
+#top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;align-items:center;gap:12px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(8,12,20,.85),rgba(8,12,20,0));pointer-events:none;z-index:5}
+#top>*{pointer-events:auto}
+#top>div:first-child{white-space:nowrap;flex:none}
+#top b{font-size:17px;letter-spacing:-.01em}
+#top .sub{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+#stepbar{margin-left:auto;display:flex;align-items:center;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 8px;max-width:60vw;backdrop-filter:blur(8px)}
+#stepno{font-family:var(--f-mono);font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 8px;white-space:nowrap}
+#steptxt{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{background:var(--glass);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:14px;border-radius:999px;padding:7px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+.ib:hover{border-color:var(--accent)}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:4}
+.ring{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid var(--accent);box-shadow:0 0 0 4px rgba(255,197,77,.18),0 0 18px rgba(255,197,77,.55);animation:pulse 1.4s ease-in-out infinite}
+.ring.target{border-color:var(--good);box-shadow:0 0 0 4px rgba(95,211,154,.18),0 0 18px rgba(95,211,154,.5)}
+@keyframes pulse{50%{transform:scale(1.25);opacity:.6}}
+.chip{position:absolute;transform:translate(-50%,calc(-100% - 24px));background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-family:var(--f-mono);font-size:12px;color:var(--accent);white-space:nowrap;backdrop-filter:blur(8px)}
+.chip .k{color:var(--fg);font-family:var(--f-body);font-weight:700}
+.chip.lvl{position:fixed;transform:translate(26px,-50%);border-color:#6fb3ff;color:#bfe0ff;pointer-events:none;z-index:4}
+.chip.lvl::before{content:"";position:absolute;left:-22px;top:50%;width:18px;height:2px;background:#6fb3ff}
+#showGuide{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:6}
+#demo{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100vw - 28px));background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--good);border-radius:14px;padding:12px 16px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:6}
+#demo .dh{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+#demo .n{font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--good);color:#06200f;border-radius:999px;padding:3px 9px}
+#demo .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#demo .t{font-size:16px;line-height:1.35}
+#demo .w{font-size:13.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+#demo .w p{margin:3px 0} #demo .w .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:4px 8px;border-radius:6px;display:inline-block}
+#demo .b{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#demo .b .sb.p{border-color:var(--good);color:var(--good);font-weight:700}
+#demo .bar{height:3px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:10px;overflow:hidden}
+#demo .bar i{display:block;height:100%;background:var(--good);width:0;transition:width .3s}
+#instr{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(430px,calc(100vw - 28px));display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:10px 14px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:5}
+#instr .n{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 9px;align-self:start}
+#instr .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#instr .t{font-size:15px;line-height:1.3}
+#instr .v{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:20px;color:var(--accent);white-space:nowrap;text-align:right}
+#instr .v:empty{display:none}
+#instr .h{grid-column:2/4;font-size:12px;color:var(--muted)}
+#instr .h:empty{display:none}
+#instr .b{grid-column:2/4;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sb{background:transparent;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13px;border-radius:999px;padding:4px 10px;cursor:pointer}
+.sb:hover{border-color:var(--accent)}
+#panel{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(400px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(12px);box-shadow:0 20px 50px rgba(0,0,0,.45);z-index:7;display:flex;flex-direction:column;overflow:hidden}
+#panel header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+#panel header b{font-size:15px;flex:1}
+#panel .body{overflow:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:14px}
+#panel h3{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.diag{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
+.diag b{font-family:var(--f-mono);color:var(--accent);text-align:right}
+.ev{border-left:3px solid var(--line);padding:4px 10px;font-size:14px}
+.ev.warn{border-color:var(--bad)} .ev.good{border-color:var(--good)} .ev.info{border-color:var(--accent)}
+.ev .t{color:var(--muted);font-family:var(--f-mono);font-size:11px;margin-right:6px}
+.ev button{background:none;border:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;padding:0 0 0 6px;text-decoration:underline}
+.ev .why{display:none;margin-top:6px;color:var(--muted);font-size:13px;line-height:1.4}
+.ev.open .why{display:block}
+.why p{margin:4px 0}
+.why .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:5px 8px;border-radius:6px;display:inline-block}
+.tool-list{display:flex;flex-direction:column;gap:6px}
+.tool-list details{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.tool-list summary{cursor:pointer;font-weight:700}
+.tool-list p{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+#menu{position:fixed;z-index:8;min-width:220px;max-width:min(320px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);padding:6px;display:flex;flex-direction:column;gap:2px}
+#menu .mh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#menu .mh button{background:none;border:1px solid var(--line);color:var(--accent);border-radius:999px;font:inherit;font-size:12px;padding:1px 8px;cursor:pointer;text-transform:none;letter-spacing:0}
+#menu .mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;font-size:15px;padding:9px 10px;border-radius:9px;cursor:pointer}
+#menu .mi:hover,#menu .mi:focus-visible{background:rgba(255,255,255,.08)}
+#menu .mi.hold{background:rgba(255,197,77,.12)} #menu .mi.hold:active{background:rgba(255,197,77,.3)}
+#menu .mi .ic{width:22px;text-align:center;flex:none}
+#menu .mi small{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+#menu .mi.danger{color:var(--bad)}
+#exao{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.6);backdrop-filter:blur(6px);z-index:9;padding:16px}
+#toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:15px;max-width:min(520px,calc(100vw - 32px));opacity:0;transition:.25s;z-index:6;backdrop-filter:blur(8px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.good{border-color:var(--good)} #toast.bad{border-color:var(--bad)}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.55);backdrop-filter:blur(6px);z-index:10;padding:16px}
+.card{width:100%;max-width:520px;background:#121a27;border:1px solid var(--line);border-radius:18px;padding:22px 22px 18px;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.card h1{margin:0 0 6px;font-size:24px;line-height:1.15;letter-spacing:-.01em}
+.card p{margin:8px 0;color:var(--muted)}
+.card ul{margin:10px 0 0;padding-left:20px;color:var(--muted)}
+.card li{margin:3px 0}
+.card .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700;font-size:16px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.res{display:grid;grid-template-columns:1fr auto;gap:6px 14px;margin-top:10px;font-size:15px}
+.res b{font-family:var(--f-mono);color:var(--accent)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:900px){#top .sub{display:none}#stepbar{display:none}}
+@media (max-width:640px){#top b{font-size:15px}#instr .t{font-size:14px}#instr .v{font-size:16px}#panel{top:auto;height:70vh;left:12px;right:12px;width:auto}}
+@media (prefers-reduced-motion:reduce){.ring{animation:none}}
+/* guide vertical à gauche, du haut vers le bas (nov. 2026) */
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}#instr{left:max(14px,env(safe-area-inset-left,0px));transform:none}#instr.min{bottom:auto}
+.tip{position:fixed;z-index:9;max-width:300px;background:var(--glass);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:7px 10px;font-size:13px;line-height:1.35;pointer-events:none;backdrop-filter:blur(10px);box-shadow:0 10px 28px rgba(0,0,0,.4)}.tip b{color:var(--accent)}#menu .minfo{font-size:12.5px;line-height:1.35;color:var(--muted);padding:2px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}#menu .minfo b{color:var(--fg)}
+.mt{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 10px}.mt th,.mt td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:top}.mt th{color:var(--muted);font-weight:700;font-size:12px}.card{max-height:92vh;overflow:auto}
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}
+#exao{inset:auto;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));left:auto;bottom:auto;display:block;place-items:initial;background:none;backdrop-filter:none;padding:0;z-index:6;width:min(940px,calc(100vw - 24px))}
+#exao .tc{background:var(--glass);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:14px;padding:10px 12px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);max-height:calc(100vh - 90px);overflow:auto}
+#exao .th{display:flex;align-items:center;gap:10px;flex-wrap:wrap}#exao .th span{flex:1;min-width:200px;font-size:12.5px;color:var(--muted)}#exao .tf{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:13px;color:var(--muted);font-family:var(--f-mono)}
+.mt.st{font-size:13px;margin:6px 0 8px}.mt.st th{font-size:11.5px;line-height:1.25}.mt.st th.c{color:var(--accent)}.mt.st td{vertical-align:middle;padding:5px}.mt.st td small{display:block;font-size:11px;color:var(--muted);font-family:var(--f-mono)}.mt.st td.au{font-family:var(--f-mono);color:var(--fg);white-space:nowrap}.mt.st td.na{color:var(--muted)}.mt.st td.so{font-size:12px;color:var(--muted);max-width:130px}.mt.st td.su{font-size:11.5px;line-height:1.3}
+.mt.st td.in{white-space:nowrap}.mt.st td.in input{width:84px;background:rgba(255,255,255,.06);border:1px dashed var(--accent);border-radius:8px;color:var(--fg);font:inherit;font-family:var(--f-mono);font-size:14px;padding:5px 7px;cursor:text}.mt.st td.in input:focus{outline:2px solid var(--accent);border-style:solid;background:rgba(255,197,77,.08)}.mt.st td.in input::placeholder{color:var(--muted);font-size:11.5px;font-family:var(--f-body)}.mt.st td.in button{margin-left:4px;background:transparent;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:4px 7px;cursor:pointer;font:inherit}
+.mt.st td.ok{color:var(--good);font-family:var(--f-mono);font-weight:700;font-size:14px;white-space:nowrap}.mt.st td.ok small{color:var(--good);font-family:var(--f-body);font-weight:700}
+.mt.st td.no small{color:var(--bad);font-family:var(--f-body);font-weight:700}.mt.st td.no input{border-color:var(--bad);border-style:solid;animation:shk .4s}@keyframes shk{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@media (max-width:640px){#exao{top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));right:8px;width:calc(100vw - 16px)}#exao .tc{max-height:55vh}.mt.st td.in input{width:70px}}
+#btnZoom.on{border-color:var(--accent);color:var(--accent)}
+#zoom{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;z-index:5;pointer-events:none}
+#zoom .bub{pointer-events:auto;background:var(--glass);border:1px solid var(--line);border-top:3px solid #6fb3ff;border-radius:16px;padding:7px 10px 8px;backdrop-filter:blur(10px);width:270px;box-shadow:0 12px 30px rgba(0,0,0,.4);cursor:pointer}
+#zoom .bh{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase}#zoom .bh i{font-style:normal;color:var(--accent);text-transform:none;letter-spacing:0}
+#zoom canvas{display:block;width:250px;height:210px;margin:3px auto 2px}
+#zoom .bt{font-weight:700;font-size:14px;color:var(--fg)}#zoom .bt.grav{color:#9fd0ff}#zoom .bt.cap{color:#7fb6f5}#zoom .bt.hyg{color:#8fb0ff}
+#zoom .bd{font-size:12.5px;color:var(--muted);line-height:1.35;min-height:34px}
+#zoom .bub.flash{animation:zf 1.4s}@keyframes zf{25%{box-shadow:0 0 0 3px var(--accent),0 12px 30px rgba(0,0,0,.4)}}
+#zlines{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}#zlines line{stroke:rgba(159,208,255,.7);stroke-width:1.5;stroke-dasharray:5 4}
+body.zon #toast{left:calc(50% - 290px)}
+.wbars{margin:8px 0 12px}.wbar{display:flex;align-items:center;gap:10px;margin:6px 0}.wbar .wl{width:86px;font-size:13px;color:var(--muted)}.wbar .wt{flex:1;display:flex;height:22px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden}.wbar i,.wleg i{display:inline-block;font-style:normal;font-family:var(--f-mono);font-size:11.5px;line-height:22px;text-align:center;color:#06142b;white-space:nowrap;overflow:hidden}.wbar i.h,.wleg i.h{background:#1c54c4;color:#fff}.wbar i.c,.wleg i.c{background:#488ee8}.wbar i.g,.wleg i.g{background:#9ccef9}.wleg{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}.wleg i{width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+@media (max-width:1100px){#zoom .bub{width:212px}#zoom canvas{width:192px;height:161px}#zoom .bd{display:none}body.zon #toast{left:50%;bottom:calc(250px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:640px){#zoom{gap:6px;right:8px}#zoom .bub{width:46vw;padding:5px 6px}#zoom canvas{width:42vw;height:35vw}#zoom .bh i{display:none}}
+</style>
+
+<div id="scene3d" aria-label="Paillasse en 3D. Glisse pour tourner, clique sur les objets pour manipuler."></div>
+<div id="labels"></div>
+<header id="top">
+  <div><b>Labo SVT</b> <span class="sub">· Tronc commun · BIOF · Facteurs édaphiques</span></div>
+  <div id="stepbar"><span id="stepno">·</span><span id="steptxt"></span></div>
+  <button class="ib" id="btnDemo" type="button">▶ Démonstration</button>
+  <button class="ib" id="btnSpeed" type="button" title="Accélération des minutes de l'expérience">⏩ ×30</button>
+  <button class="ib" id="btnZoom" type="button" title="Zoom microscopique sur l'eau du sol">🔍 Zoom</button>
+  <button class="ib" id="btnTable" type="button">Mesures</button>
+  <button class="ib" id="btnPanel" type="button">Carnet</button>
+  <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
+  <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
+</header>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnGuide" type="button">Masquer</button></span></div>
+<aside id="panel" hidden aria-label="Carnet de manipulation">
+  <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
+  <div class="body">
+    <section><h3>État réel de la paillasse</h3><div class="diag" id="diag"></div></section>
+    <section><h3>Journal des gestes</h3><div id="events"></div></section>
+    <section><h3>Le matériel et son usage</h3><div class="tool-list" id="toolHelp"></div></section>
+  </div>
+</aside>
+<div id="demo" hidden><div class="dh"><span class="n">Démo 1/14</span><span class="k"></span></div><div class="t"></div><div class="w"></div><div class="b"><button class="sb p" id="dPause" type="button">⏸ Pause</button><button class="sb" id="dNext" type="button">Suivant ⏭</button><button class="sb" id="dMin" type="button">Masquer</button><button class="sb" id="dQuit" type="button">Quitter la démo</button></div><div class="bar"><i></i></div></div>
+<button class="ib" id="showGuide" type="button" hidden>Afficher le guide ▸</button>
+<div id="menu" hidden role="menu"></div>
+<div id="toast" role="status"></div>
+<div id="exao" hidden><div class="tc"><div class="th"><b>Tableau des mesures</b><span>Les masses s'écrivent seules · à toi de calculer les trois formes d'eau (clique dans une case, écris au clavier, 1 chiffre après la virgule, puis Entrée)</span><button class="sb" id="closeExao" type="button">Masquer</button></div><div id="tbl"></div><div class="tf"><span>gravité = V_g · retenue = m₁ − m₀ · hygroscopique = m₂ − m₀ · capillaire = m₁ − m₂</span><button class="sb p" id="exaoEval" type="button">Évaluer</button></div></div></div>
+<div id="overlay">
+  <div class="card">
+    <p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">SVT · Tronc commun · Les facteurs édaphiques</p>
+    <h1>Les trois formes d'eau du sol</h1>
+    <p>Deux pots percés : 300 g de sable (A) et 300 g d'argile (B) séchés à l'étuve, un plant de haricot dans chacun. Pèse-les secs (m₀) puis arrose-les : l'<b>eau de gravité</b> s'écoule dans l'éprouvette. Pèse-les égouttés (m₁), puis laisse passer les jours jusqu'à ce que la plante fane (m₂). Tu en déduis l'<b>eau capillaire</b> (utilisable) et l'<b>eau hygroscopique</b> (inutilisable).</p>
+    <ul>
+      <li>Clique sur un objet : s'il n'a qu'un usage, le geste se fait aussitôt ; sinon un menu te laisse choisir. Tout est permis, dans l'ordre que tu veux.</li>
+      <li>Le temps est accéléré : les minutes (×30, réglable en haut) et les jours (calendrier sur la paillasse).</li>
+      <li>Un <b>zoom microscopique</b> montre en direct les grains, l'air et l'eau de chaque pot ; clique sur une bulle pour voir les molécules d'eau.</li>
+      <li>Le guide à gauche conseille la prochaine étape ; le <b>Carnet</b> explique chaque geste ; <b>Mesures</b> rassemble tes pesées.</li>
+    </ul>
+    <div class="row"><button class="btn" id="start" type="button">Entrer au labo →</button><button class="btn ghost" id="startDemo" type="button">▶ Voir la démonstration</button></div>
+  </div>
+</div>
+
+<!--labnav--><style>
+.labnav{position:relative;display:flex;align-items:center;gap:6px;margin-left:6px}
+.labnav select{appearance:none;-webkit-appearance:none;background:var(--glass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffc54d' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13.5px;border-radius:999px;padding:6px 28px 6px 12px;max-width:min(330px,42vw);cursor:pointer;backdrop-filter:blur(8px)}
+.labnav select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.labnav select optgroup{background:#121a27;color:var(--accent);font-style:normal}
+.labnav select option{background:#121a27;color:var(--fg)}
+.labnav{flex:none}.labnav select{max-width:250px}
+#top>*{flex:none}#top #stepbar{flex:1 1 0;min-width:0;max-width:none}#top #steptxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+@media (max-width:1500px){#top .sub{display:none}}
+@media (max-width:640px){.labnav select{max-width:40vw;font-size:12.5px}}
+</style>
+<script>
+/* navigation entre les manips : une liste déroulante classée par matière et niveau, dans la barre du haut.
+   Pour une nouvelle manip : ajouter une ligne ici, relancer inject-nav.py, régénérer les manips des sols, republier toutes les manips. */
+(function () {
+  "use strict";
+  const LABS = [
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Labo Sciences 2BAC", n: "Préparer 100 mL de NaOH à 0,10 mol/L (conductimètre)", u: "solution-naoh.html" },
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Dosage acide-base 2BAC", n: "Dosage acide éthanoïque / soude (indicateur, pH-métrie)", u: "chimie-dosage-acide-base.html" },
+    { g: "SVT · 2ᵉ Bac PC BIOF", t: "Labo SVT ExAO 2BAC", n: "Respiration et fermentation des levures (ExAO)", u: "svt-exao-levures.html" },
+    { g: "SVT · Tronc commun", t: "Rétention et perméabilité des sols", n: "Facteurs édaphiques (1) : rétention en eau et perméabilité", u: "svt-sol-retention.html" },
+    { g: "SVT · Tronc commun", t: "Propriétés chimiques du sol", n: "Facteurs édaphiques (2) : pH, calcaire, complexe argilo-humique", u: "svt-sol-chimie.html" },
+    { g: "SVT · Tronc commun", t: "Les trois formes d'eau du sol", n: "Facteurs édaphiques (3) : eau de gravité, capillaire, hygroscopique", u: "svt-sol-eau.html" },
+  ];
+  function mount() {
+    const top = document.getElementById("top"); if (!top || top.querySelector(".labnav")) return;
+    const wrap = document.createElement("label"); wrap.className = "labnav"; wrap.title = "Changer de manip";
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Changer de manip");
+    const cur = LABS.findIndex((l) => l.t === document.title), head = document.createElement("option");
+    head.textContent = "📚 Manips…"; head.value = ""; if (cur < 0) head.selected = true; sel.append(head); const home = document.createElement("option"); home.value = "home"; home.textContent = "🏠 Toutes les manips"; sel.append(home);
+    const groups = {};
+    LABS.forEach((l, i) => { let og = groups[l.g]; if (!og) { og = groups[l.g] = document.createElement("optgroup"); og.label = l.g; sel.append(og); } const o = document.createElement("option"); o.value = String(i); o.textContent = (i === cur ? "✓ " : "") + l.n; if (i === cur) o.selected = true; og.append(o); });
+    sel.addEventListener("change", () => {
+      if (sel.value === "home") { location.href = "./"; return; } const l = LABS[+sel.value]; if (!l || +sel.value === cur) return;
+      location.href = l.u;
+      sel.value = cur >= 0 ? String(cur) : "";
+    });
+    wrap.append(sel); const first = top.firstElementChild; if (first) first.after(wrap); else top.prepend(wrap);
+  }
+  if (document.getElementById("top")) mount(); else document.addEventListener("DOMContentLoaded", mount);
+})();
+</script><!--/labnav-->
+<script src="vendor/three-r128.min.js"></script>
+<script src="vendor/OrbitControls-r128.js"></script>
+<script>
+/* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
+if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
+  constructor(cam, el) { this.object = cam; this.el = el; this.target = new THREE.Vector3(); this.enabled = true; this.enableDamping = false; this.minDistance = 0.1; this.maxDistance = 10; this.maxPolarAngle = Math.PI; this.rotateSpeed = 1; this.panSpeed = 1;
+    let drag = null; el.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, b: e.button }; el.setPointerCapture(e.pointerId); });
+    el.addEventListener("pointermove", (e) => { if (!drag || !this.enabled) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; const o = this.object.position.clone().sub(this.target), s = new THREE.Spherical().setFromVector3(o); s.theta -= dx * 0.005 * this.rotateSpeed; s.phi = Math.max(0.05, Math.min(this.maxPolarAngle, s.phi - dy * 0.005 * this.rotateSpeed)); this.object.position.copy(this.target).add(o.setFromSpherical(s)); });
+    const up = () => (drag = null); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", (e) => { if (!this.enabled) return; e.preventDefault(); const o = this.object.position.clone().sub(this.target), d = Math.max(this.minDistance, Math.min(this.maxDistance, o.length() * (e.deltaY > 0 ? 1.1 : 0.9))); this.object.position.copy(this.target).add(o.setLength(d)); }, { passive: false });
+  }
+  update() { this.object.lookAt(this.target); }
+};
+</script>
+<script>
+(function(){
+"use strict";
+const $ = (s) => document.querySelector(s);
+const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d).replace(".", ",");
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const BENCH = 0.92;
+const T3 = {}, M = {};
+
+/* ------------------------------------------------------------ briques 3D */
+const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; }
+function box(w, h, d, mat, parent, x, y, z) { return mesh(new THREE.BoxGeometry(w, h, d), mat, parent, x, y, z); }
+function cyl(rt, rb, h, mat, parent, x, y, z, seg = 28, open = false) { return mesh(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), mat, parent, x, y, z); }
+function sph(r, mat, parent, x, y, z) { return mesh(new THREE.SphereGeometry(r, 20, 14), mat, parent, x, y, z); }
+function rod(a, b, r, mat, parent) { const A = V3(a), B = V3(b), d = B.clone().sub(A), m = cyl(r, r, d.length(), mat, parent, 0, 0, 0, 16); m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m; }
+function std(color, rough = 0.5, metal = 0, extra = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough, metalness: metal }, extra)); }
+function canvasTex(w, h, draw, rep) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; }
+function grain(ctx, w, h, amp) { const d = ctx.getImageData(0, 0, w, h); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * amp; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } ctx.putImageData(d, 0, 0); }
+function wire(a, b, mat, parent, drop = 0.05, r = 0.0021) { const pts = []; for (let i = 0; i <= 8; i++) { const s = i / 8; pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * s, Math.max(r + 0.001, a[1] + (b[1] - a[1]) * s - drop * Math.sin(Math.PI * s)), a[2] + (b[2] - a[2]) * s + 0.02 * Math.sin(Math.PI * s))); } return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, r, 8, false), mat, parent); }
+function lcd(w, h, parent, x, y, z, fg = "#8ef58b", bg = "#07110a") {
+  const cw = 256, ch = Math.max(40, Math.round((cw * h) / w)), c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const ctx = c.getContext("2d"), t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: t, roughness: 0.2 }));
+  m.position.set(x, y, z); parent.add(m); let last = "";
+  m.set = (a, b = "") => {
+    const k = a + "|" + b; if (k === last) return; last = k;
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = fg; ctx.textBaseline = "middle";
+    const us = Math.min(ch * 0.32, 34), uw = b ? us * b.length * 0.62 + 10 : 0, fs = Math.min(ch * 0.62, (cw - 24 - uw) / (a.length * 0.62));
+    ctx.font = `700 ${Math.round(fs)}px "JetBrains Mono", Consolas, monospace`; ctx.textAlign = "right"; ctx.fillText(a, cw - 12 - uw, ch * 0.55);
+    if (b) { ctx.font = `700 ${Math.round(us)}px Arial, sans-serif`; ctx.textAlign = "left"; ctx.fillText(b, cw - uw - 2, ch * 0.6); }
+    t.needsUpdate = true;
+  };
+  return m;
+}
+function print(w, h, parent, x, y, z, lines, bg = null, fg = "#f1f1ee") {
+  const cw = 512, ch = Math.round((cw * h) / w), c = document.createElement("canvas"); c.width = cw; c.height = ch; const ctx = c.getContext("2d");
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); } ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(ch * (l.s || 0.42))}px Arial, sans-serif`; ctx.fillStyle = l.c || fg; ctx.fillText(l.t, cw / 2, ch * (l.y != null ? l.y : (i + 0.5) / lines.length)); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, transparent: !bg, roughness: 0.6 })); m.position.set(x, y, z); m.receiveShadow = true; parent.add(m); return m;
+}
+function wrapLabel(r, h, parent, x, y, z, lines, bg) {
+  const c = document.createElement("canvas"); c.width = 512; c.height = Math.round(512 * h / (2.4 * r)); const ctx = c.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(c.height * (l.s || 0.2))}px Arial, sans-serif`; ctx.fillStyle = l.c || "#1b1b1b"; ctx.fillText(l.t, c.width / 2, c.height * (i + 0.5) / lines.length); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
+}
+function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
+function liquidMat(color, op = 0.42) { return new THREE.MeshPhysicalMaterial({ color, roughness: 0.06, transparent: true, opacity: op, clearcoat: 1, depthWrite: false, envMapIntensity: 1.2 }); }
+
+function initMats() {
+  T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
+  T3.floor = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#9aa1a8"; x.fillRect(0, 0, w, h); for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { x.fillStyle = `hsl(210,7%,${66 + Math.random() * 7}%)`; x.fillRect(i * 256 + 2, j * 256 + 2, 252, 252); } grain(x, w, h, 16); }, [24, 24]);
+  T3.tiles = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#1b1f24"; x.fillRect(0, 0, w, h); const s = w / 4; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.fillStyle = `hsl(210,9%,${24 + Math.random() * 4}%)`; x.fillRect(i * s + 3, j * s + 3, s - 6, s - 6); } grain(x, w, h, 5); }, [30, 2.4]);
+  T3.sky = canvasTex(512, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#7fb0e6"); g.addColorStop(0.65, "#d8e8f6"); g.addColorStop(1, "#e9f0f5"); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5; i++) { x.fillStyle = "rgba(255,255,255,.55)"; x.beginPath(); x.ellipse(Math.random() * w, 40 + Math.random() * 80, 50 + Math.random() * 40, 12, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#9db7a1"; x.beginPath(); x.moveTo(0, h * 0.78); for (let i = 0; i <= 10; i++) x.lineTo((w * i) / 10, h * (0.7 + Math.random() * 0.06)); x.lineTo(w, h); x.lineTo(0, h); x.fill();
+    for (let i = 0; i < 14; i++) { x.fillStyle = `hsl(${120 + Math.random() * 25},30%,${30 + Math.random() * 12}%)`; x.beginPath(); x.ellipse(Math.random() * w, h * 0.78, 18 + Math.random() * 16, 30 + Math.random() * 20, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#c9c2b5"; x.fillRect(0, h * 0.86, w, h * 0.14);
+  });
+  T3.beaker = canvasTex(256, 256, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#1d2b3a"; x.strokeStyle = "rgba(255,255,255,.9)"; x.lineWidth = 5; x.lineJoin = "round"; x.font = "bold 22px Arial"; x.textAlign = "left"; for (let i = 1; i <= 5; i++) { const y = h - i * 40; x.fillRect(90, y, i % 2 ? 30 : 46, 3); x.strokeText(String(i * 50), 142, y + 8); x.fillText(String(i * 50), 142, y + 8); } x.font = "bold 20px Arial"; x.strokeText("250 mL", 92, 26); x.fillText("250 mL", 92, 26); });
+  T3.poster = canvasTex(1024, 640, (x, w, h) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = "#1d2b44"; x.font = "bold 38px Arial"; x.textAlign = "center"; x.fillText("Tableau périodique des éléments", w / 2, 52);
+    const cols = ["#f4a7a3", "#f7cf8f", "#fdf1a2", "#b8e3b0", "#a9d4f2", "#cdbcf0", "#e6e6e6"], s = 50, ox = 62, oy = 90, shape = [[0, 17], [0, 1, 12, 13, 14, 15, 16, 17], [0, 1, 12, 13, 14, 15, 16, 17]];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 18; c++) { if (r < 3 && !shape[r].includes(c)) continue; x.fillStyle = cols[(c < 2 ? 0 : c < 12 ? 1 + (r % 2) : c < 17 ? 3 + (c % 2) : 5)]; x.fillRect(ox + c * s, oy + r * s, s - 4, s - 4); }
+    for (let r = 0; r < 2; r++) for (let c = 2; c < 17; c++) { x.fillStyle = cols[6]; x.fillRect(ox + c * s, oy + 380 + r * s, s - 4, s - 4); }
+  });
+  T3.safety = canvasTex(512, 640, (x, w, h) => {
+    x.fillStyle = "#fff4d6"; x.fillRect(0, 0, w, h); x.fillStyle = "#c8302b"; x.fillRect(0, 0, w, 70); x.fillStyle = "#fff"; x.font = "bold 40px Arial"; x.textAlign = "center"; x.fillText("SÉCURITÉ AU LABO", w / 2, 48);
+    x.fillStyle = "#222"; x.font = "bold 28px Arial"; x.textAlign = "left"; ["Lunettes et blouse obligatoires", "Sols et plants : gants, lavage des mains", "Ne jamais pipeter à la bouche", "Rincer à l'eau en cas de projection", "Déchets dans le bac prévu"].forEach((t, i) => { x.fillStyle = "#c8302b"; x.beginPath(); x.arc(44, 130 + i * 90, 12, 0, 7); x.fill(); x.fillStyle = "#222"; x.fillText(t, 72, 140 + i * 90); });
+  });
+  M.epoxy = std(0xffffff, 0.55, 0, { map: T3.epoxy }); M.cabinet = std(0xeef1f4, 0.55); M.gap = std(0x8b939b, 0.7);
+  M.steel = std(0xd9dde2, 0.22, 1); M.alu = std(0xbcc3cb, 0.35, 0.9); M.chrome = std(0xffffff, 0.08, 1);
+  M.black = std(0x1b1d20, 0.42); M.dark = std(0x30353b, 0.5); M.grey = std(0x8a9199, 0.5); M.white = std(0xf3f3ef, 0.38); M.beige = std(0xdcd4c3, 0.5);
+  M.blue = std(0x2b59aa, 0.4); M.red = std(0xc42f29, 0.42); M.standPaint = std(0x3a4a57, 0.45, 0.2); M.wireB = std(0x161616, 0.5); M.ptfe = std(0xf4f4f0, 0.35);
+  M.glass = new THREE.MeshPhysicalMaterial({ color: 0xe6f4ff, roughness: 0.03, transparent: true, opacity: 0.17, clearcoat: 1, clearcoatRoughness: 0.02, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 1.8 });
+  M.pellet = std(0xf7f7f2, 0.55); M.plasticW = std(0xf4f6f8, 0.3, 0, { transparent: true, opacity: 0.9 });
+}
+function envScene() {
+  const s = new THREE.Scene(), bright = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), side: THREE.DoubleSide });
+  const room = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 10), new THREE.MeshBasicMaterial({ color: 0x9aa0a8, side: THREE.BackSide })); room.position.y = 1.6; s.add(room);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshBasicMaterial({ color: 0x4a4e54 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.39; s.add(fl);
+  for (const x of [-4, -1.3, 1.3, 4]) for (const z of [-2, 1.5]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), bright(7, 7, 6.6)); p.rotation.x = Math.PI / 2; p.position.set(x, 3.55, z); s.add(p); }
+  for (const x of [-2, 2]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), bright(2.6, 3, 3.6)); w.position.set(x, 2, -4.95); s.add(w); }
+  return s;
+}
+function buildRoom(scene) {
+  const floor = mesh(new THREE.PlaneGeometry(24, 24), std(0xffffff, 0.72, 0, { map: T3.floor }), scene); floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+  const wz = -0.64;
+  mesh(new THREE.PlaneGeometry(18, 1.45), std(0xffffff, 0.35, 0, { map: T3.tiles }), scene, 0, 0.725, wz).castShadow = false;
+  mesh(new THREE.PlaneGeometry(18, 2.0), std(0x3e444b, 0.9), scene, 0, 2.45, wz).castShadow = false;
+  const ceil = mesh(new THREE.PlaneGeometry(24, 24), std(0xf2f3f4, 0.9), scene, 0, 3.4, 0); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+  for (const x of [-3.3, -1.1, 1.1, 3.3]) box(1.2, 0.02, 0.6, new THREE.MeshBasicMaterial({ color: 0xffffff }), scene, x, 3.39, 0.2).castShadow = false;
+  for (const wx of [-1.1, 1.1, 3.3, -3.3]) {
+    mesh(new THREE.PlaneGeometry(1.5, 1.05), new THREE.MeshBasicMaterial({ map: T3.sky }), scene, wx, 2.05, wz + 0.004).castShadow = false;
+    for (const [w, h, x, y] of [[1.6, 0.05, 0, 0.55], [1.6, 0.05, 0, -0.55], [0.05, 1.15, -0.78, 0], [0.05, 1.15, 0.78, 0], [0.035, 1.05, 0, 0]]) box(w, h, 0.05, M.white, scene, wx + x, 2.05 + y, wz + 0.02);
+    box(1.7, 0.035, 0.14, M.white, scene, wx, 1.47, wz + 0.06);
+  }
+  const bl = 7.6;
+  box(bl, 0.04, 0.84, M.epoxy, scene, 0, BENCH - 0.02, -0.22);
+  box(bl - 0.08, BENCH - 0.14, 0.74, M.cabinet, scene, 0, (BENCH - 0.14) / 2 + 0.1, -0.25);
+  box(bl - 0.1, 0.1, 0.7, M.dark, scene, 0, 0.05, -0.28);
+  for (let i = 0; i <= 12; i++) { const x = -bl / 2 + 0.05 + i * ((bl - 0.1) / 12); box(0.006, BENCH - 0.16, 0.004, M.gap, scene, x, (BENCH - 0.14) / 2 + 0.1, 0.122); if (i < 12) box(0.18, 0.014, 0.02, M.steel, scene, x + (bl - 0.1) / 24, BENCH - 0.14, 0.135); }
+  box(bl, 0.14, 0.05, std(0x3e444b, 0.5), scene, 0, BENCH + 0.07, -0.6);
+  for (let x = -3.4; x <= 3.4; x += 0.85) { box(0.08, 0.08, 0.012, M.white, scene, x, BENCH + 0.07, -0.57); for (const dx of [-0.012, 0.012]) cyl(0.004, 0.004, 0.004, M.black, scene, x + dx, BENCH + 0.07, -0.5635, 10).rotation.x = Math.PI / 2; }
+  mesh(new THREE.PlaneGeometry(1.5, 0.94), std(0xffffff, 0.7, 0, { map: T3.poster }), scene, -2.2, 2.25, wz + 0.006).castShadow = false;
+  mesh(new THREE.PlaneGeometry(0.5, 0.62), std(0xffffff, 0.7, 0, { map: T3.safety }), scene, 1.0, 2.15, wz + 0.006).castShadow = false;
+  // paillasse voisine : verrerie en attente, pour donner de la vie à la salle
+  for (const [x, r, h, m] of [[-1.6, 0.04, 0.11, M.glass], [-1.48, 0.03, 0.09, M.glass], [1.9, 0.035, 0.13, M.glass], [2.05, 0.02, 0.2, M.glass]]) cyl(r, r, h, m, scene, x, BENCH + h / 2, -0.35, 28, true).castShadow = false;
+}
+
+/* ------------------------------------------------------------ matériel de la manip (tout dans le groupe g, origine = dessus de la paillasse) */
+const TOOLS = {};
+function tool(name, obj, anchor = [0, 0, 0], grab = false) { obj.userData.tool = name; obj.traverse((o) => (o.userData.tool = name)); TOOLS[name] = { obj, anchor: V3(anchor), grab, home: obj.position.clone(), homeRot: obj.rotation.clone() }; return obj; }
+const X = {};
+function rboxGeo(w, h, d, r, seg = 3) {
+  r = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
+  const s = new THREE.Shape(), x = -w / 2 + r, y = -h / 2 + r, W = w - 2 * r, H = h - 2 * r, c = Math.min(r, W / 2, H / 2);
+  s.moveTo(x + c, y); s.lineTo(x + W - c, y); s.quadraticCurveTo(x + W, y, x + W, y + c); s.lineTo(x + W, y + H - c); s.quadraticCurveTo(x + W, y + H, x + W - c, y + H);
+  s.lineTo(x + c, y + H); s.quadraticCurveTo(x, y + H, x, y + H - c); s.lineTo(x, y + c); s.quadraticCurveTo(x, y, x + c, y);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: seg, curveSegments: 6 }); g.center(); return g;
+}
+function rbox(w, h, d, r, mat, parent, x, y, z) { return mesh(rboxGeo(w, h, d, r), mat, parent, x, y, z); }
+function knurlCap(parent, r, h, mat, x, y, z, n = 28) { const cap = cyl(r, r, h, mat, parent, x, y, z, 48); for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, b = box(0.0024, h * 0.86, 0.0022, mat, cap, Math.cos(a) * r, 0, Math.sin(a) * r); b.rotation.y = -a; } cyl(r * 0.92, r * 0.92, 0.0015, mat, cap, 0, h / 2 + 0.0007, 0, 48); return cap; }
+function lathe(prof, mat, parent, x, y, z, seg = 48) { return mesh(new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(p[0], p[1])), seg), mat, parent, x, y, z); }
+function feet(parent, w, d, y = 0, r = 0.006) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(r, r * 1.1, 0.006, M.rubber, parent, (sx * w) / 2, y + 0.003, (sz * d) / 2, 16); }
+function key(parent, w, h, x, y, z, label, mat = M.keyGrey, fg = "#f1f1ee") { const k = rbox(w, h, 0.006, 0.0015, mat, parent, x, y, z); if (label) print(w * 0.9, h * 0.6, k, 0, 0, 0.0032, [{ t: label, b: true, s: 0.95, c: fg }]); return k; }
+function knobDial(parent, x, y, z, r, mat = M.black) {
+  const k = cyl(r, r * 1.06, r * 1.1, mat, parent, x, y, z, 32); k.rotation.x = Math.PI / 2; box(r * 0.22, r * 0.85, 0.0015, M.white, k, 0, r * 0.5, r * 0.56).rotation.x = -Math.PI / 2;
+  const tex = canvasTex(256, 256, (c, w) => { c.clearRect(0, 0, w, w); c.strokeStyle = "#e9e9e4"; c.lineWidth = 6; for (let i = 0; i <= 10; i++) { const a = -Math.PI * 0.75 + (i / 10) * Math.PI * 1.5; c.beginPath(); c.moveTo(128 + Math.cos(a) * 92, 128 + Math.sin(a) * 92); c.lineTo(128 + Math.cos(a) * (i % 5 ? 104 : 114), 128 + Math.sin(a) * (i % 5 ? 104 : 114)); c.stroke(); } });
+  mesh(new THREE.PlaneGeometry(r * 3.2, r * 3.2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.6 }), parent, x, y, z + 0.0005).castShadow = false; return k;
+}
+function labelTex(title, lines, band = "#1e4f9c", w = 768, h = 384, ghs = false) {
+  return canvasTex(w, h, (x) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = band; x.fillRect(0, 0, w, 54); x.fillRect(0, h - 26, w, 26);
+    x.fillStyle = "#fff"; x.font = "bold 28px Arial"; x.textAlign = "left"; x.fillText("LABOCHEM · réactif pour analyses", 24, 38);
+    x.fillStyle = "#111"; x.font = "bold 70px Arial"; x.fillText(title, 28, 140); x.font = "30px Arial"; x.fillStyle = "#333"; lines.forEach((l, i) => x.fillText(l, 28, 192 + i * 40));
+    if (ghs) { const cx = w - 120, cy = 200, s = 85; x.save(); x.translate(cx, cy); x.rotate(Math.PI / 4); x.fillStyle = "#d81e1e"; x.fillRect(-s, -s, 2 * s, 2 * s); x.fillStyle = "#fff"; x.fillRect(-s + 10, -s + 10, 2 * s - 20, 2 * s - 20); x.restore(); x.strokeStyle = "#111"; x.lineWidth = 7; x.lineCap = "round"; x.beginPath(); x.moveTo(cx - 55, cy - 35); x.lineTo(cx - 18, cy - 62); x.moveTo(cx - 55, cy - 35); x.lineTo(cx - 36, cy - 4); x.moveTo(cx + 18, cy - 62); x.lineTo(cx + 55, cy - 35); x.lineTo(cx + 36, cy - 4); x.stroke(); x.fillStyle = "#111"; x.fillRect(cx - 62, cy + 10, 52, 34); x.fillRect(cx + 10, cy + 10, 52, 34); }
+  });
+}
+function dropper(parent, x, z, color, name, zone, liq = 0xeef3f8) {
+  const d = new THREE.Group(); d.position.set(x, 0, z); parent.add(d);
+  lathe([[0, 0], [0.014, 0], [0.016, 0.003], [0.016, 0.05], [0.013, 0.056], [0.008, 0.06], [0.008, 0.066], [0, 0.066]], dropper.amber || (dropper.amber = new THREE.MeshPhysicalMaterial({ color: 0x7a3a0c, roughness: 0.08, transparent: true, opacity: 0.85, clearcoat: 1, clearcoatRoughness: 0.05 })), d, 0, 0, 0, 36).castShadow = false;
+  const dp = new THREE.Group(); d.add(dp); d.userData.dp = dp; dp.userData.liq = liq;
+  knurlCap(dp, 0.0095, 0.012, M.black, 0, 0.072, 0, 20); dp.userData.teat = lathe([[0, 0], [0.0052, 0], [0.006, 0.004], [0.0074, 0.012], [0.0077, 0.02], [0.0064, 0.027], [0.003, 0.031], [0, 0.032]], std(0x1c1c1e, 0.75), dp, 0, 0.077, 0, 24); // tétine
+  cyl(0.0026, 0.0013, 0.062, M.glass, dp, 0, 0.035, 0, 12).castShadow = false; cyl(0.0017, 0.0011, 0.02, liquidMat(liq, 0.85), dp, 0, 0.016, 0, 10).castShadow = false; // pipette compte-gouttes
+  mesh(new THREE.CylinderGeometry(0.0163, 0.0163, 0.03, 36, 1, true, -1.3, 2.6), std(0xffffff, 0.6, 0, { map: canvasTex(512, 200, (c, w, h) => { c.fillStyle = "#fff"; c.fillRect(0, 0, w, h); c.fillStyle = color; c.fillRect(0, 0, w, 36); c.fillStyle = "#111"; c.font = "bold 46px Arial"; c.textAlign = "center"; c.fillText(name, w / 2, 100); c.font = "30px Arial"; c.fillText("zone de virage " + zone, w / 2, 150); }) }), d, 0, 0.03, 0).castShadow = false;
+  return d;
+}
+
+// verre lisible : liseré sombre sur les bords vus en rasant (réfraction), comme une vraie paroi de verre
+// couleurs fidèles : les codes hexadécimaux des matériaux sont pensés en sRGB (comme sur une photo) ; three r128 les lit en linéaire, ce qui délave tout
+function linColors(root) {
+  const seen = new Set();
+  root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) { if (seen.has(m) || m.isShaderMaterial || !m.color || m.userData.lin) continue; seen.add(m); m.userData.lin = true; m.color.convertSRGBToLinear(); if (m.sheenColor) m.sheenColor.convertSRGBToLinear(); } });
+}
+
+function glassEdges(root) {
+  const mat = new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(0x3d5468) }, a: { value: 0.75 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: "varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "uniform vec3 c; uniform float a; varying vec3 vN; varying vec3 vV; void main(){ float r = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(c, a * pow(r, 2.5)); }" });
+  const list = []; root.traverse((o) => { if (o.isMesh && o.material === M.glass) list.push(o); });
+  for (const o of list) { const e = new THREE.Mesh(o.geometry, mat); e.renderOrder = (o.renderOrder || 0) + 1; e.castShadow = false; e.raycast = () => {}; o.add(e); }
+}
+
+/* ============================================================ SVT · TC · Facteurs édaphiques : les trois formes d'eau du sol
+   Protocole (manuel TC SVT BIOF, doc « Les différentes formes de l'eau dans le sol ») : deux pots percés garnis d'une toile,
+   300 g de sol séché à l'étuve (105 °C) chacun, sable (A) et argile (B), un plant de haricot repiqué dans chaque pot.
+   m₀ : pot + plant + sol sec. On arrose (200 mL) : l'eau de gravité traverse le sol et tombe dans l'éprouvette (V_g).
+   Fin de l'égouttage = capacité au champ : il reste l'eau capillaire et l'eau hygroscopique → m₁ ; m₁ − m₀ = eau retenue.
+   La plante puise l'eau capillaire jusqu'au flétrissement : il ne reste que l'eau hygroscopique → m₂ ; m₂ − m₀ ; m₁ − m₂.
+   Teneurs massiques typiques (g d'eau / g de sol sec ; FAO Irrigation & Drainage 56, Saxton & Rawls 2006) :
+   sable : capacité au champ ≈ 0,12 · point de flétrissement ≈ 0,03 · saturation ≈ 0,26 ;
+   argile : capacité au champ ≈ 0,40 · point de flétrissement ≈ 0,24 · saturation ≈ 0,50.
+   Comme le document du manuel, l'eau qui reste au point de flétrissement est assimilée à l'eau hygroscopique.
+   Argile séchée à l'air (non étuvée) : elle garde ≈ 6 % d'eau, une partie de son eau hygroscopique.
+   Modèle d'égouttage : l'eau posée en surface s'infiltre (constante τi), le sol se remplit jusqu'à saturation, l'excès au-dessus
+   de la capacité au champ s'égoutte (constante τd). Évapotranspiration : ≈ 12 g/jour par le plant tant qu'il reste de l'eau
+   capillaire, ≈ 1,5 g/jour par la surface du sol. */
+const SOIL = {
+  sable: { fc: 0.12, wp: 0.03, sat: 0.26, tau: 2.5, rho: 1.55, dry: 0xd6bd88, wet: 0x8a6c43 },
+  argile: { fc: 0.4, wp: 0.24, sat: 0.5, tau: 9, rho: 1.25, dry: 0x9b5d3c, wet: 0x55291a },
+};
+const AIRDRY_W = 0.06; // g d'eau par g d'argile sèche, dans l'argile séchée à l'air
+const M_SOL = 300, V_EAU = 200, ET_MAX = 12, EV_MAX = 1.5; // g de sol, mL d'eau, g/jour
+const POT_M = [78.4, 79.1], PLANT_M = [6.6, 6.3]; // pots percés + toile ; plants de haricot avec leur motte
+const STX = [0.02, 0.3], STZ = -0.2, LET = ["A", "B"], WANT = ["sable", "argile"];
+const FUN_Y = 0.23, POT_Y = 0.352, BAL_P = [-0.4, 0.074, -0.18];
+const POT_IN = 0.006, POT_H = 0.084, PR0 = 0.0385, PR1 = 0.0495; // intérieur du pot : fond, hauteur, rayons bas et haut
+const rAt = (h) => PR0 + ((PR1 - PR0) * h) / POT_H - 0.0004;
+const potV = (h) => ((Math.PI * h) / 3) * (PR0 * PR0 + PR0 * (PR0 + ((PR1 - PR0) * h) / POT_H) + (PR0 + ((PR1 - PR0) * h) / POT_H) ** 2) * 1e6; // cm³
+const POT_CAP = potV(POT_H);
+function potH(V) { if (V <= 0) return 0; let a = 0, b = POT_H * 1.4; for (let k = 0; k < 30; k++) { const m = (a + b) / 2; if (potV(m) < V) a = m; else b = m; } return (a + b) / 2; }
+const CYL_R = 0.0185, CYL_Y0 = 0.01, CYL_CAP = 250; // éprouvettes graduées 250 mL
+const cylH = (V) => (V * 1e-6) / (Math.PI * CYL_R * CYL_R);
+const clk = (min) => { const s = Math.max(0, Math.round(min * 60)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+const tTxt = (min) => { const s = Math.round(min * 60); return Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0") + " s"; };
+const soilCol = (fc, wet) => { const d = new THREE.Color(SOIL.sable.dry).lerp(new THREE.Color(SOIL.argile.dry), fc), w = new THREE.Color(SOIL.sable.wet).lerp(new THREE.Color(SOIL.argile.wet), fc); return d.lerp(w, clamp(wet, 0, 1)); };
+const setCol = (mat, c) => { mat.color.copy(c).convertSRGBToLinear(); };
+const g1 = (x) => fmt(x, 1);
+const r1 = (x) => Math.round(x * 10) / 10;
+const JAR = { sable: { t: "sable", n: "sable séché à l'étuve" }, argile: { t: "argile", n: "argile séchée à l'étuve" }, argair: { t: "argile", n: "argile séchée à l'air" } };
+
+function soilMat(hex) { if (!T3.soil) T3.soil = canvasTex(256, 256, (x, w, h) => { x.fillStyle = "#e6e6e6"; x.fillRect(0, 0, w, h); for (let i = 0; i < 3200; i++) { const v = (170 + Math.random() * 85) | 0; x.fillStyle = `rgb(${v},${v},${v})`; x.beginPath(); x.arc(Math.random() * w, Math.random() * h, 0.6 + Math.random() * 1.5, 0, 7); x.fill(); } }, [3, 3]); return std(hex, 0.95, 0, { map: T3.soil }); }
+// éprouvette graduée 250 mL (Ø 41 mm, pied hexagonal, bec) : traits tous les 2 mL, chiffres tous les 50 mL
+function gradCyl(parent, x, z, liqColor) {
+  const c = new THREE.Group(); c.position.set(x, 0, z); parent.add(c); const ro = CYL_R + 0.0019;
+  cyl(0.036, 0.038, 0.009, M.glass, c, 0, 0.0045, 0, 6).castShadow = false;
+  const tb = lathe([[0, 0.009], [ro, 0.009], [ro, 0.252], [ro + 0.0016, 0.258], [ro + 0.0006, 0.26], [CYL_R, 0.256], [CYL_R, CYL_Y0], [0, CYL_Y0]], M.glass, c, 0, 0, 0, 40); tb.castShadow = false; tb.renderOrder = 3;
+  const spout = mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.008, 12, 1, true, -1, 2), M.glass, c, -(ro + 0.001), 0.257, 0); spout.rotation.z = 0.6; spout.castShadow = false;
+  const H = cylH(CYL_CAP) + 0.012, px = 1024 / H;
+  const gr = mesh(new THREE.CylinderGeometry(ro + 0.0002, ro + 0.0002, H, 32, 1, true, -0.75, 128 / px / ro), new THREE.MeshStandardMaterial({ map: canvasTex(128, 1024, (k, w, h) => {
+    k.clearRect(0, 0, w, h); k.fillStyle = "#121a24"; k.strokeStyle = "rgba(255,255,255,.9)"; k.lineWidth = 4; k.lineJoin = "round"; k.font = "bold 24px Arial"; k.textAlign = "left";
+    for (let v = 2; v <= CYL_CAP; v += 2) { const y = h - cylH(v) * px, L = v % 50 === 0 ? 46 : v % 10 === 0 ? 30 : 16; k.strokeRect(14, y - 1, L, 2); k.fillRect(14, y - 1, L, 2); if (v % 50 === 0) { k.strokeText(String(v), 66, y + 8); k.fillText(String(v), 66, y + 8); } }
+  }), transparent: true, depthWrite: false, roughness: 0.5 }), c, 0, CYL_Y0 + H / 2, 0); gr.castShadow = false; gr.renderOrder = 4;
+  print(0.05, 0.016, c, ro + 0.0006, 0.2, 0, [{ t: "250 mL", b: true, s: 0.5, c: "#121a24" }, { t: "± 2 mL · 20 °C", s: 0.32, c: "#121a24" }]).rotation.y = Math.PI / 2;
+  const liq = cyl(CYL_R - 0.0002, CYL_R - 0.0002, 1, liquidMat(liqColor, 0.62), c, 0, 0, 0, 32); liq.castShadow = false; liq.renderOrder = 2; liq.visible = false;
+  c.userData.liq = liq; return c;
+}
+// feuille de haricot (limbe ovale pointu), à plat dans le plan horizontal, orientée vers +x
+function leafGeo() { if (T3.leafG) return T3.leafG; const s = new THREE.Shape(); s.moveTo(0, 0); s.bezierCurveTo(0.22, 0.42, 0.82, 0.38, 1, 0); s.bezierCurveTo(0.82, -0.38, 0.22, -0.42, 0, 0); const g = new THREE.ShapeGeometry(s, 10); g.rotateX(-Math.PI / 2); return (T3.leafG = g); }
+function buildPlant(g, k, x, z) {
+  const pl = new THREE.Group(); pl.position.set(x, 0.012, z); g.add(pl);
+  const stemM = std(0x6f9a3c, 0.6), leafM = std(0x4f9a3a, 0.62, 0, { side: THREE.DoubleSide });
+  cyl(0.0105, 0.0085, 0.02, soilMat(0x4a3424), pl, 0, 0.01, 0, 20).castShadow = false;
+  rod([0, 0.018, 0], [0, 0.07, 0], 0.0021, stemM, pl);
+  const up = new THREE.Group(); up.position.set(0, 0.07, 0); pl.add(up); rod([0, 0, 0], [0, 0.05, 0], 0.0018, stemM, up);
+  const lv = [], leaf = (y, ang, size, tilt) => { const pv = new THREE.Group(); pv.position.set(0, y, 0); pv.rotation.y = ang; up.add(pv); const d = new THREE.Group(); pv.add(d); rod([0, 0, 0], [0.016, 0.006, 0], 0.0011, stemM, d); const b = mesh(leafGeo(), leafM, d, 0.016, 0.006, 0); b.scale.setScalar(size); b.rotation.z = tilt; lv.push({ d, size }); };
+  leaf(0, 0, 0.036, 0.2); leaf(0, Math.PI, 0.036, 0.2); leaf(0.05, 0.6, 0.022, 0.3); leaf(0.05, 2.7, 0.022, 0.3); leaf(0.05, 4.8, 0.022, 0.3);
+  return { grp: pl, up, lv, leafM, k };
+}
+function buildBench(g) {
+  M.rubber = std(0x15171a, 0.9); M.keyGrey = std(0x4b525b, 0.5); M.lcdBezel = std(0x111317, 0.35); M.brushed = std(0xcfd4d9, 0.32, 0.95);
+  M.potPP = std(0x2e6b45, 0.5); const boss = std(0x4a5058, 0.4, 0.5);
+  // --- balance de précision (0,1 g, portée 3 100 g)
+  const bal = new THREE.Group(); bal.position.set(-0.4, 0, -0.15); g.add(bal); X.bal = bal;
+  rbox(0.22, 0.05, 0.24, 0.007, std(0xe6e9ed, 0.42), bal, 0, 0.028, 0); feet(bal, 0.19, 0.21);
+  rbox(0.22, 0.032, 0.065, 0.005, std(0x2f353c, 0.5), bal, 0, 0.066, 0.0875);
+  cyl(0.07, 0.07, 0.003, std(0x2b3036, 0.6), bal, 0, 0.0545, -0.03, 48);
+  const pan = cyl(0.066, 0.066, 0.004, M.brushed, bal, 0, 0.07, -0.03, 64); mesh(new THREE.TorusGeometry(0.066, 0.0018, 10, 64), M.brushed, pan, 0, 0.002, 0).rotation.x = Math.PI / 2;
+  cyl(0.016, 0.02, 0.014, M.alu, bal, 0, 0.061, -0.03, 24);
+  rbox(0.13, 0.026, 0.004, 0.0015, M.lcdBezel, bal, -0.03, 0.066, 0.1205);
+  X.lcdB = lcd(0.12, 0.02, bal, -0.03, 0.066, 0.1228, "#1a2a1a", "#c7d6a8");
+  const tare = key(bal, 0.03, 0.013, 0.078, 0.071, 0.121, "TARE", std(0x2b59aa, 0.45)); tool("tare", tare, [0, 0.006, 0.004]);
+  print(0.12, 0.007, bal, -0.03, 0.0465, 0.1205, [{ t: "max 3100 g · d = 0,1 g", s: 0.8, c: "#4a5058" }]);
+  // --- bocaux de sol à bouchon vissé : sable et argile séchés à l'étuve, argile seulement séchée à l'air
+  const jar = (name, x, z, title, lines, band, col) => {
+    const j = new THREE.Group(); j.position.set(x, 0, z); g.add(j);
+    lathe([[0, 0], [0.042, 0], [0.045, 0.004], [0.045, 0.1], [0.04, 0.106], [0.037, 0.108], [0.037, 0.12], [0, 0.12]], M.glass, j, 0, 0, 0, 48).castShadow = false;
+    cyl(0.0425, 0.0425, 0.082, soilMat(col), j, 0, 0.045, 0, 40).castShadow = false;
+    mesh(new THREE.CylinderGeometry(0.0452, 0.0452, 0.05, 48, 1, true, -1.25, 2.5), std(0xffffff, 0.6, 0, { map: labelTex(title, lines, band) }), j, 0, 0.05, 0).castShadow = false;
+    j.userData.cap = knurlCap(j, 0.04, 0.022, std(band === "#6b7280" ? 0x5b6270 : name === "sable" ? 0xb5832a : 0x7a3b22, 0.45), 0, 0.131, 0, 30);
+    tool(name, j, [0, 0.15, 0]); return j;
+  };
+  jar("sable", -0.68, -0.3, "Sable", ["séché à l'étuve 105 °C", "grains 0,05 – 2 mm"], "#b5832a", SOIL.sable.dry);
+  jar("argile", -0.68, -0.16, "Argile", ["séchée à l'étuve 105 °C", "particules < 2 µm"], "#7a3b22", SOIL.argile.dry);
+  jar("argair", -0.68, -0.02, "Argile", ["séchée à l'air libre", "(non étuvée)"], "#6b7280", 0x8f583a);
+  // --- cuillère-spatule inox
+  const sp = new THREE.Group(); sp.position.set(-0.55, 0.006, 0.12); g.add(sp);
+  const bowl = mesh(new THREE.SphereGeometry(0.013, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M.steel, sp, 0, 0.006, 0); bowl.scale.set(1.25, 0.55, 1); bowl.material.side = THREE.DoubleSide;
+  rod([0.015, 0.006, 0], [0.18, 0.012, 0], 0.0028, M.steel, sp); rod([0.18, 0.012, 0], [0.205, 0.012, 0], 0.0045, std(0x1b1d21, 0.6), sp);
+  X.spLoad = sph(0.011, soilMat(0xd6bd88), sp, 0, 0.006, 0); X.spLoad.scale.set(1.2, 0.45, 0.9); X.spLoad.visible = false;
+  tool("spoon", sp, [0.08, 0.03, 0]);
+  // --- plateau de semis : deux plants de haricot dans leur motte
+  const tr = new THREE.Group(); tr.position.set(-0.24, 0, 0.1); g.add(tr);
+  rbox(0.14, 0.028, 0.07, 0.004, std(0x1d2024, 0.7), tr, 0, 0.014, 0);
+  [-0.05, -0.017, 0.017, 0.05].forEach((dx) => cyl(0.013, 0.013, 0.002, soilMat(0x4a3424), tr, dx, 0.0285, 0, 20).castShadow = false);
+  print(0.1, 0.012, tr, 0, 0.015, 0.0352, [{ t: "plants de haricot · 12 jours", b: true, s: 0.55, c: "#e8ece6" }]);
+  X.plant = [buildPlant(g, 0, -0.257, 0.1), buildPlant(g, 1, -0.223, 0.1)];
+  X.plant.forEach((p, k) => tool("seed" + k, p.grp, [0, 0.14, 0]));
+  // --- deux postes : potence, anneau, entonnoir, pot percé (toile au fond), éprouvette 250 mL, minuteur
+  X.pot = []; X.soil = []; X.pond = []; X.C = []; X.drop = []; X.strm = []; X.tlcd = []; X.fun = [];
+  for (let i = 0; i < 2; i++) {
+    const x = STX[i];
+    rbox(0.12, 0.012, 0.13, 0.004, M.standPaint, g, x, 0.006, STZ - 0.15); cyl(0.0065, 0.0065, 0.62, M.steel, g, x, 0.31, STZ - 0.17, 20);
+    print(0.03, 0.03, g, x, 0.0125, STZ - 0.1, [{ t: LET[i], b: true, s: 1, c: "#ffffff" }]).rotation.x = -Math.PI / 2;
+    rbox(0.026, 0.028, 0.028, 0.004, boss, g, x, 0.352, STZ - 0.17); box(0.004, 0.018, 0.006, std(0x1b1d21, 0.5), g, x + 0.019, 0.352, STZ - 0.17);
+    rod([x, 0.352, STZ - 0.156], [x, 0.352, STZ - 0.044], 0.0035, M.steel, g); mesh(new THREE.TorusGeometry(0.043, 0.0026, 10, 48), M.steel, g, x, 0.352, STZ).rotation.x = Math.PI / 2;
+    const F = new THREE.Group(); F.position.set(x, FUN_Y, STZ); g.add(F); X.fun.push(F);
+    const fg = lathe([[0.0038, 0], [0.0038, 0.07], [0.0525, 0.14], [0.0534, 0.1436], [0.0506, 0.1428], [0.0028, 0.0712], [0.0028, 0]], M.glass, F, 0, 0, 0, 48); fg.castShadow = false; fg.renderOrder = 3;
+    // pot en plastique percé, toile fine au fond (retient le sol, laisse passer l'eau)
+    const P = new THREE.Group(); P.position.set(x, POT_Y, STZ); g.add(P); X.pot.push(P);
+    lathe([[0, 0], [0.04, 0], [0.042, 0.004], [0.053, 0.088], [0.056, 0.09], [0.056, 0.094], [0.051, 0.094], [0.0495, 0.09], [PR0, POT_IN], [0, POT_IN]], M.potPP, P, 0, 0, 0, 48);
+    cyl(PR0 - 0.0004, PR0 - 0.0004, 0.0012, std(0xe9e4d6, 0.9), P, 0, POT_IN + 0.0007, 0, 40).castShadow = false;
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; cyl(0.0035, 0.0035, 0.0009, std(0x0d1013, 0.9), P, Math.cos(a) * 0.022, -0.0004, Math.sin(a) * 0.022, 12).castShadow = false; }
+    const lab = print(0.024, 0.024, P, 0, 0.05, 0.0505, [{ t: LET[i], b: true, s: 0.9, c: "#ffffff" }]); lab.rotation.x = -0.13;
+    const soil = cyl(1, 1, 1, soilMat(0xd6bd88), P, 0, 0, 0, 40); soil.visible = false; soil.castShadow = false; X.soil.push(soil);
+    const pond = cyl(1, 1, 1, liquidMat(0x9cc4e8, 0.55), P, 0, 0, 0, 40); pond.visible = false; pond.castShadow = false; pond.renderOrder = 2; X.pond.push(pond);
+    tool("pot" + i, P, [0, 0.16, 0]); F.traverse((o) => (o.userData.tool = "pot" + i));
+    const C = gradCyl(g, x, STZ, 0xcfe3fa); X.C.push(C); tool("cyl" + i, C, [0.03, 0.2, 0]);
+    const d = sph(0.0022, liquidMat(0xcfe3fa, 0.85), g, x, FUN_Y, STZ); d.visible = false; d.castShadow = false; X.drop.push(d);
+    const s = cyl(0.0013, 0.0013, 1, liquidMat(0xcfe3fa, 0.8), g, x, 0, STZ, 8); s.visible = false; s.castShadow = false; X.strm.push(s);
+    const T = new THREE.Group(); T.position.set(x, 0, STZ + 0.1); T.rotation.x = -0.35; g.add(T);
+    rbox(0.07, 0.036, 0.022, 0.006, std(0xf2f3f5, 0.4), T, 0, 0.022, 0); rbox(0.058, 0.016, 0.003, 0.002, M.lcdBezel, T, 0, 0.028, 0.0115);
+    X.tlcd.push(lcd(0.052, 0.012, T, 0, 0.028, 0.0132, "#101a10", "#cfe0b0"));
+    [["START", -0.02, 0x2a8a4a], ["STOP", 0, 0xc8302b], ["RAZ", 0.02, 0x4b525b]].forEach(([t, kx, col]) => key(T, 0.017, 0.007, kx, 0.012, 0.0115, t, std(col, 0.45)));
+    tool("tim" + i, T, [0, 0.05, 0]);
+  }
+  // --- éprouvette de mesure 250 mL et pissette d'eau
+  X.E0 = gradCyl(g, 0.62, -0.02, 0xcfe3fa); tool("e0", X.E0, [0.03, 0.2, 0]);
+  const wsh = new THREE.Group(); wsh.position.set(0.76, 0, -0.12); g.add(wsh);
+  const ldpeT = new THREE.MeshPhysicalMaterial({ color: 0xf2f4f0, roughness: 0.45, transparent: true, opacity: 0.72, clearcoat: 0.3, depthWrite: false }), wBlue = std(0x1f6fc4, 0.42);
+  lathe([[0, 0], [0.034, 0], [0.038, 0.006], [0.038, 0.12], [0.035, 0.136], [0.019, 0.152], [0.0155, 0.164], [0, 0.164]], ldpeT, wsh, 0, 0, 0, 56).castShadow = false;
+  cyl(0.035, 0.035, 0.115, liquidMat(0xd9ecff, 0.28), wsh, 0, 0.062, 0, 40).castShadow = false;
+  knurlCap(wsh, 0.0175, 0.022, wBlue, 0, 0.175, 0, 24);
+  mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[0, 0.186, 0], [0, 0.216, 0], [-0.018, 0.228, 0], [-0.045, 0.22, 0], [-0.06, 0.206, 0]].map(V3)), 40, 0.003, 12, false), wBlue, wsh).castShadow = false;
+  wrapLabel(0.0385, 0.055, wsh, 0, 0.075, 0, [{ t: "EAU", b: true, s: 0.2 }, { t: "arrosage · 500 mL", s: 0.13 }], "#dfeefb");
+  tool("wash", wsh, [0, 0.2, 0]);
+  // --- calendrier de paillasse (jour, heure) : passer au lendemain, temps accéléré
+  const cal = new THREE.Group(); cal.position.set(0.47, 0, 0.13); cal.rotation.x = -0.3; g.add(cal);
+  rbox(0.11, 0.05, 0.03, 0.007, std(0xf2f3f5, 0.4), cal, 0, 0.03, 0); rbox(0.094, 0.026, 0.003, 0.002, M.lcdBezel, cal, 0, 0.036, 0.0155);
+  X.calLcd = lcd(0.088, 0.02, cal, 0, 0.036, 0.0172, "#0e1622", "#9fd0ff");
+  key(cal, 0.05, 0.008, 0, 0.014, 0.0155, "☀ +1 JOUR", std(0xe0a12a, 0.45), "#1a1400");
+  tool("cal", cal, [0, 0.07, 0]);
+  // --- bac à déchets
+  const bin = new THREE.Group(); bin.position.set(-0.8, 0, 0.16); g.add(bin);
+  lathe([[0, 0], [0.062, 0], [0.065, 0.004], [0.07, 0.115], [0.074, 0.118], [0.074, 0.122], [0.068, 0.122], [0.068, 0.118], [0.063, 0.006], [0, 0.006]], std(0x7d8791, 0.6), bin, 0, 0, 0, 40).castShadow = false;
+  mesh(new THREE.CylinderGeometry(0.0705, 0.067, 0.035, 40, 1, true, -1.2, 2.4), std(0xffffff, 0.6, 0, { map: canvasTex(512, 160, (x, w, h) => { x.fillStyle = "#f2b728"; x.fillRect(0, 0, w, h); x.fillStyle = "#111"; x.font = "bold 46px Arial"; x.textAlign = "center"; x.fillText("DÉCHETS", w / 2, 62); x.font = "bold 30px Arial"; x.fillText("sols, plants, eau", w / 2, 110); x.fillRect(0, 140, w, 8); }) }), bin, 0, 0.075, 0).castShadow = false;
+  tool("bin", bin, [0, 0.14, 0]);
+  // --- grains et filets animés
+  X.fallP = new THREE.Group(); g.add(X.fallP); X.fallM = soilMat(0xd6bd88); for (let i = 0; i < 16; i++) { const p = sph(0.0026, X.fallM, X.fallP, 0, 0, 0); p.castShadow = false; } X.fallP.visible = false;
+  X.arcW = mesh(new THREE.BufferGeometry(), liquidMat(0xd9ecff, 0.85), g); X.arcE = mesh(new THREE.BufferGeometry(), liquidMat(0xd9ecff, 0.85), g); X.arcBin = mesh(new THREE.BufferGeometry(), liquidMat(0xb8a27a, 0.8), g);
+  X.arcS = mesh(new THREE.BufferGeometry(), std(0xd6bd88, 0.95), g);
+  for (const m of [X.arcW, X.arcE, X.arcBin, X.arcS]) { m.visible = false; m.castShadow = false; m.renderOrder = 3; }
+  // --- cahier de TP
+  const cah = rbox(0.21, 0.008, 0.29, 0.002, std(0x2f6b3a, 0.6), g, 0.16, 0.004, 0.2); cah.rotation.y = -0.1;
+  print(0.19, 0.27, cah, 0, 0.0045, 0, [{ t: "TP · Les trois formes d'eau du sol", b: true, s: 0.042, y: 0.08 }, { t: "300 g de sol séché à l'étuve · 200 mL d'eau", s: 0.033, y: 0.16 }, { t: "m₀ : pot + plant + sol sec", s: 0.034, y: 0.24 }, { t: "m₁ : fin de l'égouttage", s: 0.034, y: 0.31 }, { t: "m₂ : plante fanée", s: 0.034, y: 0.38 }, { t: "gravité = V_g · retenue = m₁ − m₀", s: 0.032, y: 0.47 }, { t: "hygroscopique = m₂ − m₀", s: 0.032, y: 0.54 }, { t: "capillaire = m₁ − m₂", s: 0.032, y: 0.61 }], "#f6f3ea", "#223").rotation.x = -Math.PI / 2;
+  glassEdges(g);
+}
+
+/* ------------------------------------------------------------ état physique */
+const ST = {};
+const newSt = (i) => ({ i, ms: 0, mc: 0, airW: 0, S: 0, W: 0, D: 0, Vin: 0, Spour: 0, spill: 0, lostDrip: 0, tPour: null, plant: null, turg: 1, onBal: false, lift: false, tm: { run: false, t: 0, shown: "" }, ph: 0, fallT: 0, t1: null, t1since: null, t2: null, reads: [], w: [], ans: {}, ansKey: "", miss: { ret: 0, hyg: 0, cap: 0 }, qd: 0, zk: "" });
+const fcOf = (s) => s.ms * SOIL.sable.fc + s.mc * SOIL.argile.fc, wpOf = (s) => s.ms * SOIL.sable.wp + s.mc * SOIL.argile.wp, satOf = (s) => s.ms * SOIL.sable.sat + s.mc * SOIL.argile.sat;
+function tauOf(ms, mc) { const m = ms + mc; if (m <= 0) return 0.05; const fs = ms / m; return Math.exp(fs * Math.log(SOIL.sable.tau) + (1 - fs) * Math.log(SOIL.argile.tau)) * Math.sqrt(m / 100); }
+const soilVol = (s) => s.ms / SOIL.sable.rho + s.mc / SOIL.argile.rho;
+const soilIn = (s) => s.ms + s.mc + s.airW; // masse de sol versée (telle que pesée)
+const potMass = (i) => { const s = ST.st[i]; return POT_M[i] + (s.plant != null ? PLANT_M[s.plant] : 0) + s.ms + s.mc + s.S + s.W; };
+const shown = () => (ST.onBal != null ? potMass(ST.onBal) : 0) - ST.tare;
+const dayNo = () => Math.floor((ST.simT + 480) / 1440); // l'expérience commence le jour 0 à 8 h 00
+const hhmm = () => { const m = Math.floor(ST.simT + 480) % 1440; return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
+// une étape d'égouttage : infiltration de l'eau de surface, saturation, écoulement de l'eau au-dessus de la capacité au champ
+function drainStep(s, fc, sat, ti, td, h) { const qi = s.W / ti; s.W -= qi * h; s.S += qi * h; if (s.S > sat) { s.W += s.S - sat; s.S = sat; } const qd = Math.max(0, s.S - fc) / td; s.S -= qd * h; return qd; }
+// simulation de référence (mêmes équations) : volume final recueilli et fin pratique de l'égouttage (98 %)
+const SIMC = {};
+function simulate(ms, mc, S0, Vin) {
+  const key = [ms, mc, S0, Vin].map((v) => v.toFixed(1)).join("|"); if (SIMC[key]) return SIMC[key];
+  const s = { ms, mc, S: S0, W: Vin }, fc = fcOf(s), sat = satOf(s), tau = tauOf(ms, mc), ti = 0.45 * tau, td = 0.55 * tau, Df = Math.max(0, S0 + Vin - fc);
+  let t = 0, D = 0, t98 = null; const dt = 0.01;
+  while (t < 3000) { D += drainStep(s, fc, sat, ti, td, dt) * dt; t += dt; if (t98 == null && D >= 0.98 * Df) { t98 = t; break; } }
+  return (SIMC[key] = { Df, t98: t98 || 0, fc, wp: ms * SOIL.sable.wp + mc * SOIL.argile.wp });
+}
+function resetState() {
+  if (X.bal) for (const k of ["sable", "argile", "argair"]) { const cap = TOOLS[k].obj.userData.cap, u = cap.userData; if (u.off) { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } }
+  if (X.plant) X.plant.forEach((p) => { L.g.attach(p.grp); p.grp.visible = true; });
+  Object.assign(ST, { q: [], busy: false, ev: [], flags: {}, attempts: 1, acc: ST.acc || 30, simT: 0, dayRun: null, tare: 0, tared: false, tarePot: null, onBal: null, e0: 0, pouring: false, addTo: null, washT: 0, sqT: 0, fall: null, wPour: null, binPour: null, sFlow: null, demo: false, cur: null, guide: ST.guide == null ? true : ST.guide, balTxt: "", calTxt: "", plantIn: [null, null], mol: [false, false], zoomOn: ST.zoomOn == null ? true : ST.zoomOn });
+  ST.st = [newSt(0), newSt(1)];
+  if (!X.bal) return;
+  for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); t.obj.scale.set(1, 1, 1); }
+  X.spLoad.visible = false; X.fallP.visible = false; for (const m of [X.arcW, X.arcE, X.arcBin, X.arcS]) m.visible = false; if (L.ctl) L.ctl.enabled = true;
+  X.plant.forEach((p) => setTurgor(p, 1));
+  for (let i = 0; i < 2; i++) { X.soil[i].visible = false; X.pond[i].visible = false; X.drop[i].visible = false; X.strm[i].visible = false; X.C[i].userData.liq.visible = false; X.tlcd[i].set("00:00", ""); }
+  X.E0.userData.liq.visible = false; X.lcdB.set("0.0", "g");
+  $("#events").innerHTML = ""; renderTable();
+}
+
+/* ------------------------------------------------------------ explications */
+const WHY = {
+  pot: `<p>Le pot est en plastique, percé au fond et garni d'une <b>toile fine</b> : la toile retient le sol et laisse passer l'eau. Un pot en terre cuite absorberait lui-même de l'eau et fausserait les pesées.</p><p>Le pot est posé dans un entonnoir au-dessus d'une éprouvette graduée qui recueille l'eau qui traverse le sol.</p>`,
+  tare: `<p>Pot vide sur le plateau → TARE : l'afficheur revient à 0,0 g et n'indique plus que la masse de sol ajoutée. Pour peser ensuite le <b>pot entier</b> (m₀, m₁, m₂), on remet la balance à zéro <b>à vide</b> (TARE sans rien sur le plateau).</p>`,
+  noTare: `<p>Sans tare, l'afficheur compte aussi le pot (≈ 79 g) : en visant « 300 g » affichés, on ne verse que ≈ 220 g de sol.</p>`,
+  tareW: `<p>La balance était tarée avec un objet : la masse lue n'est pas la masse totale du pot. Ce n'est pas grave si <b>toutes</b> les pesées d'un même pot sont faites avec la même tare (les différences m₁ − m₀ restent justes), mais si la tare change entre deux pesées, les différences sont fausses. Le plus sûr : TARE à vide (0,0 g) avant chaque pesée du pot entier.</p>`,
+  weigh: `<p>On compare deux sols : on fixe tout le reste. <b>Même masse de sol sec (300 g)</b>, même plant, <b>même volume d'eau (200 mL)</b>. On verse au bocal en maintenant le bouton jusqu'à ≈ 295 g puis on ajuste à la cuillère en lisant la balance.</p>`,
+  dry: `<p>Le sol doit être <b>séché à l'étuve à 105 °C</b> : à cette température, même l'eau hygroscopique s'en va. m₀ est alors la masse d'un sol qui ne contient plus aucune eau : c'est la référence de tous les calculs.</p>`,
+  airdry: `<p>Un sol « sec à l'air » paraît sec mais garde une pellicule d'eau collée aux grains : une partie de son <b>eau hygroscopique</b> (≈ 6 % de la masse pour l'argile). Pesé ainsi, m₀ contient déjà cette eau : m₂ − m₀ sous-estime l'eau hygroscopique. Il faut un sol séché à l'étuve à 105 °C.</p>`,
+  plant: `<p>Le plant de haricot est repiqué <b>avant</b> la pesée m₀ : sa masse (≈ 6 g) est ainsi comprise dans m₀, m₁ et m₂ et s'élimine dans les différences. On néglige la petite perte d'eau de ses tissus quand il fane.</p>`,
+  m0plant: `<p>m₀ a été pesé sans le plant. Les pesées suivantes contiennent sa masse (≈ 6 g) : m₁ − m₀ et m₂ − m₀ sont trop grandes de la masse du plant.</p>`,
+  m0: `<p><b>m₀</b> = pot + toile + plant + sol sec. Aucune eau dans le sol : c'est la référence.</p>`,
+  water: `<p>On mesure <b>200 mL</b> d'eau à l'éprouvette (lecture au bas du ménisque). On verse <b>plus</b> d'eau que le sol ne peut en retenir : il se sature, et l'excès s'écoule. C'est cet excès qu'on recueille.</p>`,
+  timer: `<p>Le minuteur démarre au contact de l'eau (t = 0). Le temps est <b>accéléré</b> (×30 par défaut, réglable en haut) : les minuteurs affichent le temps réel de l'expérience.</p>`,
+  t1: `<p><b>t₁</b> : la <b>première goutte</b> tombe dans l'éprouvette (noté automatiquement). Dans le sable, l'eau trouve vite de gros pores et descend presque aussitôt ; dans l'argile, elle doit d'abord remplir et mouiller d'innombrables pores minuscules : la première goutte arrive après plusieurs minutes.</p>`,
+  gravity: `<p><b>Eau de gravité</b> : elle circule librement vers le bas, sous l'effet de son poids, dans les pores de plus de 8 µm. Son poids P est plus grand que la force F qui la retient aux grains (<b>P &gt; F</b>). Elle traverse le sol et s'écoule : c'est elle qu'on recueille dans l'éprouvette (V_g).</p>`,
+  t2: `<p><b>t₂</b> : la dernière goutte. À toi de juger : quand les gouttes deviennent très espacées puis cessent, arrête le minuteur. L'égouttage est fini : le sol est à sa <b>capacité au champ</b>.</p>`,
+  read: `<p>On lit V_g au bas du ménisque, à la fin de l'égouttage. 1 mL d'eau a une masse de 1 g : <b>V_g en mL = masse d'eau de gravité en g</b>.</p><p class="eq">Contrôle : m₁ − m₀ ≈ V versé − V_g</p>`,
+  early: `<p>Lecture ou pesée faite alors que l'eau s'écoule encore : V_g est trop petit et m₁ trop grand (de l'eau de gravité est encore dans le sol). Il faut attendre la fin de l'égouttage.</p>`,
+  capacity: `<p><b>Capacité au champ</b> (capacité de rétention) : quand l'égouttage est fini, le sol garde l'<b>eau capillaire</b> (pores fins de 0,2 à 8 µm, F &gt; P) et l'<b>eau hygroscopique</b> (pellicule autour des grains). Pesée : m₁.</p><p class="eq">eau retenue = m₁ − m₀</p>`,
+  m1: `<p><b>m₁</b> = pot + plant + sol + eau retenue, pesé à la fin de l'égouttage.</p><p class="eq">eau retenue = m₁ − m₀ = eau capillaire + eau hygroscopique</p>`,
+  day: `<p>Le temps passe en <b>accéléré</b> (une journée en ≈ 2 s). Le plant transpire (≈ 12 g d'eau par jour) et la surface du sol évapore un peu d'eau. On pèse chaque pot chaque jour et on observe les feuilles.</p>`,
+  capillary: `<p><b>Eau capillaire</b> : retenue dans les pores fins (0,2 – 8 µm) par une force F plus grande que son poids (<b>F &gt; P</b>) : elle ne s'écoule pas. Mais les poils absorbants l'aspirent avec une force plus grande encore : c'est l'<b>eau utilisable</b> par les plantes.</p>`,
+  wilt: `<p><b>Point de flétrissement</b> : la plante a utilisé toute l'eau capillaire. Il ne reste que l'<b>eau hygroscopique</b>, une fine pellicule fixée énergiquement aux particules (<b>F ≫ P</b>) : les racines ne peuvent plus l'arracher, la plante fane alors que le sol contient encore de l'eau. C'est le moment de peser m₂ ; c'est à toi d'en juger en regardant les feuilles.</p>`,
+  m2: `<p><b>m₂</b> = pot + plant + sol + eau hygroscopique, pesé quand la plante est fanée.</p><p class="eq">eau hygroscopique = m₂ − m₀</p><p class="eq">eau capillaire (utilisable) = m₁ − m₂</p>`,
+  m2early: `<p>m₂ pesé alors que la plante n'était pas encore fanée : il restait de l'eau capillaire. m₂ − m₀ est trop grand (eau hygroscopique surestimée) et m₁ − m₂ trop petit.</p>`,
+  m2late: `<p>m₂ pesé longtemps après le flétrissement : la surface du sol a continué à sécher un peu. m₂ − m₀ est légèrement trop petit.</p>`,
+  calc: `<p>Les masses s'écrivent seules dans le tableau ; <b>les calculs sont à toi</b>. Clique dans une case, écris ta valeur (1 chiffre après la virgule, comme la balance) puis Entrée.</p><p class="eq">eau retenue = m₁ − m₀</p><p class="eq">eau hygroscopique = m₂ − m₀</p><p class="eq">eau capillaire = m₁ − m₂</p>`,
+  zoom: `<p>Le <b>zoom microscopique</b> montre ce qui se passe entre les grains, calculé à partir de l'état réel du pot : grains (beige ou brun), air (blanc), eau hygroscopique (bleu foncé, pellicule collée aux grains), eau capillaire (bleu, dans les pores fins et aux contacts), eau de gravité (bleu clair, dans les gros pores). La jauge à droite situe la teneur en eau entre le point de flétrissement (PF), la capacité au champ (CC) et la saturation. Clique sur une bulle pour descendre au <b>niveau moléculaire</b>.</p>`,
+  mol: `<p>Au niveau moléculaire : la surface des particules (surtout des argiles) porte des <b>charges négatives</b>. Les molécules d'eau sont polaires : leurs atomes d'hydrogène (δ+) sont attirés par ces charges. Les premières couches de molécules sont ainsi fixées très énergiquement : c'est l'<b>eau hygroscopique</b>, que ni la gravité ni les racines ne peuvent arracher.</p>`,
+  overflow: `<p>Le sol et l'eau dépassent le volume du pot : l'eau déborde et est perdue. Le volume réellement versé sur le sol n'est plus connu.</p>`,
+  lost: `<p>Le pot a quitté son entonnoir pendant l'égouttage : les gouttes sont tombées à côté, elles ne sont pas dans l'éprouvette (V_g trop petit).</p>`,
+  compare: `<p>Le sable ne retient que peu d'eau, mais presque toute est utilisable : sa plante fane la première. L'argile retient beaucoup plus d'eau, mais une grande partie est de l'eau hygroscopique, inutilisable : <b>sa plante fane alors que le pot contient encore beaucoup d'eau</b>. Un sol équilibré (sable + limon + argile + humus) offre la plus grande réserve d'eau utilisable.</p>`,
+  bin: `<p>Les sols mouillés, les plants et l'eau usée vont au bac à déchets. On ne remet jamais un sol dans son bocal.</p>`,
+};
+const TOOL_HELP = [
+  ["Balance (0,1 g, 3 100 g)", "Pot vide sur le plateau → TARE → verser 300 g de sol. Pour peser le pot entier (m₀, m₁, m₂, suivi) : TARE à vide (0,0 g), puis menu du pot « Peser »."],
+  ["Bocaux de sol", "Sable et argile séchés à l'étuve (105 °C) ; une argile seulement séchée à l'air. Grande quantité : « Verser » en maintenant (≈ 25 g/s), puis ajuster à la cuillère."],
+  ["Cuillère-spatule", "Ajuster la masse : grande ≈ 20 g, petite ≈ 5 g, pincée ≈ 1 g ; retirer une pincée vers les déchets."],
+  ["Plateau de semis", "Deux plants de haricot dans leur motte : un par pot, repiqué avant la pesée m₀."],
+  ["Postes A et B", "Potence, entonnoir, pot percé garni d'une toile, éprouvette 250 mL qui recueille l'eau de gravité."],
+  ["Minuteurs", "Démarrent au contact de l'eau ; t₁ (première goutte) est noté seul ; arrête-les à la dernière goutte (t₂)."],
+  ["Éprouvette de mesure 250 mL", "Se remplit à la pissette (maintenir, +10 mL, +1 mL) ; se verse sur un pot."],
+  ["Pissette d'eau", "Remplit l'éprouvette de mesure."],
+  ["Calendrier", "Fait passer le temps : +1 jour ou +6 h (accéléré). Indique le jour et l'heure de l'expérience."],
+  ["Zoom microscopique", "Une bulle par pot : grains, air et les trois formes d'eau, d'après l'état réel. Clic : niveau moléculaire. Bouton 🔍 en haut : afficher / masquer."],
+  ["Bac à déchets", "Vider un pot (sol, plant), une éprouvette."],
+];
+function log(kind, txt, why) { const w = why ? WHY[why] : ""; ST.ev.push({ kind, txt }); const d = document.createElement("div"); d.className = "ev " + kind; d.innerHTML = `<span class="t">J${dayNo()} ${hhmm()}</span>${txt}${w ? '<button type="button">Pourquoi ?</button><div class="why">' + w + "</div>" : ""}`; if (w) d.querySelector("button").onclick = () => d.classList.toggle("open"); $("#events").prepend(d); }
+function once(flag, kind, txt, why) { if (ST.flags[flag]) return; ST.flags[flag] = true; log(kind, txt, why); }
+function toast(msg, kind = "") { const t = $("#toast"); t.textContent = msg; t.className = "show " + kind; clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3200); }
+
+/* ------------------------------------------------------------ caméra, guide */
+const CAMS = { wide: { p: [0.0, 0.85, 1.15], t: [0.0, 0.25, -0.15] }, bal: { p: [-0.42, 0.46, 0.42], t: [-0.5, 0.1, -0.16] }, balP: { p: [-0.34, 0.46, 0.4], t: [-0.47, 0.15, -0.17] }, e0: { p: [0.54, 0.45, 0.44], t: [0.64, 0.15, -0.05] }, bin: { p: [-0.6, 0.48, 0.62], t: [-0.78, 0.1, 0.14] }, stations: { p: [0.16, 0.74, 0.78], t: [0.16, 0.33, -0.2] }, plants: { p: [0.16, 0.66, 0.52], t: [0.16, 0.47, -0.2] }, tray: { p: [-0.18, 0.36, 0.48], t: [-0.24, 0.08, 0.1] }, cal: { p: [0.45, 0.36, 0.5], t: [0.47, 0.05, 0.12] } };
+STX.forEach((x, i) => { CAMS["st" + i] = { p: [x + 0.16, 0.66, 0.34], t: [x, 0.4, -0.2] }; CAMS["cyl" + i] = { p: [x + 0.06, 0.24, 0.12], t: [x, 0.16, -0.2] }; CAMS["tim" + i] = { p: [x + 0.08, 0.3, 0.2], t: [x, 0.06, -0.1] }; });
+let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
+const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
+function lastRead(s) { return s.reads.length ? s.reads[s.reads.length - 1] : null; }
+const lastW = (s, ph) => { for (let k = s.w.length - 1; k >= 0; k--) if (s.w[k].phase === ph) return s.w[k]; return null; };
+const freeSeed = () => [0, 1].find((k) => ST.plantIn[k] == null);
+function suggest() {
+  const P = ST.st, sh = shown(), bi = ST.onBal, balV = { v: g1(sh) + " g" };
+  // 1) remplir chaque pot de 300 g de sol séché à l'étuve, sur la balance tarée avec le pot vide
+  for (const s of P) {
+    const i = s.i, L_ = LET[i], fill = soilIn(s), ok = Math.abs(fill - M_SOL) <= 0.5;
+    if (s.Vin > 0 || (ok && !s.onBal) || (s.w.length && !s.onBal)) continue;
+    if (!s.onBal) { if (bi != null) return { on: "pot" + bi, k: "Pot " + LET[bi], t: "Remets le pot " + LET[bi] + " sur son support (entonnoir " + LET[bi] + ") pour libérer la balance.", why: "pot", cam: "bal" }; return { on: "pot" + i, k: "Pot " + L_, t: fill > 0 ? "Pose le pot " + L_ + " sur la balance pour ajuster sa masse de sol à 300,0 g." : "Pose le pot " + L_ + " vide sur la balance (clique sur le pot).", why: "pot", cam: "st" + i }; }
+    if (fill < 0.05 && ST.tarePot !== i) return { on: "tare", k: "Balance", t: "Pot " + L_ + " vide sur le plateau : appuie sur TARE.", why: "tare", cam: "bal", ...balV };
+    if (fill >= 0.05 && !s.tareOk) return { on: "pot" + i, k: "Balance non tarée", t: "La balance n'a pas été tarée avec le pot " + L_ + " vide : l'afficheur compte aussi le pot. Vide le pot aux déchets et recommence.", why: "noTare", cam: "bal", ...balV };
+    if (fill < M_SOL - 0.5) return { on: WANT[i], k: WANT[i] === "sable" ? "Sable" : "Argile", t: fill < M_SOL - 12 ? "Verse " + (WANT[i] === "sable" ? "le sable séché" : "l'argile séchée") + " à l'étuve en maintenant le bouton jusqu'à ≈ 295 g (clique sur le bocal), puis ajuste à la cuillère." : "Ajuste à la petite cuillère ou à la pincée jusqu'à 300,0 g.", why: "weigh", cam: "bal", ...balV };
+    if (fill > M_SOL + 0.5) return { on: "pot" + i, k: "Trop de sol", t: "Retire une pincée (menu du pot) pour revenir à 300,0 g.", why: "weigh", cam: "bal", ...balV };
+    return { on: "pot" + i, k: "Pot " + L_, t: "300,0 g de sol : remets le pot " + L_ + " sur son support.", why: "pot", cam: "bal", ...balV };
+  }
+  // 2) repiquer un plant dans chaque pot rempli
+  for (const s of P) if (soilIn(s) > 50 && s.plant == null && s.Vin === 0 && !s.w.length) { const k = freeSeed(); if (k != null) return { on: "seed" + k, k: "Plant " + LET[s.i], t: "Repique un plant de haricot dans le pot " + LET[s.i] + " (clique sur un plant du plateau).", why: "plant", cam: "tray" }; }
+  // 3) m₀ : peser chaque pot entier, balance tarée à vide
+  for (const s of P) if (soilIn(s) > 50 && !lastW(s, "m0") && s.Vin === 0) {
+    if (bi != null && bi !== s.i) return { on: "pot" + bi, k: "Pot " + LET[bi], t: "Remets le pot " + LET[bi] + " sur son support.", why: "pot", cam: "bal" };
+    if (Math.abs(ST.tare) > 0.05 && bi == null) return { on: "tare", k: "Balance", t: "Balance vide : appuie sur TARE pour revenir à 0,0 g avant de peser le pot entier.", why: "tare", cam: "bal", ...balV };
+    return { on: "pot" + s.i, k: "m₀ " + LET[s.i], t: "Pèse le pot " + LET[s.i] + " entier : pot + plant + sol sec (menu du pot → Peser). La masse m₀ s'inscrit dans le tableau.", why: "m0", cam: "st" + s.i };
+  }
+  // 4) arroser : 200 mL sur chaque pot (le minuteur démarre au contact de l'eau)
+  for (const s of P) if (s.Vin === 0 && soilIn(s) > 50) {
+    if (bi != null) return { on: "pot" + bi, k: "Pot " + LET[bi], t: "Remets le pot " + LET[bi] + " sur son support avant d'arroser.", why: "pot", cam: "bal" };
+    if (ST.e0 < V_EAU - 1 || ST.e0 > V_EAU + 1) return { on: ST.e0 > V_EAU + 1 ? "e0" : "wash", k: "Eau", t: ST.e0 > V_EAU + 1 ? "Trop d'eau dans l'éprouvette de mesure : vide-la et recommence." : "Remplis l'éprouvette de mesure jusqu'à 200 mL à la pissette (maintenir, puis +10 et +1 mL).", why: "water", cam: "e0", v: Math.round(ST.e0) + " mL" };
+    return { on: "e0", k: "Arrosage " + LET[s.i], t: "Verse les 200 mL sur le pot " + LET[s.i] + " : le minuteur " + LET[s.i] + " démarre au contact de l'eau. Regarde le zoom : l'eau chasse l'air des pores.", why: "timer", cam: "st" + s.i, v: Math.round(ST.e0) + " mL" };
+  }
+  // 5) égouttage : première goutte (t₁), dernière goutte (t₂), lecture de V_g
+  for (const s of P) {
+    const L_ = LET[s.i], V = { v: L_ + " : " + Math.round(s.D) + " mL · " + clk(s.tm.t) };
+    if (s.t1 == null) return { on: "cyl" + s.i, k: "Première goutte " + L_, t: "Observe le dessous du pot " + L_ + " : où va la première goutte ? t₁ s'inscrit seul dans le tableau.", why: s.mc > s.ms ? "t1" : "gravity", cam: "cyl" + s.i, ...V };
+    if (s.t2 == null) return { on: "tim" + s.i, k: "Dernière goutte " + L_, t: "L'eau de gravité s'écoule. Quand les gouttes du pot " + L_ + " cessent, arrête le minuteur " + L_ + " (t₂).", why: "gravity", cam: "cyl" + s.i, ...V };
+    if (!lastRead(s)) return { on: "cyl" + s.i, k: "Éprouvette " + L_, t: "Lis le volume d'eau de gravité V_g dans l'éprouvette " + L_ + " (clique dessus).", why: "read", cam: "cyl" + s.i, ...V };
+  }
+  // 6) m₁ : peser chaque pot égoutté (capacité au champ)
+  for (const s of P) if (!lastW(s, "m1") && ST.simT - s.tPour < 720) {
+    if (bi != null && bi !== s.i) return { on: "pot" + bi, k: "Pot " + LET[bi], t: "Remets le pot " + LET[bi] + " sur son support.", why: "pot", cam: "bal" };
+    if (Math.abs(ST.tare) > 0.05 && bi == null) return { on: "tare", k: "Balance", t: "Balance vide : TARE (0,0 g) avant de peser le pot entier.", why: "tare", cam: "bal", ...balV };
+    return { on: "pot" + s.i, k: "m₁ " + LET[s.i], t: "Égouttage fini : pèse le pot " + LET[s.i] + " (m₁). Le sol est à sa capacité au champ.", why: "capacity", cam: "st" + s.i };
+  }
+  for (const s of P) if (lastW(s, "m1") && lastW(s, "m0") && s.ans.ret == null) return { on: "pot" + s.i, k: "Calcul " + LET[s.i], t: "Dans le tableau Mesures, calcule l'eau retenue par le pot " + LET[s.i] + " : m₁ − m₀ (1 chiffre après la virgule, puis Entrée).", why: "m1", cam: "stations" };
+  // 7) les jours passent : peser chaque jour, observer les feuilles, peser m₂ quand la plante est fanée
+  const open = P.filter((s) => s.plant != null && !lastW(s, "m2"));
+  if (open.length) {
+    if (bi != null) return { on: "pot" + bi, k: "Pot " + LET[bi], t: "Remets le pot " + LET[bi] + " sur son support.", why: "pot", cam: "bal" };
+    const today = dayNo(), s = open.find((q) => dayNo() > 0 && !q.w.some((w) => w.day === today && w.phase !== "m0"));
+    if (s && Math.abs(ST.tare) > 0.05) return { on: "tare", k: "Balance", t: "Balance vide : TARE (0,0 g) avant de peser.", why: "tare", cam: "bal", ...balV };
+    if (s) return { on: "pot" + s.i, k: "Jour " + today, t: "Pèse le pot " + LET[s.i] + " (suivi du jour " + today + ") et observe ses feuilles. Plante fanée ? Menu du pot : « Plante fanée : peser m₂ ».", why: "capillary", cam: "plants" };
+    return { on: "cal", k: "Jour suivant", t: "Fais passer une journée (calendrier). Chaque jour : pèse les pots et observe les feuilles ; quand une plante est fanée, pèse son pot avec « Plante fanée : peser m₂ ».", why: "day", cam: "plants" };
+  }
+  for (const s of P) if (lastW(s, "m2") && (s.ans.hyg == null || s.ans.cap == null)) return { on: "pot" + s.i, k: "Calculs " + LET[s.i], t: "Dans le tableau, calcule pour le pot " + LET[s.i] + " l'eau hygroscopique m₂ − m₀ et l'eau capillaire m₁ − m₂.", why: "m2", cam: "stations" };
+  return { on: "pot0", k: "Comparer", t: "Clique sur Évaluer : compare les trois formes d'eau dans le sable et dans l'argile.", why: "compare", cam: "stations" };
+}
+let lastKey = "";
+function updGuide() {
+  const g = suggest(), el = $("#instr"); ST.cur = g;
+  $("#instr .v").textContent = g.v || ""; $("#stepno").textContent = g.k; $("#steptxt").textContent = g.t;
+  $("#btnEval").hidden = !ST.st.some((s) => s.w.length);
+  const key = g.on + g.t; if (key === lastKey) return; lastKey = key;
+  el.querySelector(".n").textContent = "Guide"; el.querySelector(".k").textContent = g.k; el.querySelector(".t").textContent = g.t; el.querySelector(".h").textContent = g.h || "";
+  if (g.cam && ST.guide && !ST.demo) look(g.cam);
+}
+
+/* ------------------------------------------------------------ file de gestes et briques de versement */
+function go(obj, steps) { for (const s of steps) ST.q.push(Object.assign({ obj, dur: 0.5, up: 0.05 }, s)); }
+function runQueue(dt) {
+  const a = ST.q[0]; if (!a) { ST.busy = false; return; } ST.busy = true;
+  if (a.t === undefined) { if (a.pre) a.pre(); a.t = 0; a.p0 = a.obj.position.clone(); a.r0 = a.obj.rotation.clone(); const to = typeof a.to === "function" ? a.to() : a.to, rot = typeof a.rot === "function" ? a.rot() : a.rot; a.p1 = to ? V3(to) : a.p0.clone(); a.r1 = rot ? new THREE.Euler(rot[0], rot[1], rot[2]) : a.r0.clone(); }
+  a.t += window.__fast ? 9 : dt; const k = Math.min(1, a.t / a.dur), e = k * k * (3 - 2 * k);
+  a.obj.position.lerpVectors(a.p0, a.p1, e); a.obj.position.y += a.up * Math.sin(Math.PI * e); a.obj.rotation.set(lerp(a.r0.x, a.r1.x, e), lerp(a.r0.y, a.r1.y, e), lerp(a.r0.z, a.r1.z, e));
+  if (k >= 1) { ST.q.shift(); if (a.at) a.at(); }
+}
+const homeOf = (n) => { const t = TOOLS[n]; return { to: [t.home.x, t.home.y, t.home.z], rot: [t.homeRot.x, t.homeRot.y, t.homeRot.z] }; };
+const busyToast = () => { toast(ST.dayRun ? "Attends la fin de la journée." : "Attends la fin du geste."); return true; };
+const isBusy = () => ST.busy || ST.q.length > 0 || !!ST.dayRun || !!ST.wPour;
+function gpos(obj, local = [0, 0, 0]) { const v = obj.localToWorld(V3(local)); return L.g.worldToLocal(v); }
+function capOff(cap, spot) {
+  const u = cap.userData; if (u.off) return; u.off = true;
+  go(cap, [
+    { pre: () => { u.par = cap.parent; u.p = cap.position.clone(); u.r = cap.rotation.clone(); L.g.attach(cap); }, to: () => cap.position.clone().add(new THREE.Vector3(0, 0.026, 0)).toArray(), rot: () => [cap.rotation.x, cap.rotation.y - 4 * Math.PI, cap.rotation.z], dur: 0.7, up: 0 },
+    { to: spot, rot: () => [Math.PI, cap.rotation.y, 0], dur: 0.55, up: 0.05 },
+  ]);
+}
+function capOn(cap) {
+  const u = cap.userData; if (!u.off) return;
+  const target = (dy) => () => { const v = u.par.localToWorld(u.p.clone()); L.g.worldToLocal(v); v.y += dy; return v.toArray(); };
+  go(cap, [
+    { to: target(0.026), rot: () => [0, cap.rotation.y, 0], dur: 0.55, up: 0.05 },
+    { to: target(0), rot: () => [0, cap.rotation.y + 4 * Math.PI, 0], dur: 0.7, up: 0, at: () => { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } },
+  ]);
+}
+function arcPour(m, a, b, r = 0.0016, k = 0.3, dir = null) {
+  const c = dir ? a.clone().add(dir.clone().multiplyScalar(a.distanceTo(b) * k)) : new THREE.Vector3(a.x + (b.x - a.x) * k, a.y, a.z + (b.z - a.z) * k);
+  if (m.geometry) m.geometry.dispose(); m.geometry = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, c, b), 20, r, 8, false); m.visible = true;
+}
+function fall(a, b, col, n = 10, dur = 0.55) { ST.fall = { t: 0, a, b, n, dur }; setCol(X.fallM, col); }
+// surface du sol dans le pot (repère de la paillasse) et tronc de cône du sol ou de l'eau dans le pot
+const soilTop = (i) => gpos(X.pot[i], [0, POT_IN + potH(soilVol(ST.st[i])), 0]);
+function setFrustum(m, h0, h1) { const k = Math.round(h0 * 5000) + "|" + Math.round(h1 * 5000); if (m.userData.k === k) return; m.userData.k = k; if (m.geometry) m.geometry.dispose(); const a = Math.max(0.0004, h1 - h0); m.geometry = new THREE.CylinderGeometry(rAt(h1), rAt(h0), a, 40); m.position.set(0, POT_IN + h0 + a / 2, 0); }
+
+/* ------------------------------------------------------------ déplacements des pots */
+const toBalSteps = (i) => { const s = ST.st[i], x = STX[i]; return [{ pre: () => { s.lift = true; }, to: [x, 0.52, STZ], dur: 0.6, up: 0 }, { to: [BAL_P[0], 0.32, BAL_P[2]], dur: 1.1, up: 0.05 }, { to: BAL_P, dur: 0.5, up: 0, at: () => { s.onBal = true; s.lift = false; ST.onBal = i; } }]; };
+const toSupSteps = (i, then) => { const s = ST.st[i], x = STX[i]; return [{ pre: () => { s.onBal = false; ST.onBal = null; s.lift = true; }, to: [BAL_P[0], 0.32, BAL_P[2]], dur: 0.5, up: 0 }, { to: [x, 0.52, STZ], dur: 1.1, up: 0.05 }, Object.assign(homeOf("pot" + i), { dur: 0.6, up: 0, at: () => { s.lift = false; if (then) then(); } })]; };
+function potToBal(i) {
+  if (isBusy()) return busyToast(); const s = ST.st[i]; if (s.onBal) return;
+  if (ST.onBal != null) return toast("Le pot " + LET[ST.onBal] + " est déjà sur la balance : remets-le d'abord sur son support.");
+  look("bal"); if (s.qd > 0.02) once("lift" + i, "warn", "Pot " + LET[i] + " retiré de son entonnoir pendant l'égouttage : les gouttes tombent à côté.", "lost");
+  go(X.pot[i], toBalSteps(i));
+}
+function potToSup(i) { if (isBusy()) return busyToast(); const s = ST.st[i]; if (!s.onBal) return; look("st" + i); go(X.pot[i], toSupSteps(i, () => log("info", "Pot " + LET[i] + " remis sur son support (entonnoir " + LET[i] + ").", "pot"))); }
+// pesée du pot entier : il va sur la balance, on lit l'afficheur, il revient sur son support
+function doWeigh(i, phase) {
+  if (isBusy()) return busyToast(); const s = ST.st[i];
+  if (!s.onBal && ST.onBal != null) return toast("Le pot " + LET[ST.onBal] + " est sur la balance : remets-le d'abord sur son support.");
+  look("bal"); const wasOn = s.onBal, P = X.pot[i];
+  if (!wasOn) { if (s.qd > 0.02) once("lift" + i, "warn", "Pot " + LET[i] + " retiré de son entonnoir pendant l'égouttage : les gouttes tombent à côté.", "lost"); go(P, toBalSteps(i)); }
+  go(P, [{ to: BAL_P, dur: 1.0, up: 0, at: () => record(i, phase) }]);
+  if (!wasOn) go(P, toSupSteps(i));
+}
+function record(i, forced) {
+  const s = ST.st[i], m = r1(shown()), phase = forced || (s.Vin === 0 ? "m0" : ST.simT - s.tPour < 720 ? "m1" : "suivi"), fc = fcOf(s);
+  s.w.push({ m, tare: r1(ST.tare), phase, day: dayNo(), plant: s.plant != null, S: s.S, W: s.W, drain: Math.max(0, s.S - fc) + s.W, turg: s.turg, t: ST.simT });
+  const nm = { m0: "m₀", m1: "m₁", m2: "m₂", suivi: "suivi jour " + dayNo() }[phase];
+  if (Math.abs(ST.tare) > 0.05) once("tareW" + i, "warn", "Pot " + LET[i] + " pesé sur une balance tarée (" + g1(ST.tare) + " g déduits) : la masse lue n'est pas la masse du pot entier.", "tareW");
+  if (phase === "m0" && s.plant == null) once("m0plant" + i, "warn", "m₀ (" + LET[i] + ") pesé sans plant.", "m0plant");
+  const early = phase === "m1" && Math.max(0, s.S - fc) + s.W > 1;
+  log(early ? "warn" : "good", "Pot " + LET[i] + " pesé : " + nm + " = " + g1(m) + " g, noté dans le tableau." + (early ? " L'eau s'écoule encore." : ""), early ? "early" : phase === "m2" ? "m2" : phase === "m1" ? "m1" : phase === "m0" ? "m0" : "capillary");
+  toast(LET[i] + " : " + nm + " = " + g1(m) + " g", early ? "bad" : "good"); showTable(); renderTable();
+}
+
+/* ------------------------------------------------------------ actions */
+function doTare() { look("bal"); ST.tare = ST.onBal != null ? potMass(ST.onBal) : 0; ST.tared = true; ST.tarePot = ST.onBal != null && soilIn(ST.st[ST.onBal]) < 0.05 && ST.st[ST.onBal].plant == null ? ST.onBal : null; if (ST.onBal != null && soilIn(ST.st[ST.onBal]) > 0.05) log("warn", "TARE appuyée avec du sol dans le pot " + LET[ST.onBal] + " : cette masse ne sera plus affichée.", "tare"); else log("good", ST.onBal != null ? "Balance tarée avec le pot " + LET[ST.onBal] + " vide : 0,0 g." : "Balance tarée à vide : 0,0 g.", "tare"); toast("Balance tarée.", "good"); }
+function addSoil(i, type, m) { const s = ST.st[i]; if (soilIn(s) < 0.005) s.tareOk = ST.tarePot === i; if (type === "sable") s.ms += m; else if (type === "argile") s.mc += m; else { const d = m / (1 + AIRDRY_W); s.mc += d; s.S += m - d; s.airW += m - d; } if (type === "argair") once("air" + i, "warn", "Argile séchée à l'air versée dans le pot " + LET[i] + " : elle contient déjà de l'eau.", "airdry"); if (!s.tareOk) once("noTare" + i, "warn", "Sol versé dans le pot " + LET[i] + " sans avoir taré la balance avec le pot vide : l'afficheur compte aussi le pot.", "noTare"); }
+function scoop(type, amt, label) {
+  if (isBusy()) return busyToast(); const i = ST.onBal; if (i == null) return toast("Pose d'abord un pot vide sur la balance.");
+  look("bal"); const j = TOOLS[type].obj, sp = TOOLS.spoon.obj, jx = j.position.x, jz = j.position.z, b = BAL_P, dm = +(amt * (1 + (Math.random() - 0.5) * (amt > 2 ? 0.14 : 0.3))).toFixed(1);
+  capOff(j.userData.cap, [jx + 0.085, 0.011, jz + 0.03]);
+  go(sp, [
+    { to: [jx, 0.2, jz], rot: [0, 0, 1.1], dur: 0.6, up: 0.06 },
+    { to: [jx, 0.09, jz], dur: 0.35, up: 0, at: () => { X.spLoad.visible = true; setCol(X.spLoad.material, new THREE.Color(type === "sable" ? SOIL.sable.dry : SOIL.argile.dry)); const k = Math.min(1.2, 0.5 + amt / 25); X.spLoad.scale.set(1.2 * k, 0.45 * k, 0.9 * k); } },
+    { to: [jx, 0.2, jz], dur: 0.35, up: 0 },
+    { to: [b[0], 0.23, b[2]], dur: 0.6, up: 0.03 },
+    { to: [b[0], 0.23, b[2]], rot: [0, 0, 2.5], dur: 0.35, up: 0, at: () => { X.spLoad.visible = false; fall(gpos(sp), soilTop(i), new THREE.Color(type === "sable" ? SOIL.sable.dry : SOIL.argile.dry), amt > 2 ? 10 : 4, 0.4); addSoil(i, type, dm); } },
+    { to: [b[0], 0.23, b[2]], rot: [0, 0, 1.1], dur: 0.3, up: 0 },
+    Object.assign(homeOf("spoon"), { dur: 0.6, up: 0.05, at: () => log("info", label + " (" + JAR[type].n + ") : +" + g1(dm) + " g dans le pot " + LET[i] + ". Balance : " + g1(shown()) + " g.", "weigh") }),
+  ]);
+}
+// grande quantité : le bocal se dévisse, s'incline au-dessus du pot posé sur la balance et verse tant qu'on maintient le bouton
+function startSoilPour(type) {
+  const F0 = ST.sFlow; if (F0) { if (F0.type === type && !F0.back) { F0.on = true; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
+  if (isBusy()) return busyToast(); const i = ST.onBal; if (i == null) return toast("Pose d'abord un pot vide sur la balance.");
+  if (ST.st[i].Vin > 0) return toast("Ce pot a déjà été arrosé : vide-le avant d'y remettre du sol.");
+  look("bal"); const j = TOOLS[type].obj, b = BAL_P; L.ctl.enabled = false;
+  ST.sFlow = { type, i, on: true, ready: false, back: false, idle: 0, k: 0, gT: 0, m0: soilIn(ST.st[i]) };
+  capOff(j.userData.cap, [j.position.x + 0.085, 0.011, j.position.z + 0.03]);
+  go(j, [{ to: [b[0] - 0.125, 0.33, b[2]], dur: 0.7, up: 0.05 }, { to: [b[0] - 0.125, 0.31, b[2]], rot: [0, 0, -1.9], dur: 0.6, up: 0, at: () => { if (ST.sFlow) ST.sFlow.ready = true; look("balP"); } }]);
+}
+function stopSoilPour() { const F = ST.sFlow; if (!F || !F.on) return; F.on = false; F.idle = 1.4; L.ctl.enabled = true; const m = soilIn(ST.st[F.i]); if (m - F.m0 > 0.05) { log("info", "Versé au bocal (" + JAR[F.type].n + ") : +" + g1(m - F.m0) + " g dans le pot " + LET[F.i] + ". Balance : " + g1(shown()) + " g.", "weigh"); F.m0 = m; } }
+function doPinchOut() {
+  if (isBusy()) return busyToast(); const i = ST.onBal; if (i == null) return toast("Le pot doit être sur la balance."); const s = ST.st[i], m = s.ms + s.mc + s.S; if (m <= 0.05) return toast("Le pot est vide.");
+  look("bal"); const sp = TOOLS.spoon.obj, b = BAL_P, dm = Math.min(m, +(0.6 + Math.random() * 0.8).toFixed(1)), bin = TOOLS.bin.obj.position;
+  go(sp, [
+    { to: [b[0], 0.2, b[2]], rot: [0, 0, 1.1], dur: 0.6, up: 0.06, at: () => { const f = dm / m; s.ms -= s.ms * f; s.mc -= s.mc * f; s.S -= s.S * f; s.airW -= s.airW * f; X.spLoad.visible = true; X.spLoad.scale.set(0.6, 0.22, 0.45); setCol(X.spLoad.material, soilCol(s.mc / Math.max(0.01, s.ms + s.mc), 0)); } },
+    { to: [bin.x, 0.24, bin.z], dur: 0.8, up: 0.05 },
+    { to: [bin.x, 0.24, bin.z], rot: [0, 0, 2.5], dur: 0.3, up: 0, at: () => { X.spLoad.visible = false; fall(gpos(sp), new THREE.Vector3(bin.x, 0.02, bin.z), soilCol(s.mc / Math.max(0.01, s.ms + s.mc), 0), 4, 0.4); } },
+    Object.assign(homeOf("spoon"), { dur: 0.7, up: 0.05, at: () => log("info", "Pincée retirée du pot " + LET[i] + " : −" + g1(dm) + " g. Balance : " + g1(shown()) + " g.", "weigh") }),
+  ]);
+}
+function doPlant(k, i) {
+  if (isBusy()) return busyToast(); const s = ST.st[i]; if (s.plant != null) return toast("Le pot " + LET[i] + " a déjà son plant."); if (soilIn(s) < 50) return toast("Mets d'abord le sol dans le pot " + LET[i] + ".");
+  const p = X.plant[k], P = X.pot[i]; look(s.onBal ? "bal" : "st" + i); ST.plantIn[k] = i;
+  go(p.grp, [
+    { to: [p.grp.position.x, 0.25, p.grp.position.z], dur: 0.5, up: 0 },
+    { to: () => { const t = soilTop(i); return [t.x, t.y + 0.22, t.z]; }, dur: 1.1, up: 0.05 },
+    { to: () => { const t = soilTop(i); return [t.x, t.y - 0.014, t.z]; }, dur: 0.6, up: 0, at: () => { P.attach(p.grp); s.plant = k; s.turg = 1; if (s.w.some((w) => w.phase === "m0")) once("m0plant" + i, "warn", "Plant repiqué après la pesée m₀ du pot " + LET[i] + ".", "m0plant"); log("good", "Plant de haricot repiqué dans le pot " + LET[i] + " (≈ " + g1(PLANT_M[k]) + " g avec sa motte).", "plant"); } },
+  ]);
+}
+function startPour() {
+  if (isBusy() && !ST.pouring) return; if (ST.e0 >= CYL_CAP) return toast("L'éprouvette de mesure est pleine.");
+  look("e0"); ST.pouring = true; ST.washT = 2; L.ctl.enabled = false;
+  const w = TOOLS.wash.obj; if (w.position.distanceTo(TOOLS.wash.home) < 0.01) go(w, [{ to: [0.77, 0.17, -0.02], rot: [0, 0, 0.45], dur: 0.6, up: 0.06 }]);
+}
+function stopPour() { if (!ST.pouring) return; ST.pouring = false; ST.addTo = null; ST.sqT = 0; X.arcW.visible = false; TOOLS.wash.obj.scale.set(1, 1, 1); L.ctl.enabled = true; log("info", "Éprouvette de mesure : " + Math.round(ST.e0) + " mL d'eau.", "water"); }
+function addWater(v) { startPour(); if (ST.pouring) ST.addTo = Math.min(CYL_CAP, ST.e0 + v); }
+function doPourWater(i) {
+  if (isBusy()) return busyToast(); if (ST.e0 < 0.5) return toast("L'éprouvette de mesure est vide."); const s = ST.st[i];
+  if (soilIn(s) < 1) return toast("Le pot " + LET[i] + " est vide : mets d'abord le sol.");
+  look(s.onBal ? "bal" : "st" + i); const E = X.E0, V = ST.e0, p = X.pot[i].position, at = [p.x + 0.262, p.y + 0.31, p.z + 0.02];
+  if (!s.tm.run && s.tm.t > 0) once("noTimer" + i, "warn", "Minuteur " + LET[i] + " arrêté mais pas remis à zéro : il ne sera pas relancé.", "timer");
+  go(E, [
+    { to: at, dur: 1.1, up: 0.06 },
+    { to: at, rot: [0, 0, 1.9], dur: 0.6, up: 0, at: () => { ST.wPour = { i, left: V, rate: V / 2.4 }; if (s.tPour == null) { s.tPour = ST.simT; s.Spour = s.S; } if (!s.tm.run && s.tm.t === 0) { s.tm.run = true; log("info", "Minuteur " + LET[i] + " démarré au contact de l'eau.", "timer"); } } },
+    { to: at, dur: 2.5, up: 0 },
+    { to: at, rot: [0, 0, 0], dur: 0.5, up: 0 },
+    Object.assign(homeOf("e0"), { dur: 1.0, up: 0.06, at: () => log(Math.abs(V - V_EAU) <= 1 ? "good" : "warn", Math.round(V) + " mL d'eau versés sur le pot " + LET[i] + ".", Math.abs(V - V_EAU) <= 1 ? "gravity" : "water") }),
+  ]);
+}
+function doTimer(i, act) {
+  const s = ST.st[i], t = s.tm; look("tim" + i);
+  if (act === "start") { t.run = true; log("info", "Minuteur " + LET[i] + " démarré.", "timer"); }
+  else if (act === "stop") { t.run = false; if (s.Vin > 0) { s.t2 = t.t; log("info", "Minuteur " + LET[i] + " arrêté : t₂ (dernière goutte) = " + fmt(t.t, 2) + " min, noté dans le tableau.", "t2"); toast("t₂ (" + LET[i] + ") = " + fmt(t.t, 2) + " min", "good"); showTable(); } else log("info", "Minuteur " + LET[i] + " arrêté à " + clk(t.t) + ".", "timer"); }
+  else { t.t = 0; s.t2 = null; log("info", "Minuteur " + LET[i] + " remis à zéro.", "timer"); }
+  renderTable();
+}
+function doRead(i) {
+  const s = ST.st[i]; look("cyl" + i); const V = Math.round(s.D), f = simulate(s.ms, s.mc, s.Spour, s.Vin), early = s.D < 0.95 * f.Df - 0.5;
+  s.reads.push({ V, D: s.D });
+  log(early ? "warn" : "good", "Éprouvette " + LET[i] + " : V_g = " + V + " mL d'eau de gravité, noté dans le tableau." + (early ? " L'eau coule encore." : ""), early ? "early" : "read");
+  toast(LET[i] + " : V_g = " + V + " mL (eau de gravité)", early ? "bad" : "good"); showTable(); renderTable();
+}
+function doDay(min) {
+  if (isBusy()) return busyToast(); if (ST.onBal != null) return toast("Remets d'abord le pot " + LET[ST.onBal] + " sur son support.");
+  if (!ST.st.some((s) => s.plant != null)) toast("Aucun plant repiqué : seule la surface du sol évapore de l'eau.");
+  look(ST.st.some((s) => s.plant != null) ? "plants" : "cal"); ST.dayRun = { left: min };
+  log("info", "Le temps passe : +" + (min >= 1440 ? "1 jour" : Math.round(min / 60) + " h") + " (accéléré).", "day");
+}
+function emptyPot(i) {
+  if (isBusy()) return busyToast(); const s = ST.st[i]; if (soilIn(s) + s.Vin < 0.05 && s.plant == null) return toast("Le pot " + LET[i] + " est déjà vide.");
+  look("bin"); const P = X.pot[i], bin = TOOLS.bin.obj.position, wasOn = s.onBal, k = s.plant;
+  if (wasOn) { s.onBal = false; ST.onBal = null; }
+  go(P, [
+    { pre: () => { s.lift = true; }, to: [P.position.x, 0.52, P.position.z], dur: 0.5, up: 0 },
+    { to: [bin.x + 0.07, 0.3, bin.z], dur: 1.1, up: 0.05 },
+    { to: [bin.x + 0.07, 0.3, bin.z], rot: [0, 0, 2.5], dur: 0.6, up: 0, at: () => { const m = s.ms + s.mc; if (m > 0) fall(gpos(P, [0, 0.08, 0]), new THREE.Vector3(bin.x, 0.02, bin.z), soilCol(m ? s.mc / m : 0, s.S / Math.max(1, satOf(s))), 12, 0.6); if (s.W > 1) ST.binPour = { t: 0.9, from: () => gpos(P, [0, 0.09, 0]) }; if (k != null) { const p = X.plant[k]; L.g.attach(p.grp); p.grp.visible = false; } } },
+    { to: [bin.x + 0.07, 0.3, bin.z], dur: 0.9, up: 0, at: () => { Object.assign(s, newSt(i), { tm: s.tm, onBal: false, lift: true }); s.tm.run = false; s.tm.t = 0; if (k != null) { const p = X.plant[k], t = TOOLS["seed" + k]; p.grp.position.copy(t.home); p.grp.rotation.copy(t.homeRot); p.grp.visible = true; setTurgor(p, 1); ST.plantIn[k] = null; } ST.attempts++; renderTable(); } },
+    { to: [bin.x + 0.07, 0.3, bin.z], rot: [0, 0, 0], dur: 0.4, up: 0 },
+    { to: [STX[i], 0.52, STZ], dur: 1.2, up: 0.05 },
+    Object.assign(homeOf("pot" + i), { dur: 0.6, up: 0, at: () => { s.lift = false; log("info", "Pot " + LET[i] + " vidé aux déchets (sol, eau" + (k != null ? ", plant" : "") + "), minuteur remis à zéro. Un nouveau plant attend sur le plateau. Essai nº " + ST.attempts + ".", "bin"); } }),
+  ]);
+}
+function emptyCyl(i) {
+  if (isBusy()) return busyToast(); const s = ST.st[i]; if (s.D < 0.5) return toast("L'éprouvette " + LET[i] + " est vide.");
+  look("bin"); const C = X.C[i], x = STX[i];
+  go(C, [
+    { pre: () => { s.cylAway = true; }, to: [x, 0, STZ + 0.13], dur: 0.6, up: 0 },
+    { to: [-0.56, 0.32, 0.16], dur: 1.2, up: 0.06 },
+    { to: [-0.56, 0.32, 0.16], rot: [0, 0, 2.0], dur: 0.6, up: 0, at: () => { ST.binPour = { t: 1.0, from: () => gpos(C, [-(CYL_R + 0.003), 0.257, 0]), cyl: i }; } },
+    { to: [-0.56, 0.32, 0.16], dur: 1.2, up: 0, at: () => { s.D = 0; } },
+    { to: [-0.56, 0.32, 0.16], rot: [0, 0, 0], dur: 0.5, up: 0 },
+    { to: [x, 0, STZ + 0.13], dur: 1.2, up: 0.06 },
+    Object.assign(homeOf("cyl" + i), { dur: 0.6, up: 0, at: () => { s.cylAway = false; log("info", "Éprouvette " + LET[i] + " vidée.", "bin"); } }),
+  ]);
+}
+function emptyE0() {
+  if (isBusy()) return busyToast(); if (ST.e0 < 0.5) return toast("L'éprouvette de mesure est vide."); look("bin"); const E = X.E0;
+  go(E, [{ to: [-0.56, 0.32, 0.16], dur: 1.4, up: 0.08 }, { to: [-0.56, 0.32, 0.16], rot: [0, 0, 2.0], dur: 0.6, up: 0, at: () => { ST.binPour = { t: 1.0, from: () => gpos(E, [-(CYL_R + 0.003), 0.257, 0]), e0: true }; } }, { to: [-0.56, 0.32, 0.16], dur: 1.1, up: 0, at: () => { ST.e0 = 0; } }, { to: [-0.56, 0.32, 0.16], rot: [0, 0, 0], dur: 0.5, up: 0 }, Object.assign(homeOf("e0"), { dur: 1.3, up: 0.08, at: () => log("info", "Éprouvette de mesure vidée.", "water") })]);
+}
+function doLid(type) { if (isBusy()) return busyToast(); capOn(TOOLS[type].obj.userData.cap); log("good", "Bocal refermé (" + JAR[type].n + ").", "bin"); }
+
+/* ------------------------------------------------------------ menus */
+function menuFor(name) {
+  const items = [], I = (ic, t, run, o = {}) => items.push(Object.assign({ ic, t, run }, o)), bi = ST.onBal;
+  const holdSoil = (type) => I("⏬", "Verser (" + JAR[type].n + ") dans le pot sur la balance", null, { hold: true, start: () => startSoilPour(type), stop: stopSoilPour, on: () => !!(ST.sFlow && ST.sFlow.on), s: "maintenir · ≈ 25 g/s" });
+  const soilMenu = (type) => { holdSoil(type); I("🥄", "Grande cuillère ≈ 20 g", () => scoop(type, 20, "Grande cuillère")); I("🥄", "Petite cuillère ≈ 5 g", () => scoop(type, 5, "Petite cuillère")); I("🤏", "Pincée ≈ 1 g", () => scoop(type, 1, "Pincée")); };
+  if (JAR[name]) { if (bi == null) { I("⚖", "Pose d'abord un pot vide sur la balance", () => toast("Clique sur un pot : « Poser sur la balance ».")); } else soilMenu(name); if (TOOLS[name].obj.userData.cap.userData.off) I("🔒", "Revisser le bouchon", () => doLid(name)); }
+  if (name === "spoon") { if (bi == null) I("⚖", "Pose d'abord un pot sur la balance", () => toast("Clique sur un pot : « Poser sur la balance »."));
+    else { for (const t of ["sable", "argile"]) { I("🥄", "Grande cuillère (" + JAR[t].n + ")", () => scoop(t, 20, "Grande cuillère")); I("🥄", "Petite cuillère (" + JAR[t].t + ")", () => scoop(t, 5, "Petite cuillère")); I("🤏", "Pincée (" + JAR[t].t + ")", () => scoop(t, 1, "Pincée")); } I("🤏", "Retirer une pincée → déchets", doPinchOut); } }
+  if (name === "tare") I("⏺", "Tarer la balance", doTare, { s: "met l'afficheur à zéro" });
+  if (/^pot\d$/.test(name)) { const i = +name[3], s = ST.st[i], has = soilIn(s) > 0.05;
+    if (s.onBal) { I("↩", "Remettre sur son support (entonnoir " + LET[i] + ")", () => potToSup(i)); if (has) { I("📝", "Noter la masse affichée", () => record(i), { s: g1(shown()) + " g" }); if (s.plant != null && s.Vin > 0) I("🥀", "Plante fanée : noter m₂", () => record(i, "m2")); I("🤏", "Retirer une pincée → déchets", doPinchOut); } }
+    else {
+      if (has) I("⚖", s.Vin === 0 ? "Peser le pot entier (m₀)" : ST.simT - s.tPour < 720 ? "Peser le pot égoutté (m₁)" : "Peser le pot (suivi du jour " + dayNo() + ")", () => doWeigh(i));
+      if (s.plant != null && s.Vin > 0) I("🥀", "Plante fanée : peser m₂", () => doWeigh(i, "m2"), { s: "à toi d'en juger" });
+      if (!has || s.Vin === 0) I("⚖", has ? "Poser sur la balance (ajuster le sol)" : "Poser le pot vide sur la balance", () => potToBal(i));
+      if (has && s.plant == null && freeSeed() != null) I("🌱", "Repiquer un plant de haricot", () => doPlant(freeSeed(), i));
+      if (ST.e0 > 0.5 && has) I("💧", "Arroser avec l'éprouvette (" + Math.round(ST.e0) + " mL)", () => doPourWater(i));
+    }
+    I("🔍", ST.mol[i] ? "Zoom : revenir aux grains" : "Zoom : niveau moléculaire", () => { ST.mol[i] = !ST.mol[i]; ST.zoomOn = true; });
+    if (has || s.plant != null) I("🗑", "Vider le pot aux déchets", () => emptyPot(i), { d: true }); }
+  if (/^seed\d$/.test(name)) { const k = +name[4]; ST.st.forEach((s, i) => { if (s.plant == null && soilIn(s) > 50) I("🌱", "Repiquer dans le pot " + LET[i], () => doPlant(k, i)); }); if (!items.length) I("🌱", "Mets d'abord le sol dans un pot", () => toast("Un plant se repique dans un pot déjà rempli de sol.")); }
+  if (/^cyl\d$/.test(name)) { const i = +name[3], s = ST.st[i]; if (s.tm.run && s.Vin > 0) I("⏹", "Dernière goutte : arrêter le minuteur " + LET[i], () => doTimer(i, "stop"), { s: "note t₂" }); I("👁", "Lire le volume recueilli", () => doRead(i), { s: "V_g" }); if (s.D > 0.5) I("🗑", "Vider l'éprouvette", () => emptyCyl(i), { d: true }); }
+  if (/^tim\d$/.test(name)) { const i = +name[3], t = ST.st[i].tm; I(t.run ? "⏹" : "▶", t.run ? (ST.st[i].Vin > 0 ? "STOP : dernière goutte (t₂)" : "STOP (arrêter)") : "START (démarrer)", () => doTimer(i, t.run ? "stop" : "start")); if (t.t > 0 && !t.run) I("↺", "RAZ (remettre à zéro)", () => doTimer(i, "raz")); }
+  if (name === "wash" || name === "e0") { I("💧", "Remplir l'éprouvette de mesure", null, { hold: true, s: "maintenir" }); I("💧", "+10 mL", () => addWater(10)); I("💧", "+1 mL", () => addWater(1)); if (name === "e0" && ST.e0 > 0.5) { ST.st.forEach((s, i) => I("⬇", "Arroser le pot " + LET[i], () => doPourWater(i), { s: soilIn(s) > 1 ? g1(soilIn(s)) + " g de sol" : "pot vide" })); I("🗑", "Vider l'éprouvette", emptyE0, { d: true }); } }
+  if (name === "cal") { I("☀", "Laisser passer 1 jour", () => doDay(1440), { s: "accéléré" }); I("🕕", "Laisser passer 6 h", () => doDay(360)); }
+  if (name === "bin") I("🗑", "Les sols, plants et eau usés vont ici", () => toast("Clique sur un pot ou une éprouvette pour le vider."));
+  return items;
+}
+const NAMES = { sable: "Sable séché à l'étuve", argile: "Argile séchée à l'étuve", argair: "Argile séchée à l'air", spoon: "Cuillère-spatule", tare: "Balance", wash: "Pissette", e0: "Éprouvette de mesure", cal: "Calendrier", bin: "Déchets", seed0: "Plant de haricot", seed1: "Plant de haricot" };
+const INFO = {
+  sable: "<b>Sable séché à l'étuve (105 °C)</b> : gros grains (0,05 – 2 mm), gros pores ; plus aucune eau, même hygroscopique. Pot A.",
+  argile: "<b>Argile séchée à l'étuve (105 °C)</b> : particules très fines (< 2 µm), chargées négativement, pores minuscules ; plus aucune eau. Pot B.",
+  argair: "<b>Argile séchée à l'air</b> : paraît sèche mais garde ≈ 6 % d'eau collée aux particules (eau hygroscopique). Piège : m₀ ne serait pas la masse du sol sec.",
+  spoon: "<b>Cuillère-spatule</b> : ajuste la masse de sol après le versement (grande ≈ 20 g, petite ≈ 5 g, pincée ≈ 1 g).",
+  tare: "<b>Balance (0,1 g)</b> : TARE avec le pot vide pour peser 300 g de sol ; TARE à vide avant de peser le pot entier (m₀, m₁, m₂).",
+  wash: "<b>Pissette d'eau</b> : remplit l'éprouvette de mesure jusqu'à 200 mL.",
+  e0: "<b>Éprouvette de mesure 250 mL</b> : 200 mL d'eau pour chaque pot, lecture au bas du ménisque.",
+  cal: "<b>Calendrier</b> : fait passer le temps (+1 jour, +6 h, accéléré) pour que la plante consomme l'eau du sol.",
+  bin: "<b>Bac à déchets</b> : sols mouillés, plants, eau usée ; on ne remet jamais un sol dans son bocal.",
+  seed0: "<b>Plant de haricot</b> (≈ 6 g avec sa motte) : il puise l'eau capillaire par ses poils absorbants ; il fane quand il ne reste que l'eau hygroscopique.",
+};
+INFO.seed1 = INFO.seed0;
+["A", "B"].forEach((L3, i) => {
+  NAMES["pot" + i] = "Pot " + L3; NAMES["cyl" + i] = "Éprouvette " + L3; NAMES["tim" + i] = "Minuteur " + L3;
+  INFO["pot" + i] = "<b>Pot " + L3 + " (" + (i ? "argile" : "sable") + ")</b> : pot percé, toile au fond ; on le pèse sec (m₀), égoutté (m₁) puis quand la plante est fanée (m₂).";
+  INFO["cyl" + i] = "<b>Éprouvette " + L3 + "</b> : recueille l'<b>eau de gravité</b> qui traverse le sol : V_g (1 mL = 1 g).";
+  INFO["tim" + i] = "<b>Minuteur " + L3 + "</b> : démarre à l'arrosage ; t₁ (première goutte) est noté seul ; arrête-le à la dernière goutte (t₂).";
+});
+function showTip(name, x, y) {
+  let t = $("#tip"); if (!t) { t = document.createElement("div"); t.id = "tip"; t.className = "tip"; document.body.append(t); }
+  if (!name || !INFO[name] || !$("#menu").hidden || $("#overlay").hidden === false) { t.hidden = true; return; }
+  if (t.dataset.n !== name) { t.dataset.n = name; t.innerHTML = INFO[name]; }
+  t.hidden = false; const r = t.getBoundingClientRect(), lim = (v, a, b) => Math.max(a, Math.min(b, v));
+  t.style.left = lim(x + 16, 8, window.innerWidth - r.width - 8) + "px"; t.style.top = lim(y + 18, 8, window.innerHeight - r.height - 8) + "px";
+}
+const HELP_KEY = { tare: 0, sable: 1, argile: 1, argair: 1, spoon: 2, seed0: 3, seed1: 3, pot0: 4, pot1: 4, cyl0: 4, cyl1: 4, tim0: 5, tim1: 5, e0: 6, wash: 7, cal: 8, bin: 10 };
+// un plant repiqué fait partie de son pot : un clic dessus ouvre le menu du pot
+const resolveName = (n) => { if (n && /^seed\d$/.test(n) && ST.plantIn[+n[4]] != null) return "pot" + ST.plantIn[+n[4]]; return n; };
+function closeMenu() { $("#menu").hidden = true; }
+function openMenu(name, x, y) {
+  name = resolveName(name); const items = menuFor(name); if (!items.length) return;
+  if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
+  const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
+  m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
+  for (const it of items) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.hold ? " hold" : "") + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`;
+    if (it.hold) { const st = it.start || startPour, sp = it.stop || stopPour, on = it.on || (() => ST.pouring); b.addEventListener("pointerdown", (e) => { e.preventDefault(); st(); }); const stop = () => { if (on()) { sp(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
+    else b.onclick = () => { closeMenu(); it.run(); };
+    m.append(b);
+  }
+  m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
+}
+function onClick(name, x, y) { if (!name) return; openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
+
+/* ------------------------------------------------------------ zoom microscopique : une bulle par pot, d'après l'état réel
+   Grains tirés une fois (sable : une dizaine de gros grains ; argile : ~150 fines particules) ; pour chaque point, distances
+   au grain le plus proche (d1) et au deuxième (d2). Pellicule hygroscopique : d1 < épaisseur ; eau capillaire : d1 + d2 petit
+   (pores fins et contacts entre grains) ; eau de gravité : gros pores, remplis par le haut à l'arrosage, vidés par le haut
+   à l'égouttage. */
+const ZN = 128;
+function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+const ZP = {};
+function zPattern(clay) {
+  const k = clay ? "c" : "s"; if (ZP[k]) return ZP[k];
+  const r = rng(clay ? 7 : 3), G = [];
+  if (!clay) for (let n = 0; n < 2000 && G.length < 12; n++) { const g = { x: r() * 1.1 - 0.05, y: r() * 1.1 - 0.05, r: 0.13 + r() * 0.06 }; if (G.every((h) => Math.hypot(h.x - g.x, h.y - g.y) > (h.r + g.r) * 0.95)) G.push(g); }
+  else for (let n = 0; n < 9000 && G.length < 160; n++) { const g = { x: r() * 1.04 - 0.02, y: r() * 1.04 - 0.02, r: 0.026 + r() * 0.018 }; if (G.every((h) => Math.hypot(h.x - g.x, h.y - g.y) > (h.r + g.r) * 0.92)) G.push(g); }
+  const d1 = new Float32Array(ZN * ZN), d2 = new Float32Array(ZN * ZN), big = [];
+  for (let y = 0; y < ZN; y++) for (let x = 0; x < ZN; x++) { const px = (x + 0.5) / ZN, py = (y + 0.5) / ZN; let a = 9, b = 9; for (const g of G) { const d = Math.hypot(px - g.x, py - g.y) - g.r; if (d < a) { b = a; a = d; } else if (d < b) b = d; } d1[y * ZN + x] = a; d2[y * ZN + x] = b; if (a > (clay ? 0.03 : 0.06) && Math.hypot(px - 0.5, py - 0.5) < 0.42) big.push([px, py]); }
+  const rb = rng(11), pick = []; for (let n = 0; n < 9 && big.length; n++) pick.push(big[(rb() * big.length) | 0]);
+  return (ZP[k] = { G, d1, d2, big: pick, clay });
+}
+function zState(s) {
+  const wp = wpOf(s), fc = fcOf(s), sat = satOf(s), S = s.S;
+  return { film: wp > 0 ? clamp(S / wp, 0, 1) : 0, cap: fc > wp ? clamp((Math.min(S, fc) - wp) / (fc - wp), 0, 1) : 0, grav: sat > fc ? clamp((S - fc) / (sat - fc), 0, 1) : 0, front: s.W > 0.5 ? clamp(S / Math.max(1, sat), 0.04, 1) : -1 };
+}
+function zImage(Z, st, cv) {
+  const x = cv.getContext("2d"), im = x.createImageData(ZN, ZN), D = im.data, hf = 0.006 + 0.012 * st.film, hc = 2 * hf + (Z.clay ? 0.04 : 0.065) * st.cap;
+  for (let k = 0; k < ZN * ZN; k++) {
+    const a = Z.d1[k], b = Z.d2[k], yy = Math.floor(k / ZN) / ZN; let c;
+    if (a < 0) { const e = clamp(-a / 0.025, 0, 1); c = Z.clay ? [128 + 44 * e, 72 + 32 * e, 50 + 24 * e] : [186 + 38 * e, 148 + 44 * e, 90 + 40 * e]; }
+    else if (st.film > 0.02 && a < hf) c = [28, 84, 196];
+    else if (st.cap > 0.01 && a + b < hc) c = [72, 142, 232];
+    else if (st.front >= 0 ? yy < st.front : st.grav > 0.01 && yy > 1 - st.grav) c = [156, 206, 250];
+    else c = [247, 244, 236];
+    D[k * 4] = c[0]; D[k * 4 + 1] = c[1]; D[k * 4 + 2] = c[2]; D[k * 4 + 3] = 255;
+  }
+  x.putImageData(im, 0, 0);
+}
+function zCaption(s) {
+  const m = s.ms + s.mc; if (m < 1) return ["vide", "Pot vide", "Verse le sol pour voir les grains."];
+  const wp = wpOf(s), fc = fcOf(s), S = s.S;
+  if (s.W > 0.5) return ["grav", "Arrosage : saturation", "L'eau entre par le haut et chasse l'air des pores."];
+  if (S > fc + 0.8 && s.qd > 0.02) return ["grav", "Eau de gravité", "Elle descend dans les gros pores (> 8 µm) et sort par le fond : P > F."];
+  if (S > fc + 0.8) return ["grav", "Sol gorgé d'eau", "L'eau de gravité occupe encore les gros pores."];
+  if (S >= fc - 1) return ["cap", "Capacité au champ", "Égouttage fini : il reste l'eau capillaire (pores fins, F > P) et l'eau hygroscopique."];
+  if (S > wp + 0.6) return ["cap", s.plant != null ? "La plante puise l'eau capillaire" : "Le sol sèche", s.plant != null ? "Les poils absorbants aspirent l'eau des pores fins : c'est l'eau utilisable." : "L'eau capillaire s'évapore par la surface."];
+  if (S > 0.2) return ["hyg", s.Vin > 0 ? "Point de flétrissement" : "Sol séché à l'air", s.Vin > 0 ? "Il ne reste que l'eau hygroscopique, collée aux grains (F ≫ P) : inutilisable." : "Il paraît sec mais garde une pellicule d'eau hygroscopique !"];
+  return ["sec", "Sol séché à l'étuve", "Plus aucune eau : seulement des grains et de l'air."];
+}
+function drawZoom(i, now) {
+  const s = ST.st[i], cv = $("#zc" + i); if (!cv) return; const ctx = cv.getContext("2d"), dpr = cv.width / 250;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, 250, 210);
+  const m = s.ms + s.mc, Z = zPattern(m > 0 && s.mc / m > 0.5), st = zState(s), key = (Z.clay ? "c" : "s") + [st.film, st.cap, st.grav, st.front].map((v) => v.toFixed(2)).join("|") + (m > 0);
+  if (!s.zImg) { s.zImg = document.createElement("canvas"); s.zImg.width = s.zImg.height = ZN; }
+  if (key !== s.zk) { s.zk = key; if (m > 0) zImage(Z, st, s.zImg); }
+  const cx = 104, cy = 105, R = 98, t = now / 1000;
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#f7f4ec"; ctx.fillRect(0, 0, 210, 210);
+  if (ST.mol[i]) drawMol(ctx, s, st, t, cx, cy, R);
+  else if (m > 0) {
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(s.zImg, cx - R, cy - R, 2 * R, 2 * R);
+    // gouttes d'eau de gravité qui descendent pendant l'égouttage
+    if (s.qd > 0.02 && st.grav > 0.01) { ctx.fillStyle = "rgba(30,90,200,.85)"; Z.big.forEach((p, k) => { const f = (t * 0.35 + k * 0.17) % 1, X0 = cx - R + p[0] * 2 * R, Y0 = cy - R + p[1] * 2 * R + (f - 0.5) * 34; ctx.globalAlpha = Math.sin(f * Math.PI); ctx.beginPath(); ctx.moveTo(X0, Y0 + 7); ctx.quadraticCurveTo(X0 + 4, Y0 + 1, X0, Y0 - 4); ctx.quadraticCurveTo(X0 - 4, Y0 + 1, X0, Y0 + 7); ctx.fill(); }); ctx.globalAlpha = 1; }
+    // poil absorbant du plant
+    if (s.plant != null) {
+      ctx.lineCap = "round"; ctx.strokeStyle = "#a88d5c"; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(cx + R + 4, cy - 40); ctx.quadraticCurveTo(cx + 40, cy - 20, cx + 8, cy + 6); ctx.stroke();
+      ctx.strokeStyle = "#f3e7c9"; ctx.lineWidth = 8; ctx.stroke();
+      const pull = st.cap > 0.02 && s.turg > 0.05 && s.Vin > 0;
+      if (pull) { ctx.fillStyle = "#1f5fc8"; for (let k = 0; k < 4; k++) { const f = (t * 0.6 + k * 0.25) % 1, a = k * 1.4 + 0.6, X0 = cx + 8 + Math.cos(a) * 34 * (1 - f), Y0 = cy + 6 + Math.sin(a) * 34 * (1 - f); ctx.globalAlpha = 0.25 + 0.75 * Math.sin(f * Math.PI); ctx.beginPath(); ctx.arc(X0, Y0, 3, 0, 7); ctx.fill(); } ctx.globalAlpha = 1; }
+      ctx.fillStyle = "#3b2f1d"; ctx.font = "700 10px Atkinson Hyperlegible, Arial"; ctx.fillText("poil absorbant", cx - 4, cy - 46);
+    }
+  }
+  ctx.restore();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  // forces sur une goutte (comme la colonne « nature des forces » du document)
+  const cap = zCaption(s), mode = cap[0];
+  if (!ST.mol[i] && (mode === "grav" || mode === "cap" || mode === "hyg")) {
+    const fx = 18, fy = 26, F = mode === "grav" ? 8 : mode === "cap" ? 20 : 28; ctx.fillStyle = "rgba(10,15,24,.72)"; ctx.beginPath(); ctx.arc(fx, fy + 4, 19, 0, 7); ctx.fill();
+    ctx.fillStyle = "#6fb3ff"; ctx.beginPath(); ctx.arc(fx, fy + 4, 4.5, 0, 7); ctx.fill();
+    const arrow = (y1, y2, col, lab) => { ctx.strokeStyle = ctx.fillStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(fx + (lab === "P" ? 6 : -6), y1); ctx.lineTo(fx + (lab === "P" ? 6 : -6), y2); ctx.stroke(); const d = Math.sign(y2 - y1); ctx.beginPath(); ctx.moveTo(fx + (lab === "P" ? 6 : -6), y2); ctx.lineTo(fx + (lab === "P" ? 3 : -9), y2 - 4 * d); ctx.lineTo(fx + (lab === "P" ? 9 : -3), y2 - 4 * d); ctx.fill(); ctx.font = "700 9px Arial"; ctx.fillText(lab, fx + (lab === "P" ? 10 : -16), (y1 + y2) / 2 + 3); };
+    arrow(fy + 6, fy + 18, "#ff9b8a", "P"); arrow(fy + 2, Math.max(6, fy + 2 - F), "#ffd36b", "F");
+  }
+  // jauge : saturation, capacité au champ (CC), point de flétrissement (PF)
+  const sat = satOf(s), fc = fcOf(s), wp = wpOf(s), gx = 230, gy0 = 196, gy1 = 16, hy = (v) => gy0 - (gy0 - gy1) * clamp(v / Math.max(1, sat), 0, 1);
+  ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.fillRect(gx, gy1, 12, gy0 - gy1);
+  if (m > 0) {
+    const segs = [[0, wp, "#1c54c4"], [wp, fc, "#488ee8"], [fc, sat, "#9ccef9"]]; segs.forEach(([a, b, c]) => { const top = Math.min(b, s.S); if (top > a) { ctx.fillStyle = c; ctx.fillRect(gx, hy(top), 12, hy(a) - hy(top)); } });
+    ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1; ctx.font = "700 9px Arial"; ctx.fillStyle = "#cfd6e0";
+    [[sat, "sat."], [fc, "CC"], [wp, "PF"]].forEach(([v, l]) => { const y = hy(v); ctx.beginPath(); ctx.moveTo(gx - 2, y); ctx.lineTo(gx + 14, y); ctx.stroke(); ctx.textAlign = "right"; ctx.fillText(l, gx - 4, y + 3); ctx.textAlign = "left"; });
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.strokeRect(gx + 0.5, gy1 + 0.5, 11, gy0 - gy1 - 1);
+  // légende et état
+  const box = $("#zb" + i); if (box) { const bt = box.querySelector(".bt"), bd = box.querySelector(".bd"); const key2 = cap.join("|") + ST.mol[i]; if (box.dataset.k !== key2) { if (box.dataset.k && box.dataset.k.split("|")[1] !== cap[1]) { box.classList.remove("flash"); void box.offsetWidth; box.classList.add("flash"); } box.dataset.k = key2; bt.className = "bt " + cap[0]; bt.textContent = ST.mol[i] ? "Niveau moléculaire" : cap[1]; bd.textContent = ST.mol[i] ? (st.film > 0.02 ? "Les molécules d'eau (H tourné vers les charges −) collent en couches à la surface des particules : eau hygroscopique." : "Sol sec : aucune molécule d'eau sur la surface des particules.") : cap[2]; } }
+}
+function drawMol(ctx, s, st, t, cx, cy, R) {
+  const clay = s.mc >= s.ms, y0 = cy + 46;
+  ctx.fillStyle = clay ? "#9b6a4e" : "#d9b77a"; ctx.fillRect(cx - R, y0, 2 * R, R);
+  ctx.fillStyle = clay ? "#7a4a33" : "#b8945a"; ctx.fillRect(cx - R, y0, 2 * R, 3);
+  ctx.fillStyle = "#fff"; ctx.font = "700 13px Arial"; for (let x = cx - R + 12; x < cx + R; x += 20) ctx.fillText("−", x, y0 + 16);
+  const pill = (txt, x, y) => { ctx.font = "700 9.5px Arial"; const w = ctx.measureText(txt).width + 10; ctx.fillStyle = "rgba(10,15,24,.78)"; ctx.beginPath(); ctx.rect(x - w / 2, y - 9, w, 13); ctx.fill(); ctx.fillStyle = "#f4f7fb"; ctx.textAlign = "center"; ctx.fillText(txt, x, y + 1); ctx.textAlign = "left"; };
+  const mol = (x, y, a) => { ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.fillStyle = "#f2f4f7"; ctx.strokeStyle = "#7d8a99"; ctx.lineWidth = 0.8; for (const s2 of [-1, 1]) { ctx.beginPath(); ctx.arc(s2 * 5.4, 4.2, 3.2, 0, 7); ctx.fill(); ctx.stroke(); } ctx.fillStyle = "#d8372b"; ctx.beginPath(); ctx.arc(0, 0, 5.2, 0, 7); ctx.fill(); ctx.restore(); };
+  const layers = st.film > 0.02 ? 1 + Math.round(2 * st.film) : 0;
+  for (let L2 = 0; L2 < layers; L2++) for (let x = cx - R + 10 + (L2 % 2) * 9; x < cx + R - 6; x += 18) mol(x + Math.sin(t * 3 + x) * 0.5, y0 - 8 - L2 * 14, Math.sin(x * 0.7) * 0.12);
+  const free = Math.round(22 * st.cap + 26 * st.grav); const r = rng(5);
+  for (let k = 0; k < free; k++) { const bx = cx - R + 22 + r() * (2 * R - 44), by = cy - 58 + r() * 34, ph = r() * 6; mol(bx + Math.sin(t * 1.3 + ph) * 6, by + Math.cos(t * 1.1 + ph) * 5, t * (0.6 + r()) + ph); }
+  pill(clay ? "particule d'argile (charges −)" : "grain de sable (charges −)", cx, y0 + 22);
+  if (layers) pill("eau hygroscopique fixée (F ≫ P)", cx, y0 - 8 - (layers - 1) * 14 - 16);
+  if (free) pill(st.grav > 0.01 ? "eau libre (gravité)" : "eau libre (capillaire)", cx, cy - 74);
+}
+function buildZoom() {
+  const z = document.createElement("div"); z.id = "zoom"; z.hidden = true;
+  z.innerHTML = [0, 1].map((i) => `<div class="bub" id="zb${i}" title="Clique : niveau moléculaire"><div class="bh"><span>Zoom · pot ${LET[i]}</span><i>${i ? "argile" : "sable"}</i></div><canvas id="zc${i}" width="${Math.round(250 * Math.min(2, window.devicePixelRatio || 1))}" height="${Math.round(210 * Math.min(2, window.devicePixelRatio || 1))}"></canvas><div class="bt"></div><div class="bd"></div></div>`).join("");
+  document.body.append(z);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "zlines"; svg.innerHTML = '<line id="zl0"/><line id="zl1"/>'; document.body.append(svg);
+  [0, 1].forEach((i) => { $("#zb" + i).onclick = () => { ST.mol[i] = !ST.mol[i]; if (ST.mol[i]) once("mol", "info", "Zoom au niveau moléculaire.", "mol"); }; });
+}
+
+/* ------------------------------------------------------------ rendu, caméra, souris */
+const L = {};
+/* ------------------------------------------------------------ rendu à la demande (performance)
+   L'image n'est redessinée que si quelque chose a changé à l'écran : caméra, taille de la fenêtre, position ou visibilité
+   d'un objet, couleur, opacité ou texture d'un matériau (afficheurs, liquides, indicateurs), géométrie modifiée (filets).
+   L'ombre portée n'est recalculée que si un objet qui projette une ombre a bougé ou changé de visibilité.
+   Paillasse immobile : le processeur graphique ne travaille plus ; une image de sécurité part toutes les 1,5 s.
+   Pour une capture en test, appeler R.render(scene, cam) directement reste possible. */
+const RD = { a: new Float64Array(8192), s: new Float64Array(4096), n: 0, ns: 0, np: -1, nsp: -1, ch: false, chS: false, last: 0 };
+function rdW(x) { if (RD.n >= RD.a.length) { const b = new Float64Array(RD.a.length * 2); b.set(RD.a); RD.a = b; } if (RD.a[RD.n] !== x) { RD.a[RD.n] = x; RD.ch = true; } RD.n++; }
+function rdS(x) { if (RD.ns >= RD.s.length) { const b = new Float64Array(RD.s.length * 2); b.set(RD.s); RD.s = b; } if (RD.s[RD.ns] !== x) { RD.s[RD.ns] = x; RD.chS = true; } RD.ns++; }
+function rdTex(t) { if (!t) return; rdW(t.id); rdW(t.version); rdW(t.offset.x); rdW(t.offset.y); rdW(t.rotation); }
+function rdMat(m) { if (!m) return; rdW(m.id); rdW(m.version); rdW(m.opacity); rdW(m.visible ? 1 : 0); if (m.color) { rdW(m.color.r); rdW(m.color.g); rdW(m.color.b); } if (m.emissive) { rdW(m.emissive.r); rdW(m.emissive.g); rdW(m.emissive.b); rdW(m.emissiveIntensity); } rdTex(m.map); rdTex(m.emissiveMap); rdTex(m.alphaMap); }
+function aRedessiner(R, scene, cam) {
+  RD.n = 0; RD.ns = 0; RD.ch = false; RD.chS = false;
+  scene.updateMatrixWorld(); cam.updateMatrixWorld();
+  const c = cam.matrixWorld.elements, pj = cam.projectionMatrix.elements; for (let i = 0; i < 16; i++) { rdW(c[i]); rdW(pj[i]); }
+  rdW(R.domElement.width); rdW(R.domElement.height);
+  scene.traverseVisible((o) => {
+    rdW(o.id); const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) rdW(e[i]);
+    if (o.isLight) { rdW(o.intensity); return; }
+    if (!o.material) return;
+    const g = o.geometry, p = g && g.attributes && g.attributes.position;
+    if (g) { rdW(g.id); if (p) { rdW(p.version); rdW(p.count); } if (g.index) rdW(g.index.version); rdW(g.drawRange.start); rdW(g.drawRange.count); }
+    if (Array.isArray(o.material)) o.material.forEach(rdMat); else rdMat(o.material);
+    if (o.castShadow) { rdS(o.id); for (let i = 0; i < 16; i++) rdS(e[i]); if (p) rdS(p.version); }
+  });
+  if (RD.n !== RD.np) RD.ch = true; if (RD.ns !== RD.nsp) RD.chS = true; RD.np = RD.n; RD.nsp = RD.ns;
+  if (RD.chS) R.shadowMap.needsUpdate = true;
+  const now = performance.now(); if (RD.ch || now - RD.last > 1500) { RD.last = now; return true; } return false;
+}
+function init3d() {
+  const el = $("#scene3d");
+  const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true; el.append(R.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dee4); const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(envScene(), 0.04).texture; pm.dispose();
+  const cam = new THREE.PerspectiveCamera(40, 1.6, 0.02, 40); cam.position.set(0.0, BENCH + 0.9, 1.7);
+  const ctl = new THREE.OrbitControls(cam, R.domElement); Object.assign(ctl, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.2, maxDistance: 2.8, maxPolarAngle: Math.PI * 0.48, enablePan: true, screenSpacePanning: true, panSpeed: 0.5, rotateSpeed: 0.6 }); ctl.target.set(0, BENCH + 0.15, -0.15);
+  scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x6f6b66, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff3e4, 1.25); sun.position.set(1.8, 4.4, 2.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.2, bottom: -1.2, near: 1, far: 9 }); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.012; sun.shadow.radius = 4; sun.target.position.set(0, BENCH, -0.2); scene.add(sun, sun.target);
+  const back = new THREE.DirectionalLight(0xdbe7ff, 0.35); back.position.set(0, 2.6, -3); scene.add(back);
+  initMats(); buildRoom(scene); const g = new THREE.Group(); g.position.set(0, BENCH, 0); scene.add(g); buildBench(g); linColors(scene); g.updateMatrixWorld(true);
+  Object.assign(L, { R, scene, cam, ctl, el, g, tw: null, ray: new THREE.Raycaster(), ptr: new THREE.Vector2() });
+  const fit = () => { R.setSize(window.innerWidth, window.innerHeight, false); cam.aspect = window.innerWidth / window.innerHeight; cam.updateProjectionMatrix(); }; window.addEventListener("resize", fit); fit();
+  let down = null; const pick = (ev) => { L.ptr.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1); L.ray.setFromCamera(L.ptr, cam); for (const h of L.ray.intersectObjects(g.children, true)) { let o = h.object, vis = true; while (o) { if (o.visible === false) { vis = false; break; } o = o.parent; } if (!vis) continue; if (h.object.userData.tool) return h.object.userData.tool; } return null; };
+  R.domElement.addEventListener("pointerdown", (ev) => { closeMenu(); showTip(null); down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
+  R.domElement.addEventListener("pointermove", (ev) => { if (down) return; const n = resolveName(pick(ev)); el.classList.toggle("hot", !!n); showTip(n, ev.clientX, ev.clientY); });
+  R.domElement.addEventListener("pointerleave", () => showTip(null));
+  const up = (ev) => { if (!down) return; const short = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 8 && performance.now() - down.t < 400; if (short) onClick(pick(ev), ev.clientX, ev.clientY); down = null; };
+  R.domElement.addEventListener("pointerup", up); R.domElement.addEventListener("pointercancel", () => { down = null; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); $("#exao").hidden = true; } });
+  R.domElement.addEventListener("dblclick", () => { if (ST.cur && ST.cur.cam) focusCam(CAMS[ST.cur.cam]); });
+  let pend = false; const raf = (f) => { if (pend) return; pend = true; requestAnimationFrame((t) => { pend = false; f(t); }); };
+  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt); ctl.update(); if (aRedessiner(R, scene, cam)) R.render(scene, cam); placeLabels(now); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
+}
+function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
+// turgescence du plant : 1 = feuilles étalées, 0 = fané (feuilles pendantes, tige courbée, jaunissement)
+function setTurgor(p, tg) { const dr = 1 - clamp(tg, 0, 1); if (p.dr === dr) return; p.dr = dr; p.up.rotation.z = dr * 0.55; p.lv.forEach((l) => { l.d.rotation.z = 0.12 - dr * 1.35; }); setCol(p.leafM, new THREE.Color(0x4f9a3a).lerp(new THREE.Color(0x9a9a45), dr * 0.7)); }
+
+function tick(dt) {
+  if ($("#overlay").hidden === false) return;
+  if (L.tw) { const k = Math.min(1, (performance.now() - L.tw.t0) / 1200), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; L.cam.position.lerpVectors(L.tw.p0, L.tw.p1, e); L.ctl.target.lerpVectors(L.tw.q0, L.tw.q1, e); if (k >= 1) L.tw = null; }
+  runQueue(dt);
+  if (ST.q[0] && ST.q[0].obj && !L.tw) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); } // fin du geste : la caméra revient sur la vue de l'action en cours
+  // temps de l'expérience : accéléré (minutes) ; une journée passe en ≈ 2,4 s ; pendant qu'on verse l'eau, le temps n'est pas accéléré
+  let dtm = (dt * (ST.wPour ? 1 : ST.acc)) / 60;
+  if (ST.dayRun) { dtm = Math.min(ST.dayRun.left, (1440 * dt) / 2.4); ST.dayRun.left -= dtm; if (ST.dayRun.left <= 1e-6) { ST.dayRun = null; toast("Jour " + dayNo() + " · " + hhmm() + " : pèse les pots et observe les feuilles.", ""); } }
+  ST.simT += dtm;
+  ST.st.forEach((s, i) => { if (s.tm.run) s.tm.t += dtm; const txt = clk(Math.min(s.tm.t, 5999.98)); if (txt !== s.tm.shown) { s.tm.shown = txt; X.tlcd[i].set(txt, ""); } });
+  { const txt = "J" + dayNo() + " " + hhmm(); if (txt !== ST.calTxt) { ST.calTxt = txt; X.calLcd.set(txt, ""); } }
+  // arrosage d'un pot avec l'éprouvette de mesure
+  if (ST.wPour) { const P = ST.wPour, s = ST.st[P.i], dv = Math.min(P.left, window.__fast ? P.left : P.rate * dt); P.left -= dv; ST.e0 = Math.max(0, ST.e0 - dv); s.Vin += dv; s.W += dv; const tp = gpos(X.pot[P.i], [0, POT_IN + potH(soilVol(s) + s.W) + 0.004, 0]); arcPour(X.arcE, gpos(X.E0, [-(CYL_R + 0.003), 0.258, 0]), tp, 0.0038, 0.2); if (P.left <= 0.01) { ST.wPour = null; X.arcE.visible = false; } } else X.arcE.visible = false;
+  // infiltration, égouttage, évapotranspiration, aspect de chaque pot
+  ST.st.forEach((s, i) => {
+    const fc = fcOf(s), wp = wpOf(s), sat = satOf(s), tau = tauOf(s.ms, s.mc), ti = 0.45 * tau, td = 0.55 * tau, onSup = !s.onBal && !s.lift;
+    const n = Math.max(1, Math.ceil(dtm / Math.min(0.02, ti / 4))), h = dtm / n; let qd = 0, dD = 0;
+    if (s.ms + s.mc > 0.5) for (let k = 0; k < n; k++) { qd = drainStep(s, fc, sat, ti, td, h); dD += qd * h; }
+    else if (s.W > 0) { dD = s.W; s.W = 0; }
+    if (onSup && !s.cylAway) s.D += dD; else s.lostDrip += dD;
+    s.qd = dD / Math.max(1e-9, dtm);
+    // évapotranspiration (g/jour) : le plant puise l'eau capillaire, la surface évapore un peu
+    if (s.ms + s.mc > 0.5) {
+      const fP = s.plant != null && fc > wp ? clamp((s.S - wp) / (0.08 * (fc - wp)), 0, 1) : 0, fE = fc > 0 ? clamp(s.S / fc, 0, 1) * (s.S > 0.35 * wp ? 1 : 0.15) : 0;
+      let loss = ((ET_MAX * fP + EV_MAX * fE) * dtm) / 1440; if (s.W > 0) { const e = Math.min(s.W, loss); s.W -= e; loss -= e; } s.S = Math.max(0, s.S - loss);
+    }
+    if (s.plant != null) { const tg = fc > wp ? clamp((s.S - wp) / (0.25 * (fc - wp)), 0, 1) : 1; s.turg += clamp(tg - s.turg, -dtm / 720, dtm / 720); setTurgor(X.plant[s.plant], s.turg); }
+    const vs = soilVol(s); if (vs + s.W > POT_CAP) { const ex = vs + s.W - POT_CAP; s.W -= ex; s.spill += ex; once("over" + i, "bad", "Le pot " + LET[i] + " déborde : " + Math.round(s.spill) + " mL perdus.", "overflow"); }
+    if (s.D > CYL_CAP) { s.spill += s.D - CYL_CAP; s.D = CYL_CAP; }
+    if (s.t1 == null && s.Vin > 0 && s.D >= 0.05) { const since = s.tPour == null ? 0 : ST.simT - s.tPour; s.t1 = s.tm.run || s.tm.t > 0 ? s.tm.t : since; s.t1since = since; s.dropChip = 4; log("info", "Première goutte du pot " + LET[i] + " dans l'éprouvette : t₁ = " + fmt(s.t1, 2) + " min, noté dans le tableau. C'est l'eau de gravité.", "gravity"); toast("Pot " + LET[i] + " : première goutte (t₁ = " + fmt(s.t1, 2) + " min)", "good"); showTable(); renderTable(); if (ST.guide && !ST.demo) look("cyl" + i); }
+    if (s.dropChip > 0) s.dropChip -= dt;
+    // aspect : sol (couleur selon argile et humidité), eau en surface, gouttes ou filet, eau recueillie
+    const m = s.ms + s.mc, soil = X.soil[i], pond = X.pond[i], hs = potH(vs);
+    if (m > 0.3) { soil.visible = true; setFrustum(soil, 0, hs); setCol(soil.material, soilCol(s.mc / m, sat > 0 ? s.S / sat : 0)); } else soil.visible = false;
+    if (s.W > 0.3) { pond.visible = true; setFrustum(pond, hs, potH(vs + s.W)); setCol(pond.material, new THREE.Color(0x9cc4e8).lerp(soilCol(m ? s.mc / m : 0, 1), m > 0 ? 0.3 : 0)); } else pond.visible = false;
+    if (s.plant != null) { const p = X.plant[s.plant].grp; if (p.parent === X.pot[i]) p.position.set(0, POT_IN + hs - 0.014, 0); }
+    const tipY = FUN_Y, liqY = CYL_Y0 + cylH(s.D), cl = X.C[i].userData.liq, tgtY = s.cylAway ? 0.012 : liqY, x = STX[i];
+    const dps = onSup ? (s.qd * (ST.dayRun ? 600 : ST.acc)) / 60 / 0.05 : 0; // gouttes par seconde à l'écran (goutte ≈ 0,05 mL)
+    if (dps > 7) { X.drop[i].visible = false; const st = X.strm[i]; st.visible = true; st.scale.y = Math.max(0.001, tipY - tgtY); st.position.set(x, (tipY + tgtY) / 2, STZ); }
+    else { X.strm[i].visible = false; const dr = X.drop[i]; if (s.fallT > 0) { s.fallT -= dt; const f = 1 - s.fallT / 0.25; dr.visible = true; dr.scale.setScalar(1); dr.position.set(x, lerp(tipY - 0.002, tgtY, f * f), STZ); } else if (dps > 0.004) { s.ph += dt * dps; dr.visible = true; dr.scale.setScalar(0.35 + 0.65 * Math.min(1, s.ph)); dr.position.set(x, tipY - 0.002, STZ); if (s.ph >= 1) { s.ph -= 1; s.fallT = 0.25; } } else dr.visible = false; }
+    if (s.D > 0.2) { const hh = cylH(s.D); cl.visible = true; cl.scale.y = hh; cl.position.y = CYL_Y0 + hh / 2; } else cl.visible = false;
+  });
+  // pissette → éprouvette de mesure (jet), éprouvette de mesure
+  const wsh = TOOLS.wash.obj;
+  if (ST.pouring) { if (!ST.busy) { ST.e0 = Math.min(CYL_CAP, ST.e0 + 25 * dt); if (ST.addTo != null && ST.e0 >= ST.addTo) { ST.e0 = ST.addTo; stopPour(); } if (ST.pouring) { ST.sqT += dt; const sq = 1 - 0.07 * Math.min(1, ST.sqT * 4); wsh.scale.set(sq, 1, sq); const a = gpos(wsh, [-0.06, 0.206, 0]), nn = gpos(wsh, [-0.075, 0.192, 0]).sub(a).normalize(); arcPour(X.arcW, a, new THREE.Vector3(0.62, CYL_Y0 + cylH(ST.e0), -0.02), 0.0016, 0.4, nn); } } }
+  else if (ST.washT > 0) { ST.washT -= dt; if (ST.washT <= 0 && !ST.busy) go(wsh, [Object.assign(homeOf("wash"), { dur: 0.6, up: 0.06 })]); }
+  { const cl = X.E0.userData.liq; if (ST.e0 > 0.2) { const hh = cylH(ST.e0); cl.visible = true; cl.scale.y = hh; cl.position.y = CYL_Y0 + hh / 2; } else cl.visible = false; }
+  // vidage vers le bac
+  if (ST.binPour) { const B = ST.binPour; B.t -= dt; arcPour(X.arcBin, B.from(), new THREE.Vector3(TOOLS.bin.obj.position.x, 0.02, TOOLS.bin.obj.position.z), 0.003, 0.15); if (B.cyl != null) ST.st[B.cyl].D = Math.max(0, ST.st[B.cyl].D - 200 * dt); if (B.e0) ST.e0 = Math.max(0, ST.e0 - 250 * dt); if (B.t <= 0) { ST.binPour = null; X.arcBin.visible = false; } } else X.arcBin.visible = false;
+  // versement maintenu depuis un bocal de sol, dans le pot posé sur la balance
+  if (ST.sFlow) { const F = ST.sFlow, j = TOOLS[F.type].obj, b = BAL_P, s = ST.st[F.i];
+    if (F.on && F.ready && s.onBal) { F.k = Math.min(1, F.k + dt * 2.5); const dm = 25 * F.k * dt * (0.85 + Math.random() * 0.3); addSoil(F.i, F.type, dm);
+      const top = soilTop(F.i); setCol(X.arcS.material, new THREE.Color(F.type === "sable" ? SOIL.sable.dry : SOIL.argile.dry)); arcPour(X.arcS, gpos(j, [0.037, 0.12, 0]), new THREE.Vector3(b[0] + 0.006, top.y + 0.002, b[2]), 0.0026 + 0.002 * F.k, 0.15);
+      F.gT -= dt; if (F.gT <= 0 && !ST.fall) { F.gT = 0.35; fall(gpos(j, [0.037, 0.12, 0]), top, new THREE.Color(F.type === "sable" ? SOIL.sable.dry : SOIL.argile.dry), 6, 0.35); } }
+    else { X.arcS.visible = false; F.k = 0; }
+    if (!F.on && F.ready && !F.back) { F.idle -= dt; if (F.idle <= 0 && !ST.q.length) { F.back = true; go(j, [{ to: [b[0] - 0.125, 0.33, b[2]], rot: [0, 0, 0], dur: 0.5, up: 0 }, Object.assign(homeOf(F.type), { dur: 0.8, up: 0.05, at: () => { ST.sFlow = null; } })]); } }
+    if (!F.on && !F.ready && !ST.q.length) { F.ready = true; F.idle = 0; }
+  } else X.arcS.visible = false;
+  // grains qui tombent
+  if (ST.fall) { const F = ST.fall; F.t += dt; X.fallP.visible = true; X.fallP.children.forEach((p, i) => { const tt = (F.t - (i * F.dur * 0.5) / F.n) / (F.dur * 0.6); p.visible = i < F.n && tt > 0 && tt < 1; if (p.visible) p.position.set(lerp(F.a.x, F.b.x + ((i % 3) - 1) * 0.008, tt) + Math.sin(i * 7) * 0.003, F.a.y - (F.a.y - F.b.y) * tt * tt, lerp(F.a.z, F.b.z + (((i * 5) % 3) - 1) * 0.008, tt)); }); if (F.t > F.dur * 1.2) { ST.fall = null; X.fallP.visible = false; } }
+  { const txt = g1(shown()); if (txt !== ST.balTxt) { ST.balTxt = txt; X.lcdB.set(txt.replace(",", "."), "g"); } }
+  updGuide();
+}
+function placeLabels(now) {
+  const box = $("#labels"), g = ST.cur, overlayUp = $("#overlay").hidden === false, showMain = g && ST.guide && !ST.demo && !overlayUp;
+  const proj = (v) => { v.project(L.cam); return v.z > 1 ? null : [((v.x + 1) / 2) * window.innerWidth, ((1 - v.y) / 2) * window.innerHeight]; };
+  if (!showMain) box.innerHTML = "";
+  else {
+    if (!box.firstChild) box.innerHTML = '<div class="ring"></div><div class="chip"><span class="k"></span> <span class="v"></span></div>';
+    const [ring, chip] = box.children, t = TOOLS[g.on], v = t ? t.anchor.clone() : null; if (t) t.obj.localToWorld(v); const p = v ? proj(v) : null;
+    if (!p) ring.style.display = chip.style.display = "none";
+    else { ring.style.display = chip.style.display = ""; ring.style.left = chip.style.left = p[0] + "px"; ring.style.top = chip.style.top = p[1] + "px"; chip.querySelector(".k").textContent = g.k; chip.querySelector(".v").textContent = g.v ? "· " + g.v : ""; }
+  }
+  // repère de niveau dans l'éprouvette de mesure (aide à mesurer 200 mL), puis repère « première goutte »
+  let lv = $("#lvl"); if (!lv) { lv = document.createElement("div"); lv.id = "lvl"; lv.className = "chip lvl"; box.after(lv); }
+  const drip = ST.st.find((s) => s.dropChip > 0);
+  if (drip && !overlayUp) { const p = proj(new THREE.Vector3(STX[drip.i], BENCH + FUN_Y - 0.01, STZ)); if (p) { lv.hidden = false; lv.style.left = p[0] + "px"; lv.style.top = p[1] + "px"; lv.innerHTML = '<span class="k">1ʳᵉ goutte ' + LET[drip.i] + "</span> → éprouvette : eau de gravité"; } else lv.hidden = true; }
+  else if (ST.guide && !overlayUp && ST.e0 > 0.5 && X.E0.position.distanceTo(TOOLS.e0.home) < 0.01) { const p = proj(new THREE.Vector3(0.62, BENCH + CYL_Y0 + cylH(ST.e0), -0.02)); if (p) { lv.hidden = false; lv.style.left = p[0] + "px"; lv.style.top = p[1] + "px"; lv.innerHTML = '<span class="k">eau</span> ' + Math.round(ST.e0) + " mL"; } else lv.hidden = true; } else lv.hidden = true;
+  // bulles de zoom et traits vers la surface du sol de chaque pot
+  const z = $("#zoom"), any = ST.st.some((s) => s.ms + s.mc > 0.5 || s.airW > 0), on = ST.zoomOn && any && !overlayUp;
+  if (z) { z.hidden = !on; document.body.classList.toggle("zon", on); $("#btnZoom").classList.toggle("on", ST.zoomOn); }
+  for (let i = 0; i < 2; i++) {
+    const ln = $("#zl" + i); if (!ln) continue; const s = ST.st[i], b = $("#zb" + i), show = on && s.ms + s.mc > 0.5;
+    if (b) b.style.visibility = s.ms + s.mc > 0.5 ? "" : "hidden";
+    if (show) { drawZoom(i, now || performance.now()); const v = X.pot[i].localToWorld(new THREE.Vector3(0, POT_IN + potH(soilVol(s)) * 0.6, 0.03)), p = proj(v), r = b.getBoundingClientRect(); if (p) { ln.setAttribute("x1", r.left + r.width / 2); ln.setAttribute("y1", r.top); ln.setAttribute("x2", p[0]); ln.setAttribute("y2", p[1]); ln.style.display = ""; } else ln.style.display = "none"; }
+    else ln.style.display = "none";
+  }
+}
+function compo(s) { const m = soilIn(s); if (m < 0.05) return "aucun sol"; const parts = []; if (s.ms > 0.05) parts.push(g1(s.ms) + " g sable"); if (s.mc > 0.05) parts.push(g1(s.mc + s.airW) + " g argile" + (s.airW > 0.05 ? " (séchée à l'air)" : "")); return parts.join(" + "); }
+function openPanel() {
+  const rows = [["Balance", g1(shown()) + " g" + (ST.onBal != null ? " (pot " + LET[ST.onBal] + " dessus)" : "") + (Math.abs(ST.tare) > 0.05 ? " · tare " + g1(ST.tare) + " g" : "")], ["Éprouvette de mesure", Math.round(ST.e0) + " mL d'eau"], ["Temps de l'expérience", "jour " + dayNo() + ", " + hhmm() + " · minutes accélérées ×" + ST.acc]];
+  ST.st.forEach((s, i) => { const L_ = LET[i]; rows.push(["Pot " + L_, compo(s) + (s.plant != null ? " · plant" : " · sans plant")]); if (soilIn(s) > 0.5) rows.push([L_ + " · eau dans le sol / en surface", g1(s.S) + " g / " + g1(s.W) + " mL"], [L_ + " · seuils réels : PF / CC / sat.", g1(wpOf(s)) + " / " + g1(fcOf(s)) + " / " + g1(satOf(s)) + " g"]); if (s.Vin > 0) rows.push([L_ + " · eau versée / recueillie", Math.round(s.Vin) + " mL / " + g1(s.D) + " mL"]); if (s.plant != null) rows.push([L_ + " · état du plant", s.turg > 0.8 ? "turgescent" : s.turg > 0.35 ? "commence à faner" : "fané"]); rows.push(["Minuteur " + L_, clk(s.tm.t) + (s.tm.run ? " (en marche)" : "")]); });
+  rows.push(["Essai nº", String(ST.attempts)]);
+  $("#diag").innerHTML = rows.map((r) => `<span>${r[0]}</span><b>${r[1]}</b>`).join(""); if (!$("#toolHelp").firstChild) $("#toolHelp").innerHTML = TOOL_HELP.map((t) => `<details><summary>${t[0]}</summary><p>${t[1]}</p></details>`).join(""); $("#panel").hidden = false;
+}
+/* tableau des mesures : les masses (m₀, m₁, suivi, m₂), V versé, t₁, t₂ et V_g s'écrivent seuls ; les trois calculs sont
+   saisis par l'élève et vérifiés au dixième de gramme, à partir des valeurs affichées dans le tableau */
+function rowData(s) {
+  const w0 = lastW(s, "m0"), w1 = lastW(s, "m1"), w2 = lastW(s, "m2"), m0 = w0 ? w0.m : null, m1 = w1 ? w1.m : null, m2 = w2 ? w2.m : null, rd = lastRead(s);
+  const ret = m0 != null && m1 != null ? r1(m1 - m0) : null, hyg = m0 != null && m2 != null ? r1(m2 - m0) : null, cap = m1 != null && m2 != null ? r1(m1 - m2) : null;
+  const deps = { ret: [m0, m1], hyg: [m0, m2], cap: [m1, m2] }; // une pesée qui change n'efface que les calculs qui en dépendent
+  if (!s.ansK) s.ansK = {}; for (const k in deps) { const kk = deps[k].join("|"); if (s.ansK[k] !== kk) { s.ansK[k] = kk; delete s.ans[k]; } }
+  return { m0, m1, m2, w2, Vin: s.Vin > 0 ? Math.round(s.Vin) : null, Vg: rd ? rd.V : null, t1: s.t1, t2: s.t2, ret, hyg, cap, suivi: s.w.filter((w) => w.phase === "suivi") };
+}
+const numIn = (txt) => { const v = String(txt).replace(/\s|g/gi, "").replace(",", "."); return /^[-+]?\d*\.?\d+$/.test(v) ? parseFloat(v) : NaN; };
+const FN = { ret: ["eau retenue", "m₁ − m₀"], hyg: ["eau hygroscopique", "m₂ − m₀"], cap: ["eau capillaire", "m₁ − m₂"] };
+function checkAnswer(i, f, txt) {
+  const s = ST.st[i], d = rowData(s), want = d[f], v = numIn(txt), nm = FN[f][0] + " (" + LET[i] + ")";
+  if (want == null) { toast("Il manque une pesée pour calculer " + FN[f][1] + " (pot " + LET[i] + ").", "bad"); return false; }
+  if (isNaN(v)) { toast("Écris un nombre, par exemple 36,4.", "bad"); return false; }
+  if (Math.abs(v - want) <= 0.051) { s.ans[f] = want; log("good", "Calcul juste : " + nm + " = " + FN[f][1] + " = " + g1(want) + " g. Bravo !", f === "ret" ? "m1" : f === "hyg" ? "wilt" : "capillary"); toast("Bravo ! " + nm + " = " + g1(want) + " g", "good"); renderTable(); return true; }
+  s.miss[f]++; log("warn", "Calcul refusé : " + nm + " ≠ " + String(txt).trim() + ". Recalcule " + FN[f][1] + ".", "calc");
+  toast("Résultat faux, refusé : recalcule " + FN[f][1] + " (1 chiffre après la virgule).", "bad"); return false;
+}
+function renderTable() {
+  const box = $("#tbl"); if (!box || !ST.st) return;
+  const a = document.activeElement, keep = a && a.tagName === "INPUT" && box.contains(a) ? { i: a.dataset.i, f: a.dataset.f, v: a.value } : null;
+  const cell = (s, d, f) => {
+    if (s.ans[f] != null) return `<td class="ok">${g1(s.ans[f])} g<small>✓ Bravo !</small></td>`;
+    if (d[f] == null) return `<td class="na" title="Pesées incomplètes">—</td>`;
+    return `<td class="in"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-i="${s.i}" data-f="${f}" placeholder="${FN[f][1]}" aria-label="${FN[f][0]} ${LET[s.i]}"><button type="button" data-i="${s.i}" data-f="${f}" title="Valider">✓</button></td>`;
+  };
+  const v = (x, u) => (x == null ? '<td class="na">—</td>' : `<td class="au">${x}${u ? " " + u : ""}</td>`);
+  const rows = ST.st.map((s) => { const d = rowData(s), su = d.suivi.slice(-4).map((w) => "J" + w.day + " : " + g1(w.m)).join("<br>");
+    return `<tr><td><b>${LET[s.i]}</b></td><td class="so">${compo(s)}${s.plant != null ? " · plant" : ""}</td>${v(d.m0 == null ? null : g1(d.m0), "g")}<td class="au">${d.Vin == null ? "—" : d.Vin + " mL"}<small>V_g : ${d.Vg == null ? "—" : d.Vg + " mL"}</small></td><td class="au">${d.t1 == null ? "—" : fmt(d.t1, 2)}<small>t₂ : ${d.t2 == null ? "—" : fmt(d.t2, 2)}</small></td>${v(d.m1 == null ? null : g1(d.m1), "g")}<td class="au su">${su || "—"}</td>${d.m2 == null ? v(null) : `<td class="au">${g1(d.m2)} g<small>jour ${d.w2.day}</small></td>`}${cell(s, d, "ret")}${cell(s, d, "hyg")}${cell(s, d, "cap")}</tr>`; }).join("");
+  box.innerHTML = `<table class="mt st"><tr><th></th><th>Sol</th><th>m₀ sec<br>(g)</th><th>V versé<br>V_g gravité</th><th>t₁ 1ʳᵉ goutte<br>t₂ (min)</th><th>m₁ égoutté<br>(g)</th><th>Suivi<br>(g)</th><th>m₂ fanée<br>(g)</th><th class="c">eau retenue<br>m₁ − m₀</th><th class="c">hygroscopique<br>m₂ − m₀</th><th class="c">capillaire<br>m₁ − m₂</th></tr>${rows}</table>`;
+  box.querySelectorAll("input").forEach((inp) => { inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") submit(inp); }); });
+  box.querySelectorAll("td.in button").forEach((b) => (b.onclick = () => submit(b.previousElementSibling)));
+  if (keep) { const inp = box.querySelector(`input[data-i="${keep.i}"][data-f="${keep.f}"]`); if (inp) { inp.value = keep.v; inp.focus(); } }
+}
+function submit(inp) { const i = +inp.dataset.i, f = inp.dataset.f; if (!inp.value.trim()) return; if (!checkAnswer(i, f, inp.value)) { inp.value = ""; const td = inp.parentElement; td.classList.remove("no"); void td.offsetWidth; td.classList.add("no"); let m = td.querySelector("small"); if (!m) { m = document.createElement("small"); td.append(m); } m.textContent = "✗ faux, refusé : recalcule"; inp.focus(); } }
+function showTable() { if (ST.tblShown) return; ST.tblShown = true; $("#exao").hidden = false; renderTable(); }
+function openTable() { const e = $("#exao"); e.hidden = !e.hidden; ST.tblShown = true; renderTable(); }
+// barres du bilan : eau de gravité, capillaire, hygroscopique d'un pot, à l'échelle (g)
+function bars(s, d) {
+  const gv = d.Vg || 0, cp = d.cap != null ? Math.max(0, d.cap) : null, hy = d.hyg != null ? Math.max(0, d.hyg) : null, sc = (x) => (x / 220) * 100;
+  if (cp == null || hy == null) return "";
+  return `<div class="wbar"><span class="wl">${LET[s.i]} · ${s.mc > s.ms ? "argile" : "sable"}</span><div class="wt"><i class="h" style="width:${sc(hy)}%" title="hygroscopique">${hy >= 8 ? g1(hy) : ""}</i><i class="c" style="width:${sc(cp)}%" title="capillaire">${cp >= 8 ? g1(cp) : ""}</i><i class="g" style="width:${sc(gv)}%" title="gravité">${gv >= 8 ? gv : ""}</i></div></div>`;
+}
+function evaluate() {
+  const done = ST.st.filter((s) => s.w.length); if (!done.length) { toast("Pèse d'abord au moins un pot.", "bad"); return; }
+  const pts = [], calc = [];
+  done.forEach((s) => { const d = rowData(s), L_ = LET[s.i], m = soilIn(s), w0 = lastW(s, "m0"), w1 = lastW(s, "m1"), w2 = lastW(s, "m2"), f = s.Vin > 0 ? simulate(s.ms, s.mc, s.Spour, s.Vin) : null, rd = lastRead(s);
+    if (m > 0 && Math.abs(m - M_SOL) > 1) pts.push(L_ + " : " + g1(m) + " g de sol au lieu de 300 g — la comparaison n'est plus à masse égale.");
+    if (s.airW > 0.05) pts.push(L_ + " : argile séchée à l'air — le sol contenait déjà " + g1(s.airW) + " g d'eau hygroscopique au moment de m₀ ; m₂ − m₀ est trop petit d'autant.");
+    if (s.Vin > 0 && Math.abs(s.Vin - V_EAU) > 2) pts.push(L_ + " : " + Math.round(s.Vin) + " mL d'eau versés au lieu de 200 mL.");
+    if (w0 && !w0.plant && s.plant != null) pts.push(L_ + " : m₀ pesé sans le plant — les différences m₁ − m₀ et m₂ − m₀ comptent en plus sa masse (≈ " + g1(PLANT_M[s.plant]) + " g).");
+    const tares = [w0, w1, w2].filter(Boolean).map((w) => w.tare); if (tares.length > 1 && Math.max(...tares) - Math.min(...tares) > 0.05) pts.push(L_ + " : la tare de la balance a changé entre les pesées (" + tares.map(g1).join(" / ") + " g) — les différences de masse sont faussées.");
+    if (w1 && w1.drain > 1) pts.push(L_ + " : m₁ pesé pendant l'égouttage (" + g1(w1.drain) + " g d'eau de gravité encore dans le pot) — l'eau retenue est surestimée.");
+    if (rd && f && rd.D < 0.95 * f.Df - 0.5) pts.push(L_ + " : V_g lu pendant l'écoulement (" + rd.V + " mL lus, " + g1(f.Df) + " mL à la fin).");
+    if (s.lostDrip > 0.5) pts.push(L_ + " : " + g1(s.lostDrip) + " mL d'eau de gravité tombés hors de l'éprouvette (pot déplacé pendant l'égouttage).");
+    if (s.spill > 1) pts.push(L_ + " : débordement, " + Math.round(s.spill) + " mL perdus.");
+    if (w2 && w2.turg > 0.4) pts.push(L_ + " : m₂ pesé avant le flétrissement (la plante était encore turgescente) — il restait " + g1(Math.max(0, w2.S - wpOf(s))) + " g d'eau capillaire : l'eau hygroscopique est surestimée.");
+    else if (w2 && w2.S < wpOf(s) - 2) pts.push(L_ + " : m₂ pesé longtemps après le flétrissement — la surface a continué à sécher (" + g1(wpOf(s) - w2.S) + " g en moins).");
+    if (s.t1 != null && s.t1since != null && Math.abs(s.t1 - s.t1since) > 0.25) pts.push(L_ + " : le minuteur n'a pas été démarré à l'arrosage : t₁ et t₂ sont décalés.");
+    for (const k of ["ret", "hyg", "cap"]) if (d[k] != null && s.ans[k] == null) calc.push(L_ + " : " + FN[k][0] + " (" + FN[k][1] + ") à calculer dans le tableau.");
+    const miss = s.miss.ret + s.miss.hyg + s.miss.cap; if (miss) calc.push(L_ + " : " + miss + " calcul(s) refusé(s) avant la bonne réponse.");
+  });
+  const A = ST.st[0], B = ST.st[1], dA = rowData(A), dB = rowData(B), ok = !pts.length, o = $("#overlay"); o.hidden = false;
+  const real = (s) => { const fc = fcOf(s), wp = wpOf(s); return `${g1(fc)} g retenus (capacité au champ) · ${g1(wp)} g hygroscopiques · ${g1(fc - wp)} g capillaires`; };
+  const rowsT = ST.st.filter((s) => s.w.length).map((s) => { const d = rowData(s), c = (k) => (s.ans[k] != null ? g1(s.ans[k]) + " g ✓" : d[k] != null ? "à calculer" : "—"); return `<tr><td><b>${LET[s.i]}</b></td><td>${compo(s)}</td><td>${d.Vg == null ? "—" : d.Vg + " mL"}</td><td>${c("ret")}</td><td>${c("hyg")}</td><td>${c("cap")}</td><td>${real(s)}</td></tr>`; }).join("");
+  const cmp = dA.hyg != null && dB.hyg != null && dA.cap != null && dB.cap != null ? `<p><b>Comparaison :</b> au moment où sa plante a fané, le pot de sable ne contenait plus que ${g1(dA.hyg)} g d'eau, le pot d'argile encore <b>${g1(dB.hyg)} g</b>. L'argile a retenu ${g1(dB.ret || 0)} g d'eau contre ${g1(dA.ret || 0)} g pour le sable, mais seulement ${g1(dB.cap)} g étaient utilisables par la plante (${g1(dA.cap)} g pour le sable).</p>` : "";
+  o.innerHTML = `<div class="card" style="max-width:920px"><p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">Bilan · les trois formes d'eau du sol</p><h1>${ok ? "Mesures comparables et justes" : "Mesures à revoir"}</h1>
+  <table class="mt"><tr><th></th><th>Sol</th><th>Gravité V_g</th><th>Retenue m₁ − m₀</th><th>Hygroscopique m₂ − m₀</th><th>Capillaire m₁ − m₂</th><th>Valeurs réelles du modèle</th></tr>${rowsT}</table>
+  <div class="wbars">${bars(A, dA)}${bars(B, dB)}<div class="wleg"><span><i class="h"></i>hygroscopique (inutilisable)</span><span><i class="c"></i>capillaire (utilisable)</span><span><i class="g"></i>gravité (s'écoule)</span></div></div>
+  ${cmp}
+  ${calc.length ? "<p><b>Calculs :</b></p><ul>" + calc.map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p><b>Calculs :</b> tous justes. Bravo !</p>"}
+  ${WHY.compare}
+  ${pts.length ? "<p><b>Ce qui a influencé les résultats :</b></p><ul>" + [...new Set(pts)].map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p>Aucune erreur de manipulation relevée : sols séchés à l'étuve, même masse, même volume d'eau, pesées au bon moment avec la même tare.</p>"}
+  <div class="row"><button class="btn" id="look" type="button">Continuer à explorer</button><button class="btn ghost" id="again" type="button">Tout remettre en ordre</button></div></div>`;
+  $("#look").onclick = () => { o.hidden = true; }; $("#again").onclick = () => { o.hidden = true; resetState(); setGuide(ST.guide); };
+}
+/* ------------------------------------------------------------ démonstration automatique */
+async function fillPot(i, type) {
+  if (!ST.st[i].onBal) { potToBal(i); await demoWait(0.3); }
+  doTare(); await demoWait(0.8);
+  const s = ST.st[i], m = () => soilIn(s);
+  if (ST.demo && M_SOL - m() > 30) { startSoilPour(type); while (ST.demo && m() < M_SOL - 8) { await demoTick(); const F = ST.sFlow; if (!ST.demo) break; if (F ? !F.on && !F.back : !isBusy()) startSoilPour(type); } stopSoilPour(); while (ST.demo && ST.sFlow) await demoTick(); }
+  while (ST.demo && m() < M_SOL - 0.5) { const left = M_SOL - m(); scoop(type, left > 24 ? 20 : left > 6 ? 5 : 1, left > 24 ? "Grande cuillère" : left > 6 ? "Petite cuillère" : "Pincée"); await demoWait(0.2); }
+  while (ST.demo && m() > M_SOL + 0.5) { doPinchOut(); await demoWait(0.2); }
+  potToSup(i); await demoWait(0.2);
+}
+async function fillTo(v) { if (ST.e0 > v + 0.5) { emptyE0(); await demoWait(0.3); } while (ST.demo && ST.e0 < v - 0.5) { addWater(Math.max(1, Math.min(v - ST.e0 > 30 ? 200 : 10, Math.floor(v - ST.e0)))); while (ST.demo && ST.pouring) await demoTick(); await demoWait(0.2); } }
+async function tareEmpty() { if (Math.abs(ST.tare) > 0.05) { doTare(); await demoWait(0.6); } }
+async function waitDrain(i) { const s = ST.st[i], a0 = ST.acc; ST.acc = 120; $("#btnSpeed").textContent = "⏩ ×120"; const f = () => simulate(s.ms, s.mc, s.Spour, s.Vin); while (ST.demo && (s.tPour == null || ST.simT - s.tPour < f().t98 * 1.4 + 1)) await demoTick(); ST.acc = a0; $("#btnSpeed").textContent = "⏩ ×" + a0; }
+async function waitFirstDrop(i) { const s = ST.st[i]; while (ST.demo && s.t1 == null) await demoTick(); await demoWait(1.5); }
+async function daysUntilWilt(i) {
+  const s = ST.st[i];
+  while (ST.demo && s.turg > 0.15) { doDay(1440); while (ST.demo && ST.dayRun) await demoTick(); await demoWait(0.6); await tareEmpty(); for (const q of ST.st) if (q.plant != null && !lastW(q, "m2") && q.turg > 0.15) { doWeigh(q.i); await demoWait(0.3); } }
+  if (!ST.demo) return; await tareEmpty(); doWeigh(i, "m2");
+}
+const DEMO = [
+  { k: "Pot A", t: "On pose le pot A vide sur la balance et on tare : l'afficheur revient à 0,0 g.", why: "tare", cam: "bal", run: async () => { potToBal(0); await demoWait(0.3); doTare(); }, wait: 1 },
+  { k: "Sable", t: "On verse 300 g de sable séché à l'étuve (bocal maintenu jusqu'à ≈ 292 g, puis cuillère et pincée), et le pot revient sur son entonnoir.", why: "dry", cam: "bal", run: () => fillPot(0, "sable"), wait: 1 },
+  { k: "Argile", t: "Même chose pour le pot B avec 300 g d'argile séchée à l'étuve : même masse de sol sec.", why: "weigh", cam: "bal", run: () => fillPot(1, "argile"), wait: 1 },
+  { k: "Plants", t: "On repique un plant de haricot dans chaque pot, avant la première pesée.", why: "plant", cam: "tray", run: async () => { doPlant(0, 0); await demoWait(0.3); doPlant(1, 1); }, wait: 1 },
+  { k: "m₀", t: "Balance tarée à vide, on pèse chaque pot entier : pot + plant + sol sec = m₀ (noté dans le tableau). Le zoom montre des grains et de l'air : aucune eau.", why: "m0", cam: "bal", run: async () => { await tareEmpty(); doWeigh(0); await demoWait(0.3); doWeigh(1); }, wait: 1.5 },
+  { k: "Eau", t: "On mesure 200 mL d'eau à l'éprouvette (lecture au bas du ménisque).", why: "water", cam: "e0", run: () => fillTo(V_EAU), wait: 0.8 },
+  { k: "Arrosage A", t: "On arrose le sable : le minuteur A démarre. Dans le zoom, l'eau entre par le haut et chasse l'air.", why: "timer", cam: "st0", run: () => doPourWater(0), wait: 0.5 },
+  { k: "Première goutte A", t: "Où va la première goutte ? Elle traverse le sable presque aussitôt et tombe dans l'éprouvette : c'est de l'eau de gravité (P > F). t₁ s'inscrit seul.", why: "gravity", cam: "cyl0", run: () => waitFirstDrop(0), wait: 0.5 },
+  { k: "Eau", t: "On mesure à nouveau 200 mL d'eau pour l'argile.", why: "water", cam: "e0", run: () => fillTo(V_EAU), wait: 0.8 },
+  { k: "Arrosage B", t: "On arrose l'argile : l'eau stagne en surface et s'infiltre lentement.", why: "t1", cam: "st1", run: () => doPourWater(1), wait: 0.5 },
+  { k: "Égouttage A", t: "Dans le sable, l'eau de gravité s'écoule vite. Temps accéléré ×120.", why: "gravity", cam: "cyl0", run: () => waitDrain(0), wait: 0.5 },
+  { k: "Dernière goutte A", t: "Plus aucune goutte : on arrête le minuteur A (t₂) et on lit V_g. Le sable est à sa capacité au champ.", why: "t2", cam: "cyl0", run: async () => { doTimer(0, "stop"); await demoWait(0.8); doRead(0); }, wait: 1.5 },
+  { k: "Première goutte B", t: "Dans l'argile, il faut d'abord remplir d'innombrables pores minuscules : la première goutte arrive après plusieurs minutes.", why: "t1", cam: "cyl1", run: async () => { const a0 = ST.acc; ST.acc = 120; await waitFirstDrop(1); ST.acc = a0; }, wait: 0.5 },
+  { k: "Égouttage B", t: "L'argile laisse passer l'eau goutte à goutte, longtemps.", why: "gravity", cam: "cyl1", run: () => waitDrain(1), wait: 0.5 },
+  { k: "Dernière goutte B", t: "On arrête le minuteur B et on lit V_g : bien moins d'eau de gravité que pour le sable.", why: "read", cam: "cyl1", run: async () => { doTimer(1, "stop"); await demoWait(0.8); doRead(1); }, wait: 1.5 },
+  { k: "m₁", t: "On pèse chaque pot égoutté : m₁. Le zoom montre l'eau capillaire dans les pores fins et la pellicule hygroscopique.", why: "capacity", cam: "bal", run: async () => { await tareEmpty(); doWeigh(0); await demoWait(0.3); doWeigh(1); }, wait: 1.5 },
+  { k: "Eau retenue", t: "L'élève calcule l'eau retenue m₁ − m₀ pour chaque pot.", why: "m1", cam: "stations", run: async () => { await demoCalc(0, ["ret"]); await demoCalc(1, ["ret"]); }, wait: 1 },
+  { k: "Les jours passent", t: "Chaque jour, on pèse les pots et on regarde les feuilles. Le plant du sable fane le premier : il ne reste que l'eau hygroscopique. On pèse m₂.", why: "wilt", cam: "plants", run: () => daysUntilWilt(0), wait: 1.5 },
+  { k: "Argile", t: "Le plant de l'argile tient plus longtemps, puis fane à son tour… alors que le pot contient encore beaucoup d'eau. On pèse m₂.", why: "wilt", cam: "plants", run: () => daysUntilWilt(1), wait: 1.5 },
+  { k: "Calculs", t: "Eau hygroscopique = m₂ − m₀ ; eau capillaire (utilisable) = m₁ − m₂.", why: "m2", cam: "stations", run: async () => { await demoCalc(0, ["hyg", "cap"]); await demoCalc(1, ["hyg", "cap"]); }, wait: 1 },
+  { k: "Bilan", t: "L'argile retient plus d'eau, mais une grande partie est inutilisable pour la plante.", why: "compare", cam: "stations", run: evaluate, wait: 0.5 },
+];
+async function demoCalc(i, fs) {
+  $("#exao").hidden = false; ST.tblShown = true;
+  for (const f of fs) { renderTable(); const d = rowData(ST.st[i]), q = () => $(`#tbl input[data-i="${i}"][data-f="${f}"]`); if (!q() || d[f] == null) continue; q().focus(); for (const ch of g1(d[f])) { const el = q(); if (!el || !ST.demo) return; el.value += ch; await demoWait(0.1); } await demoWait(0.4); if (q()) submit(q()); await demoWait(0.8); }
+}
+const demoTick = () => new Promise((r) => setTimeout(r, 100)).then(async () => { while (ST.demo && ST.demoPaused) await new Promise((r) => setTimeout(r, 100)); });
+async function demoWait(s) { const t0 = performance.now(); while (ST.demo && (performance.now() - t0 < s * 1000 || isBusy())) { await demoTick(); if (ST.demoSkip) { ST.demoSkip = false; break; } } }
+async function runDemo() {
+  resetState(); $("#overlay").hidden = true; $("#panel").hidden = true; closeMenu(); ST.demo = true; ST.demoPaused = false; const d = $("#demo"); setGuide(true);
+  for (let i = 0; i < DEMO.length && ST.demo; i++) {
+    const s = DEMO[i]; d.querySelector(".n").textContent = "Démo " + (i + 1) + "/" + DEMO.length; d.querySelector(".k").textContent = s.k; d.querySelector(".t").textContent = s.t; d.querySelector(".w").innerHTML = s.why ? WHY[s.why] : ""; d.querySelector(".bar i").style.width = ((i + 1) / DEMO.length) * 100 + "%";
+    look(s.cam); await demoWait(1.6); if (!ST.demo) break;
+    await s.run(); if (!ST.demo) break; while (ST.demo && isBusy()) await demoTick(); await demoWait(s.wait);
+  }
+  if (ST.demo) { ST.demo = false; setGuide(ST.guide); }
+}
+function stopDemo() { ST.demo = false; ST.demoPaused = false; stopPour(); stopSoilPour(); setGuide(ST.guide); toast("Démonstration arrêtée : la paillasse est à toi.", ""); }
+buildZoom();
+$("#btnDemo").onclick = () => { if (ST.demo) stopDemo(); else runDemo(); };
+$("#startDemo").onclick = runDemo;
+$("#dPause").onclick = () => { ST.demoPaused = !ST.demoPaused; if (ST.demoPaused) { ST.pausedAcc = ST.acc; ST.acc = 0; if (ST.pouring) stopPour(); stopSoilPour(); } else if (ST.pausedAcc) ST.acc = ST.pausedAcc; $("#dPause").textContent = ST.demoPaused ? "▶ Lecture" : "⏸ Pause"; };
+$("#dNext").onclick = () => { ST.demoPaused = false; if (ST.pausedAcc) ST.acc = ST.pausedAcc; $("#dPause").textContent = "⏸ Pause"; ST.demoSkip = true; };
+$("#dQuit").onclick = stopDemo;
+$("#start").onclick = () => { $("#overlay").hidden = true; setGuide(ST.guide); log("info", "Entrée au labo. Objectif : séparer l'eau de gravité, l'eau capillaire et l'eau hygroscopique d'un sol sableux et d'un sol argileux.", "zoom"); };
+$("#reset").onclick = () => { resetState(); $("#panel").hidden = true; toast("Paillasse remise en ordre."); };
+$("#btnPanel").onclick = openPanel; $("#closePanel").onclick = () => ($("#panel").hidden = true); $("#btnEval").onclick = evaluate; $("#closeExao").onclick = () => ($("#exao").hidden = true); $("#exaoEval").onclick = () => { $("#exao").hidden = true; evaluate(); }; $("#btnTable").onclick = openTable;
+$("#btnZoom").onclick = () => { ST.zoomOn = !ST.zoomOn; if (ST.zoomOn) once("zoomH", "info", "Zoom microscopique affiché.", "zoom"); };
+$("#btnSpeed").onclick = () => { const v = [10, 30, 120], i = (v.indexOf(ST.acc) + 1) % v.length; ST.acc = v[i]; $("#btnSpeed").textContent = "⏩ ×" + ST.acc; toast("Minutes de l'expérience accélérées ×" + ST.acc + " (les minuteurs affichent le temps réel de l'expérience).", ""); };
+$("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
+function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
+$("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
+init3d(); resetState();
+window.__lab = { onClick, ST, evaluate, startSoilPour, stopSoilPour, demoCalc, rowData, renderTable, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, simulate, doRead, doPourWater, scoop, doTare, doTimer, addWater, emptyPot, emptyCyl, potToBal, potToSup, doWeigh, record, doPlant, doDay, doPinchOut, addSoil, shown, potMass, soilIn, fcOf, wpOf, satOf, drawZoom, zCaption, checkAnswer, submit, runDemo, stopDemo, tick, runQueue };
+
+})();
+</script>

@@ -35,6 +35,7 @@ PAGES = {
     "svt-exao-levures.html": "svt-exao-levures.html",
     "svt-sol-retention.html": "svt-sol-retention.html",
     "svt-sol-chimie.html": "svt-sol-chimie.html",
+    "svt-sol-eau.html": "svt-sol-eau.html",
     "physique-5-stations.html": "physique-5-stations.html",
     "labo-3-manips.html": "labo-3-manips.html",
 }
