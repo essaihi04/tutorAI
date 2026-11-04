@@ -320,9 +320,20 @@ def _dire_les_termes_en_francais(text: str) -> str:
         terme = m.group("terme")
         if lien in _CLITIQUES_ADVERBIAUX and terme in formes_nues:
             return m.group(0)
+        # « واحد le brassage », « واحد السؤال » : ici واحد est l'article « un », pas le nombre.
+        # Le prof le dit ainsi (corpus v4) ; « un le brassage » ne veut rien dire.
+        if terme == "واحد" and _WAHED_ARTICLE_RE.match(m.string, m.end()):
+            return m.group(0)
         return _LIENS_ARABES[lien] + noyaux[terme]
 
-    return motif.sub(remplacer, text)
+    text = motif.sub(remplacer, text)
+    # « خمسة ألف » -> « cinq mille » : tous les nombres se disent en français.
+    return _MILLE_ARABE_RE.sub(lambda m: f"{m.group(1)} mille", text)
+
+
+_WAHED_ARTICLE_RE = re.compile(r"\s+(?:le|la|les|l['’]|une?|des|ال)", re.I)
+_MILLE_ARABE_RE = re.compile(
+    r"\b(un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+(?:ألف|آلاف|الاف)(?![؀-ۿ])")
 
 
 def _ouvrir_pause_apres_deux_points(text: str) -> str:

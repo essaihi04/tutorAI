@@ -242,7 +242,7 @@ import multiprocessing as mp  # noqa: E402
 # fait que le HTTP.
 MODULE_TRAVAILLEUR = r'''"""Processus d'une carte T4 (lancé en « spawn » par serveur.py)."""
 import re
-from texte_parle import parle   # CO₂ -> « C O deux », nombres en lettres… (le corpus est écrit ainsi)
+from texte_parle import parle, ponctuation_modele   # CO₂ -> « C O deux », nombres en français, écriture du corpus
 
 AR = re.compile("[؀-ۿ]")
 IMPORTANT = re.compile(
@@ -341,7 +341,7 @@ def travailleur(k, entree, sortie, conf):
         try:
             st = STYLES[style_de(texte)]
             lg = "pl" if (langue != "fr" and AR.search(texte)) else "fr"
-            w = generer(parle(texte), lg, st)
+            w = generer(ponctuation_modele(parle(texte)), lg, st)
             # Un morceau coupé à une virgule n'est pas une fin de phrase : souffle court.
             apres = st["apres"] if texte.rstrip()[-1:] in ".!?؟…" else 0.12
             w = np.concatenate([nettoyer(w.astype(np.float32), m.sr), np.zeros(int(apres * m.sr), np.float32)])

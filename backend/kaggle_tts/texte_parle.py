@@ -2,16 +2,13 @@
 (regles_transcription.md) : le modèle n'a appris que des phrases écrites comme le prof les dit.
 Le texte affiché dans le cours ne change pas ; seule la lecture change.
 - formules : CO₂ -> C O deux, C6H12O6 -> C six H douze O six, Ca²⁺ -> Ca deux plus, NADH,H⁺ -> NADH H plus ;
-- nombres en lettres : en français à côté d'un mot français (« x plus un », « f de un »), en darija entre deux mots
-  arabes (« مختلف على واحد ») ; glucose-6-phosphate -> glucose six phosphate ;
+- nombres en lettres, toujours en FRANÇAIS (« x plus un », « مختلف على un », « glucose six phosphate ») ;
 - chiffres romains des complexes : complexe I/II/III/IV -> un/deux/trois/quatre ;
 - arrêts : découpage après « : » et « ; » (0,35 s) et aux virgules des phrases longues (0,22 s).
 Test : python texte_parle.py (affiche chaque phrase des cours qui change)."""
 import re
 
 FR = "zéro un deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze quinze seize".split()
-AR_N = "صفر واحد جوج ثلاثة ربعة خمسة ستة سبعة ثمنية تسعود عشرة".split()
-AR_N[9] = "تسعة"
 EXPOSANTS = str.maketrans("₀₁₂₃₄₅₆₇₈₉⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "01234567890123456789+-")
 SIGLES = ("FADH", "NADH", "NADP", "NAD", "ATP", "ADP", "GTP")
 FORMULE = re.compile(r"(?<![\w])([A-Z][A-Za-z0-9₀-₉⁰-⁹²³¹]*[0-9₀-₉⁰-⁹²³¹][A-Za-z0-9₀-₉⁰-⁹²³¹]*)([+⁺⁻-]?)(?![\w])")
@@ -33,16 +30,29 @@ def _nombre(p, mt):
     n = int(mt.group(0))
     if n >= len(FR):
         return mt.group(0)
-    avant = re.findall(r"[^\s\d]+", p[:mt.start()])[-1:] or [""]
-    apres = re.findall(r"[^\s\d]+", p[mt.end():])[:1] or [""]
-    # darija seulement entre deux mots arabes, et jamais dans une phrase de maths (variable x, f, g… : le prof dit les nombres en français)
-    maths = re.search(r"(?<![\w'])[a-zA-Z](?![\w'])|\b(?:égale?|sur|plus|moins|limite)\b", p)
-    if n < len(AR_N) and ARABE.search(avant[0][-1:]) and ARABE.search(apres[0][:1]) and not maths:
-        return AR_N[n]
+    # Toujours en français (demande de l'utilisateur, 2026-11-04) : « حدا un », jamais « حدا واحد ».
     return FR[n]
 
 
+# Écriture du corpus v4 (38 852 transcriptions, mesuré le 2026-11-04) : apostrophe droite « ' » 15 438 fois,
+# « ’ » jamais ; ni guillemets ni tirets ; « : » 6 fois et « ; » jamais. Le modèle n'a donc appris ni « ’ » ni « ; ».
+TYPO = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "«": "", "»": "", '"': "", "“": "", "”": "",
+                      "–": ",", "—": ",", "…": "."})
+# Mots d'arabe classique que le prof du corpus ne dit jamais, remplacés par ce qu'il dit à la place.
+DARIJA_DU_CORPUS = {"انتبه": "رد البال", "انتبهوا": "ردو البال", "فالحين": "دغيا"}
+_DARIJA_RE = re.compile(r"(?<![؀-ۿ])(" + "|".join(DARIJA_DU_CORPUS) + r")(?![؀-ۿ])")
+
+
+def ponctuation_modele(q):
+    """Dernière étape avant le modèle, APRÈS le découpage (qui s'est servi de « : » et « ; » pour les arrêts) :
+    ces signes jamais vus à l'entraînement deviennent une virgule."""
+    q = re.sub(r"\s*[:;؛]\s*", "، " if ARABE.search(q) else ", ", q).strip()
+    return re.sub(r"[،,]\s*$", ".", q) if q[-1:] in "،," else q
+
+
 def parle(p):
+    p = _DARIJA_RE.sub(lambda m: DARIJA_DU_CORPUS[m.group(1)], p.translate(TYPO))
+    p = re.sub(r"\s+([,،.])", r"\1", p)          # « important , » (tiret retiré) -> « important, »
     p = re.sub(r"NADH\s*,\s*H\s*(?:[+⁺]|plus\b)", "NADH H plus", p)
     p = re.sub(r"\b([A-Z][a-z]?)([+⁺⁻])(?!\w)", lambda mt: mt.group(1) + (" plus" if mt.group(2) in "+⁺" else " moins"), p)   # H⁺ -> H plus
     p = FORMULE.sub(_formule, p)
