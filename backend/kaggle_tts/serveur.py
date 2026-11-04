@@ -326,7 +326,11 @@ def travailleur(k, entree, sortie, conf):
                                    cfg_weight=st["cfg"])
             return w.float().cpu().numpy()[0]
 
-        generer("Bonjour.", "fr", STYLES["normal"])          # chauffe
+        # Chauffe sur des phrases de la taille d'un premier morceau, dans les deux langues : avec le
+        # seul « Bonjour. », la première vraie réponse d'une séance attendait 2,7 s contre 1,6 s ensuite.
+        generer("Bonjour.", "fr", STYLES["normal"])
+        generer("D'accord, regardons ça ensemble.", "fr", STYLES["normal"])
+        generer("مزيان، دابا غادي نشوفو هادشي مع بعض.", "pl", STYLES["normal"])
         sortie.put(("pret", k, m.sr))
     except Exception as e:
         sortie.put(("echec", k, repr(e)[:300]))
