@@ -93,7 +93,7 @@ class SpeechNormalizerTests(unittest.TestCase):
         """
         self.assertEqual(
             normalize_for_speech("SVT, ADN, pH, H2O et Newton", "fr"),
-            "ès vé té, a dé enne, P H, H deux O et Nioutonne",
+            "SVT, ADN, pH, H deux O et Nioutonne"   # sigles comme dans le corpus v4,
         )
 
     def test_date_time_and_ordinal(self):
@@ -107,14 +107,14 @@ class SpeechNormalizerTests(unittest.TestCase):
         result = normalize_for_speech("النسبة هي 25% والسرعة 5 km/h و ADN", "mixed")
         self.assertIn("vingt-cinq pour cent", result)
         self.assertIn("cinq kilomètres par heure", result)
-        self.assertIn("آ دي إن", result)
+        self.assertIn("ADN", result)   # corpus v4 : sigles en lettres latines (290 fois « ADN »)
         self.assertEqual(normalize_for_speech("2,5", "mixed"), "deux virgule cinq")
         self.assertIn("deux virgule cinq", normalize_for_speech("القيمة 2,5", "mixed"))
 
-    def test_ph_is_spelled_out_for_academy(self):
+    def test_ph_stays_latin_for_academy(self):
+        # corpus v4 : le professeur écrit « pH » (189 fois), jamais « P H »
         spoken = normalize_for_speech("الـ 7 هو pH محايد.", "mixed")
-        self.assertIn("P H", spoken)
-        self.assertNotIn("pH", spoken)
+        self.assertIn("pH", spoken)
 
     def test_frequency_and_basic_si_units_are_not_misread_as_time(self):
         spoken = normalize_for_speech(
@@ -194,7 +194,7 @@ class TTSIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(segment)
         self.assertEqual(segment.text, source)
         academy.assert_awaited_once_with(
-            "La probabilité est vingt-cinq pour cent en ès vé té.", "fr"
+            "La probabilité est vingt-cinq pour cent en SVT.", "fr"
         )
 
 
@@ -406,8 +406,8 @@ def test_un_tiret_de_ponctuation_nest_pas_une_charge():
 
 def test_le_lexique_survit_a_un_mot_compose():
     """La garde anti-charge ne doit pas couper « pH-mètre » du lexique."""
-    assert "P H" in normalize_for_speech("le pH-mètre", "fr")
-    assert "a dé enne" in normalize_for_speech("ADN-polymérase", "fr")
+    assert "pH" in normalize_for_speech("le pH-mètre", "fr")
+    assert "ADN" in normalize_for_speech("ADN-polymérase", "fr")
 
 
 def test_toutes_les_formules_ont_la_meme_ecriture_dans_les_deux_langues():

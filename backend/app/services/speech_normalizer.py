@@ -122,6 +122,14 @@ _CHIFFRES_ROMAINS = {
 # Reprise EXACTE de `ACRONYMES_MOTS` du corpus. Ne rien y ajouter au jugé :
 # mesuré sur les 9 997 transcriptions du corpus, y mettre « PIB » faisait dire
 # « Pib » 183 fois, alors que le professeur épelle « P I B ».
+_SIGLES_ECRITS_D_UN_BLOC = frozenset({
+    # Corpus v4 (86 h, modèle de la voix du prof depuis le 2026-11-04) : ces sigles y sont écrits
+    # d'un bloc en lettres latines — ATP 1 105 fois (97 épelés), ADN 290, ARN 123, pH 189, SVT 75,
+    # PC 52, QCM 10 —, jamais en lettres arabes. Le modèle les dit donc bien tels quels ; les
+    # épeler ou les translittérer lui donne une forme qu'il n'a jamais entendue.
+    "ATP", "ADP", "GTP", "ADN", "ARN", "NADH", "NAD", "FADH", "SVT", "PC", "QCM", "BIOF",
+})
+
 _SIGLES_LUS_COMME_MOTS = frozenset({
     "MASI", "SIDA", "OPEP", "OTAN", "ONU", "UNESCO", "OCDE", "SMIG", "SMAG",
     "OPCVM", "ADEME", "AMO", "RAMED",
@@ -610,6 +618,9 @@ _GENETIQUE_PAIRES_QUI_SONT_DES_MOTS = frozenset({
     "au", "ce", "de", "do", "du", "en", "et", "il", "je", "la", "le",
     "ma", "me", "ne", "no", "on", "or", "ou", "sa", "se", "si", "te",
     "tu", "un", "va", "as", "in",
+    "ph",   # le pH, écrit « pH » dans le corpus (189 fois) : jamais un génotype
+    # unités : « 5 km/h » à côté de « ADN » n'est pas un génotype « k minuscule et m minuscule »
+    "km", "cm", "mm", "dm", "nm", "kg", "mg", "ml", "cl", "dl", "ms", "mn", "hz", "kj", "kw", "mv", "mj",
 })
 
 
@@ -848,6 +859,8 @@ def _epeler_formules_et_sigles(text: str) -> str:
 
         if code in _CHIFFRES_ROMAINS and not espece_chargee:
             dit = num2words(_CHIFFRES_ROMAINS[code], lang="fr")
+        elif code in _SIGLES_ECRITS_D_UN_BLOC and not espece_chargee:
+            dit = code
         elif re.fullmatch(r"[A-Z]{2,5}", code) and not espece_chargee:
             dit = code.capitalize() if code in _SIGLES_LUS_COMME_MOTS else _epeler_code(code)
         elif espece_chargee and code in _NOMS_ELEMENTS:

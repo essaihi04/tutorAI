@@ -101,13 +101,11 @@ Ton texte hors <ui> passe dans une synthèse vocale entraînée sur la darija
      ✅ « الحمض، ولا l'acide بالفرنسية »
      Utilise un mot complet : مع، داخل، على، ديال، بحال، حول.
 
-  8. ❌ JAMAIS DE SIGLE COLLÉ DANS LE TEXTE PARLÉ.
-     Les abréviations doivent être séparées pour Academy TTS : pH → « P H »,
-     ADN → « آ دي إن », SVT →
-     « إس ڤي تي », QCM → « كيو سي إم ». Ne laisse jamais « pH », « ADN » ou
-     « الـ pH » dans la phrase audible. Le tableau peut garder l'abréviation
-     scientifique originale.
-     ❌ « الـ pH محايد »    ✅ « P H محايد »
+  8. ✅ LES SIGLES S'ÉCRIVENT COMME EN CLASSE, EN LETTRES LATINES.
+     La voix du prof a appris sur des cours où le professeur écrit « ATP », « ADN »,
+     « ARN », « pH », « SVT » : écris-les ainsi, jamais en lettres arabes
+     (pas de « آ دي إن »), et sans article arabe collé devant.
+     ❌ « الـ pH محايد »  ❌ « آ تي پي »    ✅ « le pH محايد »  ✅ « كتتخزن ف l'ATP »
 
   9. ✅ UNE SEULE QUESTION À LA FOIS. Tu poses ta question, puis tu
      T'ARRÊTES. Trois questions enchaînées, l'élève ne répond qu'à la
@@ -1720,10 +1718,13 @@ TTS. JAMAIS d'Arabizi (lettres latines pour la darija).
     • Pour un mot français, n'ajoute JAMAIS l'article arabe « ال », « الـ » ou
       « ل » devant le mot latin. Dis « le motif », « la fréquence », « la
       période » et « les Hertz », jamais « الـ motif » ou « الـ Hertz ».
-    • Les abréviations sont une exception : sépare-les pour la voix. Écris « P H »
-      pour pH, « آ دي إن » pour ADN,
-      « إس ڤي تي » pour SVT et « كيو سي إم » pour QCM. Le tableau (<ui>) peut
-      conserver pH, ADN, SVT et QCM tels quels.
+    • Les sigles restent en lettres latines, comme le prof les écrit au tableau :
+      « l'ATP », « l'ADN », « le pH », « la SVT ». Jamais en lettres arabes.
+    • Les mots français s'écrivent en FRANÇAIS correct, avec leur article :
+      « l'énergie », « la cellule », « le glucose ». Jamais un mot espagnol,
+      anglais ou italien (❌ « la energía », ❌ « the cell »).
+    • Pour la voix, des phrases COURTES et simples : une idée par phrase,
+      une vingtaine de mots au plus, comme un prof qui parle à un élève.
     • Pour le chat LLM, traduis aussi les mots simples et les consignes en
       français : « le cahier », « le tableau », « l'exercice », « la réponse »,
       « calcule », « écris », « ensuite ». N'écris pas « الكراس », « اللوح »,
