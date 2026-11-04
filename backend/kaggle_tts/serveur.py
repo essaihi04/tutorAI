@@ -313,20 +313,6 @@ def travailleur(k, entree, sortie, conf):
         # La voix d'Amine n'est analysée qu'une fois : sinon chaque phrase
         # recalculerait l'empreinte de la référence (~0,3 s perdues).
         m.prepare_conditionals(REF, exaggeration=STYLES["normal"]["ex"])
-        # Passages du flow (S3Gen : jetons -> son). lahgtna en fixe 10 en dur ; chacun coûte du GPU.
-        # CONF « pas_flow » (défaut 10 = inchangé), et une requête peut le demander (banc d'écoute).
-        PAS_DEFAUT = int(conf.get("pas_flow") or 10)
-        PAS = [PAS_DEFAUT]
-        _decodeur = m.s3gen.flow.decoder
-        _forward_flow = _decodeur.forward
-
-        def _forward_pas(*a, **kw):
-            if "n_timesteps" in kw:
-                kw["n_timesteps"] = PAS[0]
-            elif len(a) >= 3:
-                a = a[:2] + (PAS[0],) + a[3:]
-            return _forward_flow(*a, **kw)
-        _decodeur.forward = _forward_pas
         demi = bool(conf.get("fp16"))
 
         def generer(texte, lg, st):
@@ -350,8 +336,7 @@ def travailleur(k, entree, sortie, conf):
         sortie.put(("echec", k, repr(e)[:300]))
         return
     while True:
-        tid, texte, langue, options = entree.get()
-        PAS[0] = int((options or {}).get("pas_flow") or PAS_DEFAUT)
+        tid, texte, langue = entree.get()
         pcm = b""
         try:
             st = STYLES[style_de(texte)]
@@ -393,7 +378,7 @@ for attr in ("__file__",):
 __main__.__spec__ = None
 ENTREE, SORTIE = ctx.Queue(), ctx.Queue()
 CONF_TRAVAIL = {"chemins": [p for p in sys.path if p], "base": BASE, "t3": T3, "ref": REF,
-                "fp16": bool(CONF.get("fp16")), "pas_flow": CONF.get("pas_flow")}
+                "fp16": bool(CONF.get("fp16"))}
 for k in range(N):
     ctx.Process(target=travailleur, args=(k, ENTREE, SORTIE, CONF_TRAVAIL), daemon=True).start()
 CARTES, SR = [], 24000
@@ -424,8 +409,8 @@ COMPTEUR = [0]
 
 
 class Travail:
-    def __init__(self, texte, langue, options=None):
-        self.texte, self.langue, self.options = texte, langue, options
+    def __init__(self, texte, langue):
+        self.texte, self.langue = texte, langue
         self.fini = threading.Event()
         self.pcm = b""
 
@@ -452,7 +437,7 @@ class _File:
             COMPTEUR[0] += 1
             tid = COMPTEUR[0]
             EN_COURS[tid] = t
-        ENTREE.put((tid, t.texte, t.langue, t.options))
+        ENTREE.put((tid, t.texte, t.langue))
 
 
 TRAVAUX = _File()
@@ -513,12 +498,11 @@ async def lire(req: Request):
     texte = (d.get("texte") or d.get("text") or "").strip()
     if not texte or len(texte) > 5000:
         raise HTTPException(422, "texte vide ou trop long")
-    req.state.options = {k: d[k] for k in ("pas_flow",) if d.get(k)}   # facultatif (banc d'écoute)
     return texte, ("fr" if d.get("langue") == "fr" else "ma")
 
 
-def lancer(texte, langue, options=None):
-    travaux = [Travail(p, langue, options) for p in phrases(texte)]
+def lancer(texte, langue):
+    travaux = [Travail(p, langue) for p in phrases(texte)]
     for t in travaux:
         TRAVAUX.put(t)
     return travaux
@@ -561,7 +545,7 @@ async def tts(req: Request, authorization: str = Header(None)):
     texte, langue = await lire(req)
     t0 = time.time()
     with Parole():
-        travaux = lancer(texte, langue, req.state.options)
+        travaux = lancer(texte, langue)
         import asyncio
         for t in travaux:
             await asyncio.to_thread(t.fini.wait)
@@ -581,7 +565,7 @@ async def tts_stream(req: Request, authorization: str = Header(None)):
 
     async def flux():
         with Parole():
-            travaux = lancer(texte, langue, req.state.options)
+            travaux = lancer(texte, langue)
             yield entete_wav()
             for t in travaux:
                 await asyncio.to_thread(t.fini.wait)

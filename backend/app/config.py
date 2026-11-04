@@ -127,8 +127,6 @@ class Settings(BaseSettings):
     kaggle_tts_budget_h_semaine: float = 25.0  # quota Kaggle = 30 h GPU / semaine
     kaggle_tts_etat_path: str = "data/kaggle_tts_etat.json"
     kaggle_tts_fp16: int = 0              # calcul en demi-précision (cf. banc_fp16.py)
-    kaggle_tts_pas_flow: int = 4          # passages du flow S3Gen (lahgtna : 10). Écoute à l'aveugle du 2026-11-05 :
-                                          # 4 jamais jugé moins net que 10 (2 mieux, 3 pareil) et premier son −0,6 s
 
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1
