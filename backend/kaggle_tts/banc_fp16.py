@@ -1,4 +1,4 @@
-"""Banc fp32 / fp16 de la voix du prof (modèle Academy v3, voix Amine) sur T4.
+"""Banc fp32 / fp16 de la voix du prof (modèle Academy, voix Amine) sur T4.
 
 Trois modes, mêmes phrases, mêmes graines :
   fp32        référence (ce que sert academy-tts-direct aujourd'hui)
@@ -62,7 +62,7 @@ sh(f"cp -r '{SOCLE}/lahgtna-chatterbox' {WORK}/" if SOCLE else
    f"git clone -q --depth 1 https://github.com/Oddadmix/lahgtna-chatterbox.git {WORK}/lahgtna-chatterbox")
 sys.path.insert(0, f"{WORK}/lahgtna-chatterbox/src")
 os.makedirs(f"{WORK}/base", exist_ok=True)
-fin = [p for p in glob.glob("/kaggle/input/**/t3_mtl23ls_v2.safetensors", recursive=True) if MODELE in p][0]
+fin = [p for p in glob.glob("/kaggle/input/**/t3_mtl23ls_v2.safetensors", recursive=True) if MODELE in p and "checkpoint" not in p][0]
 sh(f"cp '{fin}' {WORK}/base/t3_mtl23ls_v2.safetensors")
 for f in ["ve.pt", "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"]:
     sh(f"cp '{SOCLE}/lahgtna_base/{f}' {WORK}/base/")
