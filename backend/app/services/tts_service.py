@@ -157,7 +157,7 @@ def _reglages_signature(provider: str) -> str:
     return "|".join((
         # Le kernel Kaggle sert une AUTRE voix (Amine, modèle v3) que le Colab :
         # leurs phrases ne doivent jamais se servir l'une pour l'autre.
-        sel + ("|kaggle-v3-amine" if kaggle_tts.actif() else ""),
+        sel + ("|kaggle-v4-amine-vif" if kaggle_tts.actif() else ""),
         f"e{settings.academy_tts_exaggeration:.3f}",
         f"t{settings.academy_tts_temperature:.3f}",
         f"c{settings.academy_tts_cfg_weight:.3f}",

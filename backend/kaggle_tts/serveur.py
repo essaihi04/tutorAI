@@ -1,4 +1,4 @@
-"""Voix du prof en direct sur Kaggle — modèle Academy v3 (étape 1600), voix Amine.
+"""Voix du prof en direct sur Kaggle — modèle Academy v4 (corpus v4), voix Amine au ton vif.
 
 Ce script est poussé tel quel comme kernel Kaggle par le backend
 (`app/services/kaggle_tts.py`) quand une séance s'ouvre, puis il :
@@ -34,6 +34,7 @@ import urllib.request
 
 CONF = json.loads("__CONF__")
 REF_B64 = "__REF_B64__"
+TEXTE_PARLE_B64 = "__TEXTE_PARLE_B64__"   # règles du texte parlé (texte_parle.py), comme les cours v8
 
 T0 = time.time()
 WORK = "/tmp/academy"
@@ -84,7 +85,7 @@ FICHIERS_BASE = ["ve.pt", "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "c
 
 def poids_fins():
     t3 = [p for p in glob.glob("/kaggle/input/**/t3_mtl23ls_v2.safetensors", recursive=True)
-          if CONF["modele"] in p]
+          if CONF["modele"] in p and "checkpoint" not in p]
     return t3[0] if t3 else None
 
 
@@ -196,6 +197,8 @@ def installer():
         sh(f"git clone -q --depth 1 https://github.com/Oddadmix/lahgtna-chatterbox.git {code}")
     sys.path.insert(0, f"{code}/src")
 
+    with open(f"{WORK}/texte_parle.py", "wb") as f:
+        f.write(base64.b64decode(TEXTE_PARLE_B64))
     ref = f"{WORK}/reference_amine.flac"
     with open(ref, "wb") as f:
         f.write(base64.b64decode(REF_B64))
@@ -239,18 +242,21 @@ import multiprocessing as mp  # noqa: E402
 # fait que le HTTP.
 MODULE_TRAVAILLEUR = r'''"""Processus d'une carte T4 (lancé en « spawn » par serveur.py)."""
 import re
+from texte_parle import parle   # CO₂ -> « C O deux », nombres en lettres… (le corpus est écrit ainsi)
 
 AR = re.compile("[؀-ۿ]")
 IMPORTANT = re.compile(
     r"\b(donc|retiens|retenez|c'est-à-dire|autrement dit|attention|important|essentiel|définition|on appelle|"
     r"par conséquent|conclusion|bilan|la règle|je relis|rappel)\b|=|إذن|يعني|مهم|رد البال|ردو البال|عاقل|خاصك|الخلاصة|نعاود نقرا",
     re.I)
-# Réglages validés à l'écoute pour les cours (v6), sans l'étirement Rubber Band :
-# en direct, chaque dixième de seconde compte plus qu'un léger ralenti.
+INTERPELLE = re.compile(r"مرحبا|السلام|شوف|شوفو|تخيل|يلاه|هيا|مزيان|برافو|\b(regarde|regardez|imagine|bravo|bienvenue)\b", re.I)
+# Réglages des cours v8 (validés à l'écoute le 2026-11-04 : voix vive, plus de mélodie),
+# sans l'étirement Rubber Band : en direct, chaque dixième de seconde compte plus qu'un léger ralenti.
 STYLES = {
-    "essentiel": dict(ex=0.70, cfg=0.25, apres=0.45),
-    "normal": dict(ex=0.60, cfg=0.35, apres=0.28),
-    "question": dict(ex=0.70, cfg=0.35, apres=0.45),
+    "essentiel": dict(ex=0.80, cfg=0.25, apres=0.55),
+    "normal": dict(ex=0.70, cfg=0.35, apres=0.35),
+    "question": dict(ex=0.80, cfg=0.35, apres=0.55),
+    "interpelle": dict(ex=0.80, cfg=0.35, apres=0.40),
 }
 
 
@@ -259,6 +265,8 @@ def style_de(p):
         return "essentiel"
     if p.rstrip().endswith(("?", "؟")):
         return "question"
+    if INTERPELLE.search(p):
+        return "interpelle"
     return "normal"
 
 
@@ -329,7 +337,7 @@ def travailleur(k, entree, sortie, conf):
         try:
             st = STYLES[style_de(texte)]
             lg = "pl" if (langue != "fr" and AR.search(texte)) else "fr"
-            w = generer(texte, lg, st)
+            w = generer(parle(texte), lg, st)
             # Un morceau coupé à une virgule n'est pas une fin de phrase : souffle court.
             apres = st["apres"] if texte.rstrip()[-1:] in ".!?؟…" else 0.12
             w = np.concatenate([nettoyer(w.astype(np.float32), m.sr), np.zeros(int(apres * m.sr), np.float32)])
@@ -509,7 +517,7 @@ class Parole:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "moteur": "academy-v3-amine", "gpus": len(MODELES), "sample_rate": SR,
+    return {"status": "ok", "moteur": "academy-v4-amine-vif", "gpus": len(MODELES), "sample_rate": SR,
             "veille_s": CONF["veille_s"], "inactif_s": round(time.time() - ACTIVITE["derniere"])}
 
 

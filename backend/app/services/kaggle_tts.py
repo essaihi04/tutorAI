@@ -296,8 +296,10 @@ def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str,
             "modele": settings.kaggle_tts_modele, "veille_s": settings.kaggle_tts_veille_s,
             "duree_max_s": settings.kaggle_tts_duree_max_s, "fp16": bool(settings.kaggle_tts_fp16)}
     source = (DOSSIER_KERNEL / "serveur.py").read_text(encoding="utf-8")
-    ref = base64.b64encode((DOSSIER_KERNEL / "reference_amine.flac").read_bytes()).decode()
-    source = source.replace('"__CONF__"', repr(json.dumps(conf)), 1).replace('"__REF_B64__"', repr(ref), 1)
+    ref = base64.b64encode((DOSSIER_KERNEL / settings.kaggle_tts_reference).read_bytes()).decode()
+    regles = base64.b64encode((DOSSIER_KERNEL / "texte_parle.py").read_bytes()).decode()   # formules, nombres (cf. cours v8)
+    source = (source.replace('"__CONF__"', repr(json.dumps(conf)), 1).replace('"__REF_B64__"', repr(ref), 1)
+              .replace('"__TEXTE_PARLE_B64__"', repr(regles), 1))
     (dossier / "serveur.py").write_text(source, encoding="utf-8")
     u = settings.kaggle_username
     sources = [f"{u}/{settings.kaggle_tts_modele}"]

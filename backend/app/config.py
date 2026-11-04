@@ -117,7 +117,8 @@ class Settings(BaseSettings):
     kaggle_username: str = ""
     kaggle_api_token: str = ""            # KAGGLE_API_TOKEN (jamais dans le dépôt)
     kaggle_tts_kernel: str = "academy-tts-direct"
-    kaggle_tts_modele: str = "academy-entrainement-v3"   # kernel dont la sortie porte les poids fins
+    kaggle_tts_modele: str = "academy-v4-entrainement"   # kernel dont la sortie porte les poids fins (corpus v4)
+    kaggle_tts_reference: str = "reference_amine_vif.flac"   # voix choisie à l'écoute le 2026-11-04 (Amine, ton vif)
     kaggle_tts_socle: str = ""            # "academy-tts-socle" une fois ce kernel créé (démarrage plus court)
     kaggle_tts_annonce_url: str = "https://moalim.online/api/v1/tts-kaggle/annonce"
     kaggle_tts_veille_s: int = 300        # extinction après 5 min sans parler

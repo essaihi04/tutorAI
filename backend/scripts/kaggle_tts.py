@@ -158,7 +158,7 @@ def banc():
     import base64
     d = Path(tempfile.mkdtemp(prefix="banc_"))
     try:
-        ref = base64.b64encode((DOSSIER_KERNEL / "reference_amine.flac").read_bytes()).decode()
+        ref = base64.b64encode((DOSSIER_KERNEL / settings.kaggle_tts_reference).read_bytes()).decode()
         source = (DOSSIER_KERNEL / "banc_fp16.py").read_text(encoding="utf-8")
         source = source.replace('"__REF_B64__"', repr(ref), 1).replace('"__MODELE__"', repr(settings.kaggle_tts_modele), 1)
         (d / "banc.py").write_text(source, encoding="utf-8")
