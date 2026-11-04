@@ -158,7 +158,7 @@ body.zon #toast{left:calc(50% - 290px)}
     <section><h3>Le matériel et son usage</h3><div class="tool-list" id="toolHelp"></div></section>
   </div>
 </aside>
-<div id="demo" hidden><div class="dh"><span class="n">Démo 1/14</span><span class="k"></span></div><div class="t"></div><div class="w"></div><div class="b"><button class="sb p" id="dPause" type="button">⏸ Pause</button><button class="sb" id="dNext" type="button">Suivant ⏭</button><button class="sb" id="dMin" type="button">Masquer</button><button class="sb" id="dQuit" type="button">Quitter la démo</button></div><div class="bar"><i></i></div></div>
+<div id="demo" hidden><div class="dh"><span class="n">Démo 1/14</span><span class="k"></span></div><div class="t"></div><div class="w"></div><div class="b"><button class="sb p" id="dPause" type="button">⏸ Pause</button><button class="sb" id="dNext" type="button" title="Termine l'étape en cours en accéléré">Étape suivante ⏭</button><button class="sb" id="dSpeed" type="button" title="Vitesse de la démonstration">Vitesse ×1</button><button class="sb" id="dMin" type="button">Masquer</button><button class="sb" id="dQuit" type="button" title="Arrête la démo et garde la paillasse dans son état">✋ Continuer moi-même</button></div><div class="bar"><i></i></div></div>
 <button class="ib" id="showGuide" type="button" hidden>Afficher le guide ▸</button>
 <div id="menu" hidden role="menu"></div>
 <div id="toast" role="status"></div>
@@ -1212,7 +1212,7 @@ function init3d() {
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); $("#exao").hidden = true; } });
   R.domElement.addEventListener("dblclick", () => { if (ST.cur && ST.cur.cam) focusCam(CAMS[ST.cur.cam]); });
   let pend = false; const raf = (f) => { if (pend) return; pend = true; requestAnimationFrame((t) => { pend = false; f(t); }); };
-  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt); ctl.update(); if (aRedessiner(R, scene, cam)) R.render(scene, cam); placeLabels(now); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
+  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt * demoMul()); ctl.update(); if (aRedessiner(R, scene, cam)) R.render(scene, cam); placeLabels(now); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
 }
 function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
 // turgescence du plant : 1 = feuilles étalées, 0 = fané (feuilles pendantes, tige courbée, jaunissement)
@@ -1436,23 +1436,34 @@ async function demoCalc(i, fs) {
   $("#exao").hidden = false; ST.tblShown = true;
   for (const f of fs) { renderTable(); const d = rowData(ST.st[i]), q = () => $(`#tbl input[data-i="${i}"][data-f="${f}"]`); if (!q() || d[f] == null) continue; q().focus(); for (const ch of g1(d[f])) { const el = q(); if (!el || !ST.demo) return; el.value += ch; await demoWait(0.1); } await demoWait(0.4); if (q()) submit(q()); await demoWait(0.8); }
 }
-const demoTick = () => new Promise((r) => setTimeout(r, 100)).then(async () => { while (ST.demo && ST.demoPaused) await new Promise((r) => setTimeout(r, 100)); });
-async function demoWait(s) { const t0 = performance.now(); while (ST.demo && (performance.now() - t0 < s * 1000 || isBusy())) { await demoTick(); if (ST.demoSkip) { ST.demoSkip = false; break; } } }
+const demoTick = () => new Promise((r) => setTimeout(r, 100)).then(async () => { while (ST.demo && ST.demoPaused) await new Promise((r) => setTimeout(r, 100)); if (!ST.demo) throw DEMO_STOP; });
+async function demoWait(s) { const t0 = performance.now(); while (ST.demo && ((performance.now() - t0) * demoMul() < s * 1000 || isBusy())) { await demoTick(); if (ST.demoSkip) { ST.demoSkip = false; break; } } if (!ST.demo) throw DEMO_STOP; }
+/* ------------------------------------------------------------ démonstration pilotable (demande de l'enseignant, nov. 2026)
+   « Vitesse » : ×1, ×2 ou ×4 (gestes, temps de l'expérience et pauses de la démo). « Étape suivante » : l'étape en cours se
+   termine en accéléré (×12) pour que la paillasse reste cohérente, puis la démo reprend normalement. « Continuer moi-même » :
+   la démo s'arrête, la paillasse reste dans l'état où elle est et le guide reprend pour la suite. */
+const DEMO_STOP = {}; // levé par les attentes de la démo quand l'élève l'arrête
+function demoMul() { return ST.demo ? (ST.demoFF ? 12 : ST.demoSpeed || 1) : 1; }
+function demoButtons() {
+  const b = $("#dSpeed"); if (!b || b.dataset.on) return; b.dataset.on = "1"; b.textContent = "Vitesse ×" + (ST.demoSpeed || 1);
+  b.onclick = () => { const v = [1, 2, 4], k = (v.indexOf(ST.demoSpeed || 1) + 1) % v.length; ST.demoSpeed = v[k]; b.textContent = "Vitesse ×" + ST.demoSpeed; toast("Démonstration ×" + ST.demoSpeed + ".", ""); };
+}
 async function runDemo() {
   resetState(); $("#overlay").hidden = true; $("#panel").hidden = true; closeMenu(); ST.demo = true; ST.demoPaused = false; const d = $("#demo"); setGuide(true);
-  for (let i = 0; i < DEMO.length && ST.demo; i++) {
+  try { for (let i = 0; i < DEMO.length && ST.demo; i++) {
+    ST.demoFF = false;
     const s = DEMO[i]; d.querySelector(".n").textContent = "Démo " + (i + 1) + "/" + DEMO.length; d.querySelector(".k").textContent = s.k; d.querySelector(".t").textContent = s.t; d.querySelector(".w").innerHTML = s.why ? WHY[s.why] : ""; d.querySelector(".bar i").style.width = ((i + 1) / DEMO.length) * 100 + "%";
     look(s.cam); await demoWait(1.6); if (!ST.demo) break;
     await s.run(); if (!ST.demo) break; while (ST.demo && isBusy()) await demoTick(); await demoWait(s.wait);
-  }
+  } } catch (e) { if (e !== DEMO_STOP) console.error(e); } // démo arrêtée : l'étape en cours s'interrompt
   if (ST.demo) { ST.demo = false; setGuide(ST.guide); }
 }
-function stopDemo() { ST.demo = false; ST.demoPaused = false; stopPour(); stopSoilPour(); setGuide(ST.guide); toast("Démonstration arrêtée : la paillasse est à toi.", ""); }
+function stopDemo() { ST.demo = false; ST.demoPaused = false; stopPour(); stopSoilPour(); setGuide(ST.guide); ST.demoFF = false; toast("Démo arrêtée : continue toi-même, la paillasse est dans l'état où la démo l'a laissée.", ""); }
 buildZoom();
 $("#btnDemo").onclick = () => { if (ST.demo) stopDemo(); else runDemo(); };
 $("#startDemo").onclick = runDemo;
 $("#dPause").onclick = () => { ST.demoPaused = !ST.demoPaused; if (ST.demoPaused) { ST.pausedAcc = ST.acc; ST.acc = 0; if (ST.pouring) stopPour(); stopSoilPour(); } else if (ST.pausedAcc) ST.acc = ST.pausedAcc; $("#dPause").textContent = ST.demoPaused ? "▶ Lecture" : "⏸ Pause"; };
-$("#dNext").onclick = () => { ST.demoPaused = false; if (ST.pausedAcc) ST.acc = ST.pausedAcc; $("#dPause").textContent = "⏸ Pause"; ST.demoSkip = true; };
+$("#dNext").onclick = () => { ST.demoPaused = false; if (ST.pausedAcc) ST.acc = ST.pausedAcc; $("#dPause").textContent = "⏸ Pause"; ST.demoSkip = true; ST.demoFF = true; toast("Étape terminée en accéléré…", ""); };
 $("#dQuit").onclick = stopDemo;
 $("#start").onclick = () => { $("#overlay").hidden = true; setGuide(ST.guide); log("info", "Entrée au labo. Objectif : séparer l'eau de gravité, l'eau capillaire et l'eau hygroscopique d'un sol sableux et d'un sol argileux.", "zoom"); };
 $("#reset").onclick = () => { resetState(); $("#panel").hidden = true; toast("Paillasse remise en ordre."); };
@@ -1462,7 +1473,7 @@ $("#btnSpeed").onclick = () => { const v = [10, 30, 120], i = (v.indexOf(ST.acc)
 $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
 function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
-init3d(); resetState(); stepButtons(); cadrages();
+init3d(); resetState(); stepButtons(); cadrages(); demoButtons();
 window.__lab = { onClick, ST, evaluate, startSoilPour, stopSoilPour, demoCalc, rowData, renderTable, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, simulate, doRead, doPourWater, scoop, doTare, doTimer, addWater, emptyPot, emptyCyl, potToBal, potToSup, doWeigh, record, doPlant, doDay, doPinchOut, addSoil, shown, potMass, soilIn, fcOf, wpOf, satOf, drawZoom, zCaption, checkAnswer, submit, runDemo, stopDemo, tick, runQueue };
 
 })();
