@@ -200,7 +200,7 @@ def reactions(sortie: str = "/tmp/reactions"):
             faites.append({**r, "url": f"/media/audio/reactions/{r['id']}.wav"})
             print(r["id"], f"{(len(rep.content) - 44) / 2 / 24000:.1f} s", r["texte"])
     (dossier / "manifest.json").write_text(
-        json.dumps({"voix": "academy-v3-amine", "reactions": faites}, ensure_ascii=False, indent=1),
+        json.dumps({"voix": "academy-v4-amine-vif", "reactions": faites}, ensure_ascii=False, indent=1),
         encoding="utf-8")
     print(len(faites), "/", len(phrases), "réactions dans", dossier)
 

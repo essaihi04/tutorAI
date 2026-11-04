@@ -445,7 +445,7 @@ FIN = re.compile(r"(?<=[.!?؟…])\s+")
 # temps réel sur un T4 : le premier son attend tout le premier morceau, donc il
 # est court ; pendant qu'il est joué, l'autre carte prépare le suivant, qui
 # peut alors être plus long sans créer de blanc.
-PALIERS = (45, 90, 150, 200)
+PALIERS = (35, 80, 150, 200)   # 1er morceau 45 -> 35 car. (2026-11-04) : premier son plus tôt
 
 
 def phrases(texte):
