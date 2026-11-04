@@ -6,6 +6,7 @@
     python -m scripts.kaggle_tts essai    # réveil réel + mesures (démarrage, premier son, vitesse)
     python -m scripts.kaggle_tts banc     # banc fp32 / fp16 (kernel séparé, ~15 min GPU)
     python -m scripts.kaggle_tts reactions  # enregistre les réactions immédiates (voix Amine)
+    python -m scripts.kaggle_tts cours FICHIER  # enregistre d'avance les phrases des cours (cache)
 
 Le kernel direct n'est jamais lancé à la main : le backend le pousse quand une
 séance s'ouvre (app/services/kaggle_tts.py). Identifiants : KAGGLE_USERNAME et
@@ -205,6 +206,52 @@ def reactions(sortie: str = "/tmp/reactions"):
     print(len(faites), "/", len(phrases), "réactions dans", dossier)
 
 
+def cours(fichier: str = "/tmp/phrases_cours.json"):
+    """Enregistre d'avance, dans le cache vocal du backend, les phrases que le
+    tableau des cours prononce (lignes écrites, questions) : elles partent
+    ensuite sans attente ni GPU (cf. `synthesize`, qui lit ce cache en premier).
+
+    La liste vient du code même de la page (slideVersScript + toSpokenText),
+    pour que les clés de cache soient identiques à celles du tableau. À relancer
+    après toute modification d'un cours.
+    """
+    import asyncio
+    import time
+
+    from app.services import kaggle_tts
+    from app.services import tts_service
+
+    phrases = json.loads(Path(fichier).read_text(encoding="utf-8"))
+    reveil = _reveiller_essai()
+    if not reveil:
+        return
+    url, jeton, _ = reveil
+    # Ce processus parle au kernel d'essai, pas à celui des élèves.
+    kaggle_tts.pilote.cible = lambda: (url, jeton)
+    kaggle_tts.pilote.besoin_de_voix = lambda *a, **k: None
+
+    async def tout():
+        sem = asyncio.Semaphore(4)
+        faits = {"neuf": 0, "deja": 0, "echec": 0}
+        t0 = time.time()
+
+        async def une(p):
+            async with sem:
+                r = await tts_service.synthesize(p["texte"], p["lang"])
+                cle = "deja" if r.cached else ("neuf" if r.audio_b64 and r.provider == "academy" else "echec")
+                faits[cle] += 1
+                n = sum(faits.values())
+                if n % 25 == 0 or cle == "echec":
+                    print(f"{n}/{len(phrases)} {faits} {time.time() - t0:.0f} s"
+                          + (f" — échec : {p['texte'][:60]}" if cle == "echec" else ""), flush=True)
+
+        await asyncio.gather(*(une(p) for p in phrases))
+        print("terminé :", faits, f"en {time.time() - t0:.0f} s")
+
+    asyncio.run(tout())
+
+
 if __name__ == "__main__":
-    {"socle": socle, "statut": statut, "journal": journal, "essai": essai, "banc": banc, "reactions": reactions}.get(sys.argv[1] if len(sys.argv) > 1 else "",
+    {"socle": socle, "statut": statut, "journal": journal, "essai": essai, "banc": banc, "reactions": reactions,
+     "cours": lambda: cours(*sys.argv[2:3])}.get(sys.argv[1] if len(sys.argv) > 1 else "",
                                                                lambda: print(__doc__))()

@@ -1381,8 +1381,7 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     Main entry point. Always returns server-synthesized audio bytes
     (Academy, Gradio ou Google Cloud) — jamais la synthèse du navigateur.
     """
-    from app.services.kaggle_tts import pilote
-    await pilote.attendre_si_presque_pret()
+    from app.services import kaggle_tts
     if settings.tts_disabled:
         return TTSResult(audio_b64=None, mime="", provider="disabled", use_browser=False)
 
@@ -1396,6 +1395,21 @@ async def synthesize(text: str, language: str = "fr") -> TTSResult:
     # Cap length per request to avoid runaway cost (roughly 2 min of speech)
     if len(spoken_text) > 2500:
         spoken_text = spoken_text[:2500].rsplit(" ", 1)[0] + "…"
+
+    # Une phrase déjà dite par la voix d'Amine (lignes des cours enregistrées
+    # d'avance, cf. `scripts.kaggle_tts cours`) part TOUT DE SUITE, GPU allumé
+    # ou non : le choix du moteur plus bas tomberait sur le repli quand le
+    # kernel dort, et ne lirait jamais ce cache-là.
+    cache = _get_cache()
+    if cache is not None and kaggle_tts.actif():
+        cached = cache.get("academy", settings.academy_tts_voice or "prof", language, spoken_text, "wav")
+        if cached:
+            return TTSResult(
+                audio_b64=base64.b64encode(cached).decode("ascii"),
+                mime="audio/wav", provider="academy", use_browser=False, cached=True,
+            )
+
+    await kaggle_tts.pilote.attendre_si_presque_pret()
 
     provider, voice, ext = _route(language, spoken_text)
 
