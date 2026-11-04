@@ -34,7 +34,10 @@ PAGES = {
     "chimie-dosage-acide-base.html": "chimie-dosage-acide-base.html",
     "svt-exao-levures.html": "svt-exao-levures.html",
     "svt-sol-retention.html": "svt-sol-retention.html",
-    "svt-sol-chimie.html": "svt-sol-chimie.html",
+    "svt-sol-ph.html": "svt-sol-ph.html",
+    "svt-sol-calcaire.html": "svt-sol-calcaire.html",
+    "svt-sol-cah.html": "svt-sol-cah.html",
+    "svt-sol-cations.html": "svt-sol-cations.html",
     "svt-sol-eau.html": "svt-sol-eau.html",
     "physique-5-stations.html": "physique-5-stations.html",
     "labo-3-manips.html": "labo-3-manips.html",
@@ -43,6 +46,8 @@ ANCIENNES = {
     "physique-5-stations.html": ("Physique · 2ᵉ Bac PC BIOF", "Cinq stations de physique (première version)"),
     "labo-3-manips.html": ("Physique-Chimie · 2ᵉ Bac PC BIOF", "Trois manips de chimie (première version)"),
 }
+# Pages retirées (manips découpées) : leur adresse renvoie au sommaire au lieu de tomber sur l'application.
+RETIREES = ["svt-sol-chimie.html"]
 
 _LIGNE_LAB = re.compile(r'\{\s*g:\s*"([^"]*)",\s*t:\s*"([^"]*)",\s*n:\s*"([^"]*)",\s*u:\s*"([^"]*)"\s*\}')
 _OUVERTURE = re.compile(
@@ -147,6 +152,11 @@ def main() -> None:
         groupes.setdefault(g, []).append((n, publie_par_titre[t]))
     io.open(CIBLE / "index.html", "w", encoding="utf-8", newline="\n").write(sommaire(groupes, pages))
     print("sommaire                         -> labo/index.html")
+    for nom in RETIREES:
+        io.open(CIBLE / nom, "w", encoding="utf-8", newline="\n").write(
+            '<!doctype html>\n<html lang="fr"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=./">'
+            '<title>Labo virtuel 3D</title></head><body><p>Cette manip a été découpée : <a href="./">voir toutes les manips</a>.</p></body></html>\n')
+        print(f"{nom:32s} -> renvoi vers le sommaire")
 
 
 def sommaire(groupes: dict[str, list[tuple[str, str]]], pages: dict[str, str]) -> str:
