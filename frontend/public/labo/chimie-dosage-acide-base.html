@@ -123,7 +123,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
   <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
 </header>
-<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnGuide" type="button">Masquer</button></span></div>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnSkip" type="button" title="Le guide ne proposera plus cette étape">Passer l'étape ⏭</button><button class="sb" id="btnGuide" type="button">Masquer</button><button class="sb" id="btnUnskip" type="button" hidden>↺ Rétablir</button></span></div>
 <aside id="panel" hidden aria-label="Carnet de manipulation">
   <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
   <div class="body">
@@ -501,6 +501,7 @@ const rnd = (a, b, s) => +(a + s * Math.floor(Math.random() * (Math.round((b - a
 const pKa = 4.76, CB = 0.1, VPIP = 10; // pKa(CH₃COOH/CH₃COO⁻) = 4,76 à 25 °C (manuel : 4,8) ; Ke = 10⁻¹⁴
 const IND = { phph: { n: "phénolphtaléine", lo: 8.2, hi: 10, c1: [0.84, 0.91, 0.98], c2: [0.93, 0.08, 0.5] }, bbt: { n: "BBT", lo: 6.0, hi: 7.6, c1: [0.98, 0.84, 0.1], c2: [0.08, 0.32, 0.9], mid: [0.2, 0.72, 0.35] }, hel: { n: "hélianthine", lo: 3.1, hi: 4.4, c1: [0.9, 0.12, 0.1], c2: [0.98, 0.78, 0.15] } };
 function resetState() {
+  if (STEP) { STEP.skip.clear(); STEP.focus = null; } // étapes libres
   Object.assign(ST, { CA: rnd(0.08, 0.12, 0.001), nA: 0, VA: 0, Vw: 0, VB: 0, Vread: 0, bur: 0, burVis: 0, filling: false, pipPour: 0, wPour: 0, VAtarget: 0, Vwtarget: 0, bubble: false, airOut: 0, ind: null, indDrops: 0, stir: false, probeIn: false, pipState: "water", pipFull: false, pouring: false, flow: 0, VEnoted: null, pts: [], q: [], busy: false, guide: true, started: performance.now(), attempts: 1, ev: [], flags: {}, swirl: 0, pH: 7, rdPH: NaN, lastDrop: 0 });
   for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); }
   X.liq.visible = false; X.liqRing.visible = false; X.bliq.visible = false; X.bubble.visible = false; X.drop.visible = false; X.swirl.visible = false; X.pipLiq.visible = false; ST.pipLvlT = 0; ST.pipLvl = 0; ST.bkFrac = 1; ST.indDrop = null; ST.binPour = 0; ST.pipTo = null; X.menisc.visible = false; X.funnel.visible = false; X.fillStream.visible = false; X.naohCap.visible = true; X.pipStream.visible = false; X.wStream.visible = false; X.bstream.visible = false; X.agLed.material.emissiveIntensity = 0.05; X.lcdPH.set("----", "pH"); X.tap.rotation.y = 0;
@@ -568,20 +569,52 @@ const CAMS = {
 };
 let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
 const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
+/* ------------------------------------------------------------ étapes libres (demande de l'enseignant, nov. 2026)
+   L'élève peut passer une étape ou changer l'ordre. Le guide d'origine (suggestAll) est parcouru dans l'ordre conseillé :
+   la première étape qui n'est pas passée est proposée, les étapes passées sont franchies. « Passer l'étape » retire du
+   guide tout ce geste (ex. papier pH : la goutte et la lecture, pour tous les béchers) ; « Rétablir » le fait revenir.
+   Quand l'élève agit sur l'objet d'une étape plus loin (ex. le pH-mètre avant le papier pH), le guide le suit : il propose
+   les étapes de cet objet tant qu'il en reste, puis revient à l'ordre conseillé sans déplacer la caméra. La dernière étape
+   (bilan, Évaluer) ne se passe pas. */
+var STEP = { list: null, first: false, found: null, skip: new Set(), focus: null };
+const STEP_STOP = {}, stepKey = (g) => g.k + "|" + g.on, skipKey = (g) => g.why || g.k, stepSkipped = (g) => STEP.skip.has(skipKey(g));
+function __step(g) {
+  if (!g) return;
+  if (STEP.first) { if (!stepSkipped(g)) { STEP.found = g; throw STEP_STOP; } return; }
+  if (STEP.list && !STEP.list.some((h) => stepKey(h) === stepKey(g))) STEP.list.push(g);
+}
+function allSteps() { STEP.list = []; try { suggestAll(); } catch (e) { console.error(e); } const l = STEP.list; STEP.list = null; return l; }
+function firstStep() { STEP.first = true; STEP.found = null; try { suggestAll(); } catch (e) { if (e !== STEP_STOP) console.error(e); } STEP.first = false; return STEP.found; }
 function suggest() {
+  const all = allSteps(), last = all[all.length - 1]; let g = firstStep() || last;
+  if (STEP.focus) { const f = all.slice(0, -1).find((s) => s.on === STEP.focus && !stepSkipped(s)); if (f) g = f; else { STEP.focus = null; if (g) g = Object.assign({}, g, { cam: null }); } }
+  const u = $("#btnUnskip"); if (u) { u.hidden = !STEP.skip.size; u.textContent = "↺ Rétablir les étapes passées (" + STEP.skip.size + ")"; }
+  const sk = $("#btnSkip"); if (sk) sk.hidden = !g || !last || stepKey(g) === stepKey(last);
+  return g || { on: null, k: "Libre", t: "Manipule librement, puis clique sur Évaluer.", why: "" };
+}
+function stepFollow(name) {
+  if (!name || ST.demo) return; const g = firstStep(); if (g && g.on === name) { STEP.focus = null; return; }
+  STEP.focus = allSteps().slice(0, -1).some((s) => s.on === name && !stepSkipped(s)) ? name : null;
+}
+function stepButtons() {
+  const sk = $("#btnSkip"), u = $("#btnUnskip"); if (!sk || sk.dataset.on) return; sk.dataset.on = "1";
+  sk.onclick = () => { const g = ST.cur; if (!g || !g.on) return; STEP.skip.add(skipKey(g)); if (STEP.focus === g.on) STEP.focus = null; log("info", "Étape passée : « " + g.k + " ». Le guide ne la propose plus (« Rétablir » la fait revenir).", typeof WHY !== "undefined" && WHY[g.why] ? g.why : undefined); toast("Étape passée : " + g.k + ". Tu restes libre de la faire quand tu veux.", ""); };
+  u.onclick = () => { STEP.skip.clear(); STEP.focus = null; toast("Le guide reprend toutes les étapes.", ""); };
+}
+function suggestAll() {
   const VE = VEtrue(), col = indColor(ST.pH);
-  if (ST.bur === 0) return { on: "burette", k: "Burette", t: "Clique sur la burette, puis « Remplir avec NaOH » jusqu'au zéro.", why: "fill", cam: "bur" };
-  if (ST.bubble) return { on: "tap", k: "Robinet", t: "Une bulle d'air est dans la pointe : clique sur le robinet, puis « Purger la pointe ».", why: "bubble", cam: "tap" };
-  if (ST.VA === 0) { if (ST.pipState !== "acid" && !ST.pipFull) return { on: "pip", k: "Pipette", t: "Rince la pipette avec l'acide, puis prélève 10,0 mL.", why: "pip", cam: "fl" }; if (!ST.pipFull) return { on: "pip", k: "Pipette", t: "Prélève 10,0 mL d'acide avec la propipette.", why: "pip", cam: "fl" }; return { on: "beaker", k: "Bécher", t: "Verse les 10,0 mL d'acide dans le bécher (clique sur la pipette).", why: "pip", cam: "bk" }; }
-  if (ST.Vw < 15) return { on: "wash", k: "Pissette", t: "Ajoute environ 20 mL d'eau distillée (pour immerger la sonde et le barreau).", why: "water", cam: "bk", v: "V(eau) = " + Math.round(ST.Vw) + " mL" };
-  if (!ST.ind) return { on: "phph", k: "Indicateur", t: "Choisis l'indicateur dont la zone de virage contient pH_E (≈ 8,7) et ajoute 2 à 3 gouttes.", why: "ind", cam: "ind" };
-  if (!ST.stir) return { on: "agit", k: "Agitateur", t: "Allume l'agitation.", why: "stir", cam: "bk" };
+  if (ST.bur === 0) { __step({ on: "burette", k: "Burette", t: "Clique sur la burette, puis « Remplir avec NaOH » jusqu'au zéro.", why: "fill", cam: "bur" }); }
+  if (ST.bubble) { __step({ on: "tap", k: "Robinet", t: "Une bulle d'air est dans la pointe : clique sur le robinet, puis « Purger la pointe ».", why: "bubble", cam: "tap" }); }
+  if (ST.VA === 0) { if (ST.pipState !== "acid" && !ST.pipFull) { __step({ on: "pip", k: "Pipette", t: "Rince la pipette avec l'acide, puis prélève 10,0 mL.", why: "pip", cam: "fl" }); } if (!ST.pipFull) { __step({ on: "pip", k: "Pipette", t: "Prélève 10,0 mL d'acide avec la propipette.", why: "pip", cam: "fl" }); } { __step({ on: "beaker", k: "Bécher", t: "Verse les 10,0 mL d'acide dans le bécher (clique sur la pipette).", why: "pip", cam: "bk" }); } }
+  if (ST.Vw < 15) { __step({ on: "wash", k: "Pissette", t: "Ajoute environ 20 mL d'eau distillée (pour immerger la sonde et le barreau).", why: "water", cam: "bk", v: "V(eau) = " + Math.round(ST.Vw) + " mL" }); }
+  if (!ST.ind) { __step({ on: "phph", k: "Indicateur", t: "Choisis l'indicateur dont la zone de virage contient pH_E (≈ 8,7) et ajoute 2 à 3 gouttes.", why: "ind", cam: "ind" }); }
+  if (!ST.stir) { __step({ on: "agit", k: "Agitateur", t: "Allume l'agitation.", why: "stir", cam: "bk" }); }
   if (ST.VEnoted == null) {
-    if (ST.VB < VE - 1.5) return { on: "tap", k: "Robinet", t: "Verse la soude en maintenant le robinet ouvert, surveille la couleur. Ralentis dès qu'une teinte apparaît puis disparaît.", why: "pour", cam: "bk", v: "V_B = " + fmt(ST.Vread, 1) + " mL" };
-    return { on: "tap", k: "Robinet", t: "Goutte à goutte. Note V_E dès que la couleur persiste sous agitation (clique sur le bécher).", why: "fugace", cam: "bk", v: "V_B = " + fmt(ST.Vread, 1) + " mL" };
+    if (ST.VB < VE - 1.5) { __step({ on: "tap", k: "Robinet", t: "Verse la soude en maintenant le robinet ouvert, surveille la couleur. Ralentis dès qu'une teinte apparaît puis disparaît.", why: "pour", cam: "bk", v: "V_B = " + fmt(ST.Vread, 1) + " mL" }); }
+    { __step({ on: "tap", k: "Robinet", t: "Goutte à goutte. Note V_E dès que la couleur persiste sous agitation (clique sur le bécher).", why: "fugace", cam: "bk", v: "V_B = " + fmt(ST.Vread, 1) + " mL" }); }
   }
-  if (!ST.pts.length) return { on: "beaker", k: "V_E noté", t: "Clique sur Évaluer. Pour vérifier par pH-métrie : refais un dosage avec la sonde et note des points.", why: "virage", cam: "bk", v: "V_E = " + fmt(ST.VEnoted, 1) + " mL" };
-  return { on: "phm", k: "pH-mètre", t: "Clique sur Évaluer pour comparer le virage et la courbe pH.", why: "curve", cam: "ph", v: ST.pts.length + " points" };
+  if (!ST.pts.length) { __step({ on: "beaker", k: "V_E noté", t: "Clique sur Évaluer. Pour vérifier par pH-métrie : refais un dosage avec la sonde et note des points.", why: "virage", cam: "bk", v: "V_E = " + fmt(ST.VEnoted, 1) + " mL" }); }
+  { __step({ on: "phm", k: "pH-mètre", t: "Clique sur Évaluer pour comparer le virage et la courbe pH.", why: "curve", cam: "ph", v: ST.pts.length + " points" }); }
 }
 let lastKey = "";
 function updGuide() {
@@ -782,13 +815,13 @@ const HELP_KEY = { burette: 0, naoh: 5, tap: 1, beaker: 2, pip: 3, acid: 4, wash
 function closeMenu() { $("#menu").hidden = true; }
 function openMenu(name, x, y) {
   const items = menuFor(name); if (!items.length) return;
-  if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
+  if (items.length === 1 && !items[0].hold) { closeMenu(); stepFollow(name); items[0].run(); return; }
   const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
   m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
   for (const it of items) {
     const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.hold ? " hold" : "") + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`;
-    if (it.hold) { b.addEventListener("pointerdown", (e) => { e.preventDefault(); startPour(); }); const stop = () => { if (ST.pouring) { stopPour(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
-    else b.onclick = () => { closeMenu(); it.run(); };
+    if (it.hold) { b.addEventListener("pointerdown", (e) => { e.preventDefault(); stepFollow(name); startPour(); }); const stop = () => { if (ST.pouring) { stopPour(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
+    else b.onclick = () => { closeMenu(); stepFollow(name); it.run(); };
     m.append(b);
   }
   m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
@@ -985,7 +1018,7 @@ $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] ||
 /* masquer / réafficher le guidage (carte du guide ou carte de la démo, anneau compris) */
 function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
-init3d(); resetState();
+init3d(); resetState(); stepButtons();
 window.__lab = { onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, deliver, pHof, VEtrue, doVirage };
 })();
 </script>

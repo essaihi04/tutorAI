@@ -135,7 +135,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
   <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
 </header>
-<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnGuide" type="button">Masquer</button></span></div>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnSkip" type="button" title="Le guide ne proposera plus cette étape">Passer l'étape ⏭</button><button class="sb" id="btnGuide" type="button">Masquer</button><button class="sb" id="btnUnskip" type="button" hidden>↺ Rétablir</button></span></div>
 <aside id="panel" hidden aria-label="Carnet de manipulation">
   <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
   <div class="body">
@@ -610,6 +610,7 @@ const newBk = () => ({ soil: null, m: 0, w: 0, eq: 0, susp: 0, stirred: false, t
 const newTb = () => ({ v: 0, hf: 0.5, ca: 0, floc: 0, tCa: null });
 const newPf = () => ({ soil: false, dye: null, left: 0, filt: 0, colSum: 0, tPour: null });
 function resetState() {
+  if (STEP) { STEP.skip.clear(); STEP.focus = null; } // étapes libres
   if (X.jar) for (const o of [...Object.values(X.jar), X.terre, X.fH, X.fA, X.fS, X.fB, X.fE]) { const cap = o.userData.cap, u = cap.userData; if (u.off) { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } }
   for (const b of [X.hcl, X.cacl]) if (b && b.userData.dp.parent !== b) { b.attach(b.userData.dp); b.userData.dp.position.set(0, 0, 0); b.userData.dp.rotation.set(0, 0, 0); }
   Object.assign(ST, { q: [], busy: false, ev: [], flags: {}, attempts: 1, acc: ST.acc || 30, simT: 0, pouring: null, addTo: null, sqT: 0, washT: 0, fall: null, fPour: null, jet: null, drip: null, binPour: null, atChart: null, zone: null, demo: false, cur: null, guide: ST.guide == null ? true : ST.guide, ans: {}, miss: {}, tblShown: false });
@@ -698,54 +699,86 @@ const ZONES = {};
 ZONES.ph = () => {
   for (let i = 0; i < 4; i++) {
     const b = ST.bk[i], S = SOILS[SK[i]], L_ = LETN[i];
-    if (!b.soil) return { on: "jar" + i, k: "Bécher " + L_, t: "Mets 10 g de " + S.nl + " dans le bécher " + L_ + " (clique sur le bocal " + S.n + ").", why: "soilIn", cam: "ph" };
-    if (b.w < 24) return { on: "wash", k: "Eau " + L_, t: "Ajoute 25 mL d'eau distillée dans le bécher " + L_ + " (pissette : maintenir, puis +1 mL).", why: "water", cam: "bk" + i, v: Math.round(b.w) + " mL" };
-    if (!b.stirred) return { on: "rod", k: "Agiter " + L_, t: "Agite la suspension du bécher " + L_ + " avec la baguette de verre.", why: "stir", cam: "bk" + i };
+    if (!b.soil) { __step({ on: "jar" + i, k: "Bécher " + L_, t: "Mets 10 g de " + S.nl + " dans le bécher " + L_ + " (clique sur le bocal " + S.n + ").", why: "soilIn", cam: "ph" }); }
+    if (b.w < 24) { __step({ on: "wash", k: "Eau " + L_, t: "Ajoute 25 mL d'eau distillée dans le bécher " + L_ + " (pissette : maintenir, puis +1 mL).", why: "water", cam: "bk" + i, v: Math.round(b.w) + " mL" }); }
+    if (!b.stirred) { __step({ on: "rod", k: "Agiter " + L_, t: "Agite la suspension du bécher " + L_ + " avec la baguette de verre.", why: "stir", cam: "bk" + i }); }
   }
   for (let i = 0; i < 4; i++) { const b = ST.bk[i], L_ = LETN[i];
-    if (b.strip == null) return b.susp > 0.45 ? { on: "bk" + i, k: "Décantation " + L_, t: "Laisse décanter le bécher " + L_ + " : le surnageant s'éclaircit (temps accéléré).", why: "decant", cam: "bk" + i } : { on: "paper", k: "Papier pH " + L_, t: "Dépose une goutte du surnageant " + L_ + " sur une bandelette de papier pH (clique sur le distributeur jaune).", why: "paper", cam: "paper" };
-    if (ST.ans["pp" + i] == null) return { on: "strip" + i, k: "Lire " + L_, t: "La bandelette " + L_ + " est contre l'échelle de teintes : compare les couleurs et écris le pH dans le tableau (clique sur la bandelette pour la rapprocher).", why: "paper", cam: "chart" };
+    if (b.strip == null) { __step(b.susp > 0.45 ? { on: "bk" + i, k: "Décantation " + L_, t: "Laisse décanter le bécher " + L_ + " : le surnageant s'éclaircit (temps accéléré).", why: "decant", cam: "bk" + i } : { on: "paper", k: "Papier pH " + L_, t: "Dépose une goutte du surnageant " + L_ + " sur une bandelette de papier pH (clique sur le distributeur jaune).", why: "paper", cam: "paper" }); }
+    if (ST.ans["pp" + i] == null) { __step({ on: "strip" + i, k: "Lire " + L_, t: "La bandelette " + L_ + " est contre l'échelle de teintes : compare les couleurs et écris le pH dans le tableau (clique sur la bandelette pour la rapprocher).", why: "paper", cam: "chart" }); }
   }
-  if (ST.pm.cal < 2) return { on: "phm", k: "Étalonnage", t: "Étalonne le pH-mètre avec les tampons pH 7,00 puis 4,01 (clique sur le pH-mètre).", why: "cal", cam: "pm" };
+  if (ST.pm.cal < 2) { __step({ on: "phm", k: "Étalonnage", t: "Étalonne le pH-mètre avec les tampons pH 7,00 puis 4,01 (clique sur le pH-mètre).", why: "cal", cam: "pm" }); }
   for (let i = 0; i < 4; i++) { const b = ST.bk[i], L_ = LETN[i];
-    if (b.pm == null) return ST.pm.at === "bk" + i ? { on: "probe", k: "Lecture " + L_, t: "Attends que la valeur se stabilise, puis clique sur la sonde : « Lire et noter ».", why: "probe", cam: "bk" + i, v: isNaN(ST.pm.rd) ? "" : fmt(ST.pm.rd, 2) } : { on: "probe", k: "pH-mètre " + L_, t: (ST.pm.rinsed ? "" : "Rince la sonde, puis ") + "plonge la sonde dans le bécher " + L_ + " (clique sur la sonde).", why: ST.pm.rinsed ? "probe" : "rinse", cam: "pm" };
-    if (ST.ans["nat" + i] == null) return { on: "bk" + i, k: "Nature " + L_, t: "Dans le tableau, indique si le sol " + L_ + " est acide, neutre ou basique.", why: "nature", cam: "bk" + i };
+    if (b.pm == null) { __step(ST.pm.at === "bk" + i ? { on: "probe", k: "Lecture " + L_, t: "Attends que la valeur se stabilise, puis clique sur la sonde : « Lire et noter ».", why: "probe", cam: "bk" + i, v: isNaN(ST.pm.rd) ? "" : fmt(ST.pm.rd, 2) } : { on: "probe", k: "pH-mètre " + L_, t: (ST.pm.rinsed ? "" : "Rince la sonde, puis ") + "plonge la sonde dans le bécher " + L_ + " (clique sur la sonde).", why: ST.pm.rinsed ? "probe" : "rinse", cam: "pm" }); }
+    if (ST.ans["nat" + i] == null) { __step({ on: "bk" + i, k: "Nature " + L_, t: "Dans le tableau, indique si le sol " + L_ + " est acide, neutre ou basique.", why: "nature", cam: "bk" + i }); }
   }
   return null;
 };
 ZONES.hcl = () => {
   for (let i = 0; i < 4; i++) { const w = ST.wg[i], S = SOILS[SK[i]], L_ = LETN[i];
-    if (!w.soil) return { on: "jar" + i, k: "HCl " + L_, t: "Dépose une pincée de " + S.nl + " sur le verre de montre " + L_ + " (clique sur le bocal " + S.n + ").", why: "hcl", cam: "hcl" };
-    if (!w.hcl) return { on: "hcl", k: "HCl " + L_, t: "Verse quelques gouttes de HCl dilué sur le verre de montre " + L_ + ".", why: "hcl", cam: "wg" + i };
-    if (ST.ans["eff" + i] == null) return { on: "wg" + i, k: "Effervescence " + L_, t: "Observe : nulle, faible ou vive ? Note-la dans le tableau.", why: "hcl", cam: "wg" + i };
+    if (!w.soil) { __step({ on: "jar" + i, k: "HCl " + L_, t: "Dépose une pincée de " + S.nl + " sur le verre de montre " + L_ + " (clique sur le bocal " + S.n + ").", why: "hcl", cam: "hcl" }); }
+    if (!w.hcl) { __step({ on: "hcl", k: "HCl " + L_, t: "Verse quelques gouttes de HCl dilué sur le verre de montre " + L_ + ".", why: "hcl", cam: "wg" + i }); }
+    if (ST.ans["eff" + i] == null) { __step({ on: "wg" + i, k: "Effervescence " + L_, t: "Observe : nulle, faible ou vive ? Note-la dans le tableau.", why: "hcl", cam: "wg" + i }); }
   }
   return null;
 };
 ZONES.cah = () => {
-  if (ST.mb.h < 1) return { on: "fH", k: "Mélange", t: "Verse le filtrat d'humus dans le bécher de mélange.", why: "mix", cam: "cah" };
-  if (ST.mb.a < 1) return { on: "fA", k: "Mélange", t: "Verse le filtrat d'argile dans le même bécher.", why: "mix", cam: "cah" };
-  if (ST.tb[0].v < 1 || ST.tb[1].v < 1) return { on: "mb", k: "Tubes", t: "Répartis le mélange dans les tubes 1 et 2 (clique sur le bécher de mélange).", why: "split", cam: "cah" };
-  if (!ST.tb[1].ca && !ST.tb[0].ca) return { on: "cacl", k: "CaCl₂", t: "Ajoute du CaCl₂ dans le tube 2 seulement : le tube 1 reste témoin.", why: "cacl", cam: "cah" };
-  for (let k = 0; k < 2; k++) if (ST.ans["tb" + k] == null) return { on: "tb" + k, k: "Tube " + (k + 1), t: "Observe le tube " + (k + 1) + " (temps accéléré) et note son aspect dans le tableau.", why: "floc", cam: ST.tb[1].ca && !ST.tb[0].ca ? "tb1" : "tb" + k };
+  if (ST.mb.h < 1) { __step({ on: "fH", k: "Mélange", t: "Verse le filtrat d'humus dans le bécher de mélange.", why: "mix", cam: "cah" }); }
+  if (ST.mb.a < 1) { __step({ on: "fA", k: "Mélange", t: "Verse le filtrat d'argile dans le même bécher.", why: "mix", cam: "cah" }); }
+  if (ST.tb[0].v < 1 || ST.tb[1].v < 1) { __step({ on: "mb", k: "Tubes", t: "Répartis le mélange dans les tubes 1 et 2 (clique sur le bécher de mélange).", why: "split", cam: "cah" }); }
+  if (!ST.tb[1].ca && !ST.tb[0].ca) { __step({ on: "cacl", k: "CaCl₂", t: "Ajoute du CaCl₂ dans le tube 2 seulement : le tube 1 reste témoin.", why: "cacl", cam: "cah" }); }
+  for (let k = 0; k < 2; k++) if (ST.ans["tb" + k] == null) { __step({ on: "tb" + k, k: "Tube " + (k + 1), t: "Observe le tube " + (k + 1) + " (temps accéléré) et note son aspect dans le tableau.", why: "floc", cam: ST.tb[1].ca && !ST.tb[0].ca ? "tb1" : "tb" + k }); }
   return null;
 };
 ZONES.elec = () => {
-  if (!ST.u.fill) return { on: "fS", k: "Tube en U", t: "Remplis le tube en U avec la suspension argilo-humique.", why: "electro", cam: "elec" };
-  if (!ST.u.on && Math.abs(ST.u.m) < 0.35) return { on: "gen", k: "Générateur", t: "Allume le générateur : courant continu entre les deux électrodes.", why: "electro", cam: "elec" };
-  if (ST.ans.u == null) return { on: "utube", k: "Électrophorèse", t: "Observe vers quelle électrode migrent les colloïdes (temps accéléré) et note-le dans le tableau.", why: "electro", cam: "uz" };
+  if (!ST.u.fill) { __step({ on: "fS", k: "Tube en U", t: "Remplis le tube en U avec la suspension argilo-humique.", why: "electro", cam: "elec" }); }
+  if (!ST.u.on && Math.abs(ST.u.m) < 0.35) { __step({ on: "gen", k: "Générateur", t: "Allume le générateur : courant continu entre les deux électrodes.", why: "electro", cam: "elec" }); }
+  if (ST.ans.u == null) { __step({ on: "utube", k: "Électrophorèse", t: "Observe vers quelle électrode migrent les colloïdes (temps accéléré) et note-le dans le tableau.", why: "electro", cam: "uz" }); }
   return null;
 };
 ZONES.dye = () => {
-  for (let k = 0; k < 2; k++) if (!ST.pf[k].soil && ST.pf[k].dye == null) return { on: "terre", k: "Entonnoir " + "AB"[k], t: "Garnis l'entonnoir " + "AB"[k] + " de terre de jardin (clique sur le bocal Terre).", why: "dye", cam: "dye" };
-  if (ST.pf[0].dye == null) return { on: "fB", k: "Bleu", t: "Verse le bleu de méthylène sur l'entonnoir A.", why: "dye", cam: "dye" };
-  if (ST.pf[1].dye == null) return { on: "fE", k: "Éosine", t: "Verse l'éosine sur l'entonnoir B.", why: "dye", cam: "dye" };
-  for (let k = 0; k < 2; k++) if (ST.ans["pf" + k] == null) return { on: "pt" + k, k: "Filtrat " + "AB"[k], t: "Observe le filtrat " + "AB"[k] + " et note sa couleur dans le tableau.", why: "dye", cam: "pt" + k };
+  for (let k = 0; k < 2; k++) if (!ST.pf[k].soil && ST.pf[k].dye == null) { __step({ on: "terre", k: "Entonnoir " + "AB"[k], t: "Garnis l'entonnoir " + "AB"[k] + " de terre de jardin (clique sur le bocal Terre).", why: "dye", cam: "dye" }); }
+  if (ST.pf[0].dye == null) { __step({ on: "fB", k: "Bleu", t: "Verse le bleu de méthylène sur l'entonnoir A.", why: "dye", cam: "dye" }); }
+  if (ST.pf[1].dye == null) { __step({ on: "fE", k: "Éosine", t: "Verse l'éosine sur l'entonnoir B.", why: "dye", cam: "dye" }); }
+  for (let k = 0; k < 2; k++) if (ST.ans["pf" + k] == null) { __step({ on: "pt" + k, k: "Filtrat " + "AB"[k], t: "Observe le filtrat " + "AB"[k] + " et note sa couleur dans le tableau.", why: "dye", cam: "pt" + k }); }
   return null;
 };
+/* ------------------------------------------------------------ étapes libres (demande de l'enseignant, nov. 2026)
+   L'élève peut passer une étape ou changer l'ordre. Le guide d'origine (suggestAll) est parcouru dans l'ordre conseillé :
+   la première étape qui n'est pas passée est proposée, les étapes passées sont franchies. « Passer l'étape » retire du
+   guide tout ce geste (ex. papier pH : la goutte et la lecture, pour tous les béchers) ; « Rétablir » le fait revenir.
+   Quand l'élève agit sur l'objet d'une étape plus loin (ex. le pH-mètre avant le papier pH), le guide le suit : il propose
+   les étapes de cet objet tant qu'il en reste, puis revient à l'ordre conseillé sans déplacer la caméra. La dernière étape
+   (bilan, Évaluer) ne se passe pas. */
+var STEP = { list: null, first: false, found: null, skip: new Set(), focus: null };
+const STEP_STOP = {}, stepKey = (g) => g.k + "|" + g.on, skipKey = (g) => g.why || g.k, stepSkipped = (g) => STEP.skip.has(skipKey(g));
+function __step(g) {
+  if (!g) return;
+  if (STEP.first) { if (!stepSkipped(g)) { STEP.found = g; throw STEP_STOP; } return; }
+  if (STEP.list && !STEP.list.some((h) => stepKey(h) === stepKey(g))) STEP.list.push(g);
+}
+function allSteps() { STEP.list = []; try { suggestAll(); } catch (e) { console.error(e); } const l = STEP.list; STEP.list = null; return l; }
+function firstStep() { STEP.first = true; STEP.found = null; try { suggestAll(); } catch (e) { if (e !== STEP_STOP) console.error(e); } STEP.first = false; return STEP.found; }
 function suggest() {
+  const all = allSteps(), last = all[all.length - 1]; let g = firstStep() || last;
+  if (STEP.focus) { const f = all.slice(0, -1).find((s) => s.on === STEP.focus && !stepSkipped(s)); if (f) g = f; else { STEP.focus = null; if (g) g = Object.assign({}, g, { cam: null }); } }
+  const u = $("#btnUnskip"); if (u) { u.hidden = !STEP.skip.size; u.textContent = "↺ Rétablir les étapes passées (" + STEP.skip.size + ")"; }
+  const sk = $("#btnSkip"); if (sk) sk.hidden = !g || !last || stepKey(g) === stepKey(last);
+  return g || { on: null, k: "Libre", t: "Manipule librement, puis clique sur Évaluer.", why: "" };
+}
+function stepFollow(name) {
+  if (!name || ST.demo) return; const g = firstStep(); if (g && g.on === name) { STEP.focus = null; return; }
+  STEP.focus = allSteps().slice(0, -1).some((s) => s.on === name && !stepSkipped(s)) ? name : null;
+}
+function stepButtons() {
+  const sk = $("#btnSkip"), u = $("#btnUnskip"); if (!sk || sk.dataset.on) return; sk.dataset.on = "1";
+  sk.onclick = () => { const g = ST.cur; if (!g || !g.on) return; STEP.skip.add(skipKey(g)); if (STEP.focus === g.on) STEP.focus = null; log("info", "Étape passée : « " + g.k + " ». Le guide ne la propose plus (« Rétablir » la fait revenir).", typeof WHY !== "undefined" && WHY[g.why] ? g.why : undefined); toast("Étape passée : " + g.k + ". Tu restes libre de la faire quand tu veux.", ""); };
+  u.onclick = () => { STEP.skip.clear(); STEP.focus = null; toast("Le guide reprend toutes les étapes.", ""); };
+}
+function suggestAll() {
   if (ST.zone && ZONES[ST.zone]) { const s = ZONES[ST.zone](); if (s) return s; }
   for (const z of ["ph", "hcl", "cah", "elec", "dye"]) { const s = ZONES[z](); if (s) return s; }
-  return { on: "bin", k: "Bilan", t: "Clique sur Évaluer pour le bilan : pH, calcaire et complexe argilo-humique.", why: "cah", cam: "wide" };
+  { __step({ on: "bin", k: "Bilan", t: "Clique sur Évaluer pour le bilan : pH, calcaire et complexe argilo-humique.", why: "cah", cam: "wide" }); }
 }
 let lastKey = "";
 function updGuide() {
@@ -1020,13 +1053,13 @@ SK.forEach((k, i) => (NAMES["strip" + i] = "Bandelette " + LETN[i])); NAMES.tb0 
 function closeMenu() { $("#menu").hidden = true; }
 function openMenu(name, x, y) {
   const items = menuFor(name); if (!items.length) return;
-  if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
+  if (items.length === 1 && !items[0].hold) { closeMenu(); stepFollow(name); items[0].run(); return; }
   const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
   m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
   for (const it of items) {
     const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.hold ? " hold" : "") + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`;
-    if (it.hold) { b.addEventListener("pointerdown", (e) => { e.preventDefault(); it.start(); }); const stop = () => { if (it.on()) { it.stop(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
-    else b.onclick = () => { closeMenu(); it.run(); };
+    if (it.hold) { b.addEventListener("pointerdown", (e) => { e.preventDefault(); stepFollow(name); it.start(); }); const stop = () => { if (it.on()) { it.stop(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
+    else b.onclick = () => { closeMenu(); stepFollow(name); it.run(); };
     m.append(b);
   }
   m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
@@ -1304,7 +1337,7 @@ $("#btnSpeed").onclick = () => { const v = [10, 30, 120], i = (v.indexOf(ST.acc)
 $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
 function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
-init3d(); resetState();
+init3d(); resetState(); stepButtons();
 window.__lab = { onClick, doCompare, INFO, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, answer, renderTable, scoopTo, addWater, startPour, stopPour, doStir, doPaper, doCal, doRinse, doProbe, doReadPM, doHcl, doFiltrate, doSplit, doCa, doFillU, doGen, doSwap, doTerre, doDye, pHsusp, expected };
 
 })();

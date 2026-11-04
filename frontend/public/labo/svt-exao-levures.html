@@ -108,7 +108,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
   <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
 </header>
-<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnGuide" type="button">Masquer le guide</button></span></div>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnSkip" type="button" title="Le guide ne proposera plus cette étape">Passer l'étape ⏭</button><button class="sb" id="btnGuide" type="button">Masquer le guide</button><button class="sb" id="btnUnskip" type="button" hidden>↺ Rétablir</button></span></div>
 <aside id="panel" hidden aria-label="Carnet de manipulation">
   <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
   <div class="body">
@@ -448,6 +448,7 @@ function buildBench(g) {
 const ST = {};
 const SIM = 6; // 1 s réel = 6 s simulé (signalé dans WHY). O₂ saturation à 25 °C ≈ 8,3 mg/L (Benson & Krause 1984).
 function resetState() {
+  if (STEP) { STEP.skip.clear(); STEP.focus = null; } // étapes libres
   Object.assign(ST, { yeast: 0, o2: 8.3, co2: 0.5, glu: 0, eth: 0, lidOn: false, stir: false, o2In: false, co2In: false, cal: false, acq: false, ts: 0, data: [], inj: [], syrFull: true, anaer: false, q: [], busy: false, guide: true, started: performance.now(), attempts: 1, ev: [], flags: {}, rO2: 0, rdO2: 8.3, rdCO2: 0.5, noise: 0 });
   for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); }
   X.liq.visible = false; X.lid.position.set(0, 0.17, 0); X.lid.rotation.set(0, 0, 0); X.lid.visible = true; X.agLed.material.emissiveIntensity = 0.05; X.ifLed.material.emissiveIntensity = 0.1; X.syrLiq.scale.y = 0.05; X.syrLiq.position.y = -0.01; X.plunger.position.y = 0.06;
@@ -494,17 +495,49 @@ const CAMS = { enc: { p: [0.05, 0.42, 0.46], t: [0.0, 0.18, -0.17] }, pc: { p: [
 let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
 const look = (k) => { camFocus = k; focusCam(CAMS[k]) };
 const sinceInj = () => (ST.inj.length ? ST.ts - ST.inj[ST.inj.length - 1] : -1);
+/* ------------------------------------------------------------ étapes libres (demande de l'enseignant, nov. 2026)
+   L'élève peut passer une étape ou changer l'ordre. Le guide d'origine (suggestAll) est parcouru dans l'ordre conseillé :
+   la première étape qui n'est pas passée est proposée, les étapes passées sont franchies. « Passer l'étape » retire du
+   guide tout ce geste (ex. papier pH : la goutte et la lecture, pour tous les béchers) ; « Rétablir » le fait revenir.
+   Quand l'élève agit sur l'objet d'une étape plus loin (ex. le pH-mètre avant le papier pH), le guide le suit : il propose
+   les étapes de cet objet tant qu'il en reste, puis revient à l'ordre conseillé sans déplacer la caméra. La dernière étape
+   (bilan, Évaluer) ne se passe pas. */
+var STEP = { list: null, first: false, found: null, skip: new Set(), focus: null };
+const STEP_STOP = {}, stepKey = (g) => g.k + "|" + g.on, skipKey = (g) => g.why || g.k, stepSkipped = (g) => STEP.skip.has(skipKey(g));
+function __step(g) {
+  if (!g) return;
+  if (STEP.first) { if (!stepSkipped(g)) { STEP.found = g; throw STEP_STOP; } return; }
+  if (STEP.list && !STEP.list.some((h) => stepKey(h) === stepKey(g))) STEP.list.push(g);
+}
+function allSteps() { STEP.list = []; try { suggestAll(); } catch (e) { console.error(e); } const l = STEP.list; STEP.list = null; return l; }
+function firstStep() { STEP.first = true; STEP.found = null; try { suggestAll(); } catch (e) { if (e !== STEP_STOP) console.error(e); } STEP.first = false; return STEP.found; }
 function suggest() {
-  if (ST.yeast === 0) return { on: "yeast", k: "Flacon de levures", t: "Clique sur le flacon : il verse 100 mL de suspension dans l'enceinte.", why: "yeast", cam: "fl" };
-  if (!ST.stir) return { on: "agit", k: "Agitateur", t: "Allume l'agitation.", why: "stir", cam: "enc" };
-  if (!ST.cal && !ST.o2In) return { on: "pO2", k: "Sonde O₂", t: "Étalonne la sonde O₂ à l'air (100 %), puis place-la dans l'enceinte.", why: "cal", cam: "enc" };
-  if (!ST.o2In) return { on: "pO2", k: "Sonde O₂", t: "Place la sonde O₂ dans l'enceinte.", why: "probes", cam: "enc" };
-  if (!ST.co2In) return { on: "pCO2", k: "Sonde CO₂", t: "Place la sonde CO₂ dans l'enceinte.", why: "probes", cam: "enc" };
-  if (!ST.lidOn) return { on: "lid", k: "Couvercle", t: "Ferme le couvercle pour isoler la suspension de l'air.", why: "lid", cam: "enc" };
-  if (!ST.acq) return { on: "pc", k: "Ordinateur", t: "Démarre l'acquisition et laisse une ligne de base d'au moins 30 s.", why: "acq", cam: "pc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" };
-  if (ST.inj.length === 0) { const base = ST.data.length ? ST.ts - ST.data[0].t : 0; if (base < 30) return { on: "pc", k: "Ligne de base", t: "Attends 30 s d'enregistrement avant d'injecter.", why: "acq", cam: "pc", v: fmt(base, 0) + " s" }; if (!ST.syrFull) return { on: "glu", k: "Glucose", t: "Remplis la seringue au flacon de glucose (1 mL).", why: "refill", cam: "fl" }; return { on: "syr", k: "Seringue", t: "Injecte 1 mL de glucose par le passage du couvercle.", why: "inj", cam: "enc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" }; }
-  if (sinceInj() < 60) return { on: "pc", k: "Ordinateur", t: "Laisse agir le glucose : observe la pente de O₂ pendant 60 s.", why: "slope", cam: "pc", v: fmt(sinceInj(), 0) + " s" };
-  return { on: "pc", k: "Ordinateur", t: "Arrête l'acquisition et clique sur Évaluer pour comparer les pentes.", why: "slope", cam: "pc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" };
+  const all = allSteps(), last = all[all.length - 1]; let g = firstStep() || last;
+  if (STEP.focus) { const f = all.slice(0, -1).find((s) => s.on === STEP.focus && !stepSkipped(s)); if (f) g = f; else { STEP.focus = null; if (g) g = Object.assign({}, g, { cam: null }); } }
+  const u = $("#btnUnskip"); if (u) { u.hidden = !STEP.skip.size; u.textContent = "↺ Rétablir les étapes passées (" + STEP.skip.size + ")"; }
+  const sk = $("#btnSkip"); if (sk) sk.hidden = !g || !last || stepKey(g) === stepKey(last);
+  return g || { on: null, k: "Libre", t: "Manipule librement, puis clique sur Évaluer.", why: "" };
+}
+function stepFollow(name) {
+  if (!name || ST.demo) return; const g = firstStep(); if (g && g.on === name) { STEP.focus = null; return; }
+  STEP.focus = allSteps().slice(0, -1).some((s) => s.on === name && !stepSkipped(s)) ? name : null;
+}
+function stepButtons() {
+  const sk = $("#btnSkip"), u = $("#btnUnskip"); if (!sk || sk.dataset.on) return; sk.dataset.on = "1";
+  sk.onclick = () => { const g = ST.cur; if (!g || !g.on) return; STEP.skip.add(skipKey(g)); if (STEP.focus === g.on) STEP.focus = null; log("info", "Étape passée : « " + g.k + " ». Le guide ne la propose plus (« Rétablir » la fait revenir).", typeof WHY !== "undefined" && WHY[g.why] ? g.why : undefined); toast("Étape passée : " + g.k + ". Tu restes libre de la faire quand tu veux.", ""); };
+  u.onclick = () => { STEP.skip.clear(); STEP.focus = null; toast("Le guide reprend toutes les étapes.", ""); };
+}
+function suggestAll() {
+  if (ST.yeast === 0) { __step({ on: "yeast", k: "Flacon de levures", t: "Clique sur le flacon : il verse 100 mL de suspension dans l'enceinte.", why: "yeast", cam: "fl" }); }
+  if (!ST.stir) { __step({ on: "agit", k: "Agitateur", t: "Allume l'agitation.", why: "stir", cam: "enc" }); }
+  if (!ST.cal && !ST.o2In) { __step({ on: "pO2", k: "Sonde O₂", t: "Étalonne la sonde O₂ à l'air (100 %), puis place-la dans l'enceinte.", why: "cal", cam: "enc" }); }
+  if (!ST.o2In) { __step({ on: "pO2", k: "Sonde O₂", t: "Place la sonde O₂ dans l'enceinte.", why: "probes", cam: "enc" }); }
+  if (!ST.co2In) { __step({ on: "pCO2", k: "Sonde CO₂", t: "Place la sonde CO₂ dans l'enceinte.", why: "probes", cam: "enc" }); }
+  if (!ST.lidOn) { __step({ on: "lid", k: "Couvercle", t: "Ferme le couvercle pour isoler la suspension de l'air.", why: "lid", cam: "enc" }); }
+  if (!ST.acq) { __step({ on: "pc", k: "Ordinateur", t: "Démarre l'acquisition et laisse une ligne de base d'au moins 30 s.", why: "acq", cam: "pc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" }); }
+  if (ST.inj.length === 0) { const base = ST.data.length ? ST.ts - ST.data[0].t : 0; if (base < 30) { __step({ on: "pc", k: "Ligne de base", t: "Attends 30 s d'enregistrement avant d'injecter.", why: "acq", cam: "pc", v: fmt(base, 0) + " s" }); } if (!ST.syrFull) { __step({ on: "glu", k: "Glucose", t: "Remplis la seringue au flacon de glucose (1 mL).", why: "refill", cam: "fl" }); } { __step({ on: "syr", k: "Seringue", t: "Injecte 1 mL de glucose par le passage du couvercle.", why: "inj", cam: "enc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" }); } }
+  if (sinceInj() < 60) { __step({ on: "pc", k: "Ordinateur", t: "Laisse agir le glucose : observe la pente de O₂ pendant 60 s.", why: "slope", cam: "pc", v: fmt(sinceInj(), 0) + " s" }); }
+  { __step({ on: "pc", k: "Ordinateur", t: "Arrête l'acquisition et clique sur Évaluer pour comparer les pentes.", why: "slope", cam: "pc", v: "O₂ = " + fmt(ST.rdO2, 2) + " mg/L" }); }
 }
 let lastKey = "";
 function updGuide() {
@@ -611,10 +644,10 @@ const HELP_KEY = { enc: 0, lid: 1, yeast: 2, pO2: 3, pCO2: 4, agit: 5, pc: 6, if
 function closeMenu() { $("#menu").hidden = true; }
 function openMenu(name, x, y) {
   const items = menuFor(name); if (!items.length) return;
-  if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
+  if (items.length === 1 && !items[0].hold) { closeMenu(); stepFollow(name); items[0].run(); return; }
   const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
   m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
-  for (const it of items) { const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`; b.onclick = () => { closeMenu(); it.run(); }; m.append(b); }
+  for (const it of items) { const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`; b.onclick = () => { closeMenu(); stepFollow(name); it.run(); }; m.append(b); }
   m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
 }
 function onClick(name, x, y) { if (!name) return; openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
@@ -783,7 +816,7 @@ $("#btnPanel").onclick = openPanel; $("#closePanel").onclick = () => ($("#panel"
 $("#btnEval").onclick = evaluate; $("#closeExao").onclick = () => ($("#exao").hidden = true); $("#exaoEval").onclick = () => { $("#exao").hidden = true; evaluate(); };
 $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
 $("#btnGuide").onclick = () => { ST.guide = !ST.guide; $("#btnGuide").textContent = ST.guide ? "Masquer le guide" : "Afficher le guide"; $("#instr").classList.toggle("min", !ST.guide); $("#instr .t").style.display = ST.guide ? "" : "none"; $("#instr .h").style.display = ST.guide ? "" : "none"; };
-init3d(); resetState();
+init3d(); resetState(); stepButtons();
 window.__lab = { onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, doAcq, doInject, slopes };
 })();
 </script>

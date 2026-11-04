@@ -135,7 +135,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
   <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
 </header>
-<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnGuide" type="button">Masquer</button></span></div>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnSkip" type="button" title="Le guide ne proposera plus cette étape">Passer l'étape ⏭</button><button class="sb" id="btnGuide" type="button">Masquer</button><button class="sb" id="btnUnskip" type="button" hidden>↺ Rétablir</button></span></div>
 <aside id="panel" hidden aria-label="Carnet de manipulation">
   <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
   <div class="body">
@@ -544,6 +544,7 @@ function simulate(ms, mc, Vin, cot) {
   return (SIMC[key] = { Df, t95: t95 || 0, R });
 }
 function resetState() {
+  if (STEP) { STEP.skip.clear(); STEP.focus = null; } // étapes libres
   if (X.wb) for (const k of ["sable", "argile"]) { const cap = TOOLS[k].obj.userData.cap, u = cap.userData; if (u.off) { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } }
   Object.assign(ST, { q: [], busy: false, ev: [], flags: {}, attempts: 1, acc: ST.acc || 30, simT: 0, tare: 0, tared: false, onPan: true, wbL: [], wbMixed: true, e0: 0, pouring: false, addTo: null, washT: 0, sqT: 0, fall: null, wPour: null, sPour: null, binPour: null, sFlow: null, demo: false, cur: null, guide: ST.guide == null ? true : ST.guide, balTxt: "" });
   ST.st = [newSt(0), newSt(1), newSt(2)];
@@ -603,30 +604,62 @@ STX.forEach((x, i) => { CAMS["st" + i] = { p: [x + 0.14, 0.52, 0.28], t: [x, 0.2
 let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
 const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
 function lastRead(s) { return s.reads.length ? s.reads[s.reads.length - 1] : null; }
+/* ------------------------------------------------------------ étapes libres (demande de l'enseignant, nov. 2026)
+   L'élève peut passer une étape ou changer l'ordre. Le guide d'origine (suggestAll) est parcouru dans l'ordre conseillé :
+   la première étape qui n'est pas passée est proposée, les étapes passées sont franchies. « Passer l'étape » retire du
+   guide tout ce geste (ex. papier pH : la goutte et la lecture, pour tous les béchers) ; « Rétablir » le fait revenir.
+   Quand l'élève agit sur l'objet d'une étape plus loin (ex. le pH-mètre avant le papier pH), le guide le suit : il propose
+   les étapes de cet objet tant qu'il en reste, puis revient à l'ordre conseillé sans déplacer la caméra. La dernière étape
+   (bilan, Évaluer) ne se passe pas. */
+var STEP = { list: null, first: false, found: null, skip: new Set(), focus: null };
+const STEP_STOP = {}, stepKey = (g) => g.k + "|" + g.on, skipKey = (g) => g.why || g.k, stepSkipped = (g) => STEP.skip.has(skipKey(g));
+function __step(g) {
+  if (!g) return;
+  if (STEP.first) { if (!stepSkipped(g)) { STEP.found = g; throw STEP_STOP; } return; }
+  if (STEP.list && !STEP.list.some((h) => stepKey(h) === stepKey(g))) STEP.list.push(g);
+}
+function allSteps() { STEP.list = []; try { suggestAll(); } catch (e) { console.error(e); } const l = STEP.list; STEP.list = null; return l; }
+function firstStep() { STEP.first = true; STEP.found = null; try { suggestAll(); } catch (e) { if (e !== STEP_STOP) console.error(e); } STEP.first = false; return STEP.found; }
 function suggest() {
+  const all = allSteps(), last = all[all.length - 1]; let g = firstStep() || last;
+  if (STEP.focus) { const f = all.slice(0, -1).find((s) => s.on === STEP.focus && !stepSkipped(s)); if (f) g = f; else { STEP.focus = null; if (g) g = Object.assign({}, g, { cam: null }); } }
+  const u = $("#btnUnskip"); if (u) { u.hidden = !STEP.skip.size; u.textContent = "↺ Rétablir les étapes passées (" + STEP.skip.size + ")"; }
+  const sk = $("#btnSkip"); if (sk) sk.hidden = !g || !last || stepKey(g) === stepKey(last);
+  return g || { on: null, k: "Libre", t: "Manipule librement, puis clique sur Évaluer.", why: "" };
+}
+function stepFollow(name) {
+  if (!name || ST.demo) return; const g = firstStep(); if (g && g.on === name) { STEP.focus = null; return; }
+  STEP.focus = allSteps().slice(0, -1).some((s) => s.on === name && !stepSkipped(s)) ? name : null;
+}
+function stepButtons() {
+  const sk = $("#btnSkip"), u = $("#btnUnskip"); if (!sk || sk.dataset.on) return; sk.dataset.on = "1";
+  sk.onclick = () => { const g = ST.cur; if (!g || !g.on) return; STEP.skip.add(skipKey(g)); if (STEP.focus === g.on) STEP.focus = null; log("info", "Étape passée : « " + g.k + " ». Le guide ne la propose plus (« Rétablir » la fait revenir).", typeof WHY !== "undefined" && WHY[g.why] ? g.why : undefined); toast("Étape passée : " + g.k + ". Tu restes libre de la faire quand tu veux.", ""); };
+  u.onclick = () => { STEP.skip.clear(); STEP.focus = null; toast("Le guide reprend toutes les étapes.", ""); };
+}
+function suggestAll() {
   const [A, B] = ST.st, m = wbMass(), sh = shown(), V = (s) => ({ v: LET[s.i] + " : " + Math.round(s.D) + " mL · " + clk(s.tm.t) });
-  for (const s of [A, B]) if (!s.cot && s.ms + s.mc === 0) return { on: "coton", k: "Coton", t: "Place un tampon de coton au fond de l'entonnoir " + LET[s.i] + " (clique sur le sachet de coton).", why: "cot", cam: "st" + s.i };
+  for (const s of [A, B]) if (!s.cot && s.ms + s.mc === 0) { __step({ on: "coton", k: "Coton", t: "Place un tampon de coton au fond de l'entonnoir " + LET[s.i] + " (clique sur le sachet de coton).", why: "cot", cam: "st" + s.i }); }
   const target = A.ms + A.mc === 0 ? ["sable", A] : B.ms + B.mc === 0 ? ["argile", B] : null;
   if (target) {
     const [soil, s] = target, other = soil === "sable" ? "argile" : "sable", hasOther = ST.wbL.some((l) => l.t === other);
-    if (hasOther) return { on: "pese", k: "Bécher de pesée", t: "Le bécher contient " + du(other) + " : vide-le aux déchets avant de peser " + du(soil) + ".", why: "weigh", cam: "bal" };
-    if (!ST.tared || Math.abs(sh - m) > 0.005) return { on: "tare", k: "Balance", t: "Bécher de pesée vide sur le plateau : appuie sur TARE.", why: "tare", cam: "bal", v: fmt(sh) + " g" };
-    if (m < 99.5) return { on: soil, k: soil === "sable" ? "Sable" : "Argile", t: m < 90 ? "Verse " + du(soil) + " au bocal en maintenant le bouton jusqu'à ≈ 95 g (clique sur le bocal), puis ajuste à la cuillère." : "Ajuste à la petite cuillère ou à la pincée jusqu'à 100,0 g.", why: "weigh", cam: "bal", v: fmt(sh) + " g" };
-    if (m > 100.5) return { on: "pese", k: "Bécher de pesée", t: "Trop de sol : retire une pincée.", why: "weigh", cam: "bal", v: fmt(sh) + " g" };
-    return { on: "pese", k: "Bécher de pesée", t: "Verse les 100 g " + de(soil) + " dans l'entonnoir " + LET[s.i] + ".", why: "soilPour", cam: "stations", v: fmt(sh) + " g" };
+    if (hasOther) { __step({ on: "pese", k: "Bécher de pesée", t: "Le bécher contient " + du(other) + " : vide-le aux déchets avant de peser " + du(soil) + ".", why: "weigh", cam: "bal" }); }
+    if (!ST.tared || Math.abs(sh - m) > 0.005) { __step({ on: "tare", k: "Balance", t: "Bécher de pesée vide sur le plateau : appuie sur TARE.", why: "tare", cam: "bal", v: fmt(sh) + " g" }); }
+    if (m < 99.5) { __step({ on: soil, k: soil === "sable" ? "Sable" : "Argile", t: m < 90 ? "Verse " + du(soil) + " au bocal en maintenant le bouton jusqu'à ≈ 95 g (clique sur le bocal), puis ajuste à la cuillère." : "Ajuste à la petite cuillère ou à la pincée jusqu'à 100,0 g.", why: "weigh", cam: "bal", v: fmt(sh) + " g" }); }
+    if (m > 100.5) { __step({ on: "pese", k: "Bécher de pesée", t: "Trop de sol : retire une pincée.", why: "weigh", cam: "bal", v: fmt(sh) + " g" }); }
+    { __step({ on: "pese", k: "Bécher de pesée", t: "Verse les 100 g " + de(soil) + " dans l'entonnoir " + LET[s.i] + ".", why: "soilPour", cam: "stations", v: fmt(sh) + " g" }); }
   }
   for (const s of [A, B]) if (s.Vin === 0) {
-    if (ST.e0 < 99.5 || ST.e0 > 100.5) return { on: ST.e0 > 100.5 ? "e0" : "wash", k: "Eau", t: ST.e0 > 100.5 ? "Trop d'eau dans l'éprouvette de mesure : vide-la et recommence." : "Remplis l'éprouvette de mesure jusqu'à 100 mL à la pissette (maintenir, puis +1 mL).", why: "water", cam: "e0", v: Math.round(ST.e0) + " mL" };
-    return { on: "e0", k: "Eau", t: "Verse les 100 mL sur le sol de l'entonnoir " + LET[s.i] + " : le minuteur " + LET[s.i] + " démarre au contact de l'eau.", why: "timer", cam: "st" + s.i, v: Math.round(ST.e0) + " mL" };
+    if (ST.e0 < 99.5 || ST.e0 > 100.5) { __step({ on: ST.e0 > 100.5 ? "e0" : "wash", k: "Eau", t: ST.e0 > 100.5 ? "Trop d'eau dans l'éprouvette de mesure : vide-la et recommence." : "Remplis l'éprouvette de mesure jusqu'à 100 mL à la pissette (maintenir, puis +1 mL).", why: "water", cam: "e0", v: Math.round(ST.e0) + " mL" }); }
+    { __step({ on: "e0", k: "Eau", t: "Verse les 100 mL sur le sol de l'entonnoir " + LET[s.i] + " : le minuteur " + LET[s.i] + " démarre au contact de l'eau.", why: "timer", cam: "st" + s.i, v: Math.round(ST.e0) + " mL" }); }
   }
   for (const s of [A, B]) {
     const L_ = LET[s.i];
-    if (s.t1 == null) return { on: "cyl" + s.i, k: "Première goutte " + L_, t: "Attends la première goutte dans l'éprouvette " + L_ + " : t₁ s'inscrit tout seul dans le tableau.", why: s.mc > s.ms ? "clay" : "t1", cam: "cyl" + s.i, ...V(s) };
-    if (s.t2 == null) return { on: "tim" + s.i, k: "Dernière goutte " + L_, t: "t₁ = " + fmt(s.t1, 2) + " min. Observe les gouttes dans " + L_ + " : quand la dernière tombe (gouttes très espacées puis plus rien), arrête le minuteur " + L_ + " pour noter t₂.", why: "t2", cam: "cyl" + s.i, ...V(s) };
-    if (!lastRead(s)) return { on: "cyl" + s.i, k: "Éprouvette " + L_, t: "Lis le volume recueilli V_g dans l'éprouvette " + L_ + " (clique dessus).", why: "read", cam: "cyl" + s.i, ...V(s) };
+    if (s.t1 == null) { __step({ on: "cyl" + s.i, k: "Première goutte " + L_, t: "Attends la première goutte dans l'éprouvette " + L_ + " : t₁ s'inscrit tout seul dans le tableau.", why: s.mc > s.ms ? "clay" : "t1", cam: "cyl" + s.i, ...V(s) }); }
+    if (s.t2 == null) { __step({ on: "tim" + s.i, k: "Dernière goutte " + L_, t: "t₁ = " + fmt(s.t1, 2) + " min. Observe les gouttes dans " + L_ + " : quand la dernière tombe (gouttes très espacées puis plus rien), arrête le minuteur " + L_ + " pour noter t₂.", why: "t2", cam: "cyl" + s.i, ...V(s) }); }
+    if (!lastRead(s)) { __step({ on: "cyl" + s.i, k: "Éprouvette " + L_, t: "Lis le volume recueilli V_g dans l'éprouvette " + L_ + " (clique dessus).", why: "read", cam: "cyl" + s.i, ...V(s) }); }
   }
-  for (const s of [A, B]) if (!s.ans.vr || !s.ans.p) return { on: "cyl" + s.i, k: "Calculs " + LET[s.i], t: "Dans le tableau Mesures, clique dans les cases de la ligne " + LET[s.i] + " et calcule V_r et P (2 chiffres après la virgule, puis Entrée).", why: "calc", cam: "cyl" + s.i };
-  return { on: "pese", k: "Comparer", t: "Clique sur Évaluer. Puis teste un mélange : pèse par ex. 50,0 g de sable + 50,0 g d'argile, mélange et verse dans l'entonnoir C.", why: "compare", cam: "stations" };
+  for (const s of [A, B]) if (!s.ans.vr || !s.ans.p) { __step({ on: "cyl" + s.i, k: "Calculs " + LET[s.i], t: "Dans le tableau Mesures, clique dans les cases de la ligne " + LET[s.i] + " et calcule V_r et P (2 chiffres après la virgule, puis Entrée).", why: "calc", cam: "cyl" + s.i }); }
+  { __step({ on: "pese", k: "Comparer", t: "Clique sur Évaluer. Puis teste un mélange : pèse par ex. 50,0 g de sable + 50,0 g d'argile, mélange et verse dans l'entonnoir C.", why: "compare", cam: "stations" }); }
 }
 let lastKey = "";
 function updGuide() {
@@ -853,13 +886,13 @@ LET.forEach((l, i) => { NAMES["fun" + i] = "Entonnoir " + l; NAMES["cyl" + i] = 
 function closeMenu() { $("#menu").hidden = true; }
 function openMenu(name, x, y) {
   const items = menuFor(name); if (!items.length) return;
-  if (items.length === 1 && !items[0].hold) { closeMenu(); items[0].run(); return; }
+  if (items.length === 1 && !items[0].hold) { closeMenu(); stepFollow(name); items[0].run(); return; }
   const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
   m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
   for (const it of items) {
     const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.hold ? " hold" : "") + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`;
-    if (it.hold) { const st = it.start || startPour, sp = it.stop || stopPour, on = it.on || (() => ST.pouring); b.addEventListener("pointerdown", (e) => { e.preventDefault(); st(); }); const stop = () => { if (on()) { sp(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
-    else b.onclick = () => { closeMenu(); it.run(); };
+    if (it.hold) { const st = it.start || startPour, sp = it.stop || stopPour, on = it.on || (() => ST.pouring); b.addEventListener("pointerdown", (e) => { e.preventDefault(); stepFollow(name); st(); }); const stop = () => { if (on()) { sp(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
+    else b.onclick = () => { closeMenu(); stepFollow(name); it.run(); };
     m.append(b);
   }
   m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
@@ -1127,7 +1160,7 @@ $("#btnSpeed").onclick = () => { const v = [10, 30, 120], i = (v.indexOf(ST.acc)
 $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
 function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
-init3d(); resetState();
+init3d(); resetState(); stepButtons();
 window.__lab = { onClick, ST, evaluate, startSoilPour, stopSoilPour, demoCalc, rowData, renderTable, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, simulate, doRead, doPourWater, doPourSoil, scoop, doCotton, doTare, doTimer, doMix, addWater, emptyStation, emptyCyl, wbMass, shown };
 
 })();
