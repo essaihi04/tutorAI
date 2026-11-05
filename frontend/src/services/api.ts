@@ -233,6 +233,17 @@ export const submitDiagnostic = (subjectId: string, questions: any[], answers: R
 export const generatePlan = (diagnosticScores: Record<string, number>) =>
   api.post('/coaching/generate-plan', { diagnostic_scores: diagnosticScores });
 export const getStudyPlan = () => api.get('/coaching/plan');
+
+// Réveil anticipé de la voix du prof (GPU Kaggle, ~2 min 20 à froid) : lancé
+// dès que l'élève est sur le site, pour que la voix soit prête quand il ouvre
+// une séance. Au plus une fois toutes les 2 min ; un échec est sans effet.
+let dernierReveilVoix = 0;
+export const reveillerVoix = () => {
+  const maintenant = Date.now();
+  if (maintenant - dernierReveilVoix < 120_000 || !localStorage.getItem('token')) return;
+  dernierReveilVoix = maintenant;
+  api.post('/tts-kaggle/reveil').catch(() => undefined);
+};
 export const getTodaySchedule = () => api.get('/coaching/today');
 export const getAllSessions = () => api.get('/coaching/all-sessions');
 export const regeneratePlan = () => api.post('/coaching/regenerate-plan');

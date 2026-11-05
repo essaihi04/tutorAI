@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { BarChart3, BookOpen, Home, LogOut, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLearningContextStore } from '../stores/learningContextStore';
 import type { LearningSubject } from '../stores/learningContextStore';
 import { MoalimLogo } from './MoalimShell';
+import { reveillerVoix } from '../services/api';
 
 export type StudentNavKey = 'today' | 'courses' | 'tutor' | 'progress';
 
@@ -19,6 +21,9 @@ export default function StudentNavigation({ active }: { active: StudentNavKey })
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
   const subjects = useLearningContextStore((state) => state.context?.subjects || EMPTY_SUBJECTS);
+
+  // Accueil, cours, tuteur : la voix du prof démarre pendant que l'élève choisit.
+  useEffect(() => { reveillerVoix(); }, [active]);
 
   const handleLogout = () => {
     logout();
