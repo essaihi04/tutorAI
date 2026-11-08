@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corde — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Corde tendue dessinée à la craie, une perturbation la parcourt"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Rejouer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Une corde tendue, une seule perturbation (une demi-sinusoïde de durée θ),
+ * milieu homogène, sans réflexion : y(x, t) = y_S(t − x / v).
+ * Vues (?vue=) : point, front, retard, longueur, aspect, sens — une notion par diapositive.
+ * Un seul bouton (Rejouer) ; le point M se règle en le glissant sur la corde.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const V = 1.0, THETA = 0.4, A = 1;               // célérité (m/s), durée (s), amplitude (unité de dessin)
+const VUES = ['point', 'front', 'retard', 'longueur', 'aspect', 'sens'];
+const vue = VUES.includes(new URLSearchParams(location.search).get('vue')) ? new URLSearchParams(location.search).get('vue') : 'point';
+// Les vues « photo » s’arrêtent sur un instant où toute la perturbation est sur la corde.
+const ARRET = { point: 2.6, front: 1.6, retard: 2.0, longueur: 1.1, aspect: 1.1, sens: 1.1 }[vue];
+const LENT = 0.45;                              // la scène défile à 0,45 × le temps réel : on a le temps de suivre
+const S = { t: 0, running: false, jusqua: null, emis: 0, xM: vue === 'aspect' || vue === 'longueur' ? 0.5 : 0.8, fait: false, trace: [] };
+
+// Perturbation dissymétrique (montée rapide sur 30 % de θ, descente lente) : sans elle,
+// on ne verrait pas que l’aspect y(x) et l’élongation y(t) sont renversés l’un par rapport à l’autre.
+const MONTEE = 0.3;
+const forme = u => (u < 0 || u > 1 ? 0 : u < MONTEE ? Math.sin(Math.PI / 2 * u / MONTEE) : Math.cos(Math.PI / 2 * (u - MONTEE) / (1 - MONTEE)));
+const yS = t => A * forme(t / THETA);
+const y = (x, t) => yS(t - x / V);
+const vy = (x, t) => { const e = 1e-3; return (y(x, t + e) - y(x, t - e)) / (2 * e) / 4; };   // vitesse du point (signe et ordre de grandeur)
+
+const X = x => 70 + x * 310;                    // corde : 0 → 2 m
+const corde = (c, y0, t, k = 34, o = {}) => c.courbe(u => [X(u * 2), y0 - k * y(u * 2, t)], 220, { couleur: 'blanc', largeur: 2.6, ...o });
+
+function regle(c, y0, avecM = true) {
+  c.ligne(X(0), y0, X(2), y0, { couleur: 'tresfaible', largeur: 1.2, pointille: [5, 6] });
+  c.rect(X(0) - 24, y0 - 26, 14, 52, { couleur: 'faible' }).texte('S', X(0) - 17, y0 + 46, { couleur: 'cyan', align: 'center' });
+  // Le sens de propagation : au-dessus de la corde, ou en dessous quand la corde est tout en haut du cadre
+  // (vues « front » et « retard »), pour que la flèche et son texte restent entièrement visibles.
+  const bas = y0 < 110, yf = bas ? y0 + 46 : y0 - 66;
+  c.fleche(X(1.35), yf, X(1.85), yf, { couleur: 'vert' }).texte('sens de propagation', X(1.6), bas ? yf + 20 : yf - 10, { couleur: 'vert', align: 'center', taille: 15 });
+  c.repere('source', X(0) - 30, y0 - 30, 26, 80, 'la source S');
+}
+
+function pointM(c, y0, t, k = 34) {
+  const yy = y0 - k * y(S.xM, t);
+  c.ligne(X(S.xM), y0 - 46, X(S.xM), y0 + 30, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
+  c.point(X(S.xM), yy, 6.5, 'orange').texte('M', X(S.xM) + 10, y0 + 26, { couleur: 'orange' });
+  c.repere('point_m', X(S.xM) - 16, y0 - 50, 32, 84, 'le point M');
+}
+
+/* Graphe d’une élongation y(t) : origine (ox, oy), t de 0 à tmax. */
+function grapheTemps(c, ox, oy, larg, tmax, haut, etiquette = 't (s)') {
+  const pas = tmax > 1.5 ? 0.4 : 0.2, grad = [];
+  for (let g = pas; g <= tmax + 1e-9; g += pas) grad.push([g / tmax, fr(g, 1)]);
+  c.axe(ox, oy, ox + larg, oy, grad);
+  c.axe(ox, oy + 8, ox, oy - haut, [], { couleur: 'faible' });
+  c.texte(etiquette, ox + larg + 6, oy + 4, { couleur: 'jaune', taille: 16 });
+  c.texte('y', ox - 14, oy - haut + 4, { couleur: 'faible', taille: 16, align: 'right' });
+  return tt => ox + tt / tmax * larg;
+}
+function courbeTemps(c, Tx, oy, k, f, tFin, couleur) {
+  if (tFin <= 0) return;
+  c.courbe(u => [Tx(u * tFin), oy - k * f(u * tFin)], 160, { couleur, largeur: 2.4 });
+}
+
+const dessins = {
+  point(c) {
+    const y0 = 200;
+    regle(c, y0); c.direct(() => { corde(c, y0, S.t, 70); pointM(c, y0, S.t, 70); });
+    c.direct(() => {
+      // Trace du mouvement de M : un trait vertical, jamais horizontal.
+      if (S.trace.length > 1) c.trait(S.trace.map(v => [X(S.xM) + 22, y0 - 70 * v]), { couleur: 'orange', largeur: 3, alpha: .55 });
+      if (S.trace.length > 1) c.texte('trajet de M', X(S.xM) + 30, y0 - 80, { couleur: 'orange', taille: 15 });
+      const ym = y(S.xM, S.t);
+      if (ym > 0.08) c.cote(X(S.xM) - 22, y0, X(S.xM) - 22, y0 - 70 * ym, '', { couleur: 'jaune' }).texte('y', X(S.xM) - 34, y0 - 35 * ym, { couleur: 'jaune', align: 'right' });
+      c.texte(`t = ${fr(S.t)} s`, 740, 30, { couleur: 'jaune', align: 'right' });
+    });
+    c.texte('Glisse M le long de la corde, puis rejoue.', 380, 380, { couleur: 'faible', align: 'center', taille: 15 });
+  },
+
+  front(c) {
+    const t1 = 0.6, t2 = 1.4, yA = 80, y1 = 200, y2 = 310;
+    regle(c, yA, false);
+    c.direct(() => { corde(c, yA, Math.min(S.t, ARRET)); c.texte(`t = ${fr(S.t)} s`, 740, 30, { couleur: 'jaune', align: 'right' }); });
+    c.direct(() => {
+      for (const [ti, yi, nom] of [[t1, y1, 'photo 1'], [t2, y2, 'photo 2']]) {
+        if (S.t < ti) continue;
+        c.ligne(X(0), yi, X(2), yi, { couleur: 'tresfaible', largeur: 1, pointille: [5, 6] });
+        corde(c, yi, ti, 34, { alpha: .9 });
+        c.texte(`${nom} : t = ${fr(ti, 1)} s`, X(0), yi - 44, { couleur: 'cyan', taille: 16 });
+        c.ligne(X(V * ti), yi - 50, X(V * ti), yi + 18, { couleur: 'jaune', largeur: 1.6, pointille: [4, 4] });
+        c.texte('front', X(V * ti) + 6, yi + 16, { couleur: 'jaune', taille: 15 });
+      }
+      if (S.t >= t2) {
+        c.cote(X(V * t1), 365, X(V * t2), 365, `d = ${fr(V * (t2 - t1))} m`, { couleur: 'jaune' });
+        c.texte(`Δt = ${fr(t2, 1)} − ${fr(t1, 1)} = ${fr(t2 - t1)} s      v = d / Δt = ${fr(V * (t2 - t1))} / ${fr(t2 - t1)} = ${fr(V, 1)} m/s`, 380, 405, { couleur: 'vert', align: 'center', taille: 17 });
+        c.repere('distance_d', X(V * t1), 345, X(V * t2) - X(V * t1), 30, 'd, de front à front');
+      }
+    });
+  },
+
+  retard(c) {
+    const y0 = 95, tau = S.xM / V;
+    regle(c, y0); c.direct(() => { corde(c, y0, S.t, 40); pointM(c, y0, S.t, 40); c.texte(`t = ${fr(S.t)} s`, 740, 30, { couleur: 'jaune', align: 'right' }); });
+    const oy = 330, Tx = grapheTemps(c, 80, oy, 600, 2.0, 120);
+    c.direct(() => {
+      courbeTemps(c, Tx, oy, 80, yS, Math.min(S.t, 2.0), 'cyan');
+      courbeTemps(c, Tx, oy, 80, tt => yS(tt - tau), Math.min(S.t, 2.0), 'orange');
+      c.texte('y_S(t)', Tx(THETA / 2) - 6, oy - 92, { couleur: 'cyan', align: 'center', taille: 16 });
+      if (S.t > tau + THETA / 2) c.texte('y_M(t)', Tx(tau + THETA / 2) + 4, oy - 92, { couleur: 'orange', align: 'center', taille: 16 });
+      if (S.t >= tau) {
+        c.cote(Tx(0), oy + 42, Tx(tau), oy + 42, `τ = ${fr(tau)} s`, { couleur: 'jaune', dessous: true });
+        c.repere('retard_tau', Tx(0), oy + 30, Tx(tau) - Tx(0), 40, 'le retard τ');
+      }
+      c.texte(`τ = SM / v = ${fr(S.xM)} / ${fr(V, 1)} = ${fr(tau)} s`, 440, 190, { couleur: 'vert', taille: 18 });
+      c.texte('y_M(t) = y_S(t − τ)', 440, 214, { couleur: 'vert', taille: 18 });
+    });
+  },
+
+  longueur(c) {
+    const y0 = 110, t = Math.min(S.t, ARRET);
+    regle(c, y0); c.direct(() => { corde(c, y0, t, 46); pointM(c, y0, t, 46); c.texte(`t = ${fr(t)} s`, 740, 30, { couleur: 'jaune', align: 'right' }); });
+    c.direct(() => {
+      const xf = V * t, xq = V * (t - THETA);
+      if (t >= THETA) {
+        c.texte('front', X(xf), y0 + 30, { couleur: 'jaune', align: 'center', taille: 15 }).texte('queue', X(xq), y0 + 30, { couleur: 'rose', align: 'center', taille: 15 });
+        c.cote(X(xq), y0 + 46, X(xf), y0 + 46, `L = ${fr(V * THETA)} m`, { couleur: 'jaune', dessous: true });
+        c.repere('longueur_l', X(xq), y0 + 34, X(xf) - X(xq), 40, 'la longueur L');
+      }
+    });
+    const oy = 340, Tx = grapheTemps(c, 80, oy, 420, 1.2, 90);
+    c.texte('élongation du point M', 90, oy - 104, { couleur: 'orange', taille: 15 });
+    c.direct(() => {
+      courbeTemps(c, Tx, oy, 70, tt => yS(tt - S.xM / V), Math.min(S.t, 1.2), 'orange');
+      if (S.t >= S.xM / V + THETA) {
+        c.cote(Tx(S.xM / V), oy + 40, Tx(S.xM / V + THETA), oy + 40, `θ = ${fr(THETA, 1)} s`, { couleur: 'jaune', dessous: true });
+        c.repere('duree_theta', Tx(S.xM / V), oy + 28, Tx(S.xM / V + THETA) - Tx(S.xM / V), 40, 'la durée θ');
+      }
+      if (t >= THETA) c.texte(`L = v · θ = ${fr(V, 1)} × ${fr(THETA, 1)} = ${fr(V * THETA)} m`, 540, 300, { couleur: 'vert', taille: 18 });
+    });
+  },
+
+  aspect(c) {
+    const t = Math.min(S.t, ARRET), oy1 = 150, oy2 = 345;
+    // En haut : l’aspect y(x) — une photo de la corde.
+    const grad = []; for (let g = 0.4; g <= 2.0001; g += 0.4) grad.push([g / 2, fr(g, 1)]);
+    c.texte('Aspect de la corde à t = 1,1 s', 70, 34, { couleur: 'cyan', taille: 17 });
+    c.axe(X(0), oy1, X(2) + 10, oy1, grad); c.texte('x (m)', X(2) + 16, oy1 + 4, { couleur: 'jaune', taille: 16 });
+    c.repere('axe_x', X(2) - 20, oy1 - 14, 90, 30, 'axe : la distance x');
+    c.direct(() => {
+      corde(c, oy1, t, 60, { couleur: 'cyan' });
+      if (t >= ARRET - 1e-6) {
+        c.fleche(X(V * t) + 40, oy1 - 60, X(V * t) + 4, oy1 - 8, { couleur: 'jaune' }).texte('front : à droite', X(V * t) + 44, oy1 - 64, { couleur: 'jaune', taille: 15 });
+        c.point(X(S.xM), oy1, 5, 'orange').texte('M', X(S.xM), oy1 + 38, { couleur: 'orange', align: 'center', taille: 15 });
+      }
+    });
+    // En bas : l’élongation y_M(t) — le film d’un seul point.
+    c.texte('Élongation du point M (x = 0,5 m)', 70, 230, { couleur: 'orange', taille: 17 });
+    const Tx = grapheTemps(c, X(0), oy2, 620, 2.0, 80);
+    c.repere('axe_t', X(0) + 600, oy2 - 14, 90, 30, 'axe : le temps t');
+    c.direct(() => {
+      courbeTemps(c, Tx, oy2, 60, tt => yS(tt - S.xM / V), Math.min(S.t, 2.0), 'orange');
+      if (S.t >= S.xM / V + 0.05) c.fleche(Tx(S.xM / V) - 40, oy2 - 62, Tx(S.xM / V) - 4, oy2 - 8, { couleur: 'jaune' }).texte('front : à gauche', Tx(S.xM / V) - 44, oy2 - 66, { couleur: 'jaune', taille: 15, align: 'right' });
+    });
+    c.texte('Même forme, renversée : lis l\'axe avant de lire une valeur.', 380, 412, { couleur: 'vert', align: 'center', taille: 16 });
+  },
+
+  sens(c) {
+    const y0 = 220, t = Math.min(S.t, ARRET);
+    regle(c, y0, false);
+    c.direct(() => {
+      corde(c, y0, t, 110, { couleur: 'cyan' });
+      c.texte(`t = ${fr(t)} s`, 740, 30, { couleur: 'jaune', align: 'right' });
+      if (t < ARRET - 1e-6) return;
+      for (let x = 0.5; x <= 1.3001; x += 0.1) {
+        const yy = y0 - 110 * y(x, t), s = vy(x, t);
+        if (Math.abs(s) < 0.05) { c.point(X(x), yy, 3.5, 'faible'); continue; }
+        const l = Math.sign(s) * Math.min(48, 18 + 14 * Math.abs(s));
+        c.fleche(X(x), yy, X(x), yy - l, { couleur: s > 0 ? 'vert' : 'rose', largeur: 2.2, tete: 8 });
+      }
+      const xA = 1.05, xB = 0.85;
+      for (const x of [xA, xB]) { const yy = y0 - 110 * y(x, t), s = vy(x, t), l = Math.sign(s) * Math.min(48, 18 + 14 * Math.abs(s)); c.fleche(X(x), yy, X(x), yy - l, { couleur: s > 0 ? 'vert' : 'rose', largeur: 2.6, tete: 9 }); }
+      c.point(X(xA), y0 - 110 * y(xA, t), 6, 'jaune').texte('A', X(xA) + 10, y0 - 110 * y(xA, t) + 22, { couleur: 'jaune' });
+      c.point(X(xB), y0 - 110 * y(xB, t), 6, 'jaune').texte('B', X(xB) - 18, y0 - 110 * y(xB, t) + 22, { couleur: 'jaune' });
+      c.repere('point_a', X(xA) - 14, y0 - 110 * y(xA, t) - 50, 30, 80, 'A, devant le sommet');
+      c.texte('↑ monte (devant le sommet)', 70, 340, { couleur: 'vert', taille: 17 });
+      c.texte('↓ descend (derrière le sommet)', 70, 366, { couleur: 'rose', taille: 17 });
+      c.texte('• au repos (pas encore atteint, ou déjà revenu)', 70, 392, { couleur: 'faible', taille: 17 });
+    });
+  },
+};
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(11); dessins[vue](c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(ARRET, S.t + dt * LENT);
+  if (S.jusqua != null && S.t >= S.jusqua) S.t = S.jusqua;
+  if (vue === 'point') S.trace.push(y(S.xM, S.t));
+  if (S.jusqua != null && S.t >= S.jusqua) {             // instant clé atteint : arrêt sur image
+    S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 't = ' + fr(S.t) + ' s') + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= ARRET) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; finir(); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }   // le tuteur suit la scène en direct
+  return true;
+};
+
+/*
+ * Les instants clés, calculés depuis la physique (ils suivent M quand on le déplace). Le tuteur les reçoit
+ * dans l'état (`moments`) et les vise avec `play_until` : la scène rejoue et se fige à l'instant qu'il décrit.
+ */
+function moments() {
+  const tM = S.xM / V, m = {
+    source_monte: MONTEE * THETA / 2, source_sommet: MONTEE * THETA, source_revenue: THETA,
+    m_atteint: tM, m_monte: tM + MONTEE * THETA / 2, m_sommet: tM + MONTEE * THETA,
+    m_descend: tM + (MONTEE + (1 - MONTEE) / 2) * THETA, m_revenu: tM + THETA + 0.05,
+    toute_sur_corde: THETA + 0.15, fin: ARRET,
+  };
+  for (const k in m) m[k] = +Math.min(ARRET, m[k]).toFixed(3);
+  return m;
+}
+const MOTIFS = { source_monte: 'la source S monte', source_sommet: 'la source S au plus haut', source_revenue: 'la source S est revenue au repos',
+  m_atteint: 'la perturbation arrive en M', m_monte: 'M est en train de monter', m_sommet: 'M au plus haut : son élongation y est maximale',
+  m_descend: 'M est en train de descendre', m_revenu: 'M est revenu à sa place', toute_sur_corde: 'toute la perturbation est sur la corde', fin: 'fin' };
+/* Rejoue (ou continue) jusqu'à un instant clé, puis se fige. */
+function playUntil(p) {
+  const nom = p.moment && moments()[p.moment] != null ? p.moment : null;
+  const cible = nom ? moments()[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.trace = []; }   // l'instant est passé : on rejoue depuis le début
+  S.jusqua = Math.min(ARRET, Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+/* Ce que l’élève voit à cet instant, en mots : le tuteur « voit » la simulation par cette phrase. */
+function etatDuPoint(x, t) {
+  const u = t - x / V;
+  if (u <= 0) return `pas encore atteint (il le sera à t = ${fr(x / V)} s)`;
+  if (u >= THETA) return 'déjà revenu au repos, à sa place';
+  const s = vy(x, t);
+  return `${s > 0.05 ? 'en train de monter' : s < -0.05 ? 'en train de descendre' : 'au sommet'} (élongation ${fr(y(x, t) * 100 / A, 0)} % de l’amplitude)`;
+}
+function ceQuiSeVoit() {
+  const t = S.t, xf = V * t, xq = V * (t - THETA), morceaux = [`t = ${fr(t)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin de la scène)' : ' (scène arrêtée)'}.`];
+  if (t <= 0) morceaux.push('La corde est au repos ; la source S n’a pas encore été secouée.');
+  else if (xq > 2) morceaux.push('La perturbation a quitté la corde ; toute la corde est revenue au repos.');
+  else morceaux.push(`Front à x = ${fr(Math.min(xf, 2))} m${xq > 0 ? `, queue à x = ${fr(xq)} m : toute la perturbation (L = ${fr(V * THETA)} m) est sur la corde` : ' ; la source S est encore en train de bouger'}.`);
+  if (['point', 'retard', 'longueur', 'aspect'].includes(vue)) morceaux.push(`Point M (x = ${fr(S.xM)} m) : ${etatDuPoint(S.xM, t)}.`);
+  if (vue === 'retard') morceaux.push(`Graphe du bas : y_S(t) en cyan${t >= S.xM / V ? `, y_M(t) en orange décalée de τ = ${fr(S.xM / V)} s (cote jaune affichée)` : ' ; la courbe de M n’a pas encore commencé'}.`);
+  if (vue === 'front') morceaux.push(t >= 1.4 ? 'Les deux photos (t = 0,6 s et t = 1,4 s) sont affichées, avec d = 0,80 m de front à front et v = 1,0 m/s.' : t >= 0.6 ? 'La photo 1 (t = 0,6 s) est affichée ; la photo 2 viendra à t = 1,4 s.' : 'Aucune photo encore : la première sera prise à t = 0,6 s.');
+  if (vue === 'longueur' && t >= THETA) morceaux.push(`Cote L = ${fr(V * THETA)} m sur la corde${t >= S.xM / V + THETA ? `, cote θ = ${fr(THETA, 1)} s sur la courbe de M` : ''}.`);
+  if (vue === 'aspect') morceaux.push('En haut, l’aspect y(x) : front à DROITE (montée raide côté front). En bas, y_M(t) : front à GAUCHE. Même forme renversée.');
+  if (vue === 'sens' && t >= ARRET - 1e-6) morceaux.push(`Flèches : A (x = 1,05 m) ${etatDuPoint(1.05, t)} ; B (x = 0,85 m) ${etatDuPoint(0.85, t)} ; avant x = ${fr(xq)} m et après x = ${fr(xf)} m, points au repos.`);
+  return morceaux.join(' ');
+}
+
+const MESSAGES = {
+  point: 'M est revenu à sa place : il a monté puis descendu, sans voyager.',
+  front: 'On mesure d de front à front, puis v = d / Δt.',
+  retard: 'M refait le mouvement de S, en retard de τ = SM / v. Glisse M et rejoue.',
+  longueur: 'Sur la corde on lit L ; sur la courbe du temps on lit θ. L = v · θ.',
+  aspect: 'Photo de la corde : front à droite. Film du point M : front à gauche.',
+  sens: 'Devant le sommet, les points montent ; derrière, ils descendent.',
+};
+function finir() { bulle($('feedback'), MESSAGES[vue], 'good'); }
+function start() { S.jusqua = null; S.t = 0; S.trace = []; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start'); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.t >= ARRET) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+/* Arrêt sur un instant précis : le tuteur montre la scène à la date qu’il explique. */
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = Math.min(ARRET, Math.max(0, t)); S.fait = S.t >= ARRET;
+  if (vue === 'point') { S.trace = []; for (let k = 0; k <= 60; k++) S.trace.push(y(S.xM, S.t * k / 60)); }
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true; pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (Number.isFinite(+p.x_m)) { S.xM = Math.min(1.9, Math.max(0.3, Math.round(+p.x_m * 10) / 10)); S.trace = []; scene.sale = true; pont.noter('set_parameters', { x_m: S.xM }); pont.emettre(); }
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < ARRET ? resume() : start()));
+
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    if (!['point', 'retard'].includes(vue)) return null;
+    const [x, yy] = scene.local(px, py), y0 = vue === 'point' ? 200 : 95;
+    return Math.abs(x - X(S.xM)) < 26 && Math.abs(yy - y0) < 60 ? 'M' : null;
+  },
+  bouger: (id, px) => { const [x] = scene.local(px, 0); setParameters({ x_m: (x - 70) / 310 }); },
+  lacher: () => start(),
+});
+
+const EXPLICATIONS = {
+  point: [{ repere: 'source', texte: 'La source S : on secoue une seule fois.' }, { repere: 'point_m', texte: 'Le point M monte, descend, puis revient à sa place.' }],
+  front: [{ repere: 'source', texte: 'Deux photos de la même corde, à deux dates.' }, { repere: 'distance_d', texte: 'La distance se mesure de front à front.' }],
+  retard: [{ repere: 'point_m', texte: 'Le point M, à la distance SM de la source.' }, { repere: 'retard_tau', texte: 'Même courbe, décalée du retard τ = SM / v.' }],
+  longueur: [{ repere: 'longueur_l', texte: 'Sur la photo de la corde, on lit la longueur L.' }, { repere: 'duree_theta', texte: 'Sur la courbe du temps, on lit la durée θ.' }],
+  aspect: [{ repere: 'axe_x', texte: 'En haut, l’axe porte la distance : c’est une photo, le front est à droite.' }, { repere: 'axe_t', texte: 'En bas, l’axe porte le temps : le front arrive en premier, à gauche.' }],
+  sens: [{ repere: 'point_a', texte: 'A est devant le sommet : il va prendre sa place, donc il monte.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_tableau_corde', version: '1.0', title: 'Corde — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: { set_parameters: { x_m: '0.3..1.9 (position du point M, en m)' }, set_time: { time_s: `0..${ARRET} (arrêt sur cet instant)` },
+    play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Corde tendue, v = ${fr(V, 1)} m/s, perturbation de durée θ = ${fr(THETA, 1)} s. Vue « ${vue} ». ${MESSAGES[vue]}`,
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, time_s: +S.t.toFixed(2), parameters: { x_m: S.xM, v_m_s: V, theta_s: THETA }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+// La perturbation part d’elle-même une fois le montage écrit à la craie.
+setTimeout(start, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

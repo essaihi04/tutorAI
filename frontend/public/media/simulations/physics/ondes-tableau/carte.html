@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carte du chapitre — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte conceptuelle dessinée à la craie : l'onde mécanique progressive au centre, huit branches autour (nature, types, célérité, retard, durée et longueur, lecture, mesures, rédaction)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset play_until">Redessiner</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * La carte conceptuelle du chapitre (demande du 8 novembre 2026) : au centre « Onde mécanique progressive », et
+ * huit branches dessinées l'une après l'autre au rythme de la voix (play_until {moment: <branche>}). Chaque branche
+ * porte la notion et sa formule telle qu'on l'écrit (indices en indice). L'élève touche une branche : sa phrase à
+ * retenir s'écrit dans la bulle. Le lecteur lui donne son bilan (set_parameters {lacunes, acquis}) : les branches
+ * à reprendre sont entourées en rouge (ou orange : à revoir), les branches acquises sont cochées.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const CENTRE = { x: 380, y: 212, w: 176, h: 58 };
+const NOEUDS = [
+  { id: 'nature', x: 150, y: 76, w: 212, h: 66, couleur: 'cyan', comps: ['C1'], titre: 'Nature',
+    lignes: ['perturbation · milieu matériel élastique', "énergie : oui · matière : non"],
+    phrase: "Une onde mécanique progressive : la propagation d'une perturbation dans un milieu matériel élastique, avec transport d'énergie et sans transport de matière." },
+  { id: 'types', x: 380, y: 62, w: 206, h: 60, couleur: 'cyan', comps: ['C2'], titre: 'Deux types',
+    lignes: ['transversale ⊥ · longitudinale ∥', '1, 2 ou 3 dimensions'],
+    phrase: "Transversale : la perturbation est perpendiculaire à la propagation (corde, eau). Longitudinale : même direction (ressort, son)." },
+  { id: 'celerite', x: 610, y: 76, w: 212, h: 66, couleur: 'jaune', comps: ['C3'], titre: 'Célérité',
+    lignes: ['v = d / Δt', 'dépend du milieu, pas de la source'],
+    phrase: "La célérité v = d / Δt se mesure de front à front ; elle dépend du milieu (nature, température, tension), pas de l'amplitude." },
+  { id: 'retard', x: 636, y: 212, w: 200, h: 70, couleur: 'jaune', comps: ['C4'], titre: 'Retard τ',
+    lignes: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
+    phrase: "Le point M refait le mouvement de la source avec le retard τ = SM / v : y_M(t) = y_S(t − τ)." },
+  { id: 'longueur', x: 610, y: 350, w: 212, h: 62, couleur: 'jaune', comps: ['C5'], titre: 'Durée θ et longueur L',
+    lignes: ['L = v · θ', 'θ sur y(t) · L sur y(x)'],
+    phrase: "La perturbation dure θ pour un point et occupe la longueur L sur le milieu : L = v · θ." },
+  { id: 'lecture', x: 380, y: 362, w: 220, h: 62, couleur: 'vert', comps: ['C6'], titre: 'Lire une onde',
+    lignes: ['y(x) : aspect (photo) · y(t) : un point', 'devant le sommet, les points montent'],
+    phrase: "Lire l'axe d'abord : y(x) est l'aspect du milieu à un instant, y(t) le mouvement d'un point ; les deux courbes sont renversées." },
+  { id: 'mesures', x: 150, y: 350, w: 220, h: 66, couleur: 'orange', comps: ['C7', 'C8'], titre: 'Mesurer',
+    lignes: ['micros : τ = divisions × sensibilité, v = d / τ', 'écho : 2d = v · τ, d = v · τ / 2'],
+    phrase: "Deux micros : τ = nombre de divisions × sensibilité, puis v = d / τ. Écho : aller et retour, d = v · τ / 2." },
+  { id: 'methode', x: 124, y: 212, w: 200, h: 70, couleur: 'violet', comps: ['C9'], titre: 'Rédiger',
+    lignes: ['relation → A.N. → résultat → unité', "lire l'axe, reconnaître le cas"],
+    phrase: "Pour chaque calcul : la relation en lettres, l'application numérique en unités SI, le résultat, l'unité." },
+];
+const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
+
+const S = { n: 0, cible: 0, jusqua: null, running: false, lacunes: null, acquis: null, apparu: [], choisi: null };
+const DUREE_BRANCHE = 2.2;   // s par branche quand la carte se dessine seule
+
+function point(c, noeud, o = {}) {
+  const r = Math.min(14, noeud.h / 2);
+  c.rect(noeud.x - noeud.w / 2, noeud.y - noeud.h / 2, noeud.w, noeud.h, { couleur: o.couleur || noeud.couleur, arrondi: r, largeur: o.largeur || 2.4 });
+}
+
+function branche(c, n, i) {
+  const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+  // du bord du centre au bord du nœud, avec une légère courbure
+  const d0 = Math.min(CENTRE.w / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h / 2 / Math.max(.2, Math.abs(uy)));
+  const d1 = Math.min(n.w / 2 / Math.max(.2, Math.abs(ux)), n.h / 2 / Math.max(.2, Math.abs(uy)));
+  const a = [CENTRE.x + ux * d0, CENTRE.y + uy * d0], b = [n.x - ux * d1, n.y - uy * d1];
+  const m = [(a[0] + b[0]) / 2 - uy * 14, (a[1] + b[1]) / 2 + ux * 14];
+  c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
+  point(c, n);
+  c.texte(n.titre, n.x, n.y - n.h / 2 + 20, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, n.y - n.h / 2 + 38 + k * 15, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92 }));
+  c.repere(n.id, n.x - n.w / 2 - 6, n.y - n.h / 2 - 6, n.w + 12, n.h + 12, n.titre);
+  // L'état de l'élève sur cette branche : anneau rouge/orange, ou coche verte.
+  const st = statut(n);
+  if (st && ANNEAUX[st]) {
+    const [coul, etiq] = ANNEAUX[st];
+    c.rect(n.x - n.w / 2 - 6, n.y - n.h / 2 - 6, n.w + 12, n.h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6], duree: .4 });
+    c.texte(etiq, n.x + n.w / 2 - 4, n.y - n.h / 2 - 9, { couleur: coul, taille: 12, align: 'right' });
+  } else if (st === 'acquis') {
+    c.texte('✓', n.x + n.w / 2 - 14, n.y - n.h / 2 + 14, { couleur: 'vert', taille: 18 });
+  }
+  if (S.choisi === n.id) c.direct(() => c.rect(n.x - n.w / 2 - 3, n.y - n.h / 2 - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
+}
+function statut(n) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => n.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis || []).some(a => n.comps.includes(a)) ? 'acquis' : null;
+}
+
+function dessiner(c) {
+  c.rect(CENTRE.x - CENTRE.w / 2, CENTRE.y - CENTRE.h / 2, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
+  c.texte('Onde mécanique', CENTRE.x, CENTRE.y - 6, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('progressive', CENTRE.x, CENTRE.y + 16, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.repere('centre', CENTRE.x - CENTRE.w / 2, CENTRE.y - CENTRE.h / 2, CENTRE.w, CENTRE.h, 'le centre : l’onde mécanique progressive');
+  for (let i = 0; i < S.n; i++) { c.depuis(S.apparu[i]); branche(c, NOEUDS[i], i); }
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+let horloge = 0;
+scene.avancer = dt => {
+  if (!S.running) return false;
+  horloge += dt;
+  if (S.n < S.cible && horloge >= 0) {
+    // la branche suivante apparaît quand la précédente a fini de s'écrire
+    S.n += 1; S.apparu[S.n - 1] = (performance.now() - scene.ouvert) / 1000; horloge = -DUREE_BRANCHE;
+    bulle($('feedback'), NOEUDS[S.n - 1].titre + (S.n >= NOEUDS.length ? ' — la carte est complète.' : ''));
+    pont.noter('branche', { n: S.n, moment: NOEUDS[S.n - 1].id }); pont.emettre();
+    if (S.n >= S.cible) S.running = false;
+  }
+  return true;
+};
+function moments() { const m = {}; NOEUDS.forEach((n, i) => { m[n.id] = i + 1; }); m.complet = NOEUDS.length; return m; }
+function montrer(cible, par) {
+  cible = Math.max(0, Math.min(NOEUDS.length, cible));
+  if (cible < S.n) { S.n = 0; S.apparu = []; scene.reecrire(); }   // on revient en arrière : la carte se redessine jusque-là
+  S.cible = cible; S.running = S.n < cible; horloge = 0; scene.sale = true;
+  pont.noter(par || 'play_until', { moment: NOEUDS[cible - 1]?.id || 'centre' }); pont.emettre();
+}
+function playUntil(p) { const M = moments(); const n = p.moment in M ? M[p.moment] : +p.time_s; if (Number.isFinite(n)) montrer(n, 'play_until'); }
+function start() { S.n = 0; S.apparu = []; S.choisi = null; scene.reecrire(); montrer(NOEUDS.length, 'start'); bulle($('feedback'), 'La carte se dessine…'); }
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || ''), statut: String(l.statut || 'non_acquis') }));
+  if (Array.isArray(p.acquis_ids)) S.acquis = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const vues = NOEUDS.slice(0, S.n).map(n => n.titre);
+  const etat = S.lacunes ? ` Branches à reprendre : ${NOEUDS.filter(n => statut(n) && statut(n) !== 'acquis').map(n => n.titre).join(', ') || 'aucune'}.` : '';
+  return `Carte conceptuelle : « Onde mécanique progressive » au centre, ${S.n}/${NOEUDS.length} branche(s) dessinée(s)${vues.length ? ' (' + vues.join(', ') + ')' : ''}${S.running ? ', la carte se dessine' : ''}.${etat}${S.choisi ? ` L'élève a touché la branche « ${NOEUDS.find(n => n.id === S.choisi).titre} ».` : ''}`;
+}
+$('run').onclick = start;
+// Imprimer / PDF : la carte complète, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { n: S.n, cible: S.cible, running: S.running, apparu: S.apparu.slice(), choisi: S.choisi };
+  window.Tableau.imprimer({ titre: 'Carte du chapitre — ondes mécaniques progressives', scene,
+    pages: [{ nom: 'la carte complète', preparer: () => { S.n = NOEUDS.length; S.running = false; S.apparu = NOEUDS.map(() => -1e9); S.choisi = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 1 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const n = NOEUDS.slice(0, S.n).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  if (!n) return;
+  S.choisi = n.id; scene.sale = true; bulle($('feedback'), n.phrase);
+  pont.noter('touche', { moment: n.id }); pont.emettre();
+});
+
+window.Tableau.explication({ carte: NOEUDS.map(n => ({ repere: n.id, texte: n.phrase })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters'];
+const config = { id: 'ondes_tableau_carte', version: '1.0', title: 'Carte du chapitre', variants: [{ id: 'carte', label: 'carte' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (dessine la carte jusqu’à cette branche)' },
+    set_parameters: { lacunes: '[{id: C1.., statut: non_acquis|partiel}] (bilan de l’élève)', acquis_ids: '[C1, ..] compétences acquises' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Carte conceptuelle du chapitre des ondes mécaniques progressives : huit branches autour de la définition (nature, types, célérité, retard, durée et longueur, lecture, mesures, rédaction).',
+  etat: () => ({ simulation_status: S.running ? 'running' : 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: S.n, parameters: { branches: S.n, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.n / NOEUDS.length,
+  executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+bulle($('feedback'), 'Le professeur va dessiner la carte du chapitre.');
+window.__carte = { S, scene, NOEUDS };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

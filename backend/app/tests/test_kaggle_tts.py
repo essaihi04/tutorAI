@@ -1,5 +1,6 @@
 """Voix du prof sur Kaggle à la demande : cycle de vie, annonces, budget."""
 import asyncio
+from pathlib import Path
 import json
 import time
 
@@ -216,3 +217,21 @@ def test_session_kaggle_encore_en_cours(tmp_path, actif, monkeypatch):
     p = _pilote(tmp_path)
     _reveiller(p)
     assert p.etat == "eteint" and not actif
+
+
+def test_un_morceau_qui_murmure_est_refait():
+    """La voix qui décroche (son faible, ni parole ni silence, >= 0,9 s) est repérée ; la parole et les silences non."""
+    import re
+    import numpy as np
+    source = (Path(__file__).resolve().parents[2] / "kaggle_tts" / "serveur.py").read_text(encoding="utf-8")
+    module = re.search(r"MODULE_TRAVAILLEUR = r'''(.*?)\n'''", source, re.S).group(1)
+    assert "if murmure(w, m.sr):" in module
+    ns = {}
+    exec(module.split("\ndef murmure")[1].join(["def murmure", ""]).split("\ndef travailleur")[0], ns)
+    sr = 24000
+    t = np.arange(int(1.5 * sr)) / sr
+    parole = 0.3 * np.sin(2 * np.pi * 180 * t)
+    silence = np.zeros(sr)
+    marmonne = 0.01 * np.sin(2 * np.pi * 120 * t)              # ~ -43 dB pendant 1,5 s
+    assert ns["murmure"](np.concatenate([parole, silence, parole]), sr) == 0
+    assert ns["murmure"](np.concatenate([parole, marmonne, parole]), sr) >= 1.4

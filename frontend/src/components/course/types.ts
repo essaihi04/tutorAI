@@ -17,7 +17,12 @@ export interface CourseQuestion {
   options?: string[];
   timeout_seconds?: number;
   advance_on_timeout?: boolean;
+  /** Index de la bonne option (mode concentration : correction immédiate et réaction préparée). */
+  correct?: number;
 }
+
+/** Réaction du tuteur préparée d'avance pour une réponse possible (texte dit, texte écrit, piste audio). */
+export interface ReactionPreparee { parole: string; ecrit: string; audio?: string }
 
 /**
  * Un exercice CLIQUABLE posé sur le tableau, à la fin d'une étape.
@@ -105,6 +110,48 @@ export interface CourseSlide {
   };
   audio?: Record<string, PublishedSlideAudio>;
   order_index?: number;
+  /** Mode concentration (`CourseFocusStage`) : ce que le tuteur 3D montre, et quand. */
+  concentration?: SlideConcentration;
+  /** Les compétences du cours que cette diapositive travaille (suivi des acquis). */
+  competence_ids?: string[];
+}
+
+/** Une compétence du cours : l'unité du suivi des acquis (skill `suivi-des-acquis`). */
+export interface CourseCompetence { id: string; label: string; slide_ids?: string[]; /** le nom dit par la voix (sans symbole) */ dit?: string }
+
+/**
+ * Le mode concentration : l'écrit est fermé, le tuteur 3D montre au rythme de la voix.
+ * `mot` est un extrait exact du texte parlé ; sa place dans le texte donne l'instant.
+ */
+export interface SlideConcentration {
+  /** Commande que le tuteur appuie dans la simulation quand la voix commence (start, fire_pulse). */
+  demarrer?: string;
+  /**
+   * `repere` : repère dessiné dans la simulation ; `cible` : 'visuel', 'ligne:N' (tableau), 'centre:N' ;
+   * `commande` : le tuteur appuie (relance la simulation au moment où la voix l'explique).
+   */
+  pointage?: { mot: string; repere?: string; cible?: string; commande?: string; parametres?: Record<string, unknown> }[];
+  /** Formules ou mots-clés écrits au centre au moment où la voix les dit. */
+  centre?: { texte: string; mot: string }[];
+  /** La trace à recopier (bulle « À écrire dans le cahier »). */
+  cahier?: string;
+  /**
+   * La comparaison que le tuteur fait LUI-MÊME après la voix, si l'élève n'a pas touché la simulation :
+   * il change un réglage (M₂ plus loin, le fond plus bas…), rejoue et montre ce qui a changé.
+   */
+  variante?: { apres_s?: number; etapes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[] };
+  /**
+   * Les réactions préparées, pour CHAQUE réponse possible : `reponses[cle][option]` avec `juste` (bonne option)
+   * ou `1` (indice, 1er essai) et `2` (réponse et justification, 2e essai). `cle` : `q` (question de la
+   * diapositive), `e{i}` (QCM de l'exercice i), `e{i}s{j}` (affirmation j d'un vrai/faux ; option 0 = Vrai).
+   */
+  reponses?: Record<string, Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>>;
+  /**
+   * La diapositive fait le bilan des acquis (fiche « ce qu'il faut retenir », carte du chapitre) : le lecteur lit le
+   * bilan de l'élève (GET /course-player/acquis/{deck}), le donne à la simulation (`set_parameters {lacunes, acquis,
+   * acquis_ids}`) et, la voix finie, le tuteur nomme ce qu'il reste à retravailler puis fige la page « lacunes ».
+   */
+  acquis?: boolean;
 }
 
 export interface CourseActivity {
@@ -120,6 +167,8 @@ export interface CourseActivity {
 
 export interface CourseDeck {
   id: string;
+  /** Identifiant stable du manifeste (le même en local et en base) : c'est lui que suit le suivi des acquis. */
+  stable_id?: string;
   lesson_id: string;
   title: string;
   version?: number;
@@ -127,6 +176,7 @@ export interface CourseDeck {
   estimated_minutes?: number;
   source?: 'database' | 'manifest';
   activities: CourseActivity[];
+  competences?: CourseCompetence[];
 }
 
 export interface CourseProgressSnapshot {

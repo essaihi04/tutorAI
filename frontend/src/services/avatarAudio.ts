@@ -45,6 +45,11 @@ export function observeAvatarMedia(media: HTMLMediaElement) {
     } catch { /* Keep playback independent of avatar support. */ }
   };
   media.addEventListener('playing', attach);
+  // The context may still be starting when playback begins (course tracks start on their own): the first `playing`
+  // is then missed and the mouth stays shut for the whole track. Retry once the sound is unlocked, and right now if
+  // the media is already playing.
+  audioUnlock.onUnlock(() => { if (!media.paused) attach(); });
+  if (!media.paused) { attach(); if (!connected) void audioUnlock.ensureRunning().then(() => { if (!media.paused) attach(); }); }
   const disconnect = () => { source?.disconnect(); connected = false; };
   media.addEventListener('pause', disconnect);
   media.addEventListener('ended', disconnect);

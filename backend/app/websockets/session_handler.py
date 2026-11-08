@@ -2109,6 +2109,9 @@ class SessionHandler:
             bloc_etape = self._bloc_routeur()
             if bloc_etape:
                 base_prompt = bloc_etape + "\n\n" + base_prompt
+            bloc_acquis = self._bloc_acquis()
+            if bloc_acquis:
+                base_prompt = bloc_acquis + "\n\n" + base_prompt
             return base_prompt
         prompt = llm_service.build_system_prompt(
             subject=ctx.get("subject", "Physique"),
@@ -2130,7 +2133,35 @@ class SessionHandler:
         if bloc_schema:
             prompt = f"{bloc_schema}\n\n{prompt}"
         bloc_etape = self._bloc_routeur()
-        return f"{bloc_etape}\n\n{prompt}" if bloc_etape else prompt
+        prompt = f"{bloc_etape}\n\n{prompt}" if bloc_etape else prompt
+        bloc_acquis = self._bloc_acquis()
+        return f"{bloc_acquis}\n\n{prompt}" if bloc_acquis else prompt
+
+    def _bloc_acquis(self) -> str:
+        """Les lacunes de l'élève, par compétence, et la méthode qui marche avec lui (skill `suivi-des-acquis`).
+
+        Mode libre : le tuteur s'appuie sur ce qui est acquis, reprend ce qui ne l'est pas avec une autre
+        méthode que celle qui a échoué, et ne tient une notion pour reconquise qu'après une nouvelle réussite.
+        Jamais bloquant : sans fichier de suivi, rien n'est ajouté.
+        """
+        try:
+            from app.services import suivi_acquis
+            evenements = suivi_acquis.lire(str(self.student_id))
+            if not evenements:
+                return ""
+            par_cours: dict = {}
+            for e in evenements:
+                par_cours.setdefault(e.get("deck_id") or "", []).append(e)
+            blocs = []
+            for deck_id, evs in par_cours.items():
+                deck = suivi_acquis.charger_deck(deck_id) or {}
+                bloc = suivi_acquis.bloc_prompt(suivi_acquis.bilan(evs, deck), deck.get("title", ""))
+                if bloc:
+                    blocs.append(bloc)
+            return "\n\n".join(blocs)[:3000]
+        except Exception as e:  # noqa: BLE001
+            _safe_log(f"[Acquis] bloc non construit : {e}")
+            return ""
 
     async def handle_connection(self):
         """Main WebSocket handler loop."""

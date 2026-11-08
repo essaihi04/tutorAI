@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie sur une page : pour chaque partie du cours, la définition à apprendre, les formules et le point d'attention ; deuxième page : ce que l'élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * « Ce qu'il faut retenir » (demande du 8 novembre 2026, deux pages au plus) : TOUTE la fiche du chapitre tient sur
+ * UNE page — huit blocs en deux colonnes : la définition à apprendre (français, mot pour mot), la formule telle
+ * qu'on l'écrit, et le piège en orange. La voix la parcourt bloc par bloc (play_until {moment: <bloc>} met le bloc
+ * en lumière). La deuxième page est celle de l'élève : ce qu'il lui reste à retravailler (le lecteur lui donne son
+ * bilan des acquis avec set_parameters {lacunes, acquis}). Contenu dans le cadre de référence 2 Bac PC (OMP1–OMP8).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'definition', titre: "1 · L'onde mécanique progressive", comps: ['C1'],
+    def: "Propagation d'une perturbation dans un milieu matériel élastique, avec transport d'énergie et sans transport de matière.",
+    attention: "M monte, descend et revient à sa place : la matière n'avance pas." },
+  { id: 'types', titre: '2 · Transversale ou longitudinale', comps: ['C2'],
+    def: "Transversale : perturbation ⊥ à la propagation (corde, eau). Longitudinale : même direction (ressort, son).",
+    attention: "Le son est longitudinal. Dimensions : corde 1, eau 2, son 3." },
+  { id: 'celerite', titre: '3 · La célérité', comps: ['C3'], formules: ['v = d / Δt'],
+    def: "d (m) mesurée de front à front, Δt (s), v (m/s). Dépend du milieu, pas de la source ni de l'amplitude.",
+    attention: "Son : ≈ 340 m/s dans l'air, ≈ 1500 m/s dans l'eau." },
+  { id: 'retard', titre: '4 · Le retard τ', comps: ['C4'], formules: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
+    def: "M refait le mouvement de S, avec le retard τ : même courbe, décalée de τ.",
+    attention: "Convertir les ms et les cm avant de calculer." },
+  { id: 'longueur', titre: '5 · Durée θ et longueur L', comps: ['C5'], formules: ['L = v · θ'],
+    def: "θ : durée pendant laquelle un point bouge (sur y(t)). L : longueur du milieu perturbé (sur y(x)).",
+    attention: "Ne pas confondre θ (durée) et τ (retard)." },
+  { id: 'aspect', titre: '6 · Lire une onde', comps: ['C6'],
+    def: "y(x) : l'aspect du milieu, une photo (front à droite). y(t) : le mouvement d'un point (front à gauche).",
+    attention: "Lire l'axe avant la valeur. Devant le sommet, les points montent." },
+  { id: 'mesures', titre: '7 · Mesurer', comps: ['C7', 'C8'], formules: ['τ = divisions × sensibilité', 'v = d / τ', 'd = v · τ / 2'],
+    def: "Deux micros : τ lu sur l'oscilloscope, puis v = d / τ. Écho : aller-retour, 2d = v · τ.",
+    attention: "Début avec début ; ne pas oublier le 2 de l'aller-retour." },
+  { id: 'methode', titre: '8 · Rédiger comme le barème', comps: ['C9'], formules: ['relation → A.N. → résultat → unité'],
+    def: "Lire l'axe, reconnaître le cas (mot-code de l'énoncé), puis les quatre temps du calcul.",
+    attention: "Unités SI ; vérifier l'ordre de grandeur." },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const S = { page: 1, focus: null, lacunes: null, acquis: null, apparu: [] };   // apparu[i] : l'instant où la voix a allumé le bloc i
+
+/* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices). */
+function lignes(c, texte, taille, max) {
+  const ctx = c.ctx; ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const out = []; let ligne = '';
+  for (const mot of String(texte).split(/\s+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (ctx.measureText(essai.replace(/_/g, '')).width > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o = {}) {
+  for (const l of lignes(c, texte, taille, max)) { c.texte(l, x, y, { taille, ...o }); y += taille * 1.22; }
+  return y;
+}
+
+const COL = [{ x: 22, w: 350 }, { x: 392, w: 348 }], HAUT = 50, HBLOC = 92;
+function bloc(c, b, i) {
+  const col = COL[i < 4 ? 0 : 1], x = col.x, y0 = HAUT + (i % 4) * HBLOC, enLumiere = S.focus === b.id;
+  const st = statut(b);
+  // Un bloc allumé par la voix s'écrit à partir de cet instant ; les autres suivent l'ordre naturel de la fiche.
+  // Rien n'est effacé ni réécrit : chaque bloc garde sa place dans le temps (demande du 8 novembre 2026).
+  if (enLumiere) c.rect(x - 8, y0 - 6, col.w + 16, HBLOC - 4, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7, duree: .3 });
+  else if (st && STATUTS[st] && st !== 'acquis') c.rect(x - 8, y0 - 6, col.w + 16, HBLOC - 4, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8, duree: .3 });
+  let y = y0 + 12;
+  c.texte(b.titre, x, y, { couleur: 'jaune', taille: 15 });
+  if (st === 'acquis') c.texte('✓', x + col.w - 14, y, { couleur: 'vert', taille: 15 });
+  else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + col.w, y, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+  y += 17;
+  if (b.formules) {
+    let fx = x;
+    for (const f of b.formules) {
+      c.ctx.font = `15px ${window.Tableau.POLICE}`;
+      const l = Math.min(col.w, c.ctx.measureText(f.replace(/_/g, '')).width + 16);
+      c.rect(fx, y - 13, l, 20, { couleur: 'faible', arrondi: 6, largeur: 1.3 });
+      c.texte(f, fx + 8, y + 2, { couleur: 'jaune', taille: 15, max: l - 12 });
+      fx += l + 8;
+    }
+    y += 22;
+  }
+  y = paragraphe(c, b.def, x, y, 12.5, col.w, { couleur: 'blanc' });
+  c.texte('⚠', x, y, { couleur: 'orange', taille: 12 });
+  y = paragraphe(c, b.attention, x + 16, y, 11.5, col.w - 16, { couleur: 'orange', alpha: .9 });
+  c.repere(b.id, x - 8, y0 - 6, col.w + 16, HBLOC - 4, b.titre.replace(/^\d+ · /, ''));
+}
+
+function dessinerFiche(c) {
+  c.texte('Ce qu’il faut retenir', 22, 30, { couleur: 'jaune', taille: 22 });
+  c.texte('définition · formule · ⚠ piège', 740, 28, { couleur: 'faible', taille: 12, align: 'right' });
+  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.ligne(381, HAUT - 4, 381, HAUT + 4 * HBLOC - 10, { couleur: 'tresfaible', largeur: 1, pointille: [4, 6] });
+  // Les blocs allumés par la voix s'écrivent d'abord (dans l'ordre où elle les a dits), puis les autres suivent l'ordre
+  // de la fiche : le bloc dont le professeur parle n'attend jamais l'écriture des précédents.
+  // Un bloc allumé par la voix a SA ligne de temps : il s'écrit dès l'instant où elle l'a dit, sans attendre les autres.
+  // Les blocs pas encore dits suivent l'ordre naturel de la fiche, à la suite du titre.
+  let naturel = c.cur, fin = c.cur;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] != null) { c.cur = S.apparu[i]; bloc(c, b, i); }
+    else { c.cur = naturel; bloc(c, b, i); naturel = c.cur; }
+    fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 22 });
+  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' });
+    return;
+  }
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    const y0 = y - 18;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' });
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 });
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+    c.repere('lacunes', 18, y0, 720, y - y0, 'ce qu’il reste à retravailler');
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 });
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(21 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+
+function aller(n, par, focus) {
+  n = n === 2 ? 2 : 1;
+  if (n !== S.page || par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // nouvelle page ou rejouer : on réécrit depuis le début
+  const i = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+  if (n === 1 && i >= 0 && S.apparu[i] == null) S.apparu[i] = (performance.now() - scene.ouvert) / 1000;
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? BLOCS.find(b => b.id === focus).titre.replace(/^\d+ · /, '') : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; return m; }
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (nom === 'lacunes' || +p.time_s === 2) aller(2, 'play_until');
+  else aller(1, 'play_until', BLOCS.some(b => b.id === nom) ? nom : null);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  return `Page 1/2, la fiche du chapitre : huit blocs (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : ''}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
+}
+$('suiv').onclick = () => aller(S.page === 1 ? 2 : 1, 'next');
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — ondes mécaniques progressives', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = []; } },
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const i = BLOCS.findIndex((b, k) => { const col = COL[k < 4 ? 0 : 1], y0 = HAUT + (k % 4) * HBLOC; return x >= col.x - 8 && x <= col.x + col.w + 8 && y >= y0 - 6 && y <= y0 + HBLOC - 10; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'ondes_tableau_bilan', version: '2.0', title: 'Ce qu’il faut retenir', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (met ce bloc de la fiche en lumière ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1.., label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre des ondes mécaniques progressives, sur une page (huit blocs : définition, formule, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'definition'), reset: () => aller(1, 'reset', 'definition'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: () => aller(2, 'next'), previous: () => aller(1, 'previous') })[cmd]?.() });
+aller(1, 'start', 'definition');   // la voix commence par la définition : le premier bloc est déjà en lumière
+window.__bilan = { S, scene, BLOCS };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

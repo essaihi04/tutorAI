@@ -111,3 +111,25 @@ def test_l_eleve_qui_ne_comprend_pas_est_reconnu_en_francais_et_en_darija():
     assert se.eleve_ne_comprend_pas("tu peux réexpliquer ?")
     assert not se.eleve_ne_comprend_pas("tau = 1,25 s")
     assert not se.eleve_ne_comprend_pas("je comprends mieux maintenant")
+
+
+def test_le_professeur_voit_la_simulation_et_repond_aux_questions_libres_avec_elle():
+    bloc = se.bloc_prompt(MANIFESTE, "progressive")
+    assert "ce_qui_se_voit" in bloc and "QUESTION LIBRE" in bloc and "autant de fois" in bloc
+    assert "pause, explique" not in bloc          # ce labo ne sait pas s'arrêter : on ne le promet pas
+
+
+def test_une_manip_qui_s_arrete_laisse_le_professeur_figer_l_instant():
+    manip = {"capabilities": {"commands": ["start", "pause", "resume", "set_time", "set_parameters", "highlight"],
+                              "reperes": {"point_m": "le point M"}}}
+    bloc = se.bloc_prompt(manip)
+    assert "pause, explique ce qui est figé" in bloc and "set_time {time_s}" in bloc and "set_parameters" in bloc
+
+
+def test_une_manip_aux_instants_cles_fait_montrer_chaque_phase_dite():
+    manip = {"capabilities": {"commands": ["start", "pause", "resume", "play_until", "highlight"],
+                              "reperes": {"point_m": "le point M"}}}
+    bloc = se.bloc_prompt(manip)
+    assert "play_until {moment}" in bloc and "un arrêt par phase" in bloc
+    sans = se.bloc_prompt({"capabilities": {"commands": ["start", "pause", "resume", "highlight"]}})
+    assert "play_until" not in sans                # une manip sans instants clés : on ne le promet pas

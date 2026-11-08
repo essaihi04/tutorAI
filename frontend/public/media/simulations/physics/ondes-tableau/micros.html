@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deux micros — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux microphones, un oscilloscope et le graphe du retard en fonction de la distance, dessinés à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start fire_pulse pause resume play_until">Clap !</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * TP « mesure de la célérité du son » : un clap, deux micros M₁ et M₂ distants
+ * de d, un oscilloscope à 0,5 ms/div. On lit τ en divisions (début avec début),
+ * v = d / τ ; chaque clap ajoute un point au graphe τ = f(d), une droite de pente 1/v.
+ * Un seul bouton (Clap !) ; M₂ se glisse le long de la règle.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const V = 340, SENS = 0.5, T1 = 0.25;            // m/s ; ms par division ; arrivée sur M₁ (ms après le déclenchement)
+const S = { jusqua: null, d: 0.68, p: 0, running: false, pause: false, mesures: [], fait: false, emis: 0 };
+const tau = () => S.d / V * 1000;                // ms
+const XM1 = 230, PXM = 330;                      // M₁ ; px par mètre
+const XM2 = () => XM1 + S.d * PXM;
+const signal = (t, t0) => (t < t0 ? 0 : Math.exp(-(t - t0) / 0.16) * Math.sin(2 * Math.PI * 4 * (t - t0)));   // t en ms, 4 kHz
+
+function micro(c, x, y, nom, couleur) {
+  c.cercle(x, y, 11, { couleur }).ligne(x, y + 11, x, y + 34, { couleur }).ligne(x - 9, y + 34, x + 9, y + 34, { couleur });
+  c.texte(nom, x, y - 18, { couleur, align: 'center', taille: 17 });
+}
+
+function dessiner(c) {
+  scene.cadre(5);
+  // ── Le montage ──
+  const yM = 62;
+  c.texte('clap', 95, yM - 18, { couleur: 'faible', align: 'center', taille: 16 });
+  c.trait([[80, yM - 6], [95, yM + 10], [110, yM - 6]], { couleur: 'blanc' }).trait([[84, yM + 22], [95, yM + 8], [106, yM + 22]], { couleur: 'blanc' });
+  micro(c, XM1, yM, 'M₁', 'cyan');
+  c.repere('micro_1', XM1 - 18, yM - 40, 36, 80, 'micro M₁');
+  c.direct(() => {
+    micro(c, XM2(), yM, 'M₂', 'orange');
+    c.cote(XM1, yM + 52, XM2(), yM + 52, `d = ${fr(S.d)} m`, { couleur: 'jaune', dessous: true });
+    c.texte('⇠ glisse M₂ ⇢', XM2(), yM + 84, { couleur: 'faible', align: 'center', taille: 14 });
+    c.repere('micro_2', XM2() - 22, yM - 40, 44, 96, 'micro M₂ (glisse-le)');
+    // Le front sonore, au ralenti, part du clap.
+    if ((S.running || S.pause) && S.p < 0.45) {   // en marche ou figé : le front reste visible
+      const r = (S.p / 0.45) * (XM2() - 95 + 40);
+      c.trait(Array.from({ length: 25 }, (_, i) => { const a = -0.7 + 1.4 * i / 24; return [95 + r * Math.cos(a), yM + 4 + r * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6, alpha: .7 });
+    }
+  });
+
+  // ── L’oscilloscope : 10 divisions × 6 ──
+  const ox = 40, oy = 180, dx = 40, dy = 28;
+  c.texte(`Oscilloscope — ${fr(SENS, 1)} ms/div`, ox, oy - 12, { couleur: 'cyan', taille: 17 });
+  c.repere('sensibilite', ox, oy - 32, 240, 28, 'la sensibilité horizontale');
+  c.rect(ox, oy, 10 * dx, 6 * dy, { couleur: 'faible', arrondi: 4 });
+  for (let i = 1; i < 10; i++) c.ligne(ox + i * dx, oy, ox + i * dx, oy + 6 * dy, { couleur: 'tresfaible', largeur: 1, duree: .03 });
+  for (let j = 1; j < 6; j++) c.ligne(ox, oy + j * dy, ox + 10 * dx, oy + j * dy, { couleur: 'tresfaible', largeur: 1, duree: .03 });
+  c.repere('oscillogramme', ox, oy, 10 * dx, 6 * dy, 'l’oscillogramme');
+  c.direct(() => {
+    const tmax = 10 * SENS, tFin = (S.running || S.pause) ? Math.max(0, (S.p - 0.45) / 0.55) * tmax : (S.fait ? tmax : 0);
+    const voie = (y0, t0, couleur) => { if (tFin > 0) c.courbe(u => [ox + u * tFin / tmax * 10 * dx, y0 - 26 * signal(u * tFin, t0)], 260, { couleur, largeur: 2 }); };
+    voie(oy + 1.5 * dy, T1, 'cyan'); voie(oy + 4.5 * dy, T1 + tau(), 'orange');
+    c.texte('voie 1 (M₁)', ox + 10 * dx + 6, oy + 1.5 * dy + 5, { couleur: 'cyan', taille: 14 });
+    c.texte('voie 2 (M₂)', ox + 10 * dx + 6, oy + 4.5 * dy + 5, { couleur: 'orange', taille: 14 });
+    if (S.fait && !S.running) {
+      const xa = ox + T1 / SENS * dx, xb = ox + (T1 + tau()) / SENS * dx, n = tau() / SENS;
+      c.ligne(xa, oy + 1.5 * dy, xa, oy + 6 * dy + 8, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
+      c.ligne(xb, oy + 4.5 * dy, xb, oy + 6 * dy + 8, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
+      c.cote(xa, oy + 6 * dy + 14, xb, oy + 6 * dy + 14, `${fr(n, 0)} div`, { couleur: 'jaune', dessous: true });
+      c.texte(`τ = ${fr(n, 0)} × ${fr(SENS, 1)} ms = ${fr(tau(), 1)} ms`, ox, 410, { couleur: 'vert', taille: 17 });
+      c.texte(`v = d / τ = ${fr(S.d)} / ${fr(tau() / 1000, 4)} = ${fr(S.d / (tau() / 1000), 0)} m/s`, 400, 410, { couleur: 'vert', taille: 17 });
+      c.repere('retard', xa, oy + 6 * dy + 2, xb - xa, 36, 'τ : début avec début');
+    }
+  });
+
+  // ── Le graphe τ = f(d) ──
+  const gx = 560, gy = 350, gw = 170, gh = 140, dmax = 1.4, tmaxg = 4.4;
+  c.texte('τ en fonction de d', gx - 20, gy - gh - 22, { couleur: 'cyan', taille: 16 });
+  c.axe(gx, gy, gx + gw, gy, [[0.5 / dmax, '0,5'], [1 / dmax, '1']]);
+  c.axe(gx, gy, gx, gy - gh, [[2 / tmaxg, '2'], [4 / tmaxg, '4']], { vertical: true });
+  c.texte('d (m)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: 14 });
+  c.texte('τ (ms)', gx + 8, gy - gh + 6, { couleur: 'jaune', taille: 14 });
+  c.direct(() => {
+    const P = (d, t) => [gx + d / dmax * gw, gy - t / tmaxg * gh];
+    for (const m of S.mesures) { const [x, y] = P(m.d, m.tau); c.point(x, y, 4.5, 'orange'); }
+    if (S.mesures.length >= 2) {
+      const [x2, y2] = P(dmax, dmax / V * 1000);
+      c.ligne(gx, gy, x2, y2, { couleur: 'vert', largeur: 1.6, pointille: [6, 5] });
+      c.texte('droite : pente = 1 / v', gx + 40, gy - 14, { couleur: 'vert', taille: 15 });
+      c.repere('droite', gx, gy - gh, gw, gh, 'la droite τ = f(d)');
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.p = Math.min(1, S.p + dt / 2.6);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.p >= 1) {
+    S.running = false; S.fait = true; $('run').textContent = 'Clap !';
+    if (!S.mesures.some(m => Math.abs(m.d - S.d) < 1e-6)) S.mesures.push({ d: S.d, tau: tau() });
+    bulle($('feedback'), S.mesures.length < 2 ? 'Compte les divisions entre les deux débuts. Glisse M₂, puis refais un clap.' : 'Les points s’alignent : une droite qui passe par l’origine, de pente 1/v.', 'good');
+    pont.noter('measurement', { d_m: S.d, tau_ms: tau() }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+/*
+ * Les instants clés (fraction p du déroulé, calculée depuis le montage ; ils suivent M₂ quand on le déplace).
+ * Le tuteur les reçoit dans l'état (`moments`) et les vise avec `play_until {moment}`.
+ */
+function moments() {
+  const fin = XM2() - 55, tmax = 10 * SENS, spot = t => 0.45 + 0.55 * Math.min(1, t / tmax);
+  const m = { son_part: 0.06, m1_atteint: 0.45 * (XM1 - 95) / fin + 0.01, m2_atteint: 0.45 * (XM2() - 95) / fin + 0.01,
+    signal_m1: spot(T1 + 0.45), signal_m2: spot(T1 + tau() + 0.45), mesure: 1 };
+  for (const k in m) m[k] = +Math.min(1, m[k]).toFixed(3);
+  return m;
+}
+const MOTIFS = { son_part: 'le son part du clap', m1_atteint: 'le son arrive au micro M₁', m2_atteint: 'le son arrive au micro M₂',
+  signal_m1: 'le signal de M₁ apparaît sur la voie 1', signal_m2: 'le signal de M₂ apparaît, plus tard, sur la voie 2', mesure: 'oscillogramme complet, retard τ mesuré' };
+
+/* Rejoue (ou continue) jusqu'à un instant clé, puis se fige : le tuteur montre la phase qu'il décrit. */
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.progress;
+  if (!Number.isFinite(cible)) return;
+  if (cible >= 1) { if (S.pause) resume(); else if (!S.running) start(); else S.jusqua = null; return; }   // jusqu'au bout
+  if (!(S.running || S.pause) || S.p >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom, progress: cible }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.p < S.jusqua) return false;
+  S.p = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+
+/* Ce que l’élève voit, en mots : le tuteur suit la scène par cette phrase. */
+function ceQuiSeVoit() {
+  const n = tau() / SENS, m = [`Micros M₁ et M₂ séparés de d = ${fr(S.d)} m ; oscilloscope à ${fr(SENS, 1)} ms/div.`];
+  if (S.running || S.pause) {
+    const etat = S.pause ? 'Scène arrêtée : ' : '';
+    m.push(S.p < 0.45 ? `${etat}le front sonore voyage du clap vers les micros (${S.p < moments().m1_atteint ? 'pas encore arrivé à M₁' : S.p < moments().m2_atteint ? 'M₁ atteint, pas encore M₂' : 'M₁ puis M₂ atteints'}).`
+                      : `${etat}le spot balaie l’écran (${fr(Math.max(0, (S.p - 0.45) / 0.55) * 10, 1)} div sur 10) : signal de M₁ à 0,5 div${(S.p - 0.45) / 0.55 * 10 > 0.5 + n ? `, signal de M₂ à ${fr(0.5 + n, 1)} div` : ', celui de M₂ pas encore tracé'}.`);
+  } else if (S.fait) m.push(`Oscillogramme complet : début de la voie 1 à 0,5 div, début de la voie 2 à ${fr(0.5 + n, 1)} div, soit ${fr(n, 0)} divisions = ${fr(tau(), 1)} ms (cote jaune) ; v = d/τ = ${fr(S.d / (tau() / 1000), 0)} m/s affiché.`);
+  else m.push('Écran vide : aucun clap encore pour cette distance.');
+  m.push(S.mesures.length ? `Graphe τ = f(d) : ${S.mesures.length} point(s) (${S.mesures.map(x => `${fr(x.d)} m → ${fr(x.tau, 1)} ms`).join(' ; ')})${S.mesures.length >= 2 ? ', droite par l’origine de pente 1/v tracée' : ''}.` : 'Graphe τ = f(d) encore vide.');
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.p = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le son part du clap…'); pont.noter('start', { d_m: S.d }); pont.emettre(); }
+
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.mesures = []; S.fait = false; S.p = 0; S.running = false; scene.sale = true; bulle($('feedback'), 'Fais un clap.'); pont.emettre(); }
+function setParameters(p) {
+  if (!Number.isFinite(+p.d_m)) return;
+  S.d = Math.min(1.36, Math.max(0.17, Math.round(+p.d_m / 0.17) * 0.17)); S.fait = false; scene.sale = true;
+  pont.noter('set_parameters', { d_m: S.d }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.abs(x - XM2()) < 28 && y > 20 && y < 175 ? 'M2' : null; },
+  bouger: (id, px) => { const [x] = scene.local(px, 0); setParameters({ d_m: (x - XM1) / PXM }); },
+  lacher: () => bulle($('feedback'), `d = ${fr(S.d)} m : fais un clap.`),
+});
+window.Tableau.explication({ micros: [
+  { repere: 'sensibilite', texte: 'D’abord la sensibilité horizontale : une division vaut 0,5 ms.' },
+  { repere: 'retard', texte: 'On compte les divisions entre le début du signal de M₁ et le début de celui de M₂.' },
+  { repere: 'micro_2', texte: 'On éloigne M₂ : le retard augmente dans la même proportion.' },
+  { repere: 'droite', texte: 'τ en fonction de d est une droite passant par l’origine : sa pente vaut 1/v.' },
+] });
+const commandes = ['start', 'fire_pulse', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_tableau_micros', version: '1.0', title: 'Deux micros et un oscilloscope', variants: [{ id: 'micros', label: 'micros' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { d_m: '0.17..1.36 (pas de 0,17 m)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Son dans l’air, v = ${V} m/s. Oscilloscope à ${fr(SENS, 1)} ms/div. M₂ se déplace par pas de 0,17 m (soit 1 division de retard). Mesures : τ = n div × 0,5 ms ; v = d / τ ; τ = f(d) droite de pente 1/v.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(), parameters: { d_m: S.d }, tau_ms: +tau().toFixed(2), divisions: +(tau() / SENS).toFixed(1), mesures: S.mesures.slice() }),
+  progression: () => Math.min(1, S.mesures.length / 2),
+  executer: (cmd, p) => ({ start, fire_pulse: start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Fais un clap, puis lis l’oscillogramme.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

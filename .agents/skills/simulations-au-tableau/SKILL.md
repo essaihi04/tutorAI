@@ -1,0 +1,47 @@
+---
+name: simulations-au-tableau
+description: How to create a course simulation drawn on the board (chalk, transparent background, one button, draggable handles) that the tutor can see, point at, pause, relaunch and set — and that fits inside the course player. Use whenever you create or change a simulation under frontend/public/media/simulations for a course slide; do not use for static images (scientific-course-visuals) or the 3D lab (labo-virtuel-2bac).
+---
+
+# Simulations au tableau
+
+A course simulation is a small HTML page drawn with chalk ON the course board. It is not a separate app: the student sees the board, the chalk writing, and one control. The tutor reads what it shows in real time and drives it like a teacher at the blackboard. Reference set: `frontend/public/media/simulations/physics/ondes-tableau/` (corde, micros, sonar — waves example course, November 2026). Kit and protocol details: `docs/design/labos-au-tableau.md`.
+
+## Rules from the user
+
+1. **Minimum buttons.** One main button that cycles (Lancer → Pause → Reprendre → Rejouer). Every setting is a handle you drag on the drawing (`Tableau.glisser`): the point M on the rope, the second microphone, the sea floor. No slider bars, no tabs unless a variant really changes the scene.
+2. **Transparent background that blends into the board.** The page draws on the board the course player already shows: `html, body { background: transparent !important }`, no grid image, and `:root { color-scheme: normal }` — if the iframe's color-scheme differs from the course page, Chrome paints an opaque background behind it. `MediaViewer` gives `/media/simulations/` pages a transparent surface with no padding or coloured frame (a light-blue frame once made the chalk invisible).
+3. **Everything visible.** The whole drawing fits a fixed virtual frame (760 × 420, scaled with `cadre()`/`local()` in the scene helper): nothing cut, no scrolling, labels never overlapping (check every label at the extreme handle positions).
+4. **Controls at the TOP, bottom strip free.** The course player lays its own bar over the bottom of the board (pause, « Poser une question », ↺, « Suivant → », the slide counter). A button or bubble at the bottom of the simulation is hidden under it (7 November 2026: « Rejouer » was under « ↺ » and « Suivant »). Put the `.barre` first (`.barre { order: -1 }`) and keep about 4.5em empty at the bottom of the scene (`.scene { padding-bottom: 4.5em }`).
+5. **Only the programme.** Values, formulas and words come from the chapter's `backend/data/curriculum/perimetre.json`; nothing out of programme on the drawing (no √(T/μ) for the waves chapter, no superposition…). The board text is in French, the BAC BIOF language.
+6. **Drawn live, like a teacher.** Use the `Craie` kit (`shared/tableau/tableau.{css,js}`): fixed parts written stroke by stroke, the moving part drawn with `craie.direct`, the rest appearing when it happens. Render on demand (only while something moves or chalk is still writing).
+7. **Physics that reads well.** Choose shapes that make the point visible: the waves pulse is asymmetric (fast rise, slow fall), otherwise the mirror between the rope's shape and the elongation y(t) cannot be seen. Values chosen so the numbers are round (v = 1 m/s, θ = 0,4 s; v = 340 m/s with a 0,17 m step = 0,5 ms = one division; v = 1500 m/s with a 7,5 m step = 10 ms).
+
+## The tutor must be able to do everything
+
+The tutor explains with the simulation, answers a free question with it, relaunches it as often as needed, pauses on the right instant, moves an element, points at it, or brings another simulation of the lesson. So each simulation:
+
+- **Declares itself** with `Tableau.protocole({ id, commandes, config, texte, etat, progression, executer })`: manifest (`simulation_manifest`), state (`simulation_state`) and commands (`simulation_control`, fields `command` and **`parameters`**).
+- **Accepts the commands it can honour** and lists them with a schema: `start`, `reset`, `pause`, `resume`, `fire_pulse` (one-shot experiments), `set_time {time_s}` (freeze on an instant), `set_parameters {…}` (with the range and step, e.g. `x_m: '0.3..1.9'`). `highlight {target}` is added by the kit.
+- **Exposes its key instants, computed from the physics** — `moments` in the state (corde: `source_monte`, `m_atteint`, `m_monte`, `m_sommet`, `m_descend`, `m_revenu`, `toute_sur_corde`, `fin`; recomputed when M is moved; micros: `son_part`, `m1_atteint`, `m2_atteint`, `signal_m1`, `signal_m2`, `mesure`; sonar: `salve_descend`, `fond_atteint`, `salve_remonte`, `echo_recu`) — and accepts **`play_until {moment | time_s}`**: replays (from zero if the instant is past, else continues) and freezes on that instant with « Arrêt sur image : … » in the bubble. A frozen scene must still draw what is moving (front, salve, spot): draw it when `running || pause`, not only while running. This is what lets the tutor show each phase while he says it (rule 18 of the `professeur` skill). Every new simulation lists, before anything else, the instants a teacher would freeze on, and gives them a name.
+- **Says who acted.** The kit (`Tableau.protocole`) records `par: 'tuteur' | 'eleve'` on every action and `derniere_main` in the state: a command received → the tutor; a pointer or key inside the page → the student; `personne` until then. The player reacts only to what the student did himself.
+- **Variants are shown, then left to the student** (user rule, 8 November 2026). When a simulation has something to vary (M₂ moved along the ruler, M moved along the rope, the sea bottom raised or lowered), the slide declares `concentration.variante` (`apres_s`, `etapes`: `set_parameters`, `play_until`, `highlight`). Five seconds after the voice, if the student has not touched the scene, the tutor does it himself — new setting, replay, point at what changed — so the comparison is seen. If the student does it himself and gets a new result (state `finished`, `derniere_main: 'eleve'`, different `parameters`), the player pauses the course, sends before/after to `POST /course-player/sim-reaction` (DeepSeek: interpretation + one question), says the interpretation at once with the live voice (`/tts/speak`), shows the question (QCM, vrai/faux or direct, chosen from the student's previous answers on that slide: `simulation_reaction.type_de_question`), corrects it (QCM and vrai/faux in the browser with the prepared `parole_juste` / `parole_faux`; a direct answer is judged by the LLM), then « Continuer » resumes the course on the same slide.
+- **Names its views.** A scene with several views labels each one on the chalk (« Vue de dessus », « Vue de côté ») and declares a `repere` on each, so the tutor can point at a view while he says what it shows (professeur rule 21).
+- **Says what is on screen, in words** — `ce_qui_se_voit` in the state: the time, where the front is, what each point is doing, which curve is drawn, the value displayed. It is what the tutor « sees » (no OCR needed: the page knows exactly what it drew). Emit the state on every event and every 500 ms while it runs.
+- **Announces pointable landmarks** (`craie.repere(id, …)`) and an explanation script per variant (`Tableau.explication({ variante: [{ repere, texte }] })`); `backend/app/services/simulation_explication.py` puts them in the prompt with the piloting rules.
+- Each control keeps `data-professor-control="cmd …"` and the page loads `/media/simulations/professor-locate.js`, so the animated professor flies to the button and presses it.
+- To let the tutor open **another** simulation, the simulations of the lesson must be registered as lesson resources in the database (only after the user validates the course).
+
+## Traps already met
+
+- **Apostrophes inside JavaScript strings.** French text in a single-quoted string (`'la source n'a pas…'`) breaks the whole script: the page then shows only its button. Write the typographic apostrophe `’` in every French string, or use backticks.
+- **Declare before use.** The scene object must exist before the chalk loop starts (`Cannot access 'scene' before initialization`): create it, then start with `requestAnimationFrame`.
+- **The in-app browser pane blocks iframes inside the course player** (`ERR_BLOCKED_BY_CLIENT`); test the page directly or inside a same-origin test page.
+
+## Check before saying it works
+
+1. Syntax: extract each `<script>` block and run `node --check` on it.
+2. In the browser, for every variant URL: no console error, the canvas has ink, the button is there.
+3. Drive it like the tutor, from a test page that loads it in an iframe and posts `{type: 'simulation_control', command, parameters}`: pause, set a parameter, set a time, resume, fire again. Read back `current_state`: status, parameters and `ce_qui_se_voit` must match, and the numbers must be physically right (e.g. M at 1,2 m with v = 1 m/s → τ = 1,20 s; d = 1,02 m → τ = 3 ms = 6 divisions; floor at 60 m → echo after 80 ms).
+4. Open the slide in the course player (`/dev/course-player?scene=…&diapo=<slide id>`) and look at the bottom: nothing of the simulation under the player's bar.
+5. An overview page of the whole course (board text, simulations live, questions, voice) helps the user review: `physics/ondes-tableau/apercu-cours.html` is generated from the course JSON.

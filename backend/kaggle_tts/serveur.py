@@ -290,6 +290,24 @@ def nettoyer(w, sr):
     return w
 
 
+def murmure(w, sr, bas=-52.0, haut=-30.0, min_s=0.9):
+    """La voix qui décroche : plus long passage (s) de son faible, ni parole ni silence ; 0 si < min_s.
+    Entendu comme « un petit bruit, puis plus rien, puis la voix repart » (wx_r1_retard_v4, 8 novembre 2026)."""
+    import numpy as np
+    n = int(0.05 * sr)
+    k = len(w) // n
+    if k < 3:
+        return 0
+    db = 20 * np.log10(np.sqrt((np.asarray(w[:k * n], dtype=np.float64).reshape(k, n) ** 2).mean(1)) + 1e-9)
+    f = (db > bas) & (db < haut)
+    f[1:-1] |= (~f[1:-1]) & f[:-2] & f[2:]
+    best = cur = 0
+    for v in f:
+        cur = cur + 1 if v else 0
+        best = max(best, cur)
+    return round(best * 0.05, 2) if best * 0.05 >= min_s else 0
+
+
 def travailleur(k, entree, sortie, conf):
     """Processus d'une carte : charge le modèle, puis synthétise ce qu'on lui donne."""
     import os, sys
@@ -357,6 +375,9 @@ def travailleur(k, entree, sortie, conf):
             st = STYLES[style_de(texte)]
             lg = "pl" if (langue != "fr" and AR.search(texte)) else "fr"
             w = generer(ponctuation_modele(parle(texte)), lg, st)
+            if murmure(w, m.sr):          # une seule reprise : la voix a décroché, on refait le morceau
+                print(f"gpu{k} murmure, morceau refait :", texte[:60], flush=True)
+                w = generer(ponctuation_modele(parle(texte)), lg, st)
             # Un morceau coupé à une virgule n'est pas une fin de phrase : souffle court.
             apres = st["apres"] if texte.rstrip()[-1:] in ".!?؟…" else 0.12
             w = np.concatenate([nettoyer(w.astype(np.float32), m.sr), np.zeros(int(apres * m.sr), np.float32)])

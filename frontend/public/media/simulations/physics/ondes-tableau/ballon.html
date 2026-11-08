@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ballon et rides — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une goutte tombe dans l'eau calme, des rides circulaires s'éloignent, un ballon monte, descend et reste à sa place, dessiné à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Rejouer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Situation d'ouverture du chapitre (8 novembre 2026) : une goutte tombe en S dans une eau calme ; des rides
+ * circulaires s'éloignent à la célérité v ; un petit ballon posé à la distance d monte, descend, et reste à sa place.
+ * À gauche, la surface vue du dessus (les rides) ; à droite, vue de côté (le profil de l'eau et le ballon, avec
+ * son trajet : un trait vertical, jamais horizontal). Modèle : y(x, t) = y_S(t − x / v), une période de durée θ.
+ * Un seul bouton (Rejouer) ; le ballon se glisse sur la vue de dessus, puis la scène rejoue.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const V = 0.25, THETA = 0.4, XMAX = 0.5;          // célérité (m/s), durée de la perturbation (s), surface dessinée (m)
+const T0 = -0.5, ARRET = XMAX / V + THETA + 0.1;  // la goutte tombe de t = −0,5 s à t = 0 ; fin quand les rides sont sorties
+const LENT = 0.55;
+const S = { t: T0, running: false, jusqua: null, motif: '', fait: false, d: 0.3, trace: [], emis: 0 };
+
+const yS = t => (t < 0 || t > THETA ? 0 : Math.sin(2 * Math.PI * t / THETA));      // monte, descend sous le niveau, revient
+const y = (x, t) => yS(t - x / V);
+
+// Vue de dessus
+const SX = 120, SY = 175, PXD = 260;              // S ; px par mètre
+// Vue de côté
+const PX0 = 440, PY0 = 215, PXC = 600, K = 34;    // origine (S), px par mètre, amplitude dessinée
+
+function vueDessus(c) {
+  c.texte('Vue de dessus', 40, 34, { couleur: 'cyan', taille: 17 });
+  c.rect(30, 46, 360, 262, { couleur: 'tresfaible', arrondi: 8 });
+  c.direct(() => {
+    const t = S.t;
+    // La goutte tombe vers S.
+    if (t < 0) {
+      const h = (-t / -T0) * 120;
+      c.trait([[SX - 5, SY - h - 6], [SX, SY - h - 16], [SX + 5, SY - h - 6], [SX, SY - h]], { couleur: 'bleu', ferme: true });
+    }
+    c.point(SX, SY, 4, 'cyan').texte('S', SX - 16, SY + 6, { couleur: 'cyan' });
+    // Les rides : crête (trait plein) et creux (trait léger), entre le front et la queue.
+    if (t > 0) {
+      const front = V * t, crete = V * (t - THETA / 4), creux = V * (t - 3 * THETA / 4);
+      for (const [r, coul, a] of [[front, 'tresfaible', .7], [crete, 'bleu', 1], [creux, 'bleu', .45]]) {
+        if (r <= 0.004 || r > XMAX) continue;
+        c.courbe(u => [SX + r * PXD * Math.cos(2 * Math.PI * u), SY + r * PXD * Math.sin(2 * Math.PI * u)], 90, { couleur: coul, largeur: 2.2, alpha: a });
+      }
+      if (crete > 0.03 && crete < XMAX) c.repere('rides', SX + crete * PXD - 14, SY - 22, 28, 44, 'une ride (crête)');
+    }
+    // Le ballon, vu du dessus : il ne quitte jamais son point.
+    const bx = SX + S.d * PXD;
+    c.cercle(bx, SY, 8, { couleur: 'orange' });
+    c.texte('ballon', bx, SY + 30, { couleur: 'orange', align: 'center', taille: 15 });
+    c.texte('⇠ glisse-le ⇢', bx, SY + 50, { couleur: 'faible', align: 'center', taille: 13 });
+    c.repere('bouee', bx - 18, SY - 18, 36, 56, 'le ballon');
+    c.cote(SX, SY + 78, bx, SY + 78, `d = ${fr(S.d)} m`, { couleur: 'jaune', dessous: true });
+  });
+  c.repere('goutte', SX - 20, SY - 140, 40, 160, 'la goutte, en S');
+}
+
+function vueCote(c) {
+  c.texte('Vue de côté', 420, 34, { couleur: 'cyan', taille: 17 });
+  c.ligne(PX0, PY0, PX0 + XMAX * PXC, PY0, { couleur: 'tresfaible', largeur: 1.2, pointille: [5, 6] });
+  c.fleche(PX0 + 150, PY0 - 96, PX0 + 260, PY0 - 96, { couleur: 'vert' }).texte('sens de propagation', PX0 + 205, PY0 - 106, { couleur: 'vert', align: 'center', taille: 14 });
+  c.repere('profil', PX0, PY0 - 60, XMAX * PXC, 100, 'la surface de l’eau, vue de côté');
+  c.direct(() => {
+    const t = S.t;
+    c.courbe(u => [PX0 + u * XMAX * PXC, PY0 - K * y(u * XMAX, t)], 200, { couleur: 'bleu', largeur: 2.6 });
+    c.point(PX0, PY0 - K * yS(t), 4, 'cyan').texte('S', PX0 - 6, PY0 + 26, { couleur: 'cyan' });
+    // Le ballon flotte sur la surface, à x = d (à moitié dans l'eau).
+    const bx = PX0 + S.d * PXC, by = PY0 - K * y(S.d, t);
+    c.cercle(bx, by - 7, 10, { couleur: 'orange' });
+    c.repere('bouee_cote', bx - 18, by - 24, 36, 34, 'le ballon, vu de côté');
+    // Son trajet : un trait vertical, à côté d'elle.
+    if (S.trace.length > 1) {
+      const lo = Math.min(...S.trace), hi = Math.max(...S.trace);
+      if (hi - lo > 0.05) {
+        c.ligne(bx + 26, PY0 - K * hi, bx + 26, PY0 - K * lo, { couleur: 'orange', largeur: 3, alpha: .6 });
+        c.texte('trajet du ballon', bx + 34, PY0 - K * hi - 6, { couleur: 'orange', taille: 14 });
+        c.repere('trajet', bx + 16, PY0 - K * hi - 8, 22, K * (hi - lo) + 16, 'le trajet : monte et descend, sur place');
+      }
+    }
+    c.texte(`t = ${fr(Math.max(0, t))} s`, 740, 30, { couleur: 'jaune', align: 'right' });
+  });
+  c.texte('La ride avance ; l’eau et le ballon restent sur place.', 560, 330, { couleur: 'vert', align: 'center', taille: 16 });
+  c.texte(`v ≈ ${fr(V)} m/s`, 560, 356, { couleur: 'faible', align: 'center', taille: 14 });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(13); vueDessus(c); vueCote(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(ARRET, S.t + dt * LENT);
+  if (S.jusqua != null && S.t >= S.jusqua) S.t = S.jusqua;
+  S.trace.push(y(S.d, S.t));
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= ARRET) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), MESSAGE, 'good'); pont.noter('measurement', { d_m: S.d, arrivee_s: S.d / V }); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* Les instants clés, calculés depuis la physique (ils suivent le ballon quand on le déplace). */
+function moments() {
+  const tB = S.d / V, m = {
+    goutte_tombe: -0.25, ride_part: 0.06, rides_grandissent: 0.7,
+    bouee_atteinte: tB, bouee_monte: tB + THETA / 8, bouee_sommet: tB + THETA / 4, bouee_descend: tB + 0.6 * THETA,
+    bouee_creux: tB + 3 * THETA / 4, bouee_revenue: tB + THETA + 0.05, fin: ARRET,
+  };
+  for (const k in m) m[k] = +Math.min(ARRET, m[k]).toFixed(3);
+  return m;
+}
+const MOTIFS = { goutte_tombe: 'la goutte tombe vers S', ride_part: 'la goutte touche l’eau : une ride part de S', rides_grandissent: 'les rides s’éloignent en cercles',
+  bouee_atteinte: 'la ride arrive au ballon', bouee_monte: 'le ballon monte', bouee_sommet: 'le ballon au plus haut', bouee_descend: 'le ballon descend',
+  bouee_creux: 'le ballon au plus bas', bouee_revenue: 'le ballon est revenu à sa place', fin: 'les rides sont parties ; le ballon n’a pas bougé de place' };
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = T0; S.trace = []; }
+  S.jusqua = Math.min(ARRET, cible); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+/* Ce que l'élève voit, en mots : le tuteur « voit » la scène par cette phrase. */
+function ceQuiSeVoit() {
+  const t = S.t, tB = S.d / V, m = [`${t < 0 ? 'La goutte tombe vers S' : `t = ${fr(t)} s`}${S.running ? ' (la scène défile)' : S.fait ? ' (fin de la scène)' : ' (scène arrêtée)'}. Ballon à d = ${fr(S.d)} m de S.`];
+  if (t > 0) {
+    const front = V * t;
+    m.push(front > XMAX + V * THETA ? 'Les rides ont quitté la surface dessinée ; l’eau est de nouveau calme.' : `Le front des rides est à ${fr(Math.min(front, XMAX))} m de S (cercles qui s’agrandissent).`);
+    const u = t - tB;
+    m.push(u <= 0 ? `La ride n’a pas encore atteint le ballon (elle l’atteindra à t = ${fr(tB)} s).`
+      : u >= THETA ? 'Le ballon est revenu à sa place : il a monté puis descendu, sans avancer.'
+      : `Le ballon ${Math.cos(2 * Math.PI * u / THETA) > 0.2 ? 'monte' : Math.cos(2 * Math.PI * u / THETA) < -0.2 ? 'descend' : 'est à un extrême'} (élongation ${fr(y(S.d, t) * 100, 0)} % de l’amplitude), toujours au même endroit.`);
+  }
+  return m.join(' ');
+}
+
+const MESSAGE = 'La ride est passée ; le ballon a monté, descendu, et il est resté à sa place.';
+function start() { S.jusqua = null; S.t = T0; S.trace = []; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe le ballon…'); pont.noter('start', { d_m: S.d }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= ARRET) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = Math.min(ARRET, Math.max(T0, t)); S.fait = S.t >= ARRET;
+  S.trace = []; for (let k = 0; k <= 60; k++) S.trace.push(y(S.d, T0 + (S.t - T0) * k / 60));
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true; pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (!Number.isFinite(+p.d_m)) return;
+  S.d = Math.min(0.45, Math.max(0.15, Math.round(+p.d_m / 0.05) * 0.05)); S.trace = []; scene.sale = true;
+  pont.noter('set_parameters', { d_m: S.d }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > T0 && S.t < ARRET && !S.fait ? resume() : start()));
+
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, yy] = scene.local(px, py); return Math.abs(x - (SX + S.d * PXD)) < 24 && Math.abs(yy - SY) < 40 ? 'bouee' : null; },
+  bouger: (id, px) => { const [x] = scene.local(px, 0); setParameters({ d_m: (x - SX) / PXD }); },
+  lacher: () => start(),
+});
+
+window.Tableau.explication({ bouee: [
+  { repere: 'goutte', texte: 'Une goutte tombe en S : c’est la source de la perturbation.' },
+  { repere: 'rides', texte: 'Les rides partent en cercles et s’éloignent de S.' },
+  { repere: 'bouee_cote', texte: 'Le ballon monte puis descend quand la ride passe.' },
+  { repere: 'trajet', texte: 'Son trajet est vertical : il reste à sa place, la matière n’avance pas.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_tableau_bouee', version: '1.0', title: 'Ballon et rides', variants: [{ id: 'bouee', label: 'ballon' }], commands: commandes,
+  command_schema: { set_parameters: { d_m: '0.15..0.45 (distance du ballon à S, en m, pas de 0,05)' }, set_time: { time_s: `${T0}..${fr(ARRET)} (arrêt sur cet instant)` },
+    play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Goutte en S dans une eau calme ; rides circulaires de célérité v ≈ ${fr(V)} m/s ; ballon à la distance d de S. La ride avance, le ballon monte, descend et reste à sa place.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > T0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bouee',
+    time_s: +S.t.toFixed(2), parameters: { d_m: S.d, v_m_s: V, theta_s: THETA }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une goutte va tomber en S…');
+setTimeout(start, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

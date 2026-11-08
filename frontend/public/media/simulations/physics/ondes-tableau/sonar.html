@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sonar — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Bateau muni d'un sonar au-dessus du fond marin, et la courbe émission / écho, dessinés à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start fire_pulse pause resume play_until">Émettre</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Sonar : une salve d’ultrasons part du bateau, se réfléchit sur le fond et
+ * revient. L’onde parcourt 2d : 2d = v·τ, d = v·τ / 2 (eau de mer, v ≈ 1500 m/s).
+ * Un seul bouton (Émettre) ; le fond se glisse vers le haut ou le bas.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const V = 1500;
+const S = { jusqua: null, d: 30, p: 0, running: false, pause: false, fait: false, emis: 0 };
+const tau = () => 2 * S.d / V * 1000;            // ms
+const YS = 80, PX = 3.9;                         // surface ; px par mètre
+const YF = () => YS + S.d * PX;
+const XB = 170;
+
+function dessiner(c) {
+  scene.cadre(9);
+  // ── La mer, le bateau ──
+  c.courbe(u => [20 + u * 360, YS + 3 * Math.sin(u * 30)], 90, { couleur: 'bleu', largeur: 2 });
+  c.trait([[XB - 46, YS - 4], [XB + 46, YS - 4], [XB + 32, YS + 14], [XB - 32, YS + 14]], { couleur: 'blanc', ferme: true });
+  c.ligne(XB, YS - 4, XB, YS - 34, { couleur: 'blanc' }).trait([[XB, YS - 34], [XB + 24, YS - 22], [XB, YS - 12]], { couleur: 'blanc' });
+  c.texte('sonar', XB - 56, YS + 4, { couleur: 'cyan', align: 'right', taille: 14 });
+  c.repere('sonar', XB - 50, YS - 40, 100, 60, 'le sonar : émetteur et récepteur');
+  c.direct(() => {
+    // Le fond, qu’on glisse.
+    c.courbe(u => [20 + u * 360, YF() + 5 * Math.sin(u * 13 + 1)], 90, { couleur: 'orange', largeur: 2.4 });
+    c.texte('fond', 34, YF() + 26, { couleur: 'orange', taille: 15 });
+    c.texte('⇡ glisse le fond ⇣', 290, YF() + 26, { couleur: 'faible', taille: 14, align: 'center' });
+    c.cote(XB + 90, YS + 8, XB + 90, YF(), '', { couleur: 'jaune' }).texte(`d = ${fr(S.d, 0)} m`, XB + 100, (YS + YF()) / 2 + 6, { couleur: 'jaune', taille: 17 });
+    c.repere('profondeur', XB + 80, YS, 110, YF() - YS, 'la profondeur d');
+    c.repere('fond', 20, YF() - 14, 360, 28, 'le fond (glisse-le)');
+    // La salve : descend (aller) puis remonte (retour).
+    if (S.running || S.pause) {   // en marche ou figée : la salve reste visible
+      const aller = S.p < 0.5, f = aller ? S.p / 0.5 : (S.p - 0.5) / 0.5;
+      const yy = aller ? YS + 16 + f * (YF() - YS - 16) : YF() - f * (YF() - YS - 16);
+      const x = aller ? XB - 14 : XB + 14;
+      for (let k = 0; k < 3; k++) c.courbe(u => [x - 16 + 32 * u, yy + (aller ? -1 : 1) * (k * 7 + 6 * Math.sin(Math.PI * u))], 20, { couleur: aller ? 'jaune' : 'vert', largeur: 1.8 });
+      c.fleche(x, yy + (aller ? -30 : 30), x, yy + (aller ? -8 : 8), { couleur: aller ? 'jaune' : 'vert', largeur: 1.6, tete: 7 });
+    }
+    if (S.fait) {
+      c.fleche(XB - 14, YS + 18, XB - 14, YF() - 6, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }).texte('aller', XB - 22, (YS + YF()) / 2, { couleur: 'jaune', taille: 14, align: 'right' });
+      c.fleche(XB + 14, YF() - 6, XB + 14, YS + 18, { couleur: 'vert', largeur: 1.6, pointille: [5, 5] }).texte('retour', XB + 22, (YS + YF()) / 2 + 22, { couleur: 'vert', taille: 14 });
+    }
+  });
+
+  // ── Émission et écho en fonction du temps ──
+  const gx = 410, gy = 200, gw = 290, tmax = 100;
+  c.texte('Signaux reçus par le sonar', gx, 60, { couleur: 'cyan', taille: 16 });
+  c.axe(gx, gy, gx + gw, gy, [[0.2, '20'], [0.4, '40'], [0.6, '60'], [0.8, '80'], [1, '100']]);
+  c.texte('t (ms)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: 14 });
+  c.repere('axe_t', gx + gw - 40, gy - 14, 90, 30, 'axe : le temps en ms');
+  c.direct(() => {
+    const T = t => gx + t / tmax * gw, salve = (t0, h) => c.courbe(u => [T(t0) + u * 12, gy - h * Math.exp(-u * 3) * Math.sin(u * 22)], 40, { couleur: 'blanc', largeur: 2 });
+    const tNow = (S.running || S.pause) ? S.p * tau() : (S.fait ? tau() : -1);
+    if (tNow >= 0) { salve(0, 60); c.texte('émission', T(0), gy - 74, { couleur: 'jaune', taille: 14 }); }
+    if (S.fait) {
+      salve(tau(), 26); c.texte('écho', T(tau()), gy - 40, { couleur: 'vert', taille: 14 });
+      c.cote(T(0), gy + 36, T(tau()), gy + 36, `τ = ${fr(tau(), 0)} ms`, { couleur: 'jaune', dessous: true });
+      c.repere('tau', T(0), gy + 24, T(tau()) - T(0), 40, 'τ : durée de l’aller-retour');
+      c.texte('L’onde parcourt 2d : 2d = v · τ', gx, 300, { couleur: 'vert', taille: 18 });
+      c.texte(`d = v · τ / 2 = ${V} × ${fr(tau() / 1000, 3)} / 2 = ${fr(S.d, 0)} m`, gx, 330, { couleur: 'vert', taille: 18 });
+      c.texte('sans le « / 2 » : le double, faux !', gx, 362, { couleur: 'rose', taille: 16 });
+      c.repere('formule', gx, 280, 320, 90, 'd = v·τ / 2');
+    }
+  });
+  c.texte(`eau de mer : v ≈ ${V} m/s`, gx, 404, { couleur: 'faible', taille: 15 });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.p = Math.min(1, S.p + dt / 2.4);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.p >= 1) {
+    S.running = false; S.fait = true; $('run').textContent = 'Émettre';
+    bulle($('feedback'), `Écho après ${fr(tau(), 0)} ms : l’aller-retour fait 2d, donc d = v·τ / 2.`, 'good');
+    pont.noter('measurement', { d_m: S.d, tau_ms: tau() }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+/* Les instants clés (fraction p de l'aller-retour) ; le tuteur les vise avec `play_until {moment}`. */
+function moments() { return { salve_descend: 0.25, fond_atteint: 0.49, salve_remonte: 0.75, echo_recu: 1 }; }
+const MOTIFS = { salve_descend: 'la salve descend vers le fond (aller)', fond_atteint: 'la salve touche le fond et se réfléchit',
+  salve_remonte: 'l’écho remonte vers le bateau (retour)', echo_recu: 'écho reçu : τ est la durée de l’aller-retour' };
+
+/* Rejoue (ou continue) jusqu'à un instant clé, puis se fige : le tuteur montre la phase qu'il décrit. */
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.progress;
+  if (!Number.isFinite(cible)) return;
+  if (cible >= 1) { if (S.pause) resume(); else if (!S.running) start(); else S.jusqua = null; return; }   // jusqu'au bout
+  if (!(S.running || S.pause) || S.p >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom, progress: cible }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.p < S.jusqua) return false;
+  S.p = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+
+/* Ce que l’élève voit, en mots : le tuteur suit la scène par cette phrase. */
+function ceQuiSeVoit() {
+  const m = [`Bateau avec sonar ; fond à d = ${fr(S.d, 1)} m (cote jaune) ; eau de mer v = ${V} m/s.`];
+  if (S.running || S.pause) {
+    const prof = S.p < 0.5 ? S.p / 0.5 * S.d : (1 - (S.p - 0.5) / 0.5) * S.d;
+    m.push(`${S.pause ? 'Scène arrêtée : ' : ''}la salve ${S.p < 0.5 ? 'DESCEND (aller)' : 'REMONTE (retour, écho)'}, à environ ${fr(prof, 0)} m de profondeur ; t ≈ ${fr(S.p * tau(), 0)} ms depuis l’émission. Sur le graphe : émission tracée, écho pas encore reçu.`);
+  } else if (S.fait) m.push(`Écho reçu après τ = ${fr(tau(), 0)} ms (cote jaune sur le graphe). Flèches aller et retour dessinées. Affiché : 2d = v·τ et d = v·τ/2 = ${fr(S.d, 0)} m, avec l’avertissement « sans le /2 : le double, faux ».`);
+  else m.push('Aucune salve émise pour cette profondeur : graphe vide.');
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.p = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'La salve descend vers le fond…'); pont.noter('start', { d_m: S.d }); pont.emettre(); }
+
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.p = 0; S.running = false; S.fait = false; scene.sale = true; bulle($('feedback'), 'Émets une salve.'); pont.emettre(); }
+function setParameters(p) {
+  if (!Number.isFinite(+p.d_m)) return;
+  S.d = Math.min(75, Math.max(10, Math.round(+p.d_m / 7.5) * 7.5)); S.fait = false; scene.sale = true;
+  pont.noter('set_parameters', { d_m: S.d }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > 15 && x < 385 && Math.abs(y - YF()) < 22 ? 'fond' : null; },
+  bouger: (id, px, py) => { const [, y] = scene.local(px, py); setParameters({ d_m: (y - YS) / PX }); },
+  lacher: () => bulle($('feedback'), `Profondeur ${fr(S.d, 1)} m : émets une salve.`),
+});
+window.Tableau.explication({ sonar: [
+  { repere: 'sonar', texte: 'Le sonar émet une salve d’ultrasons et reçoit son écho.' },
+  { repere: 'profondeur', texte: 'L’onde descend jusqu’au fond, puis remonte : elle parcourt deux fois d.' },
+  { repere: 'tau', texte: 'τ est la durée de l’aller-retour, de l’émission à l’écho.' },
+  { repere: 'formule', texte: 'Donc 2d = v·τ, et d = v·τ divisé par deux.' },
+] });
+const commandes = ['start', 'fire_pulse', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_tableau_sonar', version: '1.0', title: 'Sonar et écho', variants: [{ id: 'sonar', label: 'sonar' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { d_m: '10..75 (pas de 7,5 m)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Sonar dans l’eau de mer, v = ${V} m/s. Profondeur d réglable de 10 à 75 m. τ = 2d / v ; d = v·τ / 2.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(), parameters: { d_m: S.d }, tau_ms: +tau().toFixed(1) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, fire_pulse: start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Émets une salve, puis lis τ.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

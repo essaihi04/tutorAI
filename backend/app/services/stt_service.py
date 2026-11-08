@@ -94,8 +94,13 @@ class STTService:
         self,
         audio_content: bytes,
         language: str = "fr",
+        gemini_seul: bool = False,
     ) -> Optional[str]:
-        """Transcribe audio bytes via Gemini. Returns text or None."""
+        """Transcribe audio bytes via Gemini. Returns text or None.
+
+        `gemini_seul` : toujours Gemini 2.5 Flash (micro de la page publique du cours, 8 novembre 2026) ; le
+        paramètre est accepté partout pour qu'un autre moteur placé devant ne serve pas cette page.
+        """
         if not audio_content:
             return None
 

@@ -170,8 +170,57 @@
       const c = this.ctx; c.fillStyle = this.couleur(couleur); c.globalAlpha = .95; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; return this;
     }
     /** Écriture à la craie, lettre par lettre. Options : couleur, taille, align, base, alpha, gras, max (largeur max). */
+    /** « y_M(t) », « t_S », « x_{AB} » : la lettre suivie d'un indice, écrit plus petit et plus bas (jamais de « _ » au tableau). */
+    static segments(s) {
+      const out = [], re = /([A-Za-zτθΔλωφ])_(\{[^}]+\}|[A-Za-z0-9]+)/g; let i = 0, m;
+      while ((m = re.exec(s))) {
+        if (m.index > i) out.push({ t: s.slice(i, m.index), sub: false });
+        out.push({ t: m[1], sub: false }); out.push({ t: m[2].replace(/[{}]/g, ''), sub: true }); i = re.lastIndex;
+      }
+      if (i < s.length) out.push({ t: s.slice(i), sub: false });
+      return out;
+    }
+    _texteIndices(s, x, y, o, taille) {
+      const c = this.ctx, segs = Craie.segments(s), police = (t) => `${o.gras ? '700 ' : ''}${t}px ${POLICE}`;
+      const petit = taille * .62, largeur = (seg) => { c.font = police(seg.sub ? petit : taille); return c.measureText(seg.t).width; };
+      let total = segs.reduce((w, seg) => w + largeur(seg), 0);
+      if (o.max && total > o.max) { taille = Math.max(10, taille * o.max / total); return this._texteIndices(s, x, y, { ...o, max: 0 }, taille); }
+      const plain = segs.map(seg => seg.t).join('');
+      const part = this._part(o.duree ?? Math.max(.1, plain.length / VITESSE_LETTRES));
+      if (part <= 0) return this;
+      let reste = part < 1 ? Math.max(1, Math.ceil(part * plain.length)) : plain.length;
+      c.fillStyle = this.couleur(o.couleur); c.globalAlpha = o.alpha ?? .96; c.textBaseline = o.base || 'alphabetic';
+      c.shadowColor = 'rgba(255,255,255,.25)'; c.shadowBlur = 1; c.textAlign = 'left';
+      let px = (o.align === 'center') ? x - total / 2 : (o.align === 'right') ? x - total : x;
+      for (const seg of segs) {
+        if (reste <= 0) break;
+        const t = seg.t.slice(0, reste); reste -= seg.t.length;
+        c.font = police(seg.sub ? petit : taille);
+        c.fillText(t, px, y + (seg.sub ? taille * .28 : 0));
+        px += c.measureText(t).width;
+        if (t.length < seg.t.length) break;
+      }
+      if (part < 1) this.tip = [px, y - taille * .3];
+      c.shadowBlur = 0; c.globalAlpha = 1;
+      return this;
+    }
+    /**
+     * Garde-fou (8 novembre 2026, « sens de propagation » caché sous la barre) : un labo qui déclare son cadre
+     * (`craie.cadre = { w, h, haut }`, `haut` = zone réservée à la barre du bouton) est prévenu dans la console de
+     * tout texte qui en sort. `window.__horsCadre` garde la liste pour les vérifications automatiques.
+     */
+    _verifierCadre(s, x, y, taille, align) {
+      const k = this.cadre; if (!k) return;
+      const l = this.ctx.measureText(s).width, x0 = align === 'center' ? x - l / 2 : align === 'right' ? x - l : x;
+      if (x0 < -2 || x0 + l > k.w + 2 || y - taille < (k.haut ?? 0) || y + taille * .3 > k.h + 2) {
+        (window.__horsCadre ||= []).includes(s) || (window.__horsCadre.push(s), console.warn('[tableau] texte hors cadre :', s, { x: Math.round(x0), y: Math.round(y), largeur: Math.round(l) }));
+      }
+    }
     texte(s, x, y, o = {}) {
       const c = this.ctx; let taille = o.taille ?? 18; s = String(s);
+      c.font = `${o.gras ? '700 ' : ''}${taille}px ${POLICE}`; this._verifierCadre(s.replace(/_/g, ''), x, y, taille, o.align);
+      if (this.echelle && this.tailleMin && /_/.test(s)) taille = Math.max(taille, this.tailleMin / this.echelle);
+      if (/[A-Za-zτθΔλωφ]_/.test(s)) return this._texteIndices(s, x, y, o, taille);
       // Petit écran : un labo peut fixer `craie.echelle` (facteur appliqué au repère) et `craie.tailleMin` (px écran) pour rester lisible.
       if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
       c.font = `${o.gras ? '700 ' : ''}${taille}px ${POLICE}`;
@@ -339,9 +388,15 @@
    */
   function protocole({ id, commandes, config, texte, etat, progression, executer }) {
     const actions = [];
-    const noter = (action, details = {}) => { actions.push({ action, details, timestamp: Date.now() }); if (actions.length > 80) actions.splice(0, actions.length - 80); };
+    // Qui a la main : le tuteur (commande reçue) ou l'élève (il touche la page). Chaque action et l'état le disent,
+    // pour que le tuteur réagisse à ce que l'élève a fait lui-même, et pas à ses propres gestes.
+    let main = 'personne';                        // personne n'a encore touché la scène
+    const prendreMain = () => { main = 'eleve'; };
+    document.addEventListener('pointerdown', prendreMain, true);
+    document.addEventListener('keydown', prendreMain, true);
+    const noter = (action, details = {}) => { actions.push({ action, details, par: main, timestamp: Date.now() }); if (actions.length > 80) actions.splice(0, actions.length - 80); };
     const emettre = (extra = {}) => {
-      try { parent.postMessage({ type: 'simulation_state', simulation_id: id, current_state: { ...etat(), ...extra }, student_actions: actions.slice(), objective_progress: progression(), timestamp: Date.now() }, '*'); } catch (_) { /* hors iframe */ }
+      try { parent.postMessage({ type: 'simulation_state', simulation_id: id, current_state: { ...etat(), derniere_main: main, ...extra }, student_actions: actions.slice(), objective_progress: progression(), timestamp: Date.now() }, '*'); } catch (_) { /* hors iframe */ }
     };
     const manifeste = () => {
       window.__SIMULATION_MANIFEST_SENT__ = true;
@@ -353,6 +408,7 @@
     window.SIMULATION_CONFIG = config;
     window.executeAICommand = (cmd, p = {}) => {
       p = p || {};
+      main = 'tuteur';
       // Le professeur montre un repère du doigt : le kit l'entoure à la craie, le labo peut en faire plus.
       const pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
       if (!commandes.includes(cmd)) { if (pointage) noter('highlight', { target: cibleDe(p) }); return; }
@@ -362,6 +418,8 @@
     window.addEventListener('message', (e) => {
       if (e.source !== parent) return; const d = e.data;
       if (d && d.type === 'simulation_control' && (!d.simulation_id || d.simulation_id === id)) window.executeAICommand(d.command, d.parameters || {});
+      // Le lecteur demande le manifeste à jour (les repères dessinés plus tard, après un arrêt ou une mesure).
+      if (d && d.type === 'simulation_manifest_request') manifeste();
     });
     // Les repères sont connus après le premier dessin : le manifeste est renvoyé une fois complet.
     manifeste(); setTimeout(manifeste, 350); setTimeout(manifeste, 1800);

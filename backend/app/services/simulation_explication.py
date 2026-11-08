@@ -163,7 +163,42 @@ def bloc_prompt(manifest: dict, variante: Optional[str] = None) -> str:
         "- Si l'élève dit qu'il n'a pas compris, ou échoue une deuxième fois : relance la simulation toi-même "
         f"(commande {commande_relance(manifest)}), puis ré-explique autrement en suivant le script, repère par repère.",
     ]
+    lignes += regles_du_pilotage(manifest)
     return "\n".join(lignes)
+
+
+def regles_du_pilotage(manifest: dict) -> list[str]:
+    """Ce que le professeur fait de la simulation au-delà du doigt : la voir, l'arrêter, la rejouer.
+
+    Les manips qui se décrivent elles-mêmes (``ce_qui_se_voit`` dans leur état,
+    renvoyé en direct pendant qu'elles tournent) donnent au tuteur une vue exacte
+    de l'écran de l'élève, sans capture ni OCR ; celles qui savent s'arrêter
+    (``pause``/``resume``/``set_time``) lui laissent choisir l'instant à expliquer.
+    """
+    commandes = set(((manifest or {}).get("capabilities", {}) or {}).get("commands") or [])
+    regles = [
+        "- TU VOIS LA SIMULATION : son état (current_state) arrive en direct. Quand il contient « ce_qui_se_voit », "
+        "c'est exactement ce que l'élève a sous les yeux en ce moment : appuie ton explication dessus (« regarde, "
+        "le front vient d'atteindre M »), jamais sur ce que tu supposes.",
+        "- QUESTION LIBRE de l'élève pendant le cours : réponds en te servant de la simulation affichée — "
+        "montre le repère utile, rejoue ou arrête-la sur l'instant qui répond à sa question, puis reviens au cours.",
+        f"- Tu peux relancer la simulation ({commande_relance(manifest)}) autant de fois que l'explication le "
+        "demande, ou que l'élève le demande.",
+    ]
+    if {"pause", "resume"} <= commandes:
+        regles.append("- Pour expliquer un instant précis : pause, explique ce qui est figé à l'écran en pointant, "
+                      "puis resume. Un mouvement qui va trop vite se commente arrêté, pas en marche.")
+    if "set_time" in commandes:
+        regles.append("- set_time {time_s} arrête la scène sur la date que tu expliques (ex. la date où M est atteint).")
+    if "play_until" in commandes:
+        regles.append("- CE QUE TU DIS, LA SIMULATION LE MONTRE À CE MOMENT : quand tu décris une phase (M monte, M "
+                      "descend, M revient, le retard τ…), rejoue la scène et fige-la sur cet instant avec "
+                      "play_until {moment} — les noms des instants clés sont dans « moments » de l'état — puis "
+                      "pointe le repère. Plusieurs phases dites à la suite : un arrêt par phase, dans l'ordre.")
+    if "set_parameters" in commandes:
+        regles.append("- set_parameters change un réglage (voir command_schema) pour montrer l'effet d'une grandeur, "
+                      "puis relance : « et si M était deux fois plus loin ? ».")
+    return regles
 
 
 def prompt_reexplication(contexte: dict, manifest: dict, variante: Optional[str], etat: dict,

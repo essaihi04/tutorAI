@@ -26,6 +26,12 @@ interface AIAvatarProps {
   labControl?: LabControlCommand | null;
   /** Émotion à exprimer (salut, bravo, affection…) : geste du personnage et émoticônes qui s'envolent de lui. */
   emotion?: { kind: ProfessorEmotionKind; key: number } | null;
+  /**
+   * Mode concentration : ni barre (poignée, réduire, statut) sous lui, ni étiquette « ☞ Moalim » sur ce qu'il montre,
+   * et il reste dans sa colonne à droite de l'écran (que la page laisse libre, `COLONNE_TUTEUR`) : il monte ou descend
+   * à hauteur de ce qu'il montre et le relie du doigt et de la baguette, sans jamais se poser sur l'écriture.
+   */
+  discret?: boolean;
 }
 type Spark = { id: number; emoji: string; x: number; y: number; dx: number; delay: number; size: number };
 const WIDTH = 180;
@@ -50,8 +56,12 @@ type Focus = { rect: DOMRect; writing: boolean };
  * Place la boîte pour que la main du professeur atteigne `point`. Avec `avoid` (le panneau de simulation
  * ou la scène montrée), il se tient à côté du panneau, jamais dessus : la baguette fait la liaison.
  */
-function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?: DOMRect | null) {
+/** Largeur (px) laissée libre à droite de l'écran pour le professeur en mode concentration. */
+export const COLONNE_TUTEUR = 200;
+
+function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?: DOMRect | null, colonne = false) {
   const { shoulderRight: right, shoulderLeft: left, reach } = rig;
+  if (colonne && !writing) return clampFlight(window.innerWidth - WIDTH - 8, point.y - right.y + reach * 0.16);
   if (avoid && !writing) {
     const y = point.y - right.y + reach * 0.16;
     if (avoid.right + 12 + WIDTH <= window.innerWidth) return clampFlight(avoid.right + 12, y);      // à droite du panneau
@@ -69,7 +79,7 @@ function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
-export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion }: AIAvatarProps) {
+export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false }: AIAvatarProps) {
   const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
@@ -185,7 +195,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       const rect = writing ? new DOMRect(penBounds!.left - 2, penBounds!.top + penBounds!.height * 0.55, 4, 4) : bounds;
       if (visible) {
         const point = writing ? { x: rect.left, y: rect.top } : { x: bounds.right - 14, y: bounds.top + bounds.height / 2 };
-        fly(reachPosition(point, writing, rig.current));
+        fly(reachPosition(point, writing, rig.current, null, discret));
         aimSide(point);
       }
       setFocus(previous => !visible ? null : previous && previous.writing === writing && same(previous.rect, rect) ? previous : { rect, writing });
@@ -201,7 +211,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     };
     window.addEventListener(PROFESSOR_FOCUS, receive);
     return () => { window.removeEventListener(PROFESSOR_FOCUS, receive); cancelAnimationFrame(frame); };
-  }, [fly, aimSide]);
+  }, [fly, aimSide, discret]);
 
   // Simulation : il vole jusqu'au bouton de la commande, tend l'index et appuie quand elle part.
   useEffect(() => {
@@ -216,7 +226,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       const bounds = element.getBoundingClientRect();
       setFocus({ rect: bounds, writing: false });
       const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
-      fly(reachPosition(point, false, rig.current, scene.getBoundingClientRect()));
+      fly(reachPosition(point, false, rig.current, scene.getBoundingClientRect(), discret));
       aimSide(point);
     };
     update();
@@ -233,7 +243,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       window.removeEventListener('scroll', update, true);
       setFocus(null);
     };
-  }, [control, fly, aimSide]);
+  }, [control, fly, aimSide, discret]);
 
   // Laboratoire HTML dans une iframe : il vole jusqu'au bouton de la commande, que le laboratoire localise
   // lui-même (`simulation_locate` → `simulation_control_rect`, en px de l'iframe, remis à l'échelle de la
@@ -262,7 +272,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       const rect = bounds();
       setFocus({ rect, writing: false });
       const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      fly(reachPosition(point, false, rig.current, iframe.getBoundingClientRect()));
+      fly(reachPosition(point, false, rig.current, iframe.getBoundingClientRect(), discret));
       aimSide(point);
     };
     let pressTimer = 0, timer = 0;
@@ -296,7 +306,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       deliver();                                   // une commande suivante ne doit jamais faire perdre celle-ci
       setFocus(null);
     };
-  }, [labControl, minimized, animationFailed, fly, aimSide]);
+  }, [labControl, minimized, animationFailed, fly, aimSide, discret]);
 
   // Sans rien à montrer, il retourne à sa place (après un court délai, pour enchaîner deux lignes sans aller-retour).
   useEffect(() => {
@@ -318,7 +328,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         <circle cx={end.x} cy={end.y} r="5" />
       </svg>}
       {target && !writing && <div className={`moalim-target${target.height < 60 ? ' moalim-target--small' : ''}`} aria-hidden="true" style={{ left: target.left, top: target.top, width: target.width, height: target.height }}>
-        <span>☞ Moalim</span>
+        {!discret && <span>☞ Moalim</span>}
       </div>}
       {press && active && <span key={press.key} className="moalim-press" aria-hidden="true" style={{ left: press.x, top: press.y }} />}
       {sparks.length > 0 && <div className="moalim-sparks" aria-hidden="true">
@@ -332,7 +342,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
                 motion={motion} onHandPosition={onHandPosition} onRig={onRig} gesture={gesture} onError={onAnimationError} />
             </Suspense>
           : <img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Moalim, ton professeur virtuel" draggable={false} />)}
-        <div className="moalim-avatar__toolbar">
+        {!discret && <div className="moalim-avatar__toolbar">
           <button type="button" className="moalim-avatar__handle" aria-label="Moalim : appuyer pour le saluer, glisser ou touches fléchées pour le déplacer"
             onPointerDown={event => {
               if (event.button !== 0) return;
@@ -360,8 +370,8 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
               fly(home.current);
             }}>⠿ Moalim</button>
           <button type="button" onClick={() => setMinimized(value => !value)} aria-label={minimized ? 'Afficher Moalim' : 'Réduire Moalim'}>{minimized ? '+' : '−'}</button>
-        </div>
-        <p className="moalim-avatar__status" role="status">{animationFailed ? 'Animation indisponible · portrait affiché' : status}</p>
+        </div>}
+        {!discret && <p className="moalim-avatar__status" role="status">{animationFailed ? 'Animation indisponible · portrait affiché' : status}</p>}
       </div>
     </>, portalRoot,
   );

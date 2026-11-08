@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LiveBoard from '../session/LiveBoard';
+import CourseFocusStage from './CourseFocusStage';
 import { saveCourseProgress } from '../../services/api';
 import { slideVersScript } from './slideVersScript';
 
@@ -56,6 +57,13 @@ interface CoursePlayerProps {
   onSimulationUpdate?: (state: any) => void;
   onComplete?: () => void;
   onRestart?: () => void;
+  /**
+   * `concentration` : l'écrit est fermé (titre et sous-titre seuls), l'image ou la
+   * simulation au centre, le tuteur 3D montre au rythme de la voix (`CourseFocusStage`).
+   */
+  mode?: 'tableau' | 'concentration';
+  /** Monte le tuteur 3D dans le mode concentration (banc local). */
+  tuteur3D?: boolean;
 }
 
 interface FlatSlide {
@@ -81,17 +89,20 @@ export default function CoursePlayer({
   onSimulationUpdate,
   onComplete,
   onRestart,
+  mode = 'tableau',
+  tuteur3D = false,
 }: CoursePlayerProps) {
   const flatSlides = useMemo<FlatSlide[]>(() =>
     deck.activities.flatMap((activity, activityIndex) =>
       (activity.slides || []).map((slide, slideIndex) => ({
         activity,
         activityIndex,
-        // Questions suspendues : la diapositive se lit d'une traite.
-        slide: QUESTIONS_DES_DIAPOSITIVES ? slide : { ...slide, question: undefined },
+        // Questions suspendues au tableau : la diapositive se lit d'une traite. En mode concentration, elles
+        // s'affichent à la fin de la voix et le tuteur réagit à chaque réponse (CourseFocusStage).
+        slide: QUESTIONS_DES_DIAPOSITIVES || mode === 'concentration' ? slide : { ...slide, question: undefined },
         slideIndex,
       })),
-    ), [deck.activities]);
+    ), [deck.activities, mode]);
 
   const storageKey = `course-player:${deck.id}`;
   const initialIndex = useMemo(() => {
@@ -267,6 +278,11 @@ export default function CoursePlayer({
     setPleinEcranVoulu(true);
   }, []);
 
+  // En concentration, le cours prend toute la place dès qu'il démarre.
+  useEffect(() => {
+    if (mode === 'concentration' && started && !courseCompleted) onFocusChange?.(true);
+  }, [mode, started, courseCompleted, onFocusChange]);
+
   if (!current) {
     return <div className="h-full grid place-items-center text-white/60">Ce cours ne contient aucune diapositive.</div>;
   }
@@ -332,7 +348,17 @@ export default function CoursePlayer({
           cliquait « Commencer » sur un cours déjà à sa cinquième ligne — et il
           se figeait hors plein écran, `startFocused` ayant été lu au montage. */}
       <div className="flex-1 min-h-0">
-        {started && (
+        {started && mode === 'concentration' && (
+          <CourseFocusStage
+            slide={current.slide}
+            language={language}
+            deckControls={commandesDuDeck}
+            tuteur3D={tuteur3D}
+            deckId={deck.stable_id || deck.id}
+            onSuivant={goToNext}
+          />
+        )}
+        {started && mode !== 'concentration' && (
         <LiveBoard
           script={script}
           isVisible

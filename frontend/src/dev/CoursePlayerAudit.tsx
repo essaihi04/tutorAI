@@ -11,9 +11,12 @@ import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import energyManifestSource from '../../../backend/data/courses/svt_ch1_energy_course_v1.json?raw';
 import muscleManifestSource from '../../../backend/data/courses/svt_ch1_muscle_course_v1.json?raw';
+// Cours exemple des ondes (6 novembre 2026), à valider avant d'entrer dans le site : ?scene=ondes
+import ondesManifestSource from '../../../backend/data/courses/phys_ch1_waves_exemple.json?raw';
 
 const ENERGY_MANIFEST = JSON.parse(energyManifestSource) as CourseDeck;
 const MUSCLE_MANIFEST = JSON.parse(muscleManifestSource) as CourseDeck;
+const ONDES_MANIFEST = JSON.parse(ondesManifestSource) as CourseDeck;
 
 const DECK: CourseDeck = {
   id: 'deck-demo-glycolyse-v4',
@@ -158,7 +161,16 @@ export default function CoursePlayerAudit() {
   const previewId = scene === 'pyruvate' ? 'energy_a10_s01' : scene === 'glucose-journey' ? 'energy_a08_s02' : 'energy_a07_s02';
   const respiratorySlide = ENERGY_MANIFEST.activities.flatMap(activity => activity.slides)
     .find(slide => slide.id === previewId);
-  const deck = scene === 'muscle' ? MUSCLE_MANIFEST : (scene === 'respiratory-chain' || scene === 'glucose-journey' || scene === 'pyruvate') && respiratorySlide
+  // &diapo=ID ouvre le cours exemple directement sur une diapositive (et les suivantes).
+  const diapo = new URLSearchParams(window.location.search).get('diapo');
+  const ondes = diapo
+    ? { ...ONDES_MANIFEST, id: `${ONDES_MANIFEST.id}-${diapo}`, activities: ONDES_MANIFEST.activities
+      .map(activite => ({ ...activite, slides: activite.slides.filter((_, i, tout) => tout.slice(0, i + 1).some(sl => sl.id === diapo)
+        || ONDES_MANIFEST.activities.flatMap(a => a.slides).findIndex(sl => sl.id === diapo)
+          < ONDES_MANIFEST.activities.flatMap(a => a.slides).findIndex(sl => sl.id === tout[i].id)) }))
+      .filter(activite => activite.slides.length) }
+    : ONDES_MANIFEST;
+  const deck = scene === 'ondes' ? ondes : scene === 'muscle' ? MUSCLE_MANIFEST : (scene === 'respiratory-chain' || scene === 'glucose-journey' || scene === 'pyruvate') && respiratorySlide
     ? { ...DECK, id: `${scene}-preview`, activities: [{
       id: scene, title: scene === 'pyruvate' ? 'Le carrefour du pyruvate' : scene === 'glucose-journey' ? 'Le voyage du glucose' : 'Chaîne respiratoire et phosphorylation oxydative',
       slides: [respiratorySlide],
@@ -189,10 +201,13 @@ export default function CoursePlayerAudit() {
         <div className="h-full w-full overflow-hidden rounded-2xl border border-white/10">
           <CoursePlayer
             deck={deck}
-            language="fr"
+            language={scene === 'ondes' ? 'mixed' : 'fr'}
             onNarration={texte => setMessages(liste => [...liste, texte])}
             onStudentQuestion={texte => setMessages(liste => [...liste, `Élève : ${texte}`])}
             onFocusChange={focus => setChatVisible(!focus)}
+            // Cours exemple des ondes : mode concentration avec le tuteur 3D (&mode=tableau pour l'ancien).
+            mode={scene === 'ondes' && new URLSearchParams(window.location.search).get('mode') !== 'tableau' ? 'concentration' : 'tableau'}
+            tuteur3D={scene === 'ondes'}
           />
         </div>
       </div>
