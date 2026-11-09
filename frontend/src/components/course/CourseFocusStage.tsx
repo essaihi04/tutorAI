@@ -159,6 +159,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const varianteFaite = useRef(false);
   // ── La question libre de l'élève : écrite, au micro ou en image ; le tuteur répond sans quitter la diapositive ──
   type QuestionLibre = { phase: 'saisie' | 'envoi' | 'reponse'; texte: string; image?: { b64: string; mime: string; nom: string }; audio?: string; enregistre: boolean;
+    /** La transcription du micro est en cours : elle va s'écrire dans le champ, pour que l'élève la vérifie. */
+    transcrit?: boolean; aVerifier?: boolean;
     reponse?: { parole: string; ecrit: string; question_comprise: string }; erreur?: string };
   const [libre, setLibre] = useState<QuestionLibre>({ phase: 'saisie', texte: '', enregistre: false });
   const enregistreur = useRef<MediaRecorder | null>(null);
@@ -363,7 +365,16 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         flux.getTracks().forEach(t => t.stop());
         const blob = new Blob(morceauxAudio.current, { type: rec.mimeType || 'audio/webm' });
         const b64 = await new Promise<string>(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(blob); });
-        setLibre(l => ({ ...l, enregistre: false, audio: b64 }));
+        // Ce qu'il vient de dire s'écrit tout de suite dans le champ (MoulSot v4) : il voit si c'est bien compris,
+        // corrige au besoin, puis envoie. Si la transcription échoue, l'enregistrement reste et part tel quel.
+        setLibre(l => ({ ...l, enregistre: false, audio: b64, transcrit: true, erreur: undefined }));
+        try {
+          const { texte } = await appelerApi<{ texte: string }>('/course-player/transcrire', { audio_b64: b64 });
+          setLibre(l => ({ ...l, transcrit: false, audio: undefined, aVerifier: true, texte: [l.texte.trim(), texte.trim()].filter(Boolean).join(' ') }));
+        } catch (e) {
+          const m = (e as Error).message;
+          setLibre(l => ({ ...l, transcrit: false, erreur: /^\d+$/.test(m) ? 'La transcription n’a pas abouti : ton enregistrement partira tel quel.' : m }));
+        }
       };
       rec.start(); enregistreur.current = rec;
       setLibre(l => ({ ...l, enregistre: true, audio: undefined }));
@@ -787,25 +798,29 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               <div className="text-sm font-semibold text-sky-200">🙋 Ta question au professeur</div>
               {libre.phase !== 'reponse' && (
                 <>
-                  <textarea value={libre.texte} onChange={e => setLibre(l => ({ ...l, texte: e.target.value }))} disabled={libre.phase === 'envoi'} rows={2}
-                    placeholder="Écris ta question… (en darija ou en français)" dir="auto"
+                  <textarea value={libre.texte} onChange={e => setLibre(l => ({ ...l, texte: e.target.value }))} disabled={libre.phase === 'envoi' || libre.transcrit} rows={2}
+                    placeholder={libre.transcrit ? 'Transcription de ce que tu as dit…' : 'Écris ta question… (en darija ou en français)'} dir="auto"
                     className="mt-2 w-full resize-none rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-lg outline-none focus:border-sky-300" />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <button onClick={() => void basculerMicro()} disabled={libre.phase === 'envoi'} className={`rounded-full px-4 py-2 text-sm ${libre.enregistre ? 'bg-rose-500/40 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}>
                       {libre.enregistre ? '■ Arrêter' : libre.audio ? '🎙️ Réenregistrer' : '🎙️ Parler'}
                     </button>
-                    {libre.audio && !libre.enregistre && <span className="text-sm text-emerald-200">✔ enregistrement prêt</span>}
+                    {libre.transcrit && <span className="text-sm text-sky-200 animate-pulse">✍️ Transcription…</span>}
+                    {libre.audio && !libre.enregistre && !libre.transcrit && <span className="text-sm text-emerald-200">✔ enregistrement prêt</span>}
                     <label className="cursor-pointer rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20">
                       📷 {libre.image ? libre.image.nom.slice(0, 18) : 'Image'}
                       <input type="file" accept="image/*" capture="environment" className="hidden" disabled={libre.phase === 'envoi'}
                         onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const b64 = await lireFichier(f); setLibre(l => ({ ...l, image: { b64, mime: f.type || 'image/png', nom: f.name } })); }} />
                     </label>
                     {libre.image && <img src={libre.image.b64} alt="" className="h-10 rounded border border-white/20" />}
-                    <button onClick={() => void envoyerQuestion()} disabled={libre.phase === 'envoi' || libre.enregistre || (!libre.texte.trim() && !libre.audio && !libre.image)}
+                    <button onClick={() => void envoyerQuestion()} disabled={libre.phase === 'envoi' || libre.enregistre || libre.transcrit || (!libre.texte.trim() && !libre.audio && !libre.image)}
                       className="ml-auto rounded-full bg-sky-500/40 px-5 py-2 text-sm hover:bg-sky-500/50 disabled:opacity-40">
                       {libre.phase === 'envoi' ? 'Le professeur réfléchit…' : 'Envoyer'}
                     </button>
                   </div>
+                  {libre.aVerifier && !libre.transcrit && libre.phase === 'saisie' && (
+                    <p className="mt-2 text-sm text-sky-200/80">Vérifie ce que le professeur a compris ; corrige si besoin, puis Envoyer.</p>
+                  )}
                   {libre.erreur && <p className="mt-2 text-sm text-rose-200">{libre.erreur}</p>}
                 </>
               )}

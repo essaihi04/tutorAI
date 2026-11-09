@@ -29,8 +29,8 @@ router = APIRouter(prefix="/public/cours-ondes", tags=["public"])
 
 COURS = "phys_ch1_waves_exemple"
 #: (nombre d'appels, fenêtre en secondes) par visiteur ET par adresse IP ; puis pour tous les visiteurs ensemble.
-LIMITES = {"llm": (40, 3600), "voix": (200, 3600), "eveil": (12, 3600), "acquis": (300, 3600)}
-LIMITES_TOTALES = {"llm": (1500, 86400), "voix": (6000, 86400), "eveil": (300, 86400)}
+LIMITES = {"llm": (40, 3600), "voix": (200, 3600), "eveil": (12, 3600), "acquis": (300, 3600), "micro": (60, 3600)}
+LIMITES_TOTALES = {"llm": (1500, 86400), "voix": (6000, 86400), "eveil": (300, 86400), "micro": (2000, 86400)}
 _appels: dict[tuple[str, str], deque] = defaultdict(deque)
 
 
@@ -107,6 +107,14 @@ async def question_eleve(body: cp.QuestionEleveRequest, request: Request, x_visi
         raise HTTPException(413, "Image trop lourde.")
     _ce_cours(body.deck_id)
     return await cp.question_eleve(body, _autoriser("llm", _visiteur(x_visiteur), request))
+
+
+@router.post("/transcrire")
+async def transcrire(body: cp.TranscrireRequest, request: Request, x_visiteur: str | None = Header(default=None)):
+    """Ce que l'élève vient de dire au micro, transcrit par MoulSot v4 : il le voit dans le champ avant d'envoyer."""
+    if len(body.audio_b64) > 3_000_000:
+        raise HTTPException(413, "Enregistrement trop long : une minute au plus.")
+    return await cp.transcrire(body, _autoriser("micro", _visiteur(x_visiteur), request))
 
 
 @router.post("/reexplication")

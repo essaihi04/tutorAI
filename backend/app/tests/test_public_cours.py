@@ -80,3 +80,9 @@ def test_micro_pas_encore_pret(client, monkeypatch):
                     json={"deck_id": "phys_ch1_waves_exemple", "audio_b64": "data:audio/webm;base64,AAAA"})
     assert reveils == ["stt"]
     assert r.status_code == 503 and "micro se prépare" in r.json()["detail"]
+
+
+def test_transcription_seule_pour_verifier_avant_d_envoyer(client):
+    r = client.post("/public/cours-ondes/transcrire", headers=H, json={"audio_b64": "data:audio/webm;base64,AAAAAAAA"})
+    assert r.status_code == 200 and r.json() == {"texte": "علاش tau"}
+    assert client.vu["gemini_seul"] is False

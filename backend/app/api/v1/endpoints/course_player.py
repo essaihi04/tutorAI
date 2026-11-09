@@ -250,6 +250,25 @@ async def reexplication(body: ReexplicationRequest, student: dict = Depends(get_
     raise HTTPException(status_code=502, detail="Réponse du LLM inutilisable")
 
 
+class TranscrireRequest(BaseModel):
+    """L'élève vient de parler au micro : on lui montre tout de suite ce qui a été compris, avant d'envoyer."""
+    audio_b64: str = Field(..., min_length=10, max_length=6_000_000)
+
+
+@router.post("/transcrire")
+async def transcrire(body: TranscrireRequest, student: dict = Depends(get_current_student)):
+    """MoulSot v4 (kernel de la voix), Gemini en secours. Le texte revient dans le champ de la question : l'élève
+    voit si la transcription est juste, la corrige s'il le faut, puis l'envoie (9 novembre 2026)."""
+    from app.services import question_eleve as qe
+
+    compris = await qe.comprendre("", body.audio_b64, None, "image/png")
+    if not compris["transcription"]:
+        from app.services.kaggle_tts import pilote
+        pilote.besoin_de_voix("stt")
+        raise HTTPException(status_code=503, detail="Le micro se prépare (la reconnaissance vocale démarre, une à trois minutes). Réessaie dans un instant, ou écris ta question.")
+    return {"texte": compris["transcription"]}
+
+
 class QuestionEleveRequest(BaseModel):
     """L'élève lève la main pendant le cours : question écrite, dite au micro (audio en base64) ou image (base64)."""
     deck_id: Optional[str] = None
