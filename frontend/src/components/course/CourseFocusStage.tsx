@@ -354,15 +354,37 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
   const lireFichier = (f: File) => new Promise<string>((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.onerror = ko; fr.readAsDataURL(f); });
 
-  const basculerMicro = useCallback(async () => {
-    if (libre.enregistre) { enregistreur.current?.stop(); return; }
+  // Le micro se tient comme un talkie-walkie (9 novembre 2026) : appuyer = il écoute, relâcher = il s'arrête et
+  // transcrit. `appuiMicro` dit si le doigt est encore posé (il peut se lever avant que le micro soit ouvert).
+  const appuiMicro = useRef(false);
+  const debutMicro = useRef(0);
+  const limiteMicro = useRef<number | undefined>(undefined);
+
+  const arreterMicro = useCallback(() => {
+    appuiMicro.current = false;
+    window.clearTimeout(limiteMicro.current);
+    if (enregistreur.current?.state === 'recording') enregistreur.current.stop();
+  }, []);
+
+  const demarrerMicro = useCallback(async () => {
+    if (appuiMicro.current || enregistreur.current?.state === 'recording') return;
+    appuiMicro.current = true;
     try {
       const flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!appuiMicro.current) {   // relâché pendant l'ouverture du micro : rien n'a été dit
+        flux.getTracks().forEach(t => t.stop());
+        setLibre(l => ({ ...l, erreur: 'Garde le bouton appuyé pendant que tu parles, puis relâche.' }));
+        return;
+      }
       const rec = new MediaRecorder(flux);
       morceauxAudio.current = [];
       rec.ondataavailable = e => { if (e.data.size) morceauxAudio.current.push(e.data); };
       rec.onstop = async () => {
         flux.getTracks().forEach(t => t.stop());
+        if (performance.now() - debutMicro.current < 500) {   // un simple clic : pas de transcription
+          setLibre(l => ({ ...l, enregistre: false, erreur: 'Garde le bouton appuyé pendant que tu parles, puis relâche.' }));
+          return;
+        }
         const blob = new Blob(morceauxAudio.current, { type: rec.mimeType || 'audio/webm' });
         const b64 = await new Promise<string>(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(blob); });
         // Ce qu'il vient de dire s'écrit tout de suite dans le champ (MoulSot v4) : il voit si c'est bien compris,
@@ -376,10 +398,14 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           setLibre(l => ({ ...l, transcrit: false, erreur: /^\d+$/.test(m) ? 'La transcription n’a pas abouti : ton enregistrement partira tel quel.' : m }));
         }
       };
-      rec.start(); enregistreur.current = rec;
-      setLibre(l => ({ ...l, enregistre: true, audio: undefined }));
-    } catch { setLibre(l => ({ ...l, erreur: 'Le micro n’est pas disponible : écris ta question, ou envoie une image.' })); }
-  }, [libre.enregistre]);
+      rec.start(); enregistreur.current = rec; debutMicro.current = performance.now();
+      limiteMicro.current = window.setTimeout(arreterMicro, 60_000);   // une minute au plus
+      setLibre(l => ({ ...l, enregistre: true, audio: undefined, erreur: undefined }));
+    } catch {
+      appuiMicro.current = false;
+      setLibre(l => ({ ...l, erreur: 'Le micro n’est pas disponible : écris ta question, ou envoie une image.' }));
+    }
+  }, [arreterMicro]);
 
   const envoyerQuestion = useCallback(async () => {
     if (libre.phase !== 'saisie' || (!libre.texte.trim() && !libre.audio && !libre.image)) return;
@@ -802,8 +828,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                     placeholder={libre.transcrit ? 'Transcription de ce que tu as dit…' : 'Écris ta question… (en darija ou en français)'} dir="auto"
                     className="mt-2 w-full resize-none rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-lg outline-none focus:border-sky-300" />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button onClick={() => void basculerMicro()} disabled={libre.phase === 'envoi'} className={`rounded-full px-4 py-2 text-sm ${libre.enregistre ? 'bg-rose-500/40 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}>
-                      {libre.enregistre ? '■ Arrêter' : libre.audio ? '🎙️ Réenregistrer' : '🎙️ Parler'}
+                    <button
+                      type="button" disabled={libre.phase === 'envoi' || libre.transcrit}
+                      // appuyer pour parler, relâcher pour arrêter (souris, doigt, ou barre d'espace)
+                      onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); void demarrerMicro(); }}
+                      onPointerUp={arreterMicro} onPointerCancel={arreterMicro} onLostPointerCapture={arreterMicro}
+                      onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); void demarrerMicro(); } }}
+                      onKeyUp={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); arreterMicro(); } }}
+                      onContextMenu={e => e.preventDefault()}
+                      style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+                      className={`rounded-full px-4 py-2 text-sm ${libre.enregistre ? 'bg-rose-500/50 ring-2 ring-rose-300 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}>
+                      {libre.enregistre ? '● Je t’écoute… relâche pour finir' : '🎙️ Maintiens pour parler'}
                     </button>
                     {libre.transcrit && <span className="text-sm text-sky-200 animate-pulse">✍️ Transcription…</span>}
                     {libre.audio && !libre.enregistre && !libre.transcrit && <span className="text-sm text-emerald-200">✔ enregistrement prêt</span>}
