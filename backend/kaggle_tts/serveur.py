@@ -9,12 +9,15 @@ Ce script est poussé tel quel comme kernel Kaggle par le backend
    cloudflared), sinon depuis Internet ;
 3. charge un modèle par carte T4 (2 cartes = 2 phrases calculées en même temps) ;
 4. annonce son adresse au backend, qui bascule la voix du prof dessus ;
+   si CONF « stt » est donné, charge aussi la reconnaissance vocale MoulSot
+   (Qwen3-ASR) sur la dernière carte, à côté de la voix : POST /stt ;
 5. s'éteint SEUL après `veille_s` sans parler (5 min) ou au bout de
    `duree_max_s` : un kernel éteint ne consomme plus de quota GPU.
 
 Contrat HTTP = celui du serveur Academy de Colab, déjà parlé par
 `tts_service.py` : POST /tts (WAV complet), POST /tts/stream (en-tête WAV puis
-PCM 16 bits phrase par phrase), GET /health, GET /voices. Jeton Bearer.
+PCM 16 bits phrase par phrase), GET /health, GET /voices, POST /stt (audio de
+l'élève -> texte ; 503 tant que MoulSot n'est pas prêt). Jeton Bearer.
 
 Les valeurs `CONF` sont remplacées à chaque lancement par le backend (jeton et
 clé d'annonce neufs à chaque fois). Rien ici n'a besoin d'être modifié à la main.
@@ -128,6 +131,36 @@ def extraire_site():
 
 threading.Thread(target=copier, daemon=True).start()
 threading.Thread(target=extraire_site, daemon=True).start()
+
+# ── 0 bis. Reconnaissance vocale (facultative) : poids et paquet préparés en parallèle, sans retarder la voix ──
+STT = {"etat": "absent" if not CONF.get("stt") else "preparation", "chemin": None, "qa": f"{WORK}/qa"}
+STT_PREP = threading.Event()
+
+
+def preparer_stt():
+    try:
+        nom = CONF["stt"]
+        # Poids affinés attachés au kernel (sortie du kernel d'entraînement) : copiés en local, sinon Hugging Face.
+        local = [os.path.dirname(p) for p in glob.glob(f"/kaggle/input/**/{nom}/config.json", recursive=True)]
+        dest = f"{WORK}/stt"
+        if local:
+            sh(f"mkdir -p {dest} && cp -r '{local[0]}'/. {dest}/")
+        else:
+            from huggingface_hub import snapshot_download
+            snapshot_download(nom, local_dir=dest, ignore_patterns=["rng_state.pth", "trainer_state.json"])
+        ok = sh(f"pip -q install --no-deps --target {STT['qa']} qwen-asr==0.0.6 qwen-omni-utils soynlp==0.0.493")
+        os.makedirs(f"{STT['qa']}/nagisa", exist_ok=True)       # seul l'aligneur s'en sert ; jamais appelé ici
+        open(f"{STT['qa']}/nagisa/__init__.py", "a").close()
+        STT["chemin"] = dest if ok else None
+        say("STT préparé :", nom, "local" if local else "Hugging Face", "" if ok else "— paquet qwen-asr ÉCHEC")
+    except Exception as e:
+        say("STT préparation échouée :", repr(e)[:200])
+    finally:
+        STT_PREP.set()
+
+
+if CONF.get("stt"):
+    threading.Thread(target=preparer_stt, daemon=True).start()
 
 
 # ── 1. Tunnel : lancé tout de suite, il s'établit pendant le chargement ──
@@ -390,6 +423,46 @@ def travailleur(k, entree, sortie, conf):
         sortie.put(("fait", tid, pcm))
 
 
+def travailleur_stt(k, entree, sortie, conf):
+    """Reconnaissance vocale MoulSot sur la carte k, à côté de la voix (≈ 4 Go de plus sur 16)."""
+    import os, sys
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(k)
+    sys.path[:0] = [p for p in conf["chemins"] if p not in sys.path]
+    try:
+        import numpy as np
+        import torch
+        from qwen_asr import Qwen3ASRModel
+        asr = Qwen3ASRModel.from_pretrained(conf["stt"], dtype=torch.float16, device_map="cuda",
+                                            max_new_tokens=256, max_inference_batch_size=4)
+        asr.transcribe(audio=(np.zeros(16000, np.float32), 16000), language="Arabic")   # chauffe
+        sortie.put(("pret", k, None))
+    except Exception as e:
+        sortie.put(("echec", k, repr(e)[:300]))
+        return
+    while True:
+        tid, brut, langue = entree.get()
+        texte = ""
+        try:
+            w = np.frombuffer(brut, dtype=np.float32)
+            with torch.inference_mode():
+                texte = asr.transcribe(audio=(w, 16000), language="French" if langue == "fr" else "Arabic")[0].text
+            # Garde-fou : le modèle affiné a, 2 fois sur 841, continué à « transcrire » après la fin de l'audio.
+            # Corpus v4 : 99,9 % des extraits sous 21,4 caractères (lettres) par seconde -> au-delà, on coupe.
+            plafond = int(22 * len(w) / 16000) + 20
+            if sum(c.isalnum() for c in texte) > plafond:
+                n, coupe = 0, len(texte)
+                for i, c in enumerate(texte):
+                    n += c.isalnum()
+                    if n > plafond:
+                        coupe = i
+                        break
+                texte = texte[:coupe].rsplit(" ", 1)[0]
+                print(f"stt gpu{k} texte trop long pour l'audio, coupé à {plafond} lettres", flush=True)
+        except Exception as e:
+            print(f"stt gpu{k} échec :", repr(e)[:200], flush=True)
+        sortie.put(("fait", tid, (texte or "").strip()))
+
+
 '''
 
 
@@ -399,7 +472,7 @@ def travailleur(k, entree, sortie, conf):
 with open(f"{WORK}/travailleur_tts.py", "w", encoding="utf-8") as f:
     f.write(MODULE_TRAVAILLEUR)
 sys.path.insert(0, WORK)
-from travailleur_tts import travailleur  # noqa: E402
+from travailleur_tts import travailleur, travailleur_stt  # noqa: E402
 r = subprocess.run("nvidia-smi -L", shell=True, capture_output=True, text=True)
 N = max(1, min(2, r.stdout.count("GPU ")))
 ctx = mp.get_context("spawn")
@@ -436,6 +509,40 @@ if not CARTES:
     annoncer("eteint", raison="aucun modèle chargé")
     os._exit(1)
 MODELES = CARTES
+
+# La reconnaissance vocale se charge APRÈS la voix, sur la dernière carte : la voix est annoncée
+# sans l'attendre ; tant que /stt répond 503, le backend garde Gemini.
+STT_ENTREE, STT_SORTIE = ctx.Queue(), ctx.Queue()
+STT_EN_COURS = {}
+
+
+def demarrer_stt():
+    STT_PREP.wait()
+    if not STT["chemin"]:
+        STT["etat"] = "echec"
+        return
+    k = CARTES[-1]
+    conf = {"chemins": [STT["qa"]] + [p for p in sys.path if p], "stt": STT["chemin"]}
+    ctx.Process(target=travailleur_stt, args=(k, STT_ENTREE, STT_SORTIE, conf), daemon=True).start()
+    try:
+        etat, _, info = STT_SORTIE.get(timeout=600)
+    except Exception:
+        etat, info = "echec", "pas de réponse en 10 min"
+    STT["etat"] = "pret" if etat == "pret" else "echec"
+    say(f"STT gpu{k}", STT["etat"], info or "", f"({time.time() - T0:.0f} s)")
+    if etat != "pret":
+        return
+    while True:
+        _, tid, texte = STT_SORTIE.get()
+        with VERROU:
+            t = STT_EN_COURS.pop(tid, None)
+        if t:
+            t.texte = texte
+            t.fini.set()
+
+
+if CONF.get("stt"):
+    threading.Thread(target=demarrer_stt, daemon=True).start()
 
 # File d'attente commune : chaque carte prend le morceau suivant dès qu'elle
 # est libre, si bien que le morceau 2 se calcule pendant que le 1 est joué.
@@ -559,7 +666,8 @@ class Parole:
 @app.get("/health")
 def health():
     return {"status": "ok", "moteur": "academy-v4-amine-vif", "gpus": len(MODELES), "sample_rate": SR,
-            "veille_s": CONF["veille_s"], "inactif_s": round(time.time() - ACTIVITE["derniere"])}
+            "veille_s": CONF["veille_s"], "inactif_s": round(time.time() - ACTIVITE["derniere"]),
+            "stt": STT["etat"]}
 
 
 @app.post("/garder")
@@ -611,6 +719,44 @@ async def tts_stream(req: Request, authorization: str = Header(None)):
                     yield t.pcm
 
     return StreamingResponse(flux(), media_type="audio/wav")
+
+
+class Ecoute:
+    def __init__(self):
+        self.fini = threading.Event()
+        self.texte = ""
+
+
+def decoder_audio(octets):
+    """webm/ogg/wav/mp3 du navigateur -> float32 mono 16 kHz (ffmpeg)."""
+    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-t", "60", "-ac", "1", "-ar", "16000",
+                        "-f", "f32le", "pipe:1"], input=octets, capture_output=True, timeout=20)
+    return r.stdout if r.returncode == 0 else b""
+
+
+@app.post("/stt")
+async def stt(req: Request, authorization: str = Header(None)):
+    verifier(authorization)
+    if STT["etat"] != "pret":
+        raise HTTPException(503, f"stt {STT['etat']}")
+    octets = await req.body()
+    if not octets or len(octets) > 15_000_000:
+        raise HTTPException(422, "audio vide ou trop long")
+    import asyncio
+    t0 = time.time()
+    with Parole():
+        brut = await asyncio.to_thread(decoder_audio, octets)
+        if len(brut) < 16000 * 4 * 0.2:
+            raise HTTPException(422, "audio illisible ou trop court")
+        e = Ecoute()
+        with VERROU:
+            COMPTEUR[0] += 1
+            tid = COMPTEUR[0]
+            STT_EN_COURS[tid] = e
+        STT_ENTREE.put((tid, brut, req.query_params.get("langue", "mixed")))
+        if not await asyncio.to_thread(e.fini.wait, 30):
+            raise HTTPException(504, "stt trop long")
+    return {"texte": e.texte, "duree_s": round(len(brut) / 4 / 16000, 2), "calcul_ms": int((time.time() - t0) * 1000)}
 
 
 threading.Thread(target=lambda: uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning"),

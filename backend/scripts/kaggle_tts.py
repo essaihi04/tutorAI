@@ -152,7 +152,35 @@ def essai():
             duree = (octets - 44) / 2 / 24000
             print(f"[{langue}] {len(texte):3d} car. : premier son {premier:.2f} s, fini {total:.2f} s, "
                   f"audio {duree:.1f} s, vitesse {total / max(duree, 0.01):.2f}× temps réel")
+        if settings.kaggle_stt_modele:
+            essai_stt(c, url, h)
     print("\nLe kernel s'éteindra seul après", settings.kaggle_tts_veille_s, "s sans parler.")
+
+
+def essai_stt(c, url, h):
+    """Reconnaissance vocale du kernel : attend /health stt=pret, puis transcrit des extraits du test figé
+    (chemins dans STT_CLIPS, séparés par des virgules) et un aller-retour voix -> texte."""
+    import os
+    import time
+    t0, etat = time.time(), None
+    while time.time() - t0 < 600:
+        etat = c.get(f"{url}/health", headers=h).json().get("stt")
+        if etat in ("pret", "echec", "absent"):
+            break
+        time.sleep(5)
+    print(f"\nSTT : {etat} ({time.time() - t0:.0f} s après la voix)")
+    if etat != "pret":
+        return
+    audios = [(p, Path(p).read_bytes()) for p in filter(None, os.environ.get("STT_CLIPS", "").split(","))]
+    r = c.post(f"{url}/tts", json={"texte": PHRASES_ESSAI[0][1], "langue": "ma"}, headers=h)
+    audios.append(("voix du prof : " + PHRASES_ESSAI[0][1], r.content))
+    for nom, octets in audios:
+        for _ in range(2):          # la 2e fois : temps « à chaud »
+            t = time.time()
+            r = c.post(f"{url}/stt", params={"langue": "mixed"}, content=octets, headers=h)
+            d = r.json() if r.status_code == 200 else {"texte": r.text[:120]}
+            print(f"[stt] {r.status_code} aller-retour {(time.time() - t) * 1000:.0f} ms, calcul {d.get('calcul_ms')} ms, "
+                  f"audio {d.get('duree_s')} s | {Path(nom).name if '/' in nom else nom}\n   -> {d.get('texte')}")
 
 
 def banc():

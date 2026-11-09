@@ -129,6 +129,14 @@ class Settings(BaseSettings):
     kaggle_tts_fp16: int = 0              # calcul en demi-précision (cf. banc_fp16.py)
     kaggle_tts_pas_flow: int = 4          # passages du flow S3Gen (lahgtna : 10). Écoute à l'aveugle du 2026-11-05 :
                                           # 4 jamais jugé moins net que 10 (2 mieux, 3 pareil) et premier son −0,6 s
+    # Reconnaissance vocale MoulSot dans le même kernel que la voix (POST /stt), Gemini en secours tant que le
+    # kernel dort. "" = désactivée. Valeurs : "atlasia/moulsot.v0.3" (Hugging Face) ou "moulsot_v4" (dossier de
+    # la sortie du kernel `kaggle_stt_source`, attachée au kernel de la voix).
+    # MoulSot v4 (2026-11-09) : affiné sur le corpus v4 (95 h), CER 10,8 % -> 9,5 % sur 841 extraits de vidéos jamais
+    # vues, darija générale stable (12,5 -> 12,7 %). Ne JAMAIS relancer le kernel source : sa sortie porte les poids.
+    kaggle_stt_modele: str = "moulsot_v4"
+    kaggle_stt_source: str = "academy-moulsot-v4"   # kernel d'entraînement, sur le compte Kaggle
+    kaggle_stt_delai_s: float = 8.0       # au-delà, Gemini prend la main
 
     # TTS cache (filesystem)
     tts_cache_enabled: int = 1

@@ -295,7 +295,7 @@ def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str,
     conf = {"annonce": settings.kaggle_tts_annonce_url, "cle": cle, "lancement": lancement, "jeton": jeton,
             "modele": settings.kaggle_tts_modele, "veille_s": settings.kaggle_tts_veille_s,
             "duree_max_s": settings.kaggle_tts_duree_max_s, "fp16": bool(settings.kaggle_tts_fp16),
-            "pas_flow": settings.kaggle_tts_pas_flow}
+            "pas_flow": settings.kaggle_tts_pas_flow, "stt": settings.kaggle_stt_modele}
     source = (DOSSIER_KERNEL / "serveur.py").read_text(encoding="utf-8")
     ref = base64.b64encode((DOSSIER_KERNEL / settings.kaggle_tts_reference).read_bytes()).decode()
     regles = base64.b64encode((DOSSIER_KERNEL / "texte_parle.py").read_bytes()).decode()   # formules, nombres (cf. cours v8)
@@ -306,6 +306,8 @@ def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str,
     sources = [f"{u}/{settings.kaggle_tts_modele}"]
     if settings.kaggle_tts_socle:
         sources.append(f"{u}/{settings.kaggle_tts_socle}")
+    if settings.kaggle_stt_modele and settings.kaggle_stt_source:
+        sources.append(f"{u}/{settings.kaggle_stt_source}")   # poids MoulSot affinés
     kernel = kernel or settings.kaggle_tts_kernel
     meta = {"id": f"{u}/{kernel}", "title": kernel,
             "code_file": "serveur.py", "language": "python", "kernel_type": "script",

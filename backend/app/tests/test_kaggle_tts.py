@@ -1,8 +1,8 @@
 """Voix du prof sur Kaggle à la demande : cycle de vie, annonces, budget."""
 import asyncio
-from pathlib import Path
 import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -125,7 +125,7 @@ def test_kernel_construit(tmp_path, actif):
     construire_kernel(tmp_path, "CLE'\"", "l1", "jeton")
     meta = json.loads((tmp_path / "kernel-metadata.json").read_text(encoding="utf-8"))
     assert meta["id"] == "prof/academy-tts-direct" and meta["is_private"] and meta["enable_gpu"]
-    assert meta["kernel_sources"] == ["prof/academy-v4-entrainement"]
+    assert meta["kernel_sources"] == ["prof/academy-v4-entrainement", "prof/academy-moulsot-v4"]   # voix + MoulSot v4
     source = (tmp_path / "serveur.py").read_text(encoding="utf-8")
     assert "__CONF__" not in source and "__REF_B64__" not in source
     compile(source, "serveur.py", "exec")

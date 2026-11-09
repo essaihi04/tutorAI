@@ -89,6 +89,37 @@ def _prompt_for(language: str) -> str:
     )
 
 
+async def _transcrire_kaggle(audio_content: bytes, language: str) -> Optional[str]:
+    """MoulSot dans le kernel de la voix (même GPU, tunnel déjà ouvert). None = indisponible -> Gemini."""
+    if not settings.kaggle_stt_modele:
+        return None
+    from app.services.kaggle_tts import pilote
+    cible = pilote.cible()
+    if not cible:
+        pilote.besoin_de_voix("stt")          # la réponse aura besoin de la voix : on réveille
+        return None
+    url, jeton = cible
+    import time as _t
+    t0 = _t.time()
+    try:
+        async with httpx.AsyncClient(timeout=settings.kaggle_stt_delai_s) as client:
+            r = await client.post(f"{url}/stt", params={"langue": language}, content=audio_content,
+                                  headers={"Authorization": f"Bearer {jeton}",
+                                           "Content-Type": _mime_for(audio_content)})
+        if r.status_code != 200:
+            _safe_log(f"[STT][Kaggle] HTTP {r.status_code} — Gemini en secours")
+            return None
+        d = r.json()
+        texte = (d.get("texte") or "").strip()
+        _safe_log(f"[STT] MoulSot lang={language} {d.get('duree_s')}s audio, calcul {d.get('calcul_ms')} ms, "
+                  f"aller-retour {int((_t.time() - t0) * 1000)} ms, chars={len(texte)}")
+        pilote.besoin_de_voix("parole")
+        return texte or None
+    except Exception as e:  # noqa: BLE001
+        _safe_log(f"[STT][Kaggle] {type(e).__name__} — Gemini en secours")
+        return None
+
+
 class STTService:
     async def transcribe_audio(
         self,
@@ -96,13 +127,16 @@ class STTService:
         language: str = "fr",
         gemini_seul: bool = False,
     ) -> Optional[str]:
-        """Transcribe audio bytes via Gemini. Returns text or None.
+        """MoulSot (kernel de la voix) s'il est prêt, sinon Gemini. Returns text or None.
 
-        `gemini_seul` : toujours Gemini 2.5 Flash (micro de la page publique du cours, 8 novembre 2026) ; le
-        paramètre est accepté partout pour qu'un autre moteur placé devant ne serve pas cette page.
+        `gemini_seul` : directement Gemini 2.5 Flash (micro de la page publique du cours, 8 novembre 2026).
         """
         if not audio_content:
             return None
+        if not gemini_seul:
+            texte = await _transcrire_kaggle(audio_content, language)
+            if texte:
+                return texte
 
         key = settings.gemini_tts_api_key or settings.gemini_api_key
         if not key:
@@ -123,10 +157,14 @@ class STTService:
             "generationConfig": {
                 "temperature": 0.0,
                 "maxOutputTokens": 1024,
+                # Gemini 2.5 « réfléchit » avant de répondre par défaut : inutile pour une transcription, et lent.
+                **({"thinkingConfig": {"thinkingBudget": 0}} if "2.5-flash" in _GEMINI_STT_MODEL else {}),
             },
         }
 
         url = _GEMINI_STT_URL.format(model=_GEMINI_STT_MODEL, key=key)
+        import time as _t
+        t0 = _t.time()
         try:
             async with httpx.AsyncClient(timeout=45.0) as client:
                 resp = await client.post(
@@ -153,7 +191,7 @@ class STTService:
             _safe_log(
                 f"[STT] Gemini lang={language} mime={mime} "
                 f"bytes={len(audio_content)} chars={len(transcript)} "
-                f"finish={finish_reason}"
+                f"finish={finish_reason} {int((_t.time() - t0) * 1000)} ms"
             )
             if not transcript:
                 _safe_log(f"[STT][Gemini] Empty body: {str(data)[:500]}")
