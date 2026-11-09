@@ -34,35 +34,114 @@ const SX = 120, SY = 175, PXD = 260;              // S ; px par mètre
 // Vue de côté
 const PX0 = 440, PY0 = 215, PXC = 600, K = 34;    // origine (S), px par mètre, amplitude dessinée
 
+/* L'eau, rendue « pour de vrai » : la surface vue du dessus est éclairée selon sa pente (une ride claire du côté
+ * de la lumière, sombre de l'autre), avec un léger affaiblissement en s'éloignant de S pour l'œil seulement ;
+ * le modèle (y = y_S(t − x / v)) reste celui de la vue de côté et des mesures. */
+const pente = (r, t) => { const u = t - r / V; return u < 0 || u > THETA ? 0 : -(2 * Math.PI / (THETA * V)) * Math.cos(2 * Math.PI * u / THETA); };
+const attenue = r => 1 / Math.sqrt(1 + r / 0.06);
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * Math.max(0, Math.min(1, k))));
+const EAU = [14, 74, 92], CLAIR = [150, 220, 235], SOMBRE = [4, 30, 42];
+function eauDessus(ctx, t) {
+  const X0 = 30, Y0 = 46, W = 360, H = 262, R = Math.hypot(X0 + W - SX, Y0 + H - SY) + 4;
+  ctx.save();
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X0, Y0, W, H, 8) : ctx.rect(X0, Y0, W, H); ctx.clip();
+  // Le fond : un bassin, plus profond au centre, plus clair vers le bord.
+  const fond = ctx.createLinearGradient(X0, Y0, X0 + W, Y0 + H);
+  fond.addColorStop(0, 'rgb(18,88,108)'); fond.addColorStop(.55, 'rgb(12,66,84)'); fond.addColorStop(1, 'rgb(8,48,64)');
+  ctx.fillStyle = fond; ctx.fillRect(X0, Y0, W, H);
+  // Reflets lents du ciel sur l'eau calme (caustiques douces).
+  ctx.globalAlpha = .035; ctx.fillStyle = '#bfefff';
+  for (let k = 0; k < 7; k++) {
+    const cx = X0 + ((k * 97 + performance.now() * .006 * (1 + k % 3)) % (W + 80)) - 40, cy = Y0 + 30 + (k * 53) % (H - 40);
+    ctx.beginPath(); ctx.ellipse(cx, cy, 40 + 9 * (k % 4), 7 + 2 * (k % 3), -.35, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Les rides : un dégradé radial dont chaque anneau prend la teinte de la pente de l'eau à ce rayon.
+  if (t > 0 && V * (t - THETA) < R / PXD) {
+    const g = ctx.createRadialGradient(SX, SY, 0, SX, SY, R), N = 260;
+    for (let k = 0; k <= N; k++) {
+      const rpx = R * k / N, r = rpx / PXD, p = pente(r, t) * attenue(r) * .034, h = y(r, t) * attenue(r);
+      const c = p > 0 ? mix(EAU, CLAIR, p * 1.1 + h * .15) : mix(EAU, SOMBRE, -p * 1.1 - h * .1);
+      const a = Math.min(.85, Math.abs(p) * 1.5 + Math.abs(h) * .25);
+      g.addColorStop(k / N, `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`);
+    }
+    ctx.fillStyle = g; ctx.fillRect(X0, Y0, W, H);
+    // Un fin liseré de lumière sur la crête.
+    const crete = V * (t - THETA / 4);
+    if (crete > 0.005) {
+      ctx.strokeStyle = 'rgba(225,250,255,' + (.55 * attenue(crete)).toFixed(3) + ')'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(SX - 1, SY - 1, crete * PXD, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  // L'éclaboussure, juste quand la goutte touche l'eau.
+  if (t >= 0 && t < 0.22) {
+    const k = t / 0.22;
+    ctx.fillStyle = `rgba(230,250,255,${(1 - k).toFixed(2)})`;
+    for (let i = 0; i < 9; i++) {
+      const a = i * 2 * Math.PI / 9 + .3, rr = 4 + 22 * k;
+      ctx.beginPath(); ctx.arc(SX + rr * Math.cos(a), SY + rr * Math.sin(a), 2.2 * (1 - k) + .6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function goutte(ctx, x, yb) {
+  ctx.save();
+  const g = ctx.createRadialGradient(x - 2, yb - 9, 1, x, yb - 7, 9);
+  g.addColorStop(0, 'rgba(240,252,255,.95)'); g.addColorStop(1, 'rgba(110,190,220,.85)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, yb - 18);
+  ctx.bezierCurveTo(x + 2, yb - 12, x + 7, yb - 7, x + 7, yb - 3); ctx.arc(x, yb - 3, 7, 0, Math.PI); ctx.bezierCurveTo(x - 7, yb - 7, x - 2, yb - 12, x, yb - 18);
+  ctx.fill(); ctx.restore();
+}
+function balle(ctx, x, yb, r, ombre) {
+  ctx.save();
+  if (ombre) { ctx.fillStyle = 'rgba(0,15,25,.35)'; ctx.beginPath(); ctx.ellipse(x + r * .35, yb + r * .4, r * 1.05, r * .8, 0, 0, Math.PI * 2); ctx.fill(); }
+  const g = ctx.createRadialGradient(x - r * .35, yb - r * .4, r * .1, x, yb, r);
+  g.addColorStop(0, '#ffd9a8'); g.addColorStop(.35, '#ff9a3c'); g.addColorStop(1, '#b4480c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, yb, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.ellipse(x - r * .38, yb - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
 function vueDessus(c) {
   c.texte('Vue de dessus', 40, 34, { couleur: 'cyan', taille: 17 });
+  c.direct(() => eauDessus(c.ctx, S.t));
   c.rect(30, 46, 360, 262, { couleur: 'tresfaible', arrondi: 8 });
   c.direct(() => {
     const t = S.t;
     // La goutte tombe vers S.
-    if (t < 0) {
-      const h = (-t / -T0) * 120;
-      c.trait([[SX - 5, SY - h - 6], [SX, SY - h - 16], [SX + 5, SY - h - 6], [SX, SY - h]], { couleur: 'bleu', ferme: true });
-    }
+    if (t < 0) goutte(c.ctx, SX, SY - (-t / -T0) * 120);
     c.point(SX, SY, 4, 'cyan').texte('S', SX - 16, SY + 6, { couleur: 'cyan' });
     // Les rides : crête (trait plein) et creux (trait léger), entre le front et la queue.
     if (t > 0) {
-      const front = V * t, crete = V * (t - THETA / 4), creux = V * (t - 3 * THETA / 4);
-      for (const [r, coul, a] of [[front, 'tresfaible', .7], [crete, 'bleu', 1], [creux, 'bleu', .45]]) {
-        if (r <= 0.004 || r > XMAX) continue;
-        c.courbe(u => [SX + r * PXD * Math.cos(2 * Math.PI * u), SY + r * PXD * Math.sin(2 * Math.PI * u)], 90, { couleur: coul, largeur: 2.2, alpha: a });
-      }
+      const crete = V * (t - THETA / 4);
       if (crete > 0.03 && crete < XMAX) c.repere('rides', SX + crete * PXD - 14, SY - 22, 28, 44, 'une ride (crête)');
     }
-    // Le ballon, vu du dessus : il ne quitte jamais son point.
+    // Le ballon, vu du dessus : il ne quitte jamais son point (il grossit un peu quand il monte).
     const bx = SX + S.d * PXD;
-    c.cercle(bx, SY, 8, { couleur: 'orange' });
+    balle(c.ctx, bx, SY, 9 * (1 + .12 * y(S.d, t)), true);
     c.texte('ballon', bx, SY + 30, { couleur: 'orange', align: 'center', taille: 15 });
     c.texte('⇠ glisse-le ⇢', bx, SY + 50, { couleur: 'faible', align: 'center', taille: 13 });
     c.repere('bouee', bx - 18, SY - 18, 36, 56, 'le ballon');
     c.cote(SX, SY + 78, bx, SY + 78, `d = ${fr(S.d)} m`, { couleur: 'jaune', dessous: true });
   });
   c.repere('goutte', SX - 20, SY - 140, 40, 160, 'la goutte, en S');
+}
+
+/* Vue de côté : une tranche d'eau, la surface suit le modèle, l'eau est plus sombre en profondeur. */
+function eauCote(ctx, t) {
+  const L = XMAX * PXC, BAS = PY0 + 62, N = 220;
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(PX0, BAS);
+  for (let k = 0; k <= N; k++) ctx.lineTo(PX0 + L * k / N, PY0 - K * y(XMAX * k / N, t));
+  ctx.lineTo(PX0 + L, BAS); ctx.closePath();
+  const g = ctx.createLinearGradient(0, PY0 - K, 0, BAS);
+  g.addColorStop(0, 'rgba(60,170,200,.78)'); g.addColorStop(.35, 'rgba(18,96,122,.85)'); g.addColorStop(1, 'rgba(6,40,56,.92)');
+  ctx.fillStyle = g; ctx.fill();
+  // La surface : un liseré clair, plus brillant sur la crête.
+  ctx.beginPath();
+  for (let k = 0; k <= N; k++) { const px = PX0 + L * k / N, py = PY0 - K * y(XMAX * k / N, t); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+  ctx.strokeStyle = 'rgba(200,245,255,.9)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
 }
 
 function vueCote(c) {
@@ -72,11 +151,11 @@ function vueCote(c) {
   c.repere('profil', PX0, PY0 - 60, XMAX * PXC, 100, 'la surface de l’eau, vue de côté');
   c.direct(() => {
     const t = S.t;
-    c.courbe(u => [PX0 + u * XMAX * PXC, PY0 - K * y(u * XMAX, t)], 200, { couleur: 'bleu', largeur: 2.6 });
-    c.point(PX0, PY0 - K * yS(t), 4, 'cyan').texte('S', PX0 - 6, PY0 + 26, { couleur: 'cyan' });
-    // Le ballon flotte sur la surface, à x = d (à moitié dans l'eau).
+    // Le ballon flotte sur la surface, à x = d (à moitié dans l'eau) : dessiné d'abord, l'eau passe devant.
     const bx = PX0 + S.d * PXC, by = PY0 - K * y(S.d, t);
-    c.cercle(bx, by - 7, 10, { couleur: 'orange' });
+    balle(c.ctx, bx, by + 1, 10, false);
+    eauCote(c.ctx, t);
+    c.point(PX0, PY0 - K * yS(t), 4, 'cyan').texte('S', PX0 - 6, PY0 + 26, { couleur: 'cyan' });
     c.repere('bouee_cote', bx - 18, by - 24, 36, 34, 'le ballon, vu de côté');
     // Son trajet : un trait vertical, à côté d'elle.
     if (S.trace.length > 1) {
