@@ -108,7 +108,11 @@ function phraseDesLacunes(b: Bilan): string {
 }
 async function appelerApi<T>(chemin: string, corps: unknown): Promise<T> {
   const r = await fetch(`/api/v1${chemin}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton()}` }, body: JSON.stringify(corps) });
-  if (!r.ok) throw new Error(`${r.status}`);
+  if (!r.ok) {
+    // Le serveur dit pourquoi (micro qui se prépare, trop de demandes…) : c'est ce que l'élève lit.
+    const detail = await r.json().then((d: { detail?: unknown }) => (typeof d?.detail === 'string' ? d.detail : '')).catch(() => '');
+    throw new Error(detail || `${r.status}`);
+  }
   return r.json() as Promise<T>;
 }
 
@@ -390,7 +394,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         reponse: '', tentative: 1, correct: null, reaction_preparee: false, methodes: { visuel: visuel?.kind || 'aucun', question_libre: true },
       }).catch(() => { /* jamais bloquant */ });
     } catch (e) {
-      setLibre(l => ({ ...l, phase: 'saisie', erreur: `Le professeur n'a pas pu répondre (${(e as Error).message}).` }));
+      const m = (e as Error).message;
+      setLibre(l => ({ ...l, phase: 'saisie', erreur: /^\d+$/.test(m) ? `Le professeur n'a pas pu répondre (${m}).` : m }));
     }
   }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, dire, parTuteur, ressentir]);
 

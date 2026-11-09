@@ -41,11 +41,11 @@ def test_sans_visiteur_refuse(client):
     assert client.post("/public/cours-ondes/question-eleve", json={"texte": "?"}).status_code == 400
 
 
-def test_question_au_micro_passe_par_gemini(client):
+def test_question_au_micro_passe_par_moulsot(client):
     r = client.post("/public/cours-ondes/question-eleve", headers=H,
                     json={"deck_id": "phys_ch1_waves_exemple", "title": "Retard", "audio_b64": "data:audio/webm;base64,AAAA"})
     assert r.status_code == 200, r.text
-    assert client.vu["gemini_seul"] is True
+    assert client.vu["gemini_seul"] is False      # MoulSot v4 d'abord (kernel de la voix), Gemini en secours
     assert r.json()["question_comprise"] == "علاش tau"
 
 
@@ -65,3 +65,18 @@ def test_suivi_des_acquis_du_visiteur(client):
     assert client.post("/public/cours-ondes/acquis", headers=H, json=e).status_code == 200
     b = client.get("/public/cours-ondes/acquis/phys_ch1_waves_exemple", headers=H).json()
     assert any(c["id"] == "C4" and c["statut"] == "non_acquis" for c in b["competences"])
+
+
+def test_micro_pas_encore_pret(client, monkeypatch):
+    import app.services.stt_service as stt_mod
+
+    async def rien(self, data, language="fr", gemini_seul=False):
+        return None
+    monkeypatch.setattr(stt_mod.STTService, "transcribe_audio", rien)
+    from app.services import kaggle_tts
+    reveils = []
+    monkeypatch.setattr(kaggle_tts.pilote, "besoin_de_voix", lambda raison="parole": reveils.append(raison))   # pas de vrai GPU
+    r = client.post("/public/cours-ondes/question-eleve", headers=H,
+                    json={"deck_id": "phys_ch1_waves_exemple", "audio_b64": "data:audio/webm;base64,AAAA"})
+    assert reveils == ["stt"]
+    assert r.status_code == 503 and "micro se prépare" in r.json()["detail"]

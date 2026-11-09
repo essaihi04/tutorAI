@@ -271,8 +271,13 @@ async def question_eleve(body: QuestionEleveRequest, student: dict = Depends(get
     from app.services import question_eleve as qe
     from app.services.llm_service import llm_service
 
-    compris = await qe.comprendre(body.texte, body.audio_b64, body.image_b64, body.image_mime,
-                                  gemini_seul=str(student.get("id") or "").startswith("public-"))
+    # Le micro passe par MoulSot v4 (dans le kernel de la voix), Gemini seulement en secours (9 novembre 2026).
+    compris = await qe.comprendre(body.texte, body.audio_b64, body.image_b64, body.image_mime)
+    if body.audio_b64 and not (compris["texte"] or compris["transcription"] or compris["image_texte"]):
+        # Rien d'audible ou reconnaissance pas encore prête (le GPU démarre ~3 min) : on le dit, sans faire parler le LLM.
+        from app.services.kaggle_tts import pilote
+        pilote.besoin_de_voix("stt")
+        raise HTTPException(status_code=503, detail="Le micro se prépare (la reconnaissance vocale démarre, une à trois minutes). Réessaie dans un instant, ou écris ta question.")
     ctx = body.model_dump(exclude={"audio_b64", "image_b64"})
     prompt = qe.prompt_question(ctx, compris)
     for _ in range(2):
