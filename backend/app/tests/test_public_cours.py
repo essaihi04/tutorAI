@@ -79,7 +79,7 @@ def test_micro_pas_encore_pret(client, monkeypatch):
     r = client.post("/public/cours-ondes/question-eleve", headers=H,
                     json={"deck_id": "phys_ch1_waves_exemple", "audio_b64": "data:audio/webm;base64,AAAA"})
     assert reveils == ["stt"]
-    assert r.status_code == 503 and "micro se prépare" in r.json()["detail"]
+    assert r.status_code == 409 and "micro se prépare" in r.json()["detail"]
 
 
 def test_transcription_seule_pour_verifier_avant_d_envoyer(client):
