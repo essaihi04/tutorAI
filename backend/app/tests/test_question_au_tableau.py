@@ -68,3 +68,9 @@ def test_l_explication_porte_son_exercice():
     assert _r({"categorie": "diapo", "parole": "شوف.", "exercice": ex})["exercice"]["type"] == "vrai_faux"
     assert qe.explication_depuis(json.dumps({"parole": "مزيان.", "exercice": {"type": "x"}}))["exercice"] is None
     assert "association" in qe.prompt_prerequis({"title": "R"}, "q", "n")
+
+
+def test_conversation_normale_sans_explication():
+    r = _r({"categorie": "conversation", "parole": "العفو! يلا نكملو.", "tableau": ["x"], "exercice": {"type": "qcm", "choix": ["a", "b"], "bonne": 0}})
+    assert r["categorie"] == "conversation" and r["parole"] and r["tableau"] == [] and r["exercice"] is None
+    assert "on n'explique que si l'élève le demande" in qe.prompt_question({"title": "x"}, {"texte": "merci", "transcription": "", "image_texte": ""})

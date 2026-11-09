@@ -81,7 +81,45 @@ const CLIPS = {
   suivante: '/media/audio/reactions/notion-plus-tard.mp3',
   hors_cours: '/media/audio/reactions/hors-cours.mp3',
   verifier: '/media/audio/reactions/verifier-compris.mp3',
+  merci: '/media/audio/reactions/social-merci.mp3',
+  ok: '/media/audio/reactions/social-ok.mp3',
+  salut: '/media/audio/reactions/social-salut.mp3',
 } as const;
+/** Dites à l'instant où une vraie question part : l'élève n'attend jamais dans le silence. */
+const CLIPS_QUESTION = ['/media/audio/reactions/q-ma-1.mp3', '/media/audio/reactions/q-ma-7.mp3'];
+
+const DEMANDE = /[?؟]|\b(comment|pourquoi|qu['’ ]?est|c['’ ]?est quoi|explique|expliquer|réexplique|peux[- ]tu|quelle?s?|quand|combien|où|donne|montre|calcule)\b|كيفاش|علاش|شنو|اشنو|أشنو|واش|فين|شحال|اشرح|شرح|عاود|kifach|3lach|chno|wach|3awe?d|chra7|fhemni/i;
+const NEGATION = /\b(pas|non|rien|aucun|ma ?fhemt|mafhemtch)\b|ما ?فهمت|مافهمت|ماشي|لا\b/i;
+const MERCI = /\b(merci|thanks?|thank you|chokran|choukran|chukran)\b|شكرا|شكراً|بارك الله|يعطيك الصحة|الله يحفظك/i;
+const SALUT = /^(salut|bonjour|bonsoir|salam|slm|hello|hi|السلام|سلام|اهلا|أهلا|مرحبا)/i;
+const ACCORD = /\b(ok|okay|oki|d['’ ]?accord|dacc|compris|c['’ ]?est bon|bien|parfait|super|clair|mzyan|mzian|mezyan|mziane|wakha|wa5a|safi|fhemt|fhamt|oui|on continue|continue|suivant)\b|مزيان|واخا|صافي|فهمت|مفهوم|زوين|تمام|واضح|نكملو|كمل/i;
+/**
+ * Une conversation normale (9 novembre 2026) : « merci », « مزيان », « d'accord », « bonjour » ne sont pas des
+ * demandes d'explication. Reconnus ici, sans serveur : la réponse est une phrase préenregistrée, instantanée.
+ */
+function motSocial(texte: string): 'merci' | 'ok' | 'salut' | null {
+  const t = texte.trim();
+  if (!t || t.split(/\s+/).length > 6 || DEMANDE.test(t) || NEGATION.test(t)) return null;
+  if (MERCI.test(t)) return 'merci';
+  if (SALUT.test(t)) return 'salut';
+  if (ACCORD.test(t)) return 'ok';
+  return null;
+}
+/** La parole coupée en morceaux : une première phrase courte (elle part vite), puis des groupes de phrases. */
+function decouperParole(texte: string): string[] {
+  const phrases = (texte.match(/[^.!?؟…]+[.!?؟…]*/g) || [texte]).map(x => x.trim()).filter(Boolean);
+  const out: string[] = [];
+  let courant = '';
+  for (const ph of phrases) {
+    // Le premier morceau reste court (premier son en ~3 s) mais jamais minuscule ; les suivants grandissent :
+    // chacun est prêt avant que le précédent ait fini d'être dit (deux cartes calculent en parallèle).
+    const limite = [70, 120][out.length] ?? 170;
+    if (courant.length >= 25 && courant.length + ph.length > limite) { out.push(courant); courant = ph; }
+    else courant = courant ? `${courant} ${ph}` : ph;
+  }
+  if (courant) out.push(courant);
+  return out;
+}
 /** Durée du coup de brosse (ms) : le temps de préparer l'explication et sa voix. */
 const BROSSE_MS = 3400;
 const attendre = (ms: number) => new Promise<void>(ok => window.setTimeout(ok, ms));
@@ -92,7 +130,7 @@ type Exercice = {
   choix?: string[]; bonne?: number; affirmations?: { texte: string; vrai: boolean }[]; paires?: { gauche: string; droite: string }[];
 };
 type ReponseLibre = {
-  categorie: 'diapo' | 'suivante' | 'prerequis' | 'hors_cours'; notion: string; diapo_suivante: { id: string; title: string } | null;
+  categorie: 'diapo' | 'suivante' | 'prerequis' | 'hors_cours' | 'conversation'; notion: string; diapo_suivante: { id: string; title: string } | null;
   parole: string; ecrit: string; tableau: string[]; question_comprise: string;
   gestes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[]; exercice?: Exercice | null;
 };
@@ -211,6 +249,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const tourQuestion = useRef(0);
   /** La voix qui joue est celle de l'explication au tableau : quand elle finit, l'exercice arrive. */
   const voixExplication = useRef(false);
+  /** L'explication est dite par morceaux : la suite attend ici pendant que le premier morceau joue. */
+  const fileVoix = useRef<Promise<string | null>[]>([]);
+  const morceaux = useRef({ total: 1, joues: 0 });
   const enregistreur = useRef<MediaRecorder | null>(null);
   const morceauxAudio = useRef<Blob[]>([]);
   // ── Le cycle de reprise : faux → le tuteur réexplique autrement, puis question jumelle ; 3 cycles au plus ──
@@ -390,6 +431,11 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       return r.ok ? URL.createObjectURL(await r.blob()) : null;
     } catch { return null; }
   }, []);
+  /** La voix d'un texte long, par morceaux calculés en parallèle : le premier (court) arrive en quelques secondes. */
+  const preparerMorceaux = useCallback((texte: string): Promise<string | null>[] => {
+    const urls = decouperParole(texte).map(m => preparerVoix(m));
+    return urls.length ? urls : [Promise.resolve(null)];
+  }, [preparerVoix]);
   const dire = useCallback(async (texte: string): Promise<boolean> => {
     const url = await preparerVoix(texte);
     const voix = voixRef.current;
@@ -483,14 +529,40 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     if (voix) { voix.src = CLIPS.verifier; void voix.play().catch(() => {}); }
   }, [ressentir]);
   /** La voix de l'explication part ; à sa fin (ou, sans voix, après les lignes), l'exercice. */
-  const lancerExplication = useCallback((url: string | null, nLignes: number, tour: number) => {
+  const lancerExplication = useCallback(async (urls: Promise<string | null>[], nLignes: number, tour: number) => {
     const voix = voixRef.current;
     const sansVoix = () => window.setTimeout(() => proposerExercice(tour), nLignes * 2400 + 2500);
+    const url = await urls[0];
+    if (tour !== tourQuestion.current) return;
     if (!url || !voix) { sansVoix(); return; }
     voixExplication.current = true;
+    fileVoix.current = urls.slice(1); morceaux.current = { total: urls.length, joues: 0 };
     voix.src = url;
-    voix.play().catch(() => { voixExplication.current = false; sansVoix(); });
+    voix.play().catch(() => { voixExplication.current = false; fileVoix.current = []; sansVoix(); });
   }, [proposerExercice]);
+  /** Un morceau de l'explication est fini : le suivant s'enchaîne ; après le dernier, l'exercice. */
+  const morceauFini = useCallback(async () => {
+    if (!voixExplication.current) return;
+    const tour = tourQuestion.current, voix = voixRef.current;
+    while (fileVoix.current.length) {
+      const url = await fileVoix.current.shift()!;
+      if (tour !== tourQuestion.current || !voixExplication.current) return;
+      morceaux.current.joues += 1;
+      if (url && voix) { voix.src = url; try { await voix.play(); return; } catch { /* morceau suivant */ } }
+    }
+    voixExplication.current = false;
+    window.setTimeout(() => proposerExercice(tour), 700);
+  }, [proposerExercice]);
+  /** Après une réponse de conversation : le cours reprend ; s'il était fini, les questions ou la diapositive suivante. */
+  const avancerLeCours = useCallback(() => {
+    setLibre({ phase: 'saisie', texte: '', enregistre: false });
+    setPanneau(null); setTableauProf(null); setAnnonce(null);
+    const audio = audioRef.current;
+    if (coursEnPause.current) { coursEnPause.current = false; void audio?.play(); if (demarree.current) envoyerASim('resume'); return; }
+    if (audio && !audio.ended && audio.currentTime > 0 && piste?.url) return;   // la voix du cours joue encore
+    if (questions.some(q => !(q.cle in finies.current))) setPanneau('questions');
+    else onSuivant?.();
+  }, [envoyerASim, piste?.url, questions, onSuivant]);
   /** L'élève a répondu à l'exercice : le tuteur réagit à la voix, la réponse compte pour les acquis. */
   const exerciceFini = useCallback((ex: Exercice, correct: boolean, reponse: string) => {
     ressentir(correct ? 'celebrate' : 'encourage');
@@ -503,10 +575,28 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
   const envoyerQuestion = useCallback(async () => {
     if (libre.phase !== 'saisie' || (!libre.texte.trim() && !libre.audio && !libre.image)) return;
+    // « merci », « مزيان », « d'accord », « bonjour » : une conversation normale, pas une demande d'explication.
+    // La réponse est préenregistrée (instantanée), puis le cours avance ; rien n'est réexpliqué.
+    const social = !libre.audio && !libre.image ? motSocial(libre.texte) : null;
+    if (social) {
+      const tour = ++tourQuestion.current;
+      voixExplication.current = false;
+      setLibre(l => ({ ...l, phase: 'envoi', erreur: undefined }));
+      ressentir(social === 'ok' ? 'celebrate' : social === 'merci' ? 'love' : 'greet');
+      await jouerEtAttendre(CLIPS[social], 6000);
+      if (tour === tourQuestion.current) avancerLeCours();
+      return;
+    }
     setLibre(l => ({ ...l, phase: 'envoi', erreur: undefined }));
     ressentir('think');
+    // Une vraie question : le professeur le dit tout de suite (phrase préenregistrée) pendant qu'il prépare sa réponse.
+    if (libre.audio || libre.image || DEMANDE.test(libre.texte)) {
+      const voix = voixRef.current;
+      voixExplication.current = false;
+      if (voix) { voix.src = CLIPS_QUESTION[Math.floor(Math.random() * CLIPS_QUESTION.length)]; void voix.play().catch(() => {}); }
+    }
     iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*');
-    await new Promise(r => window.setTimeout(r, 500));
+    await new Promise(r => window.setTimeout(r, 150));
     let r: ReponseLibre;
     try {
       r = await appelerApi<ReponseLibre>('/course-player/question-eleve', {
@@ -529,6 +619,20 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: 'question_libre', type: 'directe', enonce: question.slice(0, 300),
       reponse: categorie, tentative: 1, correct: null, reaction_preparee: false, methodes: { visuel: visuel?.kind || 'aucun', question_libre: true },
     }).catch(() => { /* jamais bloquant */ });
+
+    if (categorie === 'conversation') {
+      // Une remarque, un mot gentil : une ou deux phrases à la voix, sans tableau ni exercice, puis le cours avance.
+      ressentir('love');
+      const dit = await dire(r.parole);
+      if (!encore()) return;
+      if (dit) await new Promise<void>(ok => {
+        const v = voixRef.current, max = window.setTimeout(ok, 12000);
+        const fin = () => { window.clearTimeout(max); v?.removeEventListener('ended', fin); ok(); };
+        if (!v || v.ended || v.paused) fin(); else v.addEventListener('ended', fin);
+      });
+      if (encore()) avancerLeCours();
+      return;
+    }
 
     if (categorie === 'suivante' || categorie === 'hors_cours') {
       // Une notion d'une diapositive qui vient, ou une question hors du cours : il le dit simplement, puis reprend.
@@ -554,17 +658,19 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         const e = await appelerApi<{ parole: string; ecrit: string; tableau: string[]; exercice?: Exercice | null }>('/course-player/question-eleve/explication', {
           deck_id: deckId, slide_id: slide.id, title: slide.title, speech: parole, question, notion: r.notion,
         });
-        return { e, url: await preparerVoix(e.parole) };
+        const urls = preparerMorceaux(e.parole);
+        await urls[0];   // le premier morceau est prêt avant la fin de la brosse (ou juste après)
+        return { e, urls };
       })();
       prepa.catch(() => { /* lu plus bas */ });
       await Promise.all([jouerEtAttendre(CLIPS.effacer, 7000), attendre(BROSSE_MS)]);
       if (!encore()) return;
       setTableauProf(t => t && { ...t, etape: 'prepare' });
       try {
-        const { e, url } = await prepa;
+        const { e, urls } = await prepa;
         if (!encore()) return;
         setTableauProf(t => t && { ...t, etape: 'ecrit', lignes: e.tableau || [], parole: e.parole, ecrit: e.ecrit, exercice: e.exercice, debut: performance.now() });
-        lancerExplication(url, (e.tableau || []).length, tour);
+        void lancerExplication(urls, (e.tableau || []).length, tour);
       } catch (err) {
         const m = (err as Error).message;
         if (encore()) setTableauProf(t => t && { ...t, etape: 'ecrit', erreur: /^\d+$/.test(m) ? 'Le professeur n’a pas pu préparer son explication.' : m });
@@ -575,19 +681,20 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     // La notion de la diapositive : expliquée au tableau, à la voix, avec la figure.
     ressentir('encourage');
     setTableauProf({ mode: 'diapo', etape: 'prepare', lignes: r.tableau || [], vues: 0, parole: r.parole, ecrit: r.ecrit, notion: r.notion, question, texte: false, debut: 0, exercice: r.exercice });
-    const url = await preparerVoix(r.parole);
+    const urls = preparerMorceaux(r.parole);
+    await urls[0];
     if (!encore()) return;
     setTableauProf(t => t && { ...t, etape: 'ecrit', debut: performance.now() });
-    lancerExplication(url, (r.tableau || []).length, tour);
+    void lancerExplication(urls, (r.tableau || []).length, tour);
     (r.gestes || []).forEach((g, i) => window.setTimeout(() => {
       if (!encore()) return;
       if (g.commande) parTuteur(g.commande, g.parametres || {});
       else if (g.repere) parTuteur('highlight', { target: g.repere });
     }, 1200 + i * 3500));
-  }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, preparerVoix, jouerEtAttendre, parTuteur, ressentir, envoyerASim, lancerExplication]);
+  }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, preparerMorceaux, dire, jouerEtAttendre, parTuteur, ressentir, envoyerASim, lancerExplication, avancerLeCours]);
 
   const reprendreApresQuestion = useCallback(() => {
-    tourQuestion.current += 1; voixExplication.current = false;
+    tourQuestion.current += 1; voixExplication.current = false; fileVoix.current = [];
     voixRef.current?.pause();
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
     setPanneau(null); setTableauProf(null); setAnnonce(null);
@@ -596,7 +703,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
   /** Une autre question : le tableau du professeur se ferme, la bulle de la question se rouvre. */
   const autreQuestion = useCallback(() => {
-    tourQuestion.current += 1; voixExplication.current = false;
+    tourQuestion.current += 1; voixExplication.current = false; fileVoix.current = [];
     voixRef.current?.pause();
     setTableauProf(null); setAnnonce(null);
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
@@ -610,7 +717,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     if (!t || t.etape !== 'ecrit' || t.vues >= t.lignes.length) return;
     const v = voixRef.current;
     const n = v && voixParle && Number.isFinite(v.duration) && v.duration > 0
-      ? Math.floor((v.currentTime / v.duration) * t.lignes.length * 1.15) + 1
+      ? Math.floor(((morceaux.current.joues + v.currentTime / v.duration) / Math.max(1, morceaux.current.total)) * t.lignes.length * 1.15) + 1
       : Math.floor((performance.now() - t.debut) / 2400) + 1;
     if (n > t.vues) {
       const vues = Math.min(n, t.lignes.length);
@@ -845,7 +952,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       <audio ref={voixRef} onPlay={event => { setVoixParle(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }} onPause={() => setVoixParle(false)}
         onEnded={() => {
           setVoixParle(false);
-          if (voixExplication.current) { voixExplication.current = false; const tour = tourQuestion.current; window.setTimeout(() => proposerExercice(tour), 700); }
+          void morceauFini();
         }} />
 
       {/* ── Le titre et le sous-titre, seulement ── */}

@@ -9,7 +9,11 @@ Le tuteur classe d'abord la question par rapport au COURS (user rule, 9 novembre
   - « prerequis »  : une notion des années précédentes ou de base → il efface le tableau à la brosse pendant une
                      phrase préenregistrée (le temps de préparer le script et la voix : `/question-eleve/explication`),
                      puis l'explique sur le tableau propre et la relie à la diapositive ;
-  - « hors_cours » : un autre cours, un autre chapitre, une autre matière → il ne répond pas et le dit simplement.
+  - « hors_cours » : un autre cours, un autre chapitre, une autre matière → il ne répond pas et le dit simplement ;
+  - « conversation » : un merci, un « d'accord », un bonjour, une remarque → une ou deux phrases, comme dans une
+                     conversation normale, puis le cours continue : on n'explique que si l'élève le demande. (Les
+                     mots les plus courants — merci, مزيان, ok, compris — sont reconnus dans le navigateur et
+                     reçoivent une phrase préenregistrée, sans attendre le serveur.)
 
 Tout le contexte est donné : le titre, ce qu'il vient d'expliquer, ce que la simulation montre (`ce_qui_se_voit`), ses
 instants clés et ses repères (pour montrer en parlant), et le plan du cours (diapositives d'avant et d'après).
@@ -22,7 +26,7 @@ from typing import Optional
 from app.services.reexplication import valider_gestes
 from app.services.simulation_reaction import REGLES_VOIX, lire_json, parole_propre
 
-CATEGORIES = ("diapo", "suivante", "prerequis", "hors_cours")
+CATEGORIES = ("diapo", "suivante", "prerequis", "hors_cours", "conversation")
 
 
 async def comprendre(texte: str, audio_b64: Optional[str], image_b64: Optional[str], image_mime: str, gemini_seul: bool = False) -> dict:
@@ -136,7 +140,11 @@ Ce que tu viens d'expliquer : {str(ctx.get('speech') or '')[:1200]}
 Ce que l'élève voit en ce moment : {str(ctx.get('ce_qui_se_voit') or 'la diapositive')[:600]}
 {_parties(compris)}
 
-D'ABORD, CLASSE sa question (« categorie ») :
+D'ABORD, CLASSE ce qu'il dit (« categorie ») :
+- "conversation" : ce n'est PAS une demande d'explication — un remerciement, « d'accord », « j'ai compris », « مزيان »,
+  une salutation, un mot gentil, une remarque, « comment ça va », « on continue » → tu réponds comme dans une
+  conversation normale, en UNE ou DEUX phrases courtes et chaleureuses dans « parole », et tu proposes de continuer ;
+  tu n'expliques RIEN, tu ne réexpliques pas la diapositive : on n'explique que si l'élève le demande ;
 - "diapo" : elle porte sur la diapositive actuelle, ou sur une notion de CE cours déjà vue plus haut → tu l'expliques ;
 - "suivante" : elle porte sur une notion de CE cours traitée dans une diapositive qui VIENT → tu ne l'expliques pas
   maintenant ; donne l'id de cette diapositive (« diapo_id ») ;
@@ -150,7 +158,7 @@ D'ABORD, CLASSE sa question (« categorie ») :
 SEULEMENT si "diapo" : réponds à SA question, précisément, en 3 à 6 phrases dites, en t'appuyant sur la figure quand
 c'est possible, puis ramène-le au cours en une phrase. Si c'est un exercice (image), ne donne pas la réponse finale :
 nomme le cas, la relation à utiliser et la première étape, et demande-lui de continuer. Pour les autres catégories,
-laisse « parole », « tableau », « ecrit » et « gestes » vides.
+laisse « parole », « tableau », « ecrit » et « gestes » vides (sauf « parole » pour "conversation").
 {sim}
 
 {REGLES_TABLEAU}
@@ -209,6 +217,9 @@ def reponse_depuis(texte_llm: str, ctx: dict, plan: Optional[list[dict]] = None,
         return base if cat == "suivante" else _avec_reponse(base, d, ctx)
     if cat in ("prerequis", "hors_cours"):
         return base
+    if cat == "conversation":   # une conversation normale : une ou deux phrases, ni tableau ni exercice
+        parole = parole_propre(d.get("parole"))
+        return {**base, "parole": parole} if parole else None
     return _avec_reponse(base, d, ctx)
 
 
