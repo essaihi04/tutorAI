@@ -38,6 +38,25 @@ Les règles viennent d'un professeur de dix ans de métier (octobre 2026) :
     Les prérequis possibles viennent de `prerequis.py`, par chapitre, et le
     modèle en déclare un avec ``<prerequis>id</prerequis>``.
 
+D'autres règles viennent de cours réels de profs marocains (novembre 2026) :
+
+  • Rédiger comme au barème : relation avec les symboles de l'énoncé,
+    application numérique, résultat, unité ; une seule application
+    numérique, à la fin ; répondre à la question et seulement à elle.
+  • Vérifier un résultat par l'ordre de grandeur et, si possible, par une
+    seconde voie.
+  • Devant un graphe : que porte l'axe, dans quelle unité, que vaut une
+    division — avant toute lecture.
+  • Reconnaître le cas type au mot-code de l'énoncé, dessiner, appliquer la
+    méthode du cas, puis le faire varier d'un paramètre.
+  • Une définition se construit par trois questions (quoi, où, quelles
+    caractéristiques) avant d'être relue.
+  • Un QCM se lit jusqu'au dernier mot, et se justifie par le mot qui décide.
+
+Le détail par chapitre (insistances, pièges et gestes, cas types, valeurs
+repères, ce qu'il ne faut pas dire) vient d'`experience_profs.py` ; chaque
+bloc n'entre dans la consigne qu'au moment où il sert.
+
 Le module ne lit ni base ni réseau. Il tient trois faits — une question
 est-elle en attente, combien d'essais l'élève a-t-il faits, combien de tours
 ont passé — et rend une consigne. Le jugement « correct / partiel / faux / incertain »
@@ -51,6 +70,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from app.services import experience_profs
 from app.services.prerequis import BALISE_PREREQUIS, bloc_candidats
 
 EVALUATIONS: tuple[str, ...] = ("correct", "partiel", "faux", "incertain", "aucune")
@@ -100,6 +120,39 @@ RELECTURE = (
     "chaque terme), annoncée par « Je relis : », mot pour mot comme au tableau, en phrases courtes. "
     "Une seule phrase-clé, relue une seule fois."
 )
+#: Règles apprises de cours réels de profs marocains (novembre 2026), valables
+#: pour toutes les matières ; le détail par chapitre vient d'`experience_profs.py`.
+REDACTION = (
+    "Rédaction comme au barème : relation littérale avec les symboles DE L'ÉNONCÉ, application numérique, "
+    "résultat, unité — chaque élément compte. Une seule application numérique, à la fin. "
+    "Réponds à la question posée, et seulement à elle."
+)
+VERIFICATION = (
+    "Avant de valider un résultat chiffré : compare-le à l'ordre de grandeur attendu (valeur repère du "
+    "chapitre) et, si une seconde voie de calcul existe, fais-la refaire par là. Un résultat absurde se "
+    "signale, il ne s'écrit pas."
+)
+LECTURE_AXE = (
+    "Devant une courbe, un oscillogramme ou une photo : fais d'abord dire ce que porte l'axe horizontal, "
+    "dans quelle unité, et ce que vaut une division — avant toute lecture de valeur."
+)
+CAS_TYPE = (
+    "Fais repérer le mot-code de l'énoncé (« réfléchi », « deux milieux », « t₁ inconnu »…), nommer le cas "
+    "type, dessiner la situation, puis appliquer la méthode du cas. Une fois résolu, fais-le varier d'un "
+    "seul paramètre (« et si on éloigne le récepteur ? »)."
+)
+DEFINITION = (
+    "Si la notion est une définition : fais-la construire par trois questions — Quoi ? Où ? Quelles "
+    "caractéristiques ? — avant de la relire mot pour mot."
+)
+QCM = (
+    "Pour un vrai/faux ou un QCM : fais lire chaque proposition jusqu'au dernier mot et justifier par le mot "
+    "qui décide."
+)
+_GRAPHE = re.compile(
+    r"\b(courbe|graphe|graphique|oscillo\w*|oscillogramme|figure|photo\w*|aspect|axe|division|div)\b",
+    re.IGNORECASE,
+)
 LECTURE_ACTIVE = (
     "Lecture de l'énoncé, deuxième temps : quelle que soit sa réponse, fais maintenant la RELECTURE "
     "ACTIVE avec lui — les données (avec leurs unités), ce qui est demandé, et le verbe de la consigne "
@@ -141,10 +194,16 @@ class SkillProfesseur:
     #: Ce qui s'est passé ce tour côté parenthèse, pour le journal et l'écran :
     #: {"etat": "ouverte" | "fermee", "id", "titre", "niveau", "reussite", "essais"} ou None.
     evenement_parenthese: Optional[dict] = None
+    #: L'expérience des profs sur le chapitre en cours (`experience_profs.FicheExperience`), ou None.
+    experience: Optional[Any] = None
 
     def proposer_prerequis(self, candidats: list[Any]) -> None:
         """Les prérequis du chapitre, donnés par la séance. Rien n'est ouvert ici."""
         self.candidats = list(candidats or [])
+
+    def proposer_experience(self, fiche: Optional[Any]) -> None:
+        """La fiche d'expérience du chapitre, donnée par la séance (None si le chapitre n'en a pas)."""
+        self.experience = fiche
 
     @property
     def _candidats_restants(self) -> list[Any]:
@@ -207,6 +266,10 @@ class SkillProfesseur:
                 "complète ou corrige celles qui manquent, puis lance la première étape de résolution par UNE "
                 "question. Évaluation « aucune »."
             )
+            lignes.append(CAS_TYPE)
+            if bloc := experience_profs.bloc_resolution(self.experience, demande):
+                lignes.append(bloc)
+            lignes.append(REDACTION)
         elif self.question_en_attente:
             essai = self.tentatives + 1
             lignes.append(
@@ -231,6 +294,12 @@ class SkillProfesseur:
                         "Si c'est faux : ne donne pas la réponse. Nomme ce qui est juste s'il y a quelque chose, "
                         "pose le doigt sur la confusion, donne UN indice ciblé et repose la question."
                     )
+            lignes.append(
+                "Si sa réponse est un calcul, juge-la au barème : il manque la relation, l'application "
+                "numérique ou l'unité → « partiel » au plus. " + VERIFICATION
+            )
+            if self.tentatives >= 1 and (bloc := experience_profs.bloc_pieges(self.experience)):
+                lignes.append(bloc)
             if self.incertains < PRECISIONS_AVANT_JUGEMENT:
                 lignes.append(
                     "Si tu ne peux pas trancher (réponse ambiguë, coupée, mal transcrite) : ne juge pas et ne "
@@ -266,14 +335,23 @@ class SkillProfesseur:
             lignes.append("Situation : l'élève veut s'entraîner. Pose UN exercice adapté à la phase, sans la "
                           "solution. Puis lance la PREMIÈRE LECTURE de l'énoncé : demande-lui seulement de quoi "
                           "parle l'exercice, en une phrase. Aucun calcul avant la relecture.")
+            lignes.append(QCM)
         elif _DEMANDE_EXPLICATION.search(demande) or phase in ("explanation", "exploration"):
             lignes.append("Situation : une notion à expliquer. Explique en un bloc complet : l'idée, un exemple "
                           "concret, la formule et le sens de chaque terme s'il y en a une ; puis arrête-toi et "
                           "demande une reformulation avec ses mots.")
+            lignes.append(DEFINITION)
+            if bloc := experience_profs.bloc_explication(self.experience):
+                lignes.append(bloc)
             lignes.append(RELECTURE)
         else:
             lignes.append("Situation : échange libre. Réponds, puis termine par une question qui fait avancer "
                           "l'objectif de la phase.")
+        # Une question libre de l'élève : les réponses justes à des questions proches déjà posées par d'autres.
+        if self.tours > 0 and (bloc := experience_profs.bloc_questions(self.experience, demande)):
+            lignes.append(bloc)
+        if _GRAPHE.search(demande):
+            lignes.append(LECTURE_AXE)
         return (
             "\n\n[GESTE DE PROF — ce tour]\n"
             "Commence ta réponse par la balise <eval>…</eval> : « correct », « partiel », « faux » ou "

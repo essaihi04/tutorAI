@@ -177,6 +177,8 @@ export interface CourseDeck {
   source?: 'database' | 'manifest';
   activities: CourseActivity[];
   competences?: CourseCompetence[];
+  /** `concentration` : le cours se joue en mode concentration, avec le tuteur 3D du cours (cours refaits). */
+  mode?: 'tableau' | 'concentration';
 }
 
 export interface CourseProgressSnapshot {

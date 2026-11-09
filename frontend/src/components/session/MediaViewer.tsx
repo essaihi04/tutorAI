@@ -577,7 +577,10 @@ export function SessionMediaDisplay({ media, isVisible, onSimulationUpdate }: Se
   };
 
   return (
-    <div className="h-full w-full p-2 bg-blue-50 rounded-lg border-2 border-blue-200 overflow-hidden">
+    // Une simulation dessinée au tableau se pose directement sur le tableau : pas de carte bleue autour.
+    <div className={media.type === 'simulation' && usesTransparentSimulationSurface
+      ? 'h-full w-full overflow-hidden'
+      : 'h-full w-full p-2 bg-blue-50 rounded-lg border-2 border-blue-200 overflow-hidden'}>
       {media.type === 'image' && (
         <div className="h-full flex flex-col gap-2">
           <div className="flex items-center gap-2 text-blue-700 font-medium">

@@ -26,7 +26,19 @@ from app.services.subject_access_service import subject_access_service
 
 _log = logging.getLogger(__name__)
 _DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "courses"
-_LOCAL_MANIFESTS = tuple(sorted(_DATA_DIR.glob("*_course_v1.json")))
+# Les cours refaits en mode concentration (`*_exemple.json`, 9 novembre 2026) sont des manifestes comme les autres ;
+# avec `remplace_la_base: true`, ils passent AVANT le deck publié en base pour leur leçon (voir `_prioritaire`).
+_LOCAL_MANIFESTS = tuple(sorted(_DATA_DIR.glob("*_course_v1.json"))) + tuple(sorted(_DATA_DIR.glob("*_exemple.json")))
+
+
+def _prioritaire(manifest: dict) -> str:
+    """L'identifiant de LA leçon dont ce manifeste remplace le deck publié en base (cours refait, validé par
+    l'utilisateur), ou "" . La leçon est nommée par son id, jamais devinée par les titres : « ondes mécaniques
+    progressives » se lit aussi dans la leçon des ondes périodiques. Retirer `remplace_la_base` rend la main au
+    deck de la base, qui n'est ni modifié ni archivé."""
+    if manifest.get("remplace_la_base") and manifest.get("status") == "published":
+        return str(manifest.get("lecon_remplacee") or "")
+    return ""
 
 
 def _is_uuid(value: Any) -> bool:
@@ -111,6 +123,10 @@ class CoursePlayerService:
             for manifest in manifests
         ]
         scored = [item for item in scored if item[0] > 0]
+        if not scored:
+            return None
+        # Un cours prioritaire ne sert que sa leçon (`get_deck`) : il n'entre pas dans la recherche par titres.
+        scored = [item for item in scored if not _prioritaire(item[1])]
         if not scored:
             return None
         scored.sort(key=lambda item: item[0], reverse=True)
@@ -274,7 +290,7 @@ class CoursePlayerService:
         # sans cela, la carte d'un cours ouvrait la leçon de l'autre.
         claimed_lesson_ids: set[str] = set()
 
-        for manifest in self._load_local_manifests():
+        for manifest in sorted(self._load_local_manifests(), key=lambda m: not _prioritaire(m)):
             stable_id = manifest.get("stable_id") or manifest.get("id")
             linked_rows = [
                 row for row in published_rows
@@ -287,6 +303,12 @@ class CoursePlayerService:
 
             lesson = None
             deck_row = None
+            if _prioritaire(manifest):
+                # Le cours refait prend sa leçon, nommée par son id ; il n'a pas de ligne en base.
+                lesson = next((item for item in allowed_lessons if str(item.get("id")) == _prioritaire(manifest)), None)
+                if lesson is None:
+                    continue
+                linked_rows = []
             for row in linked_rows:
                 candidate = next(
                     (item for item in allowed_lessons if str(item.get("id")) == str(row.get("lesson_id"))),
@@ -312,6 +334,10 @@ class CoursePlayerService:
                 if ranked and ranked[0][0] > 0:
                     lesson = ranked[0][1]
             if lesson is None:
+                continue
+            if str(lesson.get("id")) in claimed_lesson_ids:
+                # Un cours refait a déjà pris cette leçon : l'ancien (et son deck en base, déjà noté traité) ne
+                # s'affiche pas une seconde fois.
                 continue
             claimed_lesson_ids.add(str(lesson.get("id")))
 
@@ -591,7 +617,13 @@ class CoursePlayerService:
         return public
 
     async def get_deck(self, lesson_id: str) -> Optional[dict]:
-        """Return the latest published deck, or the matching local manifest."""
+        """Return the latest published deck, or the matching local manifest.
+
+        Exception : un manifeste `remplace_la_base` qui correspond à la leçon passe avant le deck de la base
+        (cours refait en mode concentration ; la base garde l'ancien deck, intact)."""
+        for manifest in self._load_local_manifests():
+            if _prioritaire(manifest) and _prioritaire(manifest) == str(lesson_id):
+                return self._manifeste_pour(manifest, lesson_id)
         try:
             admin = get_supabase_admin()
             deck_result = (
@@ -649,26 +681,29 @@ class CoursePlayerService:
         except Exception as exc:
             _log.info("[CoursePlayer] Published deck unavailable, using manifest fallback: %s", exc)
 
-        lesson_title = ""
-        chapter_title = ""
+        lesson_title, chapter_title = self._titres_lecon(lesson_id)
+        # Les deux titres restent séparés : fondus en un seul texte, l'intitulé
+        # du chapitre rendait les deux leçons indiscernables.
+        manifest = self._load_local_manifest(lesson_title, chapter_title)
+        if not manifest:
+            return None
+        return self._manifeste_pour(manifest, lesson_id)
+
+    def _titres_lecon(self, lesson_id: str) -> tuple[str, str]:
         try:
             admin = get_supabase_admin()
             lesson_result = admin.table("lessons").select("title_fr, chapter_id, chapters(title_fr)").eq(
                 "id", lesson_id
             ).limit(1).execute()
             lesson = lesson_result.data[0] if lesson_result.data else {}
-            lesson_title = str(lesson.get("title_fr") or "")
-            chapter_title = str(self._chapter_from_lesson(lesson).get("title_fr") or "")
+            return str(lesson.get("title_fr") or ""), str(self._chapter_from_lesson(lesson).get("title_fr") or "")
         except Exception:
             # The REST endpoint already checked lesson access.  During local
             # development the manifest remains useful even if Supabase is down.
-            lesson_title = ""
-            chapter_title = ""
-        # Les deux titres restent séparés : fondus en un seul texte, l'intitulé
-        # du chapitre rendait les deux leçons indiscernables.
-        manifest = self._load_local_manifest(lesson_title, chapter_title)
-        if not manifest:
-            return None
+            return "", ""
+
+    @staticmethod
+    def _manifeste_pour(manifest: dict, lesson_id: str) -> dict:
         manifest["lesson_id"] = lesson_id
         manifest["source"] = "manifest"
         for activity in manifest.get("activities", []):

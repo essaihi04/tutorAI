@@ -2473,7 +2473,9 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
         <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
           {/* Un seul professeur, monté en permanence (il vole au-dessus de la page via un portail) : le monter
               dans chaque vue le détruisait et le recréait à chaque changement, d'où un clignotement. */}
-          {!(showExamPanel && examExercises.length > 0) && (
+          {/* Un cours refait en mode concentration a son propre professeur 3D (il pointe, pilote les simulations et
+              réagit aux réponses) : celui de la page s'efface pendant ce cours, pour qu'il n'y en ait qu'un. */}
+          {!(showExamPanel && examExercises.length > 0) && !(courseDeck && !isLibreConnexion && courseDeck.mode === 'concentration') && (
             <AIAvatar isSpeaking={isSpeaking} isProcessing={isProcessing} processingStage={processingStage} isListening={isRecording || isStudentTyping} control={scientificControl} labControl={labControl} emotion={professorEmotion} />
           )}
           {showExamPanel && examExercises.length > 0 ? (
@@ -2685,6 +2687,8 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
                   externalAudioActive={isSpeaking}
                   onSimulationUpdate={handleSimulationUpdate}
                   onComplete={() => { setLessonCompleted(true); expressEmotion('celebrate'); }}
+                  mode={courseDeck.mode === 'concentration' ? 'concentration' : 'tableau'}
+                  tuteur3D={courseDeck.mode === 'concentration'}
                   onRestart={() => setLessonCompleted(false)}
                 />
               </div>

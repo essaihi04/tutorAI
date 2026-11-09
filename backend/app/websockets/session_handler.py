@@ -4774,6 +4774,14 @@ RÈGLES :
             self._bloc_perimetre = ""
         if self._bloc_perimetre:
             _safe_log(f"[Périmètre] fiche injectée pour {chapitre}")
+        # Et l'expérience des profs sur ce chapitre : le skill la sert au bon moment.
+        try:
+            from app.services import experience_profs
+
+            self.skill_prof.proposer_experience(experience_profs.fiche(matiere, chapitre))
+        except Exception as exc:
+            _safe_log(f"[Expérience] fiche indisponible: {exc}")
+            self.skill_prof.proposer_experience(None)
 
     def _observer_perimetre(self, ai_response: str) -> None:
         """Relit la réponse du tuteur et note les termes hors programme.
@@ -4787,7 +4795,19 @@ RÈGLES :
             ctx = self.session_context or {}
             matiere = str(ctx.get("subject") or "")
             chapitre = getattr(self, "_chapitre_reconnu", None)
-            detections = perimetre.detecter(self._extract_display_text(ai_response), matiere, chapitre)
+            texte = self._extract_display_text(ai_response)
+            try:
+                from app.services import experience_profs
+
+                approximations = experience_profs.detecter(texte, matiere, chapitre)
+                if approximations:
+                    _safe_log(f"[Expérience] approximation(s) à ne pas reprendre : {[d.terme for d in approximations]}")
+                    perimetre.journaliser(approximations, subject=matiere, chapitre=chapitre,
+                                          student_id=str(getattr(self, "student_id", "") or ""),
+                                          tour=self.skill_prof.tours, chemin=experience_profs.JOURNAL)
+            except Exception as exc:
+                _safe_log(f"[Expérience] observation impossible: {exc}")
+            detections = perimetre.detecter(texte, matiere, chapitre)
             if not detections:
                 return
             self._depassements_perimetre = getattr(self, "_depassements_perimetre", 0) + len(detections)
