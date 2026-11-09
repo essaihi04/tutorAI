@@ -824,9 +824,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               <div className="text-sm font-semibold text-sky-200">🙋 Ta question au professeur</div>
               {libre.phase !== 'reponse' && (
                 <>
-                  <textarea value={libre.texte} onChange={e => setLibre(l => ({ ...l, texte: e.target.value }))} disabled={libre.phase === 'envoi' || libre.transcrit} rows={2}
-                    placeholder={libre.transcrit ? 'Transcription de ce que tu as dit…' : 'Écris ta question… (en darija ou en français)'} dir="auto"
-                    className="mt-2 w-full resize-none rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-lg outline-none focus:border-sky-300" />
+                  <div className="relative mt-2">
+                    <textarea value={libre.texte} onChange={e => setLibre(l => ({ ...l, texte: e.target.value }))} disabled={libre.phase === 'envoi' || libre.transcrit} rows={2}
+                      placeholder={libre.transcrit ? 'Transcription de ce que tu as dit…' : 'Écris ta question… (en darija ou en français)'} dir="auto"
+                      className="w-full resize-none rounded-lg border border-white/20 bg-black/30 px-3 py-2 pr-24 text-lg outline-none focus:border-sky-300" />
+                    {/* Transcription fausse : on efface tout d'un geste et on recommence (au micro ou au clavier). */}
+                    {libre.texte.trim() && !libre.transcrit && libre.phase === 'saisie' && (
+                      <button type="button" onClick={() => setLibre(l => ({ ...l, texte: '', aVerifier: false, erreur: undefined }))}
+                        className="absolute right-2 top-2 rounded-full bg-white/10 px-3 py-1 text-xs text-white/70 hover:bg-rose-500/30 hover:text-white"
+                        aria-label="Effacer le texte">✕ Effacer</button>
+                    )}
+                  </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <button
                       type="button" disabled={libre.phase === 'envoi' || libre.transcrit}
