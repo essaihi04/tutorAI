@@ -11,7 +11,7 @@ def test_le_prompt_porte_la_question_et_la_figure():
     p = qe.prompt_question(CTX, {"texte": "علاش tau كيكبر ؟", "transcription": "", "image_texte": ""})
     assert "علاش tau" in p and "m_atteint" in p and "retard_tau" in p and "Ce que l'élève voit" in p and "jamais en chiffres" in p
     p2 = qe.prompt_question(CTX, {"texte": "", "transcription": "", "image_texte": "Exercice 2 : d = 1,02 m…"})
-    assert "Texte lu sur l'image" in p2 and "ne donne pas la\nréponse finale" in p2.replace("\r", "")
+    assert "Texte lu sur l'image" in p2 and "ne donne pas la réponse finale" in p2.replace("\r", "").replace("\n", " ")
 
 
 def test_la_reponse_est_nettoyee_et_les_gestes_bornes():

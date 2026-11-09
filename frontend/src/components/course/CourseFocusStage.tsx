@@ -62,7 +62,45 @@ const ANIMATIONS = `
 @keyframes question-apparait { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: none } }
 .tableau-questions { animation: tableau-descend .7s cubic-bezier(.2,.8,.2,1) both }
 .question-apparait { opacity: 0; animation: question-apparait .45s ease-out both }
+@keyframes craie-ecrit { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
+.craie-ecrit { animation: craie-ecrit 1.4s steps(28) both }
+@keyframes brosse-g { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
+@keyframes brosse-d { from { clip-path: inset(0 0 0 100%) } to { clip-path: inset(0 0 0 0) } }
+@keyframes brosse-trajet {
+  0% { left: -6%; top: 6% } 31% { left: 90%; top: 9% } 34% { left: 90%; top: 40% } 64% { left: -6%; top: 42% }
+  67% { left: -6%; top: 74% } 100% { left: 90%; top: 76% } }
+@keyframes brosse-frotte { 0%, 100% { transform: rotate(-8deg) translateY(0) } 50% { transform: rotate(7deg) translateY(6px) } }
+.brosse { position: absolute; width: 112px; height: 50px; animation: brosse-trajet ${3.4}s linear both; z-index: 3 }
+.brosse > div { animation: brosse-frotte .26s ease-in-out infinite }
+@keyframes poussiere { from { opacity: .55 } to { opacity: 0 } }
 `;
+
+/** Les phrases préenregistrées des questions libres (voix du cours) : elles partent sans attente ni GPU. */
+const CLIPS = {
+  effacer: '/media/audio/reactions/tableau-effacer.mp3',
+  suivante: '/media/audio/reactions/notion-plus-tard.mp3',
+  hors_cours: '/media/audio/reactions/hors-cours.mp3',
+  verifier: '/media/audio/reactions/verifier-compris.mp3',
+} as const;
+/** Durée du coup de brosse (ms) : le temps de préparer l'explication et sa voix. */
+const BROSSE_MS = 3400;
+const attendre = (ms: number) => new Promise<void>(ok => window.setTimeout(ok, ms));
+
+/** Le petit exercice qui suit l'explication au tableau : il vérifie ce que l'élève a compris. */
+type Exercice = {
+  type: 'qcm' | 'vrai_faux' | 'association'; enonce: string; explication: string; parole_juste: string; parole_faux: string;
+  choix?: string[]; bonne?: number; affirmations?: { texte: string; vrai: boolean }[]; paires?: { gauche: string; droite: string }[];
+};
+type ReponseLibre = {
+  categorie: 'diapo' | 'suivante' | 'prerequis' | 'hors_cours'; notion: string; diapo_suivante: { id: string; title: string } | null;
+  parole: string; ecrit: string; tableau: string[]; question_comprise: string;
+  gestes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[]; exercice?: Exercice | null;
+};
+/** Le tableau du professeur : il y explique la question à la voix ; le texte n'est montré qu'à la demande. */
+type TableauProf = {
+  mode: 'diapo' | 'efface'; etape: 'brosse' | 'prepare' | 'ecrit' | 'exercice'; lignes: string[]; vues: number; parole: string; ecrit: string;
+  notion: string; question: string; texte: boolean; debut: number; erreur?: string; exercice?: Exercice | null;
+};
 
 /** Durée du vol du tuteur jusqu'au bouton (s), mesurée : la commande arrive ~0,9 s après le geste. */
 const AVANCE_COMMANDE = 0.9;
@@ -161,8 +199,18 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   type QuestionLibre = { phase: 'saisie' | 'envoi' | 'reponse'; texte: string; image?: { b64: string; mime: string; nom: string }; audio?: string; enregistre: boolean;
     /** La transcription du micro est en cours : elle va s'écrire dans le champ, pour que l'élève la vérifie. */
     transcrit?: boolean; aVerifier?: boolean;
-    reponse?: { parole: string; ecrit: string; question_comprise: string }; erreur?: string };
+    reponse?: ReponseLibre; erreur?: string };
   const [libre, setLibre] = useState<QuestionLibre>({ phase: 'saisie', texte: '', enregistre: false });
+  // La réponse ne s'écrit pas en texte : le tuteur l'explique au tableau (9 novembre 2026).
+  const [tableauProf, setTableauProf] = useState<TableauProf | null>(null);
+  const tableauRef = useRef<TableauProf | null>(null);
+  tableauRef.current = tableauProf;
+  const lignesProfRef = useRef<(HTMLParagraphElement | null)[]>([]);
+  const [annonce, setAnnonce] = useState<{ mode: 'suivante' | 'hors_cours'; notion: string; titre?: string } | null>(null);
+  const [horloge, setHorloge] = useState(0);
+  const tourQuestion = useRef(0);
+  /** La voix qui joue est celle de l'explication au tableau : quand elle finit, l'exercice arrive. */
+  const voixExplication = useRef(false);
   const enregistreur = useRef<MediaRecorder | null>(null);
   const morceauxAudio = useRef<Blob[]>([]);
   // ── Le cycle de reprise : faux → le tuteur réexplique autrement, puis question jumelle ; 3 cycles au plus ──
@@ -228,6 +276,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     coursEnPause.current = false; eleveATouche.current = false; varianteFaite.current = false;
     setCycle(null); finies.current = {}; fausses.current = {}; voixLancee.current = false;
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
+    setTableauProf(null); setAnnonce(null); tourQuestion.current += 1;
   }, [slide.id, piste?.url, piste?.duration_ms]);
 
   // L'élève passe lui-même à une autre diapositive au milieu d'une reprise : la compétence reste NON ACQUISE,
@@ -249,6 +298,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     const lire = () => {
       const audio = audioRef.current;
       if (audio) setTemps(audio.currentTime);
+      if (tableauRef.current?.etape === 'ecrit' && tableauRef.current.vues < tableauRef.current.lignes.length) setHorloge(performance.now());
       frame = requestAnimationFrame(lire);
     };
     frame = requestAnimationFrame(lire);
@@ -331,19 +381,35 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }, [temps, enLecture, pointage, parTuteur, tuteur3D]);
 
   /** La voix du tuteur, générée à l'instant (même voix que le cours). Sans voix, le texte reste affiché. */
-  const dire = useCallback(async (texte: string): Promise<boolean> => {
-    if (!texte.trim()) return false;
+  /** La voix d'un texte, calculée d'avance (URL du son) : on la joue quand le tableau est prêt. */
+  const preparerVoix = useCallback(async (texte: string): Promise<string | null> => {
+    if (!texte.trim()) return null;
     try {
       const r = await fetch('/api/v1/tts/speak', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton()}` },
         body: JSON.stringify({ text: texte, language: 'mixed' }) });
-      if (!r.ok) return false;
-      const url = URL.createObjectURL(await r.blob());
-      const voix = voixRef.current;
-      if (!voix) return false;
-      voix.src = url; await voix.play();
-      return true;
-    } catch { return false; /* la voix manque : l'écrit suffit */ }
+      return r.ok ? URL.createObjectURL(await r.blob()) : null;
+    } catch { return null; }
   }, []);
+  const dire = useCallback(async (texte: string): Promise<boolean> => {
+    const url = await preparerVoix(texte);
+    const voix = voixRef.current;
+    if (!url || !voix) return false;   // la voix manque : l'écrit suffit
+    try { voix.src = url; await voix.play(); return true; } catch { return false; }
+  }, [preparerVoix]);
+  /** Une phrase préenregistrée, jouée jusqu'au bout (ou `max` ms au plus) ; false si elle n'a pas pu partir. */
+  const jouerEtAttendre = useCallback((url: string, max = 9000) => new Promise<boolean>(ok => {
+    const voix = voixRef.current;
+    if (!voix) { ok(false); return; }
+    let fini = false;
+    const fin = (b: boolean) => {
+      if (fini) return; fini = true; window.clearTimeout(id);
+      voix.removeEventListener('ended', bien); voix.removeEventListener('error', mal); ok(b);
+    };
+    const bien = () => fin(true), mal = () => fin(false);
+    voix.addEventListener('ended', bien); voix.addEventListener('error', mal);
+    const id = window.setTimeout(() => fin(true), max);
+    voix.src = url; voix.play().catch(() => fin(false));
+  }), []);
 
   /** L'élève lève la main : le cours se met en pause et le panneau de la question s'ouvre. */
   const leverLaMain = useCallback(() => {
@@ -407,41 +473,152 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     }
   }, [arreterMicro]);
 
+  /** Après l'explication : « واش فهمتي مزيان ؟ » et le petit exercice s'écrit au tableau. */
+  const proposerExercice = useCallback((tour: number) => {
+    const t = tableauRef.current;
+    if (tour !== tourQuestion.current || !t || t.etape !== 'ecrit' || !t.exercice) return;
+    setTableauProf({ ...t, etape: 'exercice', vues: t.lignes.length });
+    ressentir('think');
+    const voix = voixRef.current;
+    if (voix) { voix.src = CLIPS.verifier; void voix.play().catch(() => {}); }
+  }, [ressentir]);
+  /** La voix de l'explication part ; à sa fin (ou, sans voix, après les lignes), l'exercice. */
+  const lancerExplication = useCallback((url: string | null, nLignes: number, tour: number) => {
+    const voix = voixRef.current;
+    const sansVoix = () => window.setTimeout(() => proposerExercice(tour), nLignes * 2400 + 2500);
+    if (!url || !voix) { sansVoix(); return; }
+    voixExplication.current = true;
+    voix.src = url;
+    voix.play().catch(() => { voixExplication.current = false; sansVoix(); });
+  }, [proposerExercice]);
+  /** L'élève a répondu à l'exercice : le tuteur réagit à la voix, la réponse compte pour les acquis. */
+  const exerciceFini = useCallback((ex: Exercice, correct: boolean, reponse: string) => {
+    ressentir(correct ? 'celebrate' : 'encourage');
+    void dire(correct ? ex.parole_juste : ex.parole_faux);
+    void appelerApi('/course-player/acquis', {
+      slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: 'question_libre_exercice', type: ex.type, enonce: (ex.enonce || '').slice(0, 300),
+      reponse: reponse.slice(0, 300), tentative: 1, correct, reaction_preparee: false, methodes: { visuel: 'tableau', question_libre: true },
+    }).catch(() => { /* jamais bloquant */ });
+  }, [ressentir, dire, slide.id, slide.title, deckId]);
+
   const envoyerQuestion = useCallback(async () => {
     if (libre.phase !== 'saisie' || (!libre.texte.trim() && !libre.audio && !libre.image)) return;
     setLibre(l => ({ ...l, phase: 'envoi', erreur: undefined }));
     ressentir('think');
     iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*');
     await new Promise(r => window.setTimeout(r, 500));
+    let r: ReponseLibre;
     try {
-      const r = await appelerApi<{ parole: string; ecrit: string; question_comprise: string; gestes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[] }>('/course-player/question-eleve', {
+      r = await appelerApi<ReponseLibre>('/course-player/question-eleve', {
         deck_id: deckId, slide_id: slide.id, title: slide.title, speech: parole, ce_qui_se_voit: String(dernierEtat.current?.ce_qui_se_voit || ''),
         texte: libre.texte.trim(), audio_b64: libre.audio, image_b64: libre.image?.b64, image_mime: libre.image?.mime || 'image/png',
         moments: dernierEtat.current?.moments || {}, reperes: reperesRef.current,
       });
-      setLibre(l => ({ ...l, phase: 'reponse', reponse: r }));
-      ressentir('encourage');
-      void dire(r.parole);
-      r.gestes.forEach((g, i) => window.setTimeout(() => {
-        if (g.commande) parTuteur(g.commande, g.parametres || {});
-        else if (g.repere) parTuteur('highlight', { target: g.repere });
-      }, 1200 + i * 3500));
-      void appelerApi('/course-player/acquis', {
-        slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: 'question_libre', type: 'directe', enonce: r.question_comprise.slice(0, 300),
-        reponse: '', tentative: 1, correct: null, reaction_preparee: false, methodes: { visuel: visuel?.kind || 'aucun', question_libre: true },
-      }).catch(() => { /* jamais bloquant */ });
     } catch (e) {
       const m = (e as Error).message;
       setLibre(l => ({ ...l, phase: 'saisie', erreur: /^\d+$/.test(m) ? `Le professeur n'a pas pu répondre (${m}).` : m }));
+      return;
     }
-  }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, dire, parTuteur, ressentir]);
+    const tour = ++tourQuestion.current;
+    const encore = () => tour === tourQuestion.current;   // l'élève a changé de diapositive ou fermé le tableau
+    const question = r.question_comprise || libre.texte.trim();
+    const categorie = r.categorie || 'diapo';
+    setLibre(l => ({ ...l, phase: 'reponse', reponse: r }));
+    setPanneau(null);   // la réponse se fait au tableau, pas dans la bulle
+    void appelerApi('/course-player/acquis', {
+      slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: 'question_libre', type: 'directe', enonce: question.slice(0, 300),
+      reponse: categorie, tentative: 1, correct: null, reaction_preparee: false, methodes: { visuel: visuel?.kind || 'aucun', question_libre: true },
+    }).catch(() => { /* jamais bloquant */ });
+
+    if (categorie === 'suivante' || categorie === 'hors_cours') {
+      // Une notion d'une diapositive qui vient, ou une question hors du cours : il le dit simplement, puis reprend.
+      setAnnonce({ mode: categorie, notion: r.notion, titre: r.diapo_suivante?.title });
+      ressentir(categorie === 'suivante' ? 'encourage' : 'think');
+      await jouerEtAttendre(CLIPS[categorie], 9000);
+      if (!encore()) return;
+      await attendre(1200);
+      if (!encore()) return;
+      setAnnonce(null);
+      voixRef.current?.pause();
+      setLibre({ phase: 'saisie', texte: '', enregistre: false });
+      if (coursEnPause.current) { coursEnPause.current = false; void audioRef.current?.play(); if (demarree.current) envoyerASim('resume'); }
+      return;
+    }
+
+    if (categorie === 'prerequis') {
+      // Une notion de base : la brosse efface le tableau pendant une phrase préenregistrée ; pendant ce temps
+      // l'explication s'écrit au serveur et sa voix se calcule. Puis il l'explique sur le tableau propre.
+      ressentir('encourage');
+      setTableauProf({ mode: 'efface', etape: 'brosse', lignes: [], vues: 0, parole: '', ecrit: '', notion: r.notion, question, texte: false, debut: 0 });
+      const prepa = (async () => {
+        const e = await appelerApi<{ parole: string; ecrit: string; tableau: string[]; exercice?: Exercice | null }>('/course-player/question-eleve/explication', {
+          deck_id: deckId, slide_id: slide.id, title: slide.title, speech: parole, question, notion: r.notion,
+        });
+        return { e, url: await preparerVoix(e.parole) };
+      })();
+      prepa.catch(() => { /* lu plus bas */ });
+      await Promise.all([jouerEtAttendre(CLIPS.effacer, 7000), attendre(BROSSE_MS)]);
+      if (!encore()) return;
+      setTableauProf(t => t && { ...t, etape: 'prepare' });
+      try {
+        const { e, url } = await prepa;
+        if (!encore()) return;
+        setTableauProf(t => t && { ...t, etape: 'ecrit', lignes: e.tableau || [], parole: e.parole, ecrit: e.ecrit, exercice: e.exercice, debut: performance.now() });
+        lancerExplication(url, (e.tableau || []).length, tour);
+      } catch (err) {
+        const m = (err as Error).message;
+        if (encore()) setTableauProf(t => t && { ...t, etape: 'ecrit', erreur: /^\d+$/.test(m) ? 'Le professeur n’a pas pu préparer son explication.' : m });
+      }
+      return;
+    }
+
+    // La notion de la diapositive : expliquée au tableau, à la voix, avec la figure.
+    ressentir('encourage');
+    setTableauProf({ mode: 'diapo', etape: 'prepare', lignes: r.tableau || [], vues: 0, parole: r.parole, ecrit: r.ecrit, notion: r.notion, question, texte: false, debut: 0, exercice: r.exercice });
+    const url = await preparerVoix(r.parole);
+    if (!encore()) return;
+    setTableauProf(t => t && { ...t, etape: 'ecrit', debut: performance.now() });
+    lancerExplication(url, (r.tableau || []).length, tour);
+    (r.gestes || []).forEach((g, i) => window.setTimeout(() => {
+      if (!encore()) return;
+      if (g.commande) parTuteur(g.commande, g.parametres || {});
+      else if (g.repere) parTuteur('highlight', { target: g.repere });
+    }, 1200 + i * 3500));
+  }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, preparerVoix, jouerEtAttendre, parTuteur, ressentir, envoyerASim, lancerExplication]);
 
   const reprendreApresQuestion = useCallback(() => {
+    tourQuestion.current += 1; voixExplication.current = false;
     voixRef.current?.pause();
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
-    setPanneau(null);
+    setPanneau(null); setTableauProf(null); setAnnonce(null);
     if (coursEnPause.current) { coursEnPause.current = false; void audioRef.current?.play(); if (demarree.current) envoyerASim('resume'); }
   }, [envoyerASim]);
+
+  /** Une autre question : le tableau du professeur se ferme, la bulle de la question se rouvre. */
+  const autreQuestion = useCallback(() => {
+    tourQuestion.current += 1; voixExplication.current = false;
+    voixRef.current?.pause();
+    setTableauProf(null); setAnnonce(null);
+    setLibre({ phase: 'saisie', texte: '', enregistre: false });
+    setPanneau('question_eleve');
+  }, []);
+
+  // Les lignes du tableau s'écrivent au rythme de la voix (sans voix : une ligne toutes les 2,4 s) ; le tuteur
+  // montre chaque ligne quand il l'écrit.
+  useEffect(() => {
+    const t = tableauProf;
+    if (!t || t.etape !== 'ecrit' || t.vues >= t.lignes.length) return;
+    const v = voixRef.current;
+    const n = v && voixParle && Number.isFinite(v.duration) && v.duration > 0
+      ? Math.floor((v.currentTime / v.duration) * t.lignes.length * 1.15) + 1
+      : Math.floor((performance.now() - t.debut) / 2400) + 1;
+    if (n > t.vues) {
+      const vues = Math.min(n, t.lignes.length);
+      setTableauProf({ ...t, vues });
+      const el = lignesProfRef.current[vues - 1];
+      if (el && tuteur3D) window.setTimeout(() => focusProfessor(el), 50);
+    }
+  }, [horloge, tableauProf, voixParle, tuteur3D]);
 
   /** Toutes les questions justes : le tableau se ferme après la voix du bravo et le cours passe à la diapositive suivante. */
   const terminerEtPasser = useCallback(() => {
@@ -665,7 +842,11 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           onEnded={() => { setEnLecture(false); setFinie(true); iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*'); if (conc.acquis) direLesLacunes(); if (questions.length && !reactionRef.current) setPanneau('questions'); }}
         />
       )}
-      <audio ref={voixRef} onPlay={event => { setVoixParle(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }} onPause={() => setVoixParle(false)} onEnded={() => setVoixParle(false)} />
+      <audio ref={voixRef} onPlay={event => { setVoixParle(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }} onPause={() => setVoixParle(false)}
+        onEnded={() => {
+          setVoixParle(false);
+          if (voixExplication.current) { voixExplication.current = false; const tour = tourQuestion.current; window.setTimeout(() => proposerExercice(tour), 700); }
+        }} />
 
       {/* ── Le titre et le sous-titre, seulement ── */}
       <header className="shrink-0 px-6 pt-4 pb-2 text-center">
@@ -725,6 +906,37 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             {visuel.kind === 'image' && visuel.url && (
               <img src={visuel.url} alt={visuel.alt || contenu.alt || ''} className="max-h-full max-w-full object-contain" />
             )}
+          </div>
+        )}
+
+        {/* ── La question de l'élève expliquée au tableau ── */}
+        {tableauProf?.mode === 'diapo' && tableauProf.etape !== 'exercice' && (
+          <TableauDuProf t={tableauProf} lignesRef={lignesProfRef} onTexte={() => setTableauProf(t => t && { ...t, texte: !t.texte })}
+            onAutre={autreQuestion} onContinuer={reprendreApresQuestion} />
+        )}
+        {(tableauProf?.mode === 'efface' || tableauProf?.etape === 'exercice') && (
+          <div className="absolute inset-y-0 left-3 z-30 flex flex-col pb-2" style={{ right: tuteur3D ? COLONNE_TUTEUR + 4 : 12 }}>
+            <TableauDuProf t={tableauProf!} lignesRef={lignesProfRef} plein onFini={exerciceFini} onTexte={() => setTableauProf(t => t && { ...t, texte: !t.texte })}
+              onAutre={autreQuestion} onContinuer={reprendreApresQuestion} />
+          </div>
+        )}
+        {annonce && (
+          <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center" style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+          <div className="tableau-questions w-[min(92%,640px)] rounded-2xl border-2 border-amber-200/40 bg-[#0f2219] px-5 py-4 text-center shadow-2xl"
+            style={{ fontFamily: CRAIE }}>
+            {annonce.mode === 'suivante' ? (
+              <>
+                <p className="craie-ecrit text-xl text-amber-100">📌 {annonce.notion || 'Cette notion'} : on la traite bientôt</p>
+                {annonce.titre && <p className="craie-ecrit mt-1 text-lg text-cyan-200" style={{ animationDelay: '.9s' }}>→ diapo « {annonce.titre} »</p>}
+                <p className="mt-2 text-sm text-white/60">Maintenant, concentrons-nous sur cette partie.</p>
+              </>
+            ) : (
+              <>
+                <p className="craie-ecrit text-xl text-rose-200">Cette question n’est pas dans ce cours{annonce.notion ? ` (${annonce.notion})` : ''}.</p>
+                <p className="mt-2 text-sm text-white/60">On revient à notre leçon.</p>
+              </>
+            )}
+          </div>
           </div>
         )}
 
@@ -870,9 +1082,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               {libre.phase === 'reponse' && libre.reponse && (
                 <>
                   {libre.reponse.question_comprise && <p className="mt-2 text-sm text-white/55">Ta question : « {libre.reponse.question_comprise} »</p>}
-                  <p className="mt-2 text-lg leading-relaxed text-white/90"><Formule t={libre.reponse.ecrit || libre.reponse.parole} /></p>
+                  <p className="mt-2 text-base text-white/70">Le professeur te répond au tableau.</p>
                   <div className="mt-3 flex gap-2">
-                    <button onClick={() => setLibre({ phase: 'saisie', texte: '', enregistre: false })} className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Autre question</button>
+                    <button onClick={autreQuestion} className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Autre question</button>
                     <button onClick={reprendreApresQuestion} className="rounded-full bg-emerald-500/30 px-4 py-2 text-sm hover:bg-emerald-500/40">Continuer le cours</button>
                   </div>
                 </>
@@ -1119,6 +1331,192 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
     </div>
   );
 }
+
+/**
+ * Le tableau du professeur pour la question de l'élève (9 novembre 2026). Il y écrit, ligne après ligne, au rythme
+ * de sa voix ; ce qu'il dit n'est montré en texte qu'à la demande. `plein` : le tableau a été effacé à la brosse
+ * (notion de base) et couvre toute la scène ; sinon il s'ouvre sous la figure, qui reste visible pour les gestes.
+ */
+function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContinuer, onFini }: {
+  t: TableauProf; plein?: boolean; lignesRef: React.MutableRefObject<(HTMLParagraphElement | null)[]>;
+  onTexte: () => void; onAutre: () => void; onContinuer: () => void; onFini?: (ex: Exercice, correct: boolean, reponse: string) => void;
+}) {
+  const enExercice = t.etape === 'exercice' && !!t.exercice;
+  const brosse = t.etape === 'brosse';
+  const fond = '#0f2219';
+  return (
+    <section className={`relative flex flex-col overflow-hidden rounded-2xl ${plein ? 'flex-1' : 'tableau-questions w-full max-w-4xl shrink-0'} ${brosse ? '' : 'border-2 border-amber-200/40 shadow-2xl'}`}
+      style={{ fontFamily: CRAIE, background: brosse ? 'transparent' : fond, maxHeight: plein ? undefined : '42%', minHeight: plein ? undefined : 120 }}>
+      {brosse && (
+        <>
+          {/* Trois passages de brosse : chaque bande redevient un tableau propre derrière elle. */}
+          {[0, 1, 2].map(i => (
+            <div key={i} className="absolute inset-x-0" style={{
+              top: `${i * 33.34}%`, height: '33.4%', background: fond,
+              animation: `${i % 2 ? 'brosse-d' : 'brosse-g'} ${BROSSE_MS / 3000}s linear ${(i * BROSSE_MS) / 3000}s both`,
+            }} />
+          ))}
+          <div className="brosse" aria-hidden>
+            <div>
+              <div style={{ height: 22, borderRadius: '10px 10px 3px 3px', background: 'linear-gradient(#a8743f, #7a4e22)', boxShadow: 'inset 0 2px 0 rgba(255,255,255,.25)' }} />
+              <div style={{ height: 18, borderRadius: '0 0 6px 6px', background: 'repeating-linear-gradient(90deg, #e9e4d6 0 6px, #d3cdbb 6px 9px)', boxShadow: '0 10px 22px 6px rgba(240,240,230,.35)' }} />
+            </div>
+          </div>
+          <p className="absolute bottom-3 left-0 right-0 z-[4] text-center text-lg text-amber-100/90">On traite d’abord cet élément{t.notion ? ` : ${t.notion}` : ''}…</p>
+        </>
+      )}
+      {!brosse && (
+        <>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-200/20 px-4 py-2">
+            <div className="truncate text-base text-emerald-200">🧑‍🏫 {t.notion || 'Ta question'}</div>
+            <div className="flex shrink-0 gap-2 text-sm" style={{ fontFamily: 'system-ui, sans-serif' }}>
+              {(t.etape === 'ecrit' || enExercice) && (t.parole || t.ecrit) && (
+                <button onClick={onTexte} className="rounded-full bg-white/10 px-3 py-1 hover:bg-white/20">{t.texte ? 'Masquer le texte' : '📄 Voir le texte'}</button>
+              )}
+              <button onClick={onAutre} className="rounded-full bg-white/10 px-3 py-1 hover:bg-white/20">Autre question</button>
+              <button onClick={onContinuer} className="rounded-full bg-emerald-500/30 px-3 py-1 hover:bg-emerald-500/40">Continuer le cours</button>
+            </div>
+          </div>
+          <div className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4 ${plein && !enExercice ? 'justify-center' : ''}`}>
+            {t.etape === 'prepare' && <p className="animate-pulse text-xl text-white/60">Le professeur prépare le tableau…</p>}
+            {t.lignes.slice(0, t.vues).map((l, i) => (
+              <p key={i} ref={el => { lignesRef.current[i] = el; }} className="craie-ecrit" dir="auto"
+                style={{ fontSize: enExercice ? 18 : plein ? 30 : 24, color: /[=→]/.test(l) ? '#fef9c3' : '#f1f5e9', lineHeight: 1.35, opacity: enExercice ? .7 : 1 }}>
+                <Formule t={l} />
+              </p>
+            ))}
+            {t.etape === 'ecrit' && !t.lignes.length && !t.erreur && <p className="text-lg text-white/50">Écoute le professeur…</p>}
+            {t.erreur && <p className="text-base text-rose-200" style={{ fontFamily: 'system-ui, sans-serif' }}>{t.erreur}</p>}
+            {enExercice && <ExerciceDuTableau ex={t.exercice!} onFini={(c, r) => onFini?.(t.exercice!, c, r)} />}
+            {t.texte && (
+              <div className="mt-2 rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-base text-white/80" style={{ fontFamily: 'system-ui, sans-serif' }}>
+                {t.ecrit && <p><Formule t={t.ecrit} /></p>}
+                {t.parole && <p dir="auto" className="mt-2 whitespace-pre-wrap text-white/60">{t.parole}</p>}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * L'exercice qui suit l'explication au tableau (9 novembre 2026) : QCM, vrai/faux ou association, choisi par le
+ * tuteur selon ce qu'il a expliqué. Une seule tentative : la correction s'affiche, le tuteur réagit à la voix.
+ */
+function ExerciceDuTableau({ ex, onFini }: { ex: Exercice; onFini: (correct: boolean, reponse: string) => void }) {
+  const [fini, setFini] = useState<boolean | null>(null);
+  const [choix, setChoix] = useState<number | null>(null);
+  const [vf, setVf] = useState<(boolean | null)[]>(() => (ex.affirmations || []).map(() => null));
+  // Association : la colonne de droite est mélangée une fois ; l'élève touche une notion, puis sa partenaire.
+  const droites = useMemo(() => {
+    const d = (ex.paires || []).map((p, i) => ({ texte: p.droite, i }));
+    for (let k = d.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [d[k], d[j]] = [d[j], d[k]]; }
+    if (d.length > 1 && d.every((x, k) => x.i === k)) d.push(d.shift()!);   // jamais déjà dans l'ordre
+    return d;
+  }, [ex]);
+  const [gauche, setGauche] = useState<number | null>(null);
+  const [lien, setLien] = useState<Record<number, number>>({});   // gauche → droite (indice de paire)
+  const COULEURS = ['#fde68a', '#a5f3fc', '#f9a8d4', '#bbf7d0'];
+
+  const terminer = (correct: boolean, reponse: string) => { setFini(correct); onFini(correct, reponse); };
+  const bouton = 'rounded-xl border px-4 py-2 text-left text-lg transition-colors';
+  const corrige = fini !== null;
+
+  return (
+    <div className="question-apparait mt-3 rounded-2xl border border-amber-200/30 bg-black/20 p-4">
+      <div className="text-sm font-semibold text-amber-200">✏️ Tu as bien compris ? Vérifions</div>
+      {ex.enonce && <p className="mt-2 text-xl text-white/90"><Formule t={ex.enonce} /></p>}
+
+      {ex.type === 'qcm' && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {(ex.choix || []).map((c, i) => {
+            const etat = !corrige ? '' : i === ex.bonne ? 'border-emerald-300 bg-emerald-500/25' : i === choix ? 'border-rose-300 bg-rose-500/25' : 'opacity-60';
+            return (
+              <button key={i} disabled={corrige} onClick={() => { setChoix(i); terminer(i === ex.bonne, c); }}
+                className={`${bouton} border-white/20 hover:bg-white/10 ${etat}`}><Formule t={c} /></button>
+            );
+          })}
+        </div>
+      )}
+
+      {ex.type === 'vrai_faux' && (
+        <div className="mt-3 flex flex-col gap-2">
+          {(ex.affirmations || []).map((a, i) => {
+            const juste = corrige && vf[i] === a.vrai, faux = corrige && vf[i] !== a.vrai;
+            return (
+              <div key={i} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${juste ? 'border-emerald-300/70' : faux ? 'border-rose-300/70' : 'border-white/15'}`}>
+                <p className="flex-1 text-lg"><Formule t={a.texte} /></p>
+                {[true, false].map(v => (
+                  <button key={String(v)} disabled={corrige} onClick={() => setVf(x => x.map((y, k) => (k === i ? v : y)))}
+                    className={`rounded-full px-3 py-1 text-sm ${vf[i] === v ? 'bg-sky-500/50' : 'bg-white/10 hover:bg-white/20'}`}>{v ? 'Vrai' : 'Faux'}</button>
+                ))}
+                {corrige && <span className="w-16 text-sm">{juste ? '✔' : `✘ ${a.vrai ? 'Vrai' : 'Faux'}`}</span>}
+              </div>
+            );
+          })}
+          {!corrige && (
+            <button disabled={vf.some(v => v === null)} onClick={() => {
+              const affs = ex.affirmations || [];
+              terminer(affs.every((a, i) => vf[i] === a.vrai), affs.map((a, i) => `${a.texte} : ${vf[i] ? 'vrai' : 'faux'}`).join(' ; '));
+            }} className="self-end rounded-full bg-sky-500/40 px-5 py-2 text-sm hover:bg-sky-500/50 disabled:opacity-40">Vérifier</button>
+          )}
+        </div>
+      )}
+
+      {ex.type === 'association' && (
+        <>
+          <p className="mt-1 text-sm text-white/55">Touche un élément à gauche, puis celui qui va avec à droite.</p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              {(ex.paires || []).map((p, i) => {
+                const n = Object.keys(lien).indexOf(String(i));
+                const ok = corrige ? lien[i] === i : null;
+                return (
+                  <button key={i} disabled={corrige} onClick={() => setGauche(i)}
+                    className={`${bouton} ${gauche === i ? 'border-sky-300 bg-sky-500/20' : 'border-white/20 hover:bg-white/10'} ${ok === true ? 'border-emerald-300' : ok === false ? 'border-rose-300' : ''}`}
+                    style={lien[i] !== undefined && !corrige ? { boxShadow: `inset 6px 0 0 ${COULEURS[n % 4]}` } : undefined}>
+                    <Formule t={p.gauche} />{corrige && ok === false && <span className="block text-sm text-emerald-200">→ <Formule t={p.droite} /></span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-col gap-2">
+              {droites.map(d => {
+                const deQui = Object.entries(lien).find(([, v]) => v === d.i)?.[0];
+                const n = deQui === undefined ? -1 : Object.keys(lien).indexOf(deQui);
+                return (
+                  <button key={d.i} disabled={corrige || gauche === null} onClick={() => {
+                    if (gauche === null) return;
+                    setLien(l => { const m = Object.fromEntries(Object.entries(l).filter(([, v]) => v !== d.i)); return { ...m, [gauche]: d.i }; });
+                    setGauche(null);
+                  }} className={`${bouton} border-white/20 hover:bg-white/10 disabled:cursor-default`}
+                    style={n >= 0 && !corrige ? { boxShadow: `inset -6px 0 0 ${COULEURS[n % 4]}` } : undefined}>
+                    <Formule t={d.texte} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {!corrige && (
+            <button disabled={Object.keys(lien).length < (ex.paires || []).length} onClick={() => {
+              const paires = ex.paires || [];
+              terminer(paires.every((_, i) => lien[i] === i), paires.map((p, i) => `${p.gauche} → ${paires[lien[i]]?.droite ?? '?'}`).join(' ; '));
+            }} className="mt-3 rounded-full bg-sky-500/40 px-5 py-2 text-sm hover:bg-sky-500/50 disabled:opacity-40">Vérifier</button>
+          )}
+        </>
+      )}
+
+      {corrige && (
+        <p className={`mt-3 text-lg ${fini ? 'text-emerald-200' : 'text-rose-200'}`}>
+          {fini ? '✔ Bravo, c’est compris. ' : '✘ Pas tout à fait. '}{ex.explication && <Formule t={ex.explication} />}
+        </p>
+      )}
+    </div>
+  );
+}
+
 
 function QuestionSurResultat({ reaction, onRepondre, onContinuer }: {
   reaction: Extract<Reaction, { phase: 'question' }>;

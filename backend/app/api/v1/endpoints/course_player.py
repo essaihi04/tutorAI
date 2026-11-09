@@ -300,15 +300,48 @@ async def question_eleve(body: QuestionEleveRequest, student: dict = Depends(get
         # 409 et pas 503 : main.py remplace le texte de toute réponse 5xx par « Erreur interne du service ».
         raise HTTPException(status_code=409, detail="Le micro se prépare (la reconnaissance vocale démarre, une à trois minutes). Réessaie dans un instant, ou écris ta question.")
     ctx = body.model_dump(exclude={"audio_b64", "image_b64"})
-    prompt = qe.prompt_question(ctx, compris)
+    # Le plan du cours : pour savoir si la notion vient dans une diapositive suivante (9 novembre 2026).
+    from app.services import suivi_acquis
+    deck = suivi_acquis.charger_deck(body.deck_id or "") if body.deck_id else None
+    plan, idx = qe.plan_du_cours(deck, body.slide_id)
+    prompt = qe.prompt_question(ctx, compris, plan, idx, (deck or {}).get("title", ""))
     for _ in range(2):
         try:
             texte = await llm_service.chat(messages=[{"role": "user", "content": prompt}],
                                            system_prompt="Tu es un professeur de physique bienveillant et exigeant. Tu réponds uniquement en JSON valide.",
-                                           temperature=0.5, max_tokens=700, student_id=_compte(student), session_type="course_player")
+                                           temperature=0.5, max_tokens=1400, student_id=_compte(student), session_type="course_player")
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"LLM indisponible : {e}") from e
-        r = qe.reponse_depuis(texte, ctx)
+        r = qe.reponse_depuis(texte, ctx, plan, idx)
         if r:
             return {**r, "question_comprise": compris["texte"] or compris["transcription"] or compris["image_texte"][:300]}
+    raise HTTPException(status_code=502, detail="Réponse du LLM inutilisable")
+
+
+class ExplicationRequest(BaseModel):
+    """Une notion de base demandée : le tableau s'efface à la brosse pendant que cette explication se prépare."""
+    deck_id: Optional[str] = None
+    slide_id: str = ""
+    title: str = ""
+    speech: str = Field(default="", max_length=3000)
+    question: str = Field(default="", max_length=1500)
+    notion: str = Field(default="", max_length=200)
+
+
+@router.post("/question-eleve/explication")
+async def question_eleve_explication(body: ExplicationRequest, student: dict = Depends(get_current_student)):
+    from app.services import question_eleve as qe
+    from app.services.llm_service import llm_service
+
+    prompt = qe.prompt_prerequis(body.model_dump(), body.question or body.notion, body.notion or body.question)
+    for _ in range(2):
+        try:
+            texte = await llm_service.chat(messages=[{"role": "user", "content": prompt}],
+                                           system_prompt="Tu es un professeur de physique bienveillant et exigeant. Tu réponds uniquement en JSON valide.",
+                                           temperature=0.5, max_tokens=1400, student_id=_compte(student), session_type="course_player")
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"LLM indisponible : {e}") from e
+        r = qe.explication_depuis(texte)
+        if r:
+            return r
     raise HTTPException(status_code=502, detail="Réponse du LLM inutilisable")

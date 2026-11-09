@@ -109,6 +109,13 @@ async def question_eleve(body: cp.QuestionEleveRequest, request: Request, x_visi
     return await cp.question_eleve(body, _autoriser("llm", _visiteur(x_visiteur), request))
 
 
+@router.post("/question-eleve/explication")
+async def question_eleve_explication(body: cp.ExplicationRequest, request: Request, x_visiteur: str | None = Header(default=None)):
+    """Une notion de base : expliquée sur le tableau effacé (préparée pendant la brosse)."""
+    _ce_cours(body.deck_id)
+    return await cp.question_eleve_explication(body, _autoriser("llm", _visiteur(x_visiteur), request))
+
+
 @router.post("/transcrire")
 async def transcrire(body: cp.TranscrireRequest, request: Request, x_visiteur: str | None = Header(default=None)):
     """Ce que l'élève vient de dire au micro, transcrit par MoulSot v4 : il le voit dans le champ avant d'envoyer."""

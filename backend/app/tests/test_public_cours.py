@@ -82,6 +82,21 @@ def test_micro_pas_encore_pret(client, monkeypatch):
     assert r.status_code == 409 and "micro se prépare" in r.json()["detail"]
 
 
+def test_explication_d_une_notion_de_base(client):
+    r = client.post("/public/cours-ondes/question-eleve/explication", headers=H,
+                    json={"deck_id": "phys_ch1_waves_exemple", "question": "c'est quoi la vitesse ?", "notion": "vitesse moyenne"})
+    assert r.status_code == 200, r.text
+    assert r.json()["parole"] and "tableau" in r.json()
+    assert client.post("/public/cours-ondes/question-eleve/explication", headers=H,
+                       json={"deck_id": "svt_ch1", "notion": "x"}).status_code == 404
+
+
+def test_question_classee_avec_le_plan_du_cours(client):
+    r = client.post("/public/cours-ondes/question-eleve", headers=H,
+                    json={"deck_id": "phys_ch1_waves_exemple", "slide_id": "wx_i1_corde", "texte": "comment ?"})
+    assert r.status_code == 200 and r.json()["categorie"] == "diapo"
+
+
 def test_transcription_seule_pour_verifier_avant_d_envoyer(client):
     r = client.post("/public/cours-ondes/transcrire", headers=H, json={"audio_b64": "data:audio/webm;base64,AAAAAAAA"})
     assert r.status_code == 200 and r.json() == {"texte": "علاش tau"}
