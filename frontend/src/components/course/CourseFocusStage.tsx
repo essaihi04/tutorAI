@@ -433,8 +433,18 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }, []);
   /** La voix d'un texte long, par morceaux calculés en parallèle : le premier (court) arrive en quelques secondes. */
   const preparerMorceaux = useCallback((texte: string): Promise<string | null>[] => {
-    const urls = decouperParole(texte).map(m => preparerVoix(m));
-    return urls.length ? urls : [Promise.resolve(null)];
+    // Deux morceaux à la fois, dans l'ordre (un par carte) : envoyés tous ensemble, ils se gênent et le premier
+    // arrive après le dernier (mesuré en ligne : 8,2 s au lieu de 4,9 s pour le premier morceau).
+    const textes = decouperParole(texte);
+    if (!textes.length) return [Promise.resolve(null)];
+    const poser: ((u: string | null) => void)[] = [];
+    const urls = textes.map(() => new Promise<string | null>(ok => { poser.push(ok); }));
+    let suivant = 0;
+    const ouvrier = async () => {
+      while (suivant < textes.length) { const i = suivant++; poser[i](await preparerVoix(textes[i])); }
+    };
+    void ouvrier(); void ouvrier();
+    return urls;
   }, [preparerVoix]);
   const dire = useCallback(async (texte: string): Promise<boolean> => {
     const url = await preparerVoix(texte);
