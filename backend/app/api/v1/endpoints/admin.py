@@ -617,3 +617,29 @@ async def get_recent_requests(limit: int = 50, admin: bool = Depends(_verify_adm
         return {"requests": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# AVIS DES PROFS (relecture des cours sur le lien libre, 10 novembre 2026)
+# ──────────────────────────────────────────────
+
+class StatutAvis(BaseModel):
+    visiteur: str
+    deck_id: str
+    slide_id: str
+    statut: str = Field(..., pattern="^(a_faire|corrige|ignore)$")
+
+
+@router.get("/avis-profs")
+async def get_avis_profs(admin: bool = Depends(_verify_admin_token)):
+    """Chaque vote « bon / à corriger » et commentaire laissé par un prof sur une diapositive (le dernier de chaque
+    relecteur), pour retrouver et corriger les diapositives signalées."""
+    from app.api.v1.endpoints.public_cours import lire_avis
+    return {"avis": lire_avis()}
+
+
+@router.post("/avis-profs/statut")
+async def set_statut_avis(body: StatutAvis, admin: bool = Depends(_verify_admin_token)):
+    from app.api.v1.endpoints.public_cours import marquer_avis
+    marquer_avis(body.visiteur, body.deck_id, body.slide_id, body.statut)
+    return {"ok": True}

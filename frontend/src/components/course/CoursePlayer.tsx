@@ -64,6 +64,8 @@ interface CoursePlayerProps {
   mode?: 'tableau' | 'concentration';
   /** Monte le tuteur 3D dans le mode concentration (banc local). */
   tuteur3D?: boolean;
+  /** La diapositive affichée change (relecture des profs sur le lien libre, 10 novembre 2026). */
+  onSlideChange?: (slide: { id: string; title: string; position: number; total: number }) => void;
 }
 
 interface FlatSlide {
@@ -91,6 +93,7 @@ export default function CoursePlayer({
   onRestart,
   mode = 'tableau',
   tuteur3D = false,
+  onSlideChange,
 }: CoursePlayerProps) {
   const flatSlides = useMemo<FlatSlide[]>(() =>
     deck.activities.flatMap((activity, activityIndex) =>
@@ -139,6 +142,10 @@ export default function CoursePlayer({
   useEffect(() => {
     completedSlideIdsRef.current = completedSlideIds;
   }, [completedSlideIds]);
+
+  useEffect(() => {
+    if (current && onSlideChange) onSlideChange({ id: current.slide.id, title: current.slide.title || '', position: index + 1, total: flatSlides.length });
+  }, [current, index, flatSlides.length, onSlideChange]);
 
   const persist = useCallback((
     nextIndex: number,

@@ -84,6 +84,18 @@ class CoursePlayerService:
             for path in _LOCAL_MANIFESTS
             if path.exists()
         ]
+        # Les autres cours refaits en mode concentration (`<matière>_chN_<clé>.json`, 10 novembre 2026) : seulement
+        # ceux publiés pour leur leçon (`remplace_la_base`) ; un brouillon ne se montre qu'aux profs (lien libre).
+        connus = {path.name for path in _LOCAL_MANIFESTS}
+        for path in sorted(_DATA_DIR.glob("*_ch*_*.json")):
+            if path.name in connus or "_script_" in path.stem:
+                continue
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if _prioritaire(manifest):
+                self._manifest_cache.append(manifest)
         return copy.deepcopy(self._manifest_cache)
 
     @staticmethod

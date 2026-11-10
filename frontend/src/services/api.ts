@@ -546,6 +546,16 @@ export interface RegistrationRequestPayload {
 export const submitRegistrationRequest = (data: RegistrationRequestPayload) =>
   api.post('/registration-requests', data);
 
+// ─── Avis des profs sur les cours du lien libre (10 novembre 2026) ──────
+export interface AvisProf {
+  visiteur: string; deck_id: string; slide_id: string; slide_titre: string; position: number;
+  vote: 'bon' | 'mauvais' | null; commentaire: string; relecteur: string; date: string;
+  statut: 'a_faire' | 'corrige' | 'ignore';
+}
+export const listAvisProfs = () => adminApi.get<{ avis: AvisProf[] }>('/avis-profs');
+export const setStatutAvisProf = (a: Pick<AvisProf, 'visiteur' | 'deck_id' | 'slide_id'>, statut: AvisProf['statut']) =>
+  adminApi.post('/avis-profs/statut', { visiteur: a.visiteur, deck_id: a.deck_id, slide_id: a.slide_id, statut });
+
 export const listRegistrationRequests = (status?: string) =>
   adminApi.get('/registration-requests', { params: status ? { status } : {} });
 

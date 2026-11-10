@@ -1,5 +1,7 @@
 """Publie le cours exemple des ondes, en accès libre : https://moalim.online/cours-ondes/
 
+Depuis le 10 novembre 2026, la même page sert aussi les autres cours refaits (`?cours=<id>`, relecture des profs).
+
 Le cours est encore hors du site (il n'est pas dans la base) : on le publie comme une page à part, dans son propre
 dossier du serveur, sans commit ni déploiement du site, et sans toucher à la configuration nginx (`location /` sert
 déjà `cours-ondes/index.html`) ni aux médias du site.
@@ -70,6 +72,13 @@ def copier_medias() -> list[Path]:
                 a_copier.add(rel)
                 if rel.suffix in TEXTE:
                     a_lire.append(PUBLIC / rel)
+    # Une simulation se sert de fichiers voisins par chemins relatifs (ondes.css, commun.js…) : on copie son dossier
+    # entier (cours de relecture du 10 novembre 2026 : ondes-periodiques-tableau/…).
+    for rel in list(a_copier):
+        p = rel.parts
+        if len(p) >= 5 and p[0] == "media" and p[1] == "simulations" and rel.suffix == ".html":
+            dossier = PUBLIC / Path(*p[:4])
+            a_copier |= {f.relative_to(PUBLIC) for f in dossier.rglob("*") if f.is_file()}
     wav = []
     for rel in sorted(a_copier):
         src = PUBLIC / rel

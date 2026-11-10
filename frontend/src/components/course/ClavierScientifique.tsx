@@ -65,7 +65,7 @@ export function BoutonSymboles({ ouvert, onClick, petit = false }: { ouvert: boo
 
 export default function ClavierScientifique({ cible, valeur, onChange, onFermer }: {
   /** Le champ où l'élève écrit (le curseur y est lu, puis replacé après l'insertion). */
-  cible: RefObject<Champ>;
+  cible: RefObject<Champ | null>;
   valeur: string;
   onChange: (v: string) => void;
   onFermer?: () => void;

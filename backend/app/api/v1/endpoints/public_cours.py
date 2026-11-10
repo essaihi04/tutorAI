@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import re
 import time
 from collections import defaultdict, deque
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response
@@ -29,8 +32,13 @@ from app.api.v1.endpoints import course_player as cp
 router = APIRouter(prefix="/public/cours-ondes", tags=["public"])
 
 COURS = "phys_ch1_waves_exemple"
+_DOSSIER_COURS = Path(__file__).resolve().parents[4] / "data" / "courses"
+#: Les avis des profs qui relisent les cours sur le lien libre (10 novembre 2026), une ligne JSON par avis ; le
+#: dernier avis d'un relecteur sur une diapositive remplace les précédents (`lire_avis`). Hors dépôt (data/ ignoré).
+FICHIER_AVIS = Path(__file__).resolve().parents[4] / "data" / "avis_profs" / "avis.jsonl"
 #: (nombre d'appels, fenêtre en secondes) par visiteur ET par adresse IP ; puis pour tous les visiteurs ensemble.
-LIMITES = {"llm": (40, 3600), "voix": (200, 3600), "eveil": (30, 3600), "acquis": (300, 3600), "micro": (60, 3600)}
+LIMITES = {"llm": (40, 3600), "voix": (200, 3600), "eveil": (30, 3600), "acquis": (300, 3600), "micro": (60, 3600),
+           "avis": (400, 3600)}
 LIMITES_TOTALES = {"llm": (1500, 86400), "voix": (6000, 86400), "eveil": (300, 86400), "micro": (2000, 86400)}
 _appels: dict[tuple[str, str], deque] = defaultdict(deque)
 
@@ -66,8 +74,24 @@ def _autoriser(quoi: str, visiteur: str, request: Request) -> dict:
     return {"id": f"public-{visiteur}"}
 
 
+def cours_publics() -> set[str]:
+    """Les cours servis sur le lien libre : le cours exemple et chaque cours refait en mode concentration
+    (`backend/data/courses/<matière>_chN_<clé>.json`, `mode: concentration`), brouillons compris : les profs les relisent
+    avant leur validation."""
+    ids = {COURS}
+    for f in _DOSSIER_COURS.glob("*_ch*_*.json"):
+        if f.stem.endswith("_course_v1") or "_script_" in f.stem:
+            continue
+        try:
+            if json.loads(f.read_text(encoding="utf-8")).get("mode") == "concentration":
+                ids.add(f.stem)
+        except (OSError, ValueError):
+            continue
+    return ids
+
+
 def _ce_cours(deck_id: str | None) -> None:
-    if deck_id and not deck_id.startswith(COURS):
+    if deck_id and not any(deck_id.startswith(c) for c in cours_publics()):
         raise HTTPException(404, "Cours introuvable")
 
 
@@ -160,3 +184,71 @@ async def acquis(body: cp.AcquisEvent, request: Request, x_visiteur: str | None 
 async def bilan(deck_id: str, request: Request, x_visiteur: str | None = Header(default=None)):
     _ce_cours(deck_id)
     return await cp.bilan_acquis(deck_id, _autoriser("acquis", _visiteur(x_visiteur), request))
+
+
+# ── Relecture par les profs (10 novembre 2026) : sur le lien libre, chaque diapositive reçoit un vote « bon » ou
+# « à corriger » et un commentaire ; l'admin les lit dans le tableau de bord (onglet « Avis des profs »). ──
+
+class Avis(BaseModel):
+    deck_id: str = Field(..., min_length=3, max_length=80)
+    slide_id: str = Field(..., min_length=1, max_length=120)
+    slide_titre: str = Field(default="", max_length=300)
+    position: int = Field(default=0, ge=0, le=1000)
+    vote: str | None = Field(default=None, pattern="^(bon|mauvais)$")
+    commentaire: str = Field(default="", max_length=4000)
+    relecteur: str = Field(default="", max_length=80)
+
+
+def lire_avis() -> list[dict]:
+    """Tous les avis, le dernier d'un relecteur sur une diapositive seulement (les plus récents d'abord)."""
+    if not FICHIER_AVIS.exists():
+        return []
+    derniers: dict[tuple, dict] = {}
+    for ligne in FICHIER_AVIS.read_text(encoding="utf-8").splitlines():
+        try:
+            a = json.loads(ligne)
+        except ValueError:
+            continue
+        if a.get("type") == "statut":          # l'admin a marqué l'avis corrigé / à faire
+            cle = tuple(a.get("cle") or ())
+            if cle in derniers:
+                derniers[cle]["statut"] = a.get("statut", "a_faire")
+            continue
+        cle = (a.get("visiteur"), a.get("deck_id"), a.get("slide_id"))
+        ancien = derniers.get(cle)
+        a.setdefault("statut", ancien.get("statut", "a_faire") if ancien else "a_faire")
+        derniers[cle] = a
+    return sorted(derniers.values(), key=lambda a: a.get("date", ""), reverse=True)
+
+
+def _ecrire(ligne: dict) -> None:
+    FICHIER_AVIS.parent.mkdir(parents=True, exist_ok=True)
+    with FICHIER_AVIS.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+
+
+@router.post("/avis")
+async def donner_avis(body: Avis, request: Request, x_visiteur: str | None = Header(default=None)):
+    visiteur = _visiteur(x_visiteur)
+    _autoriser("avis", visiteur, request)
+    _ce_cours(body.deck_id)
+    if not body.vote and not body.commentaire.strip():
+        raise HTTPException(400, "Avis vide")
+    _ecrire({**body.model_dump(), "commentaire": body.commentaire.strip(), "relecteur": body.relecteur.strip(),
+             "visiteur": visiteur, "date": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    return {"ok": True}
+
+
+@router.get("/avis/{deck_id}")
+async def mes_avis(deck_id: str, request: Request, x_visiteur: str | None = Header(default=None)):
+    """Les avis que CE relecteur a déjà donnés sur ce cours (la page les remontre diapositive par diapositive)."""
+    visiteur = _visiteur(x_visiteur)
+    _autoriser("avis", visiteur, request)
+    _ce_cours(deck_id)
+    return {"avis": {a["slide_id"]: {"vote": a.get("vote"), "commentaire": a.get("commentaire", "")}
+                     for a in lire_avis() if a.get("visiteur") == visiteur and a.get("deck_id") == deck_id}}
+
+
+def marquer_avis(visiteur: str, deck_id: str, slide_id: str, statut: str) -> None:
+    _ecrire({"type": "statut", "cle": [visiteur, deck_id, slide_id], "statut": statut,
+             "date": datetime.now(timezone.utc).isoformat(timespec="seconds")})
