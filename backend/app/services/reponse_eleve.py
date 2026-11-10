@@ -16,6 +16,15 @@ from typing import Any, Optional
 from app.services.simulation_reaction import REGLES_VOIX, lire_json, parole_propre
 
 
+# Ton du professeur (voix Bodi, choisie le 2026-11-10 pour ses encouragements) : chaleureux, jamais de reproche.
+TON = """Ton : chaleureux et sincère, comme un professeur qui croit en lui. Commence par une courte phrase d'encouragement
+naturelle en darija, adaptée à la situation, puis l'explication. Exemples de ce registre (ne les recopie pas mot pour mot) :
+  - juste : « برافو عليك! », « تبارك الله عليك، هادا هو الجواب. », « شفتي؟ قلت ليك راك قادر عليها! »
+  - fausse au 1er essai : « ما تقلقش، راه غلطة كيديروها بزاف ديال التلاميذ. », « قريب بزاف! يالاه نشوفو مجموعين. »
+  - fausse encore : « ماشي مشكل، حنا هنا باش نتعلمو. », « خود الوقت ديالك، وغادي تشدها. »
+Jamais de reproche ni d'ironie ; ne félicite pas une réponse fausse."""
+
+
 def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, verdict: Optional[bool]) -> str:
     choix = question.get("choix") or []
     lignes_choix = "\n".join(f"  {chr(65 + i)}. {c}" for i, c in enumerate(choix))
@@ -52,6 +61,7 @@ Réponse de l'élève (essai n° {tentative}) : {str(reponse)[:500]}
 {consigne_juge}
 S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux phrases, sans en faire trop.
 {geste}
+{TON}
 
 {REGLES_VOIX}
 

@@ -25,3 +25,8 @@ def test_reponse_libre_injugeable_et_json_bancal():
     assert re_.reaction_reponse('{"correct": null, "parole": "وضح ليا"}', None)["correct"] is None
     assert re_.reaction_reponse('{"correct": "oui", "parole": "x"}', None) is None
     assert re_.reaction_reponse("rien", None) is None
+
+
+def test_ton_chaleureux_dans_le_prompt():
+    p = re_.prompt_reponse({"title": "Retard"}, Q, "B", 1, None)
+    assert "برافو عليك" in p and "ne félicite pas une réponse fausse" in p

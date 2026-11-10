@@ -125,7 +125,7 @@ def test_kernel_construit(tmp_path, actif):
     construire_kernel(tmp_path, "CLE'\"", "l1", "jeton")
     meta = json.loads((tmp_path / "kernel-metadata.json").read_text(encoding="utf-8"))
     assert meta["id"] == "prof/academy-tts-direct" and meta["is_private"] and meta["enable_gpu"]
-    assert meta["kernel_sources"] == ["prof/academy-v4-entrainement", "prof/academy-moulsot-v4"]   # voix + MoulSot v4
+    assert meta["kernel_sources"] == ["prof/academy-v5-bodi", "prof/academy-moulsot-v4"]   # voix + MoulSot v4
     source = (tmp_path / "serveur.py").read_text(encoding="utf-8")
     assert "__CONF__" not in source and "__REF_B64__" not in source
     compile(source, "serveur.py", "exec")
@@ -146,7 +146,7 @@ def test_tts_service_suit_le_kernel(tmp_path, actif, monkeypatch):
     asyncio.run(p.recevoir_annonce({"etat": "pret", "cle": p.cle, "lancement": p.lancement,
                                     "url": "https://h.trycloudflare.com", "jeton": "j"}))
     assert tts_service._academy_cible() == ("https://h.trycloudflare.com", "j")
-    assert "kaggle-v4-amine-vif" in tts_service._reglages_signature("academy")
+    assert "kaggle-v5-bodi" in tts_service._reglages_signature("academy")
 
 
 def test_attente_courte_si_presque_pret(tmp_path, actif, monkeypatch):
