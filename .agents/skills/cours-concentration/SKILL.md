@@ -50,6 +50,7 @@ Every course is now made like the waves example (`backend/data/courses/phys_ch1_
    - Both slides belong to the « rédiger / bilan » competence and ask no question; the gaps shown are those the free mode will reuse (skill `suivi-des-acquis`).
 10. **Check:** `python preparer_reponses.py verifier <cours.json>` must print « cours prêt pour le mode concentration » (every `mot` found, every track present, every question keyed, every reaction written and voiced). Then play the course in the browser (pane visible: a hidden pane slows the animations and falsifies the timings): freezes on their words, tutor in his column, questions at the end, reactions voiced.
 11. **Show the user**, wait for validation; only then register the simulations as lesson resources, publish the deck, refresh the voice cache, deploy.
+12. **Teachers review it on the free link** (user rule, 10 November 2026): every concentration course `<matière>_chN_<clé>.json` is served, even as a draft, at `https://moalim.online/cours-ondes/?cours=<id>` (`?cours=liste` lists them) after `python -I scripts/publier_cours_ondes.py`. On each slide the teacher votes 👍 / 👎 and writes a comment (`/public/cours-ondes/avis`); the admin reads them in the dashboard tab « Avis des profs » (`/admin?tab=avis`), opens the slide, corrects it, marks it « corrigé ». **Students** (account mode) only get a course once it carries `status: published`, `remplace_la_base: true` and `lecon_remplacee: <lesson id>` (lesson ids: table `lessons`, `title_fr`); drafts never reach them.
 
 ## Traps already met
 
