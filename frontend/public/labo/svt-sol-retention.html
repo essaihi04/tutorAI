@@ -210,6 +210,325 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 </script><!--/labnav-->
 <script src="vendor/three-r128.min.js"></script>
 <script src="vendor/OrbitControls-r128.js"></script>
+<script id="labmains">
+/* Mains gantées du labo (nov. 2026, demande de l'enseignant) : deux mains en gants nitrile font
+   TOUS les gestes. Aucun objet ne bouge seul : la main vient le prendre, le tient pendant le geste (dévisser, verser,
+   presser la pissette, plonger la sonde…), le repose et se retire hors du champ.
+   Branchement générique sur la file de gestes du moteur (ST.q) :
+   - chaque étape de la file a un objet `obj` : une main libre vient le saisir avant que l'étape commence (étape
+     d'attente insérée en tête de file, 0,24 s), puis suit l'objet image par image (prise calculée sur sa forme) ;
+   - un bouchon qu'on dévisse ou revisse : la main droite le pince, la main gauche tient le flacon ;
+   - un objet laissé incliné (pissette qu'on presse, récipient qui finit de s'égoutter) reste tenu ;
+   - une action sans geste (tare, marche/arrêt, minuteur…) : l'index appuie sur l'appareil ;
+   - une action maintenue sans geste (robinet de burette) : la main tient l'objet tant qu'on maintient.
+   Installation dans la fonction principale de chaque manip, après `window.__lab = …` :
+     if (window.LabMains) { runQueue = LabMains.install({ ST, TOOLS, L, runQueue, startPour: …, stopPour: … }); menuFor = LabMains.wrapMenu(menuFor); }
+   Source unique : mains.js ; inject-mains.py la recopie dans les pages. */
+(function () {
+  if (window.LabMains) return;
+  const GLOVE = 0x5b7fe4, GLOVE_DARK = 0x4a6bd0; // gant nitrile bleu, manchette un ton plus foncé
+  const POKE_RE = /tar|marche|arr[êe]t|allum|[ée]tein|d[ée]marr|z[ée]ro|minut|chrono|lancer|mesur|[ée]talonn|r[ée]gl|bouton|appuy|agitat|g[ée]n[ée]rat|acqu|enregistr|jour/i;
+  let THREE, C, M = null;
+  const lin = (h) => new THREE.Color(h).convertSRGBToLinear();
+  const ease = (k) => k * k * (3 - 2 * k);
+
+  /* ---------------------------------------------------------------- modèle d'une main (repère : centre de la paume,
+     doigts vers +Y, paume tournée vers +Z, pouce du côté +X pour la droite (s = 1), −X pour la gauche (s = −1)) */
+  function makeHand(s, mats) {
+    const H = new THREE.Group(); H.name = s > 0 ? "main droite" : "main gauche";
+    const add = (par, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; m.raycast = () => {}; par.add(m); return m; };
+    // paume : ellipsoïde aplati + dos de main + jointure des doigts
+    const palm = add(H, new THREE.SphereGeometry(1, 28, 18), mats.glove); palm.scale.set(0.041, 0.051, 0.0155);
+    const back = add(H, new THREE.SphereGeometry(1, 24, 14), mats.glove, 0, 0.004, -0.004); back.scale.set(0.038, 0.047, 0.013);
+    const kn = add(H, new THREE.CylinderGeometry(0.0118, 0.0118, 0.07, 16), mats.glove, 0, 0.041, 0.0); kn.rotation.z = Math.PI / 2;
+    // doigts : 3 phalanges chacun, articulées (rotation.x > 0 = le doigt se replie vers la paume)
+    const seg = (par, len, r, tip) => {
+      const j = new THREE.Group(); par.add(j);
+      add(j, new THREE.SphereGeometry(r, 14, 10), mats.glove);
+      add(j, new THREE.CylinderGeometry(r * 0.93, r, len, 14, 1, true), mats.glove, 0, len / 2, 0);
+      if (tip) add(j, new THREE.SphereGeometry(r * 0.93, 14, 10), mats.glove, 0, len, 0);
+      return j;
+    };
+    const finger = (x, y, lens, r, splay) => {
+      const base = new THREE.Group(); base.position.set(x, y, 0.001); base.rotation.z = splay; H.add(base);
+      const j1 = seg(base, lens[0], r, false), j2 = seg(j1, lens[1], r * 0.94, false); j2.position.y = lens[0];
+      const j3 = seg(j2, lens[2], r * 0.88, true); j3.position.y = lens[1];
+      return [j1, j2, j3];
+    };
+    const F = [
+      finger(s * 0.027, 0.044, [0.027, 0.022, 0.019], 0.0094, -s * 0.05), // index
+      finger(s * 0.009, 0.047, [0.029, 0.025, 0.021], 0.0097, 0), // majeur
+      finger(-s * 0.01, 0.045, [0.027, 0.023, 0.02], 0.0092, s * 0.04), // annulaire
+      finger(-s * 0.027, 0.039, [0.022, 0.018, 0.017], 0.0081, s * 0.1), // auriculaire
+    ];
+    // pouce : part du bas de la paume, en biais vers +X·s, s'oppose en se repliant vers la paume
+    const tb = new THREE.Group(); tb.position.set(s * 0.03, -0.022, 0.007); tb.rotation.set(0.45, s * 0.35, -s * 0.45); H.add(tb);
+    const t1 = seg(tb, 0.032, 0.0118, false), t2 = seg(t1, 0.026, 0.011, false); t2.position.y = 0.032;
+    const t3 = seg(t2, 0.022, 0.0102, true); t3.position.y = 0.026;
+    // poignet et revers du gant
+    const wr = add(H, new THREE.CylinderGeometry(0.025, 0.027, 0.05, 20), mats.glove, 0, -0.068, -0.002); wr.scale.set(1.3, 1, 0.78);
+    const cuff = add(H, new THREE.CylinderGeometry(0.029, 0.031, 0.03, 22, 1, false), mats.glove, 0, -0.098, -0.002); cuff.scale.set(1.2, 1, 0.82);
+    // manchette du gant qui s'estompe (sans bras ni manche : un avant-bras entier masquerait la paillasse dès que la caméra s'approche)
+    const gaunt = add(H, new THREE.CylinderGeometry(0.031, 0.034, 0.05, 24, 1, true), mats.fade, 0, -0.137, -0.002); gaunt.scale.set(1.2, 1, 0.84); gaunt.castShadow = false; gaunt.renderOrder = 3;
+    H.userData = { F, T: [t1, t2, t3], s, tip: null };
+    return H;
+  }
+  // poses : courbure de chaque phalange des 4 doigts (index à part) et du pouce
+  function setCurl(H, c) {
+    const u = H.userData;
+    u.F.forEach((f, i) => { const v = i === 0 && c.idx ? c.idx : c.f; f[0].rotation.x = v[0]; f[1].rotation.x = v[1]; f[2].rotation.x = v[2]; });
+    u.T[0].rotation.x = c.th[0]; u.T[1].rotation.x = c.th[1]; u.T[2].rotation.x = c.th[2];
+  }
+  const POSE = {
+    rest: { f: [0.35, 0.45, 0.3], th: [0.2, 0.25, 0.2] },
+    point: { f: [1.45, 1.5, 1.1], idx: [0.04, 0.05, 0.03], th: [0.7, 0.6, 0.4] },
+    pinch: { f: [1.0, 1.0, 0.7], th: [0.7, 0.55, 0.4] },
+  };
+  const wrapPose = (r) => { const a = Math.min(4.2, Math.max(0.7, 0.088 / (r + 0.006))); return { f: [a * 0.36, a * 0.36, a * 0.28], th: [0.55 + Math.min(0.4, a * 0.1), 0.55, 0.4] }; };
+  const lerpPose = (a, b, k) => { const L = (x, y) => x.map((v, i) => v + (y[i] - v) * k); return { f: L(a.f, b.f), idx: L(a.idx || a.f, b.idx || b.f), th: L(a.th, b.th) }; };
+
+  // dégradé d'opacité de la manchette (v = 1 côté main, v = 0 côté coude)
+  function fadeTex() {
+    const c = document.createElement("canvas"); c.width = 4; c.height = 64; const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 0, 64);
+    g.addColorStop(0, "#fff"); g.addColorStop(0.25, "#fff"); g.addColorStop(1, "#000"); x.fillStyle = g; x.fillRect(0, 0, 4, 64);
+    const t = new THREE.CanvasTexture(c); return t;
+  }
+
+  /* ---------------------------------------------------------------- forme d'un objet (repère local), mise en cache */
+  const SHAPES = new WeakMap();
+  function shapeOf(obj) {
+    let sh = SHAPES.get(obj); if (sh) return sh;
+    obj.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3(), pts = [];
+    obj.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      for (let p = o; p && p !== obj; p = p.parent) if (p.visible === false) return;
+      if (o.material && o.material.visible === false) return; // zones de clic invisibles
+      if (o.geometry.type === "TubeGeometry") return; // câbles, filets de liquide
+      const pos = o.geometry.attributes.position, step = Math.max(1, Math.floor(pos.count / 900));
+      m.multiplyMatrices(inv, o.matrixWorld);
+      for (let i = 0; i < pos.count; i += step) { v.fromBufferAttribute(pos, i).applyMatrix4(m); pts.push(v.x, v.y, v.z); }
+    });
+    const bb = new THREE.Box3(); for (let i = 0; i < pts.length; i += 3) bb.expandByPoint(v.set(pts[i], pts[i + 1], pts[i + 2]));
+    if (!pts.length) bb.set(new THREE.Vector3(-0.01, 0, -0.01), new THREE.Vector3(0.01, 0.02, 0.01));
+    sh = { pts, bb, size: bb.getSize(new THREE.Vector3()), c: bb.getCenter(new THREE.Vector3()) };
+    SHAPES.set(obj, sh); return sh;
+  }
+  // support : plus grande avancée de la forme dans la direction d (repère local), dans une tranche autour de la position t le long de l'axe a
+  function support(sh, a, t, d, c, band) {
+    let best = -1, n = 0; const P = sh.pts;
+    for (let i = 0; i < P.length; i += 3) {
+      const x = P[i] - c.x, y = P[i + 1] - c.y, z = P[i + 2] - c.z, along = x * a.x + y * a.y + z * a.z;
+      if (Math.abs(along - t) > band) continue; n++;
+      const sd = x * d.x + y * d.y + z * d.z; if (sd > best) best = sd;
+    }
+    return n ? best : null;
+  }
+
+  /* ---------------------------------------------------------------- prise d'un objet par une main */
+  let tmpQ, UP; // créés à l'installation (THREE peut se charger après ce script)
+  function camDirH(at) { const d = C.L.cam.position.clone().sub(at); d.y = 0; if (d.lengthSq() < 1e-6) d.set(0, 0, 1); return d.normalize(); }
+  function basisQuat(X, Y, Z) { return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z)); }
+  // calcule, au moment de la saisie, où et comment la main tient l'objet (point et orientation dans le repère de l'objet)
+  function planGrip(obj, s) {
+    const sh = shapeOf(obj), sz = sh.size, maxD = Math.max(sz.x, sz.y, sz.z);
+    obj.updateMatrixWorld(true);
+    const wq = obj.getWorldQuaternion(new THREE.Quaternion()), iq = wq.clone().invert(), wp = obj.localToWorld(sh.c.clone());
+    const cd = camDirH(wp), cr = new THREE.Vector3().crossVectors(UP, cd).normalize(); // vers la caméra, à droite de l'élève
+    const toLocal = (w) => w.clone().applyQuaternion(iq).normalize();
+    const ws = obj.getWorldScale(new THREE.Vector3()), sc = (ws.x + ws.y + ws.z) / 3 || 1;
+    if (maxD < 0.045) { // petit objet (bouchon, clé de robinet) : pincé par le dessus
+      const top = new THREE.Vector3(sh.c.x, sh.bb.max.y, sh.c.z);
+      return { kind: "pinch", P: top, lift: 0.03, ref: cd.clone().negate().addScaledVector(cr, -s * 0.35).normalize(), pose: POSE.pinch };
+    }
+    const horiz = Math.max(sz.x, sz.z) > 1.6 * sz.y && Math.max(sz.x, sz.z) > 0.07;
+    let A, t, S, T;
+    if (horiz) { // spatule, cuillère : on tient le manche (le bout le plus fin), pouce vers l'outil
+      A = sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
+      const half = (sz.x >= sz.z ? sz.x : sz.z) / 2, side = new THREE.Vector3(A.z, 0, A.x), up = new THREE.Vector3(0, 1, 0);
+      const spread = (end) => { const a = support(sh, A, end * half * 0.85, up, sh.c, half * 0.15), b = support(sh, A, end * half * 0.85, side, sh.c, half * 0.15), b2 = support(sh, A, end * half * 0.85, side.clone().negate(), sh.c, half * 0.15); return (a || 0) + (b || 0) + (b2 || 0); };
+      const handleEnd = spread(1) < spread(-1) ? 1 : -1;
+      t = handleEnd * half * 0.62; T = A.clone().multiplyScalar(-handleEnd);
+      S = toLocal(new THREE.Vector3(0, 1, 0).addScaledVector(cd, 0.6)); S.addScaledVector(A, -S.dot(A)).normalize();
+    } else { // objet debout : tenu à pleine main sur le côté, pouce vers le haut
+      A = new THREE.Vector3(0, 1, 0); const thin = sz.y > 2.4 * Math.max(sz.x, sz.z);
+      t = (thin ? 0.24 : -0.06) * sz.y; T = A.clone();
+      const ang = 2.0; // paume sur le côté, un peu en arrière (≈ 115° de l'axe de la caméra) : le poignet revient vers l'élève, du côté de sa main
+      const wsd = cd.clone().multiplyScalar(Math.cos(ang)).addScaledVector(cr, s * Math.sin(ang));
+      S = toLocal(wsd); S.addScaledVector(A, -S.dot(A)).normalize();
+    }
+    let r = support(sh, A, t, S, sh.c, 0.012); if (r == null) r = Math.max(sz.x, sz.z) / 2;
+    const rw = r * sc, P = sh.c.clone().addScaledVector(A, t).addScaledVector(S, r);
+    // orientation de la main dans le repère de l'objet : X = pouce (s), Z = paume vers l'objet, Y = doigts
+    const X = T.clone().multiplyScalar(s), Z = S.clone().negate(), Y = new THREE.Vector3().crossVectors(Z, X);
+    return { kind: "wrap", P, off: 0.0165 / sc, S, q: basisQuat(X, Y, Z), pose: wrapPose(rw) };
+  }
+  // pose de la main (monde) pour une prise donnée, à cet instant
+  function gripPose(obj, gp, s, out) {
+    obj.updateMatrixWorld(true);
+    if (gp.kind === "pinch") { // la main suit la position du bouchon mais ne tourne pas avec lui (les doigts « vissent »)
+      const p = obj.localToWorld(gp.P.clone()), ax = UP.clone().applyQuaternion(obj.getWorldQuaternion(tmpQ)).normalize();
+      out.p.copy(p).addScaledVector(ax, gp.lift);
+      const ry = obj.rotation.y, wob = 0.32 * Math.sin(ry * 2);
+      // doigts vers le fond (l'avant-bras revient vers l'élève), paume vers le bas
+      const Y = gp.ref.clone().addScaledVector(ax, -gp.ref.dot(ax)).normalize().applyAxisAngle(ax, wob), Z = ax.clone().negate(), X = new THREE.Vector3().crossVectors(Y, Z);
+      out.p.addScaledVector(Y, -0.04); // paume en avant du bouchon : le bout des doigts se replie dessus
+      out.q.copy(basisQuat(X, Y, Z)); return out;
+    }
+    const p = obj.localToWorld(gp.P.clone().addScaledVector(gp.S, gp.off));
+    out.p.copy(p); out.q.copy(obj.getWorldQuaternion(tmpQ)).multiply(gp.q); return out;
+  }
+
+  /* ---------------------------------------------------------------- les deux mains */
+  function Mains(ctx) {
+    this.ctx = ctx; this.hands = null; this.holdN = 0; this.stats = { grab: 0, poke: 0, hold: 0 }; // stats : pour les tests
+  }
+  Mains.prototype.build = function () {
+    const sc = this.ctx.L.scene; if (!sc) return false;
+    const mats = {
+      glove: new THREE.MeshPhysicalMaterial({ color: lin(GLOVE), roughness: 0.48, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.55 }),
+      fade: new THREE.MeshStandardMaterial({ color: lin(GLOVE_DARK), roughness: 0.5, metalness: 0, transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaMap: fadeTex() }),
+    };
+    this.hands = [1, -1].map((s) => {
+      const H = makeHand(s, mats); H.visible = false; sc.add(H); setCurl(H, POSE.rest);
+      // bout de l'index en pose « pointer » (repère de la main) pour viser un bouton
+      setCurl(H, POSE.point); H.updateMatrixWorld(true); const tip = new THREE.Vector3(); H.userData.F[0][2].children[2].getWorldPosition(tip); H.userData.tip = H.worldToLocal(tip.clone()); setCurl(H, POSE.rest);
+      return { s, H, mode: "rest", obj: null, gp: null, b: 1, dur: 0.26, from: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, cur: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, pose: POSE.rest, curl: POSE.rest, idle: 0, keep: false, sec: null, t: 0 };
+    });
+    return true;
+  };
+  Mains.prototype.restPose = function (h, out) {
+    const cam = this.ctx.L.cam, f = new THREE.Vector3(), r = new THREE.Vector3(), u = new THREE.Vector3();
+    cam.updateMatrixWorld(); cam.matrixWorld.extractBasis(r, u, f); f.negate();
+    out.p.copy(cam.position).addScaledVector(f, 0.42).addScaledVector(r, h.s * 0.2).addScaledVector(u, -0.33);
+    const Y = f.clone().addScaledVector(u, -0.2).normalize(), Z = u.clone().negate().addScaledVector(Y, Y.dot(u)).normalize(), X = new THREE.Vector3().crossVectors(Y, Z);
+    out.q.copy(basisQuat(X, Y, Z)); return out;
+  };
+  Mains.prototype.retarget = function (h, mode) {
+    h.from.p.copy(h.cur.p); h.from.q.copy(h.cur.q);
+    if (!h.H.visible) this.restPose(h, h.from); // la main arrive d'en bas, hors du champ
+    h.mode = mode; h.b = 0; h.idle = 0; h.t = 0;
+  };
+  Mains.prototype.grab = function (h, obj, opt = {}) {
+    if (h.mode === "grip" && h.obj === obj) { h.sec = opt.sec || null; return 0; }
+    this.stats.grab++; h.obj = obj; h.gp = planGrip(obj, h.s); h.pose = h.gp.pose; h.sec = opt.sec || null; h.keep = !!opt.keep;
+    const was = h.H.visible; this.retarget(h, "grip");
+    const tgt = gripPose(obj, h.gp, h.s, { p: new THREE.Vector3(), q: new THREE.Quaternion() });
+    if (was && h.cur.p.distanceTo(tgt.p) < 0.02) { h.b = 1; return 0; }
+    return h.dur;
+  };
+  Mains.prototype.release = function (h) { h.auto = false; h.obj = null; h.gp = null; h.keep = false; h.sec = null; h.pose = POSE.rest; this.retarget(h, "rest"); };
+  Mains.prototype.poke = function (name) {
+    const T = this.ctx.TOOLS[name]; if (!T || !T.obj || !this.hands) return;
+    this.stats.poke++; const h = this.free(); const bb = new THREE.Box3().setFromObject(T.obj), c = bb.getCenter(new THREE.Vector3()), sz = bb.getSize(new THREE.Vector3());
+    const cd = camDirH(c), p = c.clone(); p.y = bb.min.y + sz.y * 0.55;
+    const tx = Math.abs(cd.x) > 1e-3 ? sz.x / 2 / Math.abs(cd.x) : 1e9, tz = Math.abs(cd.z) > 1e-3 ? sz.z / 2 / Math.abs(cd.z) : 1e9; p.addScaledVector(cd, Math.min(tx, tz, 0.3));
+    const Y = cd.clone().negate().addScaledVector(UP, -0.45).normalize(), Z = UP.clone().negate().addScaledVector(Y, Y.dot(UP)).normalize(), X = new THREE.Vector3().crossVectors(Y, Z);
+    h.obj = null; h.gp = null; h.keep = false; h.sec = null; h.pose = POSE.point; h.pk = { p, q: basisQuat(X, Y, Z), Y };
+    this.retarget(h, "poke");
+  };
+  // main à utiliser : une main libre (la droite d'abord), sinon celle qui ne tient rien d'important
+  Mains.prototype.free = function (not) {
+    const [R, G] = this.hands, ok = (h) => h !== not && h.mode !== "grip";
+    if (ok(R)) return R; if (ok(G)) return G;
+    const cand = [R, G].filter((h) => h !== not && !h.keep); const h = cand.find((x) => !x.sec) || cand[0] || (R !== not ? R : G);
+    return h;
+  };
+  const rootOf = (o, TOOLS) => { const set = new Set(Object.values(TOOLS).map((t) => t.obj)); for (let p = o; p; p = p.parent) if (set.has(p)) return p; return o; };
+  // une étape de la file commence : la main saisit l'objet ; renvoie le temps d'approche
+  Mains.prototype.onStep = function (a) {
+    const obj = a.obj; if (!obj || !obj.isObject3D || a.__mains) return 0; a.__mains = true;
+    let vis = true; for (let p = obj; p; p = p.parent) if (p.visible === false) vis = false; if (!vis) return 0;
+    const held = this.hands.find((h) => h.mode === "grip" && h.obj === obj);
+    let wait = 0;
+    const u = obj.userData || {}, isCap = "off" in u || shapeOf(obj).size.y < 0.045 && obj.parent && obj.parent !== this.ctx.L.g;
+    const primary = held || this.free();
+    wait = Math.max(wait, this.grab(primary, obj));
+    if (isCap) { // l'autre main tient le flacon pendant qu'on dévisse ou revisse
+      const par = u.par || (obj.parent !== this.ctx.L.g ? obj.parent : null);
+      if (par && par !== this.ctx.L.g) { const bottle = rootOf(par, this.ctx.TOOLS); const other = this.free(primary); if (other && other !== primary) wait = Math.max(wait, this.grab(other, bottle, { sec: obj })); }
+    }
+    return wait;
+  };
+  Mains.prototype.frame = function (dt) {
+    if (!this.hands && !this.build()) return;
+    const ST = this.ctx.ST, q = ST.q || [], fast = !!window.__fast;
+    // nouvelle étape en tête de file : la main vient d'abord saisir l'objet (étape d'attente insérée)
+    const a = q[0];
+    if (a && a.t === undefined && !a.__mains && !a.__wait) {
+      const w = this.onStep(a);
+      if (w > 0.02 && !fast) { const d = new THREE.Object3D(); a.obj.getWorldPosition(d.position); q.unshift({ obj: d, dur: w * 0.95, up: 0, __wait: true, __mains: true }); }
+    }
+    const flow = !!(ST.pouring || ST.sFlow);
+    // robinet de burette ouvert (élève ou démonstration) : une main tient la clé tant que la burette coule
+    const tap = this.ctx.TOOLS.tap && this.ctx.TOOLS.tap.obj;
+    if (tap && ST.pouring && !q.length && !this.hands.some((h) => h.mode === "grip" && h.obj === tap)) { const h = this.free(); if (h) { this.grab(h, tap, { keep: true }); h.auto = true; } }
+    for (const h of this.hands) {
+      // relâcher quand le geste est fini (sauf objet encore incliné, versement maintenu en cours)
+      if (h.mode === "grip") {
+        const inQ = q.some((st) => st.obj === h.obj || (h.sec && st.obj === h.sec));
+        if (inQ || (h.keep && this.holdN > 0) || (h.auto && ST.pouring)) h.idle = 0;
+        else {
+          h.idle += dt;
+          const up = UP.clone().applyQuaternion(h.obj.getWorldQuaternion(tmpQ)), tilted = up.y < 0.96 && !h.sec && h.gp.kind !== "pinch";
+          const lim = tilted ? (flow || this.holdN > 0 ? 1e9 : 2.2) : 0.12;
+          if (fast || h.idle > lim || !h.obj.parent) this.release(h);
+        }
+      }
+      if (h.mode === "poke") { h.t += dt; if (h.t > (fast ? 0 : 0.62)) this.release(h); }
+      // pose visée
+      const tgt = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
+      if (h.mode === "grip") gripPose(h.obj, h.gp, h.s, tgt);
+      else if (h.mode === "poke") { const k = h.t < 0.26 ? -0.014 : h.t < 0.38 ? lerpN(-0.014, 0.002, (h.t - 0.26) / 0.12) : 0.002; tgt.q.copy(h.pk.q); tgt.p.copy(h.pk.p).addScaledVector(h.pk.Y, k).sub(h.H.userData.tip.clone().applyQuaternion(h.pk.q)); }
+      else this.restPose(h, tgt);
+      // transition douce vers la pose visée, puis main solidaire de l'objet
+      if (h.b < 1) {
+        h.b = fast ? 1 : Math.min(1, h.b + dt / h.dur); const e = ease(h.b);
+        h.cur.p.lerpVectors(h.from.p, tgt.p, e); if (h.mode !== "rest") h.cur.p.y += 0.035 * Math.sin(Math.PI * e);
+        h.cur.q.copy(h.from.q).slerp(tgt.q, e);
+      } else { h.cur.p.copy(tgt.p); h.cur.q.copy(tgt.q); }
+      const show = !(h.mode === "rest" && h.b >= 1);
+      if (h.H.visible !== show) h.H.visible = show;
+      if (!show) continue;
+      h.H.position.copy(h.cur.p); h.H.quaternion.copy(h.cur.q);
+      h.curl = lerpPose(h.curl, h.pose, fast ? 1 : Math.min(1, dt * 14)); setCurl(h.H, h.curl);
+    }
+  };
+  const lerpN = (a, b, k) => a + (b - a) * Math.min(1, Math.max(0, k));
+  Mains.prototype.holdTool = function (name) {
+    const T = this.ctx.TOOLS[name]; if (!T || !T.obj) return; const h = this.free(); if (!h) return; this.stats.hold++;
+    this.grab(h, T.obj, { keep: true });
+  };
+
+  window.LabMains = {
+    install(ctx) {
+      THREE = window.THREE; if (!THREE) return ctx.runQueue;
+      tmpQ = new THREE.Quaternion(); UP = new THREE.Vector3(0, 1, 0);
+      C = ctx; M = new Mains(ctx); LabMains.m = M;
+      const rq = ctx.runQueue;
+      return function runQueue(dt) { try { M.frame(dt); } catch (e) { if (!M.err) { M.err = e; console.warn("mains :", e); } } return rq(dt); };
+    },
+    // les actions du menu : appui de l'index sur un appareil, main qui tient l'objet pendant une action maintenue
+    wrapMenu(menuFor) {
+      return function (name) {
+        const items = menuFor.apply(this, arguments); if (!M || !Array.isArray(items)) return items;
+        const qn = () => (M.ctx.ST.q || []).length;
+        return items.map((it) => {
+          const w = Object.assign({}, it);
+          if (it.hold) {
+            const st = it.start || M.ctx.startPour, sp = it.stop || M.ctx.stopPour;
+            if (st) w.start = function () { const n0 = qn(); const r = st.apply(this, arguments); M.holdN++; if (qn() === n0) M.holdTool(name); return r; };
+            if (sp) w.stop = function () { const r = sp.apply(this, arguments); M.holdN = 0; if (M.hands) M.hands.forEach((h) => { if (h.keep) h.keep = false; }); return r; };
+          } else if (typeof it.run === "function") {
+            w.run = function () { const n0 = qn(); const r = it.run.apply(this, arguments); try { if (M.hands && qn() === n0 && POKE_RE.test(String(it.t || ""))) M.poke(name); } catch (e) {} return r; };
+          }
+          return w;
+        });
+      };
+    },
+  };
+})();
+</script>
 <script>
 /* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
 if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
@@ -1199,6 +1518,7 @@ function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidde
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
 init3d(); resetState(); stepButtons(); cadrages(); demoButtons();
 window.__lab = { onClick, ST, evaluate, startSoilPour, stopSoilPour, demoCalc, rowData, renderTable, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, simulate, doRead, doPourWater, doPourSoil, scoop, doCotton, doTare, doTimer, doMix, addWater, emptyStation, emptyCyl, wbMass, shown };
+if (window.LabMains) { runQueue = LabMains.install({ ST, TOOLS, L, runQueue, startPour: typeof startPour === "function" ? startPour : null, stopPour: typeof stopPour === "function" ? stopPour : null }); menuFor = LabMains.wrapMenu(menuFor); } /*labmains*/
 
 })();
 </script>
