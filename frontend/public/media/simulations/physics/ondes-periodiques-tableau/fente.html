@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ouverture et diffraction — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Cuve à ondes vue de dessus : une onde arrive sur une paroi percée d'une ouverture de largeur a ; derrière, elle passe tout droit ou repart en arcs de cercle, avec la même longueur d'onde"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Rejouer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="eau.js"></script>
+<script>
+/*
+ * Ouverture et diffraction (cours « Ondes mécaniques progressives périodiques », 10 novembre 2026).
+ * Cuve à ondes vue de dessus : N = 20 Hz, λ = 1,5 cm, v = 0,30 m/s ; une paroi percée d'une ouverture de largeur a
+ * (1 à 6 cm, bords glissables). Vues (?vue=) : large (a = 6 cm), voisine (2 cm), etroite (1 cm), circulaire_incidente.
+ *
+ * Modèle simple, qualitatif mais sans rien de faux (pas de calcul d'intensité) :
+ *  - la phase en un point est 2πN(t − u/v), u = chemin depuis la source : avant la paroi, la distance à la réglette
+ *    (ou à S) ; derrière, dans le prolongement de l'ouverture, le même chemin ; sur les côtés, le chemin jusqu'au
+ *    bord de l'ouverture plus la distance à ce bord (arcs de cercle centrés sur les bords, donc sur l'ouverture
+ *    quand elle est étroite). Même N, même v, donc même λ de part et d'autre : c'est ce que montrent les règles.
+ *  - l'amplitude sur les côtés décroît avec l'angle φ (vers l'ombre) comme exp(−(φ/φ₀)²), φ₀ = 1,5·λ/a :
+ *    ouverture large → l'onde passe presque tout droit (diaphragmée) ; a de l'ordre de λ ou plus petite → arcs dans
+ *    presque toutes les directions. Ni amortissement ni réflexion (bords et paroi absorbants, pour l'œil).
+ * Le mouvement est ralenti 10 fois pour l'œil. Un seul bouton ; les deux bords de l'ouverture se glissent.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const E = window.EauPeinte;
+const $ = id => document.getElementById(id);
+const VUES = ['large', 'voisine', 'etroite', 'circulaire_incidente'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'large';
+const N = 20, V = 0.30, LAM = V / N, T = 1 / N;      // λ = 1,5 cm
+const PXCM = 20, PXM = 100 * PXCM, LENT = 0.1;
+const R = { x: 58, y: 50, w: 672, h: 290 }, YC = R.y + R.h / 2, XW = 300;     // XW : plan de la paroi
+const CIRC = vue === 'circulaire_incidente';
+const SRC = CIRC ? { x: 112, y: YC } : { x: 78, y: YC };                        // pointe S, ou réglette en x = 78
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, a: { large: 6, voisine: 2, etroite: 1, circulaire_incidente: 1 }[vue] };
+
+/* Géométrie de l'ouverture (px) et chemins (m). */
+const bords = () => { const h = S.a * PXCM / 2; return { y1: YC - h, y2: YC + h }; };
+const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) / PXM;
+const uSource = (x, y) => (CIRC ? dist(SRC.x, SRC.y, x, y) : (x - SRC.x) / PXM);   // chemin depuis la source, sans paroi
+const tParoi = () => (XW - SRC.x) / PXM / V;                                         // le front touche la paroi (sur l'axe)
+const phi0 = () => Math.min(3, 1.5 * LAM / (S.a / 100));                             // ouverture angulaire des arcs (rad)
+
+function plan() {
+  const tw = tParoi(), tP = Math.ceil((tw + 0.45) / T) * T;
+  return { tw, tP, regleAvant: tP + 0.05, regleApres: tP + 0.12, fin: tP + 0.2 };
+}
+/* L'eau est photographiée à tP : ensuite l'image reste arrêtée pour poser les règles. */
+const tauDe = t => Math.min(t, plan().tP);
+function onde(u, tau, amp = 1) {
+  if (u < 0) return null;
+  const ph = 2 * Math.PI * N * (tau - u / V); if (tau - u / V < 0) return null;
+  return { h: Math.sin(ph), s: -Math.cos(ph), amp };
+}
+const cretesU = tau => { const out = []; for (let k = 0; k < 400; k++) { const u = V * (tau - (k + 0.25) / N); if (u < 0) break; out.push(u); } return out; };
+const attenue = u => (CIRC ? 1 / Math.sqrt(1 + u / 0.09) : 1);                        // pour l'œil seulement (onde circulaire)
+const angle = (dx, dy) => Math.atan2(dy, dx);
+const norm = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a <= -Math.PI) a += 2 * Math.PI; return a; };
+
+/* ── Peinture de l'eau : onde incidente, onde transmise, onde diffractée sur les côtés ───────────── */
+function peindreEau(ctx, tau) {
+  const { y1, y2 } = bords(), umaxTot = 1400, cr = cretesU(tau), Z = R;
+  ctx.save(); E.chemin(ctx, R); ctx.clip(); E.fond(ctx, R);
+  // 1. Avant la paroi.
+  ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, XW - R.x, R.h); ctx.clip();
+  if (CIRC) {
+    const c = { forme: 'radial', x: SRC.x, y: SRC.y, umax: umaxTot, pas: 2, zone: Z, onde: r => onde(r / PXM, tau, attenue(r / PXM)) };
+    E.rides(ctx, c); E.liseres(ctx, c, cr.map(u => ({ u: u * PXM, a: .55 * attenue(u) })));
+  } else {
+    for (const sens of [1, -1]) {
+      ctx.save(); ctx.beginPath(); if (sens > 0) ctx.rect(SRC.x, R.y, XW - SRC.x, R.h); else ctx.rect(R.x, R.y, SRC.x - R.x, R.h); ctx.clip();
+      const c = { forme: 'lineaire', sens, x: SRC.x, umax: sens > 0 ? XW - SRC.x + 4 : SRC.x - R.x + 4, pas: 1.8, zone: Z, onde: r => onde(r / PXM, tau, .75) };
+      E.rides(ctx, c); E.liseres(ctx, c, cr.map(u => ({ u: u * PXM, a: .45 })));
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+  // 2. Derrière l'ouverture, dans son prolongement (bande droite, ou cône issu de S) : le même chemin depuis la source.
+  const E1 = { x: XW, y: y1 }, E2 = { x: XW, y: y2 };
+  const d1 = CIRC ? angle(E1.x - SRC.x, E1.y - SRC.y) : 0, d2 = CIRC ? angle(E2.x - SRC.x, E2.y - SRC.y) : 0;
+  const loin = (P, a) => [P.x + 3000 * Math.cos(a), P.y + 3000 * Math.sin(a)];
+  ctx.save(); ctx.beginPath(); ctx.moveTo(E1.x, E1.y); ctx.lineTo(...loin(E1, d1)); ctx.lineTo(...loin(E2, d2)); ctx.lineTo(E2.x, E2.y); ctx.closePath(); ctx.clip();
+  if (CIRC) {
+    const c = { forme: 'radial', x: SRC.x, y: SRC.y, umax: umaxTot, pas: 2, zone: Z, onde: r => onde(r / PXM, tau, attenue(r / PXM)) };
+    E.rides(ctx, c); E.liseres(ctx, c, cr.map(u => ({ u: u * PXM, a: .55 * attenue(u) })));
+  } else {
+    const c = { forme: 'lineaire', x: SRC.x, umax: R.x + R.w - SRC.x + 4, pas: 1.8, zone: Z, onde: r => onde(r / PXM, tau, .75) };
+    E.rides(ctx, c); E.liseres(ctx, c, cr.map(u => ({ u: u * PXM, a: .45 })));
+  }
+  ctx.restore();
+  // 3. Sur les côtés : arcs centrés sur chaque bord, chemin = (source → bord) + (bord → point) ; plus faibles vers l'ombre.
+  const p0 = phi0(), ampMax = CIRC ? 1 : .75;
+  for (const [B, d, cote] of [[E1, d1, -1], [E2, d2, 1]]) {
+    const uB = uSource(B.x, B.y);
+    E.masque(ctx, (o) => {
+      E.chemin(o, R); o.clip();
+      o.beginPath(); o.moveTo(B.x, B.y); o.lineTo(...loin(B, d)); const [fx] = loin(B, d); o.lineTo(fx, B.y + cote * 3000); o.lineTo(XW, B.y + cote * 3000); o.closePath(); o.clip();
+      const c = { forme: 'radial', x: B.x, y: B.y, umax: umaxTot, pas: 2, zone: Z, onde: r => onde(uB + r / PXM, tau, ampMax * attenue(uB + r / PXM)) };
+      E.rides(o, c); E.liseres(o, c, cr.map(u => ({ u: (u - uB) * PXM, a: .55 * attenue(u) })));
+    }, { x: B.x, y: B.y, depart: d + Math.PI, alpha: th => { const f = cote * norm(th - d); return f <= 0 ? 1 : Math.exp(-((f / p0) ** 2)); } });
+  }
+  ctx.restore();
+  // La paroi (deux blocs) et la source.
+  E.paroi(ctx, XW - 5, R.y, y1, 10); E.paroi(ctx, XW - 5, y2, R.y + R.h, 10);
+  E.boitier(ctx, 6, YC - 17, 44, 34); E.bras(ctx, 50, SRC.x, YC);
+  if (CIRC) E.pointe(ctx, SRC.x, SRC.y, 5); else E.reglette(ctx, SRC.x, R.y + 8, R.y + R.h - 8);
+}
+
+/* Régime affiché selon a / λ (mots du cours ; jamais « il ne se passe rien »). */
+function regime() {
+  const r = S.a / (LAM * 100);
+  if (r >= 3) return { nom: 'diaphragmee', l1: 'Ouverture large devant λ : l’onde passe tout droit,', l2: 'limitée à la largeur de l’ouverture (onde diaphragmée).' };
+  if (r > 1.5) return { nom: 'intermediaire', l1: 'Ouverture un peu plus grande que λ : l’onde passe,', l2: 'et ses bords s’arrondissent nettement.' };
+  return { nom: 'diffractee', l1: 'a de l’ordre de λ ou plus petite : diffraction nette,', l2: r < 1 ? 'arcs de cercle centrés sur l’ouverture, presque partout.' : 'arcs de cercle centrés sur l’ouverture.' };
+}
+
+/* Les règles : avant la paroi (sur l'onde incidente) et après (dans l'axe), bouts accrochés aux crêtes. */
+function regles() {
+  const P = plan(), tau = tauDe(S.t), cr = cretesU(tau), out = {};
+  const pose = (debut, finPose) => Math.max(0, Math.min(1, (S.t - debut) / (finPose - debut) + 1e-6));
+  const choisir = (u0) => { let best = cr[0]; for (const u of cr) if (Math.abs(u - u0) < Math.abs(best - u0)) best = u; return best; };
+  // Avant : de la crête la plus proche de 3,5 cm de la source (1,6 cm pour S, pour laisser la cote a libre), sur 3 intervalles.
+  const pa = pose(P.tP + 0.01, P.regleAvant);
+  if (pa > 0) {
+    const ua = choisir(CIRC ? 0.016 : 0.035), y = CIRC ? YC + 2 : YC + 74;
+    out.avant = { xa: SRC.x + ua * PXM, xb: SRC.x + (ua + 3 * LAM) * PXM, y, p: pa, n: 3 };
+  }
+  // Après : dans l'axe, à partir de la crête la plus proche de 2 cm derrière la paroi.
+  const pb = pose(P.tP + 0.07, P.regleApres);
+  if (pb > 0) {
+    const uW = uSource(XW, YC), ub = choisir(uW + 0.02), y = YC + 2;
+    out.apres = { xa: SRC.x + ub * PXM, xb: SRC.x + (ub + 3 * LAM) * PXM, y, p: pb, n: 3 };
+  }
+  return out;
+}
+function dessinerRegle(c, Rg, nom, couleur) {
+  const y = Rg.y - (1 - Rg.p) * 36;
+  E.regle(c.ctx, Rg.xa, Rg.xb, y, PXCM, Rg.p, 12);
+  c.repere(nom, Rg.xa - 12, y - 30, Rg.xb - Rg.xa + 24, 52, nom === 'regle_avant' ? 'la règle avant l’ouverture' : 'la règle après l’ouverture');
+  if (Rg.p < 1) return;
+  const pas = (Rg.xb - Rg.xa) / Rg.n;
+  for (let i = 0; i <= Rg.n; i++) c.ligne(Rg.xa + i * pas, y - 13, Rg.xa + i * pas, y + 1, { couleur: 'jaune', largeur: 2, tremble: .3 });
+  for (let i = 0; i < Rg.n; i++) { const x1 = Rg.xa + i * pas, x2 = x1 + pas; c.courbe(u => [x1 + pas * u, y - 15 - 6 * Math.sin(Math.PI * u)], 10, { couleur, largeur: 1.7 }); c.texte(String(i + 1), (x1 + x2) / 2, y - 25, { couleur, align: 'center', taille: 14 }); }
+}
+
+function dessiner(c) {
+  const P = plan(), tau = tauDe(S.t), { y1, y2 } = bords(), M = moments(), reg = regime();
+  c.direct(() => peindreEau(c.ctx, tau));
+  c.texte(CIRC ? 'Cuve vue de dessus : onde circulaire et ouverture' : 'Cuve vue de dessus : onde rectiligne et ouverture', 12, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.texte('onde incidente', CIRC ? 150 : 130, R.y + 22, { couleur: 'blanc', taille: 15 });
+  c.repere('onde_incidente', R.x + 4, R.y + 4, XW - R.x - 10, R.h - 8, 'l’onde incidente');
+  c.texte(CIRC ? 'S' : 'S (réglette)', CIRC ? SRC.x - 8 : SRC.x + 8, CIRC ? SRC.y - 12 : R.y + R.h - 12, { couleur: 'cyan', taille: 15, align: CIRC ? 'right' : 'left' });
+  c.texte('paroi', XW + 10, R.y + 22, { couleur: 'faible', taille: 14 });
+  c.direct(() => {
+    if (tau >= P.tw + T) {
+      const nom = reg.nom === 'diaphragmee' ? 'onde diaphragmée' : 'onde diffractée';
+      c.texte(nom, 560, R.y + 22, { couleur: 'blanc', taille: 15, align: 'center' });
+    }
+    c.repere('onde_diffractee', XW + 10, R.y + 4, R.x + R.w - XW - 14, R.h - 8, 'l’onde après l’ouverture');
+    if (S.t > P.tP) c.texte('photo : image arrêtée', 748, 32, { couleur: 'cyan', align: 'right', taille: 15 });
+    else c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, 748, 32, { couleur: 'faible', align: 'right', taille: 14 });
+    // L'ouverture : ses deux bords (poignées) et la cote a.
+    for (const yb of [y1, y2]) c.cercle(XW, yb, 6, { couleur: 'jaune', largeur: 2 });
+    c.cote(XW - 22, y1, XW - 22, y2, '', { couleur: 'jaune' });
+    c.texte('a', XW - 30, YC + 6, { couleur: 'jaune', align: 'right', taille: 18 });
+    c.texte('⇕', XW + 14, y1 - 6, { couleur: 'faible', taille: 14 });
+    c.repere('ouverture', XW - 40, y1 - 10, 60, y2 - y1 + 20, `l’ouverture : a = ${fr(S.a, 1)} cm`);
+    // En bas : a et λ côte à côte, puis ce que fait l'onde.
+    c.texte(`a = ${fr(S.a, 1)} cm ;  λ = ${fr(LAM * 100, 1)} cm`, 12, 368, { couleur: 'jaune', taille: 18 });
+    if (S.t >= M.premier_arc) { c.texte(reg.l1, 12, 392, { couleur: 'vert', taille: 16, max: 440 }); c.texte(reg.l2, 12, 414, { couleur: 'vert', taille: 16, max: 440 }); }
+    const Rg = regles();
+    if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) c.texte(`λ avant : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, 480, 368, { couleur: 'orange', taille: 17 }); }
+    if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) { c.texte(`λ après : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, 480, 392, { couleur: 'rose', taille: 17 }); } }
+    if (S.t >= P.fin - 0.04) c.texte('même N = 20 Hz, même λ, même v', 480, 414, { couleur: 'vert', taille: 16 });
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(29); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  const fin = plan().fin;
+  S.t = Math.min(fin, S.t + dt * LENT);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function moments() {
+  const P = plan(), m = {
+    onde_arrive: 0.5 * P.tw, ouverture_atteinte: P.tw, premier_arc: P.tw + T, quatre_arcs: P.tw + 4 * T + 0.002,
+    regle_avant: P.regleAvant, regle_apres: P.regleApres,
+  };
+  for (const k in m) m[k] = +Math.min(P.fin, m[k]).toFixed(4);
+  return m;
+}
+const MOTIFS = {
+  onde_arrive: 'l’onde avance vers la paroi', ouverture_atteinte: 'l’onde atteint l’ouverture',
+  premier_arc: 'une première ride passe l’ouverture', quatre_arcs: 'quatre rides sont passées par l’ouverture',
+  regle_avant: 'la règle est posée avant l’ouverture', regle_apres: 'la règle est posée après l’ouverture : même λ',
+};
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(plan().fin, Math.max(0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (mouvement ralenti 10 fois)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+function ceQuiSeVoit() {
+  const P = plan(), M = moments(), t = S.t, tau = tauDe(t), reg = regime(), uW = uSource(XW, YC);
+  const m = [`t = ${fr(t, 3)} s${S.running ? ' (la scène défile, ralentie 10 fois)' : S.fait ? ' (fin de la scène)' : ' (scène arrêtée)'}. Onde incidente ${CIRC ? 'circulaire (pointe en S)' : 'rectiligne (réglette)'}, N = 20 Hz, λ = 1,5 cm affichée. Ouverture a = ${fr(S.a, 1)} cm affichée (a/λ ≈ ${fr(S.a / (LAM * 100), 1)}).`];
+  if (t <= 0) m.push('Le vibreur n’a pas encore démarré.');
+  else if (tau < P.tw) m.push(`L’onde avance vers la paroi ; le front est à ${fr((uW - V * tau) * 100, 1)} cm de l’ouverture.`);
+  else {
+    const passees = cretesU(tau).filter(u => u > uW).length;
+    m.push(`L’onde a atteint l’ouverture ; ${passees} ride(s) passée(s) derrière la paroi.`);
+    if (t >= M.premier_arc) m.push(`Derrière la paroi (écrit au tableau) : ${reg.l1} ${reg.l2}`);
+  }
+  if (t > P.tP) m.push('Photo : l’image est arrêtée.');
+  const Rg = regles();
+  if (Rg.avant && Rg.avant.p >= 1) m.push('Règle avant l’ouverture : 4 traits, 3 intervalles, d = 4,5 cm : λ avant = 1,5 cm.');
+  if (Rg.apres && Rg.apres.p >= 1) m.push('Règle après l’ouverture, dans l’axe : 4 traits, 3 intervalles, d = 4,5 cm : λ après = 1,5 cm. Même λ avant et après.');
+  if (t >= P.fin - 0.04) m.push('Écrit : même N = 20 Hz, même λ, même v.');
+  return m.join(' ');
+}
+function message() {
+  const r = regime();
+  return r.nom === 'diffractee' ? 'Diffraction : l’onde repart en arcs de cercle ; même N, même λ, même v.' : r.nom === 'diaphragmee' ? 'Ouverture large : l’onde passe tout droit, limitée par l’ouverture ; même λ.' : 'L’onde passe et s’arrondit sur les bords ; même λ avant et après.';
+}
+
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le vibreur démarre… (mouvement ralenti 10 fois)'); pont.noter('start', { a_cm: S.a }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= plan().fin) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const fin = plan().fin;
+  S.running = false; S.jusqua = null; S.t = Math.min(fin, Math.max(0, t)); S.fait = S.t >= fin;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 3)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (!Number.isFinite(+p.a_cm)) return;
+  S.a = Math.min(6, Math.max(1, Math.round(+p.a_cm * 2) / 2)); scene.sale = true;
+  bulle($('feedback'), `Ouverture réglée : a = ${fr(S.a, 1)} cm.`);
+  pont.noter('set_parameters', { a_cm: S.a }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < plan().fin && !S.fait ? resume() : start()));
+
+/* Poignées : les deux bords de l'ouverture (on resserre ou on élargit, l'ouverture reste centrée). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py), { y1, y2 } = bords(); return Math.abs(x - XW) < 16 && (Math.abs(y - y1) < 14 || Math.abs(y - y2) < 14) ? 'bord' : null; },
+  bouger: (id, px, py) => { const [, y] = scene.local(px, py); const a = Math.min(6, Math.max(1, Math.round(Math.abs(y - YC) * 2 / PXCM * 2) / 2)); if (a !== S.a) { S.a = a; scene.sale = true; } },
+  lacher: () => { bulle($('feedback'), `Ouverture réglée : a = ${fr(S.a, 1)} cm.`); pont.noter('set_parameters', { a_cm: S.a }); pont.emettre(); if (!S.running && (S.fait || S.t === 0)) start(); },
+});
+
+const EXPLICATIONS = {
+  large: [{ repere: 'ouverture', texte: 'Une ouverture large devant λ.' }, { repere: 'onde_diffractee', texte: 'L’onde passe tout droit, limitée à la largeur de l’ouverture.' }],
+  voisine: [{ repere: 'ouverture', texte: 'a est de l’ordre de λ.' }, { repere: 'onde_diffractee', texte: 'L’onde repart en arcs de cercle centrés sur l’ouverture : c’est la diffraction.' }, { repere: 'regle_apres', texte: 'Après l’ouverture, la même longueur d’onde.' }],
+  etroite: [{ repere: 'ouverture', texte: 'Une ouverture plus petite que λ.' }, { repere: 'onde_diffractee', texte: 'Des arcs de cercle dans presque toutes les directions.' }],
+  circulaire_incidente: [{ repere: 'onde_incidente', texte: 'L’onde incidente est circulaire, centrée sur S.' }, { repere: 'onde_diffractee', texte: 'Après une ouverture étroite, elle repart en cercles centrés sur l’ouverture.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_fente', version: '1.0', title: 'Ouverture et diffraction — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: { a_cm: '1..6 (largeur de l’ouverture, en cm, pas de 0,5)' },
+    set_time: { time_s: `0..${fr(plan().fin, 3)} (arrêt sur cet instant, en s de l’expérience)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Cuve à ondes vue de dessus, onde ${CIRC ? 'circulaire' : 'rectiligne'} incidente, N = 20 Hz, λ = 1,5 cm, v = 0,30 m/s ; paroi percée d’une ouverture de largeur a (1 à 6 cm). La diffraction est nette quand a est de l’ordre de λ ou plus petite ; après l’ouverture, N, λ et v sont inchangées. Mouvement ralenti 10 fois.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: { a_cm: S.a, lambda_cm: 1.5, lambda_apres_cm: 1.5, frequence_hz: N, v_m_s: V, regime: regime().nom }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le vibreur va démarrer…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

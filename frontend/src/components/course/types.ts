@@ -19,6 +19,24 @@ export interface CourseQuestion {
   advance_on_timeout?: boolean;
   /** Index de la bonne option (mode concentration : correction immédiate et réaction préparée). */
   correct?: number;
+  /** Calcul ou raisonnement : la démonstration écrite à la main au tableau, après la réaction. */
+  demonstration?: Demonstration;
+}
+
+/**
+ * La démonstration manuscrite d'une question qui demande un calcul ou un raisonnement (user rule, 10 novembre 2026).
+ * Une fois l'élève a répondu et entendu la réaction, le tableau des questions l'écrit ligne par ligne pendant que le
+ * tuteur la dit ; chaque ligne apparaît quand la voix atteint son `mot` (extrait exact de `parole`, sa place dans le
+ * texte × la durée de la piste, comme `concentration.centre`). `audio` : la piste de la voix du cours ; sans piste,
+ * `parole` est dite par la voix en direct, par morceaux. Puis le carrousel passe seul à la question suivante.
+ */
+export interface Demonstration {
+  /** Le texte dit (règles de la voix : darija simple, nombres et unités en mots, aucun symbole). */
+  parole: string;
+  /** Les lignes écrites comme le barème les lit : relation, substitution, résultat avec unité (`y_M` → M en indice). */
+  lignes: { texte: string; mot: string }[];
+  /** La piste de `parole` (voix du cours), si elle est déjà calculée. */
+  audio?: string;
 }
 
 /** Réaction du tuteur préparée d'avance pour une réponse possible (texte dit, texte écrit, piste audio). */
@@ -50,6 +68,8 @@ export interface CourseExercise {
   pairs?: { left: string; right: string }[];
   /** Le mot de la fin, affiché une fois l'élève fixé. */
   explanation?: string;
+  /** Calcul ou raisonnement : la démonstration manuscrite (pour un vrai/faux, après sa dernière affirmation). */
+  demonstration?: Demonstration;
 }
 
 export interface CourseVisual {

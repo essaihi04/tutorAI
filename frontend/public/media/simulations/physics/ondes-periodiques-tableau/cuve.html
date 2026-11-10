@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cuve à ondes — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Cuve à ondes : un vibreur crée des rides périodiques sur l'eau, vue de dessus et vue de côté, une règle posée sur les rides"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Rejouer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="eau.js"></script>
+<script>
+/*
+ * Cuve à ondes (cours « Ondes mécaniques progressives périodiques », 10 novembre 2026).
+ * Un vibreur de fréquence N entretient une onde périodique à la surface de l'eau : y(r, t) = A sin 2πN(t − r/v)
+ * pour r ≤ v·t, eau calme au-delà du front. Ni amortissement ni réflexion : les bords sont absorbants.
+ * Valeurs du contrat : N = 20 Hz → λ = 1,5 cm, v = 0,30 m/s ; N = 30 Hz → λ = 1,1 cm, v = 0,33 m/s (la surface
+ * de l'eau est un milieu dispersif). Le mouvement est ralenti 10 fois pour l'œil (dit dans la bulle et l'état).
+ * Vues (?vue=) : dessus_cote, circulaire, rectiligne, compter, frequence.
+ * Un seul bouton ; la molette du vibreur (20 ↔ 30 Hz) et les bouts de la règle se règlent sur le dessin.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const E = window.EauPeinte;
+const $ = id => document.getElementById(id);
+const VUES = ['dessus_cote', 'circulaire', 'rectiligne', 'compter', 'frequence'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'dessus_cote';
+const PXCM = 20, PXM = 100 * PXCM;                  // 20 px pour 1 cm d'eau
+const VIT = { 20: 0.30, 30: 0.33 };                  // célérité des rides (m/s) selon N : milieu dispersif
+const lam = N => VIT[N] / N;                          // longueur d'onde (m)
+const LENT = 0.1;                                    // ralenti 10 fois pour l'œil (20 Hz → 2 oscillations par seconde à l'écran)
+const POINTE = vue === 'dessus_cote' || vue === 'circulaire';
+const AVEC_COTE = ['dessus_cote', 'circulaire', 'rectiligne'].includes(vue);
+const G = AVEC_COTE ? { eau: { x: 60, y: 44, w: 420, h: 200 }, sx: POINTE ? 112 : 86, col: 505 }
+  : vue === 'compter' ? { eau: { x: 60, y: 44, w: 440, h: 290 }, sx: 86, col: 525, yr: 184 }
+  : { eau: { x: 60, y: 44, w: 400, h: 250 }, sx: 86, col: 480, yr: 164 };
+G.sy = G.eau.y + G.eau.h / 2;
+const COTE = { x0: G.eau.x, x1: G.eau.x + G.eau.w, y: 326, bas: 370, k: 11 };
+const LC = (G.eau.x + G.eau.w - G.sx) / PXM;          // de la source au bord de la cuve (m)
+const KNOB = { x: G.col + 14, y: 66 };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, N: 20, regle: null };
+
+/* Le déroulé, calculé depuis la physique (dates en s du temps réel de l'expérience). */
+function plan() {
+  if (vue !== 'frequence') {
+    const N = S.N, T = 1 / N, tP = Math.ceil(LC / VIT[N] / T) * T;   // photo : les rides couvrent toute la cuve
+    const p = { N1: N, T, tP };
+    if (vue === 'compter') Object.assign(p, { regle: tP + 0.05, nums: [0.08, 0.105, 0.13].map(d => tP + d), formule: tP + 0.16, fin: tP + 0.2 });
+    else p.fin = tP + 0.12;
+    return p;
+  }
+  const T1 = 1 / 20, tP = Math.ceil(LC / VIT[20] / T1) * T1, tc = tP + 0.25, tP2 = tc + Math.ceil(LC / VIT[30] * 30) / 30;
+  return { N1: 20, T: T1, tP, regle: tP + 0.05, ligne1: tP + 0.12, tc, change: tc + 0.15, tP2, regle2: tP2 + 0.05, ligne2: tP2 + 0.12, conclusion: tP2 + 0.18, fin: tP2 + 0.22 };
+}
+const Nactuel = () => (vue === 'frequence' ? (S.t >= plan().tc ? 30 : 20) : S.N);
+
+/*
+ * L'eau à l'instant t : le « temps de l'eau » tau (figé pendant une photo) et les trains d'ondes présents.
+ * Vue frequence : le vibreur passe à 30 Hz quand la phase de la source est nulle ; le nouveau train occupe
+ * r < v'(tau − tP), l'ancien (20 Hz) continue au-delà et sort par le bord absorbant.
+ */
+function eau(t) {
+  const P = plan(), A = { N: P.N1, v: VIT[P.N1], t0: 0, rlo: 0, rhi: Infinity };
+  if (vue !== 'frequence') { const fige = vue === 'compter' && t > P.tP; return { tau: fige ? P.tP : t, trains: [A], fige, phase: 1 }; }
+  if (t < P.tP) return { tau: t, trains: [A], fige: false, phase: 1 };
+  if (t < P.tc) return { tau: P.tP, trains: [A], fige: true, phase: 1 };
+  const tau = P.tP + Math.min(t, P.tP2) - P.tc, rB = VIT[30] * (tau - P.tP);
+  return { tau, trains: [{ N: 30, v: VIT[30], t0: P.tP, rlo: 0, rhi: rB }, { ...A, rlo: rB }], fige: t >= P.tP2, phase: 2 };
+}
+function onde(w, r) {
+  for (const tr of w.trains) {
+    if (r < tr.rlo || r >= tr.rhi) continue;
+    const u = w.tau - tr.t0 - r / tr.v; if (u < 0) return null;
+    const ph = 2 * Math.PI * tr.N * u; return { h: Math.sin(ph), s: -Math.cos(ph) };
+  }
+  return null;
+}
+/* Les crêtes (r en m, croissant) : 2πN(tau − t0 − r/v) = π/2 + 2kπ. */
+function cretes(w) {
+  const out = [];
+  for (const tr of w.trains) {
+    for (let k = 0; k < 400; k++) {
+      const r = tr.v * (w.tau - tr.t0 - (k + 0.25) / tr.N);
+      if (r < tr.rlo) break;
+      if (r < tr.rhi && r <= LC + 0.01) out.push(r);
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+const yS = w => (onde(w, 0)?.h) || 0;
+/* La crête suivie en jaune : la 3e émise ; quand elle approche du bord, on suit celle émise 5 périodes après. */
+function creteSuivie(w, N) {
+  let k = 2, r = VIT[N] * (w.tau - (k + 0.25) / N);
+  while (r > LC * 0.75) { k += 5; r = VIT[N] * (w.tau - (k + 0.25) / N); }
+  return r;
+}
+const front = w => w.trains[w.trains.length - 1].v * w.tau;   // le front du premier train émis
+
+/* ── Peinture de l'eau (règle 7 : vue de dessus et vue de côté réalistes) ─────────────── */
+function peindreDessus(ctx, w) {
+  const r = G.eau;
+  ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r);
+  if (POINTE) {
+    // Affaiblissement avec la distance : pour l'œil seulement (le modèle n'a pas d'amortissement).
+    const att = u => 1 / Math.sqrt(1 + u / PXM / 0.09);
+    const umax = Math.hypot(Math.max(G.sx - r.x, r.x + r.w - G.sx), r.h / 2) + 6;
+    const c = { forme: 'radial', x: G.sx, y: G.sy, umax, pas: 1.8, zone: r, onde: u => { const o = onde(w, u / PXM); return o && { ...o, amp: att(u) }; } };
+    E.rides(ctx, c); E.liseres(ctx, c, cretes(w).map(rr => ({ u: rr * PXM, a: .6 * att(rr * PXM) })));
+  } else {
+    for (const sens of [1, -1]) {
+      ctx.save(); ctx.beginPath();
+      if (sens > 0) ctx.rect(G.sx, r.y, r.x + r.w - G.sx, r.h); else ctx.rect(r.x, r.y, G.sx - r.x, r.h);
+      ctx.clip();
+      const umax = (sens > 0 ? r.x + r.w - G.sx : G.sx - r.x) + 6;
+      // Contraste adouci pour l'œil (amp 0,72) : la position des crêtes ne change pas.
+      const c = { forme: 'lineaire', sens, x: G.sx, umax, pas: 1.8, zone: r, onde: u => { const o = onde(w, u / PXM); return o && { ...o, amp: .72 }; } };
+      E.rides(ctx, c); E.liseres(ctx, c, cretes(w).filter(rr => rr * PXM < umax).map(rr => ({ u: rr * PXM, a: .45 })));
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+  // Le vibreur, vu de dessus : boîtier hors de l'eau, bras, pointe (bille) ou réglette (lame) dans l'eau.
+  E.boitier(ctx, 6, G.sy - 17, 44, 34);
+  if (POINTE) { E.bras(ctx, 50, G.sx, G.sy); E.pointe(ctx, G.sx, G.sy, 5 * (1 + 0.12 * yS(w))); }
+  else { E.bras(ctx, 50, G.sx, G.sy); E.reglette(ctx, G.sx, r.y + 8, r.y + r.h - 8); }
+}
+function peindreCote(ctx, w) {
+  E.boitier(ctx, G.sx - 22, 276, 44, 20);
+  E.tige(ctx, G.sx, 296, COTE.y - COTE.k * yS(w) + 10, POINTE ? 4 : 6);
+  E.cote(ctx, COTE, x => (onde(w, Math.abs(x - G.sx) / PXM)?.h) || 0);
+}
+
+/* Un cercle de craie limité au cadre de l'eau (morceaux visibles seulement). */
+function arcDans(c, cx, cy, r, R, o) {
+  const n = Math.max(32, Math.round(r / 2.5)); let run = [];
+  const vider = () => { if (run.length > 1) c.trait(run, { tremble: .4, ...o }); run = []; };
+  for (let i = 0; i <= n; i++) {
+    const a = -Math.PI + 2 * Math.PI * i / n, x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+    if (x > R.x + 2 && x < R.x + R.w - 2 && y > R.y + 2 && y < R.y + R.h - 2) run.push([x, y]); else vider();
+  }
+  vider();
+}
+
+/* La molette du vibreur et la fréquence, en haut de la colonne de droite. */
+function molette(c) {
+  const N = Nactuel();
+  c.direct(() => E.molette(c.ctx, KNOB.x, KNOB.y, 13, N === 20 ? -2.3 : -0.8));
+  c.texte(`vibreur : N = ${N} Hz`, G.col + 34, 72, { couleur: 'jaune', taille: 18 });
+  c.texte('molette : 20 ↔ 30 Hz', G.col + 34, 92, { couleur: 'faible', taille: 13 });
+  c.repere('vibreur', 4, G.sy - 22, 52, 44, 'le vibreur');
+  c.repere('frequence_vibreur', KNOB.x - 16, KNOB.y - 16, 190, 34, 'la fréquence N du vibreur (molette)');
+}
+function source(c) {
+  if (POINTE) c.texte('S', G.sx - 6, G.sy - 12, { couleur: 'cyan', taille: 17, align: 'right' });
+  else c.texte('S (réglette)', G.sx + 8, G.eau.y + 22, { couleur: 'cyan', taille: 15 });
+  c.repere('source', G.sx - 12, POINTE ? G.sy - 14 : G.eau.y + 6, 24, POINTE ? 28 : G.eau.h - 12, POINTE ? 'la source S (pointe du vibreur)' : 'la source : la réglette');
+  c.texte('vibreur', 28, G.sy + 34, { couleur: 'faible', align: 'center', taille: 14 });
+}
+
+/* ── Vues ─────────────────────────────────────────────────────────────────────── */
+function vueDessusCote(c) {
+  const P = plan(), w = eau(S.t), N = Nactuel(), L = lam(N), R = G.eau, M = moments();
+  c.direct(() => peindreDessus(c.ctx, w));
+  c.texte('Vue de dessus', R.x, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.repere('vue_dessus', R.x, R.y, R.w, R.h, 'la vue de dessus : les rides');
+  source(c);
+  c.direct(() => peindreCote(c.ctx, w));
+  c.texte('Vue de côté (coupe selon l’axe)', 160, 270, { couleur: 'cyan', taille: 17 });
+  c.repere('vue_cote', COTE.x0, 296, COTE.x1 - COTE.x0, 76, 'la vue de côté : le profil de l’eau');
+  molette(c);
+  c.texte(POINTE ? 'Pointe : onde circulaire' : 'Réglette : onde rectiligne', G.col, 134, { couleur: 'cyan', taille: 17 });
+  c.texte('Bords absorbants : ni amortissement ni réflexion.', COTE.x0, 400, { couleur: 'faible', taille: 13 });
+  c.direct(() => {
+    c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, 748, 26, { couleur: 'faible', align: 'right', taille: 14 });
+    if (S.t >= M.premiere_ride) c.texte('trait clair = une crête', G.col, 166, { couleur: 'jaune', taille: 16 });
+    // La crête surlignée, suivie dans les deux vues.
+    const rh = creteSuivie(w, N), xh = G.sx + rh * PXM;
+    if (rh > 0.002 && xh < R.x + R.w - 4) {
+      if (POINTE) arcDans(c, G.sx, G.sy, rh * PXM, R, { couleur: 'jaune', largeur: 2.2 });
+      else c.ligne(xh, R.y + 6, xh, R.y + R.h - 6, { couleur: 'jaune', largeur: 2.2, tremble: .4 });
+      c.point(xh, COTE.y - COTE.k, 4.5, 'jaune');
+      if (vue === 'dessus_cote') {
+        // Le pointillé saute la ligne du titre « Vue de côté ».
+        c.ligne(xh, G.sy + 8, xh, R.y + R.h, { couleur: 'jaune', largeur: 1.3, pointille: [4, 5], alpha: .8 });
+        c.ligne(xh, 278, xh, COTE.y - COTE.k - 8, { couleur: 'jaune', largeur: 1.3, pointille: [4, 5], alpha: .8 });
+        c.texte('la même crête', G.col, 194, { couleur: 'jaune', taille: 15 }).texte('dans les deux vues', G.col, 214, { couleur: 'jaune', taille: 15 });
+      }
+      c.repere('crete', xh - 10, G.sy - 36, 20, 72, 'une crête : un trait clair vu de dessus');
+      c.repere('crete_cote', xh - 12, COTE.y - COTE.k - 14, 24, 24, 'la même crête, vue de côté');
+      // Après la photo : d'une crête à la suivante, une longueur d'onde (dans les deux vues).
+      const xa = xh - L * PXM;
+      if (S.t >= M.photo && xa > G.sx + 4) {
+        c.cote(xa, G.sy + 40, xh, G.sy + 40, 'λ', { couleur: 'vert', taille: 17 });
+        c.cote(xa, COTE.y - COTE.k - 16, xh, COTE.y - COTE.k - 16, 'λ', { couleur: 'vert', taille: 17 });
+        c.texte('d’une crête à la suivante :', G.col, 250, { couleur: 'vert', taille: 15 });
+        c.texte(`λ = ${fr(L * 100, 1)} cm`, G.col, 276, { couleur: 'vert', taille: 20 });
+        c.repere('lambda', xa, G.sy + 22, xh - xa, 24, 'une longueur d’onde λ');
+      }
+    }
+    if (vue !== 'dessus_cote' && S.t >= M.premiere_ride) {
+      // Sens de propagation : vers l'extérieur (circulaire) ou perpendiculaire aux traits (rectiligne).
+      if (POINTE) for (const a of [-0.55, 0, 0.55]) c.fleche(G.sx + 150 * Math.cos(a), G.sy + 150 * Math.sin(a) * .62, G.sx + 205 * Math.cos(a), G.sy + 205 * Math.sin(a) * .62, { couleur: 'vert', largeur: 2 });
+      else c.fleche(G.sx + 200, R.y + 30, G.sx + 290, R.y + 30, { couleur: 'vert', largeur: 2 });
+      c.texte('sens de propagation', G.col, 194, { couleur: 'vert', taille: 15 });
+      c.texte(POINTE ? 'cercles centrés sur S' : 'traits parallèles à la réglette', G.col, 214, { couleur: 'faible', taille: 14 });
+    }
+  });
+}
+
+/* La règle posée sur la photo : ses bouts tombent sur des crêtes ; n intervalles numérotés. */
+function regleActuelle() {
+  if (!G.yr) return null;
+  const P = plan(), w = eau(S.t);
+  if (!w.fige) return null;
+  const debut = w.phase === 2 ? P.tP2 : P.tP, pose = w.phase === 2 ? P.regle2 : P.regle;
+  const p = Math.max(0, Math.min(1, (S.t - debut - 0.01) / (pose - debut - 0.01) + 1e-6));
+  if (p <= 0) return null;
+  const cr = cretes(w), N = Nactuel(), L = lam(N);
+  let ra, rb, manuel = false;
+  if (S.regle && S.regle.phase === w.phase && S.regle.N === N) ({ ra, rb, manuel } = S.regle);
+  else {
+    let i0 = 0; cr.forEach((r, i) => { if (Math.abs(r - 0.05) < Math.abs(cr[i0] - 0.05)) i0 = i; });
+    ra = cr[i0]; rb = cr[Math.min(cr.length - 1, i0 + 3)];
+  }
+  // manuel : l'élève a déplacé la règle, ses numéros et le calcul s'affichent tout de suite.
+  return { ra, rb, n: Math.round((rb - ra) / L), posee: p >= 1, p, phase: w.phase, cr, L, N, manuel };
+}
+function dessinerRegle(c) {
+  const R = regleActuelle(); if (!R) return null;
+  const xa = G.sx + R.ra * PXM, xb = G.sx + R.rb * PXM, y = G.yr - (1 - R.p) * 40;
+  E.regle(c.ctx, xa, xb, y, PXCM, R.p);
+  if (!R.posee) return R;
+  const P = plan(), t0 = R.phase === 2 ? P.regle2 : P.regle, nums = vue === 'compter' ? P.nums : [t0, t0, t0];
+  for (let i = 0; i <= R.n; i++) { const x = xa + i * R.L * PXM; c.ligne(x, y - 16, x, y + 1, { couleur: 'jaune', largeur: 2.2, tremble: .3 }); }
+  for (let i = 0; i < R.n; i++) {
+    if (S.t < nums[Math.min(i, nums.length - 1)] - 1e-6 && !R.manuel) continue;
+    const x1 = xa + i * R.L * PXM, x2 = x1 + R.L * PXM;
+    c.courbe(u => [x1 + (x2 - x1) * u, y - 18 - 8 * Math.sin(Math.PI * u)], 12, { couleur: 'orange', largeur: 1.8 });
+    c.texte(String(i + 1), (x1 + x2) / 2, y - 30, { couleur: 'orange', align: 'center', taille: 16 });
+  }
+  c.repere('regle', xa - 14, y, xb - xa + 28, 22, 'la règle posée sur les rides');
+  c.repere('intervalle', xa, y - 44, R.L * PXM, 44, 'un intervalle : d’une crête à la suivante');
+  c.repere('crete', xa - 8, G.eau.y + 6, 16, G.eau.h - 12, 'une crête : un trait clair');
+  return R;
+}
+
+function vueCompter(c) {
+  const P = plan(), w = eau(S.t), R = G.eau, N = Nactuel();
+  c.direct(() => peindreDessus(c.ctx, w));
+  c.texte('Cuve à ondes, vue de dessus', R.x, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.repere('vue_dessus', R.x, R.y, R.w, R.h, 'la vue de dessus : les rides');
+  source(c); molette(c);
+  c.texte('On compte les intervalles,', G.col, 318, { couleur: 'faible', taille: 15 }).texte('pas les traits.', G.col, 338, { couleur: 'faible', taille: 15 });
+  c.direct(() => {
+    c.texte(`t = ${fr(Math.min(S.t, P.tP))} s  (ralenti ×10)`, 748, 26, { couleur: 'faible', align: 'right', taille: 14 });
+    if (w.fige) c.texte('Photo de la surface', G.col, 134, { couleur: 'cyan', taille: 17 }).texte('(image arrêtée)', G.col, 154, { couleur: 'faible', taille: 14 });
+    const Rg = dessinerRegle(c);
+    if (Rg && Rg.posee) {
+      const d = Rg.n * Rg.L * 100;
+      c.texte(`d = ${fr(d, 1)} cm`, G.col, 192, { couleur: 'jaune', taille: 19 });
+      c.texte(`${Rg.n + 1} traits, n = ${Rg.n} intervalles`, G.col, 218, { couleur: 'orange', taille: 16 });
+      if (S.t >= P.formule || Rg.manuel) {
+        c.texte('λ = d / n', G.col, 252, { couleur: 'vert', taille: 19 });
+        c.texte(`λ = ${fr(d, 1)} / ${Rg.n} = ${fr(Rg.L * 100, 1)} cm`, G.col, 278, { couleur: 'vert', taille: 19 });
+      }
+      c.texte('⇠ glisse les bouts de la règle ⇢', R.x + R.w / 2, 362, { couleur: 'faible', align: 'center', taille: 14 });
+    }
+  });
+}
+
+function vueFrequence(c) {
+  const P = plan(), w = eau(S.t), R = G.eau, col = G.col;
+  c.direct(() => peindreDessus(c.ctx, w));
+  c.texte('Cuve à ondes, vue de dessus', R.x, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.repere('vue_dessus', R.x, R.y, R.w, R.h, 'la vue de dessus : les rides');
+  source(c); molette(c);
+  // Le tableau des mesures.
+  c.texte('N (Hz)', col, 132, { couleur: 'blanc', taille: 16 }).texte('λ (cm)', col + 78, 132, { couleur: 'blanc', taille: 16 }).texte('v = λ·N (m/s)', col + 150, 132, { couleur: 'blanc', taille: 16 });
+  c.ligne(col - 4, 140, col + 272, 140, { couleur: 'faible', largeur: 1.4 });
+  c.ligne(col + 66, 116, col + 66, 202, { couleur: 'tresfaible', largeur: 1.2 }).ligne(col + 140, 116, col + 140, 202, { couleur: 'tresfaible', largeur: 1.2 });
+  c.repere('tableau_mesures', col - 6, 112, 280, 94, 'le tableau des mesures : N, λ, v');
+  c.direct(() => {
+    c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, 748, 26, { couleur: 'faible', align: 'right', taille: 14 });
+    const lignes = [[P.ligne1, 20, 166], [P.ligne2, 30, 194]];
+    for (const [quand, N, y] of lignes) {
+      if (S.t < quand) continue;
+      c.texte(String(N), col + 8, y, { couleur: 'jaune', taille: 18 }).texte(fr(lam(N) * 100, 1), col + 86, y, { couleur: 'jaune', taille: 18 }).texte(fr(VIT[N], 2), col + 170, y, { couleur: 'vert', taille: 18 });
+    }
+    if (S.t >= P.conclusion) {
+      c.texte('v change quand N change :', col, 236, { couleur: 'vert', taille: 16 });
+      c.texte('la surface de l’eau est', col, 260, { couleur: 'vert', taille: 16 });
+      c.texte('un milieu dispersif.', col, 286, { couleur: 'vert', taille: 20 });
+      c.repere('dispersif', col - 4, 220, 270, 74, 'conclusion : milieu dispersif');
+    }
+    const Rg = dessinerRegle(c);
+    if (w.phase === 1 && w.fige) c.texte('Photo à 20 Hz (image arrêtée)', R.x, 320, { couleur: 'cyan', taille: 16 });
+    if (w.phase === 2 && !w.fige) c.texte('Molette tournée : 30 Hz. Les rides se resserrent.', R.x, 320, { couleur: 'cyan', taille: 16 });
+    if (w.phase === 2 && w.fige) c.texte('Photo à 30 Hz (image arrêtée)', R.x, 320, { couleur: 'cyan', taille: 16 });
+    if (Rg && Rg.posee) {
+      const d = Rg.n * Rg.L * 100;
+      c.texte(`d = ${fr(d, 1)} cm pour ${Rg.n} intervalles : λ = ${fr(Rg.L * 100, 1)} cm`, R.x, 346, { couleur: 'jaune', taille: 16 });
+      c.texte(`v = λ·N = ${fr(Rg.L * 100, 1)}×10⁻² × ${Rg.N} = ${fr(VIT[Rg.N], 2)} m/s`, R.x, 372, { couleur: 'vert', taille: 16 });
+    }
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => {
+  scene.cadre(17);
+  if (vue === 'compter') vueCompter(c); else if (vue === 'frequence') vueFrequence(c); else vueDessusCote(c);
+  return c.fin();
+});
+scene.avancer = dt => {
+  if (!S.running) return false;
+  const fin = plan().fin;
+  S.t = Math.min(fin, S.t + dt * LENT);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), MESSAGES[vue], 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* Les instants clés, calculés depuis la physique (ils suivent la fréquence choisie). */
+function moments() {
+  const P = plan(), T = P.T, m = { vibreur_demarre: T / 8, premiere_ride: 1.05 * T, quatre_rides: 4.05 * T, photo: P.tP };
+  if (vue === 'compter' || vue === 'frequence') m.regle_posee = P.regle;
+  if (vue === 'frequence') { m.frequence_changee = P.change; m.nouvelle_mesure = P.ligne2; }
+  for (const k in m) m[k] = +Math.min(P.fin, m[k]).toFixed(4);
+  return m;
+}
+const MOTIFS = {
+  vibreur_demarre: 'le vibreur démarre, la source S commence à monter',
+  premiere_ride: 'une première ride s’éloigne de la source',
+  quatre_rides: 'quatre rides sur l’eau, régulièrement espacées',
+  photo: vue === 'compter' || vue === 'frequence' ? 'photo de la surface : l’image est arrêtée' : 'les rides couvrent toute la cuve',
+  regle_posee: 'la règle est posée sur les rides',
+  frequence_changee: 'le vibreur est passé à 30 Hz : les rides se resserrent',
+  nouvelle_mesure: 'nouvelle mesure à 30 Hz : λ et v recalculées',
+};
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.regle = null; S.jusqua = Math.min(plan().fin, Math.max(0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (mouvement ralenti 10 fois)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+/* Ce que l'élève voit, en mots (le tuteur « voit » la scène par cette phrase). */
+function ceQuiSeVoit() {
+  const P = plan(), M = moments(), t = S.t, w = eau(t), N = Nactuel(), L = lam(N), cr = cretes(w);
+  const m = [`t = ${fr(t, 3)} s${S.running ? ' (la scène défile, ralentie 10 fois)' : S.fait ? ' (fin de la scène)' : ' (scène arrêtée)'}. Vibreur ${POINTE ? 'à pointe : onde circulaire' : 'à réglette : onde rectiligne'}, N = ${N} Hz affiché.`];
+  if (t <= 0) { m.push('Le vibreur n’a pas encore démarré ; l’eau est calme.'); return m.join(' '); }
+  const f = front(w);
+  if (vue === 'frequence' && w.phase === 2) m.push(`Le vibreur est passé de 20 à 30 Hz : les nouvelles rides, plus serrées, occupent ${w.fige ? 'toute la cuve' : `les ${fr(Math.min(LC, VIT[30] * (w.tau - P.tP)) * 100, 1)} premiers cm`}.`);
+  else m.push(f < LC ? `Les rides avancent ; le front est à ${fr(f * 100, 1)} cm de la source ; ${cr.length} crête(s) (traits clairs) sur l’eau.` : `Les rides couvrent toute la cuve (${cr.length} traits clairs) et sortent au bord sans revenir.`);
+  if (w.fige) m.push('Photo : l’image est arrêtée.');
+  if (AVEC_COTE) {
+    const rh = creteSuivie(w, N);
+    if (rh > 0.002 && rh < LC) m.push(`Une crête est surlignée en jaune dans les deux vues, à ${fr(rh * 100, 1)} cm de S${vue === 'dessus_cote' ? ', reliée par un pointillé de la vue de dessus à la vue de côté' : ''}.`);
+    if (t >= M.photo) m.push(`Double flèche λ entre deux crêtes voisines dans les deux vues ; affiché : λ = ${fr(L * 100, 1)} cm.`);
+    if (vue !== 'dessus_cote' && t >= M.premiere_ride) m.push(POINTE ? 'Rides en cercles centrés sur S ; flèches du sens de propagation vers l’extérieur.' : 'Rides en traits parallèles à la réglette ; flèche du sens de propagation perpendiculaire aux traits.');
+  }
+  const Rg = regleActuelle();
+  if (Rg) {
+    const d = Rg.n * Rg.L * 100;
+    if (!Rg.posee) m.push('La règle se pose sur la photo.');
+    else {
+      m.push(`Règle posée de ${fr(Rg.ra * 100, 1)} cm à ${fr(Rg.rb * 100, 1)} cm de la source : ${Rg.n + 1} traits, ${Rg.n} intervalles numérotés ; affiché d = ${fr(d, 1)} cm${vue === 'compter' && t < P.formule && !Rg.manuel ? '' : `, λ = d / n = ${fr(d, 1)} / ${Rg.n} = ${fr(Rg.L * 100, 1)} cm`}.`);
+      if (vue === 'frequence') m.push(`Affiché : v = λ·N = ${fr(Rg.L * 100, 1)}×10⁻² × ${Rg.N} = ${fr(VIT[Rg.N], 2)} m/s.`);
+    }
+  }
+  if (vue === 'frequence') {
+    const lignes = [];
+    if (t >= P.ligne1) lignes.push('20 Hz → λ = 1,5 cm → v = 0,30 m/s');
+    if (t >= P.ligne2) lignes.push('30 Hz → λ = 1,1 cm → v = 0,33 m/s');
+    m.push(lignes.length ? `Tableau : ${lignes.join(' ; ')}.` : 'Tableau des mesures encore vide.');
+    if (t >= P.conclusion) m.push('Conclusion écrite : v change quand N change, la surface de l’eau est un milieu dispersif.');
+  }
+  return m.join(' ');
+}
+
+const MESSAGES = {
+  dessus_cote: 'Vue de dessus, chaque trait clair est une crête ; d’un trait au suivant : λ.',
+  circulaire: 'Une pointe crée des rides circulaires, centrées sur S.',
+  rectiligne: 'Une réglette crée des rides rectilignes, parallèles à la réglette.',
+  compter: 'On compte les intervalles, pas les traits : λ = d / n.',
+  frequence: 'La célérité dépend de la fréquence : la surface de l’eau est un milieu dispersif.',
+};
+function start() { S.jusqua = null; S.t = 0; S.regle = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le vibreur démarre… (mouvement ralenti 10 fois)'); pont.noter('start', { frequence_hz: Nactuel() }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= plan().fin) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (ralenti 10 fois)'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const fin = plan().fin;
+  S.running = false; S.jusqua = null; S.t = Math.min(fin, Math.max(0, t)); S.fait = S.t >= fin;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 3)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (!Number.isFinite(+p.frequence_hz)) return;
+  const N = +p.frequence_hz < 25 ? 20 : 30;
+  if (vue === 'frequence') {
+    // Les deux réglages font partie du déroulé : on se place sur la mesure correspondante.
+    setTime({ time_s: N === 20 ? moments().regle_posee : moments().nouvelle_mesure });
+  } else {
+    S.N = N; S.regle = null; scene.sale = true;
+    const fin = plan().fin; if (S.t >= fin) { S.t = fin; S.fait = true; S.running = false; $('run').textContent = 'Rejouer'; }
+  }
+  bulle($('feedback'), `Vibreur réglé à ${N} Hz.`);
+  pont.noter('set_parameters', { frequence_hz: N }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < plan().fin && !S.fait ? resume() : start()));
+
+/* Poignées : la molette du vibreur (20 ↔ 30 Hz) ; les bouts et le corps de la règle (accrochés aux crêtes). */
+const proche = (cr, r) => cr.reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a), cr[0]);
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (Math.hypot(x - KNOB.x, y - KNOB.y) < 22) return 'molette';
+    const Rg = regleActuelle(); if (!Rg || !Rg.posee || y < G.yr - 40 || y > G.yr + 28) return null;
+    const xa = G.sx + Rg.ra * PXM, xb = G.sx + Rg.rb * PXM;
+    if (Math.abs(x - xa) < 13) return 'ra';
+    if (Math.abs(x - xb) < 13) return 'rb';
+    if (x > xa && x < xb) { S.prise = (x - G.sx) / PXM - Rg.ra; return 'corps'; }
+    return null;
+  },
+  bouger: (id, px) => {
+    if (id === 'molette') return;
+    const Rg = regleActuelle(); if (!Rg) return;
+    const [x] = scene.local(px, 0), r = (x - G.sx) / PXM, cr = Rg.cr, L = Rg.L;
+    let { ra, rb } = Rg;
+    if (id === 'ra') ra = Math.min(proche(cr, r), rb - L * 0.9);
+    else if (id === 'rb') rb = Math.max(proche(cr, r), ra + L * 0.9);
+    else { const n = rb - ra; ra = proche(cr, r - S.prise); rb = proche(cr, ra + n); if (rb - ra < n - L / 2) { rb = cr[cr.length - 1]; ra = proche(cr, rb - n); } }
+    ra = proche(cr, ra); rb = proche(cr, rb);
+    S.regle = { ra, rb, phase: Rg.phase, N: Rg.N, manuel: true }; scene.sale = true;
+  },
+  lacher: id => {
+    if (id === 'molette') { setParameters({ frequence_hz: Nactuel() === 20 ? 30 : 20 }); return; }
+    const Rg = regleActuelle();
+    if (Rg) { pont.noter('set_parameters', { regle_d_cm: +(Rg.n * Rg.L * 100).toFixed(2), intervalles: Rg.n }); pont.emettre(); }
+  },
+});
+
+const EXPLICATIONS = {
+  dessus_cote: [
+    { repere: 'source', texte: 'La pointe du vibreur frappe l’eau en S, N fois par seconde.' },
+    { repere: 'crete', texte: 'Vue de dessus, chaque trait clair est une crête.' },
+    { repere: 'crete_cote', texte: 'C’est la même crête, vue de côté : un sommet de l’eau.' },
+    { repere: 'lambda', texte: 'D’une crête à la suivante, il y a une longueur d’onde λ.' },
+  ],
+  circulaire: [{ repere: 'source', texte: 'Une pointe : la source est un point, les rides sont des cercles centrés sur S.' }, { repere: 'crete', texte: 'Chaque cercle clair est une crête.' }],
+  rectiligne: [{ repere: 'source', texte: 'Une réglette : la source est une ligne, les rides sont des traits parallèles.' }, { repere: 'crete', texte: 'Chaque trait clair est une crête.' }],
+  compter: [{ repere: 'regle', texte: 'La règle est posée sur la photo, ses bouts sur deux crêtes.' }, { repere: 'intervalle', texte: 'On compte les intervalles, pas les traits : λ = d / n.' }],
+  frequence: [{ repere: 'frequence_vibreur', texte: 'On change la fréquence du vibreur.' }, { repere: 'regle', texte: 'On remesure λ avec la règle.' }, { repere: 'tableau_mesures', texte: 'La célérité a changé avec la fréquence : milieu dispersif.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_cuve', version: '1.0', title: 'Cuve à ondes — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: { frequence_hz: vue === 'frequence' ? '20 | 30 (se place sur la mesure à cette fréquence)' : '20 | 30 (fréquence du vibreur, en Hz)' },
+    set_time: { time_s: `0..${fr(plan().fin, 3)} (arrêt sur cet instant, en s de l’expérience)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Cuve à ondes, vue « ${vue} ». Vibreur ${POINTE ? 'à pointe (onde circulaire)' : 'à réglette (onde rectiligne)'}. N = 20 Hz : λ = 1,5 cm, v = 0,30 m/s ; N = 30 Hz : λ = 1,1 cm, v = 0,33 m/s. Mouvement ralenti 10 fois. Bords absorbants, ni amortissement ni réflexion. ${MESSAGES[vue]}`,
+  etat: () => {
+    const N = Nactuel(), Rg = regleActuelle();
+    return { simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+      time_s: +S.t.toFixed(3), parameters: { frequence_hz: N, lambda_cm: +(lam(N) * 100).toFixed(2), v_m_s: VIT[N], ...(Rg && Rg.posee ? { regle_d_cm: +(Rg.n * Rg.L * 100).toFixed(2), intervalles: Rg.n } : {}) }, moments: moments() };
+  },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le vibreur va démarrer…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

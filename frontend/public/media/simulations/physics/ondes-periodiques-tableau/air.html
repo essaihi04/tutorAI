@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le son dans l’air — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un haut-parleur émet un son dans l’air, les compressions de l’air avancent, une règle mesure la longueur d’onde, dessinés à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="exposants.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le son dans l’air à deux fréquences (cours « Ondes mécaniques progressives périodiques », 10 novembre 2026).
+ * Un haut-parleur émet un son de N = 1000 Hz (λ = 34 cm) ou 2000 Hz (λ = 17 cm) ; v = 340 m/s dans les deux cas :
+ * l’air n’est pas un milieu dispersif. Les bandes de pression sont peintes (claires = compressions, onde longitudinale) ;
+ * le front atteint le repère A (68 cm) à t = 2,0 ms quelle que soit la fréquence.
+ * Ralenti pour l’œil (dit dans la bulle) : 1 ms dure 1 s à l’écran ; les dates affichées sont les vraies.
+ * Vues (?vue=) : mille_hertz, deux_mille_hertz, comparaison. Un seul bouton ; la molette du générateur se tourne (glisser).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['mille_hertz', 'deux_mille_hertz', 'comparaison'];
+const qv = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(qv) ? qv : 'mille_hertz';
+const COMP = vue === 'comparaison';
+const V = 340, T0 = 0.4, XA_M = 0.68, LONG = 1.02;   // m/s ; début (s affichées) ; repère A (m) ; air dessiné (m)
+const XM = 112, PXM = 600;                           // membrane du haut-parleur ; px par mètre
+const xDe = m => XM + m * PXM;
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', f: vue === 'deux_mille_hertz' ? 2000 : 1000, ecrit: {}, emis: 0 };
+const lam = f => V / f;                               // m
+const tr = () => Math.max(0, (S.t - T0) * 1e-3);      // temps réel (s) depuis l’émission
+const front = () => Math.min(LONG, V * tr());         // m
+
+/* Les faisceaux : un seul (vues à une fréquence), ou deux l’un sous l’autre (comparaison). */
+const FAISCEAUX = COMP ? [{ f: 1000, yc: 100, h: 74, id: 'lambda_1000', coul: 'cyan' }, { f: 2000, yc: 222, h: 74, id: 'lambda_2000', coul: 'orange' }]
+  : [{ f: null, yc: 160, h: 108 }];
+const fDe = F => F.f ?? S.f;
+const YREG = COMP ? 282 : 238;
+
+function moments() {
+  const m = { son_part: T0 + 0.3, front_a_repere: T0 + XA_M / V * 1000, mesure_lambda: T0 + LONG / V * 1000 + 0.25 };
+  if (COMP) m.comparaison = m.mesure_lambda + 0.6; else m.fin = m.mesure_lambda + 0.6;
+  for (const k in m) m[k] = +m[k].toFixed(3);
+  return m;
+}
+const FIN = () => Math.max(...Object.values(moments()));
+const MOTIFS = { son_part: 'le haut-parleur vibre : les compressions partent dans l’air', front_a_repere: 'le front atteint le repère A (68 cm) à t = 2,0 ms',
+  mesure_lambda: 'l’air rempli de compressions : on mesure λ entre deux compressions voisines', comparaison: 'même célérité, 340 m/s, pour les deux fréquences', fin: 'λ mesurée, v calculée' };
+
+/* L’air, peint : bandes de compression douces qui avancent (rien après le front) ; molécules qui vont et viennent sur place.
+ * Bords estompés pour l’œil seulement ; le modèle p = sin 2π(N·t − x/λ) reste exact. */
+function air(ctx, F) {
+  const f = fDe(F), L = lam(f), y0 = F.yc - F.h / 2, x1 = xDe(LONG), t = tr();
+  if (!(S.running || S.pause || S.fait) || t <= 0) return;
+  ctx.save();
+  const g = ctx.createLinearGradient(XM, 0, x1, 0), n = 240;
+  for (let k = 0; k <= n; k++) {
+    const xm = LONG * k / n; let a = 0;
+    if (xm <= V * t) { const p = Math.sin(2 * Math.PI * (f * t - xm / L)); a = 0.04 + 0.32 * (p + 1) / 2; }
+    g.addColorStop(k / n, `rgba(255,236,200,${a.toFixed(3)})`);
+  }
+  ctx.fillStyle = g;
+  ctx.globalAlpha = .5; ctx.fillRect(XM, y0, x1 - XM, F.h);
+  ctx.globalAlpha = .6; ctx.fillRect(XM, y0 + F.h * .12, x1 - XM, F.h * .76);
+  ctx.globalAlpha = .7; ctx.fillRect(XM, y0 + F.h * .26, x1 - XM, F.h * .48);
+  ctx.globalAlpha = .45; ctx.fillStyle = '#fff6e6';
+  for (let xp = XM + 8; xp < x1 - 3; xp += 15) {
+    const xm = (xp - XM) / PXM, xi = xm <= V * t ? -4 * Math.cos(2 * Math.PI * (f * t - xm / L)) : 0;
+    for (let y = y0 + 8, i = 0; y < y0 + F.h; y += 16, i++) { ctx.beginPath(); ctx.arc(xp + xi + (i % 2) * 5, y, 1.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+/* Le haut-parleur, peint (objet réel) : aimant, cône, membrane qui vibre à la fréquence du son. */
+function hautParleur(ctx, yc, f) {
+  const t = tr(), xi = (S.running || S.pause || S.fait) && t > 0 ? -2.5 * Math.cos(2 * Math.PI * f * t) : 0;
+  ctx.save();
+  const gb = ctx.createLinearGradient(0, yc - 22, 0, yc + 22);
+  gb.addColorStop(0, '#5b6472'); gb.addColorStop(.5, '#2d333c'); gb.addColorStop(1, '#1a1e24');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(50, yc - 20, 30, 40, 5) : ctx.rect(50, yc - 20, 30, 40); ctx.fill();
+  const gc = ctx.createLinearGradient(80, 0, XM, 0);
+  gc.addColorStop(0, '#3a414c'); gc.addColorStop(1, '#8a94a3');
+  ctx.fillStyle = gc; ctx.beginPath(); ctx.moveTo(80, yc - 14); ctx.lineTo(XM - 4 + xi, yc - 38); ctx.lineTo(XM - 4 + xi, yc + 38); ctx.lineTo(80, yc + 14); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(230,236,245,.85)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(XM - 3 + xi, yc - 38); ctx.lineTo(XM - 3 + xi, yc + 38); ctx.stroke();
+  ctx.restore();
+}
+/* Les compressions (maxima de pression) visibles à l’instant : positions en m. */
+function compressions(f) {
+  const L = lam(f), t = tr(), out = [];
+  for (let k = -2; k < 20; k++) { const x = L * (f * t - 0.25 - k); if (x > 0.02 && x < Math.min(front(), LONG) - 0.01) out.push(x); }
+  return out.sort((a, b) => a - b);
+}
+
+function dessiner(c) {
+  scene.cadre(23);
+  for (const F of FAISCEAUX) c.direct(() => air(c.ctx, F));
+  c.texte(COMP ? 'Deux sons dans l’air' : `Un son dans l’air`, 40, 24, { couleur: 'cyan', taille: 18 });
+
+  // ── Les haut-parleurs ──
+  for (const F of FAISCEAUX) {
+    c.direct(() => hautParleur(c.ctx, F.yc, fDe(F)));
+    c.repere(F === FAISCEAUX[0] ? 'haut_parleur' : 'haut_parleur_2', 44, F.yc - 42, 74, 84, 'le haut-parleur');
+    if (COMP) c.texte(`${F.f} Hz`, 20, F.yc + 58, { couleur: F.coul, taille: 16 });
+  }
+  if (!COMP) {
+    c.texte('générateur :', 40, 58, { couleur: 'faible', taille: 15 });
+    c.direct(() => {
+      c.texte(`N = ${S.f} Hz`, 128, 58, { couleur: 'jaune', taille: 17 });
+      // La molette : un cercle et un index tourné vers la fréquence choisie.
+      const cx = 250, cy = 52, a = S.f === 1000 ? -2.4 : -0.7;
+      c.cercle(cx, cy, 12, { couleur: 'jaune' });
+      c.ligne(cx, cy, cx + 10 * Math.cos(a), cy + 10 * Math.sin(a), { couleur: 'jaune', largeur: 2.4 });
+      c.texte('⇠ tourne ⇢', cx + 20, 58, { couleur: 'faible', taille: 13 });
+      c.repere('generateur', 36, 36, 300, 30, 'la molette de fréquence du générateur');
+    });
+  }
+
+  // ── Le repère A et le chrono ──
+  const xa = xDe(XA_M), yh = FAISCEAUX[0].yc - FAISCEAUX[0].h / 2 - 4, yb = FAISCEAUX[FAISCEAUX.length - 1].yc + FAISCEAUX[FAISCEAUX.length - 1].h / 2 + 4;
+  c.ligne(xa, yh, xa, yb, { couleur: 'vert', largeur: 1.4, pointille: [5, 5] });
+  c.texte('A', xa, yh - 6, { couleur: 'vert', align: 'center', taille: 17 });
+  c.repere('repere_a', xa - 14, yh - 24, 28, yb - yh + 24, 'le repère A, à 68 cm');
+
+  // ── La règle, en cm ──
+  c.ligne(XM, YREG, xDe(LONG) + 4, YREG, { couleur: 'blanc', largeur: 1.8 });
+  for (let k = 0; k <= 100; k += 5) c.ligne(xDe(k / 100), YREG, xDe(k / 100), YREG + (k % 10 ? 5 : 10), { couleur: 'faible', largeur: 1.2, duree: .02 });
+  for (let k = 0; k <= 100; k += 10) c.texte(String(k), xDe(k / 100), YREG + 25, { couleur: 'faible', align: 'center', taille: 14, duree: .1 });
+  c.texte('cm', xDe(LONG) + 22, YREG + 25, { couleur: 'faible', align: 'center', taille: 14 });
+  c.repere('regle', XM - 6, YREG - 4, xDe(LONG) - XM + 40, 34, 'la règle, graduée en cm');
+
+  c.direct(() => {
+    c.texte(`t = ${fr(tr() * 1000, 2)} ms`, 740, 24, { couleur: 'jaune', align: 'right', taille: 18 });
+    c.repere('chrono', 610, 6, 134, 24, 'le chrono (temps réel, en ms)');
+    // Une compression repérée, et le front.
+    const F0 = FAISCEAUX[0], cs = compressions(fDe(F0));
+    if (cs.length) { const x = xDe(cs[Math.min(1, cs.length - 1)]); c.repere('compression', x - 10, F0.yc - F0.h / 2, 20, F0.h, 'une compression (bande claire)'); }
+    if ((S.running || S.pause) && front() > 0.01 && front() < LONG - 0.005) {
+      for (const F of FAISCEAUX) c.ligne(xDe(front()), F.yc - F.h / 2 + 4, xDe(front()), F.yc + F.h / 2 - 4, { couleur: 'faible', largeur: 1.2 });
+    }
+  });
+
+  // ── Ce qui s’écrit en route : la date au repère A, puis λ et v ──
+  const M = moments(), Y = COMP ? 334 : 300, actif = S.running || S.pause || S.fait;
+  const quand = (nom) => { if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.depuis(S.ecrit[nom]); };
+  if (actif && S.t >= M.front_a_repere - 1e-6) {
+    quand('a');
+    c.texte(COMP ? 'Les deux fronts atteignent A ensemble, à t = 2,0 ms.' : `Le front atteint A (68 cm) à t = 2,0 ms : v = 0,68 / 2×10⁻³ = 340 m/s`, 40, COMP ? 330 : Y, { couleur: 'vert', taille: 16, max: 700 });
+  }
+  if (actif && S.t >= M.mesure_lambda - 1e-6) {
+    quand('l');
+    FAISCEAUX.forEach((F, i) => {
+      const f = fDe(F), cs = compressions(f);
+      if (cs.length < 2) return;
+      const k = Math.max(0, Math.floor(cs.length / 2) - 1), xa1 = xDe(cs[k]), xb1 = xDe(cs[k + 1]), yc = F.yc - F.h / 2 + 14;
+      c.ligne(xa1, F.yc - F.h / 2 + 4, xa1, F.yc + F.h / 2 - 4, { couleur: 'jaune', largeur: 1.2, pointille: [4, 4] });
+      c.ligne(xb1, F.yc - F.h / 2 + 4, xb1, F.yc + F.h / 2 - 4, { couleur: 'jaune', largeur: 1.2, pointille: [4, 4] });
+      c.cote(xa1, yc + 6, xb1, yc + 6, `λ = ${fr(lam(f) * 100, 0)} cm`, { couleur: 'jaune', taille: 16, dessous: true });
+      c.repere(f === 1000 ? 'lambda_1000' : 'lambda_2000', xa1 - 4, F.yc - F.h / 2, xb1 - xa1 + 8, F.h, `λ = ${fr(lam(f) * 100, 0)} cm à ${f} Hz`);
+      const lg = `${f} Hz : λ = ${fr(lam(f) * 100, 0)} cm ; v = λ·N = ${fr(lam(f), 2)} × ${f} = 340 m/s`;
+      c.texte(COMP ? lg : `λ = ${fr(lam(f) * 100, 0)} cm = ${fr(lam(f), 2)} m ; v = λ·N = ${fr(lam(f), 2)} × ${f} = 340 m/s`, 40, COMP ? 356 + i * 24 : Y + 30, { couleur: COMP ? F.coul : 'vert', taille: 16, max: 700 });
+    });
+    c.repere('calcul', 36, (COMP ? 356 : Y + 30) - 18, 700, COMP ? 46 : 24, 'λ puis v = λ·N');
+  }
+  if (COMP && actif && S.t >= M.comparaison - 1e-6) {
+    quand('c');
+    c.texte('Même célérité pour les deux fréquences : l’air n’est pas un milieu dispersif.', 40, 408, { couleur: 'vert', taille: 17, max: 700 });
+    c.repere('conclusion', 36, 390, 700, 24, 'l’air n’est pas dispersif');
+  }
+  if (!COMP && actif && S.t >= M.fin - 1e-6) {
+    quand('f');
+    c.texte(S.f === 1000 ? 'Double la fréquence : tourne la molette.' : 'λ deux fois plus petite qu’à 1000 Hz ; même célérité.', 40, Y + 60, { couleur: 'faible', taille: 15, max: 700 });
+  }
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN()) {
+    S.running = false; S.pause = false; S.fait = true; etiquette();
+    bulle($('feedback'), COMP ? 'λ divisée par deux, célérité inchangée : l’air n’est pas dispersif.' : `À ${S.f} Hz : λ = ${fr(lam(S.f) * 100, 0)} cm et v = 340 m/s.`, 'good');
+    pont.noter('measurement', { frequence_hz: COMP ? [1000, 2000] : S.f, lambda_cm: COMP ? [34, 17] : +(lam(S.f) * 100).toFixed(1), v_m_s: V }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function start() {
+  S.t = 0; S.jusqua = null; S.motif = ''; S.ecrit = {}; S.running = true; S.pause = false; S.fait = false; etiquette();
+  bulle($('feedback'), 'Scène ralentie : 1 ms dure 1 s à l’écran.'); pont.noter('start', { frequence_hz: S.f }); pont.emettre();
+}
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = Math.min(FIN(), cible); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  if (COMP) return;
+  const f = +p.frequence_hz; if (f !== 1000 && f !== 2000) return;
+  S.f = f; pont.noter('set_parameters', { frequence_hz: f }); start();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+if (!COMP) window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.hypot(x - 250, y - 52) < 24 ? 'molette' : null; },
+  bouger: () => {},
+  lacher: () => setParameters({ frequence_hz: S.f === 1000 ? 2000 : 1000 }),
+});
+
+function ceQuiSeVoit() {
+  const M = moments(), t = tr() * 1000, act = S.running || S.pause || S.fait;
+  const m = [COMP ? 'Deux haut-parleurs l’un sous l’autre : 1000 Hz en haut, 2000 Hz en bas ; repère A à 68 cm ; règle en cm.' : `Haut-parleur réglé à N = ${S.f} Hz (molette du générateur) ; repère A à 68 cm ; règle en cm.`];
+  if (!act || t <= 0) { m.push('Le haut-parleur ne vibre pas encore : air calme.'); return m.join(' '); }
+  m.push(`${S.pause ? 'Scène arrêtée, ' : S.fait ? 'Fin, ' : ''}t = ${fr(t, 2)} ms. Bandes claires (compressions) qui avancent ; les molécules vont et viennent sur place (onde longitudinale).`);
+  m.push(front() < LONG ? `Le front est à ${fr(front() * 100, 0)} cm du haut-parleur ${Math.abs(front() - XA_M) < 0.005 ? '(il est exactement au repère A, t = 2,0 ms)' : front() < XA_M ? '(pas encore au repère A)' : '(repère A dépassé)'}.` : 'L’air est rempli de compressions sur toute la règle.');
+  if (COMP) m.push('Les deux fronts avancent ensemble ; en bas les compressions sont deux fois plus serrées.');
+  if (S.t >= M.front_a_repere - 1e-6) m.push(COMP ? 'Écrit : les deux fronts atteignent A ensemble, à t = 2,0 ms.' : 'Écrit : le front atteint A à t = 2,0 ms, v = 0,68 / 2×10⁻³ = 340 m/s.');
+  if (S.t >= M.mesure_lambda - 1e-6) m.push(COMP ? 'Cotes : λ = 34 cm (1000 Hz) et λ = 17 cm (2000 Hz) ; v = 340 m/s pour les deux.' : `Cote jaune λ = ${fr(lam(S.f) * 100, 0)} cm entre deux compressions voisines ; v = λ·N = ${fr(lam(S.f), 2)} × ${S.f} = 340 m/s.`);
+  if (COMP && S.t >= M.comparaison - 1e-6) m.push('Conclusion écrite : même célérité, l’air n’est pas un milieu dispersif.');
+  return m.join(' ');
+}
+
+const EXPLICATIONS = {
+  mille_hertz: [
+    { repere: 'haut_parleur', texte: 'Le haut-parleur vibre à 1000 hertz.' },
+    { repere: 'compression', texte: 'Il pousse l’air : des compressions avancent, l’onde est longitudinale.' },
+    { repere: 'repere_a', texte: 'Le front arrive en A, à 68 cm, au bout de 2 millisecondes.' },
+    { repere: 'lambda_1000', texte: 'Entre deux compressions voisines : λ = 34 cm.' },
+    { repere: 'calcul', texte: 'v = λ·N = 0,34 × 1000 = 340 m/s.' },
+  ],
+  deux_mille_hertz: [
+    { repere: 'generateur', texte: 'On double la fréquence : 2000 hertz.' },
+    { repere: 'repere_a', texte: 'Le front arrive en A à la même date, 2 millisecondes.' },
+    { repere: 'lambda_2000', texte: 'Les compressions sont deux fois plus serrées : λ = 17 cm.' },
+    { repere: 'calcul', texte: 'v = 0,17 × 2000 = 340 m/s : la même célérité.' },
+  ],
+  comparaison: [
+    { repere: 'repere_a', texte: 'Les deux fronts arrivent ensemble au repère A.' },
+    { repere: 'lambda_1000', texte: 'À 1000 hertz, λ = 34 cm.' },
+    { repere: 'lambda_2000', texte: 'À 2000 hertz, λ = 17 cm.' },
+    { repere: 'conclusion', texte: 'La célérité ne dépend pas de la fréquence : l’air n’est pas dispersif.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = COMP ? ['start', 'reset', 'pause', 'resume', 'play_until'] : ['start', 'reset', 'pause', 'resume', 'set_parameters', 'play_until'];
+const schema = { play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)' } };
+if (!COMP) schema.set_parameters = { frequence_hz: '1000 | 2000 (rejoue la scène)' };
+const config = { id: 'ondes_periodiques_air', version: '1.0', title: 'Le son dans l’air — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes, command_schema: schema };
+/* Le tuteur pilote : le banc doit être entièrement écrit pour que ce qu’il dit (ce_qui_se_voit) soit à l’écran. */
+function achever() { if (!scene.craie.complet || (performance.now() - scene.ouvert) < 8000) { scene.ouvert = performance.now() - 60000; scene.sale = true; } }
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Son dans l’air, v = 340 m/s : 1000 Hz → λ = 34 cm ; 2000 Hz → λ = 17 cm. Le front atteint le repère A (68 cm) à 2,0 ms dans les deux cas : l’air n’est pas dispersif. Vue « ${vue} ».`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : S.fait ? 'finished' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), t_reel_ms: +(tr() * 1000).toFixed(2), moments: moments(), parameters: COMP ? { frequences_hz: [1000, 2000] } : { frequence_hz: S.f },
+    lambda_cm: COMP ? [34, 17] : +(lam(S.f) * 100).toFixed(1), v_m_s: V }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => (achever(), { start, reset: start, pause, resume, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le haut-parleur va émettre…');
+setTimeout(() => { if (!S.running && !S.pause && !S.fait && S.t === 0) start(); }, 1500);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

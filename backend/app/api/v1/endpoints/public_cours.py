@@ -2,6 +2,7 @@
 
 Sans compte : le visiteur est reconnu par un identifiant tiré au hasard dans son navigateur (`X-Visiteur`), qui sert
 de clé à son suivi des acquis (`public-<id>`). Les mêmes services que le lecteur connecté répondent :
+  - photo de la feuille de l'élève lue par l'OCR (`/ocr-reponse`, plafond « llm »), montrée dans le champ avant l'envoi ;
   - questions libres (écrites, au micro — transcrites par Gemini 2.5 Flash —, ou en image), réexplication en
     cycles, réactions aux réponses et aux manipulations : DeepSeek ;
   - la voix du professeur : notre modèle sur Kaggle (`synthesize`), réveillé dès que la page s'ouvre (`/eveil`) ;
@@ -122,6 +123,15 @@ async def transcrire(body: cp.TranscrireRequest, request: Request, x_visiteur: s
     if len(body.audio_b64) > 3_000_000:
         raise HTTPException(413, "Enregistrement trop long : une minute au plus.")
     return await cp.transcrire(body, _autoriser("micro", _visiteur(x_visiteur), request))
+
+
+@router.post("/ocr-reponse")
+async def ocr_reponse(body: cp.OcrReponseRequest, request: Request, x_visiteur: str | None = Header(default=None)):
+    """« 📷 Photo » : la feuille de l'élève lue (Mistral OCR + DeepSeek), montrée dans le champ avant tout envoi."""
+    if len(body.image_b64) > 6_000_000:
+        raise HTTPException(413, "Image trop lourde.")
+    _ce_cours(body.deck_id)
+    return await cp.ocr_reponse(body, _autoriser("llm", _visiteur(x_visiteur), request))
 
 
 @router.post("/reexplication")

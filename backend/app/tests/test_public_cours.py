@@ -101,3 +101,43 @@ def test_transcription_seule_pour_verifier_avant_d_envoyer(client):
     r = client.post("/public/cours-ondes/transcrire", headers=H, json={"audio_b64": "data:audio/webm;base64,AAAAAAAA"})
     assert r.status_code == 200 and r.json() == {"texte": "علاش tau"}
     assert client.vu["gemini_seul"] is False
+
+
+def test_photo_de_la_feuille_lue_avec_le_contexte_de_la_diapositive(client, monkeypatch):
+    """« 📷 Photo » : Mistral OCR + DeepSeek avec le contexte ; le texte revient au champ (jamais envoyé seul)."""
+    import app.services.ocr_service as ocr
+    vu = {}
+
+    async def lire(image_b64, mime_type="image/png", correct_math=True, subject="", contexte=""):
+        vu.update(subject=subject, contexte=contexte, mime=mime_type)
+        return {"text": "$\lambda$ = v·T = 0,40 m", "success": True}
+
+    monkeypatch.setattr(ocr, "extract_text_from_image", lire)
+    r = client.post("/public/cours-ondes/ocr-reponse", headers=H, json={
+        "image_b64": "data:image/jpeg;base64,AAAA", "deck_id": "phys_ch1_waves_exemple", "title": "Le retard",
+        "lead": "τ = d / v", "enonce": "Calcule λ."})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"texte": "\lambda = v·T = 0,40 m"}            # jamais de $ dans le champ
+    assert vu["subject"] == "physique" and "Le retard" in vu["contexte"] and "Calcule λ." in vu["contexte"]
+    assert "ne corrige NI ses erreurs" in vu["contexte"]
+
+
+def test_photo_illisible_dit_pourquoi(client, monkeypatch):
+    import app.services.ocr_service as ocr
+
+    async def rien(*a, **k):
+        return {"text": "", "success": False}
+
+    monkeypatch.setattr(ocr, "extract_text_from_image", rien)
+    r = client.post("/public/cours-ondes/ocr-reponse", headers=H, json={"image_b64": "data:image/png;base64,AAAA"})
+    assert r.status_code == 422 and "photo" in r.json()["detail"]
+    assert client.post("/public/cours-ondes/ocr-reponse", headers=H,
+                       json={"image_b64": "AAAAAAAAAAAA", "deck_id": "autre_cours"}).status_code == 404
+
+
+def test_matiere_et_chapitre_deduits_du_cours():
+    from app.api.v1.endpoints import course_player as cp
+    assert cp.matiere_du_cours("chim_ch3_acides", None) == "chimie"
+    assert cp.matiere_du_cours("x", {"subject": "Mathématiques"}) == "math"
+    m, ctx = cp.contexte_ocr(cp.OcrReponseRequest(image_b64="AAAAAAAAAAAA", title="Diapo"), {"title": "Ondes périodiques"})
+    assert m == "physique" and "Chapitre : Ondes périodiques." in ctx and "« Diapo »" in ctx

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stroboscope — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Cuve à ondes dans une pièce sombre éclairée par un stroboscope : les rides défilent, puis paraissent immobiles sous des éclairs à la fréquence du vibreur"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Rejouer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="eau.js"></script>
+<script>
+/*
+ * Stroboscope (cours « Ondes mécaniques progressives périodiques », 10 novembre 2026).
+ * La cuve à ondes de cuve.html (réglette, N = 20 Hz, λ = 1,5 cm, v = 0,30 m/s) dans une pièce sombre.
+ * Vues (?vue=) : sans (éclairage continu : les rides défilent), eclair (un éclair, puis un autre une période après),
+ * immobile (éclairs à 20 Hz : immobilité apparente, on pose la règle), ralenti (éclairs à 19 Hz, montré seulement :
+ * aucune formule de fréquence apparente, hors programme).
+ * Modèle : y(r, t) = A sin 2πN(t − r/v) ; un éclair montre la surface à l'instant de l'éclair (durée négligeable).
+ * Entre deux éclairs, l'image reste vue (persistance rétinienne) : pour l'œil seulement, l'image s'assombrit un peu.
+ * Le mouvement est ralenti pour l'œil (8 fois ; 40 fois entre les deux éclairs de la vue eclair).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const E = window.EauPeinte;
+const $ = id => document.getElementById(id);
+const VUES = ['sans', 'eclair', 'immobile', 'ralenti'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'sans';
+const N = 20, V = 0.30, LAM = V / N, T = 1 / N;      // vibreur 20 Hz, λ = 1,5 cm
+const PXCM = 20, PXM = 100 * PXCM;
+const R = { x: 50, y: 82, w: 420, h: 250 }, SX = 74, SY = R.y + R.h / 2, LC = (R.x + R.w - SX) / PXM;
+const YR = SY + 34;                                   // la règle, posée sous l'axe
+const LAMPE = { x: 640, y: 118 }, KNOB = { x: 700, y: 118 };
+const T0 = 1.0;                                       // le vibreur tourne depuis 1 s : les rides couvrent déjà la cuve
+const STROBE = vue === 'immobile' || vue === 'ralenti';
+const S = { t: T0, running: false, jusqua: null, motif: '', fait: false, emis: 0, ne: vue === 'ralenti' ? 19 : 20, regle: null };
+
+/* Le déroulé (dates en s du temps réel de l'expérience). */
+function plan() {
+  const off = T0 + 0.1;
+  if (vue === 'sans') return { off: Infinity, fin: T0 + 0.6, lent: () => 1 / 8 };
+  if (vue === 'eclair') { const t1 = off + 0.02, t2 = t1 + T; return { off, t1, t2, eclairs: [t1, t2], fin: t2 + 0.045, lent: t => (t < off ? 1 / 8 : 1 / 40) }; }
+  const ts = off + 0.03, pe = 1 / S.ne, fige = immobile();
+  const p = { off, ts, pe, fin: fige ? ts + 6 * pe + 0.06 + 0.3 : ts + 1.2, lent: () => 1 / 8 };
+  if (fige) Object.assign(p, { regle0: ts + 6 * pe, regle: ts + 6 * pe + 0.06 });
+  return p;
+}
+/* Les éclairs reviennent à chaque période : chaque ride a pris la place de la précédente → image immobile. */
+const decalage = () => { const q = N / S.ne, d = q - Math.round(q); return d; };   // fraction de λ gagnée d'un éclair au suivant
+const immobile = () => Math.abs(decalage()) < 1e-9;
+
+/* Ce que l'œil voit à l'instant t : l'image de l'eau (temps tau), sa luminosité, la lueur de la lampe. */
+function lumiere(t) {
+  const P = plan();
+  if (t < P.off) return { tau: t, lum: 1, eclat: 0, mode: 'continu', n: 0 };
+  let tf = null, n = 0;
+  if (vue === 'eclair') { for (const e of P.eclairs) if (t >= e) { tf = e; n++; } }
+  else if (t >= P.ts) { n = Math.floor((t - P.ts) * S.ne + 1e-9) + 1; tf = P.ts + (n - 1) * P.pe; }
+  if (tf == null) return { tau: t, lum: 0.04, eclat: 0, mode: 'noir', n: 0 };
+  const dd = (t - tf) / P.lent(t);                    // secondes vues à l'écran depuis l'éclair
+  const lum = vue === 'eclair' ? 0.04 + 0.96 * Math.exp(-dd / 0.9) : 0.74 + 0.26 * Math.exp(-dd / 0.15);
+  return { tau: tf, lum, eclat: Math.exp(-dd / 0.12), mode: vue === 'eclair' ? 'eclair' : 'strobo', n, tf };
+}
+function onde(r, tau) { const u = tau - r / V; if (u < 0) return null; const ph = 2 * Math.PI * N * u; return { h: Math.sin(ph), s: -Math.cos(ph) }; }
+function cretes(tau) { const out = []; for (let k = 0; k < 400; k++) { const r = V * (tau - (k + 0.25) / N); if (r < 0) break; if (r <= LC + 0.01) out.push(r); } return out.sort((a, b) => a - b); }
+
+function peindre(ctx, L) {
+  // La pièce sombre autour de la cuve (peinte), puis l'eau éclairée selon la lampe.
+  ctx.save(); ctx.fillStyle = 'rgba(0,4,8,.55)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(4, 44, 752, 352, 14); else ctx.rect(4, 44, 752, 352); ctx.fill(); ctx.restore();
+  ctx.save(); E.chemin(ctx, R); ctx.clip(); E.fond(ctx, R, { reflets: false });
+  for (const sens of [1, -1]) {
+    ctx.save(); ctx.beginPath();
+    if (sens > 0) ctx.rect(SX, R.y, R.x + R.w - SX, R.h); else ctx.rect(R.x, R.y, SX - R.x, R.h);
+    ctx.clip();
+    const umax = (sens > 0 ? R.x + R.w - SX : SX - R.x) + 6;
+    const c = { forme: 'lineaire', sens, x: SX, umax, pas: 1.8, zone: R, onde: u => { const o = onde(u / PXM, L.tau); return o && { ...o, amp: .75 }; } };
+    E.rides(ctx, c); E.liseres(ctx, c, cretes(L.tau).filter(r => r * PXM < umax).map(r => ({ u: r * PXM, a: .5 })));
+    ctx.restore();
+  }
+  ctx.restore();
+  E.boitier(ctx, 10, SY - 17, 36, 34); E.bras(ctx, 46, SX, SY); E.reglette(ctx, SX, R.y + 8, R.y + R.h - 8);
+  E.nuit(ctx, { x: R.x - 2, y: R.y - 2, w: R.w + 4, h: R.h + 4 }, 1 - L.lum);
+  if (L.mode === 'noir') { ctx.save(); ctx.fillStyle = 'rgba(0,4,8,.7)'; ctx.fillRect(8, SY - 19, 40, 38); ctx.restore(); }
+  E.lampe(ctx, LAMPE.x, LAMPE.y, L.mode === 'continu' ? 0 : L.eclat);
+  // Le faisceau de l'éclair vers la cuve.
+  if (L.mode !== 'continu' && L.eclat > .03) {
+    ctx.save(); const g = ctx.createLinearGradient(LAMPE.x - 40, LAMPE.y, R.x + R.w / 2, SY);
+    g.addColorStop(0, `rgba(255,250,225,${(.28 * L.eclat).toFixed(3)})`); g.addColorStop(1, 'rgba(255,250,225,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(LAMPE.x - 44, LAMPE.y - 10); ctx.lineTo(R.x + R.w, R.y); ctx.lineTo(R.x + R.w, R.y + R.h); ctx.lineTo(LAMPE.x - 44, LAMPE.y + 10); ctx.fill(); ctx.restore();
+  }
+  if (STROBE) E.molette(ctx, KNOB.x, KNOB.y, 13, -Math.PI / 2 + (S.ne - 20) * 0.25);
+}
+
+/* La règle (vue immobile) : bouts accrochés aux crêtes de l'image immobile. */
+function regleActuelle() {
+  const P = plan(); if (!STROBE || !P.regle) return null;
+  const p = Math.max(0, Math.min(1, (S.t - P.regle0) / (P.regle - P.regle0) + 1e-6));
+  if (p <= 0) return null;
+  const cr = cretes(lumiere(S.t).tau);
+  let ra, rb, manuel = false;
+  if (S.regle) ({ ra, rb, manuel } = S.regle);
+  else { let i0 = 0; cr.forEach((r, i) => { if (Math.abs(r - 0.05) < Math.abs(cr[i0] - 0.05)) i0 = i; }); ra = cr[i0]; rb = cr[Math.min(cr.length - 1, i0 + 3)]; }
+  return { ra, rb, n: Math.round((rb - ra) / LAM), p, posee: p >= 1, cr, manuel };
+}
+
+function dessiner(c) {
+  const P = plan(), L = lumiere(S.t), M = moments();
+  c.direct(() => peindre(c.ctx, L));
+  c.texte('Pièce sombre : la cuve vue de dessus', 14, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.texte('S (réglette)', SX + 8, R.y + 22, { couleur: 'cyan', taille: 15 });
+  c.texte('vibreur : N = 20 Hz', 500, 76, { couleur: 'jaune', taille: 18 });
+  c.texte('stroboscope', LAMPE.x - 6, 160, { couleur: 'faible', align: 'center', taille: 14 });
+  c.repere('vibreur', 6, SY - 22, 44, 44, 'le vibreur (N = 20 Hz)');
+  c.repere('source', SX - 8, R.y + 6, 16, R.h - 12, 'la source : la réglette');
+  c.repere('stroboscope', LAMPE.x - 40, LAMPE.y - 22, 80, 44, 'le stroboscope : une lampe qui envoie des éclairs');
+  c.texte('Mouvement ralenti pour l’œil.', R.x, 382, { couleur: 'faible', taille: 13 });
+  c.direct(() => {
+    const col = 500;
+    if (STROBE) {
+      c.texte(`éclairs : ${S.ne} Hz`, col, 196, { couleur: 'jaune', taille: 18 }).texte('⇅ molette : 15 à 25 Hz', col, 216, { couleur: 'faible', taille: 13 });
+      c.repere('frequence_eclairs', col - 4, 178, 250, 44, 'la fréquence des éclairs (molette)');
+    }
+    // L'état de ce qu'on voit.
+    let l1 = '', l2 = '', coul = 'vert';
+    if (L.mode === 'continu') { l1 = 'Lumière continue :'; l2 = 'les rides défilent.'; coul = 'rose'; }
+    else if (L.mode === 'noir') { l1 = 'Lumière éteinte :'; l2 = 'on ne voit presque rien.'; coul = 'faible'; }
+    else if (L.mode === 'eclair') { l1 = `Éclair n° ${L.n} :`; l2 = 'les rides figées un instant.'; }
+    else if (immobile()) { l1 = L.n >= 3 ? 'Immobilité apparente :' : `Éclair n° ${L.n}…`; l2 = L.n >= 3 ? 'les rides semblent arrêtées.' : ''; }
+    else { const d = decalage(); l1 = L.n >= 3 ? `Les rides semblent ${d > 0 ? 'avancer' : 'reculer'}` : `Éclair n° ${L.n}…`; l2 = L.n >= 3 ? (Math.abs(d) < 0.15 ? 'lentement (montré seulement).' : '(image qui saute).') : ''; coul = 'orange'; }
+    c.texte(l1, col, 256, { couleur: coul, taille: 17 }); if (l2) c.texte(l2, col, 280, { couleur: coul, taille: 17 });
+    c.repere('etat_eclairage', col - 4, 238, 250, 50, 'ce que l’on voit');
+
+    // Vue sans : la règle posée sur les rides qui défilent, sans pouvoir lire λ.
+    if (vue === 'sans') {
+      E.regle(c.ctx, SX + 0.05 * PXM, SX + 0.095 * PXM, YR, PXCM, 1);
+      c.repere('regle', SX + 0.05 * PXM - 14, YR, 0.045 * PXM + 28, 22, 'la règle posée sur l’eau');
+      c.texte('La règle est posée,', col, 320, { couleur: 'faible', taille: 15 }).texte('mais les rides glissent dessous.', col, 340, { couleur: 'faible', taille: 15 });
+    }
+    // Vue eclair : une croix sur une ride au premier éclair ; au second, la ride marquée a avancé de λ.
+    if (vue === 'eclair' && S.t >= P.t1) {
+      const cr = cretes(P.t1), rx = cr.reduce((a, b) => (Math.abs(b - 0.1) < Math.abs(a - 0.1) ? b : a), cr[0]), x = SX + rx * PXM, y = SY - 62;
+      c.ligne(x - 8, y - 8, x + 8, y + 8, { couleur: 'jaune', largeur: 2.6 }).ligne(x - 8, y + 8, x + 8, y - 8, { couleur: 'jaune', largeur: 2.6 });
+      c.repere('crete', x - 10, R.y + 6, 20, R.h - 12, 'la ride marquée d’une croix');
+      if (S.t >= P.t2) {
+        const x2 = x + LAM * PXM;
+        c.cercle(x2, y, 9, { couleur: 'orange', largeur: 2.2 });
+        c.fleche(x + 10, y - 22, x2 - 2, y - 22, { couleur: 'orange', largeur: 2, tete: 7 }).texte('+ λ', (x + x2) / 2, y - 30, { couleur: 'orange', align: 'center', taille: 15 });
+        c.texte('Une période plus tard :', col, 320, { couleur: 'vert', taille: 15 });
+        c.texte('une ride est de nouveau', col, 340, { couleur: 'vert', taille: 15 }).texte('sous la croix ; la ride', col, 360, { couleur: 'vert', taille: 15 }).texte('marquée a avancé de λ.', col, 380, { couleur: 'vert', taille: 15 });
+      } else c.texte('Une croix marque une ride.', col, 320, { couleur: 'jaune', taille: 15 });
+    }
+    // Vue immobile : la règle sur l'image immobile, puis λ, N et v.
+    const Rg = regleActuelle();
+    if (Rg) {
+      const xa = SX + Rg.ra * PXM, xb = SX + Rg.rb * PXM, y = YR - (1 - Rg.p) * 40;
+      E.regle(c.ctx, xa, xb, y, PXCM, Rg.p);
+      c.repere('regle', xa - 14, y, xb - xa + 28, 22, 'la règle posée sur l’image immobile');
+      if (Rg.posee) {
+        for (let i = 0; i <= Rg.n; i++) { const x = xa + i * LAM * PXM; c.ligne(x, y - 14, x, y + 1, { couleur: 'jaune', largeur: 2.2, tremble: .3 }); }
+        for (let i = 0; i < Rg.n; i++) { const x1 = xa + i * LAM * PXM, x2 = x1 + LAM * PXM; c.courbe(u => [x1 + (x2 - x1) * u, y - 16 - 7 * Math.sin(Math.PI * u)], 12, { couleur: 'orange', largeur: 1.8 }); c.texte(String(i + 1), (x1 + x2) / 2, y - 27, { couleur: 'orange', align: 'center', taille: 15 }); }
+        const d = Rg.n * LAM * 100, q = S.t - P.regle;
+        if (q >= -1e-4 || Rg.manuel) c.texte(`d = ${fr(d, 1)} cm, n = ${Rg.n} : λ = ${fr(LAM * 100, 1)} cm`, col, 320, { couleur: 'jaune', taille: 16 });
+        if (q >= 0.08 || Rg.manuel) c.texte('N = fréquence des éclairs = 20 Hz', col, 344, { couleur: 'jaune', taille: 15 });
+        if (q >= 0.16 || Rg.manuel) c.texte(`v = λ·N = ${fr(LAM * 100, 1)}×10⁻² × 20 = ${fr(V, 2)} m/s`, col, 372, { couleur: 'vert', taille: 16 });
+      }
+    }
+    if (vue === 'ralenti' && L.n >= 3) c.texte('On ne calcule rien avec ce mouvement.', col, 320, { couleur: 'faible', taille: 14 });
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  const P = plan();
+  S.t = Math.min(P.fin, S.t + dt * P.lent(S.t));
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(4) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= P.fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* Les instants clés, calculés depuis la physique (période T = 1/N, éclairs à la fréquence choisie). */
+function moments() {
+  const P = plan(), m = { rides_defilent: T0 + 0.06 };
+  if (vue === 'eclair') { m.eclair_1 = P.t1 + 0.0005; m.eclair_2 = P.t2 + 0.0005; }
+  if (STROBE) {
+    m.eclair_1 = P.ts + 0.0005; m.eclair_2 = P.ts + P.pe + 0.0005;
+    if (immobile()) { m.immobilite = P.ts + 4 * P.pe + 0.0005; m.regle_posee = P.regle; } else m.ralenti = P.ts + 0.5;
+  }
+  for (const k in m) m[k] = +Math.min(P.fin, m[k]).toFixed(4);
+  return m;
+}
+const MOTIFS = {
+  rides_defilent: 'lumière continue : les rides défilent', eclair_1: 'un éclair : les rides figées un instant',
+  eclair_2: 'un éclair une période plus tard : chaque ride a pris la place de la précédente',
+  immobilite: 'éclairs à la fréquence du vibreur : immobilité apparente', regle_posee: 'la règle est posée sur l’image immobile',
+  ralenti: 'les rides semblent avancer lentement',
+};
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-5) S.t = T0;
+  S.regle = null; S.jusqua = Math.min(plan().fin, Math.max(T0 + 0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (mouvement ralenti)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+function ceQuiSeVoit() {
+  const P = plan(), L = lumiere(S.t), m = [`t = ${fr(S.t, 3)} s${S.running ? ' (la scène défile, ralentie pour l’œil)' : S.fait ? ' (fin de la scène)' : ' (scène arrêtée)'}. Pièce sombre ; cuve à ondes vue de dessus, réglette, vibreur N = 20 Hz affiché (λ = 1,5 cm).`];
+  if (L.mode === 'continu') m.push(`Lumière continue : les rides défilent${vue === 'sans' ? ' sous la règle posée sur l’eau ; on ne peut pas lire λ' : ''}.`);
+  else if (L.mode === 'noir') m.push('Lumière éteinte : on ne voit presque rien.');
+  else if (L.mode === 'eclair') {
+    m.push(`Éclair n° ${L.n} : l’image des rides apparaît figée, puis s’efface${L.lum < .2 ? ' (image presque éteinte)' : ''}. Une croix jaune marque une ride.`);
+    if (L.n >= 2) m.push('Une période après le premier éclair (T = 0,05 s) : une ride est de nouveau sous la croix ; la ride marquée a avancé de λ (flèche « + λ »).');
+  } else {
+    m.push(`Stroboscope : éclairs à ${S.ne} Hz affichés (éclair n° ${L.n}).`);
+    if (L.n >= 3) m.push(immobile() ? 'Immobilité apparente : chaque éclair montre les rides au même endroit.' : `Les rides semblent ${decalage() > 0 ? 'avancer' : 'reculer'}${Math.abs(decalage()) < 0.15 ? ' lentement' : ' par sauts'} ; c’est seulement montré, on ne calcule rien avec ce mouvement.`);
+  }
+  const Rg = regleActuelle();
+  if (Rg && Rg.posee) {
+    const q = S.t - P.regle, d = Rg.n * LAM * 100;
+    m.push(`Règle posée sur l’image immobile : ${Rg.n + 1} traits, ${Rg.n} intervalles numérotés${q >= -1e-4 || Rg.manuel ? ` ; affiché d = ${fr(d, 1)} cm, λ = ${fr(LAM * 100, 1)} cm` : ''}${q >= 0.08 || Rg.manuel ? ' ; N = fréquence des éclairs = 20 Hz' : ''}${q >= 0.16 || Rg.manuel ? ` ; v = λ·N = ${fr(V, 2)} m/s` : ''}.`);
+  } else if (Rg) m.push('La règle se pose sur l’image immobile.');
+  return m.join(' ');
+}
+function message() {
+  if (vue === 'sans') return 'Les rides avancent sans arrêt : impossible de mesurer λ.';
+  if (vue === 'eclair') return 'Un éclair très bref montre la surface comme une photo.';
+  return immobile() ? 'Un éclair par période : la surface paraît immobile, et on mesure λ.' : 'Éclairs un peu moins fréquents que le vibreur : les rides semblent avancer lentement.';
+}
+
+function start() { S.jusqua = null; S.t = T0; S.regle = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (mouvement ralenti)'); pont.noter('start', { eclairs_hz: S.ne }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(4) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= plan().fin) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const fin = plan().fin;
+  S.running = false; S.jusqua = null; S.t = Math.min(fin, Math.max(T0, t)); S.fait = S.t >= fin;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 3)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (!Number.isFinite(+p.eclairs_hz)) return;
+  if (!STROBE) { bulle($('feedback'), 'Dans cette vue, la lampe n’envoie pas d’éclairs réguliers.'); return; }
+  S.ne = Math.min(25, Math.max(15, Math.round(+p.eclairs_hz))); S.regle = null;
+  if (S.t > plan().fin) S.t = plan().fin;
+  S.fait = false; scene.sale = true;
+  bulle($('feedback'), `Éclairs réglés à ${S.ne} Hz.`); pont.noter('set_parameters', { eclairs_hz: S.ne }); pont.emettre();
+  if (!S.running) resume();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > T0 && S.t < plan().fin && !S.fait ? resume() : start()));
+
+/* Poignées : la molette du stroboscope (glisser vers le haut : plus d'éclairs) ; les bouts de la règle. */
+const proche = (cr, r) => cr.reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a), cr[0]);
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (STROBE && Math.hypot(x - KNOB.x, y - KNOB.y) < 22) { S.prise = { y, ne: S.ne }; return 'molette'; }
+    const Rg = regleActuelle(); if (!Rg || !Rg.posee || y < YR - 36 || y > YR + 28) return null;
+    const xa = SX + Rg.ra * PXM, xb = SX + Rg.rb * PXM;
+    if (Math.abs(x - xa) < 13) return 'ra';
+    if (Math.abs(x - xb) < 13) return 'rb';
+    return null;
+  },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (id === 'molette') { const ne = Math.min(25, Math.max(15, S.prise.ne + Math.round((S.prise.y - y) / 12))); if (ne !== S.ne) { S.ne = ne; S.regle = null; scene.sale = true; } return; }
+    const Rg = regleActuelle(); if (!Rg) return;
+    const r = (x - SX) / PXM; let { ra, rb } = Rg;
+    if (id === 'ra') ra = Math.min(proche(Rg.cr, r), rb - LAM * 0.9); else rb = Math.max(proche(Rg.cr, r), ra + LAM * 0.9);
+    S.regle = { ra: proche(Rg.cr, ra), rb: proche(Rg.cr, rb), manuel: true }; scene.sale = true;
+  },
+  lacher: id => {
+    if (id === 'molette') { setParameters({ eclairs_hz: S.ne }); return; }
+    const Rg = regleActuelle(); if (Rg) { pont.noter('set_parameters', { regle_d_cm: +(Rg.n * LAM * 100).toFixed(2), intervalles: Rg.n }); pont.emettre(); }
+  },
+});
+
+const EXPLICATIONS = {
+  sans: [{ repere: 'etat_eclairage', texte: 'En lumière continue, les rides avancent sans arrêt.' }, { repere: 'regle', texte: 'La règle est posée, mais impossible de lire λ.' }],
+  eclair: [{ repere: 'stroboscope', texte: 'Dans le noir, la lampe envoie un éclair très bref.' }, { repere: 'crete', texte: 'Pendant l’éclair, les rides n’ont pas le temps d’avancer : on les voit figées.' }],
+  immobile: [{ repere: 'frequence_eclairs', texte: 'Un éclair à chaque période du vibreur.' }, { repere: 'etat_eclairage', texte: 'Chaque ride a pris la place de la précédente : la surface paraît immobile.' }, { repere: 'regle', texte: 'Sur l’image immobile, on mesure λ.' }],
+  ralenti: [{ repere: 'frequence_eclairs', texte: 'Des éclairs un peu moins fréquents que le vibreur.' }, { repere: 'etat_eclairage', texte: 'Les rides semblent avancer lentement : on le regarde, on ne le calcule pas.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_stroboscope', version: '1.0', title: 'Stroboscope — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: STROBE ? { eclairs_hz: '15..25 (fréquence des éclairs, en Hz, pas de 1)' } : {},
+    set_time: { time_s: `${T0}..${fr(plan().fin, 3)} (arrêt sur cet instant, en s de l’expérience)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Stroboscope, vue « ${vue} ». Cuve à ondes dans une pièce sombre, réglette, vibreur N = 20 Hz, λ = 1,5 cm, v = 0,30 m/s. Éclairs à la fréquence du vibreur : immobilité apparente, on mesure λ. Mouvement ralenti pour l’œil. ${message()}`,
+  etat: () => {
+    const Rg = regleActuelle();
+    return { simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > T0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+      time_s: +S.t.toFixed(4), parameters: { frequence_vibreur_hz: N, eclairs_hz: STROBE ? S.ne : null, lambda_cm: 1.5, v_m_s: V, ...(Rg && Rg.posee ? { regle_d_cm: +(Rg.n * LAM * 100).toFixed(2), intervalles: Rg.n } : {}) }, moments: moments() };
+  },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), vue === 'sans' ? 'Le vibreur tourne ; la lampe éclaire en continu…' : 'Le vibreur tourne ; on va éteindre la lumière…');
+setTimeout(() => { if (!S.running && S.t === T0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

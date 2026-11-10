@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures à la craie — ondes périodiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une figure du cours écrite à la craie, pas à pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="exposants.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Figures fixes du cours « Ondes mécaniques progressives périodiques » (10 novembre 2026), écrites à la craie pas à pas,
+ * comme un professeur au tableau : ?fig=fig_frise | fig_prefixes | fig_oscillo | fig_deux_axes | fig_enonce_cuve |
+ * fig_coupe_2017 | fig_yM_2022 | fig_diffraction_a_completer | fig_enonce_2020.
+ * Les figures d’énoncé sont redessinées d’après les nationaux (2017 N exercice II, 2020 N exercice II, 2022 R exercice 2).
+ * Chaque figure : `trace` = la figure seule (l’état de la question), des étapes nommées, puis `fin` (lecture ou correction).
+ * Le tuteur fige l’écriture sur une étape (`play_until {moment}`) et montre chaque élément (`highlight {target}`).
+ * fig_yM_2022 : y_S(t) se trace par-dessus seulement si `&source=1` ou si le tuteur demande l’étape `source`.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+const FIGS = {
+  fig_frise: { titre: 'Trois sonneries à intervalles égaux', etapes: ['trace', 'durees', 'fin'] },
+  fig_prefixes: { titre: 'Tableau des préfixes', etapes: ['trace', 'exemples', 'fin'] },
+  fig_oscillo: { titre: 'Oscillogramme à deux courbes (0,1 ms/div)', etapes: ['trace', 'periode', 'fin'] },
+  fig_deux_axes: { titre: 'Même courbe, deux axes (ms puis cm)', etapes: ['trace', 'unites', 'lecture', 'fin'] },
+  fig_enonce_cuve: { titre: 'Cuve vue de dessus, comme dans un énoncé', etapes: ['trace', 'intervalles', 'fin'] },
+  fig_coupe_2017: { titre: 'Coupe de la surface de l’eau (national 2017 N)', etapes: ['trace', 'lambda', 'front', 'fin'] },
+  fig_yM_2022: { titre: 'Élongation y_M(t) (national 2022 R)', etapes: ['trace', 'retard', 'periode', 'amplitude', 'source', 'fin'] },
+  fig_diffraction_a_completer: { titre: 'Diffraction : figure à compléter', etapes: ['trace', 'arcs', 'fin'] },
+  fig_enonce_2020: { titre: 'Ondes circulaires (national 2020 N)', etapes: ['trace', 'lambda', 'fin'] },
+};
+const fig = FIGS[P.get('fig')] ? P.get('fig') : 'fig_frise';
+const VITESSE = 1.6;                              // l’écriture va un peu plus vite que la craie du kit
+const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif: '', source: P.get('source') === '1', emis: 0 };
+let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.tw);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+let MM = {};
+const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Une partie peinte (eau, quadrillage) apparaît quand l’écriture arrive à elle, d’un coup. */
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => fn(c.ctx)); };
+const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
+
+// ───────────────────────── Les figures ─────────────────────────
+const DESSINS = {
+  fig_frise(c) {
+    c.texte('Un phénomène périodique', 40, 34, { couleur: 'cyan', taille: 20 });
+    const ya = 262;
+    c.fleche(50, ya, 720, ya, { couleur: 'blanc', largeur: 2 }).texte('t', 732, ya + 6, { couleur: 'blanc', taille: 18 });
+    c.repere('axe', 46, ya - 12, 700, 24, 'l’axe du temps');
+    const X = [180, 380, 580], H = ['8 h', '9 h', '10 h'];
+    X.forEach((x, i) => {
+      const y = 190;
+      c.cercle(x, y - 50, 5, { couleur: 'jaune' });
+      c.trait([[x - 8, y - 45], [x - 10, y - 30], [x - 14, y - 15], [x - 24, y - 3], [x + 24, y - 3], [x + 14, y - 15], [x + 10, y - 30], [x + 8, y - 45], [x - 8, y - 45]], { couleur: 'jaune' });
+      c.point(x, y + 3, 4, 'jaune');
+      c.trait([[x - 34, y - 34], [x - 40, y - 24], [x - 34, y - 14]], { couleur: 'faible', largeur: 1.6 }).trait([[x + 34, y - 34], [x + 40, y - 24], [x + 34, y - 14]], { couleur: 'faible', largeur: 1.6 });
+      c.ligne(x, y + 10, x, ya, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+      c.ligne(x, ya - 7, x, ya + 7, { couleur: 'blanc', largeur: 2 });
+      c.texte(H[i], x, ya + 28, { couleur: 'blanc', align: 'center', taille: 17 });
+      c.texte('sonnerie', x, y - 64, { couleur: 'faible', align: 'center', taille: 14 });
+      c.repere('sonnerie_' + (i + 1), x - 44, y - 82, 88, 96, `la sonnerie de ${H[i]}`);
+    });
+    marque(c, 'trace');
+    c.pause(.4);
+    c.cote(X[0], ya + 52, X[1], ya + 52, '1 h', { couleur: 'jaune', taille: 17, dessous: true });
+    c.cote(X[1], ya + 52, X[2], ya + 52, '1 h', { couleur: 'jaune', taille: 17, dessous: true });
+    c.repere('duree', X[0], ya + 40, X[2] - X[0], 40, 'la même durée entre deux sonneries');
+    marque(c, 'durees');
+    c.pause(.3);
+    c.texte('La sonnerie se refait identique, après la même durée : c’est périodique.', 40, 392, { couleur: 'vert', taille: 18, max: 690 });
+    c.repere('conclusion', 36, 372, 694, 26, 'le phénomène est périodique');
+    marque(c, 'fin');
+  },
+
+  fig_prefixes(c) {
+    c.texte('Convertir d’abord : les préfixes', 40, 34, { couleur: 'cyan', taille: 20 });
+    const X = [50, 160, 300, 450, 730], Y = [60, 104, 160, 216, 272, 328];
+    c.ligne(X[0], Y[1], X[4], Y[1], { couleur: 'faible', largeur: 1.6 });
+    for (let j = 2; j < Y.length - 1; j++) c.ligne(X[0], Y[j], X[4], Y[j], { couleur: 'tresfaible', largeur: 1.2, duree: .15 });
+    for (const x of X.slice(1, 4)) c.ligne(x, Y[0], x, Y[5], { couleur: 'tresfaible', largeur: 1.2, duree: .15 });
+    [['on lit', 'cyan'], ['préfixe', 'cyan'], ['on écrit', 'cyan'], ['exemple', 'cyan']].forEach(([t, col], i) => c.texte(t, (X[i] + X[i + 1]) / 2, 92, { couleur: col, align: 'center', taille: 17 }));
+    const L = [['ms', 'milli', '× 10⁻³ s', '20 ms = 20×10⁻³ s', 'ligne_ms'], ['µs', 'micro', '× 10⁻⁶ s', '25 µs = 25×10⁻⁶ s', 'ligne_us'],
+      ['cm', 'centi', '× 10⁻² m', '1,5 cm = 1,5×10⁻² m', 'ligne_cm'], ['mm', 'milli', '× 10⁻³ m', '8,5 mm = 8,5×10⁻³ m', 'ligne_mm']];
+    L.forEach((l, i) => {
+      const y = Y[i + 1] + 36;
+      c.texte(l[0], (X[0] + X[1]) / 2, y, { couleur: 'jaune', align: 'center', taille: 22 });
+      c.texte(l[1], (X[1] + X[2]) / 2, y, { couleur: 'blanc', align: 'center', taille: 19 });
+      c.texte(l[2], (X[2] + X[3]) / 2, y, { couleur: 'vert', align: 'center', taille: 20 });
+      c.repere(l[4], X[0], Y[i + 1], X[4] - X[0], Y[i + 2] - Y[i + 1], `la ligne ${l[0]}`);
+    });
+    c.repere('tableau', X[0], Y[0], X[4] - X[0], Y[5] - Y[0], 'le tableau des préfixes');
+    marque(c, 'trace');
+    c.pause(.3);
+    L.forEach((l, i) => c.texte(l[3], (X[3] + X[4]) / 2, Y[i + 1] + 36, { couleur: 'blanc', align: 'center', taille: 18, max: 270 }));
+    c.repere('exemples', X[3], Y[1], X[4] - X[3], Y[5] - Y[1], 'les exemples convertis');
+    marque(c, 'exemples');
+    c.pause(.3);
+    c.texte('On convertit sur la ligne où on lit, avant tout calcul.', 40, 380, { couleur: 'vert', taille: 19, max: 690 });
+    c.repere('regle_conversion', 36, 360, 694, 28, 'convertir avant de calculer');
+    marque(c, 'fin');
+  },
+
+  fig_oscillo(c) {
+    c.texte('Oscillogramme', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('sensibilité horizontale : 0,1 ms/div', 40, 60, { couleur: 'jaune', taille: 17 });
+    c.repere('sensibilite', 36, 42, 290, 26, 'la sensibilité horizontale : 0,1 ms par division');
+    const x0 = 50, y0 = 80, dx = 40, dy = 30, yc = y0 + 4 * dy;
+    c.rect(x0, y0, 10 * dx, 8 * dy, { couleur: 'faible', arrondi: 4 });
+    for (let i = 1; i < 10; i++) c.ligne(x0 + i * dx, y0, x0 + i * dx, y0 + 8 * dy, { couleur: 'tresfaible', largeur: 1, duree: .03 });
+    for (let j = 1; j < 8; j++) c.ligne(x0, y0 + j * dy, x0 + 10 * dx, y0 + j * dy, { couleur: j === 4 ? 'faible' : 'tresfaible', largeur: 1, duree: .03 });
+    c.repere('ecran', x0, y0, 10 * dx, 8 * dy, 'l’écran de l’oscilloscope');
+    c.courbe(u => [x0 + u * 10 * dx, yc - 2.5 * dy * Math.sin(2 * Math.PI * u * 10 / 5)], 200, { couleur: 'cyan', largeur: 2.6 });
+    c.texte('voie 1', x0 + 10 * dx + 8, yc - 2.5 * dy + 6, { couleur: 'cyan', taille: 15 });
+    c.repere('courbe_1', x0, yc - 2.5 * dy - 6, 10 * dx, 5 * dy + 12, 'la courbe de la voie 1');
+    c.courbe(u => [x0 + u * 10 * dx, yc - 1.5 * dy * Math.sin(2 * Math.PI * (u * 10 - 1) / 5)], 200, { couleur: 'orange', largeur: 2 });
+    c.texte('voie 2', x0 + 10 * dx + 8, yc + 1.5 * dy + 20, { couleur: 'orange', taille: 15 });
+    c.repere('courbe_2', x0, yc - 1.5 * dy - 6, 10 * dx, 3 * dy + 12, 'la courbe de la voie 2');
+    marque(c, 'trace');
+    c.pause(.4);
+    const xa = x0 + 1.25 * dx, xb = x0 + 6.25 * dx;
+    c.ligne(xa, yc - 2.5 * dy, xa, y0 + 8 * dy + 10, { couleur: 'jaune', largeur: 1.3, pointille: [4, 4] });
+    c.ligne(xb, yc - 2.5 * dy, xb, y0 + 8 * dy + 10, { couleur: 'jaune', largeur: 1.3, pointille: [4, 4] });
+    for (let k = 1; k <= 5; k++) c.texte(String(k), xa + (k - 0.5) * dx, y0 + 8 * dy + 4 - 10, { couleur: 'jaune', align: 'center', taille: 14, duree: .15 });
+    c.cote(xa, y0 + 8 * dy + 18, xb, y0 + 8 * dy + 18, 'une période : 5 div', { couleur: 'jaune', taille: 16, dessous: true });
+    c.repere('periode', xa, y0, xb - xa, 8 * dy + 44, 'une période : 5 divisions');
+    marque(c, 'periode');
+    c.pause(.3);
+    const xt = 520;
+    c.texte('T = n × sensibilité', xt, 120, { couleur: 'blanc', taille: 18 });
+    c.texte('T = 5 × 0,1 ms', xt, 160, { couleur: 'vert', taille: 18 });
+    c.texte('T = 0,5 ms = 5×10⁻⁴ s', xt, 200, { couleur: 'vert', taille: 18, max: 225 });
+    c.texte('N = 1/T = 2000 Hz', xt, 250, { couleur: 'vert', taille: 18 });
+    c.repere('calcul', xt - 6, 100, 236, 160, 'T = 5 × 0,1 ms = 0,5 ms ; N = 2000 Hz');
+    marque(c, 'fin');
+  },
+
+  fig_deux_axes(c) {
+    c.texte('Même dessin, deux axes : lis l’axe d’abord', 40, 32, { couleur: 'cyan', taille: 20 });
+    const G = [{ x0: 70, nom: 't (ms)', grad: ['10', '20', '30', '40'], id: 't' }, { x0: 430, nom: 'x (cm)', grad: ['2', '4', '6', '8'], id: 'x' }];
+    const yc = 190, w = 240, A = 62;
+    for (const g of G) {
+      c.axe(g.x0, yc, g.x0 + w + 20, yc, g.grad.map((s, i) => [(i + 1) * w / 4 / (w + 20), s]));
+      c.axe(g.x0, yc + A + 20, g.x0, yc - A - 34, [], {});
+      c.texte('y (mm)', g.x0 + 8, yc - A - 24, { couleur: 'faible', taille: 15 });
+      c.texte(g.nom, g.x0 + w + 26, yc + 6, { couleur: 'jaune', taille: 17 });
+      c.repere('axe_' + g.id, g.x0 + w - 10, yc - 14, 100, 40, g.id === 't' ? 'l’axe en millisecondes : un temps' : 'l’axe en centimètres : une distance');
+      c.courbe(u => [g.x0 + u * w, yc - A * Math.sin(2 * Math.PI * (u * 4 - 0.5) / 2)], 160, { couleur: g.id === 't' ? 'cyan' : 'orange', largeur: 2.6 });
+      c.repere('courbe_' + g.id, g.x0, yc - A - 6, w, 2 * A + 12, g.id === 't' ? 'la courbe en fonction du temps' : 'la courbe en fonction de x');
+    }
+    marque(c, 'trace');
+    c.pause(.4);
+    for (const g of G) c.cercle(g.x0 + w + 52, yc + 1, 32, { couleur: 'rose', largeur: 1.8 });
+    marque(c, 'unites');
+    c.pause(.3);
+    for (const g of G) {
+      const xa = g.x0 + w / 4, xb = g.x0 + 3 * w / 4;
+      // La cote passe AU-DESSUS des crêtes : elle ne croise pas les graduations de l’axe.
+      c.ligne(xa, yc - A - 2, xa, yc - A - 22, { couleur: 'jaune', largeur: 1.2, pointille: [3, 3] }).ligne(xb, yc - A - 2, xb, yc - A - 22, { couleur: 'jaune', largeur: 1.2, pointille: [3, 3] });
+      c.cote(xa, yc - A - 14, xb, yc - A - 14, '', { couleur: 'jaune' });
+    }
+    c.texte('axe en ms → T = 30 − 10 = 20 ms', 70, 300, { couleur: 'vert', taille: 18, max: 330 });
+    c.repere('lecture_t', 66, 280, 330, 28, 'sur l’axe des temps : T = 20 ms');
+    c.texte('axe en cm → λ = 6 − 2 = 4 cm', 430, 300, { couleur: 'vert', taille: 18, max: 300 });
+    c.repere('lecture_x', 426, 280, 300, 28, 'sur l’axe des distances : λ = 4 cm');
+    marque(c, 'lecture');
+    c.pause(.3);
+    c.texte('Même forme : un temps donne T, une distance donne λ.', 40, 372, { couleur: 'blanc', taille: 19, max: 690 });
+    marque(c, 'fin');
+  },
+
+  fig_enonce_cuve(c) {
+    c.texte('Cuve à ondes vue de dessus', 40, 30, { couleur: 'cyan', taille: 20 });
+    const X0 = 60, Y0 = 52, W = 650, H = 270, xs = 92, L = 72;
+    peindre(c, ctx => {
+      ctx.save(); const g = ctx.createLinearGradient(X0, Y0, X0 + W, Y0 + H);
+      g.addColorStop(0, 'rgba(40,120,150,.22)'); g.addColorStop(1, 'rgba(20,80,110,.16)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, W, H); ctx.restore();
+    });
+    c.rect(X0, Y0, W, H, { couleur: 'faible', arrondi: 4 });
+    c.repere('cuve', X0, Y0, W, H, 'la surface de l’eau, vue de dessus');
+    c.ligne(xs, Y0 + 14, xs, Y0 + H - 14, { couleur: 'blanc', largeur: 5 });
+    c.texte('S', xs - 18, Y0 + H / 2 + 6, { couleur: 'blanc', taille: 20 });
+    c.repere('point_s', xs - 24, Y0 + 8, 34, H - 16, 'la plaque du vibreur, en S');
+    for (let k = 1; k <= 8; k++) c.ligne(xs + k * L, Y0 + 14, xs + k * L, Y0 + H - 14, { couleur: 'blanc', largeur: 2 });
+    c.repere('traits', xs + L - 6, Y0 + 8, 7 * L + 12, H - 16, 'les traits : des crêtes');
+    const xm = xs + 6 * L, xn = xs + 3 * L;
+    c.point(xm, Y0 + 80, 5, 'jaune').texte('M', xm + 10, Y0 + 76, { couleur: 'jaune', taille: 19 });
+    c.repere('point_m', xm - 14, Y0 + 58, 40, 36, 'le point M');
+    c.point(xn, Y0 + 190, 5, 'jaune').texte('N', xn + 10, Y0 + 186, { couleur: 'jaune', taille: 19 });
+    c.repere('point_n', xn - 14, Y0 + 168, 40, 36, 'le point N');
+    const yd = Y0 + H + 34, x2 = xs + 2 * L;
+    c.ligne(x2, Y0 + H - 10, x2, yd + 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 4] }).ligne(xm, Y0 + 92, xm, yd + 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 4] });
+    c.cote(x2, yd, xm, yd, 'd = 6 cm', { couleur: 'jaune', taille: 17, dessous: true });
+    c.repere('cote_d', x2, yd - 12, xm - x2, 40, 'la cote d = 6 cm');
+    marque(c, 'trace');
+    c.pause(.4);
+    for (let k = 1; k <= 6; k++) c.texte(String(k), xs + (k - 0.5) * L, Y0 + 30, { couleur: 'cyan', align: 'center', taille: 17, duree: .2 });
+    c.repere('intervalles', xs, Y0 + 10, 6 * L, 28, 'les intervalles comptés depuis S');
+    marque(c, 'intervalles');
+    c.pause(.3);
+    c.texte('d couvre 4 intervalles : λ = 6 / 4 = 1,5 cm', 470, 382, { couleur: 'vert', taille: 16, max: 280 });
+    c.texte('depuis S : SM = 6 λ = 9 cm', 470, 406, { couleur: 'vert', taille: 16, max: 280 });
+    c.repere('calcul', 466, 364, 284, 50, 'λ = 1,5 cm ; SM = 6λ');
+    marque(c, 'fin');
+  },
+
+  fig_coupe_2017(c) {
+    // Redessinée d’après le national 2017 N (exercice II) : coupe verticale, règle en mm, S au milieu, front à 6 cm de S.
+    const xs = 380, k = 34, ys = 186, A = 26, xg = 9.3;          // S ; px par cm ; niveau de la surface ; amplitude dessinée ; demi-largeur (cm)
+    const yS = x => (Math.abs(x) <= 6 ? ys - A * Math.sin(2 * Math.PI * (1.5 - Math.abs(x) / 4)) : ys);
+    c.texte('Surface de l’eau', xs - xg * k, ys - 28, { couleur: 'blanc', taille: 16 });
+    peindre(c, ctx => {
+      ctx.save(); ctx.beginPath(); ctx.moveTo(xs - xg * k, 268);
+      for (let i = 0; i <= 400; i++) { const x = -xg + 2 * xg * i / 400; ctx.lineTo(xs + x * k, yS(x)); }
+      ctx.lineTo(xs + xg * k, 268); ctx.closePath();
+      const g = ctx.createLinearGradient(0, ys - A, 0, 268); g.addColorStop(0, 'rgba(150,170,185,.55)'); g.addColorStop(1, 'rgba(90,105,120,.5)');
+      ctx.fillStyle = g; ctx.fill(); ctx.restore();
+    });
+    c.courbe(u => { const x = -xg + 2 * xg * u; return [xs + x * k, yS(x)]; }, 300, { couleur: 'blanc', largeur: 2.4 });
+    c.repere('surface', xs - xg * k, ys - A - 8, 2 * xg * k, 2 * A + 16, 'la surface de l’eau, à l’instant t');
+    // La règle, graduée en mm.
+    const yr = 204;
+    c.rect(xs - 9 * k, yr, 18 * k, 28, { couleur: 'faible', arrondi: 2, fond: 'blanc', fondAlpha: .12 });
+    peindre(c, ctx => { ctx.save(); ctx.strokeStyle = 'rgba(226,232,240,.55)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let i = -90; i <= 90; i++) { const x = xs + i * k / 10, h = i % 10 === 0 ? 0 : i % 5 === 0 ? 9 : 5; if (h) { ctx.moveTo(x, yr); ctx.lineTo(x, yr + h); } } ctx.stroke(); ctx.restore(); });
+    for (let i = -9; i <= 9; i++) c.ligne(xs + i * k, yr, xs + i * k, yr + 13, { couleur: 'blanc', largeur: 1.4, duree: .02 });
+    c.repere('regle', xs - 9 * k, yr, 18 * k, 28, 'la règle graduée (en mm)');
+    c.texte('S', xs, yr + 50, { couleur: 'blanc', align: 'center', taille: 19 });
+    c.point(xs, ys, 4, 'blanc');
+    c.repere('point_s', xs - 14, ys - 12, 28, 76, 'la source S');
+    c.cote(xs + 7 * k, yr + 46, xs + 8 * k, yr + 46, '', { couleur: 'blanc' }).texte('1 cm', xs + 7.5 * k, yr + 70, { couleur: 'blanc', align: 'center', taille: 16 });
+    c.repere('echelle', xs + 7 * k - 8, yr + 34, k + 16, 44, 'l’échelle : 1 cm');
+    marque(c, 'trace');
+    c.pause(.4);
+    const xa = xs + 1 * k, xb = xs + 5 * k;
+    c.ligne(xa, ys - A, xa, ys - A - 34, { couleur: 'jaune', largeur: 1.2, pointille: [4, 4] }).ligne(xb, ys - A, xb, ys - A - 34, { couleur: 'jaune', largeur: 1.2, pointille: [4, 4] });
+    c.cote(xa, ys - A - 28, xb, ys - A - 28, 'λ = 4 cm', { couleur: 'jaune', taille: 18 });
+    c.repere('lambda', xa, ys - A - 60, xb - xa, 40, 'λ = 4 cm entre deux crêtes voisines');
+    c.repere('crete', xb - 14, ys - A - 8, 28, 20, 'une crête');
+    marque(c, 'lambda');
+    c.pause(.3);
+    const xf = xs + 6 * k;
+    c.point(xf, ys, 5, 'orange').texte('M (front)', xf + 8, ys + 2 - 14, { couleur: 'orange', taille: 16 });
+    c.repere('point_m', xf - 10, ys - 30, 90, 40, 'M : le front de l’onde');
+    c.cote(xs, 300, xf, 300, 'SM = 6 cm', { couleur: 'orange', taille: 17, dessous: true });
+    c.repere('front', xs, 288, xf - xs, 40, 'le front est à 6 cm de S');
+    marque(c, 'front');
+    c.pause(.3);
+    c.texte('v = λ·N = 4×10⁻² × 50 = 2 m/s', 40, 356, { couleur: 'vert', taille: 18, max: 330 });
+    c.texte('t = SM / v = 6×10⁻² / 2 = 0,03 s', 40, 390, { couleur: 'vert', taille: 18, max: 330 });
+    c.texte('y_M(t) = y_S(t − 0,03)', 430, 390, { couleur: 'vert', taille: 18 });
+    c.repere('calcul', 36, 336, 640, 62, 'v = 2 m/s ; t = 0,03 s');
+    marque(c, 'fin');
+  },
+
+  fig_yM_2022(c) {
+    // Redessinée d’après le national 2022 R (exercice 2, partie 1) : y_M(t) en mm, t en ms, M à L = 2,5 cm de S.
+    const x0 = 92, kx = 12, yc = 214, ky = 21, X = t => x0 + t * kx, Y = y => yc - y * ky;
+    peindre(c, ctx => { ctx.save(); ctx.strokeStyle = 'rgba(96,165,250,.16)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let t = 0; t <= 50; t++) { ctx.moveTo(X(t), Y(7)); ctx.lineTo(X(t), Y(-7)); }
+      for (let y = -7; y <= 7; y++) { ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(50), Y(y)); } ctx.stroke(); ctx.restore(); });
+    for (let t = 5; t <= 50; t += 5) c.ligne(X(t), Y(7), X(t), Y(-7), { couleur: 'tresfaible', largeur: 1.2, duree: .03 });
+    for (const y of [-6, -3, 3, 6]) c.ligne(X(0), Y(y), X(50), Y(y), { couleur: 'tresfaible', largeur: 1.2, duree: .03 });
+    c.fleche(X(0), yc, X(50) + 26, yc, { couleur: 'blanc', largeur: 2 });
+    c.fleche(X(0), Y(-7), X(0), Y(7) - 18, { couleur: 'blanc', largeur: 2 });
+    c.texte('y_M (mm)', X(0) + 10, Y(7) - 6, { couleur: 'blanc', taille: 17 });
+    c.texte('t (ms)', X(50) - 10, yc - 10, { couleur: 'blanc', taille: 17 });
+    for (const t of [10, 25, 35, 45]) c.texte(String(t), X(t), yc + 20, { couleur: 'blanc', align: 'center', taille: 15, duree: .12 });
+    for (const y of [3, 0, -3, -6]) c.texte(String(y).replace('-', '−'), X(0) - 10, Y(y) + 5, { couleur: 'blanc', align: 'right', taille: 15, duree: .12 });
+    c.repere('axe', X(0), yc - 12, X(50) - X(0) + 30, 40, 'l’axe des temps, en ms');
+    const yM = t => (t < 10 ? 0 : 6 * Math.sin(2 * Math.PI * (t - 10) / 20));
+    c.courbe(u => [X(50 * u), Y(yM(50 * u))], 260, { couleur: 'cyan', largeur: 2.8 });
+    c.repere('courbe', X(0), Y(6) - 6, X(50) - X(0), Y(-6) - Y(6) + 12, 'la courbe y_M(t)');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.cote(X(0), yc + 40, X(10), yc + 40, '', { couleur: 'jaune' });
+    c.texte('τ = 10 ms', X(5), yc + 62, { couleur: 'jaune', align: 'center', taille: 17 });
+    c.texte('M démarre', X(10) + 8, yc + 40, { couleur: 'jaune', taille: 14 });
+    c.repere('retard', X(0), yc - 26, X(10) - X(0) + 140, 96, 'le retard τ = 10 ms : M commence à bouger');
+    marque(c, 'retard');
+    c.pause(.3);
+    c.ligne(X(15), Y(6), X(15), Y(7) - 8, { couleur: 'jaune', largeur: 1.2, pointille: [4, 4] }).ligne(X(35), Y(6), X(35), Y(7) - 8, { couleur: 'jaune', largeur: 1.2, pointille: [4, 4] });
+    c.cote(X(15), Y(7) - 4, X(35), Y(7) - 4, 'T = 35 − 15 = 20 ms', { couleur: 'jaune', taille: 16 });
+    c.repere('periode', X(15), Y(7) - 30, X(35) - X(15), 40, 'la période T = 20 ms entre deux crêtes');
+    marque(c, 'periode');
+    c.pause(.3);
+    c.cote(X(46.5), yc, X(46.5), Y(6), '', { couleur: 'jaune' });
+    c.texte('a = 6 mm', X(47.5), Y(3.6), { couleur: 'jaune', taille: 15 });
+    c.repere('amplitude', X(45.5), Y(6) - 6, 70, 6 * ky + 12, 'l’amplitude : 6 mm');
+    marque(c, 'amplitude');
+    if (S.source) {
+      c.pause(.4);
+      const yS = t => 6 * Math.sin(2 * Math.PI * t / 20);
+      c.courbe(u => [X(40 * u), Y(yS(40 * u))], 220, { couleur: 'orange', largeur: 2, pointille: [7, 5] });
+      c.texte('y_S(t) : même courbe, avancée de τ', X(20), Y(-6.6) + 30, { couleur: 'orange', taille: 15, max: 320 });
+      c.repere('courbe_source', X(0), Y(6) - 6, X(40) - X(0), Y(-6) - Y(6) + 12, 'y_S(t) : la même courbe, qui commence à t = 0');
+      marque(c, 'source');
+    }
+    c.pause(.3);
+    c.texte('N = 1/T = 50 Hz ; v = L/τ = 2,5×10⁻² / 10⁻² = 2,5 m/s ; λ = v·T = 5 cm', 40, 408, { couleur: 'vert', taille: 16, max: 690 });
+    c.repere('calcul', 36, 390, 694, 24, 'N = 50 Hz ; v = 2,5 m/s ; λ = 5 cm');
+    marque(c, 'fin');
+  },
+
+  fig_diffraction_a_completer(c) {
+    c.texte('Ondes incidentes et obstacle : complète la figure', 40, 30, { couleur: 'cyan', taille: 19, max: 690 });
+    const X0 = 40, Y0 = 48, W = 680, H = 300, xo = 330, yo = Y0 + H / 2, L = 45, a = 30;
+    peindre(c, ctx => { ctx.save(); const g = ctx.createLinearGradient(X0, 0, X0 + W, 0);
+      g.addColorStop(0, 'rgba(40,120,150,.22)'); g.addColorStop(1, 'rgba(20,80,110,.16)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, W, H); ctx.restore(); });
+    for (let k = 1; k <= 6; k++) {
+      // Le trait le plus proche de l’obstacle laisse la place de la cote « a = 1 cm ».
+      if (k === 1) c.ligne(xo - L, Y0 + 36, xo - L, yo - 16, { couleur: 'blanc', largeur: 2 }).ligne(xo - L, yo + 14, xo - L, Y0 + H - 12, { couleur: 'blanc', largeur: 2 });
+      else c.ligne(xo - k * L, Y0 + 36, xo - k * L, Y0 + H - 12, { couleur: 'blanc', largeur: 2 });
+    }
+    c.repere('ondes_incidentes', xo - 6 * L - 6, Y0 + 30, 6 * L, H - 40, 'les ondes incidentes rectilignes');
+    c.fleche(xo - 5.5 * L, Y0 + H - 24, xo - 3.5 * L, Y0 + H - 24, { couleur: 'vert' });
+    c.cote(xo - 5 * L, Y0 + 22, xo - 4 * L, Y0 + 22, 'λ = 1,5 cm', { couleur: 'jaune', taille: 15 });
+    c.trait([[xo, Y0], [xo, yo - a / 2]], { couleur: 'orange', largeur: 7 }).trait([[xo, yo + a / 2], [xo, Y0 + H]], { couleur: 'orange', largeur: 7 });
+    c.texte('obstacle', xo, Y0 + H + 17, { couleur: 'orange', align: 'center', taille: 15 });
+    c.repere('obstacle', xo - 8, Y0, 16, H, 'l’obstacle');
+    c.cote(xo - 16, yo - a / 2, xo - 16, yo + a / 2, '', { couleur: 'jaune' });
+    c.texte('a = 1 cm', xo - 24, yo + 5, { couleur: 'jaune', align: 'right', taille: 15 });
+    c.repere('ouverture', xo - 90, yo - a / 2 - 6, 100, a + 12, 'l’ouverture de largeur a = 1 cm');
+    c.repere('zone_a_completer', xo + 14, Y0 + 6, X0 + W - xo - 20, H - 12, 'la partie à compléter');
+    marque(c, 'trace');
+    // Le « ? » de l’énoncé : visible sur la figure à compléter, effacé quand le tuteur commence les arcs.
+    if (M.trace !== undefined && S.tw >= M.trace - 1e-6 && S.tw < (M.trace_fin ?? Infinity)) c.direct(() => c.texte('?', xo + 180, yo + 14, { couleur: 'faible', taille: 46, align: 'center' }));
+    c.pause(.6);
+    marque(c, 'trace_fin');
+    c.point(xo, yo, 4, 'rose');
+    for (let k = 1; k <= 8; k++) {
+      const pts = [];
+      for (let i = 0; i <= 40; i++) { const t = -1.35 + 2.7 * i / 40, x = xo + k * L * Math.cos(t), y = yo + k * L * Math.sin(t); if (y > Y0 + 6 && y < Y0 + H - 6 && x < X0 + W - 4) pts.push([x, y]); }
+      if (pts.length > 1) c.trait(pts, { couleur: 'cyan', largeur: 2 });
+    }
+    c.repere('arcs', xo + 6, Y0 + 6, X0 + W - xo - 10, H - 12, 'les arcs de cercle, centrés sur l’ouverture');
+    c.repere('centre', xo - 10, yo - 10, 20, 20, 'le centre des arcs : l’ouverture');
+    marque(c, 'arcs');
+    c.pause(.3);
+    c.texte('Arcs centrés sur l’ouverture, espacés de λ.', 40, 388, { couleur: 'vert', taille: 18, max: 690 });
+    c.texte('a ≤ λ : diffraction ; même N, même λ, même v après l’ouverture.', 40, 411, { couleur: 'vert', taille: 17, max: 690 });
+    c.repere('regle_trace', 36, 370, 694, 46, 'la règle de tracé et la justification');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2020(c) {
+    // Redessinée d’après le national 2020 N (exercice II) : quatre rides circulaires autour de S, 1 cm couvre deux intervalles.
+    const xs = 230, ys = 196, L = 40;
+    for (let k = 1; k <= 4; k++) c.cercle(xs, ys, k * L, { couleur: 'blanc', largeur: 2 });
+    c.point(xs, ys, 4, 'blanc').texte('S', xs, ys - 12, { couleur: 'blanc', align: 'center', taille: 18 });
+    c.repere('point_s', xs - 14, ys - 30, 28, 40, 'la source S');
+    c.repere('cercles', xs - 4 * L, ys - 4 * L, 8 * L, 8 * L, 'les rides : des crêtes circulaires');
+    const yb = ys + 4 * L + 26;
+    c.ligne(xs + 2 * L, ys, xs + 2 * L, yb + 6, { couleur: 'faible', largeur: 1.2, pointille: [5, 5] }).ligne(xs + 4 * L, ys, xs + 4 * L, yb + 6, { couleur: 'faible', largeur: 1.2, pointille: [5, 5] });
+    c.cote(xs + 2 * L, yb, xs + 4 * L, yb, '1 cm', { couleur: 'blanc', taille: 17, dessous: true });
+    c.repere('echelle', xs + 2 * L - 6, yb - 12, 2 * L + 12, 44, '1 cm');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.texte('1', xs + 2.5 * L, ys - 8, { couleur: 'cyan', align: 'center', taille: 17 }).texte('2', xs + 3.5 * L, ys - 8, { couleur: 'cyan', align: 'center', taille: 17 });
+    c.repere('intervalles', xs + 2 * L, ys - 26, 2 * L, 26, 'deux intervalles');
+    const xt = 470;
+    c.texte('1 cm couvre 2 intervalles :', xt, 110, { couleur: 'blanc', taille: 18, max: 270 });
+    c.texte('1 cm = 2 λ  →  λ = 0,5 cm', xt, 144, { couleur: 'vert', taille: 18, max: 270 });
+    c.texte('λ = 5×10⁻³ m', xt, 178, { couleur: 'vert', taille: 18 });
+    c.repere('calcul_lambda', xt - 6, 90, 276, 96, 'λ = 0,5 cm');
+    marque(c, 'lambda');
+    c.pause(.3);
+    c.texte('v = 0,25 m/s :', xt, 236, { couleur: 'blanc', taille: 18 });
+    c.texte('N = v / λ = 0,25 / (5×10⁻³)', xt, 270, { couleur: 'vert', taille: 18, max: 270 });
+    c.texte('N = 50 Hz', xt, 304, { couleur: 'vert', taille: 18 });
+    c.texte('d = 5 cm : τ = d / v = 0,2 s', xt, 352, { couleur: 'vert', taille: 18, max: 270 });
+    c.repere('calcul_n', xt - 6, 216, 276, 146, 'N = 50 Hz ; τ = 0,2 s');
+    marque(c, 'fin');
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(31);
+  MM = {};
+  DESSINS[fig](c);
+  M = MM;
+  return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
+}
+
+const etapes = () => FIGS[fig].etapes.filter(e => e !== 'source' || S.source);
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : 'Réécrire'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.tw += dt * VITESSE;
+  if (S.jusqua != null && S.tw >= S.jusqua) {
+    S.tw = S.jusqua; S.jusqua = null; S.running = false;
+    if (M.fin !== undefined && S.tw >= M.fin - 1e-6) { S.pause = false; S.fait = true; etiquette(); bulle($('feedback'), 'Figure complète.'); pont.noter('measurement', { figure: fig }); pont.emettre(); return true; }
+    S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt : ' + (S.motif || 'étape choisie') + '.'); pont.noter('pause', { moment: S.motif }); pont.emettre();
+    return true;
+  }
+  if (M.fin !== undefined && S.tw >= M.fin + 0.05) {
+    S.running = false; S.pause = false; S.fait = true; etiquette(); pont.noter('measurement', { figure: fig }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
+const MOTIFS = { trace: 'la figure seule', fin: 'figure complète', durees: 'les durées égales', exemples: 'les exemples convertis', periode: 'la période', unites: 'les unités des axes',
+  lecture: 'les deux lectures', intervalles: 'les intervalles comptés depuis S', lambda: 'la longueur d’onde', front: 'le front à 6 cm de S', retard: 'le retard τ',
+  amplitude: 'l’amplitude', source: 'la courbe de la source', arcs: 'les arcs de l’onde diffractée' };
+function playUntil(p) {
+  if (p.moment === 'source' && !S.source) { S.source = true; M = {}; }
+  calculer();
+  const nom = p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), '');
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+const DESCRIPTIONS = {
+  fig_frise: ['Un axe du temps avec trois sonneries (cloches) à 8 h, 9 h et 10 h.', 'Cotes jaunes « 1 h » entre deux sonneries voisines.', 'Phrase : la sonnerie se refait identique, après la même durée : c’est périodique.'],
+  fig_prefixes: ['Tableau à quatre lignes : ms (milli, × 10⁻³ s), µs (micro, × 10⁻⁶ s), cm (centi, × 10⁻² m), mm (milli, × 10⁻³ m).', 'Exemples : 20 ms = 20×10⁻³ s ; 25 µs = 25×10⁻⁶ s ; 1,5 cm = 1,5×10⁻² m ; 8,5 mm = 8,5×10⁻³ m.', 'Phrase : on convertit sur la ligne où on lit, avant tout calcul.'],
+  fig_oscillo: ['Écran 10 × 8 divisions, sensibilité horizontale 0,1 ms/div ; voie 1 (cyan, grande) et voie 2 (orange, plus petite, décalée d’une division) ; une période = 5 divisions.', 'Pointillés sur deux crêtes voisines de la voie 1, divisions numérotées 1 à 5, cote « une période : 5 div ».', 'Calcul écrit : T = 5 × 0,1 ms = 0,5 ms = 5×10⁻⁴ s ; N = 2000 Hz.'],
+  fig_deux_axes: ['Deux graphes de même forme : à gauche axe t (ms) gradué 10, 20, 30, 40 ; à droite axe x (cm) gradué 2, 4, 6, 8 ; crêtes à 10 et 30 ms, et à 2 et 6 cm.', 'Les unités des axes sont entourées en rose.', 'Lectures : axe en ms → T = 20 ms ; axe en cm → λ = 4 cm.', 'Phrase : même forme, un temps donne T, une distance donne λ.'],
+  fig_enonce_cuve: ['Cuve vue de dessus : plaque du vibreur en S à gauche, huit traits parallèles (crêtes) espacés régulièrement ; M sur le 6e trait, N sur le 3e ; cote d = 6 cm du 2e trait à M.', 'Intervalles numérotés 1 à 6 depuis S jusqu’à M.', 'Calcul : d couvre 4 intervalles, λ = 1,5 cm ; depuis S, SM = 6λ = 9 cm.'],
+  fig_coupe_2017: ['Coupe verticale de la surface de l’eau (national 2017) : S au milieu, une règle graduée en mm sous la surface, échelle « 1 cm » ; l’onde s’étend de part et d’autre de S jusqu’à 6 cm, surface plate au-delà.', 'Cote λ = 4 cm entre deux crêtes voisines.', 'Point M au front, cote SM = 6 cm.', 'Calculs : v = λ·N = 2 m/s ; t = SM/v = 0,03 s ; y_M(t) = y_S(t − 0,03).'],
+  fig_yM_2022: ['Graphe y_M(t) (national 2022 R) sur papier quadrillé : axe t en ms (10, 25, 35, 45), axe y_M en mm (3, 0, −3, −6) ; courbe plate jusqu’à 10 ms, puis sinusoïde d’amplitude 6 mm, crêtes à 15 et 35 ms.', 'Cote τ = 10 ms sous l’axe, de 0 à 10 ms, et « M démarre » : M commence à bouger à 10 ms.', 'Cote T = 35 − 15 = 20 ms entre deux crêtes.', 'Cote a = 6 mm.', 'Courbe y_S(t) en pointillés orange : même courbe, commencée à t = 0.', 'Calculs : N = 50 Hz ; v = L/τ = 2,5 m/s ; λ = v·T = 5 cm.'],
+  fig_diffraction_a_completer: ['Cuve vue de dessus : six traits rectilignes incidents (λ = 1,5 cm), flèche de propagation, obstacle orange avec une ouverture a = 1 cm ; à droite la partie vide à compléter (un point d’interrogation).', 'Arcs de cercle cyan centrés sur l’ouverture, espacés de λ.', 'Phrases : arcs centrés sur l’ouverture, espacés de λ ; a ≤ λ : diffraction, même N, même λ, même v.'],
+  fig_enonce_2020: ['Quatre rides circulaires autour de S (national 2020) ; pointillés et cote « 1 cm » du 2e au 4e cercle.', 'Intervalles 1 et 2 numérotés ; 1 cm = 2λ, λ = 0,5 cm = 5×10⁻³ m.', 'Calculs : N = v/λ = 50 Hz ; τ = d/v = 0,2 s pour d = 5 cm.'],
+};
+function ceQuiSeVoit() {
+  const faites = FIGS[fig].etapes.map((n, i) => [n, DESCRIPTIONS[fig][i]]).filter(([n]) => etapes().includes(n) && vu(n));
+  const m = [`Figure « ${fig} » : ${FIGS[fig].titre.replace(/_/g, '')}.`];
+  if (!faites.length) m.push(S.running ? 'La figure est en train de s’écrire à la craie (étape « trace » pas encore finie).' : 'Rien d’écrit encore.');
+  faites.forEach(([, d]) => { if (d) m.push(d); });
+  m.push(S.running ? 'La craie écrit encore.' : S.pause ? `Écriture arrêtée après l’étape « ${faites.length ? faites[faites.length - 1][0] : 'aucune'} ».` : 'Figure complète.');
+  return m.join(' ');
+}
+const commandes = ['start', 'reset', 'pause', 'resume', 'play_until'];
+const config = { id: 'ondes_periodiques_figures', version: '1.0', title: 'Figure — ' + FIGS[fig].titre.replace(/_/g, ''), variants: [{ id: fig, label: fig }], commands: commandes,
+  command_schema: { play_until: { moment: FIGS[fig].etapes.join(' | ') + ' (réécrit la figure et s’arrête après cette étape)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Figure du cours « Ondes mécaniques progressives périodiques » : ${FIGS[fig].titre.replace(/_/g, '')}. Étapes d’écriture : ${FIGS[fig].etapes.join(', ')}.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: fig,
+    moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p) })[cmd]?.() });
+etiquette();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

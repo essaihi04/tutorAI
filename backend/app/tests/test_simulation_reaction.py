@@ -44,3 +44,53 @@ def test_la_correction_d_une_reponse_directe():
     r = sr.correction_depuis('{"correct": false, "parole": "ماشي هي هادي", "ecrit": "τ double."}')
     assert r == {"correct": False, "parole": "ماشي هي هادي", "ecrit": "τ double."}
     assert sr.correction_depuis('{"parole": "x"}') is None
+
+
+# ── Résultat à la demande (10 novembre 2026) : tout ce qui est écrit est dit, chaque option a son retour ──
+
+def _retour(e):
+    return {"ecrit": e, "parole": f"شوف، {e}"}
+
+
+def test_le_prompt_demande_un_retour_par_option_et_la_question_lue():
+    prompt, _ = sr.prompt_interpretation({"title": "t"}, {}, {}, [])
+    assert '"retours": [{"ecrit"' in prompt and "parole_question" in prompt
+    assert "un élément par choix" in prompt and "ne contient rien que « parole » ne dise" in prompt
+    prompt_vf, genre = sr.prompt_interpretation({"title": "t"}, {}, {}, [{"type": "qcm", "correct": False}])
+    assert genre == "vrai_faux" and "[retour si l'élève répond Vrai, retour s'il répond Faux]" in prompt_vf
+    assert "RETOUR_" not in prompt and "RETOUR_" not in prompt_vf
+
+
+def test_un_qcm_garde_un_retour_aligne_sur_chaque_choix():
+    llm = json.dumps({
+        "parole": "مزيان.", "ecrit": "τ double.", "parole_question": "**Si** d double، tau شنو كيدير؟",
+        "question": {"type": "qcm", "enonce": "Si d double, τ…", "choix": ["double", "reste", "diminue"], "bonne": 0,
+                     "retours": [_retour("Juste : τ = d / v."), _retour("Non : τ dépend de d."), _retour("Non : τ augmente.")],
+                     "parole_juste": "برافو", "parole_faux": "لا"},
+    }, ensure_ascii=False)
+    r = sr.reaction_depuis(llm, "qcm")
+    assert r["parole_question"] == "Si d double، tau شنو كيدير؟"
+    assert [x["ecrit"] for x in r["question"]["retours"]] == ["Juste : τ = d / v.", "Non : τ dépend de d.", "Non : τ augmente."]
+    assert r["question"]["parole_juste"] == "برافو"          # compatibilité : les anciens champs restent
+
+
+def test_des_retours_mal_alignes_sont_ignores_sans_perdre_la_question():
+    llm = json.dumps({"parole": "x", "ecrit": "y", "question": {
+        "enonce": "?", "choix": ["a", "b", "c"], "bonne": 1, "retours": [_retour("a"), _retour("b")],
+        "parole_juste": "oui", "parole_faux": "non"}})
+    r = sr.reaction_depuis(llm, "qcm")
+    assert r and "retours" not in r["question"] and r["question"]["parole_faux"] == "non"
+    sans_parole = json.dumps({"parole": "x", "question": {"enonce": "?", "choix": ["a", "b"], "bonne": 0,
+                                                         "retours": [_retour("a"), {"ecrit": "b", "parole": ""}]}})
+    assert "retours" not in sr.reaction_depuis(sans_parole, "qcm")["question"]
+
+
+def test_un_vrai_faux_porte_un_retour_pour_vrai_et_un_pour_faux_par_affirmation():
+    llm = json.dumps({"parole": "x", "ecrit": "y", "question": {"type": "vrai_faux", "enonce": "Vrai ou faux ?", "affirmations": [
+        {"texte": "τ double", "vrai": True, "retours": [_retour("Oui, τ double."), _retour("Si : τ = d / v double.")]},
+        {"texte": "v change", "vrai": False, "retours": [_retour("Non, v reste.")]},     # incomplet : ignoré
+    ]}})
+    r = sr.reaction_depuis(llm, "vrai_faux")
+    a0, a1 = r["question"]["affirmations"]
+    assert [x["ecrit"] for x in a0["retours"]] == ["Oui, τ double.", "Si : τ = d / v double."]
+    assert "retours" not in a1 and a1["vrai"] is False

@@ -13,10 +13,13 @@ import energyManifestSource from '../../../backend/data/courses/svt_ch1_energy_c
 import muscleManifestSource from '../../../backend/data/courses/svt_ch1_muscle_course_v1.json?raw';
 // Cours exemple des ondes (6 novembre 2026), à valider avant d'entrer dans le site : ?scene=ondes
 import ondesManifestSource from '../../../backend/data/courses/phys_ch1_waves_exemple.json?raw';
+// Ondes périodiques (10 novembre 2026), à valider : ?scene=ondes-periodiques
+import periodiquesManifestSource from '../../../backend/data/courses/phys_ch2_ondes_periodiques.json?raw';
 
 const ENERGY_MANIFEST = JSON.parse(energyManifestSource) as CourseDeck;
 const MUSCLE_MANIFEST = JSON.parse(muscleManifestSource) as CourseDeck;
-const ONDES_MANIFEST = JSON.parse(ondesManifestSource) as CourseDeck;
+const ONDES_MANIFEST_EXEMPLE = JSON.parse(ondesManifestSource) as CourseDeck;
+const PERIODIQUES_MANIFEST = JSON.parse(periodiquesManifestSource) as CourseDeck;
 
 const DECK: CourseDeck = {
   id: 'deck-demo-glycolyse-v4',
@@ -163,6 +166,8 @@ export default function CoursePlayerAudit() {
     .find(slide => slide.id === previewId);
   // &diapo=ID ouvre le cours exemple directement sur une diapositive (et les suivantes).
   const diapo = new URLSearchParams(window.location.search).get('diapo');
+  const ONDES_MANIFEST = scene === 'ondes-periodiques' ? PERIODIQUES_MANIFEST : ONDES_MANIFEST_EXEMPLE;
+  const enConcentration = scene === 'ondes' || scene === 'ondes-periodiques';
   const ondes = diapo
     ? { ...ONDES_MANIFEST, id: `${ONDES_MANIFEST.id}-${diapo}`, activities: ONDES_MANIFEST.activities
       .map(activite => ({ ...activite, slides: activite.slides.filter((_, i, tout) => tout.slice(0, i + 1).some(sl => sl.id === diapo)
@@ -170,7 +175,7 @@ export default function CoursePlayerAudit() {
           < ONDES_MANIFEST.activities.flatMap(a => a.slides).findIndex(sl => sl.id === tout[i].id)) }))
       .filter(activite => activite.slides.length) }
     : ONDES_MANIFEST;
-  const deck = scene === 'ondes' ? ondes : scene === 'muscle' ? MUSCLE_MANIFEST : (scene === 'respiratory-chain' || scene === 'glucose-journey' || scene === 'pyruvate') && respiratorySlide
+  const deck = enConcentration ? ondes : scene === 'muscle' ? MUSCLE_MANIFEST : (scene === 'respiratory-chain' || scene === 'glucose-journey' || scene === 'pyruvate') && respiratorySlide
     ? { ...DECK, id: `${scene}-preview`, activities: [{
       id: scene, title: scene === 'pyruvate' ? 'Le carrefour du pyruvate' : scene === 'glucose-journey' ? 'Le voyage du glucose' : 'Chaîne respiratoire et phosphorylation oxydative',
       slides: [respiratorySlide],
@@ -201,13 +206,13 @@ export default function CoursePlayerAudit() {
         <div className="h-full w-full overflow-hidden rounded-2xl border border-white/10">
           <CoursePlayer
             deck={deck}
-            language={scene === 'ondes' ? 'mixed' : 'fr'}
+            language={enConcentration ? 'mixed' : 'fr'}
             onNarration={texte => setMessages(liste => [...liste, texte])}
             onStudentQuestion={texte => setMessages(liste => [...liste, `Élève : ${texte}`])}
             onFocusChange={focus => setChatVisible(!focus)}
             // Cours exemple des ondes : mode concentration avec le tuteur 3D (&mode=tableau pour l'ancien).
-            mode={scene === 'ondes' && new URLSearchParams(window.location.search).get('mode') !== 'tableau' ? 'concentration' : 'tableau'}
-            tuteur3D={scene === 'ondes'}
+            mode={enConcentration && new URLSearchParams(window.location.search).get('mode') !== 'tableau' ? 'concentration' : 'tableau'}
+            tuteur3D={enConcentration}
           />
         </div>
       </div>

@@ -1,3 +1,4 @@
+import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -133,7 +134,7 @@ async def simulation_reaction(body: SimReactionRequest, student: dict = Depends(
     for _ in range(2):                                  # une seconde chance si le JSON est inutilisable
         try:
             texte = await llm_service.chat(messages=[{"role": "user", "content": prompt}], system_prompt=systeme,
-                                           temperature=0.5, max_tokens=700, student_id=_compte(student),
+                                           temperature=0.5, max_tokens=700 if genre is None else 1800, student_id=_compte(student),
                                            session_type="course_player")
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"LLM indisponible : {e}") from e
@@ -268,6 +269,71 @@ async def transcrire(body: TranscrireRequest, student: dict = Depends(get_curren
         # 409 et pas 503 : main.py remplace le texte de toute réponse 5xx par « Erreur interne du service ».
         raise HTTPException(status_code=409, detail="Le micro se prépare (la reconnaissance vocale démarre, une à trois minutes). Réessaie dans un instant, ou écris ta question.")
     return {"texte": compris["transcription"]}
+
+
+class OcrReponseRequest(BaseModel):
+    """La photo de la feuille de l'élève (sa réponse ou sa question) : lue, puis montrée dans le champ AVANT tout envoi."""
+    image_b64: str = Field(..., min_length=10, max_length=8_000_000)
+    image_mime: str = "image/jpeg"
+    deck_id: Optional[str] = None
+    title: str = Field(default="", max_length=300)
+    lead: str = Field(default="", max_length=500)
+    matiere: str = Field(default="", max_length=60)
+    chapitre: str = Field(default="", max_length=300)
+    enonce: str = Field(default="", max_length=600)        # la question à laquelle il répond, s'il y en a une
+
+
+def matiere_du_cours(deck_id: str, deck: Optional[dict]) -> str:
+    """physique / chimie / math / svt, d'après le cours (son champ `subject`, sinon le préfixe de son id)."""
+    sujet = str((deck or {}).get("subject") or (deck or {}).get("matiere") or "").lower()
+    cle = f"{sujet} {deck_id or ''}".lower()
+    if "chim" in cle or cle.startswith("chem"):
+        return "chimie"
+    if "math" in cle:
+        return "math"
+    if "svt" in cle or "bio" in cle:
+        return "svt"
+    return "physique"
+
+
+def contexte_ocr(body: OcrReponseRequest, deck: Optional[dict]) -> tuple[str, str]:
+    """(matière, contexte) donnés à la correction de l'OCR : la diapositive, le chapitre, la notation à rendre."""
+    matiere = body.matiere.strip() or matiere_du_cours(body.deck_id or "", deck)
+    chapitre = body.chapitre.strip() or str((deck or {}).get("title") or "")
+    lignes = [
+        "C'est la photo de la feuille d'un élève de 2e Bac PC BIOF (Maroc) : sa réponse ou sa question, écrite à la main.",
+        f"Matière : {matiere}." + (f" Chapitre : {chapitre}." if chapitre else ""),
+        f"Diapositive : « {body.title} »" + (f" — {body.lead}" if body.lead else "") + "." if body.title else "",
+        f"Question posée : {body.enonce}" if body.enonce else "",
+        "Normalise les symboles, les unités et la notation comme ce chapitre les écrit : lettres grecques en Unicode (λ, τ, θ, ω, Δ, µ),"
+        " exposants et indices en Unicode (m·s⁻¹, 10⁻³, x², y_M devient yM), flèches de réaction (→, ⇌), unités du SI (Hz, m, s, Ω, °C).",
+        "Jamais de LaTeX ni de signe $. Garde les mots de l'élève, sa langue (français ou darija) et son raisonnement :"
+        " ne corrige NI ses erreurs de physique NI ses résultats, ne complète rien, n'ajoute aucune explication.",
+        "Rends uniquement le texte lu, prêt à être relu par l'élève.",
+    ]
+    return matiere, "\n".join(x for x in lignes if x)
+
+
+@router.post("/ocr-reponse")
+async def ocr_reponse(body: OcrReponseRequest, student: dict = Depends(get_current_student)):
+    """« 📷 Photo » : Mistral OCR puis DeepSeek (`ocr_service`) avec le contexte de la diapositive. Le texte revient dans
+    le champ ; l'élève le corrige à la main avant d'envoyer (10 novembre 2026) — jamais d'envoi automatique."""
+    from app.services import suivi_acquis
+    from app.services.ocr_service import extract_text_from_image
+
+    deck = suivi_acquis.charger_deck(body.deck_id) if body.deck_id else None
+    matiere, contexte = contexte_ocr(body, deck)
+    try:
+        r = await extract_text_from_image(body.image_b64, body.image_mime or "image/jpeg", correct_math=True,
+                                          subject=matiere, contexte=contexte)
+    except Exception:  # noqa: BLE001
+        r = {}
+    texte = str(r.get("text") or r.get("markdown") or "").strip()
+    texte = re.sub(r"\$+", "", texte)[:3000]
+    if not texte:
+        # 422 et pas 5xx : main.py remplace le texte de toute réponse 5xx par « Erreur interne du service ».
+        raise HTTPException(status_code=422, detail="Je n’ai pas pu lire la photo : prends-la de plus près, bien éclairée, ou écris ta réponse.")
+    return {"texte": texte}
 
 
 class QuestionEleveRequest(BaseModel):

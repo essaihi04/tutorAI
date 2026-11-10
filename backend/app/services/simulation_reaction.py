@@ -7,6 +7,13 @@ Le tuteur, sans quitter la diapositive :
      vrai/faux s'il s'est trompé à la question précédente, QCM par défaut, question directe s'il a juste ;
   3. corrige la réponse (QCM et vrai/faux sont corrigés dans le navigateur ; une réponse directe est jugée ici).
 
+Le résultat n'est montré qu'à la demande (règle du 10 novembre 2026) : quand l'élève appuie sur « 🔎 Ton résultat »,
+TOUT ce qui est écrit dans le panneau est dit par le tuteur — l'interprétation (`parole` ↔ `ecrit`), puis la question
+lue à voix haute (`parole_question`). Chaque option a son propre retour, écrit et dit quand l'élève la choisit :
+  - QCM : `question.retours = [{ecrit, parole}]`, un par choix, dans l'ordre de `choix` ;
+  - vrai/faux : `affirmation.retours = [{ecrit, parole} pour « Vrai », {ecrit, parole} pour « Faux »]`.
+`parole_juste` / `parole_faux` restent (anciens écrans, et secours si un retour manque).
+
 Le texte dit suit les règles de la voix (skill `voix-du-cours`) : darija simple, français pour les termes du
 programme, les nombres, les unités et les équations, en toutes lettres, sans chiffres ni symboles ni tashkil.
 Le LLM (DeepSeek, via `llm_service.chat`) répond en JSON ; tout ce qui sort d'ici est vérifié et borné.
@@ -28,6 +35,9 @@ REGLES_VOIX = """RÈGLES DU TEXTE DIT (« parole ») — il est lu tel quel par 
 - aucun chiffre, aucun symbole (= / × τ), aucun markdown, aucun tashkil ;
 - une phrase toute en français de plus de dix mots se coupe par des virgules.
 Exemple : « شوف، بعدتي M deux. دابا la distance هي un virgule zéro deux mètre، و tau ولا trois millisecondes. »"""
+
+
+RETOUR = '{"ecrit": "...", "parole": "..."}'
 
 
 def type_de_question(historique: list[dict]) -> str:
@@ -52,11 +62,18 @@ def _etat_court(etat: dict) -> str:
 def prompt_interpretation(diapo: dict, avant: dict, apres: dict, historique: list[dict]) -> tuple[str, str]:
     """(prompt, type de question imposé)."""
     genre = type_de_question(historique)
+    consigne_retours = {
+        "qcm": "« retours » a exactement un élément par choix, dans l'ordre de « choix ».",
+        "vrai_faux": "chaque affirmation porte « retours » = [retour si l'élève répond Vrai, retour s'il répond Faux].",
+        "directe": "(question directe : pas de retours, la réponse sera jugée à part).",
+    }[genre]
     forme = {
-        "vrai_faux": '"question": {"type": "vrai_faux", "enonce": "...", "affirmations": [{"texte": "...", "vrai": true}, {"texte": "...", "vrai": false}], "explication": "..."}',
-        "qcm": '"question": {"type": "qcm", "enonce": "...", "choix": ["...", "...", "..."], "bonne": 0, "explication": "..."}',
+        "vrai_faux": '"question": {"type": "vrai_faux", "enonce": "...", "affirmations": [{"texte": "...", "vrai": true, "retours": [RETOUR_SI_VRAI, RETOUR_SI_FAUX]}, {"texte": "...", "vrai": false, "retours": [RETOUR_SI_VRAI, RETOUR_SI_FAUX]}], "explication": "..."}',
+        "qcm": '"question": {"type": "qcm", "enonce": "...", "choix": ["...", "...", "..."], "bonne": 0, "retours": [RETOUR_CHOIX_0, RETOUR_CHOIX_1, RETOUR_CHOIX_2], "explication": "..."}',
         "directe": '"question": {"type": "directe", "enonce": "...", "attendu": "la réponse juste, courte", "explication": "..."}',
     }[genre]
+    forme = forme.replace("RETOUR_SI_VRAI", RETOUR).replace("RETOUR_SI_FAUX", RETOUR)
+    forme = re.sub(r"RETOUR_CHOIX_\d", RETOUR, forme)
     forme = forme[:-1] + (', "parole_juste": "ce que tu dis s\'il répond juste (une ou deux phrases, règles de la voix)", '
                           '"parole_faux": "ce que tu dis s\'il se trompe : la bonne réponse et pourquoi (deux phrases, règles de la voix)"}')
     prompt = f"""Tu es le professeur de physique d'un élève de 2e Bac PC BIOF au Maroc. Il suit la diapositive « {diapo.get('title', '')} ».
@@ -70,11 +87,16 @@ APRÈS sa manipulation : {_etat_court(apres)}
    Deux à quatre phrases. Félicite-le d'avoir essayé, sans en faire trop.
 2. Pose UNE question de type « {genre} » sur ce résultat précis (une prédiction ou une justification, pas une définition).
    L'énoncé et les choix sont en FRANÇAIS écrit, avec les valeurs et les unités (on peut écrire 3,0 ms, τ, d).
+3. TOUT ce qui est écrit est dit : « ecrit » ne contient rien que « parole » ne dise (mêmes idées, mêmes valeurs, dans
+   le même ordre) ; « parole_question » lit à voix haute l'énoncé ET chaque choix (ou chaque affirmation), règles de la voix.
+4. CHAQUE option a son propre retour {{"ecrit": "...", "parole": "..."}} : {consigne_retours}
+   « ecrit » : une ou deux phrases en français écrit ; « parole » : la même chose dite (règles de la voix) — la bonne
+   option : bravo et pourquoi c'est juste ; une option fausse : pourquoi elle est fausse, puis la bonne réponse et sa raison.
 
 {REGLES_VOIX}
 
 Réponds UNIQUEMENT par ce JSON :
-{{"parole": "ton interprétation dite (règles ci-dessus), qui finit en annonçant la question", "ecrit": "la même interprétation en français écrit, courte, avec les valeurs", {forme}}}"""
+{{"parole": "ton interprétation dite (règles ci-dessus), qui finit en annonçant la question sans la lire", "ecrit": "la même interprétation en français écrit, courte, avec les valeurs", "parole_question": "la question lue à voix haute, avec ses choix (règles de la voix)", {forme}}}"""
     return prompt, genre
 
 
@@ -116,6 +138,21 @@ def parole_propre(texte: Any) -> str:
     return re.sub(r"\s+", " ", t).strip()[:900]
 
 
+def valider_retours(retours: Any, n: int) -> Optional[list[dict]]:
+    """Les retours d'une question, alignés sur ses options : exactement `n`, chacun écrit ET dit ; sinon aucun."""
+    if not isinstance(retours, list) or len(retours) != n:
+        return None
+    out = []
+    for r in retours:
+        if not isinstance(r, dict):
+            return None
+        ecrit, parole = str(r.get("ecrit") or "").strip()[:400], parole_propre(r.get("parole"))[:500]
+        if not ecrit or not parole:
+            return None
+        out.append({"ecrit": ecrit, "parole": parole})
+    return out
+
+
 def valider_question(q: Any, genre: str) -> Optional[dict]:
     if not isinstance(q, dict) or not str(q.get("enonce") or "").strip():
         return None
@@ -127,9 +164,20 @@ def valider_question(q: Any, genre: str) -> Optional[dict]:
         if len(choix) < 2 or not isinstance(bonne, int) or not 0 <= bonne < len(choix):
             return None
         out.update(choix=choix, bonne=bonne)
+        retours = valider_retours(q.get("retours"), len(choix))
+        if retours:
+            out["retours"] = retours
     elif genre == "vrai_faux":
-        aff = [{"texte": str(a.get("texte")).strip()[:250], "vrai": bool(a.get("vrai"))}
-               for a in (q.get("affirmations") or []) if isinstance(a, dict) and str(a.get("texte") or "").strip()][:3]
+        aff = []
+        for a in (q.get("affirmations") or []):
+            if not isinstance(a, dict) or not str(a.get("texte") or "").strip():
+                continue
+            item = {"texte": str(a.get("texte")).strip()[:250], "vrai": bool(a.get("vrai"))}
+            retours = valider_retours(a.get("retours"), 2)       # [si l'élève dit Vrai, s'il dit Faux]
+            if retours:
+                item["retours"] = retours
+            aff.append(item)
+        aff = aff[:3]
         if not aff:
             return None
         out.update(affirmations=aff)
@@ -149,7 +197,8 @@ def reaction_depuis(texte_llm: str, genre: str) -> Optional[dict]:
     question = valider_question(d.get("question"), genre)
     if not parole or not question:
         return None
-    return {"parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600], "question": question}
+    return {"parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600],
+            "parole_question": parole_propre(d.get("parole_question"))[:700], "question": question}
 
 
 def correction_depuis(texte_llm: str) -> Optional[dict]:

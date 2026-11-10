@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deux récepteurs d’ultrasons — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un émetteur d’ultrasons, deux récepteurs R₁ et R₂ sur une règle graduée en millimètres, les compressions de l’air, et l’écran d’un oscilloscope à deux courbes, dessinés à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="exposants.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * TP « mesure de la longueur d’onde des ultrasons » (cours « Ondes mécaniques progressives périodiques », 10 novembre 2026).
+ * Un émetteur E (N = 40 kHz) ; deux récepteurs : R₁ fixe, R₂ glissé le long d’une règle graduée en mm ; un oscilloscope
+ * à deux voies, 5 µs/div (T = 25 µs = 5 divisions), déclenché sur R₁. v = 340 m/s, λ = v/N = 8,5 mm.
+ * Les ultrasons sont des ondes longitudinales : l’air est peint en bandes de compression douces (claires = compressions),
+ * avec quelques « molécules » qui vont et viennent sur place le long de la propagation.
+ * Modèle : p(x, t) = sin 2π(t/T − x/λ) ; la courbe de R₂ est celle de R₁ retardée de d/λ période.
+ * Ralenti pour l’œil (dit dans la bulle) : une période de 25 µs dure 1 s à l’écran ; les valeurs affichées restent les vraies.
+ * L’amplitude de R₂ diminue quand il s’éloigne : effet visuel (l’onde s’affaiblit), sans calcul, dit comme tel.
+ * Vues (?vue=) : cote_a_cote, reculer, ecran, deja_ecartes. Un seul bouton ; R₂ se glisse sur la règle.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['cote_a_cote', 'reculer', 'ecran', 'deja_ecartes'];
+const qv = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(qv) ? qv : 'cote_a_cote';
+const DEJA = vue === 'deja_ecartes', RECUL = vue === 'reculer' || DEJA;
+const N = 40000, V = 340, LAMBDA = 8.5, T_US = 25, SENS = 5;   // Hz ; m/s ; mm ; µs ; µs/div
+const TA = 1.0, T0 = 0.3;                                       // durée affichée d’une période (s) ; début de l’émission (s)
+const D0 = DEJA ? 100 : 0;                                      // position de départ de R₂ (mm, distance R₁R₂ lue sur la règle)
+const DMIN = DEJA ? 95 : 0, DMAX = DEJA ? 125 : 25.5;
+
+// ── Géométrie du banc (cadre 760 × 420) ──
+const G = DEJA ? { XE: 78, XR1: 150, PX: 14, coupe: [200, 240], X95: 250 } : { XE: 78, XR1: 250, PX: 16 };
+const LPX = LAMBDA * G.PX;                    // λ en px
+const Y1 = 84, Y2 = 134, YB0 = 52, YB1 = 160, YR = 170;   // pistes de R₁ et R₂ ; faisceau ; règle
+const XB1 = 712;                              // bout du faisceau peint
+const xDe = d => (DEJA ? G.X95 + (d - 95) * G.PX : G.XR1 + d * G.PX);
+const dDe = x => (DEJA ? 95 + (x - G.X95) / G.PX : (x - G.XR1) / G.PX);
+const K = 2;                                  // vue « déjà écartés » : nombre entier de λ caché dans la coupure de la règle
+/* Retard (en périodes) de l’onde en x depuis l’émetteur ; null dans la coupure de la règle. Dans la vue « déjà écartés »,
+ * l’énoncé dit les récepteurs en phase au départ (d₁ = 10,0 cm) : la coupure « ≈ » cache le nombre entier de λ entre eux. */
+function phi(x) {
+  if (!DEJA || x <= G.coupe[0]) return (x - G.XE) / LPX;
+  if (x < G.coupe[1]) return null;
+  return (G.XR1 - G.XE) / LPX + K + (dDe(x) - D0) / LAMBDA;
+}
+const arrivee = x => T0 + phi(x) * TA;
+
+// ── Oscilloscope ──
+const SX0 = 40, SY0 = 232, DX = 38, DY = 26, YC = SY0 + 3 * DY, A1 = 2 * DY;
+const XP = 452;                               // panneau des lectures, à droite de l’écran
+
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', d: D0, manuel: false, ecrit: null, emis: 0 };
+
+/* Les instants clés, calculés depuis la géométrie (arrivée de l’onde) et le déroulé du recul de R₂. */
+function moments() {
+  const cs = Math.max(arrivee(G.XR1), arrivee(xDe(D0))) + 0.5;
+  const m = { emission: T0 + 0.35, courbes_superposees: cs };
+  if (RECUL) { const r = cs + 0.7; Object.assign(m, { decalage: r + 0.75, opposition: r + 1.5, en_phase_1: r + 3.3, en_phase_2: r + 7.4, mesure: r + 7.9 }); }
+  else if (vue === 'ecran') m.mesure = cs + 1.2;
+  else m.fin = cs + 1.2;
+  for (const k in m) m[k] = +m[k].toFixed(3);
+  return m;
+}
+const FIN = () => Math.max(...Object.values(moments()));
+/* Le recul de R₂ quand la scène le joue : un λ en 3 s, arrêt 1,2 s (on lit la règle), un λ de plus. */
+function dScript(t) {
+  const s = t - (moments().courbes_superposees + 0.7);
+  const d = s <= 0 ? 0 : s < 3 ? LAMBDA * s / 3 : s < 4.2 ? LAMBDA : s < 7.2 ? LAMBDA * (1 + (s - 4.2) / 3) : 2 * LAMBDA;
+  return D0 + Math.round(d * 1e4) / 1e4;
+}
+const MOTIFS = {
+  emission: 'l’émetteur émet : les compressions partent dans l’air',
+  courbes_superposees: DEJA ? 'départ : R₂ à d₁ = 10,0 cm, les deux courbes sont en phase' : 'R₁ et R₂ au même endroit : les deux courbes sont superposées, en phase',
+  decalage: 'R₂ a reculé : sa courbe a glissé vers la droite et elle est plus petite',
+  opposition: 'R₂ a reculé d’une demi-longueur d’onde : les courbes sont en opposition de phase',
+  en_phase_1: 'premier retour en phase : R₂ a reculé d’une longueur d’onde',
+  en_phase_2: 'deuxième retour en phase : R₂ a reculé de deux longueurs d’onde',
+  mesure: vue === 'ecran' ? 'lecture de la période : 5 divisions à 5 µs/div' : 'mesure de λ et calcul de la célérité',
+  fin: 'les deux courbes restent superposées',
+};
+
+// ── État des courbes ──
+const decal = () => (S.d - D0) / LAMBDA;                     // décalage de R₂ en périodes
+const retours = () => Math.max(0, Math.floor(decal() + 0.012));
+function relation() {
+  const f = ((decal() % 1) + 1) % 1, e = Math.min(f, 1 - f);
+  if (e < 0.012) return 'phase';
+  if (Math.abs(f - 0.5) < 0.012) return 'opposition';
+  return 'autre';
+}
+const amp2 = () => 1 / (1 + S.d / 60);                        // R₂ plus loin : signal plus faible (effet visuel)
+const recu = x => S.t >= arrivee(x) && (S.running || S.pause || S.fait);
+const u = (ts, retard, a) => a * Math.sin(2 * Math.PI * ((ts - 5) / T_US - retard));   // ts en µs ; montée à 1 div
+
+/* L’air, peint : une bande de compression claire et douce par période, qui avance ; rien avant le front.
+ * Pour l’œil seulement : les bords du faisceau sont estompés. Le modèle p = sin 2π(t/T − x/λ) reste exact. */
+function air(ctx, t) {
+  if (!(S.running || S.pause || S.fait) || t <= T0) return;
+  ctx.save();
+  const g = ctx.createLinearGradient(G.XE, 0, XB1, 0), n = 220;
+  for (let k = 0; k <= n; k++) {
+    const x = G.XE + (XB1 - G.XE) * k / n, ph = phi(x);
+    let a = 0;
+    if (ph !== null && t >= arrivee(x)) { const p = Math.sin(2 * Math.PI * ((t - T0) / TA - ph)); a = 0.04 + 0.30 * (p + 1) / 2; }
+    g.addColorStop(k / n, `rgba(186,222,255,${a.toFixed(3)})`);
+  }
+  ctx.fillStyle = g;
+  ctx.globalAlpha = .5; ctx.fillRect(G.XE, YB0, XB1 - G.XE, YB1 - YB0);
+  ctx.globalAlpha = .6; ctx.fillRect(G.XE, YB0 + 12, XB1 - G.XE, YB1 - YB0 - 24);
+  ctx.globalAlpha = .7; ctx.fillRect(G.XE, YB0 + 26, XB1 - G.XE, YB1 - YB0 - 52);
+  // Les molécules de l’air vont et viennent sur place, dans la direction de propagation (onde longitudinale).
+  ctx.globalAlpha = .45; ctx.fillStyle = '#e8f4ff';
+  for (let x0 = G.XE + 10; x0 < XB1 - 4; x0 += 17) {
+    const ph = phi(x0); if (ph === null) continue;
+    const xi = t >= arrivee(x0) ? -5 * Math.cos(2 * Math.PI * ((t - T0) / TA - ph)) : 0;
+    for (let y = YB0 + 9; y < YB1; y += 18) { ctx.beginPath(); ctx.arc(x0 + xi + ((y / 18) % 2) * 5, y, 1.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+
+function recepteur(c, x, y, couleur) {
+  c.rect(x, y - 11, 24, 22, { couleur, arrondi: 5 });
+  c.ligne(x + 1, y - 7, x + 1, y + 7, { couleur, largeur: 3.4 });          // la face sensible, tournée vers l’émetteur
+  c.ligne(x + 24, y, x + 36, y, { couleur: 'faible', largeur: 1.4 });     // le fil vers l’oscilloscope
+}
+
+const TITRES = { cote_a_cote: 'Deux récepteurs côte à côte', reculer: 'On recule R₂', ecran: 'Lire la période sur l’écran', deja_ecartes: 'Récepteurs déjà écartés au départ' };
+
+function dessiner(c) {
+  scene.cadre(17);
+  c.direct(() => air(c.ctx, S.t));
+  c.texte(TITRES[vue], 40, 24, { couleur: 'cyan', taille: 18, duree: .8 });
+  c.texte('ultrasons : N = 40 kHz', 740, 24, { couleur: 'jaune', align: 'right', taille: 16, duree: .6 });
+
+  // ── L’émetteur ──
+  c.texte('émetteur E', 30, 46, { couleur: 'blanc', taille: 14, duree: .35 });
+  c.rect(44, 66, 28, 88, { couleur: 'blanc', arrondi: 6, duree: .3 });
+  c.ligne(G.XE - 3, 74, G.XE - 3, 146, { couleur: 'blanc', largeur: 3.6 });
+  c.repere('emetteur', 36, 34, 52, 126, 'l’émetteur d’ultrasons (40 kHz)');
+  c.texte('air', 722, 112, { couleur: 'faible', taille: 15, duree: .15 });
+  c.repere('compressions', G.XE + 4, YB0, XB1 - G.XE - 8, YB1 - YB0, 'les compressions de l’air (bandes claires)');
+
+  // ── R₁, fixe ──
+  recepteur(c, G.XR1, Y1, 'cyan');
+  c.texte('R₁', G.XR1 + 12, Y1 - 18, { couleur: 'cyan', align: 'center', taille: 17 });
+  c.repere('recepteur_1', G.XR1 - 8, Y1 - 36, 50, 50, 'le récepteur R₁ (fixe)');
+  c.ligne(G.XR1 + 1, Y1 + 12, G.XR1 + 1, YR, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+
+  // ── La règle graduée en mm ──
+  if (!DEJA) {
+    const x1 = G.XR1 + DMAX * G.PX;
+    c.ligne(G.XR1, YR, x1 + 6, YR, { couleur: 'blanc', largeur: 1.8, duree: .3 });
+    for (let k = 0; k <= DMAX; k++) c.ligne(G.XR1 + k * G.PX, YR, G.XR1 + k * G.PX, YR + (k % 5 ? 5 : 10), { couleur: 'faible', largeur: 1.2, duree: .012 });
+    for (let k = 0; k <= 25; k += 5) c.texte(String(k), G.XR1 + k * G.PX, YR + 26, { couleur: 'faible', align: 'center', taille: 14, duree: .05 });
+    c.texte('mm', x1 + 30, YR + 26, { couleur: 'faible', align: 'center', taille: 14 });
+    c.repere('regle', G.XR1 - 6, YR - 4, x1 - G.XR1 + 46, 34, 'la règle graduée en mm');
+  } else {
+    c.ligne(G.XR1, YR, G.coupe[0], YR, { couleur: 'blanc', largeur: 1.8 });
+    for (let x = G.XR1; x <= G.coupe[0]; x += G.PX) c.ligne(x, YR, x, YR + ((x - G.XR1) % (5 * G.PX) ? 5 : 10), { couleur: 'faible', largeur: 1.2, duree: .012 });
+    c.texte('0', G.XR1, YR + 26, { couleur: 'faible', align: 'center', taille: 14 });
+    c.texte('≈', (G.coupe[0] + G.coupe[1]) / 2, YR + 6, { couleur: 'blanc', align: 'center', taille: 22 });
+    const x95 = G.X95, x125 = xDe(125);
+    c.ligne(x95 - 6, YR, x125 + 6, YR, { couleur: 'blanc', largeur: 1.8, duree: .3 });
+    for (let k = 95; k <= 125; k++) c.ligne(xDe(k), YR, xDe(k), YR + (k % 5 ? 5 : 10), { couleur: 'faible', largeur: 1.2, duree: .012 });
+    for (let k = 95; k <= 125; k += 5) c.texte(fr(k / 10, k % 10 ? 1 : 0), xDe(k), YR + 26, { couleur: 'faible', align: 'center', taille: 14, duree: .05 });
+    c.texte('cm', x125 + 28, YR + 26, { couleur: 'faible', align: 'center', taille: 14 });
+    c.texte('↑ départ : d₁ = 10,0 cm', xDe(100) - 6, YR + 43, { couleur: 'vert', taille: 13, duree: .4 });
+    c.repere('regle', G.XR1 - 6, YR - 4, x125 - G.XR1 + 46, 34, 'la règle : zéro sous R₁, graduée en mm');
+  }
+
+  // ── L’écran de l’oscilloscope : 10 × 6 divisions ──
+  c.texte(`Oscilloscope : ${SENS} µs/div`, SX0, SY0 - 10, { couleur: 'cyan', taille: 16, duree: .6 });
+  c.repere('sensibilite', SX0 - 4, SY0 - 30, 196, 26, 'la sensibilité horizontale : 5 µs par division');
+  c.rect(SX0, SY0, 10 * DX, 6 * DY, { couleur: 'faible', arrondi: 4, duree: .6 });
+  for (let i = 1; i < 10; i++) c.ligne(SX0 + i * DX, SY0, SX0 + i * DX, SY0 + 6 * DY, { couleur: 'tresfaible', largeur: 1, duree: .015 });
+  for (let j = 1; j < 6; j++) c.ligne(SX0, SY0 + j * DY, SX0 + 10 * DX, SY0 + j * DY, { couleur: j === 3 ? 'faible' : 'tresfaible', largeur: 1, duree: .015 });
+  c.repere('ecran', SX0, SY0, 10 * DX, 6 * DY, 'l’écran de l’oscilloscope');
+  c.texte('R₁ → voie 1', XP, SY0 + 4, { couleur: 'cyan', taille: 15, duree: .35 });
+  c.texte('R₂ → voie 2', XP + 130, SY0 + 4, { couleur: 'orange', taille: 15, duree: .35 });
+
+  // Les parties vivantes apparaissent quand la craie a fini le banc et l’écran (le professeur dessine, puis allume).
+  if (c.t >= c.cur) c.direct(() => {
+    // ── R₂, qu’on glisse ──
+    const x2 = xDe(S.d);
+    recepteur(c, x2, Y2, 'orange');
+    c.texte('R₂ ⇠⇢', x2 + 12, Y2 - 18, { couleur: 'orange', align: 'center', taille: 16 });
+    c.ligne(x2 + 1, Y2 + 12, x2 + 1, YR - 1, { couleur: 'orange', largeur: 1.4, pointille: [3, 4] });
+    c.trait([[x2 - 5, YR - 9], [x2 + 1, YR - 1], [x2 + 7, YR - 9]], { couleur: 'orange', largeur: 1.6 });
+    c.repere('recepteur_2', x2 - 10, Y2 - 36, 52, 56, 'le récepteur R₂ (glisse-le le long de la règle)');
+
+    // ── Les deux courbes : celle de R₁ (épaisse, cyan) sous celle de R₂ (fine, orange) ──
+    const trace = (retard, a, couleur, largeur, actif) => c.courbe(k => [SX0 + k * 10 * DX, YC - (actif ? u(k * 10 * SENS, retard, a) : 0)], 240, { couleur, largeur, alpha: actif ? .92 : .35 });
+    const r1 = recu(G.XR1), r2 = recu(x2);
+    trace(0, A1, 'cyan', 5, r1);
+    trace(decal(), A1 * amp2(), 'orange', 1.6, r2);
+    c.repere('courbe_1', SX0, YC - A1 - 6, 10 * DX, 2 * A1 + 12, 'la courbe de R₁ (voie 1)');
+    c.repere('courbe_2', SX0, YC - A1 * amp2() - 6, 10 * DX, 2 * A1 * amp2() + 12, 'la courbe de R₂ (voie 2)');
+
+    // ── Les lectures, à droite ──
+    const rel = relation(), deux = r1 && r2;
+    c.texte(DEJA ? `R₂ lu sur la règle : ${fr(S.d / 10, 2)} cm` : `R₂ a reculé de d = ${fr(S.d, 2)} mm`, XP, SY0 + 34, { couleur: 'jaune', taille: 17, max: 290 });
+    c.texte(!deux ? 'les courbes ne sont pas encore là' : rel === 'phase' ? 'courbes en phase' : rel === 'opposition' ? 'courbes en opposition de phase' : `courbe de R₂ décalée de ${fr(((decal() % 1) + 1) % 1, 2)} T`,
+      XP, SY0 + 62, { couleur: !deux ? 'faible' : rel === 'phase' ? 'vert' : rel === 'opposition' ? 'rose' : 'blanc', taille: 17, max: 290 });
+    if (vue !== 'cote_a_cote' || S.d > 0) {
+      c.texte(`retours en phase : ${retours()}`, XP, SY0 + 90, { couleur: 'cyan', taille: 17 });
+      c.repere('compteur', XP - 4, SY0 + 72, 200, 24, 'le compteur des retours en phase');
+    }
+  });
+
+  // ── La mesure, écrite à la craie quand on y arrive ──
+  const M = moments();
+  if (M.mesure !== undefined && S.t >= M.mesure - 1e-6 && (S.pause || S.fait || S.running)) {
+    if (S.ecrit == null) S.ecrit = (performance.now() - scene.ouvert) / 1000;
+    c.depuis(S.ecrit);
+    const y0 = SY0 + 120, n = retours(), dep = S.d - D0;
+    if (vue === 'ecran') {
+      const xa = SX0 + DX, xb = SX0 + 6 * DX;
+      for (let k = 1; k <= 5; k++) c.texte(String(k), SX0 + (k + 0.5) * DX, SY0 + 16, { couleur: 'jaune', align: 'center', taille: 14, duree: .15 });
+      c.cote(xa, SY0 + 6 * DY - 10, xb, SY0 + 6 * DY - 10, '5 div', { couleur: 'jaune', taille: 15 });
+      c.repere('periode', xa, SY0 + 2, xb - xa, 6 * DY - 4, 'une période : 5 divisions');
+      c.texte('T = 5 div × 5 µs/div = 25 µs', XP, y0, { couleur: 'vert', taille: 17, max: 296 });
+      c.texte('T = 25×10⁻⁶ s', XP, y0 + 26, { couleur: 'vert', taille: 17 });
+      c.texte('N = 1/T = 40 000 Hz > 20 kHz : ultrason', XP, y0 + 52, { couleur: 'vert', taille: 16, max: 296 });
+      c.repere('calcul', XP - 4, y0 - 18, 300, 78, 'T = 25 µs, N = 40 kHz');
+    } else if (n >= 1 && relation() === 'phase') {
+      const nl = n === 1 ? 'λ' : `${n}λ`;
+      if (DEJA) {
+        c.texte(`déplacement : ${fr(S.d / 10, 2)} − 10,00 = ${fr(dep / 10, 2)} cm`, XP, y0, { couleur: 'vert', taille: 16, max: 296 });
+        c.texte(`${n} retour${n > 1 ? 's' : ''} en phase : ${fr(dep / 10, 2)} cm = ${nl}`, XP, y0 + 26, { couleur: 'vert', taille: 16, max: 296 });
+        c.texte(`λ = ${fr(dep / 10, 2)} / ${n} = ${fr(LAMBDA / 10, 2)} cm ; v = λ·N = 340 m/s`, XP, y0 + 52, { couleur: 'vert', taille: 16, max: 296 });
+      } else {
+        c.texte(`${n} retour${n > 1 ? 's' : ''} en phase : ${fr(dep, 1)} mm = ${nl}`, XP, y0, { couleur: 'vert', taille: 16, max: 296 });
+        c.texte(`λ = ${fr(dep, 1)} / ${n} = ${fr(LAMBDA, 1)} mm = 8,5×10⁻³ m`, XP, y0 + 26, { couleur: 'vert', taille: 16, max: 296 });
+        c.texte('v = λ·N = 8,5×10⁻³ × 40 000 = 340 m/s', XP, y0 + 52, { couleur: 'vert', taille: 16, max: 296 });
+      }
+      c.repere('calcul', XP - 4, y0 - 18, 300, 78, 'le calcul de λ puis de v');
+    } else {
+      c.texte('R₂ n’est pas sur un retour en phase :', XP, y0, { couleur: 'rose', taille: 16, max: 296 });
+      c.texte('glisse-le jusqu’à des courbes en phase.', XP, y0 + 26, { couleur: 'rose', taille: 16, max: 296 });
+    }
+  }
+  if (vue === 'cote_a_cote' && S.t >= moments().courbes_superposees && S.d === 0) {
+    c.texte('même endroit : même signal, au même instant', XP, SY0 + 120, { couleur: 'vert', taille: 16, max: 296 });
+  }
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) S.t = S.jusqua;
+  if (RECUL && !S.manuel) S.d = dScript(S.t);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.jusqua = null; S.running = false; S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN()) {
+    S.running = false; S.pause = false; S.fait = true; etiquette();
+    bulle($('feedback'), MESSAGES[vue], 'good'); pont.noter('measurement', { d_mm: S.d, relation: relation(), retours_en_phase: retours() }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MESSAGES = {
+  cote_a_cote: 'Au même endroit, R₁ et R₂ reçoivent la même chose au même instant. Glisse R₂ pour le reculer.',
+  reculer: 'Deux retours en phase : R₂ a reculé de 2λ = 17 mm, donc λ = 8,5 mm. Glisse R₂ toi-même.',
+  ecran: 'T = 5 divisions × 5 µs = 25 µs, donc N = 40 kHz : un ultrason.',
+  deja_ecartes: 'C’est le déplacement qui compte : 11,70 − 10,00 = 1,70 cm = 2λ, donc λ = 0,85 cm.',
+};
+
+function start(garder) {
+  S.t = 0; S.jusqua = null; S.motif = ''; S.ecrit = null; S.running = true; S.pause = false; S.fait = false;
+  if (RECUL || !garder) { S.manuel = false; S.d = D0; }
+  etiquette(); bulle($('feedback'), 'Scène ralentie : une période de 25 µs dure 1 s à l’écran.');
+  pont.noter('start', { d_mm: S.d }); pont.emettre();
+}
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(true); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
+function reset() { start(false); }
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.manuel || !(S.running || S.pause) || S.t >= cible - 1e-3) start(false);
+  S.jusqua = Math.min(FIN(), cible); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  const v = +String(p.d_mm ?? '').replace(',', '.');
+  if (!Number.isFinite(v)) return;
+  S.d = Math.min(DMAX, Math.max(DMIN, Math.round(v / 0.05) * 0.05));
+  S.d = Math.round(S.d * 100) / 100; S.manuel = true;
+  // Un réglage montre le régime établi : l’onde est arrivée aux deux récepteurs, l’écran se met à jour.
+  if (S.t < moments().courbes_superposees) { S.t = moments().courbes_superposees; if (!S.running) { S.pause = true; } }
+  if (S.fait) { S.fait = false; S.pause = true; }
+  S.ecrit = S.t >= (moments().mesure ?? Infinity) ? S.ecrit : null;
+  etiquette(); scene.sale = true; pont.noter('set_parameters', { d_mm: S.d }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start(true));
+
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.abs(x - xDe(S.d) - 10) < 26 && y > Y2 - 34 && y < YR + 16 ? 'R2' : null; },
+  bouger: (id, px) => {
+    const [x] = scene.local(px, 0);
+    setParameters({ d_mm: Math.round(dDe(x - 4) / 0.25) * 0.25 });
+  },
+  lacher: () => bulle($('feedback'), relation() === 'phase' ? `R₂ à ${fr(S.d, 2)} mm : courbes en phase (${retours()} retour${retours() > 1 ? 's' : ''} en phase).` : relation() === 'opposition' ? `R₂ à ${fr(S.d, 2)} mm : courbes en opposition de phase.` : `R₂ à ${fr(S.d, 2)} mm : les courbes sont décalées.`),
+});
+
+/* Ce que l’élève voit, en mots : le tuteur suit la scène par cette phrase. */
+function ceQuiSeVoit() {
+  const t = S.t, m = [`Vue « ${vue} » : émetteur d’ultrasons (40 kHz), R₁ fixe, R₂ ${DEJA ? `lu à ${fr(S.d / 10, 2)} cm sur la règle (départ d₁ = 10,0 cm)` : `à d = ${fr(S.d, 2)} mm de R₁ sur la règle`} ; oscilloscope à 5 µs/div.`];
+  if (!(S.running || S.pause || S.fait) || t <= T0) m.push('L’émetteur ne fonctionne pas encore : air calme, écran avec deux traits plats.');
+  else {
+    m.push(`${S.pause ? 'Scène arrêtée : ' : S.fait ? 'Fin du déroulé : ' : ''}les compressions (bandes claires) avancent de l’émetteur vers les récepteurs, les molécules de l’air vont et viennent sur place (onde longitudinale).`);
+    const r1 = recu(G.XR1), r2 = recu(xDe(S.d));
+    if (!r1 && !r2) m.push('L’onde n’est pas encore arrivée aux récepteurs : traits plats à l’écran.');
+    else if (!r2) m.push('Courbe de R₁ (cyan) à l’écran ; l’onde n’a pas encore atteint R₂.');
+    else {
+      const rel = relation();
+      m.push(`Écran : courbe de R₁ (cyan, voie 1) et courbe de R₂ (orange, voie 2${S.d > 0.2 ? ', plus petite : R₂ est plus loin' : ', même amplitude : même endroit'}), T = 5 divisions. ${rel === 'phase' ? (decal() < 0.01 ? (S.d < 0.2 ? 'Les deux courbes sont superposées : en phase, même amplitude' : 'Les deux courbes sont en phase (crêtes alignées)') : `Les deux courbes sont de nouveau en phase`) : rel === 'opposition' ? 'Les courbes sont en opposition de phase (une crête en face d’un creux)' : `La courbe de R₂ est décalée de ${fr(((decal() % 1) + 1) % 1, 2)} période vers la droite`}. Retours en phase depuis le départ : ${retours()}.`);
+    }
+    const M = moments();
+    if (M.mesure !== undefined && t >= M.mesure - 1e-6) {
+      if (vue === 'ecran') m.push('Écrit : chiffres 1 à 5 sur une période, cote « 5 div », T = 5 × 5 µs = 25 µs = 25×10⁻⁶ s, N = 40 000 Hz (ultrason).');
+      else if (retours() >= 1 && relation() === 'phase') m.push(DEJA ? `Écrit : déplacement ${fr(S.d / 10, 2)} − 10,00 = ${fr((S.d - D0) / 10, 2)} cm = ${retours()}λ, λ = 0,85 cm, v = λ·N = 340 m/s.` : `Écrit : ${fr(S.d - D0, 1)} mm = ${retours()}λ, λ = 8,5 mm, v = λ·N = 8,5×10⁻³ × 40 000 = 340 m/s.`);
+      else m.push('Écrit en rose : R₂ n’est pas sur un retour en phase.');
+    }
+  }
+  return m.join(' ');
+}
+
+const EXPLICATIONS = {
+  cote_a_cote: [
+    { repere: 'emetteur', texte: 'L’émetteur envoie des ultrasons de 40 kilohertz.' },
+    { repere: 'compressions', texte: 'L’onde est longitudinale : des compressions avancent dans l’air.' },
+    { repere: 'recepteur_2', texte: 'R₁ et R₂ sont au même endroit.' },
+    { repere: 'ecran', texte: 'Ils reçoivent la même chose au même instant : les courbes sont superposées.' },
+  ],
+  reculer: [
+    { repere: 'recepteur_2', texte: 'On recule R₂ le long de la règle.' },
+    { repere: 'courbe_2', texte: 'Sa courbe glisse vers la droite et rapetisse : le signal arrive plus tard et plus faible.' },
+    { repere: 'compteur', texte: 'Elle se remet en phase : un retour en phase, R₂ a reculé d’une longueur d’onde.' },
+    { repere: 'regle', texte: 'La règle indique 8,5 mm au premier retour, 17 mm au deuxième.' },
+    { repere: 'calcul', texte: 'Deux retours, deux λ : λ = 8,5 mm, et v = λ·N = 340 m/s.' },
+  ],
+  ecran: [
+    { repere: 'sensibilite', texte: 'D’abord la sensibilité horizontale : 5 microsecondes par division.' },
+    { repere: 'periode', texte: 'On compte les divisions d’une période : cinq.' },
+    { repere: 'calcul', texte: 'T = 5 × 5 µs = 25 µs, on convertit en secondes, puis N = 1/T = 40 kHz.' },
+  ],
+  deja_ecartes: [
+    { repere: 'regle', texte: 'Au départ, R₂ est déjà à 10,0 cm, et les courbes sont en phase.' },
+    { repere: 'recepteur_2', texte: 'On recule R₂ : deuxième retour en phase à 11,7 cm.' },
+    { repere: 'calcul', texte: 'C’est le déplacement qui compte : 1,7 cm pour deux λ, λ = 0,85 cm.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_recepteurs', version: '1.0', title: 'Deux récepteurs d’ultrasons — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)' },
+    set_parameters: { d_mm: DEJA ? '95..125 (position de R₂ lue sur la règle, en mm ; départ 100 ; retours en phase à 108,5 puis 117)' : '0..25.5 (recul de R₂ en mm, pas de 0,05 ; en phase à 8,5 et 17 ; opposition à 4,25)' } } };
+/* Le tuteur pilote : le banc doit être entièrement écrit pour que ce qu’il dit (ce_qui_se_voit) soit à l’écran. */
+function achever() { if (!scene.craie.complet || (performance.now() - scene.ouvert) < 8000) { scene.ouvert = performance.now() - 60000; scene.sale = true; } }
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Ultrasons N = 40 kHz, v = 340 m/s, λ = 8,5 mm, T = 25 µs = 5 divisions à 5 µs/div. R₁ fixe, R₂ glissé sur une règle en mm. Vue « ${vue} ». ${MESSAGES[vue]}`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : S.fait ? 'finished' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), moments: moments(), parameters: { d_mm: S.d }, decalage_periodes: +decal().toFixed(3), relation: relation(), retours_en_phase: retours(),
+    valeurs: { N_hz: N, v_m_s: V, lambda_mm: LAMBDA, T_us: T_US, sensibilite_us_div: SENS } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => (achever(), { start: () => start(true), reset, pause, resume, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'L’émetteur va émettre…');
+// Le banc est d’abord dessiné à la craie, puis l’émetteur s’allume (au plus tard 6 s après l’ouverture).
+(function allumer(n) { if (S.running || S.pause || S.fait || S.t > 0) return; if ((n > 1 && scene.craie.complet) || n >= 20) return start(true); setTimeout(() => allumer(n + 1), 300); })(0);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

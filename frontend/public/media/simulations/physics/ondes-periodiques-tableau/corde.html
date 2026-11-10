@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corde et vibreur — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Corde tendue reliée à un vibreur : une onde progressive périodique la parcourt, dessinée au tableau"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Ondes mécaniques progressives périodiques (cours 2, novembre 2026) : une corde tendue reliée à un vibreur.
+ * Modèle : y(x, t) = y_S(t − x / v), avec y_S(t) = A·sin(2πt / T) pour t ≥ 0 et 0 avant (le front avance) ;
+ * vue « secousse » : la source ne fait qu’une période, puis s’arrête (rappel du cours 1).
+ * Valeurs rondes du contrat commun : v = 1 m/s, T = 0,5 s, N = 2 Hz, λ = 0,5 m ; corde de 0 à 2 m, sans
+ * amortissement ni réflexion ; M par défaut à 0,75 m (1,5 λ) ; P glissable (vue « phase »).
+ * Huit vues (?vue=), une notion chacune : secousse, vibreur, periode, lambda, double, avance, phase, retard.
+ * Un seul bouton ; M (vues periode, retard) et P (vue phase) se glissent sur la corde.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const V = 1.0, T = 0.5, N = 1 / T, LAMBDA = V * T, L = 2.0;   // célérité (m/s), période (s), fréquence (Hz), longueur d’onde (m), corde (m)
+const VUES = ['secousse', 'vibreur', 'periode', 'lambda', 'double', 'avance', 'phase', 'retard'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'vibreur';
+const SECOUSSE = vue === 'secousse';
+const LENT = 0.4;                                  // la scène défile à 0,4 × le temps réel : une période dure 1,25 s à l’écran
+const PHOTO = vue === 'double' ? 2.625 : 2.125;    // instant de la photo : la source est sur une crête, la corde est pleine
+const ARRET = { secousse: 2.7, vibreur: 4.0, periode: 3.4, lambda: PHOTO, double: PHOTO, avance: 2.0, phase: 3.0, retard: 3.0 }[vue];
+const S = { t: 0, running: false, jusqua: null, nom: null, fait: false, emis: 0, xM: 0.75, xP: 1.25 };
+
+/* La physique (exacte : le rendu peint ne la change jamais). */
+const yS = t => (t <= 0 || (SECOUSSE && t >= T) ? 0 : Math.sin(2 * Math.PI * t / T));
+const y = (x, t) => yS(t - x / V);
+const montee = (x, t) => { const u = t - x / V; return u <= 0 || (SECOUSSE && u >= T) ? 0 : Math.cos(2 * Math.PI * u / T); };   // signe de la vitesse du point
+
+/* Formats : 0,750 → « 0,75 », 0,625 → « 0,625 » ; 1,50 → « 1,5 », 2,00 → « 2 ». */
+const fm = v => { const s = fr(v, 3); return s.endsWith('0') ? s.slice(0, -1) : s; };
+const fn = v => fr(v, 2).replace(/0+$/, '').replace(/,$/, '');
+const ft = t => (Math.abs(t * 100 - Math.round(t * 100)) > 1e-6 ? fm(t) : fr(t, 2));   // une date : 2,125 s reste 2,125 s
+const signe = s => s.replace(/^-/, '−');
+
+/* Géométrie de chaque vue dans le cadre 760 × 420 : origine S, px par mètre, repos de la corde, amplitude dessinée. */
+const G = {
+  secousse: { X0: 110, PX: 300, y0: 165, K: 58 }, vibreur: { X0: 110, PX: 300, y0: 165, K: 58 },
+  periode: { X0: 110, PX: 300, y0: 112, K: 42 }, lambda: { X0: 110, PX: 300, y0: 150, K: 55 },
+  double: { X0: 70, PX: 140, y0: 200, K: 50 }, avance: { X0: 110, PX: 300, y0: 140, K: 50 },
+  phase: { X0: 110, PX: 300, y0: 160, K: 58 }, retard: { X0: 110, PX: 300, y0: 92, K: 34 },
+}[vue];
+const X = x => G.X0 + x * G.PX;
+const Y = (x, t) => G.y0 - G.K * y(x, t);
+const HAUT_VIBREUR = G.y0 + G.K + 16;              // dessus du boîtier du vibreur
+
+/* ── Le milieu, peint « pour de vrai » : une corde de chanvre éclairée par le haut, avec son ombre portée. ── */
+function peindreCorde(ctx, t, w = 5.5) {
+  const pts = []; for (let i = 0; i <= 260; i++) { const x = L * i / 260; pts.push([X(x), Y(x, t)]); }
+  const chemin = (dx, dy) => { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px + dx, py + dy) : ctx.moveTo(px + dx, py + dy))); };
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  chemin(2, 6); ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = w + 2; ctx.stroke();            // ombre sur le tableau (pour l’œil)
+  chemin(0, 1); ctx.strokeStyle = '#6b4521'; ctx.lineWidth = w; ctx.stroke();                       // bord dans l’ombre
+  chemin(0, -.4); ctx.strokeStyle = '#c99a5b'; ctx.lineWidth = w - 1.8; ctx.stroke();               // le corps de la corde
+  chemin(0, 0); ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(92,58,26,.55)'; ctx.lineWidth = w - 2.4; ctx.stroke(); ctx.setLineDash([]);   // la torsade
+  chemin(0, -w * .3); ctx.strokeStyle = 'rgba(255,238,205,.78)'; ctx.lineWidth = 1.1; ctx.stroke();  // reflet sur le dessus
+  ctx.restore();
+}
+/* Un morceau de corde surligné (le motif colorié de la vue « lambda »), par-dessus la corde peinte. */
+function surlignerMotif(ctx, t, xa, xb) {
+  ctx.save(); ctx.lineCap = 'round'; ctx.beginPath();
+  for (let i = 0; i <= 80; i++) { const x = xa + (xb - xa) * i / 80, px = X(x), py = Y(x, t); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+  ctx.strokeStyle = 'rgba(250,204,21,.55)'; ctx.lineWidth = 11; ctx.stroke(); ctx.restore();
+}
+/* Une perle peinte attachée à la corde (le point M en rouge, P en violet). */
+function perle(ctx, x, yb, r, teinte) {
+  const c = teinte === 'violet' ? ['#ede9fe', '#8b5cf6', '#3b1d7a'] : ['#ffd5cc', '#ef4444', '#7f1d1d'];
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 2, yb + 5, r, r * .7, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(x - r * .35, yb - r * .4, r * .1, x, yb, r);
+  g.addColorStop(0, c[0]); g.addColorStop(.45, c[1]); g.addColorStop(1, c[2]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, yb, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.ellipse(x - r * .38, yb - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+/* Le vibreur, dessiné comme un objet : boîtier métallique, haut-parleur, voyant, tige verticale qui tient la corde en S. */
+function rr(ctx, x, yy, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, yy, w, h, r); else ctx.rect(x, yy, w, h); }
+function peindreVibreur(ctx, t) {
+  const xs = X(0), ys = G.y0 - G.K * yS(t), haut = HAUT_VIBREUR, bx = xs - 64, bw = 76, bh = 44;
+  const allume = t > 0 && !(SECOUSSE && t >= T);
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; rr(ctx, bx + 4, haut + 6, bw, bh, 7); ctx.fill();
+  const g = ctx.createLinearGradient(0, haut, 0, haut + bh);
+  g.addColorStop(0, '#9aa6b2'); g.addColorStop(.45, '#5d6873'); g.addColorStop(1, '#2b3239');
+  ctx.fillStyle = g; rr(ctx, bx, haut, bw, bh, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1; ctx.stroke();
+  const cx = bx + 24, cy = haut + bh / 2, hp = ctx.createRadialGradient(cx - 3, cy - 3, 1, cx, cy, 13);
+  hp.addColorStop(0, '#59636e'); hp.addColorStop(.7, '#15191d'); hp.addColorStop(1, '#a9b4bf');
+  ctx.fillStyle = hp; ctx.beginPath(); ctx.arc(cx, cy, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = allume ? '#4ade80' : '#334155'; ctx.beginPath(); ctx.arc(bx + bw - 13, haut + 11, 3.2, 0, Math.PI * 2); ctx.fill();
+  if (allume) { ctx.fillStyle = 'rgba(74,222,128,.25)'; ctx.beginPath(); ctx.arc(bx + bw - 13, haut + 11, 6.5, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = '#1f252b'; ctx.fillRect(xs - 6, haut - 4, 12, 5);                     // le guide de la tige
+  const tg = ctx.createLinearGradient(xs - 2.5, 0, xs + 2.5, 0);
+  tg.addColorStop(0, '#6b7280'); tg.addColorStop(.5, '#f1f5f9'); tg.addColorStop(1, '#6b7280');
+  ctx.fillStyle = tg; ctx.fillRect(xs - 2.2, ys, 4.4, haut - ys);                        // la tige
+  ctx.fillStyle = '#22282e'; rr(ctx, xs - 5, ys - 5, 10, 10, 2.5); ctx.fill();         // la pince qui tient la corde
+  ctx.restore();
+}
+
+/* ── Morceaux à la craie communs ── */
+function montage(c) {
+  c.ligne(X(0), G.y0, X(L), G.y0, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 6] });
+  c.texte('S', X(0) - 12, G.y0 + 6, { couleur: 'cyan', align: 'right' });
+  c.texte('vibreur', X(0) - 26, HAUT_VIBREUR + 62, { couleur: 'faible', align: 'center', taille: 14 });
+  c.repere('vibreur', X(0) - 68, HAUT_VIBREUR - 6, 84, 56, 'le vibreur');
+}
+function milieu(c, avecVibreur = true) {
+  c.direct(() => { if (avecVibreur) peindreVibreur(c.ctx, S.t); peindreCorde(c.ctx, S.t, vue === 'double' ? 4.5 : 5.5); });
+}
+function reperesSource(c) {
+  c.direct(() => { const ys = G.y0 - G.K * yS(S.t); c.repere('source', X(0) - 16, Math.min(ys, G.y0) - 16, 32, Math.abs(ys - G.y0) + 32, 'la source S'); });
+}
+function heure(c) { c.direct(() => c.texte(`t = ${ft(S.t)} s`, 740, 26, { couleur: 'jaune', align: 'right' })); }
+/* Un point de la corde (perle) avec son nom au-dessus ; flèche verte s’il monte, rose s’il descend. */
+function pointCorde(c, x, nom, teinte, fleche = false) {
+  const yb = Y(x, S.t);
+  c.ligne(X(x), G.y0 - G.K - 6, X(x), G.y0 + G.K + 6, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
+  perle(c.ctx, X(x), yb, 7, teinte);
+  c.texte(nom, X(x), yb - 13, { couleur: teinte === 'violet' ? 'violet' : 'rouge', align: 'center', taille: 17 });
+  const s = montee(x, S.t);
+  if (fleche && Math.abs(s) > 0.3) c.fleche(X(x) + 14, yb, X(x) + 14, yb - Math.sign(s) * 22, { couleur: s > 0 ? 'vert' : 'rose', largeur: 2, tete: 7 });
+  c.repere(nom === 'M' ? 'point_m' : 'point_p', X(x) - 16, G.y0 - G.K - 14, 32, 2 * G.K + 28, nom === 'M' ? 'le point M' : 'le point P');
+}
+/* Front de l’onde : flèche jaune sous la corde tant qu’il est sur la corde. */
+function front(c, yHaut, yBas, avecTexte = true) {
+  const xf = V * S.t;
+  if (S.t <= 0 || xf >= L) return;
+  c.fleche(X(xf), yBas, X(xf), yHaut, { couleur: 'jaune', largeur: 1.8, tete: 8 });
+  if (avecTexte && xf > 0.15) c.texte('front', X(xf), yBas + 16, { couleur: 'jaune', align: 'center', taille: 15 });
+  c.repere('front', X(xf) - 14, yHaut - 6, 28, yBas - yHaut + 26, 'le front de l’onde');
+}
+/* Positions des crêtes (phase T/4) ou des creux (phase 3T/4) présents sur la corde à l’instant t. */
+function sur(t, phase) {
+  const out = [], xmax = Math.min(L, V * t) + 1e-9;
+  if (SECOUSSE && t > T) return out;
+  for (let k = 0; ; k++) { const x = V * (t - phase - k * T); if (x < -1e-9) break; if (x <= xmax) out.push(Math.max(0, x)); }
+  return out.sort((a, b) => a - b);
+}
+const proche = (liste, cible, eviter = []) => liste.filter(x => eviter.every(e => Math.abs(x - e) > 0.15)).sort((a, b) => Math.abs(a - cible) - Math.abs(b - cible))[0];
+/* Crête, creux, amplitude : nommés à la craie quand la scène est figée ; toujours pointables. */
+function creteCreux(c, cible, eviter, ecrire) {
+  const t = S.t, xc = proche(sur(t, T / 4), cible, eviter), xq = xc == null ? null : proche(sur(t, 3 * T / 4), xc + LAMBDA / 2, eviter);
+  if (xc != null) {
+    c.repere('crete', X(xc) - 22, G.y0 - G.K - 24, 44, 34, 'une crête');
+    if (ecrire) c.texte('crête', X(xc), G.y0 - G.K - 12, { couleur: 'jaune', align: 'center', taille: 16 });
+  }
+  if (xq != null) {
+    c.repere('creux', X(xq) - 22, G.y0 + G.K - 10, 44, 34, 'un creux');
+    if (ecrire) c.texte('creux', X(xq), G.y0 + G.K + 20, { couleur: 'rose', align: 'center', taille: 16 });
+  }
+  if (xc != null) {
+    const xa = X(L) + 16;
+    c.repere('amplitude', xa - 12, G.y0 - G.K - 6, 34, G.K + 12, 'l’amplitude');
+    if (ecrire) {
+      c.ligne(X(Math.min(L, xc)) + 8, G.y0 - G.K, xa + 6, G.y0 - G.K, { couleur: 'tresfaible', largeur: 1, pointille: [3, 4] });
+      c.cote(xa, G.y0, xa, G.y0 - G.K, '', { couleur: 'jaune' });
+      c.texte('A', xa + 9, G.y0 - G.K / 2 + 6, { couleur: 'jaune', taille: 16 });
+    }
+  }
+}
+/* Un chronomètre à la craie : l’aiguille fait un tour par période. */
+function cadranChrono(c, cx, cy, r) {
+  c.cercle(cx, cy, r, { couleur: 'blanc', largeur: 2 });
+  c.ligne(cx, cy - r, cx, cy - r - 7, { couleur: 'blanc', largeur: 2.6 });
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; c.ligne(cx + (r - 5) * Math.sin(a), cy - (r - 5) * Math.cos(a), cx + r * Math.sin(a), cy - r * Math.cos(a), { couleur: 'faible', largeur: 1.4, duree: .04 }); }
+  c.repere('chrono', cx - r - 6, cy - r - 12, 2 * r + 12, 2 * r + 18, 'le chronomètre');
+}
+function aiguille(c, cx, cy, r, val) {
+  const a = 2 * Math.PI * val / T;
+  c.ligne(cx, cy, cx + (r - 6) * Math.sin(a), cy - (r - 6) * Math.cos(a), { couleur: 'jaune', largeur: 2.2 });
+  c.point(cx, cy, 2.5, 'jaune');
+}
+/* Axe du temps : graduations toutes les 0,5 s, nombres écrits sous la courbe (jamais sur elle). */
+function axeTemps(c, ox, oy, larg, tmax, haut, nom, yNombres) {
+  const grad = []; for (let g = 0.5; g <= tmax + 1e-9; g += 0.5) grad.push([g / tmax, null]);
+  c.axe(ox, oy, ox + larg, oy, grad);
+  c.axe(ox, oy + 8, ox, oy - haut, [], { couleur: 'faible' });
+  if (yNombres != null) {
+    c.texte('0', ox, yNombres, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
+    for (const [f] of grad) c.texte(fn(f * tmax), ox + f * larg, yNombres, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
+    c.texte('t (s)', ox + larg + 16, yNombres, { couleur: 'jaune', taille: 15 });
+  }
+  if (nom) c.texte(nom, ox + 8, oy - haut + 8, { couleur: 'faible', taille: 15 });
+  return tt => ox + tt / tmax * larg;
+}
+function courbeTemps(c, Tx, oy, k, f, t0, t1, couleur) {
+  if (t1 <= t0) return;
+  c.courbe(u => { const tt = t0 + u * (t1 - t0); return [Tx(tt), oy - k * f(tt)]; }, 300, { couleur, largeur: 2.4 });
+}
+/* Une règle à la craie sous la corde, graduée tous les 0,1 m, nombres tous les 0,5 m. */
+function regle(c, yr) {
+  c.rect(X(0) - 6, yr, X(L) - X(0) + 12, 22, { couleur: 'blanc', arrondi: 3, largeur: 1.8, fond: 'blanc', fondAlpha: .05 });
+  for (let k = 0; k <= 20; k++) { const x = X(k * 0.1), h = k % 5 === 0 ? 11 : 6; c.ligne(x, yr, x, yr + h, { couleur: 'faible', largeur: 1.2, duree: .02 }); }
+  for (let k = 0; k <= 4; k++) c.texte(fn(k * 0.5), X(k * 0.5), yr + 40, { couleur: 'faible', taille: 14, align: 'center', duree: .1 });
+  c.texte('x (m)', X(L) + 12, yr + 17, { couleur: 'jaune', taille: 15 });
+  c.repere('regle', X(0) - 8, yr - 4, X(L) - X(0) + 16, 30, 'la règle');
+}
+const fige = () => !S.running && S.t > 0;
+
+/* ── Les huit vues ── */
+const dessins = {
+  secousse(c) { vueCorde(c, 'Une seule secousse : la source fait un aller-retour, puis s’arrête.'); },
+  vibreur(c) { vueCorde(c, 'Le vibreur ne s’arrête pas : l’onde non plus.'); },
+
+  periode(c) {
+    milieu(c); montage(c); reperesSource(c); heure(c);
+    const cx = 500, cy = 205, r = 22; cadranChrono(c, cx, cy, r);
+    c.texte('Glisse M le long de la corde, puis rejoue.', 150, 244, { couleur: 'faible', taille: 14 });
+    const oy = 335, k2 = 40, Tx = axeTemps(c, 110, oy, 580, ARRET, 56, 'y_M', 396);
+    c.repere('courbe_ym', 110, oy - k2 - 8, 580, 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
+    c.direct(() => {
+      const t = S.t, tau = S.xM / V, t0 = tau + T / 4, val = t < t0 ? 0 : Math.min(T, t - t0);
+      pointCorde(c, S.xM, 'M', 'rouge', true);
+      aiguille(c, cx, cy, r, val);
+      c.texte(`chrono : ${fr(val)} s${t >= t0 + T - 1e-6 ? '  (arrêté)' : ''}`, cx + 32, cy - 4, { couleur: 'jaune', taille: 16 });
+      const n = t < t0 ? 0 : Math.min(2, Math.floor((t - t0) / T + 1e-6));
+      c.texte(t >= t0 + 1 - 1e-6 ? `en 1 s : ${n} allers-retours` : `allers-retours de M : ${n}`, cx + 32, cy + 20, { couleur: 'faible', taille: 16 });
+      courbeTemps(c, Tx, oy, k2, tt => y(S.xM, tt), 0, Math.min(t, ARRET), 'rouge');
+      if (t >= t0 + T - 1e-6) {
+        const a = Tx(t0), b = Tx(t0 + T), yc = oy - k2 - 12;
+        c.ligne(a, oy - k2, a, yc, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] }).ligne(b, oy - k2, b, yc, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
+        c.cote(a, yc, b, yc, `T = ${fr(T)} s`, { couleur: 'jaune', taille: 16 });
+      }
+    });
+  },
+
+  lambda(c) {
+    milieu(c); montage(c); reperesSource(c); heure(c);
+    const yr = 292; regle(c, yr);
+    c.direct(() => {
+      const t = S.t; front(c, G.y0 + 10, G.y0 + G.K + 30, false);
+      if (t < ARRET - 1e-6) return;
+      // La photo : un motif colorié de crête à crête, la règle dessous.
+      const cr = sur(t, T / 4), xa = proche(cr, 0.5), xb = xa + LAMBDA;
+      surlignerMotif(c.ctx, t, xa, xb);
+      c.texte(`Photo de la corde à t = ${fm(t)} s`, 110, 34, { couleur: 'cyan', taille: 17 });
+      for (const x of [xa, xb]) c.ligne(X(x), G.y0 - G.K + 4, X(x), yr, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
+      c.cote(X(xa), yr - 12, X(xb), yr - 12, `λ = ${fr(LAMBDA)} m`, { couleur: 'jaune', taille: 17 });
+      c.repere('motif', X(xa) - 4, G.y0 - G.K - 8, X(xb) - X(xa) + 8, 2 * G.K + 16, 'un motif, de crête à crête');
+      creteCreux(c, 1.5, [xa, xb], true);
+      c.texte('Le même motif se répète tout le long de la corde.', 380, 372, { couleur: 'vert', align: 'center', taille: 16 });
+    });
+  },
+
+  double(c) {
+    // À gauche : la photo de la corde, y en fonction de x (axe en m). À droite : le film du point M, y en fonction de t (axe en s).
+    const y0 = G.y0, K = G.K, ligneNb = y0 + K + 20;
+    c.texte('Photo de la corde : y en fonction de x', 40, 64, { couleur: 'cyan', taille: 16 });
+    c.texte('Film du point M : y_M en fonction de t', 418, 64, { couleur: 'rouge', taille: 16 });
+    c.repere('vue_photo', 34, 46, 360, 250, 'la photo de la corde (axe x en m)');
+    c.repere('vue_film', 412, 46, 344, 250, 'le film du point M (axe t en s)');
+    c.direct(() => peindreCorde(c.ctx, S.t, 4.5));
+    const grad = []; for (let k = 1; k <= 4; k++) grad.push([k / 4, null]);
+    c.axe(X(0), y0, X(L) + 14, y0, grad.map(([f]) => [f * (X(L) - X(0)) / (X(L) + 14 - X(0)), null]));
+    c.axe(X(0), y0 + K + 6, X(0), y0 - K - 22, [], { couleur: 'faible' });
+    c.texte('y', X(0) - 8, y0 - K - 14, { couleur: 'faible', taille: 15, align: 'right' });
+    for (let k = 0; k <= 4; k++) c.texte(fn(k * 0.5), X(k * 0.5), ligneNb, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
+    c.texte('x (m)', X(L) + 18, y0 + 5, { couleur: 'jaune', taille: 15 });
+    c.texte('S', X(0) - 10, y0 + 18, { couleur: 'cyan', align: 'right', taille: 15 });
+    const Tx = axeTemps(c, 425, y0, 279, 3, K + 22, 'y_M', ligneNb);
+    c.repere('courbe_ym', 425, y0 - K - 8, 279, 2 * K + 16, 'le film du point M (son élongation au cours du temps)');
+    heure(c);
+    c.direct(() => {
+      const t = S.t, tau = S.xM / V;
+      pointCorde(c, S.xM, 'M', 'rouge');
+      courbeTemps(c, Tx, y0, K, tt => y(S.xM, tt), 0, Math.min(t, 3), 'rouge');
+      front(c, y0 + 8, y0 + K + 4, false);
+      if (t < ARRET - 1e-6) return;
+      const cr = sur(t, T / 4), xa = proche(cr.filter(x => x + LAMBDA <= L + 1e-9), 0.75), yc = y0 - K - 14;
+      if (xa != null) {
+        const xb = xa + LAMBDA;
+        for (const x of [xa, xb]) c.ligne(X(x), y0 - K + 2, X(x), yc, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
+        c.cote(X(xa), yc, X(xb), yc, `λ = ${fr(LAMBDA)} m`, { couleur: 'jaune', taille: 16 });
+        c.repere('crete', X(xa) - 18, yc - 22, 36, K + 30, 'une crête de la photo');
+      }
+      const ta = tau + T / 4, tb = ta + T;
+      if (tb <= t + 1e-9) {
+        for (const tt of [ta, tb]) c.ligne(Tx(tt), y0 - K + 2, Tx(tt), yc, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
+        c.cote(Tx(ta), yc, Tx(tb), yc, `T = ${fr(T)} s`, { couleur: 'jaune', taille: 16 });
+      }
+      c.texte('Même dessin, deux axes : une distance donne λ, un temps donne T.', 380, 340, { couleur: 'vert', align: 'center', taille: 17 });
+    });
+  },
+
+  avance(c) {
+    milieu(c); montage(c); reperesSource(c); heure(c);
+    const yr = 280; regle(c, yr);
+    const cx = 150, cy = 380, r = 22; cadranChrono(c, cx, cy, r);
+    c.direct(() => {
+      const t = S.t, xf = Math.min(L, V * t);
+      if (t > 0 && V * t < L) {
+        c.ligne(X(xf), G.y0 - G.K - 8, X(xf), yr, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
+        c.texte('front', X(xf), G.y0 - G.K - 14, { couleur: 'jaune', align: 'center', taille: 15 });
+        c.repere('front', X(xf) - 16, G.y0 - G.K - 30, 32, yr - G.y0 + G.K + 30, 'le front de l’onde');
+      }
+      if (t > 0) c.cote(X(0), yr - 18, X(xf), yr - 18, xf > 0.12 ? `${fr(xf)} m` : '', { couleur: 'jaune', taille: 15 });
+      for (let k = 1; k <= 4; k++) if (V * t >= k * LAMBDA - 1e-6) c.texte(`${k} λ`, X(k * LAMBDA), yr + 62, { couleur: 'jaune', align: 'center', taille: 16 });
+      aiguille(c, cx, cy, r, t);
+      c.texte(`chrono : ${fr(t)} s`, cx + 34, cy - 4, { couleur: 'jaune', taille: 16 });
+      c.texte(`soit ${fn(t / T)} T`, cx + 34, cy + 20, { couleur: 'faible', taille: 16 });
+      if (t >= T - 1e-6) c.texte(`En 1 T (${fr(T)} s), le front avance de 1 λ (${fr(LAMBDA)} m).`, 360, 376, { couleur: 'vert', taille: 16 });
+      if (t >= 2 * T - 1e-6) c.texte(`En 2 T (${fr(2 * T)} s), il avance de 2 λ (${fr(2 * LAMBDA)} m).`, 360, 402, { couleur: 'vert', taille: 16 });
+    });
+  },
+
+  phase(c) {
+    milieu(c); montage(c); reperesSource(c); heure(c);
+    c.texte('Glisse P le long de la corde, puis rejoue.', 430, 340, { couleur: 'faible', align: 'center', taille: 14 });
+    c.direct(() => {
+      const t = S.t, d = Math.abs(S.xP - S.xM), q = d / LAMBDA;
+      front(c, G.y0 + 10, G.y0 + G.K + 30, false);
+      pointCorde(c, S.xM, 'M', 'rouge', true); pointCorde(c, S.xP, 'P', 'violet', true);
+      const yc = G.y0 + G.K + 42;
+      c.cote(X(Math.min(S.xM, S.xP)), yc, X(Math.max(S.xM, S.xP)), yc, `MP = ${fm(d)} m`, { couleur: 'jaune', dessous: true, taille: 16 });
+      c.texte(`MP / λ = ${fm(d)} / ${fr(LAMBDA)} = ${fn(q)}`, 430, 312, { couleur: 'vert', align: 'center', taille: 18 });
+      // Figé avec M en haut : les creux qui suivent M sont numérotés 1, 2, 3 (0,5 λ ; 1,5 λ ; 2,5 λ de M).
+      if (fige() && t >= S.xM / V && Math.sin(2 * Math.PI * (t - S.xM / V) / T) > 0.97) {
+        const creux = sur(t, 3 * T / 4).filter(x => x > S.xM).slice(0, 3);
+        creux.forEach((x, i) => c.texte(String(i + 1), X(x), G.y0 + G.K + 24, { couleur: 'rose', align: 'center', taille: 17 }));
+        if (creux.length) c.repere('creux', X(creux[0]) - 18, G.y0 + G.K - 14, X(creux[creux.length - 1]) - X(creux[0]) + 36, 44, 'les creux après M, numérotés');
+      }
+    });
+  },
+
+  retard(c) {
+    milieu(c); montage(c); reperesSource(c); heure(c);
+    const oy1 = 250, oy2 = 350, k2 = 30, tmax = 3;
+    const Tx = axeTemps(c, 110, oy1, 570, tmax, 44, 'y_S', null);
+    axeTemps(c, 110, oy2, 570, tmax, 44, 'y_M', 398);
+    c.repere('courbe_ys', 110, oy1 - k2 - 8, 570, 2 * k2 + 16, 'le film de la source S (son élongation au cours du temps)');
+    c.repere('courbe_ym', 110, oy2 - k2 - 8, 570, 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
+    c.direct(() => {
+      const t = S.t, tau = S.xM / V;
+      pointCorde(c, S.xM, 'M', 'rouge');
+      courbeTemps(c, Tx, oy1, k2, yS, 0, Math.min(t, tmax), 'cyan');
+      courbeTemps(c, Tx, oy2, k2, tt => yS(tt - tau), 0, Math.min(t, tmax), 'rouge');
+      c.texte(`τ = SM / v = ${fm(S.xM)} / ${fn(V)} = ${fm(tau)} s`, 250, 162, { couleur: 'vert', taille: 17 });
+      c.texte(`SM = ${fn(S.xM / LAMBDA)} λ   donc   τ = ${fn(tau / T)} T`, 250, 188, { couleur: 'vert', taille: 17 });
+      c.texte('y_M(t) = y_S(t − τ)', 545, 188, { couleur: 'vert', taille: 17 });
+      if (t >= tau) {
+        c.ligne(Tx(tau), oy1 - k2 - 4, Tx(tau), oy2 + k2 + 4, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
+        c.cote(Tx(0), 300, Tx(tau), 300, `τ = ${fm(tau)} s`, { couleur: 'jaune', taille: 16 });
+        c.repere('retard_tau', Tx(0), 284, Tx(tau) - Tx(0), 24, 'le retard τ');
+      }
+    });
+  },
+};
+/* Vues « secousse » et « vibreur » : la corde, le vibreur, le point M, le sens de propagation. */
+function vueCorde(c, phrase) {
+  milieu(c); montage(c); reperesSource(c); heure(c);
+  c.fleche(X(1.3), 70, X(1.8), 70, { couleur: 'vert' }).texte('sens de propagation', X(1.55), 58, { couleur: 'vert', align: 'center', taille: 15 });
+  c.texte(phrase, 420, 350, { couleur: 'vert', align: 'center', taille: 16 });
+  c.direct(() => {
+    front(c, G.y0 + 10, G.y0 + G.K + 30);
+    pointCorde(c, S.xM, 'M', 'rouge');
+    if (!SECOUSSE) creteCreux(c, 1.2, [S.xM, V * S.t], fige() && S.t >= 0.75);
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(17); dessins[vue](c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(ARRET, S.t + dt * LENT);
+  if (S.jusqua != null && S.t >= S.jusqua) {             // instant clé atteint : arrêt sur image
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.nom ? MOTIFS[S.nom]() : `t = ${fr(S.t)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(3), moment: S.nom }); pont.emettre();
+    return true;
+  }
+  if (S.t >= ARRET) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), MESSAGES[vue], 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }   // le tuteur suit la scène en direct
+  return true;
+};
+
+/*
+ * Les instants clés, calculés depuis la physique et recalculés quand M ou P bougent. Le tuteur les reçoit dans
+ * l’état (`moments`) et les vise avec `play_until` : la scène rejoue et se fige à l’instant qu’il décrit.
+ * « m_et_p_en_haut » et « m_haut_p_bas » sont le même instant : le premier où M est en haut alors que l’onde
+ * a atteint M et P depuis au moins T/4 ; ce que fait P à cet instant dépend de MP (dit dans la bulle et l’état).
+ */
+function hautM() {
+  const tR = Math.max(S.xM, S.xP) / V + T / 4 - 1e-6, base = S.xM / V + T / 4;
+  return base + Math.max(0, Math.ceil((tR - base) / T)) * T;
+}
+const LISTE = {
+  secousse: ['vibreur_demarre', 'front_atteint_m', 'm_premier_sommet', 'm_revenu', 'fin'],
+  vibreur: ['vibreur_demarre', 'front_atteint_m', 'm_premier_sommet', 'm_meme_etat', 'front_a_une_lambda', 'front_a_deux_lambda', 'photo', 'fin'],
+  periode: ['vibreur_demarre', 'front_atteint_m', 'm_premier_sommet', 'm_meme_etat', 'm_une_seconde', 'fin'],
+  lambda: ['vibreur_demarre', 'front_a_une_lambda', 'front_a_deux_lambda', 'photo', 'fin'],
+  double: ['vibreur_demarre', 'front_atteint_m', 'm_premier_sommet', 'm_meme_etat', 'photo', 'fin'],
+  avance: ['vibreur_demarre', 'front_a_une_lambda', 'front_a_deux_lambda', 'front_a_deux_lambda_et_demi', 'fin'],
+  phase: ['vibreur_demarre', 'front_atteint_m', 'front_atteint_p', 'm_et_p_en_haut', 'm_haut_p_bas', 'fin'],
+  retard: ['vibreur_demarre', 'front_atteint_m', 'm_premier_sommet', 'm_meme_etat', 'fin'],
+}[vue];
+function moments() {
+  const tM = S.xM / V, tous = {
+    vibreur_demarre: T / 8, front_atteint_m: tM, m_premier_sommet: tM + T / 4, m_meme_etat: tM + T / 4 + T,
+    m_une_seconde: tM + T / 4 + 1, m_revenu: tM + T + 0.05,
+    front_a_une_lambda: LAMBDA / V, front_a_deux_lambda: 2 * LAMBDA / V, front_a_deux_lambda_et_demi: 2.5 * LAMBDA / V,
+    front_atteint_p: S.xP / V, m_et_p_en_haut: hautM(), m_haut_p_bas: hautM(), photo: PHOTO, fin: ARRET,
+  };
+  const out = {}; for (const k of LISTE) out[k] = +Math.min(ARRET, tous[k]).toFixed(3);
+  return out;
+}
+function etatP() {
+  const s = y(S.xP, S.t);
+  return s > 0.97 ? 'en haut aussi : M et P vibrent en phase' : s < -0.97 ? 'en bas : M et P vibrent en opposition de phase' : `ni en haut ni en bas (${montee(S.xP, S.t) > 0 ? 'il monte' : 'il descend'}) : ni en phase ni en opposition`;
+}
+const MOTIFS = {
+  vibreur_demarre: () => 'le vibreur démarre, S monte',
+  front_atteint_m: () => `le front arrive en M (t = ${fm(S.xM / V)} s) ; M va commencer à bouger`,
+  m_premier_sommet: () => 'M est au plus haut pour la première fois',
+  m_meme_etat: () => 'une période plus tard, M est de nouveau au plus haut',
+  m_une_seconde: () => 'une seconde après le premier sommet : M a fait 2 allers-retours',
+  m_revenu: () => 'M est revenu au repos : la secousse est passée',
+  front_a_une_lambda: () => `après une période (${fr(T)} s), le front est à λ = ${fr(LAMBDA)} m de S`,
+  front_a_deux_lambda: () => `après deux périodes (${fr(2 * T)} s), le front est à 2 λ = ${fr(2 * LAMBDA)} m de S`,
+  front_a_deux_lambda_et_demi: () => `le front est à 2,5 λ = ${fr(2.5 * LAMBDA)} m de S, à t = 2,5 T = ${fr(2.5 * T)} s`,
+  front_atteint_p: () => 'le front arrive en P',
+  m_et_p_en_haut: () => `M est en haut ; P est ${etatP()}`,
+  m_haut_p_bas: () => `M est en haut ; P est ${etatP()}`,
+  photo: () => `photo de la corde à t = ${fm(PHOTO)} s`,
+  fin: () => 'fin',
+};
+/* Rejoue (ou continue) jusqu’à un instant clé, puis se fige. */
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = 0;              // l’instant est passé : on rejoue depuis le début
+  S.jusqua = cible >= ARRET - 1e-6 ? null : Math.max(0.01, cible); S.nom = nom;
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: cible }); pont.emettre();
+}
+
+/* Ce que l’élève voit à cet instant, en mots : le tuteur « voit » la simulation par cette phrase. */
+function etatDuPoint(x, t) {
+  const u = t - x / V;
+  if (u <= 1e-9) return `au repos : l’onde ne l’a pas encore atteint (elle l’atteindra à t = ${fm(x / V)} s)`;
+  if (SECOUSSE && u >= T) return 'revenu au repos, à sa place : la secousse est passée';
+  const s = y(x, t), el = `élongation ${signe(String(Math.round(s * 100) || 0))} % de l’amplitude`;
+  if (s > 0.97) return `en haut, sur une crête (${el})`;
+  if (s < -0.97) return `en bas, dans un creux (${el})`;
+  return `${montee(x, t) > 0 ? 'en train de monter' : 'en train de descendre'} (${el})`;
+}
+function phraseFront(t) {
+  const xf = V * t;
+  if (t <= 0) return 'La corde est au repos ; le vibreur n’a pas encore démarré.';
+  if (SECOUSSE) {
+    const xq = V * (t - T);
+    if (xq >= L) return 'La secousse a quitté la corde : toute la corde est de nouveau au repos.';
+    return `${xf < L ? `Front à x = ${fm(xf)} m` : 'Le front a dépassé le bout de la corde (pas de réflexion)'}${xq > 0 ? `, queue à x = ${fm(xq)} m ; le vibreur est arrêté` : ' ; le vibreur fait encore sa seule secousse'}.`;
+  }
+  return xf < L ? `Front à x = ${fm(xf)} m de S (${fn(xf / LAMBDA)} λ) ; à droite du front, la corde est encore au repos.`
+    : 'L’onde occupe toute la corde (le front a dépassé x = 2 m ; pas de réflexion) ; le vibreur continue.';
+}
+function ceQuiSeVoit() {
+  const t = S.t, m = [`Vue « ${vue} ». t = ${ft(t)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin de la scène)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`, phraseFront(t)];
+  if (vue !== 'avance' && vue !== 'lambda') m.push(`Point M (rouge, x = ${fm(S.xM)} m = ${fn(S.xM / LAMBDA)} λ) : ${etatDuPoint(S.xM, t)}.`);
+  if (vue === 'vibreur' && fige() && t >= 0.75) m.push('Crête, creux et amplitude A sont écrits à la craie sur la corde figée.');
+  if (vue === 'periode') {
+    const t0 = S.xM / V + T / 4, val = t < t0 ? 0 : Math.min(T, t - t0), n = t < t0 ? 0 : Math.min(2, Math.floor((t - t0) / T + 1e-6));
+    m.push(t < t0 ? 'Chrono à 0,00 s : il démarrera quand M sera au plus haut.' : `Chrono : ${fr(val)} s${val >= T - 1e-6 ? ' (arrêté : M est revenu au même état, en allant dans le même sens ; T = 0,50 s)' : ''}.`);
+    m.push(`${t >= t0 + 1 - 1e-6 ? 'En 1 s' : 'Depuis le premier sommet'}, M a fait ${n} aller${n > 1 ? 's' : ''}-retour${n > 1 ? 's' : ''}. Dessous, y_M(t) se trace en rouge${t >= t0 + T - 1e-6 ? ', avec la cote T = 0,50 s entre deux crêtes' : ''}.`);
+  }
+  if (vue === 'lambda') m.push(t >= ARRET - 1e-6 ? `Photo figée à t = ${fm(t)} s : 4 motifs sur la corde ; un motif colorié de x = 0,5 m à x = 1 m, la règle dessous indique λ = 0,50 m de crête à crête ; crête, creux et amplitude A écrits.` : 'La corde se remplit ; la photo sera prise quand toute la corde vibre.');
+  if (vue === 'double') m.push(`À gauche, la photo de la corde (axe x en m) ; à droite, le film y_M(t) du point M (axe t en s), en rouge${t >= ARRET - 1e-6 ? ' ; cotes affichées : λ = 0,50 m sur la photo, T = 0,50 s sur le film ; même dessin, deux axes' : ''}.`);
+  if (vue === 'avance') {
+    m.push(`Chrono : ${fr(t)} s = ${fn(t / T)} T ; la règle indique le front à ${fr(Math.min(L, V * t))} m = ${fn(Math.min(L, V * t) / LAMBDA)} λ.`);
+    if (t >= T - 1e-6) m.push('Écrit : en 1 T (0,50 s), le front avance de 1 λ (0,50 m)' + (t >= 2 * T - 1e-6 ? ' ; en 2 T (1,00 s), il avance de 2 λ (1,00 m).' : '.'));
+  }
+  if (vue === 'phase') {
+    const d = Math.abs(S.xP - S.xM), q = d / LAMBDA, r = Math.abs(q - Math.round(q)) < 1e-6 ? 'entier : en phase' : Math.abs(q - Math.floor(q) - 0.5) < 1e-6 ? 'entier et demi : en opposition de phase' : 'ni entier ni entier et demi : ni en phase ni en opposition';
+    m.push(`Point P (violet, x = ${fm(S.xP)} m) : ${etatDuPoint(S.xP, t)}. MP = ${fm(d)} m, MP / λ = ${fn(q)} (${r}).`);
+  }
+  if (vue === 'retard') m.push(`Graphes : y_S(t) en cyan en haut, y_M(t) en rouge en bas${t >= S.xM / V ? `, décalée de τ = SM / v = ${fm(S.xM / V)} s (= ${fn(S.xM / V / T)} T, cote jaune)` : ' ; la courbe de M est encore plate, M n’a pas commencé à bouger'}.`);
+  return m.join(' ');
+}
+
+const MESSAGES = {
+  secousse: 'Une seule secousse : M a monté, descendu, puis il s’est arrêté.',
+  vibreur: 'Le vibreur ne s’arrête pas : M recommence sans cesse le même mouvement.',
+  periode: 'M revient au même état toutes les 0,50 s : c’est la période T.',
+  lambda: 'Sur la photo, le motif mesure 0,50 m : c’est la longueur d’onde λ.',
+  double: 'Même dessin, deux axes : la photo donne λ, le film donne T.',
+  avance: 'Pendant une période T, le front avance d’une longueur d’onde λ.',
+  phase: 'Compare MP à λ : glisse P et rejoue.',
+  retard: 'M refait le mouvement de S, avec le retard τ = SM / v. Glisse M et rejoue.',
+};
+function start() { S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start'); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= ARRET) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+/* Arrêt sur un instant précis : le tuteur montre la scène à la date qu’il explique. */
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = Math.min(ARRET, Math.max(0, t)); S.fait = S.t >= ARRET;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t)} s.`);
+  scene.sale = true; pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+/* M et P : de 0,25 à 1,75 m, au pas de 0,025 m (λ/20) ; P n’est jamais confondu avec M. */
+const borne = (v, pas) => +Math.min(1.75, Math.max(0.25, Math.round(v / pas) * pas)).toFixed(3);
+function setParameters(p, pas = 0.025) {
+  const ch = {};
+  if (p.x_m != null && Number.isFinite(+p.x_m)) { S.xM = borne(+p.x_m, pas); ch.x_m = S.xM; }
+  if (p.x_p != null && Number.isFinite(+p.x_p)) { S.xP = borne(+p.x_p, pas); ch.x_p = S.xP; }
+  if (Math.abs(S.xP - S.xM) < 1e-6) { S.xP = +(S.xP + (S.xP <= 1.5 ? 0.125 : -0.125)).toFixed(3); ch.x_p = S.xP; }
+  if (!Object.keys(ch).length) return;
+  scene.sale = true; pont.noter('set_parameters', ch); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < ARRET && !S.fait ? resume() : start()));
+
+/* Poignées : M se glisse (vues periode, retard) au pas de 0,05 m ; P (vue phase) au pas de λ/4 = 0,125 m. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, yy] = scene.local(px, py);
+    if (Math.abs(yy - G.y0) > G.K + 24) return null;
+    if (vue === 'phase') return Math.abs(x - X(S.xP)) < 24 ? 'P' : null;
+    if (vue === 'periode' || vue === 'retard') return Math.abs(x - X(S.xM)) < 24 ? 'M' : null;
+    return null;
+  },
+  bouger: (id, px) => { const [x] = scene.local(px, 0), v = (x - G.X0) / G.PX; setParameters(id === 'P' ? { x_p: v } : { x_m: v }, id === 'P' ? 0.125 : 0.05); },
+  lacher: () => start(),
+});
+
+const EXPLICATIONS = {
+  secousse: [{ repere: 'vibreur', texte: 'Le vibreur ne fait qu’une seule secousse.' }, { repere: 'point_m', texte: 'M monte, descend, puis s’arrête : comme au premier cours.' }],
+  vibreur: [{ repere: 'vibreur', texte: 'Le vibreur ne s’arrête pas.' }, { repere: 'point_m', texte: 'M recommence sans cesse le même mouvement.' }, { repere: 'crete', texte: 'Une crête : un point au plus haut.' }, { repere: 'creux', texte: 'Un creux : un point au plus bas.' }, { repere: 'amplitude', texte: 'L’amplitude : la hauteur maximale, depuis la position de repos.' }],
+  periode: [{ repere: 'point_m', texte: 'Le point M, en rouge.' }, { repere: 'chrono', texte: 'Le chrono part quand M est au plus haut, et s’arrête quand il y revient.' }, { repere: 'courbe_ym', texte: 'Le film de M : deux crêtes voisines sont séparées de T.' }],
+  lambda: [{ repere: 'motif', texte: 'Sur la photo, ce motif se répète le long de la corde.' }, { repere: 'regle', texte: 'La règle mesure le motif, de crête à crête : c’est λ.' }],
+  double: [{ repere: 'vue_photo', texte: 'À gauche, l’axe porte une distance : on lit λ.' }, { repere: 'vue_film', texte: 'À droite, l’axe porte un temps : on lit T.' }],
+  avance: [{ repere: 'chrono', texte: 'Le chrono part avec le vibreur.' }, { repere: 'front', texte: 'Le front avance le long de la règle.' }, { repere: 'regle', texte: 'Après une période, il est à une longueur d’onde de S.' }],
+  phase: [{ repere: 'point_m', texte: 'Le point M.' }, { repere: 'point_p', texte: 'Le point P : compare son mouvement à celui de M.' }],
+  retard: [{ repere: 'point_m', texte: 'M est à la distance SM de la source.' }, { repere: 'courbe_ys', texte: 'Le film de la source S.' }, { repere: 'courbe_ym', texte: 'Le film de M : la même courbe, en retard de τ.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_corde', version: '1.0', title: 'Corde et vibreur — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { x_m: '0.25..1.75 (position du point M, en m, pas de 0,025)', x_p: '0.25..1.75 (position du point P, en m, pas de 0,025 ; vue phase)' },
+    set_time: { time_s: `0..${ARRET} (arrêt sur cet instant)` },
+    play_until: { moment: LISTE.join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Corde tendue et vibreur : onde progressive périodique sinusoïdale, v = ${fn(V)} m/s, T = ${fr(T)} s, N = ${fn(N)} Hz, λ = ${fr(LAMBDA)} m ; corde de 0 à 2 m, sans amortissement ni réflexion. Vue « ${vue} ». ${MESSAGES[vue]}`,
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, time_s: +S.t.toFixed(3),
+    parameters: { x_m: S.xM, x_p: S.xP, v_m_s: V, T_s: T, N_hz: N, lambda_m: LAMBDA }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+// L’onde part d’elle-même une fois le montage écrit à la craie.
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

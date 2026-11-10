@@ -295,11 +295,13 @@ async def extract_full_document(
     }
 
 
-async def _correct_math_text_with_deepseek(raw_text: str, subject: str = "") -> str:
+async def _correct_math_text_with_deepseek(raw_text: str, subject: str = "", contexte: str = "") -> str:
     """
     Use DeepSeek to correct OCR errors using subject-specific prompt.
+    `contexte` (optional): what the text is about (slide, chapter, notation to use). It is placed before the raw
+    text, so the correction normalises symbols, units and notation the way that chapter writes them.
     """
-    if not raw_text or len(raw_text.strip()) < 10:
+    if not raw_text or len(raw_text.strip()) < (3 if contexte else 10):
         return raw_text
     
     headers = {
@@ -312,7 +314,9 @@ async def _correct_math_text_with_deepseek(raw_text: str, subject: str = "") -> 
         "messages": [
             {
                 "role": "user",
-                "content": CORRECTION_PROMPTS.get(_get_subject_key(subject), CORRECTION_PROMPTS["math"]) + raw_text + "\n\nTEXTE CORRIGÉ:"
+                "content": CORRECTION_PROMPTS.get(_get_subject_key(subject), CORRECTION_PROMPTS["math"])
+                + (f"CONTEXTE (prioritaire sur les règles ci-dessus) :\n{contexte}\n\nTEXTE OCR :\n" if contexte else "")
+                + raw_text + "\n\nTEXTE CORRIGÉ:"
             }
         ],
         "temperature": 0.1,
@@ -370,7 +374,7 @@ async def _correct_math_text_with_deepseek(raw_text: str, subject: str = "") -> 
             return raw_text
             
         corrected = message.get("content", "")
-        if corrected and isinstance(corrected, str) and len(corrected) > 10:
+        if corrected and isinstance(corrected, str) and len(corrected.strip()) > (0 if contexte else 10):
             logger.info(f"DeepSeek corrected OCR text ({len(raw_text)} → {len(corrected)} chars)")
             return corrected.strip()
         
@@ -390,6 +394,7 @@ async def extract_text_from_image(
     mime_type: str = "image/png",
     correct_math: bool = True,
     subject: str = "",
+    contexte: str = "",
 ) -> dict:
     """
     Extract text from an image using Mistral OCR + DeepSeek correction.
@@ -483,7 +488,7 @@ async def extract_text_from_image(
         # Step 2: Use DeepSeek to correct math/physics OCR errors
         if correct_math and raw_text:
             try:
-                corrected_text = await _correct_math_text_with_deepseek(raw_text, subject=subject)
+                corrected_text = await _correct_math_text_with_deepseek(raw_text, subject=subject, contexte=contexte)
                 return {
                     "text": corrected_text,
                     "markdown": corrected_text,  # Corrected text includes LaTeX
