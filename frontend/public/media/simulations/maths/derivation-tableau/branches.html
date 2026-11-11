@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Branches infinies — asymptotes et branches paraboliques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : un point M de la courbe part vers le bord, on lit la limite et on reconnaît l’asymptote ou la branche parabolique"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions), bloc branches infinies.
+ * Vues : ?vue=verticale | horizontale | oblique | oy | ox | direction | arbre.
+ * Dans les six premières vues, un point M de la courbe part vers le bord (param x_m, poignée M) ;
+ * le repère est à gauche (x ≤ ~450), les valeurs et les limites s’écrivent à droite (x ≥ 474).
+ * Moments nommés (play_until) : voir chaque vue ; `fin` = construction complète.
+ */
+const fr = MathsTableau.fr;
+const GEO = { x0: 52, y0: 64, w: 388, h: 282 };
+const RX = 474;
+const lisse = p => (1 - Math.cos(Math.PI * p)) / 2;
+const exact = (v, d = 2) => Math.abs(v - +v.toFixed(d)) < 1e-9;
+const cel = (v, d = 2) => (exact(v, d) ? '' : '≈ ') + fr(v, d);          // valeur d’une case du tableau
+const eg = (v, d = 2) => (exact(v, d) ? '= ' : '≈ ') + fr(v, d);         // « = 3 » ou « ≈ 1,67 »
+
+/* Les colonnes du tableau de valeurs : les abscisses relevées entre le départ et M, puis M (colonne jaune). */
+function colonnes(ech, depart, xm) {
+  const lo = Math.min(depart, xm) - 1e-9, hi = Math.max(depart, xm) + 1e-9, s = Math.sign(xm - depart) || 1;
+  return ech.filter(v => v >= lo && v <= hi && Math.abs(v - xm) > 1e-9).sort((a, b) => (a - b) * s);
+}
+/* Tableau de valeurs à la craie : T = { y, ih, lw, cw, rows }. */
+function tLigne(c, T, nCol) { c.ligne(RX - 4, T.y + 9, RX + T.lw + 6 + nCol * T.cw, T.y + 9, { couleur: 'faible', largeur: 1.2 }); }
+function tTitre(c, T, r) {
+  c.texte(T.rows[r], RX, T.y + r * T.ih, { couleur: 'blanc', taille: 15, max: T.lw - 6 });
+  c.ligne(RX + T.lw, T.y + r * T.ih - 18, RX + T.lw, T.y + r * T.ih + 9, { couleur: 'faible', largeur: 1.2, duree: .05 });
+}
+function tCase(c, T, r, k, s, couleur = 'blanc') { c.texte(s, RX + T.lw + 6 + (k + .5) * T.cw, T.y + r * T.ih, { couleur, taille: 15, align: 'center', max: T.cw - 4 }); }
+function tRepere(c, T, r, nCol, id, label) { c.repere(id, RX - 4, T.y + r * T.ih - 20, T.lw + 10 + nCol * T.cw, 28, label); }
+
+/* Le point M (jaune) ; s’il sort par le haut du repère, une flèche ↑ au bord. Renvoie [px, py] de la poignée. */
+function pointM(c, G, x, y, monte) {
+  const px = G.X(x);
+  if (y > G.ymax) {
+    c.fleche(px, G.y0 + 30, px, G.y0 + 4, { couleur: 'jaune', largeur: 2, duree: .01 });
+    c.texte('M', px + 26, G.y0 + 16, { couleur: 'jaune', taille: 17, duree: .01 });
+    return [px, G.y0 + 16];
+  }
+  const py = G.Y(y);
+  c.point(px, py, 5, 'jaune');
+  c.texte('M', monte ? px - 22 : px + 9, py - 9, { couleur: 'jaune', taille: 17, duree: .01 });
+  return [px, py];
+}
+function repereM(c, G, x, y) {
+  const py = y > G.ymax ? G.y0 + 16 : G.Y(y);
+  c.repere('point_m', G.X(x) - 14, py - 14, 28, 28, 'le point M de la courbe');
+}
+function poigneeM(OPT, f) {
+  return K => { const G = K.grille(OPT), x = K.P.x_m, y = f(x);
+    return [{ id: 'x_m', x: G.X(x), y: y > G.ymax ? G.y0 + 16 : G.Y(y), bouger: (px, py) => ({ x_m: G.inv(px, py)[0] }) }]; };
+}
+/* Droite passant par O de pente s, prolongée jusqu’au bord du repère. */
+function droiteO(c, G, s, o) { const xe = Math.min(G.xmax, G.ymax / s); c.ligne(G.X(0), G.Y(0), G.X(xe), G.Y(s * xe), o); return xe; }
+/* Segment vertical entre deux ordonnées (écart). */
+function segment(c, G, x, y1, y2, o) { c.ligne(G.X(x), G.Y(y1), G.X(x), G.Y(y2), { couleur: 'orange', largeur: 2.6, ...o }); }
+
+/* ---------- Fonctions ---------- */
+const fV = x => 1 / (x - 2) + 1;
+const fO = x => 2 * x + 1 + 1 / x;
+const fY = x => x * x;
+const fX = x => (x < 0 ? NaN : Math.sqrt(x));
+const fD = x => (x < 0 ? NaN : x + Math.sqrt(x));
+
+const OPT_V = { ...GEO, xmin: -1, xmax: 5, ymin: -4, ymax: 6, gx: [[1, '1'], [2, ''], [3, '3'], [4, '4']], gy: [[1, '1'], [3, '3'], [5, '5'], [-2, '−2']] };
+const OPT_H = { ...GEO, xmin: -1, xmax: 14, ymin: -2, ymax: 4, gx: [[2, '2'], [4, '4'], [6, '6'], [8, '8'], [10, '10'], [12, '12']], gy: [[1, '1'], [2, '2'], [3, '3'], [-1, '−1']] };
+const OPT_O = { ...GEO, xmin: -0.5, xmax: 6, ymin: -1, ymax: 14, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[1, '1'], [5, '5'], [10, '10']] };
+const OPT_Y = { ...GEO, xmin: -0.5, xmax: 4.5, ymin: -1, ymax: 18, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4']], gy: [[4, '4'], [8, '8'], [12, '12'], [16, '16']] };
+const OPT_X = { ...GEO, xmin: -0.5, xmax: 16, ymin: -0.5, ymax: 4.5, gx: [[1, '1'], [4, '4'], [8, '8'], [12, '12'], [15, '15']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] };
+const OPT_D = { ...GEO, xmin: -0.5, xmax: 16, ymin: -0.5, ymax: 21, gx: [[1, '1'], [4, '4'], [8, '8'], [12, '12'], [15, '15']], gy: [[5, '5'], [10, '10'], [15, '15'], [20, '20']] };
+
+/* Mini-allures de l’arbre (≈ 50 × 35 px) : petits axes, asymptote en pointillé rouge, courbe cyan. */
+function mini(c, type, x, y, w = 50, h = 35) {
+  const P = (s, v) => [x + s * w, y + h * (1 - Math.max(0, Math.min(1, v)))];
+  c.ligne(x, y + h, x + w + 4, y + h, { couleur: 'faible', largeur: 1, duree: .04 });
+  c.ligne(x, y + h, x, y - 3, { couleur: 'faible', largeur: 1, duree: .04 });
+  const pts = (g, a = .02, b = 1) => { const r = []; for (let i = 0; i <= 24; i++) { const s = a + (b - a) * i / 24; r.push(P(s, g(s))); } return r; };
+  const tir = { couleur: 'rouge', largeur: 1.3, pointille: [4, 4], duree: .06 }, cb = { couleur: 'cyan', largeur: 2, tremble: .3, duree: .15 };
+  if (type === 'av') { c.ligne(...P(.35, 0), ...P(.35, 1), tir); c.trait(pts(s => .12 + .03 / (s - .35), .38, 1), cb); }
+  if (type === 'ah') { c.ligne(...P(0, .45), ...P(1, .45), tir); c.trait(pts(s => .45 + .5 * Math.exp(-3.5 * s), .04, 1), cb); }
+  if (type === 'oy') c.trait(pts(s => .95 * Math.pow(s, 2.5), .04, 1), cb);
+  if (type === 'ox') c.trait(pts(s => .85 * Math.sqrt(s), .02, 1), cb);
+  if (type === 'oblique') { c.ligne(...P(0, .1), ...P(1, .85), tir); c.trait(pts(s => .1 + .75 * s + .05 / (s + .05), .06, 1), cb); }
+  if (type === 'direction') { c.ligne(...P(0, 0), ...P(1, .7), tir); c.trait(pts(s => .7 * s + .28 * Math.sqrt(s), .02, 1), cb); }
+}
+
+MathsTableau.page({
+  id: 'de_branches', titre: 'Branches infinies d’une courbe',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : un point M de la courbe part vers le bord ; selon la limite de f(x), de f(x)/x et de f(x) − ax, la courbe a une asymptote verticale, horizontale ou oblique, ou une branche parabolique',
+  vues: {
+    /* ---------------------------------------------------------------- verticale */
+    verticale: {
+      titre: 'Asymptote verticale : f(x) = 1/(x − 2) + 1 quand x → 2⁺',
+      params: { x_m: { min: 2.1, max: 4.8, pas: 0.05, defaut: 2.1, sens: 'abscisse du point M (x > 2)' } },
+      dessiner(c, K) {
+        K.titre('M monte le long de la droite x = 2');
+        const G = K.axes(OPT_V); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.4, p => K.courbePart(G, fV, -1, 5, p, { couleur: 'cyan', n: 400 }));
+        c.texte('(C_f)', G.X(0.45), G.Y(-2.1), { couleur: 'cyan', taille: 17 });
+        K.marque('courbe_tracee');
+        const xm = K.P.x_m, dep = 3.5, cols = colonnes([3.5, 2.5], dep, xm), n = cols.length + 1;
+        const T = { y: 92, ih: 30, lw: 50, cw: 56, rows: ['x', 'f(x)'] };
+        c.pause(.2); tLigne(c, T, n); tTitre(c, T, 0); tTitre(c, T, 1);
+        K.anime(2.8, p => {
+          const x = dep + (xm - dep) * lisse(p);
+          cols.forEach((s, k) => { if (p >= 1 || (x - s) * (xm - dep) >= -1e-9) { tCase(c, T, 0, k, fr(s)); tCase(c, T, 1, k, cel(fV(s))); } });
+          tCase(c, T, 0, n - 1, fr(x), 'jaune'); tCase(c, T, 1, n - 1, cel(fV(x)), 'jaune');
+          pointM(c, G, x, fV(x), false);
+        });
+        repereM(c, G, xm, fV(xm)); tRepere(c, T, 1, n, 'valeurs', 'les valeurs de f(x)');
+        K.marque('m_part');
+        c.pause(.3);
+        c.ligne(G.X(2), G.Y(-4), G.X(2), G.Y(6), { couleur: 'rouge', largeur: 2, pointille: [7, 6] });
+        c.texte('x = 2', G.X(2) - 8, G.y0 + 18, { couleur: 'rouge', taille: 17, align: 'right' });
+        c.repere('asymptote', G.X(2) - 12, G.y0, 24, G.h, 'la droite x = 2');
+        K.marque('asymptote_verticale');
+        c.pause(.3);
+        const y = K.lignes(RX, 190, [
+          { t: 'lim f(x) = +∞ quand x → 2⁺', couleur: 'jaune', taille: 18 },
+          { t: 'la droite d’équation x = 2', couleur: 'blanc', taille: 17 },
+          { t: 'est une asymptote verticale', couleur: 'blanc', taille: 17 },
+          { t: 'à (C_f)', couleur: 'blanc', taille: 17 },
+        ], 28);
+        c.repere('limite', RX - 4, 168, 760 - RX - 6, y - 190 + 4, 'la limite et l’asymptote verticale');
+        K.marque('limite_ecrite');
+      },
+      poignees: poigneeM(OPT_V, fV),
+      lecture: K => { const x = K.P.x_m, y = fV(x); return `M en x = ${fr(x)} : f(x) ${eg(y)}${y > 6 ? ', M est sorti par le haut du tableau' : ''} ; plus x s’approche de 2 par la droite, plus f(x) est grand.`; },
+      decrire: K => { const xm = K.P.x_m, cols = colonnes([3.5, 2.5], 3.5, xm);
+        const vals = cols.concat([xm]).map(s => `x = ${fr(s)} : f(x) ${eg(fV(s))}`).join(' ; ');
+        return {
+          repere_pose: 'Un repère : x de −1 à 5, y de −4 à 6.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = 1/(x − 2) + 1 (cyan), en deux morceaux de part et d’autre de x = 2.',
+          m_part: `Le point M (jaune) glisse sur la courbe de x = 3,5 vers x = ${fr(xm)} ; le tableau de valeurs à droite se remplit : ${vals}.` + (fV(xm) > 6 ? ' M monte le long de la verticale et sort par le haut du tableau (flèche jaune).' : ''),
+          asymptote_verticale: 'La droite x = 2 est tracée en pointillé rouge : la courbe s’en rapproche en montant.',
+          limite_ecrite: 'À droite, écrit : lim f(x) = +∞ quand x → 2⁺, donc la droite d’équation x = 2 est une asymptote verticale à (Cf).',
+        }; },
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe tracée', m_part: 'M monte vers x = 2', asymptote_verticale: 'la droite x = 2', limite_ecrite: 'la limite et l’asymptote' },
+      explication: [{ repere: 'point_m', texte: 'Quand x s’approche de 2 par la droite, M monte : f(x) vaut 1,67 puis 3 puis 11.' }, { repere: 'asymptote', texte: 'La courbe colle à la droite verticale x = 2 sans jamais la toucher.' }, { repere: 'limite', texte: 'lim f(x) = +∞ quand x → 2⁺ : la droite d’équation x = 2 est une asymptote verticale à (Cf).' }],
+    },
+    /* ---------------------------------------------------------------- horizontale */
+    horizontale: {
+      titre: 'Asymptote horizontale : f(x) = 1/(x − 2) + 1 quand x → +∞',
+      params: { x_m: { min: 2.5, max: 13.5, pas: 0.5, defaut: 13, sens: 'abscisse du point M' } },
+      dessiner(c, K) {
+        K.titre('M part à droite : la courbe se couche sur y = 1');
+        const G = K.axes(OPT_H); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.4, p => K.courbePart(G, fV, -1, 14, p, { couleur: 'cyan', n: 500 }));
+        c.texte('(C_f)', G.X(3.3), G.Y(2.7), { couleur: 'cyan', taille: 17 });
+        K.marque('courbe_tracee');
+        c.ligne(G.X(-1), G.Y(1), G.X(14), G.Y(1), { couleur: 'rouge', largeur: 2, pointille: [7, 6] });
+        K.marque('droite_tracee');
+        const xm = K.P.x_m, dep = 3;
+        K.anime(2.6, p => { const x = dep + (xm - dep) * lisse(p); pointM(c, G, x, fV(x), false); });
+        repereM(c, G, xm, fV(xm));
+        K.marque('m_part');
+        c.pause(.3);
+        const cols = colonnes([3, 12], dep, xm), n = cols.length + 1;
+        const T = { y: 122, ih: 30, lw: 70, cw: 62, rows: ['x', 'f(x) − 1'] };
+        c.texte('écart : f(x) − 1 = 1/(x − 2)', RX, 88, { couleur: 'orange', taille: 17 });
+        tLigne(c, T, n); tTitre(c, T, 0); tTitre(c, T, 1);
+        cols.forEach((s, k) => {
+          c.point(G.X(s), G.Y(fV(s)), 3.5, 'faible'); segment(c, G, s, fV(s), 1, { alpha: .45, largeur: 2 });
+          tCase(c, T, 0, k, fr(s)); tCase(c, T, 1, k, cel(fV(s) - 1));
+        });
+        segment(c, G, xm, fV(xm), 1);
+        tCase(c, T, 0, n - 1, fr(xm), 'jaune'); tCase(c, T, 1, n - 1, cel(fV(xm) - 1), 'jaune');
+        c.repere('ecart', G.X(xm) - 12, G.Y(fV(xm)) - 12, 24, Math.max(24, G.Y(1) - G.Y(fV(xm)) + 24), 'l’écart entre M et la droite y = 1');
+        tRepere(c, T, 1, n, 'valeurs', 'les valeurs de l’écart');
+        K.marque('ecart_fond');
+        c.pause(.3);
+        c.texte('y = 1', G.X(7.5), G.Y(1) + 24, { couleur: 'rouge', taille: 17 });
+        c.repere('asymptote', G.x0, G.Y(1) - 12, G.w, 24, 'la droite y = 1');
+        K.marque('asymptote_horizontale');
+        c.pause(.3);
+        const y = K.lignes(RX, 206, [
+          { t: 'lim f(x) = 1 quand x → +∞', couleur: 'jaune', taille: 18 },
+          { t: 'la droite d’équation y = 1', couleur: 'blanc', taille: 17 },
+          { t: 'est une asymptote horizontale', couleur: 'blanc', taille: 17 },
+          { t: 'à (C_f) au voisinage de +∞', couleur: 'blanc', taille: 17 },
+        ], 28);
+        c.repere('limite', RX - 4, 184, 760 - RX - 6, y - 206 + 4, 'la limite et l’asymptote horizontale');
+        K.marque('limite_ecrite');
+      },
+      poignees: poigneeM(OPT_H, fV),
+      lecture: K => { const x = K.P.x_m; return `M en x = ${fr(x)} : f(x) ${eg(fV(x))}, écart f(x) − 1 ${eg(fV(x) - 1)} ; plus M part à droite, plus l’écart est petit.`; },
+      decrire: K => { const xm = K.P.x_m, cols = colonnes([3, 12], 3, xm);
+        const vals = cols.concat([xm]).map(s => `x = ${fr(s)} : ${cel(fV(s) - 1)}`).join(' ; ');
+        return {
+          repere_pose: 'Un repère : x de −1 à 14, y de −2 à 4.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = 1/(x − 2) + 1 (cyan).',
+          droite_tracee: 'La droite horizontale y = 1 est tracée en pointillé rouge.',
+          m_part: `Le point M (jaune) part à droite sur la courbe, de x = 3 à x = ${fr(xm)} ; f(x) ${eg(fV(xm))}.`,
+          ecart_fond: `Segments orange verticaux entre la courbe et la droite y = 1 ; à droite, l’écart f(x) − 1 = 1/(x − 2) : ${vals}. L’écart fond.`,
+          asymptote_horizontale: 'La droite est nommée « y = 1 » en rouge.',
+          limite_ecrite: 'À droite, écrit : lim f(x) = 1 quand x → +∞, donc la droite d’équation y = 1 est une asymptote horizontale à (Cf) au voisinage de +∞.',
+        }; },
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe tracée', droite_tracee: 'la droite y = 1', m_part: 'M part à droite', ecart_fond: 'l’écart fond', asymptote_horizontale: 'y = 1 nommée', limite_ecrite: 'la limite et l’asymptote' },
+      explication: [{ repere: 'point_m', texte: 'M part à droite, x devient très grand.' }, { repere: 'ecart', texte: 'L’écart entre la courbe et la droite y = 1 vaut 1/(x − 2) : 1, puis 0,1… il tend vers 0.' }, { repere: 'asymptote', texte: 'La courbe se couche sur la droite y = 1.' }, { repere: 'limite', texte: 'lim f(x) = 1 quand x → +∞ : la droite d’équation y = 1 est une asymptote horizontale à (Cf) au voisinage de +∞.' }],
+    },
+    /* ---------------------------------------------------------------- oblique */
+    oblique: {
+      titre: 'Asymptote oblique : f(x) = 2x + 1 + 1/x et (Δ) : y = 2x + 1',
+      params: { x_m: { min: 0.5, max: 5.8, pas: 0.1, defaut: 5.5, sens: 'abscisse du point M (x > 0)' } },
+      dessiner(c, K) {
+        K.titre('L’écart entre la courbe et (Δ) tend vers 0');
+        const G = K.axes(OPT_O); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.4, p => K.courbePart(G, fO, -0.5, 6, p, { couleur: 'cyan', n: 400 }));
+        c.texte('(C_f)', G.X(0.35), G.Y(11.5), { couleur: 'cyan', taille: 17 });
+        K.marque('courbe_tracee');
+        c.ligne(G.X(-0.5), G.Y(0), G.X(6), G.Y(13), { couleur: 'rouge', largeur: 2, pointille: [7, 6] });
+        c.texte('(Δ) : y = 2x + 1', G.X(2.9), G.Y(3.6), { couleur: 'rouge', taille: 17 });
+        c.repere('droite', G.X(-0.5), G.Y(13), G.X(6) - G.X(-0.5), G.Y(0) - G.Y(13), 'la droite (Δ) : y = 2x + 1');
+        K.marque('droite_tracee');
+        c.pause(.3);
+        const xm = K.P.x_m, dep = 1, cols = colonnes([1, 2, 5], dep, xm), n = cols.length + 1;
+        const T = { y: 122, ih: 30, lw: 56, cw: 52, rows: ['x', 'écart'] };
+        c.texte('écart : f(x) − (2x + 1) = 1/x', RX, 88, { couleur: 'orange', taille: 17 });
+        tLigne(c, T, n); tTitre(c, T, 0); tTitre(c, T, 1);
+        K.anime(3.0, p => {
+          const x = dep + (xm - dep) * lisse(p);
+          cols.forEach((s, k) => { if (p >= 1 || (x - s) * (xm - dep) >= -1e-9) {
+            segment(c, G, s, fO(s), 2 * s + 1, { alpha: .45, largeur: 2 }); tCase(c, T, 0, k, fr(s)); tCase(c, T, 1, k, cel(1 / s)); } });
+          segment(c, G, x, fO(x), 2 * x + 1);
+          tCase(c, T, 0, n - 1, fr(x), 'jaune'); tCase(c, T, 1, n - 1, cel(1 / x), 'jaune');
+          pointM(c, G, x, fO(x), true);
+        });
+        repereM(c, G, xm, fO(xm));
+        c.repere('ecart', G.X(xm) - 12, G.Y(fO(xm)) - 12, 24, Math.max(24, G.Y(2 * xm + 1) - G.Y(fO(xm)) + 24), 'l’écart entre la courbe et (Δ)');
+        tRepere(c, T, 1, n, 'valeurs', 'les valeurs de l’écart');
+        K.marque('ecart_fond');
+        c.pause(.3);
+        K.lignes(RX, 196, [
+          { t: 'f(x) − (2x + 1) = 1/x → 0', couleur: 'vert', taille: 18 },
+          { t: 'quand x → +∞', couleur: 'vert', taille: 18, moment: 'ecart_nul_a_la_limite' },
+        ], 26);
+        c.pause(.3);
+        const y = K.lignes(RX, 266, [
+          { t: 'la droite d’équation y = 2x + 1', couleur: 'blanc', taille: 17 },
+          { t: 'est une asymptote oblique', couleur: 'blanc', taille: 17 },
+          { t: 'à (C_f) au voisinage de +∞', couleur: 'blanc', taille: 17 },
+        ], 26);
+        c.repere('limite', RX - 4, 174, 760 - RX - 6, y - 196 + 4, 'l’écart qui tend vers 0 et l’asymptote oblique');
+        K.marque('limite_ecrite');
+      },
+      poignees: poigneeM(OPT_O, fO),
+      lecture: K => { const x = K.P.x_m; return `M en x = ${fr(x)} : f(x) ${eg(fO(x))}, écart f(x) − (2x + 1) = 1/x ${eg(1 / x)} ; plus M part à droite, plus il colle à (Δ).`; },
+      decrire: K => { const xm = K.P.x_m, cols = colonnes([1, 2, 5], 1, xm);
+        const vals = cols.concat([xm]).map(s => `x = ${fr(s)} : ${cel(1 / s)}`).join(' ; ');
+        return {
+          repere_pose: 'Un repère : x de −0,5 à 6, y de −1 à 14.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = 2x + 1 + 1/x (cyan), pour x > 0.',
+          droite_tracee: 'La droite (Δ) : y = 2x + 1 est tracée en pointillé rouge, sous la courbe.',
+          ecart_fond: `M part de x = 1 vers x = ${fr(xm)} ; un segment orange vertical relie la courbe à (Δ) ; à droite, l’écart f(x) − (2x + 1) = 1/x : ${vals}. L’écart fond.`,
+          ecart_nul_a_la_limite: 'Écrit en vert : f(x) − (2x + 1) = 1/x → 0 quand x → +∞.',
+          limite_ecrite: 'Écrit : la droite d’équation y = 2x + 1 est une asymptote oblique à (Cf) au voisinage de +∞.',
+        }; },
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe tracée', droite_tracee: 'la droite (Δ)', ecart_fond: 'l’écart fond', ecart_nul_a_la_limite: 'l’écart tend vers 0', limite_ecrite: 'l’asymptote oblique' },
+      explication: [{ repere: 'droite', texte: 'La droite (Δ) : y = 2x + 1.' }, { repere: 'ecart', texte: 'L’écart vertical entre la courbe et (Δ) vaut 1/x : 1, 0,5, 0,2…' }, { repere: 'limite', texte: 'Il tend vers 0 quand x → +∞ : la droite d’équation y = 2x + 1 est une asymptote oblique à (Cf) au voisinage de +∞.' }],
+    },
+    /* ---------------------------------------------------------------- oy */
+    oy: {
+      titre: 'Branche parabolique de direction l’axe des ordonnées : f(x) = x²',
+      params: { x_m: { min: 0.5, max: 4.2, pas: 0.1, defaut: 4, sens: 'abscisse du point M' } },
+      dessiner(c, K) {
+        K.titre('La droite (OM) se redresse');
+        const G = K.axes(OPT_Y); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.2, p => K.courbePart(G, fY, -0.5, 4.5, p, { couleur: 'cyan', n: 300 }));
+        c.texte('(C_f)', G.X(2.9), G.Y(15), { couleur: 'cyan', taille: 17 });
+        K.marque('courbe_tracee');
+        const xm = K.P.x_m, dep = 1;
+        K.anime(2.4, p => { const x = dep + (xm - dep) * lisse(p); pointM(c, G, x, fY(x), true); });
+        repereM(c, G, xm, fY(xm));
+        K.marque('m_part');
+        c.pause(.3);
+        const cols = colonnes([1, 2], dep, xm), n = cols.length + 1;
+        const T = { y: 122, ih: 30, lw: 64, cw: 62, rows: ['x', 'f(x)/x'] };
+        c.texte('pente de (OM) = f(x)/x = x', RX, 88, { couleur: 'orange', taille: 17 });
+        tLigne(c, T, n); tTitre(c, T, 0); tTitre(c, T, 1);
+        cols.forEach((s, k) => { droiteO(c, G, s, { couleur: 'orange', largeur: 1.6, alpha: .45 }); tCase(c, T, 0, k, fr(s)); tCase(c, T, 1, k, cel(s)); });
+        const xe = droiteO(c, G, xm, { couleur: 'orange', largeur: 2.4 });
+        tCase(c, T, 0, n - 1, fr(xm), 'jaune'); tCase(c, T, 1, n - 1, cel(xm), 'jaune');
+        c.repere('droite_om', G.X(0), G.Y(xm * xe), G.X(xe) - G.X(0), G.Y(0) - G.Y(xm * xe), 'la droite (OM)');
+        tRepere(c, T, 1, n, 'pente', 'la pente de (OM)');
+        K.marque('pente_om_explose');
+        c.pause(.3);
+        const y = K.lignes(RX, 206, [
+          { t: 'lim f(x)/x = +∞ quand x → +∞', couleur: 'jaune', taille: 18 },
+          { t: '(C_f) admet une branche', couleur: 'blanc', taille: 17 },
+          { t: 'parabolique de direction', couleur: 'blanc', taille: 17 },
+          { t: 'l’axe des ordonnées', couleur: 'blanc', taille: 17 },
+          { t: 'au voisinage de +∞', couleur: 'blanc', taille: 16 },
+        ], 28);
+        c.repere('limite', RX - 4, 184, 760 - RX - 6, y - 206 + 4, 'la limite de f(x)/x et la branche parabolique');
+        K.marque('limite_ecrite');
+      },
+      poignees: poigneeM(OPT_Y, fY),
+      lecture: K => { const x = K.P.x_m; return `M en x = ${fr(x)} : f(x) ${eg(fY(x))}, pente de (OM) = f(x)/x ${eg(x)} ; plus M part à droite, plus (OM) se redresse.`; },
+      decrire: K => { const xm = K.P.x_m, cols = colonnes([1, 2], 1, xm);
+        const vals = cols.concat([xm]).map(s => `x = ${fr(s)} : ${cel(s)}`).join(' ; ');
+        return {
+          repere_pose: 'Un repère : x de −0,5 à 4,5, y de −1 à 18.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = x² (cyan).',
+          m_part: `Le point M (jaune) part à droite sur la courbe, de x = 1 à x = ${fr(xm)} ; f(x) ${eg(fY(xm))}.`,
+          pente_om_explose: `Les droites (OM) en orange (les anciennes en pâle) se redressent ; à droite, pente de (OM) = f(x)/x = x : ${vals}.`,
+          limite_ecrite: 'À droite, écrit : lim f(x)/x = +∞ quand x → +∞, donc (Cf) admet une branche parabolique de direction l’axe des ordonnées au voisinage de +∞.',
+        }; },
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe tracée', m_part: 'M part à droite', pente_om_explose: '(OM) se redresse', limite_ecrite: 'branche parabolique (Oy)' },
+      explication: [{ repere: 'point_m', texte: 'M part à droite : f(x) = x² grandit très vite.' }, { repere: 'droite_om', texte: 'La droite (OM) se redresse, de plus en plus verticale.' }, { repere: 'pente', texte: 'Sa pente f(x)/x = x vaut 1, puis 2, puis 4 : elle tend vers +∞.' }, { repere: 'limite', texte: 'lim f(x)/x = +∞ : (Cf) admet une branche parabolique de direction l’axe des ordonnées au voisinage de +∞.' }],
+    },
+    /* ---------------------------------------------------------------- ox */
+    ox: {
+      titre: 'Branche parabolique de direction l’axe des abscisses : f(x) = √x',
+      params: { x_m: { min: 0.5, max: 15.5, pas: 0.5, defaut: 15, sens: 'abscisse du point M' } },
+      dessiner(c, K) {
+        K.titre('La droite (OM) se couche');
+        const G = K.axes(OPT_X); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.2, p => K.courbePart(G, fX, 0, 16, p, { couleur: 'cyan', n: 300 }));
+        c.texte('(C_f)', G.X(10), G.Y(3.65), { couleur: 'cyan', taille: 17 });
+        K.marque('courbe_tracee');
+        const xm = K.P.x_m, dep = 1;
+        K.anime(2.6, p => { const x = dep + (xm - dep) * lisse(p); pointM(c, G, x, fX(x), true); });
+        repereM(c, G, xm, fX(xm));
+        K.marque('m_part');
+        c.pause(.3);
+        const cols = colonnes([1, 4], dep, xm), n = cols.length + 1;
+        const T = { y: 122, ih: 30, lw: 64, cw: 62, rows: ['x', 'f(x)/x'] };
+        c.texte('pente de (OM) = f(x)/x = 1/√x', RX, 88, { couleur: 'orange', taille: 17 });
+        tLigne(c, T, n); tTitre(c, T, 0); tTitre(c, T, 1);
+        cols.forEach((s, k) => { droiteO(c, G, 1 / Math.sqrt(s), { couleur: 'orange', largeur: 1.6, alpha: .45 }); tCase(c, T, 0, k, fr(s)); tCase(c, T, 1, k, cel(1 / Math.sqrt(s))); });
+        const sm = 1 / Math.sqrt(xm), xe = droiteO(c, G, sm, { couleur: 'orange', largeur: 2.4 });
+        tCase(c, T, 0, n - 1, fr(xm), 'jaune'); tCase(c, T, 1, n - 1, cel(sm), 'jaune');
+        c.repere('droite_om', G.X(0), G.Y(sm * xe) - 6, G.X(xe) - G.X(0), Math.max(12, G.Y(0) - G.Y(sm * xe) + 12), 'la droite (OM)');
+        tRepere(c, T, 1, n, 'pente', 'la pente de (OM)');
+        K.marque('pente_om_fond');
+        c.pause(.3);
+        const y = K.lignes(RX, 206, [
+          { t: 'lim f(x)/x = 0 quand x → +∞', couleur: 'jaune', taille: 18 },
+          { t: '(C_f) admet une branche', couleur: 'blanc', taille: 17 },
+          { t: 'parabolique de direction', couleur: 'blanc', taille: 17 },
+          { t: 'l’axe des abscisses', couleur: 'blanc', taille: 17 },
+          { t: 'au voisinage de +∞', couleur: 'blanc', taille: 16 },
+        ], 28);
+        c.repere('limite', RX - 4, 184, 760 - RX - 6, y - 206 + 4, 'la limite de f(x)/x et la branche parabolique');
+        K.marque('limite_ecrite');
+      },
+      poignees: poigneeM(OPT_X, fX),
+      lecture: K => { const x = K.P.x_m; return `M en x = ${fr(x)} : f(x) = √x ${eg(fX(x))}, pente de (OM) = 1/√x ${eg(1 / Math.sqrt(x))} ; plus M part à droite, plus (OM) se couche.`; },
+      decrire: K => { const xm = K.P.x_m, cols = colonnes([1, 4], 1, xm);
+        const vals = cols.concat([xm]).map(s => `x = ${fr(s)} : ${cel(1 / Math.sqrt(s))}`).join(' ; ');
+        return {
+          repere_pose: 'Un repère : x de −0,5 à 16, y de −0,5 à 4,5.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = √x (cyan).',
+          m_part: `Le point M (jaune) part à droite sur la courbe, de x = 1 à x = ${fr(xm)} ; f(x) ${eg(fX(xm))}.`,
+          pente_om_fond: `Les droites (OM) en orange (les anciennes en pâle) se couchent ; à droite, pente de (OM) = f(x)/x = 1/√x : ${vals}.`,
+          limite_ecrite: 'À droite, écrit : lim f(x)/x = 0 quand x → +∞, donc (Cf) admet une branche parabolique de direction l’axe des abscisses au voisinage de +∞.',
+        }; },
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe tracée', m_part: 'M part à droite', pente_om_fond: '(OM) se couche', limite_ecrite: 'branche parabolique (Ox)' },
+      explication: [{ repere: 'point_m', texte: 'M part à droite : √x grandit, mais lentement.' }, { repere: 'droite_om', texte: 'La droite (OM) se couche vers l’axe des abscisses.' }, { repere: 'pente', texte: 'Sa pente f(x)/x = 1/√x vaut 1, puis 0,5, puis 0,26 : elle tend vers 0.' }, { repere: 'limite', texte: 'lim f(x)/x = 0 : (Cf) admet une branche parabolique de direction l’axe des abscisses au voisinage de +∞.' }],
+    },
+    /* ---------------------------------------------------------------- direction */
+    direction: {
+      titre: 'Branche parabolique de direction la droite y = x : f(x) = x + √x',
+      params: { x_m: { min: 0.5, max: 15.5, pas: 0.5, defaut: 15, sens: 'abscisse du point M' } },
+      dessiner(c, K) {
+        K.titre('f(x)/x → 1 mais l’écart avec y = x grandit');
+        const G = K.axes(OPT_D); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.2, p => K.courbePart(G, fD, 0, 16, p, { couleur: 'cyan', n: 300 }));
+        c.texte('(C_f)', G.X(6), G.Y(11), { couleur: 'cyan', taille: 17 });
+        K.marque('courbe_tracee');
+        c.ligne(G.X(-0.5), G.Y(-0.5), G.X(16), G.Y(16), { couleur: 'violet', largeur: 2, pointille: [7, 6] });
+        c.texte('y = x', G.X(12.3), G.Y(11), { couleur: 'violet', taille: 17 });
+        c.repere('droite', G.X(-0.5), G.Y(16), G.X(16) - G.X(-0.5), G.Y(-0.5) - G.Y(16), 'la droite y = x');
+        K.marque('droite_tracee');
+        const xm = K.P.x_m, dep = 1;
+        K.anime(2.6, p => { const x = dep + (xm - dep) * lisse(p); pointM(c, G, x, fD(x), true); });
+        repereM(c, G, xm, fD(xm));
+        K.marque('m_part');
+        c.pause(.3);
+        const cols = colonnes([1, 4], dep, xm), n = cols.length + 1;
+        const T = { y: 116, ih: 26, lw: 76, cw: 60, rows: ['x', 'f(x)/x', 'f(x) − x'] };
+        c.texte('f(x)/x = 1 + 1/√x → 1', RX, 88, { couleur: 'jaune', taille: 17 });
+        tLigne(c, T, n); tTitre(c, T, 0); tTitre(c, T, 1);
+        cols.forEach((s, k) => { tCase(c, T, 0, k, fr(s)); tCase(c, T, 1, k, cel(fD(s) / s)); });
+        tCase(c, T, 0, n - 1, fr(xm), 'jaune'); tCase(c, T, 1, n - 1, cel(fD(xm) / xm), 'jaune');
+        tRepere(c, T, 1, n, 'pente', 'f(x)/x, qui tend vers 1');
+        K.marque('pente_tend_vers_a');
+        c.pause(.3);
+        tTitre(c, T, 2);
+        cols.forEach((s, k) => { segment(c, G, s, fD(s), s, { alpha: .45, largeur: 2 }); tCase(c, T, 2, k, cel(Math.sqrt(s))); });
+        segment(c, G, xm, fD(xm), xm);
+        tCase(c, T, 2, n - 1, cel(Math.sqrt(xm)), 'jaune');
+        c.texte('l’écart f(x) − x = √x grandit', RX, 196, { couleur: 'orange', taille: 17 });
+        c.repere('ecart', G.X(xm) - 12, G.Y(fD(xm)) - 12, 24, G.Y(xm) - G.Y(fD(xm)) + 24, 'l’écart entre la courbe et la droite y = x');
+        K.marque('ecart_grandit');
+        c.pause(.3);
+        const y = K.lignes(RX, 226, [
+          { t: 'lim f(x)/x = 1 et', couleur: 'jaune', taille: 17 },
+          { t: 'lim [f(x) − x] = +∞', couleur: 'jaune', taille: 17 },
+          { t: '(C_f) admet une branche', couleur: 'blanc', taille: 16 },
+          { t: 'parabolique de direction la', couleur: 'blanc', taille: 16 },
+          { t: 'droite d’équation y = x', couleur: 'blanc', taille: 16 },
+          { t: 'au voisinage de +∞', couleur: 'blanc', taille: 16 },
+        ], 22);
+        c.repere('limite', RX - 4, 206, 760 - RX - 6, y - 226 + 2, 'les deux limites et la branche parabolique');
+        K.marque('limite_ecrite');
+      },
+      poignees: poigneeM(OPT_D, fD),
+      lecture: K => { const x = K.P.x_m; return `M en x = ${fr(x)} : f(x) ${eg(fD(x))}, f(x)/x = 1 + 1/√x ${eg(fD(x) / x)}, écart f(x) − x = √x ${eg(Math.sqrt(x))} ; f(x)/x s’approche de 1 mais l’écart grandit.`; },
+      decrire: K => { const xm = K.P.x_m, cols = colonnes([1, 4], 1, xm), L = cols.concat([xm]);
+        return {
+          repere_pose: 'Un repère : x de −0,5 à 16, y de −0,5 à 21.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = x + √x (cyan).',
+          droite_tracee: 'La droite y = x, passant par O, en pointillé violet, sous la courbe.',
+          m_part: `Le point M (jaune) part à droite sur la courbe, de x = 1 à x = ${fr(xm)} ; f(x) ${eg(fD(xm))}.`,
+          pente_tend_vers_a: `À droite, f(x)/x = 1 + 1/√x : ${L.map(s => `x = ${fr(s)} : ${cel(fD(s) / s)}`).join(' ; ')} ; elle tend vers 1.`,
+          ecart_grandit: `Segments orange verticaux entre la courbe et la droite y = x ; l’écart f(x) − x = √x : ${L.map(s => `x = ${fr(s)} : ${cel(Math.sqrt(s))}`).join(' ; ')} : il grandit.`,
+          limite_ecrite: 'Écrit : lim f(x)/x = 1 et lim [f(x) − x] = +∞, donc (Cf) admet une branche parabolique de direction la droite d’équation y = x au voisinage de +∞.',
+        }; },
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe tracée', droite_tracee: 'la droite y = x', m_part: 'M part à droite', pente_tend_vers_a: 'f(x)/x tend vers 1', ecart_grandit: 'l’écart grandit', limite_ecrite: 'branche parabolique y = x' },
+      explication: [{ repere: 'droite', texte: 'La droite y = x, de pente 1.' }, { repere: 'pente', texte: 'f(x)/x = 1 + 1/√x tend vers 1 : la courbe prend la direction de y = x.' }, { repere: 'ecart', texte: 'Mais l’écart f(x) − x = √x grandit : 1, 2, 3,87… il tend vers +∞, pas d’asymptote.' }, { repere: 'limite', texte: '(Cf) admet une branche parabolique de direction la droite d’équation y = x au voisinage de +∞.' }],
+    },
+    /* ---------------------------------------------------------------- arbre */
+    arbre: {
+      titre: 'L’arbre de décision des branches infinies',
+      dessiner(c, K) {
+        K.titre('Branches infinies : quelle limite calculer ?');
+        // Les trois départs
+        const box = (x, y, w, t, id, label) => { c.rect(x, y, w, 30, { couleur: 'cyan', largeur: 1.4, arrondi: 6 }); c.texte(t, x + 10, y + 21, { couleur: 'cyan', taille: 15, max: w - 18 }); c.repere(id, x, y, w, 30, label); };
+        box(14, 50, 276, 'lim f(x) = ±∞ quand x → a', 'entree_a', 'lim f(x) = ±∞ quand x → a');
+        box(14, 196, 276, 'lim f(x) = b quand x → ±∞', 'entree_finie', 'lim f(x) = b quand x → ±∞');
+        box(306, 50, 300, 'lim f(x) = ±∞ quand x → ±∞', 'entree_infinie', 'lim f(x) = ±∞ quand x → ±∞');
+        K.marque('racine');
+        c.pause(.3);
+        // Feuille : asymptote verticale
+        c.fleche(36, 82, 36, 106, { couleur: 'blanc', largeur: 1.6, tete: 8 });
+        c.texte('asymptote verticale x = a', 48, 102, { couleur: 'jaune', taille: 15 });
+        mini(c, 'av', 24, 116);
+        K.lignes(86, 134, [{ t: 'la droite d’équation x = a est', taille: 13, couleur: 'blanc', max: 200 }, { t: 'une asymptote verticale à (C_f)', taille: 13, couleur: 'blanc', max: 200 }], 18);
+        c.repere('feuille_av', 20, 88, 272, 70, 'asymptote verticale');
+        K.marque('branche_av');
+        c.pause(.3);
+        // Feuille : asymptote horizontale
+        c.fleche(36, 228, 36, 252, { couleur: 'blanc', largeur: 1.6, tete: 8 });
+        c.texte('asymptote horizontale y = b', 48, 248, { couleur: 'jaune', taille: 15 });
+        mini(c, 'ah', 24, 262);
+        K.lignes(86, 280, [{ t: 'la droite d’équation y = b est une', taille: 13, couleur: 'blanc', max: 202 }, { t: 'asymptote horizontale à (C_f)', taille: 13, couleur: 'blanc', max: 202 }, { t: 'au voisinage de ±∞', taille: 13, couleur: 'blanc', max: 202 }], 17);
+        c.repere('feuille_ah', 20, 234, 272, 86, 'asymptote horizontale');
+        K.marque('branche_ah');
+        c.pause(.3);
+        // Troisième entrée : f(x)/x
+        c.fleche(328, 82, 328, 100, { couleur: 'blanc', largeur: 1.6, tete: 8 });
+        c.texte('on calcule lim f(x)/x', 340, 116, { couleur: 'blanc', taille: 15 });
+        c.repere('f_sur_x', 336, 98, 170, 24, 'on calcule lim f(x)/x');
+        K.marque('f_sur_x');
+        c.pause(.2);
+        const brin = (x, y) => { c.ligne(x, y - 30, x, y - 5, { couleur: 'faible', largeur: 1.4, duree: .08 }); c.fleche(x, y - 5, x + 16, y - 5, { couleur: 'faible', largeur: 1.4, tete: 6, duree: .08 }); };
+        brin(328, 156);
+        c.texte('±∞ : branche parabolique de direction (Oy)', 350, 156, { couleur: 'jaune', taille: 14, max: 330 });
+        mini(c, 'oy', 696, 128);
+        c.repere('feuille_oy', 346, 138, 400, 26, 'branche parabolique de direction (Oy)');
+        K.marque('feuille_oy');
+        c.pause(.2);
+        brin(328, 196);
+        c.texte('0 : branche parabolique de direction (Ox)', 350, 196, { couleur: 'jaune', taille: 14, max: 330 });
+        mini(c, 'ox', 696, 170);
+        c.repere('feuille_ox', 346, 178, 400, 26, 'branche parabolique de direction (Ox)');
+        K.marque('feuille_ox');
+        c.pause(.2);
+        brin(328, 236);
+        c.texte('a ≠ 0 : on calcule lim [f(x) − ax]', 350, 236, { couleur: 'blanc', taille: 15, max: 330 });
+        c.repere('f_moins_ax', 346, 218, 260, 26, 'a ≠ 0 : on calcule lim [f(x) − ax]');
+        K.marque('f_moins_ax');
+        c.pause(.2);
+        const brin2 = (y) => { c.ligne(370, y - 32, 370, y - 5, { couleur: 'faible', largeur: 1.4, duree: .08 }); c.fleche(370, y - 5, 386, y - 5, { couleur: 'faible', largeur: 1.4, tete: 6, duree: .08 }); };
+        brin2(274);
+        c.texte('b : asymptote oblique y = ax + b', 392, 274, { couleur: 'jaune', taille: 14, max: 290 });
+        mini(c, 'oblique', 696, 248);
+        c.repere('feuille_oblique', 388, 256, 358, 26, 'asymptote oblique y = ax + b');
+        K.marque('feuille_oblique');
+        c.pause(.2);
+        brin2(312);
+        c.texte('±∞ : branche parabolique de direction y = ax', 392, 312, { couleur: 'jaune', taille: 14, max: 290 });
+        mini(c, 'direction', 696, 288);
+        c.repere('feuille_direction', 388, 294, 358, 26, 'branche parabolique de direction y = ax');
+        K.marque('feuille_direction');
+        c.pause(.3);
+        c.rect(14, 328, 430, 28, { couleur: 'orange', largeur: 1.4, arrondi: 6 });
+        c.texte('(C_f) admet … d’équation … au voisinage de …', 24, 348, { couleur: 'orange', taille: 15, max: 410 });
+        c.repere('phrase', 14, 328, 430, 28, 'la phrase type');
+        K.marque('phrase_type');
+      },
+      decrire: {
+        racine: 'Trois départs encadrés : lim f(x) = ±∞ quand x → a ; lim f(x) = b quand x → ±∞ ; lim f(x) = ±∞ quand x → ±∞.',
+        branche_av: 'Sous le premier : asymptote verticale x = a, avec un petit croquis (la courbe longe une droite verticale) ; la droite d’équation x = a est une asymptote verticale à (Cf).',
+        branche_ah: 'Sous le deuxième : asymptote horizontale y = b, avec un petit croquis ; la droite d’équation y = b est une asymptote horizontale à (Cf) au voisinage de ±∞.',
+        f_sur_x: 'Sous le troisième : on calcule lim f(x)/x.',
+        feuille_oy: 'Si lim f(x)/x = ±∞ : branche parabolique de direction (Oy), petit croquis qui monte très vite.',
+        feuille_ox: 'Si lim f(x)/x = 0 : branche parabolique de direction (Ox), petit croquis qui se couche.',
+        f_moins_ax: 'Si lim f(x)/x = a ≠ 0 : on calcule lim [f(x) − ax].',
+        feuille_oblique: 'Si lim [f(x) − ax] = b : asymptote oblique y = ax + b, petit croquis qui colle à une droite oblique.',
+        feuille_direction: 'Si lim [f(x) − ax] = ±∞ : branche parabolique de direction la droite y = ax, petit croquis qui s’écarte de la droite.',
+        phrase_type: 'En bas, encadrée, la phrase type : (Cf) admet … d’équation … au voisinage de …',
+      },
+      motifs: { racine: 'les trois départs', branche_av: 'asymptote verticale', branche_ah: 'asymptote horizontale', f_sur_x: 'lim f(x)/x', feuille_oy: 'direction (Oy)', feuille_ox: 'direction (Ox)', f_moins_ax: 'lim [f(x) − ax]', feuille_oblique: 'asymptote oblique', feuille_direction: 'direction y = ax', phrase_type: 'la phrase type' },
+      explication: [{ repere: 'entree_a', texte: 'Une limite infinie en un réel a : asymptote verticale x = a.' }, { repere: 'entree_finie', texte: 'Une limite finie b en l’infini : asymptote horizontale y = b.' }, { repere: 'entree_infinie', texte: 'Une limite infinie en l’infini : on ne conclut pas encore.' }, { repere: 'f_sur_x', texte: 'On calcule lim f(x)/x : ±∞ donne la direction (Oy), 0 la direction (Ox).' }, { repere: 'f_moins_ax', texte: 'Si elle vaut a ≠ 0, on calcule lim [f(x) − ax] : b donne l’asymptote oblique, ±∞ la direction y = ax.' }, { repere: 'phrase', texte: 'On conclut toujours par la phrase type : (Cf) admet … d’équation … au voisinage de …' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

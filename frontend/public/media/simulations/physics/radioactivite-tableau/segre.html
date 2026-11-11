@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagramme (N, Z) — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Diagramme (N, Z) : Z en abscisse, N en ordonnée, la droite N = Z, la vallée de stabilité, les zones β⁻, β⁺ et α, les isotopes sur une ligne verticale, la famille de l’uranium 238 jusqu’au plomb 206"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Diagramme (N, Z) (cours « Décroissance radioactive », phys_ch4_radioactivite, 2e Bac PC BIOF, novembre 2026).
+ * Vues (?vue=) : vallee (défaut), zones, isotopes, famille, famille2024.
+ *  - Le diagramme : Z en abscisse (0 → 100), N en ordonnée (0 → 150), la droite N = Z en pointillé.
+ *  - Les noyaux stables (petits carrés sombres) : la liste réelle des isotopes stables de H (Z = 1) à Pb (Z = 82), jusqu’à ²⁰⁸₈₂Pb.
+ *    Les noyaux instables connus (bande autour de la vallée, largeur approchée, pour l’œil) sont colorés par zone : au-dessus de la
+ *    vallée (N plus grand que le centre de la vallée pour ce Z) bleu → β⁻ ; au-dessous orange → β⁺ ; Z > 82 jaune → α.
+ *    Centre de la vallée : moyenne des N stables pour Z ≤ 82 ; au-delà, la relation empirique A = Z·(1,98 + 0,0155·A^{2/3}).
+ *    C’est la règle simple du programme (prévision du type), pas un tableau des modes réels de chaque noyau.
+ *  - famille : la famille de l’uranium 238 (8 α et 6 β⁻) flèche par flèche sur un zoom (Z 80 → 93, N 122 → 147), compteurs ;
+ *  - famille2024 : schéma type national 2024 R (A en ordonnée, Z en abscisse), flèches (1) β⁻ et (2) α, nucléide X = ²⁰⁸₈₂Pb.
+ * Poignée élève (vues vallee, zones, isotopes) : le noyau-curseur qu’on fait glisser ; la bulle donne Z, N, A, la zone et le type prévu.
+ * La peinture (carrés colorés, sphères) ne change pas la physique : Z, N, A et les bilans écrits sont exacts.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['vallee', 'zones', 'isotopes', 'famille', 'famille2024'];
+const URLP = new URLSearchParams(location.search);
+let vue = VUES.includes(URLP.get('vue')) ? URLP.get('vue') : 'vallee';
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const CURSEUR_DEFAUT = { vallee: [53, 78], zones: [53, 78], isotopes: [6, 8], famille: [92, 146], famille2024: [83, 129] };
+const P = { Z: CURSEUR_DEFAUT[vue][0], N: CURSEUR_DEFAUT[vue][1] };
+{ const z = +URLP.get('noyau_Z'), n = +URLP.get('noyau_N'); if (URLP.has('noyau_Z') && Number.isFinite(z)) P.Z = clamp(Math.round(z), 1, 100); if (URLP.has('noyau_N') && Number.isFinite(n)) P.N = clamp(Math.round(n), 0, 150); }
+
+/* ── Données : symboles et noyaux stables (Z → liste des N stables) ──────────────────────────── */
+const SYM = ('H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd ' +
+  'In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm').split(' ');
+const STABLES = { 1: [0, 1], 2: [1, 2], 3: [3, 4], 4: [5], 5: [5, 6], 6: [6, 7], 7: [7, 8], 8: [8, 9, 10], 9: [10], 10: [10, 11, 12], 11: [12], 12: [12, 13, 14],
+  13: [14], 14: [14, 15, 16], 15: [16], 16: [16, 17, 18, 20], 17: [18, 20], 18: [18, 20, 22], 19: [20, 22], 20: [20, 22, 23, 24, 26, 28], 21: [24],
+  22: [24, 25, 26, 27, 28], 23: [28], 24: [26, 28, 29, 30], 25: [30], 26: [28, 30, 31, 32], 27: [32], 28: [30, 32, 33, 34, 36], 29: [34, 36],
+  30: [34, 36, 37, 38, 40], 31: [38, 40], 32: [38, 40, 41, 42, 44], 33: [42], 34: [40, 42, 43, 44, 46], 35: [44, 46], 36: [42, 44, 46, 47, 48, 50],
+  37: [48], 38: [46, 48, 49, 50], 39: [50], 40: [50, 51, 52, 54], 41: [52], 42: [50, 52, 53, 54, 55, 56], 44: [52, 54, 55, 56, 57, 58, 60], 45: [58],
+  46: [56, 58, 59, 60, 62, 64], 47: [60, 62], 48: [58, 60, 62, 63, 64, 66], 49: [64], 50: [62, 64, 65, 66, 67, 68, 69, 70, 72, 74], 51: [70, 72],
+  52: [68, 70, 71, 72, 73, 74], 53: [74], 54: [70, 72, 74, 75, 76, 77, 78, 80], 55: [78], 56: [74, 76, 78, 79, 80, 81, 82], 57: [82], 58: [78, 80, 82, 84],
+  59: [82], 60: [82, 83, 84, 85, 86, 88], 62: [82, 87, 88, 90, 92], 63: [88, 90], 64: [90, 91, 92, 93, 94, 96], 65: [94], 66: [90, 92, 94, 95, 96, 97, 98],
+  67: [98], 68: [94, 96, 98, 99, 100, 102], 69: [100], 70: [98, 100, 101, 102, 103, 104, 106], 71: [104], 72: [104, 105, 106, 107, 108], 73: [108],
+  74: [106, 108, 109, 110, 112], 75: [110], 76: [108, 111, 112, 113, 114, 116], 77: [114, 116], 78: [114, 116, 117, 118, 120], 79: [118],
+  80: [116, 118, 119, 120, 121, 122, 124], 81: [122, 124], 82: [122, 124, 125, 126] };
+const estStable = (Z, N) => !!(STABLES[Z] && STABLES[Z].includes(N));
+const moyenne = l => l.reduce((s, v) => s + v, 0) / l.length;
+const CENTRE = {};
+for (let Z = 1; Z <= 100; Z++) {
+  if (STABLES[Z]) CENTRE[Z] = moyenne(STABLES[Z]);
+  else if (Z <= 82) CENTRE[Z] = (moyenne(STABLES[Z - 1]) + moyenne(STABLES[Z + 1])) / 2;
+  else { let A = 2.5 * Z; for (let i = 0; i < 30; i++) A = Z * (1.98 + 0.0155 * Math.pow(A, 2 / 3)); CENTRE[Z] = A - Z; }
+}
+const bas = Z => Math.max(0, Math.ceil(CENTRE[Z] - (2 + .36 * Z)));
+const haut = Z => Math.min(150, Math.floor(CENTRE[Z] + (3 + .25 * Z)));
+const connu = (Z, N) => Z >= 1 && Z <= 100 && N >= bas(Z) && N <= haut(Z);
+/** Zone d’un noyau (Z, N) : stable, beta_moins, beta_plus, alpha, ou hors (aucun noyau connu ici). */
+function zone(Z, N) {
+  if (estStable(Z, N)) return 'stable';
+  if (!connu(Z, N)) return 'hors';
+  if (Z > 82) return 'alpha';
+  return N > CENTRE[Z] ? 'beta_moins' : 'beta_plus';
+}
+const ZONE_TXT = {
+  stable: ['dans la vallée de stabilité', 'stable : pas de désintégration'],
+  beta_moins: ['au-dessus de la vallée (excès de neutrons)', 'β⁻'],
+  beta_plus: ['au-dessous de la vallée (excès de protons)', 'β⁺'],
+  alpha: ['noyaux lourds (Z > 82)', 'α'],
+  hors: ['hors des noyaux connus', 'aucun noyau connu ici'],
+};
+const CELLULES = [];
+for (let Z = 1; Z <= 100; Z++) for (let N = bas(Z); N <= haut(Z); N++) CELLULES.push({ Z, N, z: zone(Z, N) });
+
+/* ── Instants clés : [nom, instant (s), ce qu’on voit, avance] — l’annotation s’écrit pendant « avance » s avant l’instant. ── */
+const FAM = [['U', 238, 92], ['Th', 234, 90], ['Pa', 234, 91], ['U', 234, 92], ['Th', 230, 90], ['Ra', 226, 88], ['Rn', 222, 86], ['Po', 218, 84],
+  ['Pb', 214, 82], ['Bi', 214, 83], ['Po', 214, 84], ['Pb', 210, 82], ['Bi', 210, 83], ['Po', 210, 84], ['Pb', 206, 82]];
+const COTE = ['g', 'g', 'hd', 'd', 'g', 'g', 'g', 'g', 'g', 'hd', 'd', 'g', 'hd', 'd', 'g'];          // où s’écrit le nom de chaque noyau
+const typeEtape = k => (FAM[k - 1][1] - FAM[k][1] === 4 ? 'alpha' : 'beta');
+const debutEtape = k => 1.8 + .8 * (k - 1) + (k > 6 ? 1.0 : 0);                                // pause après ²²²Rn (milieu)
+const finEtape = k => debutEtape(k) + .7;
+const SUITES = {
+  vallee: [['axes', 1.8, 'les axes : Z (protons) en abscisse, N (neutrons) en ordonnée', 1.6], ['droite_N_egal_Z', 3.4, 'la droite N = Z en pointillé', 1.2],
+    ['vallee', 6.0, 'la vallée de stabilité : les noyaux stables', 2.2], ['legers', 8.2, 'noyaux légers stables : N ≈ Z', 1.4],
+    ['lourds', 10.6, 'noyaux lourds stables : N > Z', 1.8], ['fin', 12.2, 'fin', .4]],
+  zones: [['vallee', 1.8, 'le diagramme et la vallée de stabilité', 1.6], ['zone_beta_moins', 4.0, 'zone bleue : excès de neutrons → β⁻', 1.6],
+    ['zone_beta_plus', 6.2, 'zone orange : excès de protons → β⁺', 1.6], ['zone_alpha', 8.4, 'zone jaune : noyaux lourds → α', 1.6],
+    ['fleches', 11.4, 'trois flèches depuis un même noyau : β⁻ vers (Z+1, N−1), β⁺ vers (Z−1, N+1), α vers (Z−2, N−2)', 2.4], ['fin', 13.0, 'fin', .4]],
+  isotopes: [['vallee', 1.8, 'le diagramme et la vallée de stabilité', 1.6], ['ligne_isotopes', 5.0, 'la ligne verticale Z = 6 : ¹²C stable dans la vallée, ¹⁴C au-dessus → β⁻', 3.0],
+    ['fin', 6.8, 'fin', .4]],
+  famille: [['depart', 1.6, 'départ : l’uranium 238', 1.2], ['premiere_alpha', finEtape(1), 'première désintégration α : ²³⁸U → ²³⁴Th', .7],
+    ['premiere_beta', finEtape(2), 'première désintégration β⁻ : ²³⁴Th → ²³⁴Pa', .7], ['milieu', finEtape(6) + .6, 'à mi-chemin, ²²²Rn : 4 α et 2 β⁻', .6],
+    ['arrivee', finEtape(14) + .6, 'arrivée : ²⁰⁶Pb, stable', .6], ['bilan', finEtape(14) + 3.0, '²³⁸U → ²⁰⁶Pb : 8 α et 6 β⁻', 2.2],
+    ['fin', finEtape(14) + 3.4, 'fin', .4]],
+  famille2024: [['trace', 2.2, 'le schéma : A en ordonnée, Z en abscisse, cinq nucléides de la famille du thorium', 2.0],
+    ['fleche_1', 4.6, '(1) : A ne change pas, Z augmente de 1 : β⁻', 1.8], ['fleche_2', 7.0, '(2) : A diminue de 4, Z de 2 : α', 1.8],
+    ['nucleide_X', 9.6, 'X : Z = 82, A = 208, donc X = ²⁰⁸₈₂Pb', 2.0], ['fin', 11.2, 'fin', .4]],
+};
+let SUITE, M, FIN;
+function choisirSuite() { SUITE = SUITES[vue]; M = {}; for (const [n, t] of SUITE) M[n] = +t.toFixed(2); FIN = M.fin; }
+choisirSuite();
+const moments = () => ({ ...M });
+const avance = nom => (SUITE.find(s => s[0] === nom) || [])[3] ?? 1.2;
+const a_ = nom => (nom in M ? M[nom] - avance(nom) : Infinity);
+const vu = nom => nom in M && S.t >= a_(nom);
+const apres = (t0, d = .5) => clamp((S.t - t0) / d, 0, 1);
+const PLEIN = () => ['vallee', 'zones', 'isotopes'].includes(vue);
+
+/* ── Géométrie ─────────────────────────────────────────────────────────────────────────────── */
+const O = { x: 52, y: 356 }, KX = 3.3, KY = 2.0;                       // diagramme complet : Z 0 → 100, N 0 → 150
+const XY = (Z, N) => [O.x + Z * KX, O.y - N * KY];
+const RX = 432;                                                          // colonne de droite (texte)
+const FZ = { x0: 84, kx: 25, y0: 362, ky: 12.6, Z0: 80, N0: 122 };      // zoom de la famille : Z 80 → 93, N 122 → 147
+const XYf = (Z, N) => [FZ.x0 + (Z - FZ.Z0) * FZ.kx, FZ.y0 - (N - FZ.N0) * FZ.ky];
+const XY24 = (Z, A) => [90 + (Z - 80) * 62, 360 - (A - 205) * 38];     // national 2024 : Z 80 → 85, A 205 → 213
+const IX = Z => 470 + (Z - 2) * 28 + 14, IY = N => 262 - (N - 2) * 18 - 9;   // zoom des isotopes : Z 2 → 10, N 2 → 12
+const G = { x: 432, y: 166, c: 26 };                                     // grille des trois flèches
+const GXY = (i, j) => [G.x + G.c / 2 + G.c * (i + 3), G.y + G.c / 2 + G.c * (3 - j)];
+
+/* ── Peinture ──────────────────────────────────────────────────────────────────────────────── */
+const TEINTES = { p: ['#ffd9c4', '#f2683a', '#8a280c'], n: ['#f4f8ff', '#a9b9cd', '#55657a'], e: ['#e3efff', '#5b9cf5', '#1c3d96'], v: ['#d9ffe6', '#38c172', '#14532d'] };
+function sphere(ctx, x, y, r, type, o = {}) {
+  const [c0, c1, c2] = TEINTES[type];
+  ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
+  if (o.eclat > 0) { ctx.shadowColor = 'rgba(255,240,200,.95)'; ctx.shadowBlur = 4 + r * 2 * o.eclat; }
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, c0); g.addColorStop(.45, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+  if (r > 3) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .36, y - r * .42, r * .24, r * .15, -.6, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+/** Un petit noyau peint (3 sphères), pour le curseur et les nœuds de la famille. */
+function miniNoyau(ctx, x, y, r, o = {}) {
+  sphere(ctx, x - r * .55, y + r * .35, r * .7, 'n', o); sphere(ctx, x + r * .55, y + r * .35, r * .7, 'p', o); sphere(ctx, x, y - r * .35, r * .7, o.vert ? 'v' : 'p', o);
+}
+function eclair(ctx, x, y, f) {
+  if (f <= 0 || f >= 1) return;
+  const r = 6 + 22 * f, g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(255,255,230,${.9 * (1 - f)})`); g.addColorStop(1, 'rgba(255,255,200,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+const COULEURS_ZONE = { beta_moins: '96,165,250', beta_plus: '251,146,60', alpha: '250,204,21', stable: '10,14,18' };
+/** Les carrés du diagramme complet : alpha de chaque zone (0..1) et Z maximal de la vallée (elle se peint de gauche à droite). */
+function peindreCases(ctx, { gris = 0, bleu = 0, orange = 0, jaune = 0, zmax = 82, xy = XY, kx = KX, ky = KY, filtre = null, clip = null }) {
+  ctx.save();
+  if (clip) { ctx.beginPath(); ctx.rect(...clip); ctx.clip(); }
+  const lots = { gris: [], beta_moins: [], beta_plus: [], alpha: [], stable: [] };
+  for (const c of CELLULES) {
+    if (filtre && !filtre(c)) continue;
+    if (c.z === 'stable') { if (c.Z <= zmax) lots.stable.push(c); continue; }
+    const a = c.z === 'beta_moins' ? bleu : c.z === 'beta_plus' ? orange : jaune;
+    (a > 0 ? lots[c.z] : lots.gris).push(c);
+  }
+  const remplir = (liste, style, marge = 0) => {
+    if (!liste.length) return; ctx.fillStyle = style; ctx.beginPath();
+    for (const c of liste) { const [x, y] = xy(c.Z, c.N); ctx.rect(x - kx / 2 - marge / 2 + .3, y - ky / 2 - marge / 2 + .3, kx + marge - .6, ky + marge - .6); }
+    ctx.fill();
+  };
+  if (gris > 0) remplir(lots.gris, `rgba(226,232,240,${.16 * gris})`);
+  remplir(lots.beta_moins, `rgba(${COULEURS_ZONE.beta_moins},${.6 * bleu})`);
+  remplir(lots.beta_plus, `rgba(${COULEURS_ZONE.beta_plus},${.6 * orange})`);
+  remplir(lots.alpha, `rgba(${COULEURS_ZONE.alpha},${.6 * jaune})`);
+  // La vallée : un halo clair, puis les carrés sombres des noyaux stables (une bande sombre lisible sur le tableau).
+  if (lots.stable.length) {
+    if (!clip) {
+    ctx.save(); ctx.strokeStyle = 'rgba(236,240,245,.16)'; ctx.lineWidth = Math.max(9, kx * 2.2); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+    for (let Z = 1; Z <= Math.min(82, zmax); Z++) { const [x, y] = xy(Z, CENTRE[Z]); Z === 1 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke(); ctx.restore();
+    }
+    remplir(lots.stable, `rgb(${COULEURS_ZONE.stable})`, .8);
+  }
+  ctx.restore();
+}
+function peindreCurseur(ctx) {
+  const [x, y] = XY(P.Z, P.N);
+  ctx.save(); const g = ctx.createRadialGradient(x, y, 0, x, y, 16); g.addColorStop(0, 'rgba(250,204,21,.35)'); g.addColorStop(1, 'rgba(250,204,21,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  miniNoyau(ctx, x, y, 6);
+}
+function peindre(ctx) {
+  if (vue === 'vallee') {
+    const f = apres(a_('vallee'), 1.8), zmax = Math.round(1 + 81 * f);
+    if (f > 0) peindreCases(ctx, { gris: f, zmax });
+  } else if (vue === 'zones') {
+    peindreCases(ctx, { gris: apres(.3, 1), zmax: Math.round(1 + 81 * apres(.3, 1.2)), bleu: apres(a_('zone_beta_moins'), .8), orange: apres(a_('zone_beta_plus'), .8), jaune: apres(a_('zone_alpha'), .8) });
+    if (vu('fleches')) peindreFleches(ctx);
+  } else if (vue === 'isotopes') {
+    const f = apres(.3, 1.2);
+    peindreCases(ctx, { gris: 0, bleu: .55 * f, orange: .55 * f, jaune: .55 * f, zmax: Math.round(1 + 81 * f) });
+    if (vu('ligne_isotopes')) peindreCases(ctx, { bleu: apres(a_('ligne_isotopes'), .6), orange: apres(a_('ligne_isotopes'), .6), xy: (Z, N) => [IX(Z), IY(N)], kx: 28, ky: 18, filtre: c => c.Z >= 2 && c.Z <= 10 && c.N >= 2 && c.N <= 12, clip: [IX(2) - 14, IY(12) - 9, 9 * 28, 11 * 18] });
+  } else if (vue === 'famille') peindreFamille(ctx);
+  else peindre2024(ctx);
+  if (PLEIN()) peindreCurseur(ctx);
+}
+function peindreFleches(ctx) {
+  const f = apres(a_('fleches'), .5); if (f <= 0) return;
+  ctx.save(); ctx.globalAlpha = f; ctx.strokeStyle = 'rgba(226,232,240,.14)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 7; i++) { ctx.beginPath(); ctx.moveTo(G.x + i * G.c, G.y); ctx.lineTo(G.x + i * G.c, G.y + 7 * G.c); ctx.moveTo(G.x, G.y + i * G.c); ctx.lineTo(G.x + 7 * G.c, G.y + i * G.c); ctx.stroke(); }
+  ctx.restore();
+  const [x, y] = GXY(0, 0); miniNoyau(ctx, x, y, 8, { alpha: f });
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────── */
+/**
+ * Écrit `fn` à la craie au rythme de la scène, à partir de l’instant t0 (s) : une annotation apparaît quand elle arrive.
+ * Le bloc doit être fini à l’instant clé suivant (`t1`, sinon le premier moment après t0) : s’il est plus long, son écriture
+ * est accélérée d’autant (première passe « à blanc » qui mesure sa durée), pour qu’un arrêt sur image le montre en entier.
+ */
+function ecrit(c, t0, fn, t1) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  try {
+    let k = 1;
+    if (!S.fait) {
+      const fin = t1 ?? Math.min(...SUITE.map(s => s[1]).filter(m => m > t0 + 1e-6));
+      if (Number.isFinite(fin)) { c.t = -1; c.cur = t0; fn(); const d = c.cur - t0; if (d > fin - t0) k = d / Math.max(.05, fin - t0); }
+    }
+    c.t = S.fait ? Infinity : t0 + (S.t - t0) * k; c.cur = t0; c.complet = true;
+    fn();
+    // Contrôle : sur une image figée, un bloc commencé doit être fini (sinon l’annotation de l’instant clé n’est pas lisible).
+    if (!c.complet && !S.running && SUITE.some(s => Math.abs(s[1] - S.t) < 1e-3)) { const l = (window.__ecritureInachevee ||= []), m = `${fr(S.t, 2)} s : bloc commencé à ${fr(t0, 2)} s`; if (!l.includes(m)) l.push(m); }
+  }
+  finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+function axesPrincipaux(c) {
+  const xf = O.x + 100 * KX + 16, yf = O.y - 150 * KY - 14;
+  c.fleche(O.x, O.y, xf, O.y, { couleur: 'blanc', largeur: 1.8, duree: .3 });
+  c.fleche(O.x, O.y, O.x, yf, { couleur: 'blanc', largeur: 1.8, duree: .3 });
+  for (let Z = 0; Z <= 100; Z += 20) { const [x] = XY(Z, 0); c.ligne(x, O.y - 4, x, O.y + 4, { couleur: 'faible', largeur: 1.3, duree: .02 }); c.texte(String(Z), x, O.y + 18, { couleur: 'faible', taille: 13, align: 'center', duree: .04 }); }
+  for (let N = 25; N <= 150; N += 25) { const [, y] = XY(0, N); c.ligne(O.x - 4, y, O.x + 4, y, { couleur: 'faible', largeur: 1.3, duree: .02 }); c.texte(String(N), O.x - 8, y + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .04 }); }
+  c.texte('Z', xf + 6, O.y + 6, { couleur: 'blanc', taille: 19, duree: .05 });
+  c.texte('(protons)', xf - 4, O.y + 22, { couleur: 'faible', taille: 12, duree: .1 });
+  c.texte('N', O.x + 10, yf + 10, { couleur: 'blanc', taille: 19, duree: .05 });
+  c.texte('(neutrons)', O.x + 26, yf + 10, { couleur: 'faible', taille: 12, duree: .1 });
+}
+function droiteNZ(c) {
+  const [x0, y0] = XY(0, 0), [x1, y1] = XY(100, 100);
+  c.ligne(x0, y0, x1, y1, { couleur: 'faible', largeur: 1.4, pointille: [6, 6], duree: .5 });
+  c.texte('N = Z', 352, 198, { couleur: 'faible', taille: 15, duree: .2 });
+}
+function reperesPlein(c) {
+  c.repere('vue_diagramme', O.x - 34, 38, 100 * KX + 80, O.y - 38 + 26, 'le diagramme (N, Z)');
+  c.repere('axe_Z', O.x, O.y - 8, 100 * KX + 40, 34, 'l’axe des Z (nombre de protons), en abscisse');
+  c.repere('axe_N', O.x - 34, 38, 40, O.y - 38, 'l’axe des N (nombre de neutrons), en ordonnée');
+  c.repere('droite_N_Z', ...XY(60, 72), 60, 50, 'la droite N = Z (pointillé)');
+  const [xv, yv] = XY(40, CENTRE[40]);
+  c.repere('vallee', xv - 30, yv - 22, 60, 44, 'la vallée de stabilité (noyaux stables)');
+  const [xu, yu] = XY(92, 146); c.repere('uranium_238', xu - 9, yu - 9, 18, 18, 'l’uranium 238 (Z = 92, N = 146)');
+  const [xc, yc] = XY(P.Z, P.N); c.repere('curseur', xc - 12, yc - 12, 24, 24, `le noyau-curseur : Z = ${P.Z}, N = ${P.N}`);
+}
+/** Le nom du noyau-curseur, écrit à côté (à gauche s’il est trop à droite). */
+function etiquetteCurseur(c) {
+  const [x, y] = XY(P.Z, P.N), A = P.Z + P.N, s = `[${A},${P.Z}]${SYM[P.Z - 1]}`, w = c.largeurNoyaux(s, 15);
+  const gauche = x + 14 + w > 410, yy = y < 70 ? y + 26 : clamp(y - 12, 40, 340);
+  c.noyaux(s, gauche ? x - 14 - w : x + 14, yy, { taille: 15, couleur: 'jaune' });
+}
+
+/* ── Vue « vallee » ──────────────────────────────────────────────────────────────────────── */
+function dessinerVallee(c) {
+  c.texte('Diagramme (N, Z)', 16, 26, { couleur: 'cyan', taille: 17 });
+  ecrit(c, .2, () => axesPrincipaux(c));
+  if (vu('axes')) ecrit(c, M.axes - .5, () => c.texte('Un carré = un noyau : Z protons, N neutrons.', RX, 64, { couleur: 'blanc', taille: 16, max: 318, duree: .45 }));
+  if (vu('droite_N_egal_Z')) ecrit(c, a_('droite_N_egal_Z'), () => { droiteNZ(c); c.texte('pointillé : la droite N = Z', RX, 90, { couleur: 'faible', taille: 16, duree: .4 }); });
+  if (vu('vallee')) ecrit(c, M.vallee - .5, () => {
+    c.texte('■ noyaux stables : la vallée de stabilité', RX, 124, { couleur: 'blanc', taille: 16, max: 318, duree: .3 });
+    c.texte('■ noyaux instables', RX, 148, { couleur: 'faible', taille: 16, duree: .15 });
+  });
+  if (vu('legers')) ecrit(c, a_('legers'), () => {
+    const [x, y] = XY(10, 10);
+    c.courbe(u => [x + 30 * Math.cos(u * 6.4), y + 26 * Math.sin(u * 6.4)], 30, { couleur: 'vert', largeur: 1.6, duree: .35 });
+    c.texte('légers :', 62, 280, { couleur: 'vert', taille: 15, duree: .1 }); c.texte('N ≈ Z', 62, 298, { couleur: 'vert', taille: 15, duree: .1 });
+    c.texte('noyaux légers stables : N ≈ Z', RX, 192, { couleur: 'vert', taille: 18, duree: .4 });
+    c.texte('(Z < 20 : la vallée suit la droite N = Z)', RX, 214, { couleur: 'faible', taille: 15, max: 318, duree: .4 });
+  });
+  if (vu('lourds')) ecrit(c, a_('lourds'), () => {
+    const [x, y] = XY(75, 113), [xp, yp] = XY(82, 126);
+    c.courbe(u => [x + 30 * Math.cos(u * 6.4), y + 34 * Math.sin(u * 6.4)], 30, { couleur: 'orange', largeur: 1.6, duree: .35 });
+    c.texte('lourds : N > Z', 170, 120, { couleur: 'orange', taille: 15, duree: .2 });
+    c.point(xp, yp, 3, 'orange');
+    c.noyaux('[208,82]Pb', xp + 8, yp + 22, { taille: 14, couleur: 'orange' });
+    c.texte('noyaux lourds stables : N > Z', RX, 256, { couleur: 'orange', taille: 18, duree: .4 });
+    c.noyaux('[208,82]Pb : N = 126 > Z = 82', RX, 284, { taille: 16, couleur: 'orange', duree: .5 });
+  });
+  const [xl, yl] = XY(10, 10), [xh, yh] = XY(75, 113);
+  c.repere('legers', xl - 32, yl - 28, 64, 56, 'les noyaux légers stables (N ≈ Z)');
+  c.repere('lourds', xh - 32, yh - 36, 64, 72, 'les noyaux lourds stables (N > Z)');
+  const [xp, yp] = XY(82, 126); c.repere('plomb_208', xp - 8, yp - 8, 16, 16, 'le plomb 208 : le plus lourd des noyaux stables');
+}
+
+/* ── Vue « zones » ─────────────────────────────────────────────────────────────────────────── */
+function dessinerZones(c) {
+  c.texte('Diagramme (N, Z) : les zones', 16, 26, { couleur: 'cyan', taille: 17 });
+  ecrit(c, .1, () => { axesPrincipaux(c); droiteNZ(c); });
+  if (vu('vallee')) ecrit(c, M.vallee - .4, () => c.texte('■ vallée de stabilité : noyaux stables', RX, 56, { couleur: 'blanc', taille: 16, max: 318, duree: .35 }));
+  if (vu('zone_beta_moins')) ecrit(c, a_('zone_beta_moins') + .6, () => {
+    c.texte('β⁻', 118, 226, { couleur: 'bleu', taille: 22, duree: .1 }); const [x, y] = XY(30, CENTRE[30] + 6); c.fleche(132, 232, x - 2, y - 4, { couleur: 'bleu', largeur: 1.5, tete: 7, duree: .2 });
+    c.texte('■ au-dessus : excès de neutrons → β⁻', RX, 80, { couleur: 'bleu', taille: 16, max: 318, duree: .5 });
+  });
+  if (vu('zone_beta_plus')) ecrit(c, a_('zone_beta_plus') + .6, () => {
+    c.texte('β⁺', 296, 262, { couleur: 'orange', taille: 22, duree: .1 }); const [x, y] = XY(68, CENTRE[68] - 13); c.fleche(300, 244, x + 2, y + 6, { couleur: 'orange', largeur: 1.5, tete: 7, duree: .2 });
+    c.texte('■ au-dessous : excès de protons → β⁺', RX, 104, { couleur: 'orange', taille: 16, max: 318, duree: .5 });
+  });
+  if (vu('zone_alpha')) ecrit(c, a_('zone_alpha') + .6, () => {
+    c.texte('α', 396, 86, { couleur: 'jaune', taille: 22, duree: .1 });
+    const [xu, yu] = XY(92, 146); c.cercle(xu, yu, 6, { couleur: 'jaune', largeur: 1.4, duree: .1 });
+    c.texte('■ noyaux lourds (Z > 82) → α', RX, 128, { couleur: 'jaune', taille: 16, max: 318, duree: .5 });
+  });
+  if (vu('fleches')) ecrit(c, a_('fleches') + .5, () => {
+    c.texte('Trois déplacements depuis un même noyau (Z, N) :', RX, 154, { couleur: 'blanc', taille: 15, max: 318, duree: .3 });
+    const [x0, y0] = GXY(0, 0);
+    c.texte('(Z, N)', x0 - 14, y0 + 5, { couleur: 'blanc', taille: 13, align: 'right', duree: .1 });
+    const F = [['beta_moins', 1, -1, 'bleu', 'β⁻ : (Z+1, N−1)'], ['beta_plus', -1, 1, 'orange', 'β⁺ : (Z−1, N+1)'], ['alpha', -2, -2, 'jaune', 'α : (Z−2, N−2)']];
+    for (const [, i, j, coul, txt] of F) {
+      const [x, y] = GXY(i, j), d = Math.hypot(x - x0, y - y0), ux = (x - x0) / d, uy = (y - y0) / d;
+      c.fleche(x0 + ux * 10, y0 + uy * 10, x - ux * 3, y - uy * 3, { couleur: coul, largeur: 2, tete: 8, duree: .25 });
+      c.rect(x - G.c / 2 + 2, y - G.c / 2 + 2, G.c - 4, G.c - 4, { couleur: coul, largeur: 1.3, arrondi: 3, duree: .1 });
+      c.texte(txt, 622, y + 5, { couleur: coul, taille: 16, max: 128, duree: .25 });
+    }
+    c.texte('Z →', G.x + 7 * G.c - 2, G.y + 7 * G.c + 16, { couleur: 'faible', taille: 13, align: 'right', duree: .05 });
+    c.texte('N ↑', G.x - 4, G.y + 7 * G.c + 16, { couleur: 'faible', taille: 13, duree: .05 });
+  });
+  // Repères des zones (rectangles pris dans chaque zone).
+  const [a1, b1] = XY(22, CENTRE[50] + 14), [a2, b2] = XY(50, CENTRE[22] + 4);
+  c.repere('zone_beta_moins', a1, b1, a2 - a1, b2 - b1, 'la zone bleue : excès de neutrons → β⁻');
+  const [c1, d1] = XY(40, CENTRE[70] - 4), [c2, d2] = XY(70, CENTRE[40] - 14);
+  c.repere('zone_beta_plus', c1, d1, c2 - c1, d2 - d1, 'la zone orange : excès de protons → β⁺');
+  const [e1, f1] = XY(83, 150), [e2, f2] = XY(100, 112);
+  c.repere('zone_alpha', e1 - 2, f1, e2 - e1 + 4, f2 - f1, 'la zone jaune : noyaux lourds → α');
+  for (const [id, i, j, txt] of [['fleche_beta_moins', 1, -1, 'β⁻ : vers (Z+1, N−1)'], ['fleche_beta_plus', -1, 1, 'β⁺ : vers (Z−1, N+1)'], ['fleche_alpha', -2, -2, 'α : vers (Z−2, N−2)']]) {
+    const [x0, y0] = GXY(0, 0), [x, y] = GXY(i, j);
+    c.repere(id, Math.min(x0, x) - 8, Math.min(y0, y) - 8, Math.abs(x - x0) + 16, Math.abs(y - y0) + 16, 'la flèche ' + txt);
+  }
+}
+
+/* ── Vue « isotopes » ──────────────────────────────────────────────────────────────────────── */
+function dessinerIsotopes(c) {
+  c.texte('Diagramme (N, Z) : les isotopes', 16, 26, { couleur: 'cyan', taille: 17 });
+  ecrit(c, .1, () => { axesPrincipaux(c); droiteNZ(c); });
+  if (vu('vallee')) ecrit(c, M.vallee - .4, () => c.texte('■ stables (vallée)   ■ β⁻   ■ β⁺   ■ α', RX, 40, { couleur: 'faible', taille: 14, max: 318, duree: .35 }));
+  if (vu('ligne_isotopes')) ecrit(c, a_('ligne_isotopes'), () => {
+    const [x, y0] = XY(6, 0), [, y1] = XY(6, 22);
+    c.ligne(x, y0, x, y1, { couleur: 'jaune', largeur: 1.8, duree: .2 });
+    const [r1x, r1y] = XY(2, 12), [r2x, r2y] = XY(10, 2);
+    c.rect(r1x - 3, r1y - 3, r2x - r1x + 6, r2y - r1y + 6, { couleur: 'faible', largeur: 1.2, arrondi: 2, duree: .15 });
+    c.ligne(r2x + 3, r1y - 3, 466, 64, { couleur: 'faible', largeur: 1.1, pointille: [4, 5], duree: .2 });
+    c.rect(456, 56, 280, 214, { couleur: 'tresfaible', arrondi: 6, duree: .2 });
+    c.texte('zoom', 734, 74, { couleur: 'faible', taille: 13, align: 'right', duree: .05 });
+    for (let Z = 2; Z <= 10; Z += 2) c.texte(String(Z), IX(Z), 286, { couleur: 'faible', taille: 13, align: 'center', duree: .02 });
+    for (let N = 2; N <= 12; N += 2) c.texte(String(N), 450, IY(N) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .02 });
+    c.texte('Z', 744, 290, { couleur: 'blanc', taille: 15, align: 'right', duree: .02 }); c.texte('N', 436, 66, { couleur: 'blanc', taille: 15, duree: .02 });
+    c.ligne(IX(6), IY(1.5), IX(6), IY(12.5), { couleur: 'jaune', largeur: 2.2, duree: .25 });
+    c.cercle(IX(6), IY(6), 11, { couleur: 'vert', largeur: 1.6, duree: .1 });
+    c.noyaux('[12,6]C stable', IX(6) - 18 - c.largeurNoyaux('[12,6]C stable', 15), IY(6) + 5, { taille: 15, couleur: 'vert', duree: .2 });
+    c.cercle(IX(6), IY(8), 11, { couleur: 'bleu', largeur: 1.6, duree: .1 });
+    c.noyaux('[14,6]C → β⁻', IX(6) - 18 - c.largeurNoyaux('[14,6]C → β⁻', 15), IY(8) + 5, { taille: 15, couleur: 'bleu', duree: .2 });
+    c.texte('isotopes : même Z, sur une ligne', RX, 316, { couleur: 'jaune', taille: 17, max: 318, duree: .3 });
+    c.texte('perpendiculaire à l’axe des Z', RX, 340, { couleur: 'jaune', taille: 17, max: 318, duree: .3 });
+  });
+  c.repere('ligne_isotopes', IX(6) - 10, IY(12.5), 20, IY(1.5) - IY(12.5), 'la ligne verticale Z = 6 : les isotopes du carbone');
+  c.repere('carbone_12', IX(6) - 14, IY(6) - 11, 28, 22, 'le carbone 12 : stable, dans la vallée');
+  c.repere('carbone_14', IX(6) - 14, IY(8) - 11, 28, 22, 'le carbone 14 : au-dessus de la vallée → β⁻');
+  c.repere('zoom_isotopes', 456, 56, 280, 214, 'le zoom autour du carbone (Z de 2 à 10)');
+}
+
+/* ── Vue « famille » : ²³⁸U → ²⁰⁶Pb ───────────────────────────────────────────────────────── */
+const etapesFaites = () => { let n = 0; for (let k = 1; k <= 14; k++) if (S.t >= debutEtape(k) + .45) n = k; return n; };
+const compte = () => { const n = etapesFaites(); let a = 0, b = 0; for (let k = 1; k <= n; k++) typeEtape(k) === 'alpha' ? a++ : b++; return { a, b, n }; };
+function peindreFamille(ctx) {
+  // Le fond du zoom : chaque case colorée selon sa zone (léger), les stables sombres.
+  peindreCases(ctx, { bleu: .28, orange: .28, jaune: .28, xy: XYf, kx: FZ.kx, ky: FZ.ky, filtre: c => c.Z >= 80 && c.Z <= 93 && c.N >= 122 && c.N <= 147,
+    clip: [FZ.x0 - FZ.kx / 2, FZ.y0 - 25.5 * FZ.ky, 14 * FZ.kx, 26 * FZ.ky] });
+  const { n } = compte();
+  for (let k = 0; k <= n; k++) {
+    const [Xs, A, Z] = FAM[k], [x, y] = XYf(Z, A - Z), courant = k === n && S.t >= M.depart - .8;
+    if (k === 0 && S.t < M.depart - 1) continue;
+    miniNoyau(ctx, x, y, 7, { eclat: courant && k < 14 ? .6 : 0, vert: k === 14 });
+    void Xs;
+  }
+  // La particule qui part et le petit éclair, pendant chaque désintégration.
+  for (let k = 1; k <= 14; k++) {
+    const t0 = debutEtape(k), f = (S.t - t0) / .55; if (f < 0 || f > 1) continue;
+    const [, A, Z] = FAM[k - 1], [x, y] = XYf(Z, A - Z);
+    eclair(ctx, x, y, f);
+    if (typeEtape(k) === 'alpha') { const px = x - 60 * f, py = y - 40 * f; ctx.globalAlpha = 1 - f * .7; sphere(ctx, px - 2.5, py - 2, 3.2, 'p'); sphere(ctx, px + 2.5, py + 2, 3.2, 'p'); sphere(ctx, px + 2.5, py - 2, 3.2, 'n'); sphere(ctx, px - 2.5, py + 2, 3.2, 'n'); ctx.globalAlpha = 1; }
+    else { ctx.globalAlpha = 1 - f * .7; sphere(ctx, x + 50 * f, y - 44 * f, 3.2, 'e'); ctx.globalAlpha = 1; }
+  }
+}
+function nomNoyau(c, k, o = {}) {
+  const [X, A, Z] = FAM[k], [x, y] = XYf(Z, A - Z), s = `[${A},${Z}]${X}`, w = c.largeurNoyaux(s, 14);
+  const cote = COTE[k];
+  if (cote === 'g') c.noyaux(s, x - 12 - w, y + 5, { taille: 14, ...o });
+  else if (cote === 'd') c.noyaux(s, x + 12, y + 5, { taille: 14, ...o });
+  else c.noyaux(s, x + 10, y - 5, { taille: 14, ...o });
+}
+function dessinerFamille(c) {
+  c.texte('Famille de l’uranium 238 (zoom du diagramme)', 16, 26, { couleur: 'cyan', taille: 17 });
+  ecrit(c, .1, () => {
+    c.fleche(FZ.x0 - 18, 372, 442, 372, { couleur: 'blanc', largeur: 1.8, duree: .25 });
+    c.fleche(FZ.x0 - 18, 372, FZ.x0 - 18, 36, { couleur: 'blanc', largeur: 1.8, duree: .25 });
+    for (let Z = 80; Z <= 93; Z++) { const [x] = XYf(Z, 122); c.ligne(x, 368, x, 376, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(Z), x, 390, { couleur: 'faible', taille: 12, align: 'center', duree: .02 }); }
+    for (let N = 125; N <= 145; N += 5) { const [, y] = XYf(80, N); c.ligne(FZ.x0 - 22, y, FZ.x0 - 14, y, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(N), FZ.x0 - 26, y + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .03 }); }
+    c.texte('Z', 446, 392, { couleur: 'blanc', taille: 18, duree: .03 });
+    c.texte('N', FZ.x0 - 8, 46, { couleur: 'blanc', taille: 18, duree: .03 });
+  });
+  ecrit(c, .4, () => {
+    c.texte('→ α : Z − 2, N − 2  (A − 4)', 462, 64, { couleur: 'jaune', taille: 16, max: 288, duree: .35 });
+    c.texte('→ β⁻ : Z + 1, N − 1  (A ne change pas)', 462, 88, { couleur: 'bleu', taille: 16, max: 288, duree: .4 });
+  });
+  if (vu('depart')) ecrit(c, a_('depart'), () => { nomNoyau(c, 0, { couleur: 'blanc', duree: .3 }); c.texte('départ', ...(() => { const [x, y] = XYf(92, 146); return [x - 30, y - 16]; })(), { couleur: 'faible', taille: 13, align: 'right', duree: .2 }); });
+  // Les flèches, une par désintégration, puis le nom du noyau fils.
+  for (let k = 1; k <= 14; k++) {
+    const t0 = debutEtape(k); if (S.t < t0) break;
+    ecrit(c, t0, () => {
+      const [, A0, Z0] = FAM[k - 1], [, A1, Z1] = FAM[k], [x0, y0] = XYf(Z0, A0 - Z0), [x1, y1] = XYf(Z1, A1 - Z1);
+      const d = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / d, uy = (y1 - y0) / d;
+      c.fleche(x0 + ux * 8, y0 + uy * 8, x1 - ux * 9, y1 - uy * 9, { couleur: typeEtape(k) === 'alpha' ? 'jaune' : 'bleu', largeur: 1.9, tete: 7, duree: .45 });
+      nomNoyau(c, k, { couleur: k === 14 ? 'vert' : 'blanc', duree: .25 });
+    }, finEtape(k));
+  }
+  const { a, b, n } = compte();
+  c.direct(() => {
+    if (S.t < .3 && !S.fait) return;
+    c.texte(`α : ${a}`, 470, 150, { couleur: 'jaune', taille: 30 });
+    c.texte(`β⁻ : ${b}`, 600, 150, { couleur: 'bleu', taille: 30 });
+    if (n >= 1) {
+      const [Xp, Ap, Zp] = FAM[n - 1], [Xf, Af, Zf] = FAM[n];
+      const part = typeEtape(n) === 'alpha' ? '[4,2]He' : '[0,-1]e';
+      c.texte(`désintégration ${n} / 14 :`, 462, 186, { couleur: 'faible', taille: 14 });
+      c.noyaux(`[${Ap},${Zp}]${Xp} → [${Af},${Zf}]${Xf} + ${part}`, 462, 212, { taille: 18, couleur: typeEtape(n) === 'alpha' ? 'jaune' : 'bleu' });
+    }
+  });
+  if (vu('milieu')) ecrit(c, a_('milieu'), () => c.noyaux('à mi-chemin : [222,86]Rn (4 α et 2 β⁻)', 462, 246, { taille: 16, couleur: 'faible', duree: .5 }));
+  if (vu('arrivee')) ecrit(c, a_('arrivee'), () => {
+    const [x, y] = XYf(82, 124); c.cercle(x, y, 13, { couleur: 'vert', largeur: 1.8, duree: .2 });
+    c.noyaux('arrivée : [206,82]Pb, stable', 462, 274, { taille: 16, couleur: 'vert', duree: .35 });
+  });
+  if (vu('bilan')) ecrit(c, a_('bilan'), () => {
+    c.noyaux('[238,92]U → [206,82]Pb + 8 [4,2]He + 6 [0,-1]e', 462, 310, { taille: 18, couleur: 'blanc', duree: .8 });
+    c.rect(560, 322, 130, 32, { couleur: 'vert', largeur: 1.8, arrondi: 7, duree: .3 });
+    c.texte('8 α et 6 β⁻', 625, 345, { couleur: 'vert', taille: 20, align: 'center', duree: .4 });
+    c.texte('A : 238 = 206 + 8×4 ;  Z : 92 = 82 + 8×2 − 6', 462, 378, { couleur: 'faible', taille: 15, max: 288, duree: .6 });
+  });
+  c.repere('vue_diagramme', FZ.x0 - 46, 36, 410, 364, 'le zoom du diagramme (N, Z) : Z de 80 à 93, N de 122 à 147');
+  c.repere('axe_Z', FZ.x0 - 18, 362, 380, 34, 'l’axe des Z');
+  c.repere('axe_N', FZ.x0 - 50, 36, 40, 336, 'l’axe des N');
+  { const [x, y] = XYf(92, 146); c.repere('uranium_238', x - 12, y - 12, 24, 24, 'l’uranium 238 : le départ'); }
+  { const [x, y] = XYf(82, 124); c.repere('plomb_206', x - 12, y - 12, 24, 24, 'le plomb 206 : l’arrivée, stable'); }
+  c.repere('compteur_alpha', 466, 124, 110, 34, `le compteur α : ${a}`);
+  c.repere('compteur_beta', 596, 124, 130, 34, `le compteur β⁻ : ${b}`);
+  { const [x0, y0] = XYf(92, 146), [x1, y1] = XYf(90, 144); c.repere('fleche_alpha', x1 - 6, y0 - 6, x0 - x1 + 12, y1 - y0 + 12, 'la première flèche α : ²³⁸U → ²³⁴Th'); }
+  { const [x0, y0] = XYf(90, 144), [x1, y1] = XYf(91, 143); c.repere('fleche_beta_moins', x0 - 6, y0 - 6 - (y0 - y1), x1 - x0 + 12, y0 - y1 + 12, 'la première flèche β⁻ : ²³⁴Th → ²³⁴Pa'); }
+  c.repere('bilan', 456, 290, 290, 96, 'le bilan : 8 α et 6 β⁻');
+}
+
+/* ── Vue « famille2024 » (national 2024 R) ─────────────────────────────────────────────────── */
+const N24 = { Po212: [84, 212], Bi212: [83, 212], Pb212: [82, 212], Tl208: [81, 208], X: [82, 208] };
+function peindre2024(ctx) {
+  const f = apres(.4, .8);
+  for (const [cle, [Z, A]] of Object.entries(N24)) {
+    const [x, y] = XY24(Z, A);
+    if (cle === 'X' && !vu('nucleide_X')) { ctx.globalAlpha = .5 * f; sphere(ctx, x, y, 6, 'n'); ctx.globalAlpha = 1; continue; }
+    miniNoyau(ctx, x, y, 7, { alpha: f, vert: cle === 'X' });
+  }
+}
+function dessiner2024(c) {
+  c.texte('Schéma type national 2024 R : famille du thorium', 16, 26, { couleur: 'cyan', taille: 17 });
+  ecrit(c, .1, () => {
+    c.fleche(70, 372, 440, 372, { couleur: 'blanc', largeur: 1.8, duree: .25 });
+    c.fleche(70, 372, 70, 36, { couleur: 'blanc', largeur: 1.8, duree: .25 });
+    for (let Z = 80; Z <= 85; Z++) { const [x] = XY24(Z, 205); c.ligne(x, 368, x, 376, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(Z), x, 391, { couleur: 'faible', taille: 13, align: 'center', duree: .03 }); }
+    for (let A = 206; A <= 213; A++) { const [, y] = XY24(80, A); c.ligne(66, y, 74, y, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(A), 60, y + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .03 }); }
+    c.texte('Z', 446, 392, { couleur: 'blanc', taille: 18, duree: .03 });
+    c.texte('A', 80, 46, { couleur: 'blanc', taille: 18, duree: .03 });
+    // Pointillés de lecture vers les axes, puis les noms.
+    for (const [cle, [Z, A]] of Object.entries(N24)) {
+      const [x, y] = XY24(Z, A);
+      c.ligne(x, y, x, 372, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5], duree: .05 });
+      c.ligne(70, y, x, y, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5], duree: .05 });
+      void cle;
+    }
+    c.noyaux('[212,84]Po', 348, 99, { taille: 18, couleur: 'blanc', duree: .2 });
+    c.noyaux('[212,83]Bi', 276, 72, { taille: 18, couleur: 'blanc', align: 'center', duree: .2 });
+    c.noyaux('[212,82]Pb', 214, 72, { taille: 18, couleur: 'blanc', align: 'center', duree: .2 });
+    c.noyaux('[208,81]Tl', 142 - c.largeurNoyaux('[208,81]Tl', 18), 251, { taille: 18, couleur: 'blanc', duree: .2 });
+    c.texte('X', 224, 270, { couleur: 'jaune', taille: 20, duree: .05 });
+  });
+  if (vu('trace')) ecrit(c, M.trace - .6, () => c.texte('A en ordonnée, Z en abscisse', 462, 60, { couleur: 'faible', taille: 16, max: 288, duree: .5 }));
+  if (vu('fleche_1')) ecrit(c, a_('fleche_1'), () => {
+    const [x0, y0] = XY24(83, 212), [x1] = XY24(84, 212);
+    c.fleche(x0 + 9, y0, x1 - 10, y0, { couleur: 'bleu', largeur: 2, tete: 7, duree: .25 });
+    c.texte('(1)', (x0 + x1) / 2, y0 - 12, { couleur: 'bleu', taille: 16, align: 'center', duree: .1 });
+    c.texte('(1) : A ne change pas, Z augmente de 1 : β⁻', 462, 110, { couleur: 'bleu', taille: 16, max: 288, duree: .6 });
+    c.noyaux('[212,83]Bi → [212,84]Po + [0,-1]e', 462, 140, { taille: 17, couleur: 'bleu', duree: .6 });
+  });
+  if (vu('fleche_2')) ecrit(c, a_('fleche_2'), () => {
+    const [x0, y0] = XY24(83, 212), [x1, y1] = XY24(81, 208), d = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / d, uy = (y1 - y0) / d;
+    c.fleche(x0 + ux * 10, y0 + uy * 10, x1 - ux * 11, y1 - uy * 11, { couleur: 'jaune', largeur: 2, tete: 8, duree: .3 });
+    c.texte('(2)', (x0 + x1) / 2 + 22, (y0 + y1) / 2, { couleur: 'jaune', taille: 16, duree: .1 });
+    c.texte('(2) : A diminue de 4, Z de 2 : α', 462, 186, { couleur: 'jaune', taille: 16, max: 288, duree: .55 });
+    c.noyaux('[212,83]Bi → [208,81]Tl + [4,2]He', 462, 216, { taille: 17, couleur: 'jaune', duree: .6 });
+  });
+  if (vu('nucleide_X')) ecrit(c, a_('nucleide_X'), () => {
+    const [xt, yt] = XY24(81, 208), [xx, yx] = XY24(82, 208), [xp, yp] = XY24(84, 212);
+    c.fleche(xt + 10, yt, xx - 11, yx, { couleur: 'faible', largeur: 1.4, pointille: [4, 4], tete: 7, duree: .2 });
+    const d = Math.hypot(xx - xp, yx - yp), ux = (xx - xp) / d, uy = (yx - yp) / d;
+    c.fleche(xp + ux * 10, yp + uy * 10, xx - ux * 11, yx - uy * 11, { couleur: 'faible', largeur: 1.4, pointille: [4, 4], tete: 7, duree: .25 });
+    c.texte('X : Z = 82 → Pb ;  A = 208', 462, 262, { couleur: 'vert', taille: 17, max: 288, duree: .5 });
+    c.rect(470, 278, 170, 44, { couleur: 'vert', largeur: 1.8, arrondi: 8, duree: .3 });
+    c.noyaux('X = [208,82]Pb', 555, 310, { taille: 22, couleur: 'vert', align: 'center', duree: .5 });
+  });
+  c.repere('vue_diagramme', 30, 36, 420, 362, 'le schéma (A, Z) du national 2024');
+  c.repere('axe_Z', 70, 362, 380, 34, 'l’axe des Z (abscisse)');
+  c.repere('axe_A', 30, 36, 50, 336, 'l’axe des A (ordonnée)');
+  { const [x0, y0] = XY24(83, 212), [x1] = XY24(84, 212); c.repere('fleche_1', x0 - 4, y0 - 14, x1 - x0 + 8, 46, 'la flèche (1) : β⁻'); }
+  { const [x0, y0] = XY24(83, 212), [x1, y1] = XY24(81, 208); c.repere('fleche_2', x1 + 8, y0 + 10, x0 - x1 - 16, y1 - y0 - 20, 'la flèche (2) : α'); }
+  { const [x, y] = XY24(82, 208); c.repere('nucleide_X', x - 14, y - 14, 46, 40, 'le nucléide X'); }
+}
+
+/* ── Image ─────────────────────────────────────────────────────────────────────────────────── */
+function dessiner(c) {
+  c.direct(() => peindre(c.ctx));
+  if (vue === 'vallee') dessinerVallee(c);
+  else if (vue === 'zones') dessinerZones(c);
+  else if (vue === 'isotopes') dessinerIsotopes(c);
+  else if (vue === 'famille') dessinerFamille(c);
+  else dessiner2024(c);
+  if (PLEIN()) { reperesPlein(c); c.direct(() => { const [x, y] = XY(P.Z, P.N); c.cercle(x, y, 10, { couleur: 'jaune', largeur: 1.4 }); etiquetteCurseur(c); }); }
+  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 26, { couleur: 'faible', taille: 13, align: 'right' }); });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce qui se voit ────────────────────────────────────────────────────────────────────────── */
+function infoCurseur() {
+  const z = zone(P.Z, P.N), A = P.Z + P.N;
+  return { Z: P.Z, N: P.N, A, symbole: SYM[P.Z - 1], zone: z, ou: ZONE_TXT[z][0], type: ZONE_TXT[z][1] };
+}
+const EXP = '⁰¹²³⁴⁵⁶⁷⁸⁹', IND = '₀₁₂₃₄₅₆₇₈₉';
+const haut_ = v => String(v).replace(/\d/g, d => EXP[d]), bas_ = v => String(v).replace(/\d/g, d => IND[d]);
+function texteCurseur() {
+  const i = infoCurseur();
+  return `Noyau-curseur : ${haut_(i.A)}${bas_(i.Z)}${i.symbole} (Z = ${i.Z}, N = ${i.N}, A = ${i.A}) : ${i.ou} → ${i.zone === 'stable' || i.zone === 'hors' ? i.type : 'type prévu : ' + i.type}.`;
+}
+function phase() {
+  if (S.t <= 0) return 'la scène n’a pas commencé';
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  if (vue === 'famille' && S.t > M.depart && S.t < M.arrivee) { const { n } = compte(); return `la famille se dessine : ${n} désintégration${n > 1 ? 's' : ''} sur 14`; }
+  if (!dernier) { const prochain = SUITE.find(s => S.t < s[1]); return prochain ? `en route vers : ${prochain[2]}` : ''; }
+  return dernier[0] === 'fin' ? 'fin, tout est écrit' : dernier[1];
+}
+function ceQuiSeVoit() {
+  const m = [], etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  m.push(`Vue « ${vue} », t = ${fr(S.t, 2)} s (${etat}).`);
+  if (PLEIN()) {
+    m.push('Diagramme (N, Z) : Z (nombre de protons) en abscisse de 0 à 100, gradué tous les 20 ; N (nombre de neutrons) en ordonnée de 0 à 150, gradué tous les 25.');
+    if (vue !== 'vallee' || vu('droite_N_egal_Z')) m.push('La droite N = Z est tracée en pointillé.');
+    if (vue === 'vallee') {
+      if (vu('axes')) m.push('Écrit : « Un carré = un noyau : Z protons, N neutrons ».');
+      if (vu('vallee')) m.push(S.t < M.vallee ? 'La vallée de stabilité se peint de gauche à droite.' : 'La vallée de stabilité est peinte : une bande de petits carrés sombres (noyaux stables) qui suit N ≈ Z jusqu’à Z ≈ 20 puis s’écarte au-dessus de la droite, jusqu’à ²⁰⁸₈₂Pb ; autour, les noyaux instables en gris clair.');
+      if (vu('legers')) m.push('Les noyaux légers sont entourés en vert : « noyaux légers stables : N ≈ Z ».');
+      if (vu('lourds')) m.push('Les noyaux lourds stables sont entourés en orange : « noyaux lourds stables : N > Z », avec ²⁰⁸₈₂Pb : N = 126 > Z = 82.');
+    } else {
+      m.push(vue === 'zones' && !vu('vallee') ? 'La vallée de stabilité se peint.' : 'La vallée de stabilité (carrés sombres, noyaux stables) est peinte.');
+    }
+    if (vue === 'zones') {
+      if (vu('zone_beta_moins')) m.push('Zone bleue au-dessus de la vallée : « excès de neutrons → β⁻ ».');
+      if (vu('zone_beta_plus')) m.push('Zone orange au-dessous de la vallée : « excès de protons → β⁺ ».');
+      if (vu('zone_alpha')) m.push('Zone jaune des noyaux lourds (Z > 82), l’uranium 238 entouré : « noyaux lourds → α ».');
+      if (vu('fleches')) m.push('À droite, une grille agrandie : depuis un même noyau (Z, N), trois flèches : β⁻ (bleue) vers (Z+1, N−1), β⁺ (orange) vers (Z−1, N+1), α (jaune) vers (Z−2, N−2).');
+    }
+    if (vue === 'isotopes') {
+      m.push('Les noyaux instables sont colorés : bleu au-dessus de la vallée (β⁻), orange au-dessous (β⁺), jaune pour Z > 82 (α).');
+      if (vu('ligne_isotopes')) m.push('Une ligne verticale jaune à Z = 6, et un zoom à droite (Z de 2 à 10, N de 2 à 12) : ¹²C entouré en vert (stable, dans la vallée), ¹⁴C entouré en bleu (au-dessus → β⁻). Écrit : « isotopes : même Z, sur une ligne perpendiculaire à l’axe des Z ».');
+    }
+    m.push(texteCurseur());
+  } else if (vue === 'famille') {
+    const { a, b, n } = compte();
+    m.push('Zoom du diagramme (N, Z) : Z de 80 à 93 en abscisse, N de 122 à 147 en ordonnée (cases colorées par zone, stables sombres). Légende : flèche jaune α (Z − 2, N − 2, A − 4) ; flèche bleue β⁻ (Z + 1, N − 1, A ne change pas).');
+    if (vu('depart')) m.push('Départ : ²³⁸₉₂U.');
+    if (n) {
+      const chemin = FAM.slice(0, n + 1).map(([X, A, Z]) => `${haut_(A)}${bas_(Z)}${X}`).join(' → ');
+      const [Xp, Ap, Zp] = FAM[n - 1], [Xf, Af, Zf] = FAM[n];
+      m.push(`Flèches tracées (${n} sur 14) : ${chemin}. Dernière désintégration écrite : ${haut_(Ap)}${bas_(Zp)}${Xp} → ${haut_(Af)}${bas_(Zf)}${Xf} + ${typeEtape(n) === 'alpha' ? '⁴₂He (α)' : '⁰₋₁e (β⁻)'}.`);
+    }
+    m.push(`Compteurs : « α : ${a} » et « β⁻ : ${b} ».`);
+    if (vu('milieu')) m.push('Écrit : « à mi-chemin : ²²²₈₆Rn (4 α et 2 β⁻) ».');
+    if (vu('arrivee')) m.push('²⁰⁶₈₂Pb est entouré en vert : « arrivée : ²⁰⁶₈₂Pb, stable ».');
+    if (vu('bilan')) m.push('Bilan : « ²³⁸₉₂U → ²⁰⁶₈₂Pb + 8 ⁴₂He + 6 ⁰₋₁e », encadré « 8 α et 6 β⁻ », et « A : 238 = 206 + 8×4 ; Z : 92 = 82 + 8×2 − 6 ».');
+    m.push('(Le noyau-curseur n’est pas affiché dans cette vue.)');
+  } else {
+    m.push('Schéma type national 2024 R : A en ordonnée (206 à 213), Z en abscisse (80 à 85), pointillés de lecture vers les axes ; cinq nucléides : ²¹²₈₄Po, ²¹²₈₃Bi, ²¹²₈₂Pb, ²⁰⁸₈₁Tl et X (Z = 82, A = 208).');
+    if (vu('fleche_1')) m.push('Flèche (1) bleue ²¹²₈₃Bi → ²¹²₈₄Po : « A ne change pas, Z augmente de 1 : β⁻ » ; ²¹²₈₃Bi → ²¹²₈₄Po + ⁰₋₁e.');
+    if (vu('fleche_2')) m.push('Flèche (2) jaune ²¹²₈₃Bi → ²⁰⁸₈₁Tl : « A diminue de 4, Z de 2 : α » ; ²¹²₈₃Bi → ²⁰⁸₈₁Tl + ⁴₂He.');
+    if (vu('nucleide_X')) m.push('X identifié : « X : Z = 82 → Pb ; A = 208 », encadré « X = ²⁰⁸₈₂Pb » ; flèches en pointillé de ²⁰⁸Tl et de ²¹²Po vers X.');
+    m.push('(Le noyau-curseur n’est pas affiché dans cette vue.)');
+  }
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+function message() {
+  if (vue === 'famille') return '²³⁸U → ²⁰⁶Pb : 8 α et 6 β⁻.';
+  if (vue === 'famille2024') return 'X = ²⁰⁸₈₂Pb : (1) β⁻, (2) α.';
+  return texteCurseur() + ' Fais glisser le curseur.';
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  let vueChangee = false;
+  if (VUES.includes(p.vue) && p.vue !== vue) {
+    vue = p.vue; choisirSuite(); S.t = 0; S.fait = false; S.running = false; S.jusqua = null; vueChangee = true;
+    window.Tableau.explication({ [vue]: EXPLICATIONS[vue] }); setTimeout(() => pont.manifeste(), 200);
+  }
+  const z = p.noyau_Z ?? p.Z, n = p.noyau_N ?? p.N;
+  if (z !== undefined && z !== null && z !== '' && Number.isFinite(+z)) P.Z = clamp(Math.round(+z), 1, 100);
+  if (n !== undefined && n !== null && n !== '' && Number.isFinite(+n)) P.N = clamp(Math.round(+n), 0, 150);
+  scene.sale = true;
+  bulle($('feedback'), PLEIN() ? texteCurseur() : `Vue « ${vue} ».`);
+  pont.noter('set_parameters', params()); pont.emettre();
+  if (vueChangee) start();
+}
+function params() { const i = infoCurseur(); return { vue, noyau_Z: P.Z, noyau_N: P.N, A: i.A, symbole: i.symbole, zone: i.zone, type_prevu: i.type, curseur_visible: PLEIN() }; }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : le noyau-curseur, sur le diagramme complet. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { if (!PLEIN()) return null; const [x, y] = scene.local(px, py), [cx, cy] = XY(P.Z, P.N); return Math.hypot(x - cx, y - cy) < 16 ? 'curseur' : null; },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py), Z = clamp(Math.round((x - O.x) / KX), 1, 100), N = clamp(Math.round((O.y - y) / KY), 0, 150);
+    if (Z !== P.Z || N !== P.N) { P.Z = Z; P.N = N; scene.sale = true; }
+  },
+  lacher: () => { scene.sale = true; bulle($('feedback'), texteCurseur()); pont.noter('set_parameters', params()); pont.emettre(); },
+});
+
+const EXPLICATIONS = {
+  vallee: [
+    { repere: 'axe_Z', texte: 'En abscisse, Z : le nombre de protons.' },
+    { repere: 'axe_N', texte: 'En ordonnée, N : le nombre de neutrons. Chaque carré est un noyau.' },
+    { repere: 'droite_N_Z', texte: 'En pointillé, la droite N = Z.' },
+    { repere: 'vallee', texte: 'Les carrés sombres sont les noyaux stables : la vallée de stabilité.' },
+    { repere: 'legers', texte: 'Pour les noyaux légers stables, N ≈ Z : la vallée suit la droite.' },
+    { repere: 'lourds', texte: 'Pour les noyaux lourds stables, N > Z : la vallée passe au-dessus de la droite.' },
+    { repere: 'curseur', texte: 'Fais glisser ce noyau : la bulle te dit sa zone et son type prévu.' },
+  ],
+  zones: [
+    { repere: 'vallee', texte: 'Au milieu, la vallée de stabilité.' },
+    { repere: 'zone_beta_moins', texte: 'Au-dessus, trop de neutrons : ces noyaux sont émetteurs β⁻.' },
+    { repere: 'zone_beta_plus', texte: 'Au-dessous, trop de protons : émetteurs β⁺.' },
+    { repere: 'zone_alpha', texte: 'Les noyaux lourds, au-delà du plomb, sont émetteurs α.' },
+    { repere: 'fleche_beta_moins', texte: 'β⁻ : Z augmente de 1, N diminue de 1.' },
+    { repere: 'fleche_beta_plus', texte: 'β⁺ : Z diminue de 1, N augmente de 1.' },
+    { repere: 'fleche_alpha', texte: 'α : Z et N diminuent de 2.' },
+  ],
+  isotopes: [
+    { repere: 'ligne_isotopes', texte: 'Les isotopes du carbone ont tous Z = 6 : ils sont sur une ligne verticale, perpendiculaire à l’axe des Z.' },
+    { repere: 'carbone_12', texte: 'Le carbone 12 est dans la vallée : il est stable.' },
+    { repere: 'carbone_14', texte: 'Le carbone 14 est au-dessus : trop de neutrons, il est émetteur β⁻.' },
+  ],
+  famille: [
+    { repere: 'uranium_238', texte: 'On part de l’uranium 238.' },
+    { repere: 'fleche_alpha', texte: 'Une flèche α : Z − 2 et N − 2, on arrive au thorium 234.' },
+    { repere: 'fleche_beta_moins', texte: 'Une flèche β⁻ : Z + 1 et N − 1, on arrive au protactinium 234.' },
+    { repere: 'compteur_alpha', texte: 'On compte les α…' },
+    { repere: 'compteur_beta', texte: '… et les β⁻.' },
+    { repere: 'plomb_206', texte: 'On s’arrête au plomb 206, stable.' },
+    { repere: 'bilan', texte: 'Bilan : 8 désintégrations α et 6 désintégrations β⁻.' },
+  ],
+  famille2024: [
+    { repere: 'axe_A', texte: 'Attention : ici A est en ordonnée, Z en abscisse.' },
+    { repere: 'fleche_1', texte: 'Flèche 1 : A ne change pas, Z augmente de 1 : c’est β⁻.' },
+    { repere: 'fleche_2', texte: 'Flèche 2 : A diminue de 4 et Z de 2 : c’est α.' },
+    { repere: 'nucleide_X', texte: 'X a Z = 82 et A = 208 : c’est le plomb 208.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_segre', version: '1.0', title: 'Diagramme (N, Z) — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: VUES.join(' | ') + ' (change de vue et relance)', noyau_Z: '1..100 (Z du noyau-curseur, pas 1)', noyau_N: '0..150 (N du noyau-curseur, pas 1)' },
+    set_time: { time_s: '0..fin de la vue (arrêt sur cet instant, s)' },
+    play_until: { moment: 'vallee : axes | droite_N_egal_Z | vallee | legers | lourds | fin ; zones : vallee | zone_beta_moins | zone_beta_plus | zone_alpha | fleches | fin ; isotopes : vallee | ligne_isotopes | fin ; famille : depart | premiere_alpha | premiere_beta | milieu | arrivee | bilan | fin ; famille2024 : trace | fleche_1 | fleche_2 | nucleide_X | fin (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Diagramme (N, Z) : Z en abscisse, N en ordonnée, droite N = Z, vallée de stabilité (N ≈ Z pour les légers, N > Z pour les lourds, jusqu’à ²⁰⁸₈₂Pb) ; au-dessus excès de neutrons → β⁻, au-dessous excès de protons → β⁺, noyaux lourds → α ; déplacements β⁻ (Z+1, N−1), β⁺ (Z−1, N+1), α (Z−2, N−2) ; isotopes sur une ligne verticale ; famille ²³⁸U → ²⁰⁶Pb : 8 α et 6 β⁻ ; national 2024 R (A en ordonnée) : (1) β⁻, (2) α, X = ²⁰⁸₈₂Pb.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: moments(), compteurs: vue === 'famille' ? (({ a, b }) => ({ alpha: a, beta_moins: b }))(compte()) : undefined }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le diagramme (N, Z)…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

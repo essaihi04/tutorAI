@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fonctions primitives — la carte du chapitre</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte à la craie du chapitre des primitives : F et f reliés par deux flèches, dériver et primitiver, et autour les savoir-faire du chapitre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives), ouverture du chapitre.
+ * Vues : ?vue=carte | plus_tard.
+ * carte : centre, verifier, famille, condition, tableau, formes, integrale (repères centre, verifier, integrale).
+ * plus_tard : tableau, ln, exp, integrale (repères ln, exp, integrale).
+ */
+/* Largeur d'un texte avec exposants « ^{…} » (comptés en entier : un peu large, donc sûr). */
+const larg = (c, s, t) => c.largeurTexte(String(s).replace(/\^\{([^}]*)\}/g, '$1').replace(/_/g, ''), t);
+
+/* Une bulle : cadre arrondi tracé d'abord, puis les lignes écrites au centre. Renvoie [x, y, w, h]. */
+function bulle(c, cx, y0, lignes, o = {}) {
+  const t = o.taille || 16, inter = o.inter || 22;
+  const w = Math.max(...lignes.map(l => larg(c, l.t, t))) + 28, h = (lignes.length - 1) * inter + t + 18;
+  const x = cx - w / 2, y = y0 - t - 7;
+  c.rect(x, y, w, h, { couleur: o.cadre || 'faible', arrondi: 14, largeur: 1.5, fond: o.fond, fondAlpha: .08 });
+  lignes.forEach((l, i) => c.texte(l.t, cx, y0 + i * inter, { couleur: l.couleur || 'blanc', taille: t, align: 'center' }));
+  return [x, y, w, h];
+}
+/* Flèche en arc de (x1, y) à (x2, y), bombée de `b` (négatif : vers le haut). */
+function arc(c, x1, x2, y, b, couleur) {
+  const pts = [];
+  for (let i = 0; i <= 24; i++) { const u = i / 24, mx = (x1 + x2) / 2; pts.push([(1 - u) * (1 - u) * x1 + 2 * u * (1 - u) * mx + u * u * x2, y + 2 * u * (1 - u) * b * 2]); }
+  c.trait(pts, { couleur, largeur: 2.6, tremble: .4 });
+  const [xa, ya] = pts[22], [xb, yb] = pts[24], a = Math.atan2(yb - ya, xb - xa), t = 12;
+  c.trait([[xb - t * Math.cos(a - .45), yb - t * Math.sin(a - .45)], [xb, yb], [xb - t * Math.cos(a + .45), yb - t * Math.sin(a + .45)]], { couleur, largeur: 2.6, duree: .1 });
+}
+/* Une ligne « gauche → droite » d'un tableau : gauche calée à droite de xg, flèche verte, droite après. */
+function ligneTab(c, xg, y, g, d, taille = 21, coul = 'vert', tout) {
+  c.texte(g, xg, y, { couleur: tout || 'blanc', taille, align: 'right' });
+  c.fleche(xg + 12, y - taille * .32, xg + 56, y - taille * .32, { couleur: coul, largeur: 2, tete: 9 });
+  c.texte(d, xg + 68, y, { couleur: tout || 'jaune', taille });
+}
+
+MathsTableau.page({
+  id: 'pr_ouverture', titre: 'Fonctions primitives',
+  texte: 'Ouverture du chapitre Fonctions primitives (2ᵉ Bac PC BIOF) : dériver va de F à f, primitiver revient de f à F ; autour, ce qu’on saura faire, et ce qui viendra plus tard (ln, exp, l’intégrale)',
+  vues: {
+    carte: {
+      titre: 'Fonctions primitives : la carte du chapitre',
+      dessiner(c, K) {
+        K.titre('Fonctions primitives : la carte du chapitre');
+        // Le centre : F à gauche, f à droite, dériver en haut (rouge), primitiver en bas (vert).
+        c.texte('F', 318, 196, { couleur: 'cyan', taille: 44, align: 'center' });
+        c.texte('f', 444, 196, { couleur: 'blanc', taille: 44, align: 'center' });
+        c.pause(.2);
+        arc(c, 336, 428, 158, -14, 'rouge');
+        c.texte('dériver', 382, 128, { couleur: 'rouge', taille: 18, align: 'center' });
+        c.pause(.2);
+        arc(c, 428, 336, 206, 14, 'vert');
+        c.texte('primitiver', 382, 250, { couleur: 'vert', taille: 18, align: 'center' });
+        c.repere('centre', 290, 108, 184, 150, 'F et f : dériver, primitiver');
+        K.marque('centre');
+        c.pause(.4);
+        const bv = bulle(c, 145, 74, [{ t: 'Vérifier que F est' }, { t: 'une primitive de f' }, { t: '11 sujets nationaux sur 20', couleur: 'orange' }]);
+        c.ligne(bv[0] + bv[2] + 4, 110, 300, 160, { couleur: 'tresfaible', largeur: 1.2 });
+        c.repere('verifier', ...bv, 'vérifier qu’une fonction est une primitive');
+        K.marque('verifier');
+        c.pause(.4);
+        const bf = bulle(c, 615, 74, [{ t: 'Toutes les primitives :' }, { t: 'F(x) + k', couleur: 'cyan' }]);
+        c.ligne(bf[0] - 4, 100, 462, 160, { couleur: 'tresfaible', largeur: 1.2 });
+        K.marque('famille');
+        c.pause(.4);
+        const bc = bulle(c, 145, 190, [{ t: 'La primitive telle que' }, { t: 'F(x_0) = y_0', couleur: 'cyan' }]);
+        c.ligne(bc[0] + bc[2] + 4, 200, 298, 205, { couleur: 'tresfaible', largeur: 1.2 });
+        K.marque('condition');
+        c.pause(.4);
+        const bt = bulle(c, 615, 190, [{ t: 'Le tableau des' }, { t: 'primitives usuelles' }]);
+        c.ligne(bt[0] - 4, 200, 464, 205, { couleur: 'tresfaible', largeur: 1.2 });
+        K.marque('tableau');
+        c.pause(.4);
+        bulle(c, 380, 291, [{ t: 'Les formes u’u^{n}, u’/u², u’/√u, u’cos u…', couleur: 'blanc' }], { taille: 17 });
+        K.marque('formes');
+        c.pause(.5);
+        const bi = bulle(c, 380, 339, [{ t: 'Semestre 2 : l’intégrale — 20 sujets sur 20', couleur: 'jaune' }], { taille: 17, cadre: 'jaune', fond: 'jaune' });
+        c.repere('integrale', ...bi, 'l’intégrale, au semestre 2');
+        K.marque('integrale');
+      },
+      decrire: {
+        centre: 'Au milieu, F (cyan) à gauche et f à droite ; en haut une flèche rouge « dériver » va de F à f ; en bas une flèche verte « primitiver » revient de f à F.',
+        verifier: 'En haut à gauche, une bulle : « Vérifier que F est une primitive de f — 11 sujets nationaux sur 20 ».',
+        famille: 'En haut à droite, une bulle : « Toutes les primitives : F(x) + k ».',
+        condition: 'À gauche, une bulle : « La primitive telle que F(x₀) = y₀ ».',
+        tableau: 'À droite, une bulle : « Le tableau des primitives usuelles ».',
+        formes: 'En bas, une bulle : « Les formes u’uⁿ, u’/u², u’/√u, u’cos u… ».',
+        integrale: 'Tout en bas, une bulle jaune : « Semestre 2 : l’intégrale — 20 sujets sur 20 ».',
+      },
+      motifs: { centre: 'dériver et primitiver', verifier: 'vérifier une primitive', famille: 'toutes les primitives', condition: 'la primitive avec une condition', tableau: 'le tableau des primitives', formes: 'les formes composées', integrale: 'l’intégrale au semestre 2' },
+      explication: [
+        { repere: 'centre', texte: 'Dériver va de F à f ; primitiver, c’est le chemin du retour, de f à F.' },
+        { repere: 'verifier', texte: 'Le savoir-faire le plus demandé : on dérive F et on retrouve f.' },
+        { repere: 'integrale', texte: 'Tout ce chapitre sert ensuite à calculer les intégrales.' },
+      ],
+    },
+    plus_tard: {
+      titre: 'Ce qui viendra',
+      dessiner(c, K) {
+        K.titre('Ce qui viendra');
+        c.texte('Dans ce chapitre :', 40, 78, { couleur: 'faible', taille: 17 });
+        c.pause(.2);
+        ligneTab(c, 150, 120, 'x^{n}', 'x^{n+1}/(n + 1)');
+        c.pause(.2);
+        ligneTab(c, 150, 162, '1/√x', '2√x');
+        c.pause(.2);
+        ligneTab(c, 150, 204, 'cos x', 'sin x');
+        K.marque('tableau');
+        c.pause(.4);
+        c.texte('Plus tard, chapitre ln :', 430, 78, { couleur: 'orange', taille: 18 });
+        ligneTab(c, 520, 116, '1/x', 'ln|x|', 20, 'orange', 'orange');
+        ligneTab(c, 520, 150, 'u’/u', 'ln|u|', 20, 'orange', 'orange');
+        c.repere('ln', 420, 58, 300, 102, 'plus tard : chapitre ln');
+        K.marque('ln');
+        c.pause(.4);
+        c.texte('Plus tard, chapitre exp :', 430, 196, { couleur: 'orange', taille: 18 });
+        ligneTab(c, 520, 234, 'e^{x}', 'e^{x}', 20, 'orange', 'orange');
+        ligneTab(c, 520, 268, 'u’e^{u}', 'e^{u}', 20, 'orange', 'orange');
+        c.repere('exp', 420, 176, 300, 102, 'plus tard : chapitre exp');
+        K.marque('exp');
+        c.pause(.5);
+        c.texte('Semestre 2 :', 150, 328, { couleur: 'jaune', taille: 20 });
+        c.texte('∫', 278, 336, { couleur: 'blanc', taille: 42 });
+        c.texte('b', 296, 302, { couleur: 'jaune', taille: 16 });
+        c.texte('a', 290, 348, { couleur: 'jaune', taille: 16 });
+        c.texte('f(x)dx = F(b) − F(a)', 312, 328, { couleur: 'blanc', taille: 22 });
+        c.rect(136, 285, 400, 69, { couleur: 'jaune', arrondi: 10, largeur: 1.6 });
+        c.repere('integrale', 136, 285, 400, 69, 'l’intégrale de a à b');
+        K.marque('integrale');
+      },
+      decrire: {
+        tableau: 'À gauche, sous « Dans ce chapitre », trois lignes du tableau : xⁿ → xⁿ⁺¹/(n + 1) ; 1/√x → 2√x ; cos x → sin x.',
+        ln: 'À droite, en orange : « Plus tard, chapitre ln : 1/x → ln|x| ; u’/u → ln|u| ».',
+        exp: 'Dessous, en orange : « Plus tard, chapitre exp : eˣ → eˣ ; u’eᵘ → eᵘ ».',
+        integrale: 'En bas, encadré en jaune : « Semestre 2 : ∫ₐᵇ f(x)dx = F(b) − F(a) », les bornes a et b écrites sur le signe intégrale.',
+      },
+      motifs: { tableau: 'le tableau du chapitre', ln: 'plus tard : ln', exp: 'plus tard : exp', integrale: 'l’intégrale au semestre 2' },
+      explication: [
+        { repere: 'ln', texte: '1/x n’a pas encore de primitive connue : elle viendra avec ln.' },
+        { repere: 'exp', texte: 'eˣ est sa propre primitive : chapitre exp.' },
+        { repere: 'integrale', texte: 'Une primitive F calcule l’intégrale : F(b) − F(a).' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

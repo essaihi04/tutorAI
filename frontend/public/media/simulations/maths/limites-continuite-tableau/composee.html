@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deux machines à la suite — composée</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux boîtes à la craie à la suite : x entre dans u, le résultat entre dans la racine ; la racine n’accepte que du positif"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), diapositives i3, i4 et lr1.
+ * Vues : ?vue=machines | limite | racine_n. `fin` = construction complète.
+ */
+/* La chaîne x → [ u ] → u(x) → [ racine ] → résultat ; renvoie les centres des trois colonnes. */
+function chaine(c, K, uTxt, rTxt, sortie, idR) {
+  const Y = 96, H = 52;
+  c.texte('x', 40, Y + H / 2 + 8, { couleur: 'blanc', taille: 24 });
+  c.fleche(62, Y + H / 2, 104, Y + H / 2, { couleur: 'faible', largeur: 1.8 });
+  LC.boite(c, 108, Y, 196, H, uTxt, { couleur: 'cyan' });
+  c.texte('u', 206, Y - 8, { couleur: 'cyan', taille: 16, align: 'center' });
+  c.repere('boite_u', 104, Y - 26, 204, H + 30, 'la première machine : u');
+  K.marque('boite_u');
+  c.pause(.3);
+  c.fleche(308, Y + H / 2, 352, Y + H / 2, { couleur: 'faible', largeur: 1.8 });
+  c.texte('u(x)', 330, Y + H / 2 - 10, { couleur: 'faible', taille: 15, align: 'center' });
+  LC.boite(c, 356, Y, 150, H, rTxt, { couleur: 'jaune' });
+  c.fleche(510, Y + H / 2, 556, Y + H / 2, { couleur: 'faible', largeur: 1.8 });
+  c.texte(sortie, 562, Y + H / 2 + 8, { couleur: 'jaune', taille: 22 });
+  c.repere(idR, 352, Y - 6, 158, H + 12, 'la deuxième machine : la racine');
+  K.marque(idR);
+  return { xu: 206, xr: 431, xs: 600, Y, H };
+}
+
+MathsTableau.page({
+  id: 'lc_composee', titre: 'Deux machines à la suite',
+  texte: 'Construction à la craie du cours Limites et continuité : une composée comme deux machines à la suite, d’abord u, ensuite la racine',
+  vues: {
+    machines: {
+      titre: 'x ↦ √(3x − 6) : d’abord u, ensuite la racine',
+      dessiner(c, K) {
+        K.titre('Deux machines à la suite');
+        const P = chaine(c, K, 'u(x) = 3x − 6', '√', '√(u(x))', 'boite_racine');
+        c.pause(.3);
+        c.texte('n’accepte que du positif', P.xr, P.Y + P.H + 26, { couleur: 'orange', taille: 17, align: 'center' });
+        c.repere('positif', P.xr - 100, P.Y + P.H + 8, 200, 26, 'la racine n’accepte que du positif');
+        K.marque('positif');
+        c.pause(.4);
+        c.texte('x = 4  →  u = 6  →  √6  ✓', 40, 244, { couleur: 'vert', taille: 19 });
+        K.marque('exemple_ok');
+        c.pause(.3);
+        c.texte('x = 1  →  u = −3  →  ✗ refusé', 40, 284, { couleur: 'rouge', taille: 19 });
+        K.marque('exemple_refuse');
+        c.pause(.4);
+        const G = K.axes({ x0: 500, y0: 232, w: 230, h: 116, xmin: -0.3, xmax: 3.4, ymin: -6.5, ymax: 4, gx: [[2, '2']], gy: [], origine: false });
+        K.anime(1, p => K.courbePart(G, x => 3 * x - 6, 0, 3.3, p, { couleur: 'cyan', largeur: 2 }));
+        K.rond(G, 2, 0, true, 'jaune');
+        K.anime(1, p => K.courbePart(G, x => Math.sqrt(3 * x - 6), 2, 3.3, p, { couleur: 'jaune' }));
+        c.texte('u', G.X(3.3) + 4, G.Y(3.6) + 4, { couleur: 'cyan', taille: 14 });
+        c.texte('√u', G.X(3.3) + 4, G.Y(1.7) + 16, { couleur: 'jaune', taille: 14 });
+        c.texte('x ≥ 2 donc 3x − 6 ≥ 0', 40, 330, { couleur: 'jaune', taille: 19 });
+        K.marque('courbes');
+      },
+      decrire: {
+        boite_u: 'Une boîte cyan « u(x) = 3x − 6 » : x entre dans la première machine.',
+        boite_racine: 'Le résultat u(x) entre dans la deuxième boîte, la racine : on obtient √(u(x)).',
+        positif: 'Sous la boîte racine, en orange : n’accepte que du positif.',
+        exemple_ok: 'Exemple : x = 4 donne u = 6, la racine donne √6.',
+        exemple_refuse: 'Exemple : x = 1 donne u = −3, la racine refuse.',
+        courbes: 'Petit repère : la droite u(x) = 3x − 6 et la courbe de √(3x − 6) qui naît en x = 2 ; écrit : x ≥ 2 donc 3x − 6 ≥ 0.',
+      },
+      motifs: { boite_u: 'la machine u', boite_racine: 'la machine racine', positif: 'seulement du positif', exemple_ok: 'x = 4 accepté', exemple_refuse: 'x = 1 refusé', courbes: 'u positive à partir de 2' },
+      explication: [{ repere: 'boite_u', texte: 'D’abord u : on calcule 3x − 6.' }, { repere: 'boite_racine', texte: 'Ensuite la racine de ce résultat.' }, { repere: 'positif', texte: 'La racine n’accepte que du positif : il faut prouver u ≥ 0.' }],
+    },
+    limite: {
+      titre: 'La limite traverse les deux machines : √(4 + 1/x) en +∞',
+      dessiner(c, K) {
+        K.titre('La limite passe d’une machine à l’autre');
+        const P = chaine(c, K, 'u(x) = 4 + 1/x', '√', '√(u(x))', 'boite_racine');
+        c.pause(.4);
+        const y = P.Y + P.H + 56;
+        c.texte('x → +∞', 30, y, { couleur: 'jaune', taille: 19 });
+        K.marque('x_infini');
+        c.pause(.3);
+        c.fleche(110, y - 6, 150, y - 6, { couleur: 'jaune', largeur: 1.6 });
+        c.texte('u(x) → 4', P.xu, y, { couleur: 'jaune', taille: 19, align: 'center' });
+        K.marque('u_limite');
+        c.pause(.3);
+        c.fleche(262, y - 6, 380, y - 6, { couleur: 'jaune', largeur: 1.6 });
+        c.texte('√(u(x)) → √4 = 2', 520, y, { couleur: 'jaune', taille: 19, align: 'center' });
+        c.pause(.3);
+        LC.limite(c, 210, 300, 'x → +∞', '√(4 + 1/x) = 2', { couleur: 'vert', taille: 24 });
+        c.repere('resultat', 200, 274, 300, 52, 'le résultat : 2');
+        K.marque('racine_limite');
+      },
+      decrire: {
+        boite_u: 'La première boîte : u(x) = 4 + 1/x.', boite_racine: 'La deuxième boîte : la racine.',
+        x_infini: 'Sous x, en jaune : x → +∞.', u_limite: 'Sous la boîte u : u(x) → 4, car 1/x → 0.',
+        racine_limite: 'Sous la racine : √(u(x)) → √4 = 2 ; écrit en vert : lim √(4 + 1/x) = 2 quand x → +∞.',
+      },
+      motifs: { x_infini: 'x tend vers +∞', u_limite: 'u tend vers 4', racine_limite: 'la racine tend vers 2' },
+      explication: [{ repere: 'boite_u', texte: '1/x tend vers 0, donc u tend vers 4.' }, { repere: 'boite_racine', texte: 'La racine de 4 : 2.' }],
+    },
+    racine_n: {
+      titre: 'ⁿ√u : la même chaîne avec la racine cubique',
+      dessiner(c, K) {
+        K.titre('Racine n-ième d’une fonction');
+        const P = chaine(c, K, 'u(x) = x + 1', '∛', '∛(u(x))', 'boite_racine_n');
+        c.pause(.4);
+        K.lignes(40, 216, [
+          { t: 'u est continue et positive sur [0 ; +∞[,', couleur: 'blanc' },
+          { t: 'donc x ↦ ∛(x + 1) est continue sur [0 ; +∞[.', couleur: 'vert', cadre: 'vert' },
+        ], 36);
+        c.repere('continuite', 30, 194, 520, 74, 'la continuité de ∛u');
+        K.marque('continuite');
+        c.pause(.4);
+        c.texte('x → +∞   ;   u(x) → +∞   ;   ∛(u(x)) → +∞', 40, 316, { couleur: 'jaune', taille: 20, max: 690 });
+        K.marque('limite_chaine');
+      },
+      decrire: {
+        boite_u: 'La première boîte : u(x) = x + 1.', boite_racine_n: 'La deuxième boîte : la racine cubique ∛.',
+        continuite: 'Écrit : u est continue et positive sur [0 ; +∞[, donc x ↦ ∛(x + 1) est continue sur [0 ; +∞[.',
+        limite_chaine: 'Écrit : x → +∞ ; u(x) → +∞ ; ∛(u(x)) → +∞.',
+      },
+      motifs: { continuite: 'la continuité de ∛u', limite_chaine: 'la limite traverse' },
+      explication: [{ repere: 'continuite', texte: 'Comme pour √u : u continue et positive.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

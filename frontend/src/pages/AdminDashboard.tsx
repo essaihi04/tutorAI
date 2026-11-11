@@ -19,6 +19,7 @@ import {
 import AdminCourseEditor from '../components/admin/AdminCourseEditor';
 import AdminVisualLibrary from '../components/admin/AdminVisualLibrary';
 import AdminAvisProfs from '../components/admin/AdminAvisProfs';
+import AdminRetention from '../components/admin/AdminRetention';
 
 // ─── Types ───────────────────────────────────────────────────
 interface DashboardStats {
@@ -354,7 +355,7 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits' | 'avisProfs';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits' | 'avisProfs' | 'retention';
 
 // URL de partage public Umami pour le site Moalim
 // Cette URL est publique par nature (genere via Umami: Settings -> Websites -> Moalim -> Edit -> Enable share URL)
@@ -386,7 +387,8 @@ export default function AdminDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('admin_token'));
   const [activeTab, setActiveTab] = useState<Tab>(() => (
     new URLSearchParams(window.location.search).get('tab') === 'visuals' ? 'visuals'
-      : new URLSearchParams(window.location.search).get('tab') === 'avis' ? 'avisProfs' : 'inscriptions'
+      : new URLSearchParams(window.location.search).get('tab') === 'avis' ? 'avisProfs'
+        : new URLSearchParams(window.location.search).get('tab') === 'retention' ? 'retention' : 'inscriptions'
   ));
 
   const switchTab = (t: Tab) => { setActiveTab(t); };
@@ -649,6 +651,7 @@ export default function AdminDashboard() {
     { key: 'requests', label: 'Requêtes récentes', icon: Activity },
     { key: 'courses', label: 'Cours', icon: BookOpen },
     { key: 'avisProfs', label: 'Avis des profs', icon: MessageCircle },
+    { key: 'retention', label: 'Rétention', icon: TrendingUp },
     { key: 'visuals', label: 'Bibliothèque', icon: Image },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
     // Onglet « Visites » masqué tant qu'Umami n'est pas réinstallé (cf. /js/umami.js)
@@ -1371,6 +1374,7 @@ export default function AdminDashboard() {
 
         {/* ──── AVIS DES PROFS (lien libre) ──── */}
         {activeTab === 'avisProfs' && <AdminAvisProfs />}
+        {activeTab === 'retention' && <AdminRetention />}
 
         {/* ──── UNIFIED VISUAL LIBRARY TAB ──── */}
         {activeTab === 'visuals' && <AdminVisualLibrary />}

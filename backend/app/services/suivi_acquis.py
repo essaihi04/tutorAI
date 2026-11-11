@@ -9,6 +9,8 @@ la variante du tuteur, exercice ou question du cours). On en tire, par compéten
   - le trajet : ce qui a été essayé, dans l'ordre, et avec quelle méthode ;
   - les méthodes qui marchent avec CET élève (taux de réussite par méthode) et, pour chaque lacune, la méthode
     avec laquelle la reprendre (la mieux réussie chez lui, différente de celle qui a échoué).
+Une question de PRÉDICTION (`type: "prediction"`, posée avant l'explication, 11 novembre 2026) est gardée dans le
+trajet mais n'entre ni dans le score ni dans les méthodes : se tromper en prévoyant n'est pas une erreur de compétence.
 Le bilan nourrit le mode libre (`bloc_prompt`) et la préparation du cours suivant (`lacunes`).
 
 Stockage : un fichier JSONL par élève dans `data/suivi_acquis/` (aucune table avant la validation de
@@ -155,10 +157,12 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
     labels = {c["id"]: c.get("label", c["id"]) for c in comps}
     # question → tentatives
     questions: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    predictions: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for e in evenements:
-        questions[(e.get("slide_id", ""), e.get("cle", "q"))].append(e)
+        cible = predictions if e.get("type") == "prediction" else questions
+        cible[(e.get("slide_id", ""), e.get("cle", "q"))].append(e)
     # `dit` : le nom de la compétence tel que la voix le dit (sans symbole), pour que le tuteur nomme les lacunes à voix haute
-    par_comp: dict[str, dict] = {c["id"]: {"id": c["id"], "label": labels[c["id"]], "dit": c.get("dit") or "", "questions": [], "trajet": []} for c in comps}
+    par_comp: dict[str, dict] = {c["id"]: {"id": c["id"], "label": labels[c["id"]], "dit": c.get("dit") or "", "questions": [], "predictions": [], "trajet": []} for c in comps}
     reussites: dict[str, list[float]] = defaultdict(list)
     for (slide_id, cle), tent in questions.items():
         sc = score_question(tent)
@@ -175,6 +179,17 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
             if cid in par_comp:
                 par_comp[cid]["questions"].append(q)
                 par_comp[cid]["trajet"].append(f"{q['slide_title'] or slide_id} : {q['statut']} ({', '.join(NOMS_METHODES.get(m, m) for m in meths[:3])})")
+    # Les prédictions : notées pour le trajet (ce que l'élève pensait avant l'explication), jamais dans le score.
+    for (slide_id, cle), tent in predictions.items():
+        premier = min(tent, key=lambda t: t.get("tentative", 1))
+        juste = premier.get("correct")
+        p = {"slide_id": slide_id, "slide_title": premier.get("slide_title", ""), "cle": cle, "enonce": premier.get("enonce", ""),
+             "reponse": premier.get("reponse", ""), "juste_du_premier_coup": juste}
+        for cid in (premier.get("competence_ids") or par_diapo.get(slide_id) or []):
+            if cid in par_comp:
+                par_comp[cid]["predictions"].append(p)
+                verdict = "juste" if juste else "fausse" if juste is False else "non jugée"
+                par_comp[cid]["trajet"].append(f"{p['slide_title'] or slide_id} : prédiction {verdict} (avant l'explication, non notée)")
     taux = {m: round(sum(v) / len(v), 2) for m, v in reussites.items() if v}
     marchent = [m for m, _ in sorted(taux.items(), key=lambda kv: -kv[1]) if taux[m] >= SEUIL_ACQUIS]
     for c in par_comp.values():

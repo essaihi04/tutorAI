@@ -28,6 +28,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.api.v1.endpoints import course_player as cp
+from app.api.v1.endpoints.memoire import EvenementMemoire as memoire_evenement_corps
 
 router = APIRouter(prefix="/public/cours-ondes", tags=["public"])
 
@@ -185,6 +186,25 @@ async def bilan(deck_id: str, request: Request, x_visiteur: str | None = Header(
     _ce_cours(deck_id)
     return await cp.bilan_acquis(deck_id, _autoriser("acquis", _visiteur(x_visiteur), request))
 
+
+
+# ── Mémoire longue (11 novembre 2026) : les rappels espacés et le cycle des blocs marchent aussi sur le lien libre,
+# le visiteur à la place du compte (`public-<id>`). Pas de notification ici : pas d'écran d'accueil. ──
+
+@router.get("/memoire/seance/{deck_id}")
+async def memoire_seance(deck_id: str, request: Request, x_visiteur: str | None = Header(default=None)):
+    from app.api.v1.endpoints import memoire
+    _ce_cours(deck_id)
+    return await memoire.debut_de_seance(deck_id, _autoriser("acquis", _visiteur(x_visiteur), request))
+
+
+@router.post("/memoire/evenement")
+async def memoire_evenement(body: memoire_evenement_corps, request: Request, x_visiteur: str | None = Header(default=None)):
+    from app.api.v1.endpoints import memoire
+    if body.evenement == "notification":
+        raise HTTPException(400, "Pas de notification sur le lien libre")
+    _ce_cours(body.cours_id)
+    return await memoire.evenement(body, _autoriser("acquis", _visiteur(x_visiteur), request))
 
 # ── Relecture par les profs (10 novembre 2026) : sur le lien libre, chaque diapositive reçoit un vote « bon » ou
 # « à corriger » et un commentaire ; l'admin les lit dans le tableau de bord (onglet « Avis des profs »). ──

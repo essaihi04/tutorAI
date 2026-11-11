@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prisme : trajet et angles — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un rayon laser rouge traverse un prisme de verre : normales en pointillé, angles i, r, r', i', A et D tracés à la craie ; à droite, les quatre relations du prisme s’écrivent avec les nombres"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Trajet d’un rayon dans un prisme, les quatre relations (cours « Propagation d’une onde lumineuse », partie « pour le devoir »).
+ * Deux vues : « Le prisme » (verre peint, rayon laser rouge lumineux, normales en pointillé, arcs et lettres à la craie,
+ * une couleur de craie par face : cyan pour la face 1, orange pour la face 2) et « Les calculs » (les relations s’écrivent
+ * une à une, avec les nombres).
+ * Valeurs par défaut : A = 60°, n = 1,5, i = 30° → r = 19,47°, r' = 40,53°, i' = 77,10°, D = 47,10°.
+ * Physique exacte, calculée et dessinée avec les mêmes nombres (aucun angle exagéré) :
+ *   face 1 : sin i = n·sin r ; A = r + r' ; face 2 : sin i' = n·sin r' ; D = i + i' − A.
+ * Si n·sin r' > 1, le rayon ne sort pas par la deuxième face (c’est écrit ainsi).
+ * Paramètres : i_deg 20..70 (poignée : faire pivoter le laser), n 1.3..1.8 (pas 0,01), A_deg 30..70 (?i_deg= ?n= ?A_deg= aussi).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+const borne = (v, a, b, pas) => Math.min(b, Math.max(a, Math.round(v / pas) * pas));
+const lire = (k, a, b, pas, def) => { const v = parseFloat(String(q.get(k) ?? '').replace(',', '.')); return Number.isFinite(v) ? +borne(v, a, b, pas).toFixed(2) : def; };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vus: {},
+  i: lire('i_deg', 20, 70, 1, 30), n: lire('n', 1.3, 1.8, 0.01, 1.5), A: lire('A_deg', 30, 70, 1, 60) };
+
+/* ── Géométrie ────────────────────────────────────────────────────────────── */
+const RAD = Math.PI / 180;
+const R1 = { x: 8, y: 40, w: 472, h: 352 }, R2 = { x: 492, y: 40, w: 260, h: 352 };
+const P = [262, 86], LC = 232, F = 0.42;                 // sommet du prisme, longueur des faces, point d’entrée sur la face 1
+const dir = a => [Math.cos(a * RAD), Math.sin(a * RAD)];
+const add = (p, v, k = 1) => [p[0] + v[0] * k, p[1] + v[1] * k];
+const sub = (p, r) => [p[0] - r[0], p[1] - r[1]];
+const neg = v => [-v[0], -v[1]];
+const dot = (p, r) => p[0] * r[0] + p[1] * r[1];
+const ang = v => Math.atan2(v[1], v[0]) / RAD;
+function couper(p, d, r, e) {
+  const det = -d[0] * e[1] + e[0] * d[1], b = sub(r, p);
+  return [(-b[0] * e[1] + e[0] * b[1]) / det, (d[0] * b[1] - d[1] * b[0]) / det];
+}
+const LASER_AV = 118, LASER_L = 60;                       // sortie du laser à 118 px du point d’entrée ; corps de 60 px
+/** Tout le trajet, pour les réglages courants (angles en degrés, repère du dessin : y vers le bas). */
+function trajet() {
+  const { i, n, A } = S, h = A / 2;
+  const B1 = add(P, [-Math.sin(h * RAD), Math.cos(h * RAD)], LC), B2 = add(P, [Math.sin(h * RAD), Math.cos(h * RAD)], LC);
+  const n1 = [-Math.cos(h * RAD), -Math.sin(h * RAD)], n2 = [Math.cos(h * RAD), -Math.sin(h * RAD)];   // normales sortantes
+  const E = add(P, sub(B1, P), F), dIn = dir(h - i);
+  const sr = Math.sin(i * RAD) / n, r = Math.asin(sr) / RAD;                                  // face 1 : sin i = n·sin r
+  const dV = dir(h - r);
+  const [tV, s2] = couper(E, dV, P, sub(B2, P));
+  const base = !(s2 >= 0 && s2 <= 1);                                                      // le rayon n’atteindrait pas la face 2
+  const Sp = add(E, dV, tV);
+  const rp = A - r;                                                                         // A = r + r'
+  const x2 = n * Math.sin(rp * RAD), sort = !base && Math.abs(x2) <= 1;                     // face 2 : sin i' = n·sin r'
+  const ip = sort ? Math.asin(x2) / RAD : NaN;
+  const dO = sort ? dir(-h + ip) : null;
+  const D = sort ? i + ip - A : NaN;
+  const L0 = add(E, dIn, -LASER_AV), L1 = add(E, dIn, -LASER_AV - LASER_L);
+  return { i, n, A, h, B1, B2, n1, n2, E, dIn, sr, r, dV, S: Sp, base, rp, x2, sort, ip, dO, D, L0, L1 };
+}
+
+/* ── Temps de la scène et instants clés ───────────────────────────────────── */
+const M0 = { rayon_arrive: 1.2, normale_1: 2.0, refraction_1: 3.5, trajet_dans_verre: 5.0, A_r_rprime: 6.5, normale_2: 7.5, refraction_2: 9.0, sortie: 10.5, deviation_D: 12.5, fin: 14.0 };
+const moments = () => ({ ...M0 });
+const FIN = M0.fin;
+const MOTIFS = {
+  rayon_arrive: 'le rayon arrive sur la face 1', normale_1: 'la normale à la face 1 et l’angle d’incidence i',
+  refraction_1: 'réfraction sur la face 1 : sin i = n·sin r', trajet_dans_verre: 'le rayon va tout droit jusqu’à la face 2',
+  A_r_rprime: 'A = r + r\'', normale_2: 'la normale à la face 2 et l’angle r\'', refraction_2: 'réfraction sur la face 2 : sin i\' = n·sin r\'',
+  sortie: 'le rayon sort et s’écarte de la normale', deviation_D: 'la déviation D = i + i\' − A', fin: 'fin',
+};
+const clamp01 = v => Math.max(0, Math.min(1, v));
+/** Avancée du rayon (pour l’œil) : jusqu’à la face 1 ; dans le verre (un début pour tracer r, puis jusqu’à la face 2) ; à la sortie. */
+function avance(t) {
+  const p1 = clamp01((t - 0.2) / (M0.rayon_arrive - 0.2));
+  const p2 = t < 2.6 ? 0 : t < M0.refraction_1 ? .3 * (t - 2.6) / (M0.refraction_1 - 2.6) : t < 4.0 ? .3 : Math.min(1, .3 + .7 * (t - 4.0) / (M0.trajet_dans_verre - 4.0));
+  const p3 = t < 8.4 ? 0 : t < M0.refraction_2 ? .25 * (t - 8.4) / (M0.refraction_2 - 8.4) : t < 9.4 ? .25 : Math.min(1, .25 + .75 * (t - 9.4) / (M0.sortie - 9.4));
+  return { p1, p2, p3 };
+}
+
+/* ── Peinture : salle sombre, verre, laser ────────────────────────────────── */
+const ROUGE = [255, 40, 30];
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function chemin(ctx, R) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(R.x, R.y, R.w, R.h, 8); else ctx.rect(R.x, R.y, R.w, R.h); }
+function salle(ctx, R) {
+  const g = ctx.createRadialGradient(R.x + R.w * .5, R.y + R.h * .45, 10, R.x + R.w / 2, R.y + R.h / 2, Math.max(R.w, R.h) * .75);
+  g.addColorStop(0, 'rgba(16,22,30,.94)'); g.addColorStop(1, 'rgba(4,6,10,.96)');
+  chemin(ctx, R); ctx.fillStyle = g; ctx.fill();
+}
+function triangle(ctx, T) { ctx.beginPath(); ctx.moveTo(...P); ctx.lineTo(...T.B1); ctx.lineTo(...T.B2); ctx.closePath(); }
+function verre(ctx, T) {
+  ctx.save(); ctx.translate(7, 8); triangle(ctx, T); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill(); ctx.restore();
+  triangle(ctx, T);
+  const g = ctx.createLinearGradient(P[0], P[1], P[0], T.B1[1]);
+  g.addColorStop(0, 'rgba(190,225,255,.20)'); g.addColorStop(1, 'rgba(110,160,210,.10)');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.save(); triangle(ctx, T); ctx.clip();
+  const m = add(P, sub(T.B1, P), .5), k = ctx.createLinearGradient(m[0] - 10, m[1] - 5, m[0] + 50, m[1] + 28);
+  k.addColorStop(0, 'rgba(255,255,255,.15)'); k.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = k; ctx.fillRect(P[0] - 200, P[1], 400, LC);
+  ctx.restore();
+}
+function aretes(ctx, T) {
+  ctx.save(); triangle(ctx, T); ctx.strokeStyle = 'rgba(215,235,255,.5)'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(...add(P, sub(T.B2, P), .05)); ctx.lineTo(...add(P, sub(T.B2, P), .35));
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore();
+}
+function faisceau(ctx, a, b, c, w = 3, k = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [lw, al] of [[w * 6, .05], [w * 3, .12], [w * 1.5, .45], [w * .7, .85]]) {
+    ctx.strokeStyle = rgba(c, al * k); ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+  }
+  ctx.strokeStyle = `rgba(255,235,230,${.5 * k})`; ctx.lineWidth = w * .3; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+  ctx.restore();
+}
+function halo(ctx, p, c, r, k = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+  g.addColorStop(0, `rgba(255,255,255,${.9 * k})`); g.addColorStop(.3, rgba(c, .7 * k)); g.addColorStop(1, rgba(c, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+function peindreLaser(ctx, T, allume) {
+  ctx.save(); ctx.translate(...T.L0); ctx.rotate(ang(T.dIn) * RAD);
+  const L = LASER_L, H = 18;
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-L + 4, -H / 2 + 5, L, H);
+  const g = ctx.createLinearGradient(0, -H / 2, 0, H / 2);
+  g.addColorStop(0, '#6b7280'); g.addColorStop(.45, '#374151'); g.addColorStop(1, '#111827');
+  ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-L, -H / 2, L, H, 4); else ctx.rect(-L, -H / 2, L, H); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(-L + 8, -H / 2 + 3, L - 20, 2);
+  ctx.fillStyle = allume ? rgba(ROUGE, .95) : '#1f2937'; ctx.fillRect(-3, -4, 4, 8);
+  ctx.restore();
+  if (allume) halo(ctx, T.L0, ROUGE, 11, .8);
+}
+const bout = (a, b, p) => add(a, sub(b, a), p);
+function peindre(ctx, T, t) {
+  const { p1, p2, p3 } = avance(t);
+  salle(ctx, R1);
+  ctx.save(); chemin(ctx, R1); ctx.clip();
+  verre(ctx, T);
+  peindreLaser(ctx, T, t > 0);
+  if (p1 > 0) faisceau(ctx, T.L0, bout(T.L0, T.E, p1), ROUGE, 2.6);
+  if (p1 >= 1) halo(ctx, T.E, ROUGE, 7, .6);
+  if (p2 > 0) faisceau(ctx, T.E, bout(T.E, T.S, p2), ROUGE, 2.6, .9);
+  if (p2 >= 1) halo(ctx, T.S, ROUGE, 7, .6);
+  if (T.sort && p3 > 0) faisceau(ctx, T.S, add(T.S, T.dO, 420 * p3), ROUGE, 2.6);
+  aretes(ctx, T);
+  ctx.restore();
+}
+
+/* ── Craie ────────────────────────────────────────────────────────────────── */
+function vu(c, cle, ok) {
+  if (!ok) { delete S.vus[cle]; return false; }
+  if (!(cle in S.vus)) S.vus[cle] = performance.now();
+  c.depuis((S.vus[cle] - scene.ouvert) / 1000);
+  return true;
+}
+/** Arc d’angle à la craie entre deux directions (degrés), lettre au milieu. */
+function angle(c, o, a0, a1, R, couleur, lettre, dl = 14) {
+  let d = a1 - a0; while (d > 180) d -= 360; while (d < -180) d += 360;
+  if (Math.abs(d) > .5) c.courbe(u => add(o, dir(a0 + d * u), R), Math.max(8, Math.ceil(Math.abs(d) / 4)), { couleur, largeur: 2 });
+  const m = a0 + d / 2, p = add(o, dir(m), R + dl);
+  c.texte(lettre, p[0], p[1], { couleur, taille: 17, align: 'center', base: 'middle' });
+  return p;
+}
+const f2 = v => fr(v, 2).replace('-', '−');
+const f3 = v => fr(v, 3).replace('-', '−');
+const fa = v => (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : f2(v));
+const fn = v => fr(v, 2).replace(/0+$/, '').replace(/,$/, '');
+const Y_CALC = { tete: 66, l1: 100, l2: 126, l3: 152, l4: 188, l5: 214, l6: 250, l7: 276, l8: 302, l9: 338, l10: 364, fin: 386 };
+function dessiner(c) {
+  const T = trajet(), t = S.t, M = M0, X = R2.x + 10, W = R2.w - 18;
+  c.direct(() => peindre(c.ctx, T, t));
+  // Écrit dès l’ouverture.
+  c.texte('Le prisme', R1.x + 4, 30, { couleur: 'cyan', taille: 17 });
+  c.texte('Les calculs', R2.x + 4, 30, { couleur: 'cyan', taille: 17 });
+  c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', duree: .5 });
+  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', duree: .4 });
+  c.texte(`A = ${fa(T.A)}° ;  n = ${fn(T.n)} ;  i = ${fa(T.i)}°`, X, Y_CALC.tete, { couleur: 'blanc', taille: 17, max: W });
+  // Les noms des faces se placent du côté libre : loin du laser (face 1) et loin du point de sortie (face 2).
+  { const k2 = dot(sub(T.S, P), sub(T.B2, P)) / (LC * LC), u1 = T.i > T.h ? .2 : .9, u2 = T.base || k2 > .5 ? .2 : .9;
+    const f1 = add(add(P, sub(T.B1, P), u1), T.n1, 18), f2p = add(add(P, sub(T.B2, P), u2), T.n2, 18);
+    c.texte('face 1', f1[0], f1[1], { couleur: 'cyan', taille: 14, align: 'right' });
+    c.texte('face 2', f2p[0], f2p[1], { couleur: 'orange', taille: 14 }); }
+  c.texte(`verre : n = ${fn(T.n)}`, P[0], T.B1[1] - 14, { couleur: 'faible', taille: 14, align: 'center' });
+  { const mil = add(T.L0, T.dIn, -LASER_L / 2), perp = [T.dIn[1], -T.dIn[0]];       // perp : côté « au-dessus » du laser
+    const lab = add(mil, perp, 26), rot = add(mil, perp, -28);
+    c.texte('laser', lab[0], lab[1] + 5, { couleur: 'rouge', taille: 14, align: 'center' });
+    c.cercle(...mil, 16, { couleur: 'jaune', largeur: 1.4, pointille: [4, 5] });
+    c.texte('⟲', rot[0], rot[1] + 5, { couleur: 'faible', taille: 14, align: 'center' }); }
+
+  // Phases, écrites quand elles arrivent.
+  if (vu(c, 'normale_1', t >= M.normale_1)) {
+    c.ligne(...P, ...T.B1, { couleur: 'cyan', largeur: 1.4, alpha: .55 });
+    c.ligne(...add(T.E, T.n1, 78), ...add(T.E, T.n1, -78), { couleur: 'cyan', pointille: [6, 6], largeur: 1.6 });
+    angle(c, T.E, ang(neg(T.dIn)), ang(T.n1), 40, 'cyan', 'i');
+  }
+  if (vu(c, 'refraction_1', t >= M.refraction_1)) {
+    angle(c, T.E, ang(T.dV), ang(neg(T.n1)), 44, 'cyan', 'r', 12);
+    c.texte('Face 1 :  sin i = n·sin r', X, Y_CALC.l1, { couleur: 'cyan', taille: 17, max: W });
+    c.texte(`sin r = sin ${fa(T.i)}° / ${fn(T.n)} = ${f3(T.sr)}`, X, Y_CALC.l2, { couleur: 'cyan', taille: 17, max: W });
+    c.texte(`r = ${f2(T.r)}°`, X, Y_CALC.l3, { couleur: 'cyan', taille: 18, max: W });
+  }
+  if (vu(c, 'trajet_dans_verre', t >= M.trajet_dans_verre)) {
+    c.texte(T.base ? 'le rayon atteint la base avant la face 2' : 'dans le verre, le rayon va tout droit jusqu’à la face 2', R1.x + 10, 356, { couleur: 'faible', taille: 15, max: R1.w - 20 });
+  }
+  if (vu(c, 'A_r_rprime', t >= M.A_r_rprime)) {
+    angle(c, P, ang(sub(T.B1, P)), ang(sub(T.B2, P)), 30, 'jaune', 'A', 16);
+    c.texte("A = r + r'", X, Y_CALC.l4, { couleur: 'jaune', taille: 17, max: W });
+    c.texte(`r' = ${fa(T.A)} − ${f2(T.r)} = ${f2(T.rp)}°`, X, Y_CALC.l5, { couleur: 'jaune', taille: 17, max: W });
+  }
+  if (!T.base && vu(c, 'normale_2', t >= M.normale_2)) {
+    c.ligne(...P, ...T.B2, { couleur: 'orange', largeur: 1.4, alpha: .55 });
+    c.ligne(...add(T.S, T.n2, 78), ...add(T.S, T.n2, -78), { couleur: 'orange', pointille: [6, 6], largeur: 1.6 });
+    angle(c, T.S, ang(neg(T.dV)), ang(neg(T.n2)), 34, 'orange', "r'", 13);
+  }
+  if (!T.base && vu(c, 'refraction_2', t >= M.refraction_2)) {
+    c.texte("Face 2 :  sin i' = n·sin r'", X, Y_CALC.l6, { couleur: 'orange', taille: 17, max: W });
+    if (T.sort) {
+      angle(c, T.S, ang(T.n2), ang(T.dO), 40, 'orange', "i'");
+      c.texte(`sin i' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)}`, X, Y_CALC.l7, { couleur: 'orange', taille: 17, max: W });
+      c.texte(`i' = ${f2(T.ip)}°`, X, Y_CALC.l8, { couleur: 'orange', taille: 18, max: W });
+    } else {
+      c.texte(`n·sin r' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)} > 1`, X, Y_CALC.l7, { couleur: 'orange', taille: 17, max: W });
+      c.texte('le rayon ne sort pas par la deuxième face', X, Y_CALC.l8, { couleur: 'rouge', taille: 16, max: W });
+    }
+  }
+  if (vu(c, 'sortie', t >= M.sortie)) {
+    const s = T.sort ? "le rayon sort et s’écarte de la normale (i' > r')" : T.base ? 'le rayon n’arrive pas à la face 2' : 'le rayon ne sort pas par la deuxième face';
+    c.texte(s, R1.x + 10, 380, { couleur: T.sort ? 'orange' : 'rouge', taille: 15, max: R1.w - 20 });
+  }
+  if (T.sort && vu(c, 'deviation_D', t >= M.deviation_D)) {
+    const [ti] = couper(T.E, T.dIn, T.S, T.dO), J = add(T.E, T.dIn, ti);
+    c.ligne(...T.E, ...add(T.E, T.dIn, ti + 110), { couleur: 'rose', pointille: [5, 6], largeur: 1.6 });
+    c.ligne(...T.S, ...add(J, T.dO, -24), { couleur: 'rose', pointille: [5, 6], largeur: 1.6 });
+    angle(c, J, ang(T.dIn), ang(T.dO), 44, 'rose', 'D');
+    c.texte("D = i + i' − A", X, Y_CALC.l9, { couleur: 'rose', taille: 17, max: W });
+    c.texte(`D = ${fa(T.i)} + ${f2(T.ip)} − ${fa(T.A)} = ${f2(T.D)}°`, X, Y_CALC.l10, { couleur: 'rose', taille: 18, max: W });
+  }
+  if (vu(c, 'fin', t >= M.fin)) c.texte('angles mesurés depuis la normale', X, Y_CALC.fin, { couleur: 'faible', taille: 15, max: W });
+
+  // Repères pointables.
+  const boite = (id, pts, m, lib) => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const x0 = Math.min(...xs) - m, y0 = Math.min(...ys) - m; c.repere(id, x0, y0, Math.max(...xs) + m - x0, Math.max(...ys) + m - y0, lib); };
+  c.repere('vue_prisme', R1.x, R1.y, R1.w, R1.h, 'le prisme');
+  c.repere('vue_calculs', R2.x, R2.y, R2.w, R2.h, 'les calculs');
+  c.repere('calculs', R2.x + 4, Y_CALC.l1 - 20, R2.w - 8, Y_CALC.l10 - Y_CALC.l1 + 30, 'les relations du prisme');
+  boite('laser', [T.L0, T.L1], 14, 'le laser (on le fait pivoter)');
+  boite('rayon', [T.L0, T.E, T.S].concat(T.sort ? [add(T.S, T.dO, 90)] : []), 6, 'le rayon');
+  boite('face_1', [P, T.B1], 8, 'la face 1');
+  boite('face_2', [P, T.B2], 8, 'la face 2');
+  boite('normale_1', [add(T.E, T.n1, 78), add(T.E, T.n1, -78)], 6, 'la normale à la face 1');
+  boite('normale_2', [add(T.S, T.n2, 78), add(T.S, T.n2, -78)], 6, 'la normale à la face 2');
+  const pt = (o, a0, a1, R) => { let d = a1 - a0; while (d > 180) d -= 360; while (d < -180) d += 360; return add(o, dir(a0 + d / 2), R); };
+  boite('i', [T.E, pt(T.E, ang(neg(T.dIn)), ang(T.n1), 54)], 10, 'l’angle d’incidence i');
+  boite('r', [T.E, pt(T.E, ang(T.dV), ang(neg(T.n1)), 56)], 10, 'l’angle de réfraction r');
+  boite('r_prime', [T.S, pt(T.S, ang(neg(T.dV)), ang(neg(T.n2)), 47)], 10, "l’angle r'");
+  if (T.sort) boite('i_prime', [T.S, pt(T.S, ang(T.n2), ang(T.dO), 54)], 10, "l’angle de sortie i'");
+  boite('A', [P, add(P, [0, 1], 48)], 16, 'l’angle A du prisme');
+  if (T.sort) { const [ti] = couper(T.E, T.dIn, T.S, T.dO), J = add(T.E, T.dIn, ti); boite('D', [J, pt(J, ang(T.dIn), ang(T.dO), 58)], 12, 'la déviation D'); }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fait = S.t >= FIN; $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function valeurs(T) {
+  const v = [`A = ${fa(T.A)}°`, `n = ${fn(T.n)}`, `i = ${fa(T.i)}°`, `r = ${f2(T.r)}°`];
+  if (T.base) return v.join(', ') + ' ; le rayon atteint la base avant la deuxième face';
+  v.push(`r' = ${f2(T.rp)}°`);
+  if (T.sort) v.push(`i' = ${f2(T.ip)}°`, `D = ${f2(T.D)}°`);
+  else v.push(`n·sin r' = ${f3(T.x2)} > 1 : le rayon ne sort pas par la deuxième face`);
+  return v.join(', ');
+}
+function ceQuiSeVoit() {
+  const T = trajet(), t = S.t, M = M0, m = [];
+  m.push(`Vues « Le prisme » (verre peint, rayon laser rouge, salle sombre) et « Les calculs ». t = ${fr(t, 1)} s${S.running ? ' (la scène avance)' : S.fait ? ' (fin)' : t > 0 ? ' (scène arrêtée)' : ''}. Valeurs : ${valeurs(T)}.`);
+  const ph = [];
+  if (t <= 0) ph.push('Le laser est éteint.');
+  else if (t < M.rayon_arrive) ph.push('Le rayon laser avance vers la face 1.');
+  else ph.push('Le rayon est arrivé sur la face 1.');
+  if (t >= M.normale_1) ph.push('Normale à la face 1 en pointillé cyan, angle i tracé entre le rayon incident et la normale.');
+  if (t >= M.refraction_1) ph.push(`Dans le verre, l’angle r ; écrit : sin i = n·sin r ; sin r = sin ${fa(T.i)}° / ${fn(T.n)} = ${f3(T.sr)} ; r = ${f2(T.r)}°.`);
+  if (t >= M.trajet_dans_verre) ph.push(T.base ? 'Le rayon atteint la base avant la face 2.' : 'Le rayon va tout droit dans le verre jusqu’à la face 2.');
+  if (t >= M.A_r_rprime) ph.push(`Angle A au sommet ; écrit : A = r + r' ; r' = ${fa(T.A)} − ${f2(T.r)} = ${f2(T.rp)}°.`);
+  if (t >= M.normale_2 && !T.base) ph.push("Normale à la face 2 en pointillé orange, angle r' tracé dans le verre.");
+  if (t >= M.refraction_2 && !T.base) ph.push(T.sort ? `Écrit : sin i' = n·sin r' ; sin i' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)} ; i' = ${f2(T.ip)}°.` : `Écrit : n·sin r' = ${f3(T.x2)} > 1 : le rayon ne sort pas par la deuxième face.`);
+  if (t >= M.sortie && T.sort) ph.push("Le rayon sort par la face 2 et s’écarte de la normale (i' > r').");
+  if (t >= M.deviation_D && T.sort) ph.push(`Prolongements en pointillé rose des rayons d’entrée et de sortie, arc de la déviation D ; écrit : D = i + i' − A = ${fa(T.i)} + ${f2(T.ip)} − ${fa(T.A)} = ${f2(T.D)}°.`);
+  if (t >= M.fin) ph.push('Écrit : angles mesurés depuis la normale.');
+  return m.concat(ph).join(' ');
+}
+function message() {
+  const T = trajet();
+  return T.sort ? `D = i + i' − A = ${f2(T.D)}°.` : 'Le rayon ne sort pas par la deuxième face.';
+}
+
+function start() { S.jusqua = null; S.t = 0; S.vus = {}; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le laser s’allume…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = Math.min(FIN, Math.max(0, t)); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  const M = M0, nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) { S.t = 0; S.vus = {}; }
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const params = () => ({ i_deg: S.i, n: S.n, A_deg: S.A });
+const nombre = v => (v == null || v === '' ? NaN : +String(v).replace(',', '.'));
+function setParameters(p) {
+  const ch = {};
+  if (Number.isFinite(nombre(p.i_deg))) { S.i = borne(nombre(p.i_deg), 20, 70, 1); ch.i_deg = S.i; }
+  if (Number.isFinite(nombre(p.n))) { S.n = +borne(nombre(p.n), 1.3, 1.8, 0.01).toFixed(2); ch.n = S.n; }
+  if (Number.isFinite(nombre(p.A_deg))) { S.A = borne(nombre(p.A_deg), 30, 70, 1); ch.A_deg = S.A; }
+  if (!Object.keys(ch).length) return;
+  scene.sale = true;
+  const T = trajet();
+  bulle($('feedback'), T.sort ? `i = ${fa(T.i)}°, n = ${fn(T.n)}, A = ${fa(T.A)}° : D = ${f2(T.D)}°.` : `i = ${fa(T.i)}°, n = ${fn(T.n)}, A = ${fa(T.A)}° : le rayon ne sort pas par la deuxième face.`);
+  pont.noter('set_parameters', ch); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : le laser, qu’on fait pivoter autour du point d’entrée (i de 20° à 70°, au degré). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py), T = trajet(), m = add(T.L0, T.dIn, -LASER_L / 2);
+    return Math.hypot(x - m[0], y - m[1]) < 40 ? 'laser' : null;
+  },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py), T = trajet(), a = Math.atan2(T.E[1] - y, T.E[0] - x) / RAD;
+    const i = borne(T.h - a, 20, 70, 1);
+    if (i !== S.i) { S.i = i; scene.sale = true; }
+  },
+  lacher: () => {
+    const T = trajet();
+    bulle($('feedback'), T.sort ? `Incidence réglée : i = ${fa(T.i)}° ; D = ${f2(T.D)}°.` : `Incidence réglée : i = ${fa(T.i)}° ; le rayon ne sort pas par la deuxième face.`);
+    pont.noter('set_parameters', { i_deg: S.i }); pont.emettre();
+    if (!S.running && S.t === 0) start();
+  },
+});
+
+window.Tableau.explication({
+  prisme: [
+    { repere: 'laser', texte: 'Un rayon laser rouge arrive sur la face 1.' },
+    { repere: 'normale_1', texte: 'On trace la normale à la face : les angles se mesurent depuis la normale.' },
+    { repere: 'i', texte: 'L’angle d’incidence i.' },
+    { repere: 'r', texte: 'Dans le verre, le rayon se rapproche de la normale : sin i = n·sin r.' },
+    { repere: 'A', texte: 'Dans le prisme : A = r + r\'.' },
+    { repere: 'i_prime', texte: 'À la sortie, le rayon s’écarte de la normale : sin i\' = n·sin r\'.' },
+    { repere: 'D', texte: 'La déviation entre le rayon d’entrée et le rayon de sortie : D = i + i\' − A.' },
+    { repere: 'calculs', texte: 'Les quatre relations, avec les nombres.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_lumineuses_prisme_angles', version: '1.0', title: 'Prisme : trajet d’un rayon et quatre relations', variants: [{ id: 'prisme', label: 'prisme' }], commands: commandes,
+  command_schema: {
+    set_parameters: { i_deg: '20..70 (angle d’incidence, en degrés, pas de 1)', n: '1.3..1.8 (indice du verre, pas de 0,01)', A_deg: '30..70 (angle du prisme, en degrés, pas de 1)' },
+    set_time: { time_s: `0..${FIN} (arrêt sur cet instant, en s)` },
+    play_until: { moment: Object.keys(M0).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Un rayon laser rouge traverse un prisme de verre (A = 60°, n = 1,5, i = 30° par défaut). Face 1 : sin i = n·sin r ; dans le prisme : A = r + r\' ; face 2 : sin i\' = n·sin r\' ; déviation : D = i + i\' − A. Valeurs par défaut : r = 19,47°, r\' = 40,53°, i\' = 77,10°, D = 47,10°. Les angles se mesurent depuis la normale.',
+  etat: () => { const T = trajet(); return { simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'prisme',
+    time_s: +S.t.toFixed(2), parameters: params(),
+    angles: { i_deg: T.i, r_deg: +T.r.toFixed(2), r_prime_deg: T.base ? null : +T.rp.toFixed(2), i_prime_deg: T.sort ? +T.ip.toFixed(2) : null, D_deg: T.sort ? +T.D.toFixed(2) : null, sort_face_2: T.sort },
+    moments: moments() }; },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le laser va s’allumer…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

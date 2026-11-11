@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le code génétique — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le code génétique : trois lettres de l’ARNm pour un acide aminé (4 × 4 × 4 = 64), la lecture du tableau à double entrée (1re lettre en ligne, 2e en colonne, 3e dans la case), codon stop, puis ses propriétés : redondance, lecture sans chevauchement, universalité"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Le code génétique (cours « Expression de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité RGP6.
+ * Trois vues :
+ *   codons     : 4 lettres, 20 acides aminés ; 1 lettre → 4, 2 lettres → 16 (trop peu), 3 lettres → 64 ≥ 20 ; l’ARNm d’exemple
+ *                5′ AUG GAA UUU CCG UAA 3′ découpé en codons ;
+ *   tableau    : le tableau COMPLET à double entrée (Molecules.CODE) : 1re lettre en ligne, 2e en colonne, 3e à droite de la case ;
+ *                pour chaque codon la ligne, la colonne puis la case s’allument et l’acide aminé s’écrit sous le codon ;
+ *                Met – Glu – Phe – Pro, puis UAA : codon stop (aucun acide aminé) ;
+ *   proprietes : redondance (6 codons pour Leu, CUG et CUA), lecture sans chevauchement, universalité (bactérie et cellule humaine : GAG → Glu).
+ * Règle 7 : l’ARNm et les acides aminés sont PEINTS (Molecules), le tableau et les légendes à la craie.
+ */
+const { lisse, rampe, entre } = window.Etapes;
+const M = window.Molecules;
+const TAU = Math.PI * 2;
+const clamp = v => Math.max(0, Math.min(1, v));
+const L4 = 'UCAG';
+const CRAIE_LETTRE = { U: 'rose', C: 'bleu', A: 'rouge', G: 'vert' };
+const aaDe = cod => M.traduire(cod);
+
+/* ── Le tableau du code génétique, à double entrée ── */
+function geo(x0, y0, leftW, colW, rightW, headH, lineH) {
+  return { x0, y0, leftW, colW, rightW, headH, lineH, cx0: x0 + leftW, ly0: y0 + headH, x1: x0 + leftW + 4 * colW + rightW, y1: y0 + headH + 16 * lineH };
+}
+function caseRect(g, cod) { const i = L4.indexOf(cod[0]), j = L4.indexOf(cod[1]), l = L4.indexOf(cod[2]); return { x: g.cx0 + j * g.colW, y: g.ly0 + (i * 4 + l) * g.lineH, w: g.colW, h: g.lineH }; }
+function ligneRect(g, b1) { const i = L4.indexOf(b1); return { x: g.cx0, y: g.ly0 + i * 4 * g.lineH, w: 4 * g.colW, h: 4 * g.lineH }; }
+function colRect(g, b2) { const j = L4.indexOf(b2); return { x: g.cx0 + j * g.colW, y: g.ly0, w: g.colW, h: 16 * g.lineH }; }
+/** Le tableau : traits et en-têtes à la craie (écrits vite), cases écrites d’un coup à la craie fine. o = {codonX, aaX, fs} */
+function dessinerTableau(c, k, g, tEv, o) {
+  if (!k.ecrit(c, 'tab', tEv)) return false;
+  const tr = { couleur: 'faible', largeur: 1.1, duree: .05 };
+  c.rect(g.x0, g.y0, g.x1 - g.x0, g.y1 - g.y0, { ...tr, arrondi: 3, duree: .2 });
+  c.ligne(g.x0, g.ly0, g.x1, g.ly0, tr);
+  for (let i = 1; i < 4; i++) c.ligne(g.x0, g.ly0 + i * 4 * g.lineH, g.x1, g.ly0 + i * 4 * g.lineH, tr);
+  for (let j = 0; j <= 4; j++) c.ligne(g.cx0 + j * g.colW, g.y0, g.cx0 + j * g.colW, g.y1, tr);
+  c.ligne(g.x0, g.y0, g.cx0, g.ly0, { ...tr, largeur: .9 });
+  const tp = { duree: .03 };
+  c.texte('2e', g.cx0 - 3, g.y0 + 11, { couleur: 'faible', taille: 12, align: 'right', ...tp });
+  c.texte('1re', g.x0 + 2, g.ly0 - 2, { couleur: 'faible', taille: 12, ...tp });
+  c.texte('3e', g.x1 - g.rightW / 2, g.ly0 - 5, { couleur: 'faible', taille: 12, align: 'center', ...tp });
+  for (let j = 0; j < 4; j++) c.texte(L4[j], g.cx0 + (j + .5) * g.colW, g.ly0 - 4, { couleur: CRAIE_LETTRE[L4[j]], taille: 16, align: 'center', ...tp });
+  for (let i = 0; i < 4; i++) c.texte(L4[i], g.x0 + g.leftW / 2, g.ly0 + (i * 4 + 2) * g.lineH + 7, { couleur: CRAIE_LETTRE[L4[i]], taille: 20, align: 'center', ...tp });
+  c.direct(() => {
+    for (let i = 0; i < 4; i++) for (let l = 0; l < 4; l++) {
+      const y = g.ly0 + (i * 4 + l + .5) * g.lineH + 4.5;
+      c.texte(L4[l], g.x1 - g.rightW / 2, y, { couleur: CRAIE_LETTRE[L4[l]], taille: 12, align: 'center' });
+      for (let j = 0; j < 4; j++) {
+        const cod = L4[i] + L4[j] + L4[l], aa = aaDe(cod), x = g.cx0 + j * g.colW;
+        c.texte(cod, x + o.codonX, y, { couleur: 'faible', taille: 12 });
+        c.texte(aa, x + o.aaX, y, { couleur: aa === 'Stop' ? 'rouge' : aa === 'Met' ? 'vert' : 'blanc', taille: o.fs || 13 });
+      }
+    }
+  });
+  return true;
+}
+function remplir(x, r, coul) { x.save(); x.fillStyle = coul; x.fillRect(r.x, r.y, r.w, r.h); x.restore(); }
+/** Puce peinte d’une base (lettre blanche). */
+function puce(x, cx, cy, L, w = 34, h = 30) {
+  const col = M.BASE[L]; x.save();
+  const g = x.createLinearGradient(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2); g.addColorStop(0, '#ffffff'); g.addColorStop(.18, col); g.addColorStop(1, M.ombre(col, .5));
+  x.fillStyle = g; x.beginPath(); if (x.roundRect) x.roundRect(cx - w / 2, cy - h / 2, w, h, 6); else x.rect(cx - w / 2, cy - h / 2, w, h); x.fill();
+  x.fillStyle = '#fff'; x.font = '700 18px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 2; x.fillText(L, cx, cy + 1);
+  x.restore();
+}
+/** Accolade à la craie sous [xa, xb], pointe vers le bas. */
+function accolade(c, xa, xb, y, h, o = {}) {
+  const xm = (xa + xb) / 2;
+  c.trait([[xa, y], [xa + 4, y + h * .5], [xm - 6, y + h * .5], [xm, y + h], [xm + 6, y + h * .5], [xb - 4, y + h * .5], [xb, y]], { couleur: o.couleur || 'jaune', largeur: 1.8, duree: o.duree ?? .2, tremble: .4 });
+}
+
+/* ════════════════ Vue « codons » ════════════════ */
+const MC = { quatre_lettres: 2.0, une_lettre: 4.5, deux_lettres: 7.0, quatre_seize_soixante_quatre: 9.5, decoupage_codons: 13.0 };
+const ARN_EX = 'AUGGAAUUUCCGUAA';
+const VINGT = Object.keys(M.AA);    // les 20 acides aminés
+const CA = { x0: 140, y: 330, pas: 32 };
+function dessinerCodons(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    if (t >= .3) { x.save(); x.globalAlpha = rampe(t, .3, .5); [...L4].forEach((L, i) => puce(x, 60 + i * 48, 92, L)); x.restore(); }
+    if (t >= 1.0) { const a = rampe(t, 1.0, .6); VINGT.forEach((n, i) => M.perle(x, 436 + (i % 10) * 32, 74 + Math.floor(i / 10) * 32, 13, n, { alpha: a })); }
+    if (t >= 10.0) M.brin(x, CA.x0, CA.y, CA.pas, ARN_EX, 'arn', -1, { lb: 24, alpha: rampe(t, 10.0, .5) });
+  });
+  c.texte('Trois lettres pour un acide aminé', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  if (t >= .3) c.repere('lettres', 36, 70, 196, 44, 'les 4 lettres de l’ARNm : U, C, A, G');
+  if (t >= 1.0) c.repere('vingt_acides_amines', 420, 58, 320, 90, 'les 20 acides aminés');
+  if (k.ecrit(c, 'lettres', .4)) { k.T(c, '4 lettres (bases) dans l’ARNm :', 36, 60, { couleur: 'blanc', taille: 15 }); }
+  if (k.ecrit(c, 'vingt', 1.2)) k.T(c, '20 acides aminés dans les protéines', 580, 140, { couleur: 'blanc', taille: 15, align: 'center' });
+  const yl = [184, 220, 256];
+  if (k.ecrit(c, 'l1', 3.0)) {
+    const s1 = '1 lettre → 4 possibilités : 4 < 20,'; k.T(c, s1, 36, yl[0], { couleur: 'blanc', taille: 17 });
+    k.T(c, 'trop peu', 44 + c.largeurTexte(s1, 17), yl[0], { couleur: 'rouge', taille: 17 });
+    k.T(c, 'U, C, A, G', 520, yl[0], { couleur: 'faible', taille: 14 });
+  }
+  if (k.ecrit(c, 'l2', 5.5)) {
+    const s2 = '2 lettres → 4 × 4 = 16 : 16 < 20,'; k.T(c, s2, 36, yl[1], { couleur: 'blanc', taille: 17 });
+    k.T(c, 'trop peu', 44 + c.largeurTexte(s2, 17), yl[1], { couleur: 'rouge', taille: 17 });
+    k.T(c, 'UU, UC, UA, UG, CU, … GG', 520, yl[1], { couleur: 'faible', taille: 14 });
+  }
+  if (k.ecrit(c, 'l3', 8.0)) {
+    const s3 = '3 lettres → 4 × 4 × 4 = 64 : 64 ≥ 20,'; k.T(c, s3, 36, yl[2], { couleur: 'blanc', taille: 17 });
+    k.T(c, 'assez', 44 + c.largeurTexte(s3, 17), yl[2], { couleur: 'vert', taille: 17 });
+    k.T(c, 'UUU, UUC, … GGG : 64', 520, yl[2], { couleur: 'faible', taille: 14 });
+    k.T(c, 'un acide aminé est codé par 3 nucléotides : un codon (triplet)', 36, 288, { couleur: 'vert', taille: 15 });
+  }
+  if (t >= 3.0) c.repere('calcul', 30, 166, 700, 100, 'le calcul : 4, 16, 64 possibilités');
+  if (t >= 10.0) c.repere('arnm', CA.x0 - 26, CA.y - 30, 15 * CA.pas + 52, 40, 'l’ARNm d’exemple');
+  if (k.ecrit(c, 'arn', 10.0)) {
+    k.T(c, '5′', CA.x0 - 14, CA.y + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', CA.x0 + 15 * CA.pas + 14, CA.y + 5, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'ARNm', CA.x0 + 15 * CA.pas + 32, CA.y + 5, { couleur: 'orange', taille: 15 });
+  }
+  if (k.ecrit(c, 'dec', 10.8)) {
+    for (let j = 0; j < 5; j++) {
+      const xa = CA.x0 + 3 * j * CA.pas, xb = xa + 3 * CA.pas;
+      if (j) c.ligne(xa, CA.y - 30, xa, CA.y + 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 4], duree: .06 });
+      accolade(c, xa + 3, xb - 3, CA.y + 8, 14);
+      k.T(c, `codon ${j + 1}`, (xa + xb) / 2, CA.y + 42, { couleur: 'jaune', taille: 14, align: 'center', duree: .25 });
+    }
+    k.T(c, 'codon : 3 nucléotides successifs de l’ARNm → 1 acide aminé', 380, 404, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+  if (t >= 10.8) c.repere('codon_1', CA.x0, CA.y - 30, 3 * CA.pas, 76, 'le codon 1 : AUG');
+}
+function voitCodons(k) {
+  const t = k.t, m = [];
+  if (t >= .3) m.push('En haut à gauche, écrit « 4 lettres (bases) dans l’ARNm : » et quatre puces peintes U (magenta), C (bleu), A (rouge), G (vert).');
+  if (t >= 1.0) m.push('En haut à droite, 20 perles peintes (les 20 acides aminés : Met, Arg, Ser, Gln, Glu, Val, Leu, Trp, Phe, Pro, Gly, His, Asn, Ala, Ile, Thr, Lys, Cys, Tyr, Asp), écrit « 20 acides aminés dans les protéines ».');
+  if (t >= 3.0) m.push('Écrit : « 1 lettre → 4 possibilités : 4 < 20, trop peu » (U, C, A, G).');
+  if (t >= 5.5) m.push('Écrit : « 2 lettres → 4 × 4 = 16 : 16 < 20, trop peu » (UU, UC, UA, UG, CU, … GG).');
+  if (t >= 8.0) m.push('Écrit : « 3 lettres → 4 × 4 × 4 = 64 : 64 ≥ 20, assez » ; en vert : « un acide aminé est codé par 3 nucléotides : un codon (triplet) ».');
+  if (t >= 10.0) m.push('En bas, un ARNm peint (squelette orange) 5′ AUG GAA UUU CCG UAA 3′.');
+  if (t >= 10.8) m.push('Il est découpé en 5 codons par des accolades jaunes : codon 1 AUG, codon 2 GAA, codon 3 UUU, codon 4 CCG, codon 5 UAA ; écrit « codon : 3 nucléotides successifs de l’ARNm → 1 acide aminé ».');
+  return m;
+}
+
+/* ════════════════ Vue « tableau » ════════════════ */
+const MTB = { premier_codon: 2.5, ligne: 5.0, colonne: 7.5, case: 10.0, acide_amine_ecrit: 12.5, codons_suivants: 20.0, codon_stop: 23.0 };
+const GT = geo(14, 110, 34, 112, 24, 22, 16.75);
+const T_CHOIX = 23.4;
+function planTableau(P) {
+  const cod = P.arnm.split(' ');
+  const lus = []; for (const cd of cod) { lus.push(cd); if (aaDe(cd) === 'Stop') break; }
+  const stop = aaDe(lus[lus.length - 1]) === 'Stop' ? lus.length - 1 : -1;
+  const mid = []; for (let j = 1; j < lus.length; j++) if (j !== stop) mid.push(j);
+  const D = mid.length ? 6.6 / mid.length : 0, fen = {};
+  fen[0] = { s: 1.6, row: 4.0, col: 6.5, cas: 9.0, aa: 11.4, e: stop === 0 ? 99 : 13.0 };
+  mid.forEach((j, q) => { const s = 13.2 + q * D; fen[j] = { s, row: s, col: s + .25 * D, cas: s + .5 * D, aa: s + .7 * D, e: s + D, q }; });
+  if (stop > 0) fen[stop] = { s: 20.4, row: 20.4, col: 20.8, cas: 21.2, aa: 21.8, e: 99 };
+  const pas = Math.min(24, 440 / (3 * cod.length)), x0 = 270 - 3 * cod.length * pas / 2;
+  return { cod, lus, stop, mid, fen, pas, x0, x1: x0 + 3 * cod.length * pas, cx: j => x0 + (3 * j + 1.5) * pas };
+}
+function courant(Pl, t) { let j = -1; for (let i = 0; i < Pl.lus.length; i++) if (t >= Pl.fen[i].s && t < Pl.fen[i].e) j = i; return j; }
+const YA = 74;
+function dessinerTableauVue(c, k) {
+  const t = k.t, Pl = planTableau(k.P), g = GT;
+  const choix = k.P.codon && t >= T_CHOIX ? k.P.codon : null;
+  let j = choix ? -1 : courant(Pl, t);
+  const F = j >= 0 ? Pl.fen[j] : null, cod = j >= 0 ? Pl.cod[j] : choix;
+  const vu = { row: choix ? true : F && t >= F.row, col: choix ? true : F && t >= F.col, cas: choix ? true : F && t >= F.cas, aa: F && t >= F.aa };
+  const seq = Pl.cod.join('');
+  c.direct(() => {
+    const x = c.ctx;
+    M.brin(x, Pl.x0, YA, Pl.pas, seq, 'arn', -1, { lb: 22, alpha: rampe(t, .1, .5) });
+    if (cod && vu.row) remplir(x, ligneRect(g, cod[0]), 'rgba(250,204,21,.13)');
+    if (cod && vu.col) remplir(x, colRect(g, cod[1]), 'rgba(34,211,238,.13)');
+    if (cod && vu.cas) remplir(x, caseRect(g, cod), 'rgba(250,204,21,.38)');
+  });
+  c.texte('Lire le tableau du code génétique', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  c.repere('arnm', Pl.x0 - 22, YA - 28, Pl.x1 - Pl.x0 + 44, 36, 'l’ARNm');
+  c.repere('tableau', g.x0, g.y0, g.x1 - g.x0, g.y1 - g.y0, 'le tableau du code génétique');
+  if (k.ecrit(c, 'arn', .2)) {
+    k.T(c, '5′', Pl.x0 - 12, YA + 4, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', Pl.x1 + 12, YA + 4, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'ARNm', Pl.x1 + 26, YA + 4, { couleur: 'orange', taille: 15 });
+  }
+  dessinerTableau(c, k, g, .4, { codonX: 8, aaX: 50, fs: 13 });
+  // le codon courant, encadré dans l’ARNm
+  const jCadre = j >= 0 ? j : choix ? Pl.cod.indexOf(choix) : -1;
+  if (jCadre >= 0) {
+    const xa = Pl.x0 + 3 * jCadre * Pl.pas;
+    c.rect(xa + 1, YA - 27, 3 * Pl.pas - 2, 31, { couleur: choix ? 'cyan' : 'jaune', largeur: 2, duree: .15 });
+    c.repere('codon_courant', xa, YA - 28, 3 * Pl.pas, 34, `le codon ${Pl.cod[jCadre]}`);
+  } else { const jl = Pl.lus.length - 1, xa = Pl.x0 + 3 * jl * Pl.pas; c.repere('codon_courant', xa, YA - 28, 3 * Pl.pas, 34, `le codon ${Pl.cod[jl]}`); }
+  // ligne, colonne, case du codon courant (ou du dernier lu)
+  const cr = cod || Pl.lus[Pl.lus.length - 1];
+  if (t >= 4.0 || choix) { const r = ligneRect(g, cr[0]); c.repere('ligne_1re_lettre', r.x, r.y, r.w, r.h, `la ligne de la 1re lettre ${cr[0]}`); }
+  if (t >= 6.5 || choix) { const r = colRect(g, cr[1]); c.repere('colonne_2e_lettre', r.x, r.y, r.w, r.h, `la colonne de la 2e lettre ${cr[1]}`); }
+  if (t >= 9.0 || choix) { const r = caseRect(g, cr); c.repere('case', r.x, r.y, r.w, r.h, `la case ${cr} : ${aaDe(cr)}`); }
+  if (cod && vu.row) { const r = ligneRect(g, cod[0]); c.rect(r.x, r.y, r.w, r.h, { couleur: 'jaune', largeur: 1.6, duree: .12, arrondi: 3 }); }
+  if (cod && vu.col) { const r = colRect(g, cod[1]); c.rect(r.x, r.y, r.w, r.h, { couleur: 'cyan', largeur: 1.6, duree: .12, arrondi: 3 }); }
+  if (cod && vu.cas) {
+    const r = caseRect(g, cod); c.rect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, { couleur: 'jaune', largeur: 2.4, duree: .1, arrondi: 3 });
+    // la flèche part du codon et va à sa case (tant que l’acide aminé n’est pas écrit)
+    if (jCadre >= 0 && !vu.aa) c.fleche(Pl.cx(jCadre), YA + 6, r.x + r.w * .62, r.y - 2, { couleur: 'jaune', largeur: 1.8, duree: .15 });
+  }
+  // les acides aminés écrits sous les codons
+  let derAA = null;
+  for (let i = 0; i < Pl.lus.length; i++) {
+    const Fi = Pl.fen[i]; if (!Fi) continue;
+    if (k.ecrit(c, 'aa' + i, Fi.aa)) {
+      const a = aaDe(Pl.cod[i]);
+      if (a === 'Stop') k.T(c, 'arrêt', Pl.cx(i), 100, { couleur: 'rouge', taille: 14, align: 'center' });
+      else { if (i > 0) k.T(c, '–', Pl.x0 + 3 * i * Pl.pas, 99, { couleur: 'blanc', taille: 15, align: 'center', duree: .1 }); k.T(c, a, Pl.cx(i), 100, { couleur: 'vert', taille: 15, align: 'center' }); }
+      derAA = i;
+    }
+  }
+  if (derAA !== null) c.repere('acide_amine', Pl.cx(derAA) - 22, 85, 44, 20, `l’acide aminé ${aaDe(Pl.cod[derAA])}`);
+  if (t >= 11.4) {
+    const nOk = Pl.lus.filter((cd, i) => aaDe(cd) !== 'Stop' && Pl.fen[i] && t >= Pl.fen[i].aa).length;
+    c.repere('sequence_acides_amines', Pl.x0, 85, Math.max(3, 3 * nOk) * Pl.pas, 20, 'la séquence d’acides aminés');
+  }
+  // explications à droite (premier codon)
+  const c0 = Pl.cod[0], a0 = aaDe(c0), XR = 530;
+  if (k.ecrit(c, 'e1', 4.0)) k.T(c, `1re lettre : ${c0[0]} → ligne ${c0[0]}`, XR, 146, { couleur: 'jaune', taille: 14 });
+  if (k.ecrit(c, 'e2', 6.5)) k.T(c, `2e lettre : ${c0[1]} → colonne ${c0[1]}`, XR, 166, { couleur: 'cyan', taille: 14 });
+  if (k.ecrit(c, 'e3', 9.0)) k.T(c, `3e lettre : ${c0[2]} → case ${c0}`, XR, 186, { couleur: 'jaune', taille: 14 });
+  if (k.ecrit(c, 'e4', 11.4)) k.T(c, a0 === 'Stop' ? `${c0} : codon stop` : `${c0} → ${a0}${a0 === 'Met' ? ' (initiation)' : ''}`, XR, 208, { couleur: a0 === 'Stop' ? 'rouge' : 'vert', taille: 15 });
+  if (Pl.mid.length && k.ecrit(c, 'suiv', 13.2)) k.T(c, 'codons suivants, plus vite :', XR, 236, { couleur: 'blanc', taille: 14 });
+  Pl.mid.forEach((jj, q) => { if (k.ecrit(c, 'm' + jj, Pl.fen[jj].aa)) k.T(c, `${Pl.cod[jj]} → ${aaDe(Pl.cod[jj])}`, XR + 8, 254 + q * 17, { couleur: 'vert', taille: 14 }); });
+  if (Pl.stop > 0 && k.ecrit(c, 'st', 21.8)) {
+    k.T(c, `${Pl.cod[Pl.stop]} : codon stop :`, XR, 364, { couleur: 'rouge', taille: 15 });
+    k.T(c, 'arrêt, aucun acide aminé', XR, 382, { couleur: 'rouge', taille: 15 });
+  }
+  if (Pl.stop < 0 && k.ecrit(c, 'nost', 21.8)) k.T(c, 'pas de codon stop ici', XR, 364, { couleur: 'faible', taille: 14 });
+  if (Pl.stop >= 0 && t >= Pl.fen[Pl.stop].s) { const xa = Pl.x0 + 3 * Pl.stop * Pl.pas; c.repere('codon_stop', xa, YA - 28, 3 * Pl.pas, 50, `le codon stop ${Pl.cod[Pl.stop]}`); }
+  else if (Pl.stop < 0 && t >= 21.8) c.repere('codon_stop', XR, 350, 200, 20, 'pas de codon stop');
+  if (choix && k.ecrit(c, 'choix', T_CHOIX)) k.T(c, `codon ${choix} → ${aaDe(choix) === 'Stop' ? 'Stop (arrêt)' : aaDe(choix)}`, XR, 408, { couleur: 'cyan', taille: 15 });
+}
+function voitTableau(k) {
+  const t = k.t, Pl = planTableau(k.P), m = [];
+  const choix = k.P.codon && t >= T_CHOIX ? k.P.codon : null, j = choix ? -1 : courant(Pl, t), F = j >= 0 ? Pl.fen[j] : null;
+  m.push(`En haut, l’ARNm peint 5′ ${Pl.cod.join(' ')} 3′ ; dessous, le tableau complet du code génétique à la craie : 1re lettre à gauche (lignes U, C, A, G), 2e lettre en haut (colonnes U, C, A, G), 3e lettre à droite de chaque case ; chaque case donne 4 codons et leur acide aminé (AUG Met en vert, UAA, UAG, UGA Stop en rouge).`);
+  if (F) {
+    const cd = Pl.cod[j];
+    let s = `Le codon ${j + 1}, ${cd}, est encadré en jaune dans l’ARNm`;
+    if (t >= F.row) s += ` ; la ligne ${cd[0]} (1re lettre) est allumée en jaune`;
+    if (t >= F.col) s += ` ; la colonne ${cd[1]} (2e lettre) en bleu clair`;
+    if (t >= F.cas) s += ` ; la case ${cd} (3e lettre ${cd[2]}) est encadrée : ${aaDe(cd) === 'Stop' ? 'Stop' : aaDe(cd)}${t < F.aa ? ', une flèche jaune va du codon à la case' : ''}`;
+    m.push(s + '.');
+  }
+  if (choix) m.push(`Codon choisi ${choix} : la ligne ${choix[0]}, la colonne ${choix[1]} et la case ${choix} sont allumées ; écrit « codon ${choix} → ${aaDe(choix)} ».`);
+  if (t >= 4.0) { const c0 = Pl.cod[0]; m.push(`À droite : « 1re lettre : ${c0[0]} → ligne ${c0[0]} »${t >= 6.5 ? `, « 2e lettre : ${c0[1]} → colonne ${c0[1]} »` : ''}${t >= 9.0 ? `, « 3e lettre : ${c0[2]} → case ${c0} »` : ''}${t >= 11.4 ? `, « ${c0} → ${aaDe(c0)}${aaDe(c0) === 'Met' ? ' (initiation)' : ''} »` : ''}.`); }
+  const ecrits = Pl.lus.map((cd, i) => (Pl.fen[i] && t >= Pl.fen[i].aa ? (aaDe(cd) === 'Stop' ? 'arrêt' : aaDe(cd)) : null)).filter(Boolean);
+  if (ecrits.length) m.push(`Sous l’ARNm, écrit : ${ecrits.filter(a => a !== 'arrêt').join(' – ')}${ecrits.includes('arrêt') ? ' (sous le codon stop : « arrêt », sans tiret)' : ''}.`);
+  if (Pl.mid.length && t >= Pl.fen[Pl.mid[0]].aa) m.push('À droite : « codons suivants, plus vite : » ' + Pl.mid.filter(jj => t >= Pl.fen[jj].aa).map(jj => `${Pl.cod[jj]} → ${aaDe(Pl.cod[jj])}`).join(', ') + '.');
+  if (Pl.stop > 0 && t >= 21.8) m.push(`Écrit en rouge : « ${Pl.cod[Pl.stop]} : codon stop : arrêt, aucun acide aminé ».`);
+  if (Pl.stop < 0 && t >= 21.8) m.push('Écrit : « pas de codon stop ici ».');
+  if (Pl.lus.length < Pl.cod.length && t >= 21.8) m.push(`Les codons après le codon stop (${Pl.cod.slice(Pl.lus.length).join(' ')}) ne sont pas lus.`);
+  return m;
+}
+
+/* ════════════════ Vue « propriétés » ════════════════ */
+const MP = { redondance: 4.0, sans_chevauchement: 9.0, universalite: 14.0 };
+const GP = geo(12, 50, 30, 84, 20, 20, 15.5);
+const LEU = ['UUA', 'UUG', 'CUU', 'CUC', 'CUA', 'CUG'];
+const ARN_L = 'AUGGAAUUUCCG', AL = { x0: 430, y: 96, pas: 25 };
+function bacterie(x, cx, cy, a = 1) {
+  x.save(); x.globalAlpha *= a;
+  x.strokeStyle = 'rgba(132,204,22,.7)'; x.lineWidth = 1.6; x.beginPath(); for (let i = 0; i <= 20; i++) { const px = cx + 58 + i * 2.4, py = cy + Math.sin(i * .8) * 4; i ? x.lineTo(px, py) : x.moveTo(px, py); } x.stroke();
+  const g = x.createLinearGradient(0, cy - 22, 0, cy + 22); g.addColorStop(0, 'rgba(217,249,157,.75)'); g.addColorStop(.5, 'rgba(163,230,53,.6)'); g.addColorStop(1, 'rgba(77,124,15,.7)');
+  x.fillStyle = g; x.beginPath(); if (x.roundRect) x.roundRect(cx - 58, cy - 22, 116, 44, 22); else x.rect(cx - 58, cy - 22, 116, 44); x.fill();
+  x.strokeStyle = 'rgba(63,98,18,.95)'; x.lineWidth = 2; x.stroke();
+  x.strokeStyle = 'rgba(126,34,206,.7)'; x.lineWidth = 1.5; x.beginPath(); x.ellipse(cx - 6, cy, 26, 11, .2, 0, TAU); x.stroke();
+  x.fillStyle = 'rgba(20,184,166,.9)'; for (let i = 0; i < 9; i++) { x.beginPath(); x.arc(cx - 46 + (i * 23) % 92, cy - 12 + (i * 11) % 24, 2.2, 0, TAU); x.fill(); }
+  x.restore();
+}
+function dessinerProprietes(c, k) {
+  const t = k.t, g = GP;
+  c.direct(() => {
+    const x = c.ctx;
+    // redondance : les 6 cases de Leu teintées
+    if (t >= 1.4) { const a = rampe(t, 1.4, .5); x.save(); x.globalAlpha = a; for (const cd of LEU) remplir(x, caseRect(g, cd), 'rgba(244,114,182,.22)'); for (const cd of ['CUG', 'CUA']) remplir(x, caseRect(g, cd), 'rgba(250,204,21,.3)'); x.restore(); }
+    if (t >= 11.0) remplir(x, caseRect(g, 'GAG'), `rgba(250,204,21,${.35 * rampe(t, 11.0, .4)})`);
+    // sans chevauchement : un ARNm peint
+    if (t >= 5.0) M.brin(x, AL.x0, AL.y, AL.pas, ARN_L, 'arn', -1, { lb: 20, alpha: rampe(t, 5.0, .5) });
+    // universalité : une bactérie et une cellule humaine, et le même codon GAG peint dans chacune
+    if (t >= 10.0) {
+      const a = rampe(t, 10.0, .6);
+      bacterie(x, 486, 246, a);
+      x.save(); x.globalAlpha = a; M.cytoplasme(x, 664, 246, 64, 40); M.noyau(x, 650, 246, 20, 17, { pores: 6 }); x.restore();
+      for (const cx of [486, 664]) { M.brin(x, cx - 27, 306, 18, 'GAG', 'arn', -1, { lb: 17, alpha: rampe(t, 10.6, .5) }); M.perle(x, cx + 50, 298, 11, 'Glu', { alpha: rampe(t, 11.2, .5) }); }
+    }
+  });
+  c.texte('Les propriétés du code génétique', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  dessinerTableau(c, k, g, .3, { codonX: 5, aaX: 42, fs: 12 });
+  c.repere('tableau', g.x0, g.y0, g.x1 - g.x0, g.y1 - g.y0, 'le tableau du code génétique');
+  // redondance
+  if (k.ecrit(c, 'leu', 1.4)) {
+    for (const cd of LEU) { const r = caseRect(g, cd); c.rect(r.x + 1, r.y, r.w - 2, r.h, { couleur: 'rose', largeur: 1.4, duree: .06, arrondi: 4 }); }
+    for (const cd of ['CUG', 'CUA']) { const r = caseRect(g, cd); c.rect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, { couleur: 'jaune', largeur: 2.2, duree: .08, arrondi: 4 }); }
+    k.T(c, 'CUG → Leu ; CUA → Leu', 14, 344, { couleur: 'jaune', taille: 16 });
+    k.T(c, '6 codons pour Leu : UUA, UUG, CUU, CUC, CUA, CUG', 14, 366, { couleur: 'rose', taille: 14 });
+    k.T(c, 'redondance : plusieurs codons pour un même acide aminé', 14, 390, { couleur: 'vert', taille: 15 });
+  }
+  if (t >= 1.4) {
+    const a = caseRect(g, 'UUA'), b = caseRect(g, 'CUG');
+    c.repere('codons_leu', a.x, a.y, a.w, b.y + b.h - a.y, 'les 6 codons de la leucine (Leu)');
+    const r1 = caseRect(g, 'CUG'), r2 = caseRect(g, 'CUA');
+    c.repere('cug', r1.x, r1.y, r1.w, r1.h, 'le codon CUG → Leu'); c.repere('cua', r2.x, r2.y, r2.w, r2.h, 'le codon CUA → Leu');
+  }
+  // sans chevauchement
+  if (k.ecrit(c, 'nc', 5.2)) {
+    k.T(c, '5′', AL.x0 - 12, AL.y + 4, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', AL.x0 + 12 * AL.pas + 12, AL.y + 4, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'ARNm lu codon après codon', AL.x0, 54, { couleur: 'blanc', taille: 15 });
+  }
+  for (let j = 0; j < 4; j++) {
+    if (k.ecrit(c, 'arc' + j, 5.8 + j * .6)) {
+      const xa = AL.x0 + 3 * j * AL.pas, xb = xa + 3 * AL.pas;
+      c.rect(xa + 1, AL.y - 23, 3 * AL.pas - 2, 28, { couleur: 'jaune', largeur: 1.6, duree: .12 });
+      c.courbe(u => [xa + 4 + (xb - xa - 8) * u, AL.y + 8 + Math.sin(u * Math.PI) * 12], 12, { couleur: 'jaune', largeur: 1.6, duree: .15 });
+      k.T(c, String(j + 1), (xa + xb) / 2, AL.y + 36, { couleur: 'jaune', taille: 13, align: 'center', duree: .1 });
+    }
+  }
+  if (k.ecrit(c, 'nc2', 8.2)) {
+    k.T(c, 'non chevauchant : aucune lettre partagée', AL.x0, 158, { couleur: 'vert', taille: 15 });
+    k.T(c, 'et non : AUG, UGG, GGA…', AL.x0, 180, { couleur: 'faible', taille: 14 });
+    c.ligne(AL.x0 - 2, 176, AL.x0 + 160, 174, { couleur: 'rouge', largeur: 1.4, duree: .15 });
+  }
+  if (t >= 5.0) c.repere('arnm_lecture', AL.x0 - 22, AL.y - 24, 12 * AL.pas + 44, 64, 'l’ARNm lu codon après codon');
+  // universalité
+  if (t >= 10.0) {
+    c.repere('bacterie', 420, 220, 136, 54, 'une bactérie'); c.repere('cellule_humaine', 598, 204, 132, 84, 'une cellule humaine');
+    c.repere('codon_gag', 452, 284, 290, 56, 'le codon GAG → Glu chez les deux');
+  }
+  if (k.ecrit(c, 'un', 10.2)) {
+    k.T(c, 'bactérie', 486, 212, { couleur: 'blanc', taille: 14, align: 'center' });
+    k.T(c, 'cellule humaine', 664, 198, { couleur: 'blanc', taille: 14, align: 'center' });
+  }
+  if (k.ecrit(c, 'un2', 11.4)) {
+    for (const cx of [486, 664]) k.T(c, 'GAG → Glu', cx, 336, { couleur: 'jaune', taille: 15, align: 'center' });
+    k.T(c, 'le même code chez tous les êtres vivants', 590, 364, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'universalité du code génétique', 590, 386, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+}
+function voitProprietes(k) {
+  const t = k.t, m = ['À gauche, le tableau complet du code génétique à la craie (1re lettre en ligne, 2e en colonne, 3e à droite).'];
+  if (t >= 1.4) m.push('Redondance : les 6 codons de Leu (UUA, UUG, CUU, CUC, CUA, CUG) sont entourés en rose dans la colonne U ; CUG et CUA, deux cases, encadrés en jaune ; écrit « CUG → Leu ; CUA → Leu », « 6 codons pour Leu », « redondance : plusieurs codons pour un même acide aminé ».');
+  if (t >= 5.0) m.push('En haut à droite, un ARNm peint 5′ AUG GAA UUU CCG 3′ (écrit « ARNm lu codon après codon »).');
+  if (t >= 5.8) { const n = Math.min(4, Math.floor((t - 5.8) / .6) + 1); m.push(`${n} codon${n > 1 ? 's' : ''} encadré${n > 1 ? 's' : ''} l’un après l’autre, avec un arc de lecture et son numéro : ${['AUG', 'GAA', 'UUU', 'CCG'].slice(0, n).join(', ')}.`); }
+  if (t >= 8.2) m.push('Écrit « non chevauchant : aucune lettre partagée » et, barré en rouge, « et non : AUG, UGG, GGA… ».');
+  if (t >= 10.0) m.push('En bas à droite, une bactérie peinte (verte, en bâtonnet) et une cellule humaine peinte (cytoplasme rosé, noyau bleuté) ; sous chacune un codon GAG peint (G vert, A rouge, G vert) et une perle Glu.');
+  if (t >= 11.4) m.push('Écrit « GAG → Glu » sous les deux, et en vert « le même code chez tous les êtres vivants », « universalité du code génétique » ; la case GAG Glu du tableau est surlignée.');
+  return m;
+}
+
+/* ════════════════ Paramètres et lancement ════════════════ */
+function lireArnm(v) {
+  const s = String(v ?? '').toUpperCase().replace(/T/g, 'U').replace(/[^UCAG]/g, '');
+  if (s.length % 3 || s.length < 9 || s.length > 21) return undefined;
+  return s.match(/.{3}/g).join(' ');
+}
+function lireCodon(v) { const s = String(v ?? '').toUpperCase().replace(/T/g, 'U').replace(/[^UCAG]/g, ''); return s.length === 3 ? s : s.length === 0 ? '' : undefined; }
+window.Etapes.lancer({
+  id: 'expression_code_genetique', titre: 'Le code génétique', graine: 61,
+  parametres: {
+    arnm: { defaut: 'AUG GAA UUU CCG UAA', schema: 'vue tableau : 3 à 7 codons U C A G séparés par des espaces (défaut AUG GAA UUU CCG UAA) ; tout se recalcule', lire: lireArnm },
+    codon: { defaut: '', schema: 'vue tableau : un codon de 3 lettres U C A G (la ligne, la colonne et la case s’allument, l’acide aminé s’écrit) ; vide = aucun', lire: lireCodon },
+  },
+  poignees: {
+    // vue tableau : toucher un codon de l’ARNm ou une case du tableau → codon choisi
+    toucher: (x, y, k) => {
+      if (k.vue !== 'tableau') return null;
+      const Pl = planTableau(k.P);
+      if (y >= YA - 30 && y <= YA + 8 && x >= Pl.x0 && x < Pl.x1) return 'c:' + Pl.cod[Math.floor((x - Pl.x0) / (3 * Pl.pas))];
+      const g = GT;
+      if (x >= g.cx0 && x < g.cx0 + 4 * g.colW && y >= g.ly0 && y < g.y1) { const j = Math.floor((x - g.cx0) / g.colW), r = Math.floor((y - g.ly0) / g.lineH); return 'c:' + L4[Math.floor(r / 4)] + L4[j] + L4[r % 4]; }
+      return null;
+    },
+    bouger: () => {},
+    lacher: (id, k, api) => { api.poser({ codon: id.slice(2) }); api.setTime({ time_s: k.fin }); },
+  },
+  vues: {
+    codons: { titre: 'Trois lettres pour un acide aminé', fin: 14, moments: MC, dessiner: dessinerCodons, voit: voitCodons,
+      motifs: { quatre_lettres: '4 lettres dans l’ARNm, 20 acides aminés', une_lettre: 'une lettre : 4 possibilités, trop peu', deux_lettres: 'deux lettres : 4 × 4 = 16, trop peu', quatre_seize_soixante_quatre: 'trois lettres : 4 × 4 × 4 = 64, assez', decoupage_codons: 'l’ARNm découpé en codons' },
+      conclusion: 'Un codon = 3 nucléotides de l’ARNm : 64 codons pour 20 acides aminés.',
+      texte: '4 lettres (U, C, A, G), 20 acides aminés : 1 lettre → 4, 2 lettres → 16, trop peu ; 3 lettres → 64 ≥ 20 ; l’ARNm 5′ AUG GAA UUU CCG UAA 3′ découpé en 5 codons.',
+      explication: [{ repere: 'lettres', texte: 'Quatre lettres seulement dans l’ARNm.' }, { repere: 'vingt_acides_amines', texte: 'Vingt acides aminés à coder.' }, { repere: 'calcul', texte: 'Il faut trois lettres : 64 combinaisons.' }, { repere: 'codon_1', texte: 'Un codon : trois nucléotides de l’ARNm.' }] },
+    tableau: { titre: 'Lire le tableau du code génétique', fin: 26, moments: MTB, dessiner: dessinerTableauVue, voit: voitTableau,
+      motifs: { premier_codon: 'le premier codon : AUG', ligne: '1re lettre : la ligne', colonne: '2e lettre : la colonne', case: '3e lettre : la case', acide_amine_ecrit: 'l’acide aminé s’écrit sous le codon', codons_suivants: 'les codons suivants', codon_stop: 'codon stop : arrêt, aucun acide aminé' },
+      conclusion: 'AUG GAA UUU CCG UAA → Met – Glu – Phe – Pro, puis arrêt.',
+      surReglage: (k, cles, api) => { if (cles.includes('arnm')) api.start(); else if (cles.includes('codon')) api.setTime({ time_s: k.fin }); },
+      texte: 'Lecture du tableau : 1re lettre en ligne, 2e en colonne, 3e dans la case ; 5′ AUG GAA UUU CCG UAA 3′ → Met – Glu – Phe – Pro ; UAA codon stop : aucun acide aminé.',
+      explication: [{ repere: 'ligne_1re_lettre', texte: 'La 1re lettre donne la ligne.' }, { repere: 'colonne_2e_lettre', texte: 'La 2e lettre donne la colonne.' }, { repere: 'case', texte: 'La 3e lettre donne la place dans la case.' }, { repere: 'codon_stop', texte: 'Un codon stop : aucun acide aminé, la lecture s’arrête.' }, { repere: 'sequence_acides_amines', texte: 'La séquence : Met – Glu – Phe – Pro.' }] },
+    proprietes: { titre: 'Les propriétés du code génétique', fin: 16, moments: MP, dessiner: dessinerProprietes, voit: voitProprietes,
+      motifs: { redondance: 'redondance : CUG et CUA codent tous deux Leu', sans_chevauchement: 'lecture codon après codon, sans chevauchement', universalite: 'universalité : GAG → Glu chez la bactérie comme chez l’homme' },
+      conclusion: 'Le code génétique est redondant, non chevauchant et universel.',
+      texte: 'Redondance : 6 codons pour Leu (UUA, UUG, CUU, CUC, CUA, CUG) ; lecture sans chevauchement ; universalité : GAG → Glu chez tous les êtres vivants.',
+      explication: [{ repere: 'codons_leu', texte: 'Six codons pour la leucine : le code est redondant.' }, { repere: 'arnm_lecture', texte: 'L’ARNm est lu codon après codon, sans chevauchement.' }, { repere: 'codon_gag', texte: 'Le même codon, le même acide aminé chez tous les êtres vivants.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

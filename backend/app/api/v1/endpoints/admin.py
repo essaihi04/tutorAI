@@ -643,3 +643,15 @@ async def set_statut_avis(body: StatutAvis, admin: bool = Depends(_verify_admin_
     from app.api.v1.endpoints.public_cours import marquer_avis
     marquer_avis(body.visiteur, body.deck_id, body.slide_id, body.statut)
     return {"ok": True}
+
+
+# ──────────────────────────────────────────────
+# RÉTENTION (mémoire longue, 11 novembre 2026) : ce qui reste vraiment, par cours, par compétence, par élève
+# ──────────────────────────────────────────────
+
+@router.get("/retention")
+async def get_retention(admin: bool = Depends(_verify_admin_token)):
+    """Taux de réussite du premier coup aux rappels espacés à J+7 et J+30, rappels dus, séances, saturations et
+    notifications (événements du suivi des acquis, `services/memoire_longue.py`)."""
+    from app.services import memoire_longue as ml
+    return ml.retention(ml.tous_les_eleves())

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le domaine d’abord — fonctions logarithmiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Axe gradué à la craie : les zones où ln existe coloriées en vert, les bornes exclues en ronds vides, les solutions hors du domaine barrées"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : l’ensemble de définition, puis le tri des solutions.
+ * Vues : ?vue=une | et | valeur_absolue | tri | inequation | produit_nul.
+ * une : entoure, condition, zone, resultat ; repères entoure, zone, resultat.
+ * et : conditions, zones, et, resultat ; repères et, trou, resultat.
+ * valeur_absolue : entoure, axe, resultat, piege ; repères axe, resultat, piege.
+ * tri : conditions, intersection, solutions, tri, resultat ; repères intersection, barre, resultat.
+ * inequation : domaine, resoudre, intersection, resultat ; repères domaine, intersection, resultat.
+ * produit_nul : factoriser, deux, axe, tri, resultat ; repères axe, barre, resultat.
+ */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, taille) + 18;
+  c.texte(s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.3 }); }
+/** Entoure le morceau `mot` placé après `avant` dans une ligne écrite en (x, y) ; renvoie [cx, cy, rx]. */
+function entourerMot(c, x, y, avant, mot, taille, coul = 'orange') {
+  const a = L(c, avant, taille), w = L(c, mot, taille), cx = x + a + w / 2, cy = y - taille * .32;
+  ovale(c, cx, cy, w / 2 + 10, taille * .78, coul);
+  return [cx, cy, w / 2 + 10];
+}
+/** Un axe gradué horizontal : renvoie X(v). o = {x0, x1, y, vmin, vmax, grads: [[v, libellé], …]}. */
+function axeNum(c, o) {
+  const X = v => o.x0 + (v - o.vmin) / (o.vmax - o.vmin) * (o.x1 - o.x0);
+  c.fleche(o.x0 - 12, o.y, o.x1 + 16, o.y, { couleur: 'faible', largeur: 1.8 });
+  c.texte('x', o.x1 + 22, o.y + 6, { couleur: 'faible', taille: 16 });
+  for (const [v, l] of o.grads) {
+    c.ligne(X(v), o.y - 6, X(v), o.y + 6, { couleur: 'faible', largeur: 1.4, duree: .03 });
+    if (l) c.texte(l, X(v), o.y + 27, { couleur: 'faible', taille: 17, align: 'center', duree: .06 });
+  }
+  X.o = o;
+  return X;
+}
+/** Une zone coloriée sur l’axe (dy : décalée au-dessus) ; a = −Infinity / b = Infinity : jusqu’au bout. */
+function zone(c, X, a, b, coul, dy = 0, o = {}) {
+  const xa = Number.isFinite(a) ? X(a) + (o.ouvertA ? 7 : 0) : X.o.x0 - 8, xb = Number.isFinite(b) ? X(b) - (o.ouvertB ? 7 : 0) : X.o.x1 + 10;
+  c.ligne(xa, X.o.y - dy, xb, X.o.y - dy, { couleur: coul, largeur: o.largeur || 7, alpha: o.alpha ?? .6 });
+}
+const rondVide = (c, x, y, coul) => c.cercle(x, y, 6.5, { couleur: coul, largeur: 2.4 });
+function croix(c, x, y, coul = 'rouge', r = 11) { c.ligne(x - r, y - r, x + r, y + r, { couleur: coul, largeur: 3 }); c.ligne(x - r, y + r, x + r, y - r, { couleur: coul, largeur: 3 }); }
+
+MathsTableau.page({
+  id: 'ln_domaine', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie du cours Fonctions logarithmiques : chaque ln demande ce qu’il contient strictement positif ; les conditions se relient par « et » ; on cherche le domaine d’abord, puis on trie les solutions',
+  vues: {
+    une: {
+      titre: 'Une condition par ln : u(x) > 0',
+      dessiner(c, K) {
+        K.titre('Une condition par ln : u(x) > 0');
+        const yf = 84;
+        c.texte('f(x) = ln(2x − 6)', 50, yf, { couleur: 'blanc', taille: 28 });
+        c.pause(.4);
+        const [cx, cy, rx] = entourerMot(c, 50, yf, 'f(x) = ln(', '2x − 6', 28, 'orange');
+        c.fleche(cx + rx + 4, cy + 4, cx + rx + 44, cy + 30, { couleur: 'orange', largeur: 2, tete: 9 });
+        c.texte('> 0', cx + rx + 50, cy + 42, { couleur: 'orange', taille: 26 });
+        c.repere('entoure', cx - rx - 6, cy - 26, 2 * rx + 100, 76, '2x − 6 doit être > 0');
+        K.marque('entoure');
+        c.pause(.4);
+        c.texte('x ∈ D_f ⇔ 2x − 6 > 0 ⇔ x > 3', 50, 176, { couleur: 'blanc', taille: 25 });
+        K.marque('condition');
+        c.pause(.4);
+        const X = axeNum(c, { x0: 80, x1: 640, y: 252, vmin: -1, vmax: 7, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']] });
+        zone(c, X, 3, Infinity, 'vert', 0, { ouvertA: true });
+        rondVide(c, X(3), 252, 'vert');
+        c.repere('zone', X(3) - 10, 236, X.o.x1 + 10 - X(3) + 10, 32, ']3 ; +∞[ sur l’axe');
+        K.marque('zone');
+        c.pause(.4);
+        const b = encadre(c, 'D_f = ]3 ; +∞[', 450, 334, 26, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'D_f = ]3 ; +∞[');
+        K.marque('resultat');
+      },
+      decrire: {
+        entoure: 'En haut : f(x) = ln(2x − 6) ; « 2x − 6 » est entouré en orange, une flèche : « > 0 ».',
+        condition: 'Écrit : « x ∈ D_f ⇔ 2x − 6 > 0 ⇔ x > 3 ».',
+        zone: 'Sur un axe gradué, ]3 ; +∞[ est colorié en vert ; un rond vide en 3 (3 exclu).',
+        resultat: 'Encadré en jaune : « D_f = ]3 ; +∞[ ».',
+      },
+      motifs: { entoure: 'ce qui est dans ln', condition: 'la condition', zone: 'la zone sur l’axe', resultat: 'le domaine' },
+      explication: [
+        { repere: 'entoure', texte: 'Ce qui est dans ln doit être strictement positif.' },
+        { repere: 'zone', texte: 'x > 3 : tout l’axe à droite de 3, 3 exclu.' },
+        { repere: 'resultat', texte: 'D_f = ]3 ; +∞[.' },
+      ],
+    },
+    et: {
+      titre: 'Plusieurs conditions : et',
+      dessiner(c, K) {
+        K.titre('Plusieurs conditions : et');
+        c.texte('f(x) = (1 + ln x)/ln x', 50, 84, { couleur: 'blanc', taille: 28 });
+        c.pause(.4);
+        c.texte('x > 0', 60, 136, { couleur: 'vert', taille: 24 });
+        c.texte('(ln existe)', 150, 136, { couleur: 'faible', taille: 19 });
+        c.pause(.2);
+        c.texte('ln x ≠ 0 ⇔ x ≠ 1', 60, 180, { couleur: 'rouge', taille: 24 });
+        c.texte('(dénominateur)', 270, 180, { couleur: 'faible', taille: 19 });
+        K.marque('conditions');
+        c.pause(.4);
+        const y = 258, X = axeNum(c, { x0: 80, x1: 640, y, vmin: -2, vmax: 5, grads: [[-2, '−2'], [-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        zone(c, X, 0, 1, 'vert', 0, { ouvertA: true, ouvertB: true });
+        zone(c, X, 1, Infinity, 'vert', 0, { ouvertA: true });
+        rondVide(c, X(0), y, 'vert');
+        rondVide(c, X(1), y, 'rouge');
+        c.texte('x ≠ 1', X(1), y - 18, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.repere('trou', X(1) - 16, y - 36, 32, 50, 'le trou en 1');
+        K.marque('zones');
+        c.pause(.4);
+        c.texte('et', 520, 164, { couleur: 'vert', taille: 30 });
+        ovale(c, 520 + L(c, 'et', 30) / 2, 164 - 10, 26, 22, 'vert');
+        c.pause(.2);
+        c.texte('ou', 610, 164, { couleur: 'blanc', taille: 30 });
+        c.ligne(600, 168, 650, 140, { couleur: 'rouge', largeur: 3 });
+        c.repere('et', 494, 128, 170, 52, '« et », pas « ou »');
+        K.marque('et');
+        c.pause(.4);
+        const b = encadre(c, 'D_f = ]0 ; 1[ ∪ ]1 ; +∞[', 360, 336, 26, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'D_f = ]0 ; 1[ ∪ ]1 ; +∞[');
+        K.marque('resultat');
+      },
+      decrire: {
+        conditions: 'En haut : f(x) = (1 + ln x)/ln x ; deux conditions écrites : « x > 0 (ln existe) » et « ln x ≠ 0 ⇔ x ≠ 1 (dénominateur) ».',
+        zones: 'Sur l’axe, x > 0 est colorié en vert (rond vide en 0) ; un rond vide rouge en 1 : « x ≠ 1 ».',
+        et: 'À droite, le mot « et » est entouré en vert ; « ou » est écrit puis barré en rouge.',
+        resultat: 'Encadré en jaune : « D_f = ]0 ; 1[ ∪ ]1 ; +∞[ ».',
+      },
+      motifs: { conditions: 'les deux conditions', zones: 'les zones sur l’axe', et: '« et », pas « ou »', resultat: 'le domaine' },
+      explication: [
+        { repere: 'et', texte: 'Les deux conditions doivent être vraies en même temps : « et ».' },
+        { repere: 'trou', texte: 'En 1, ln 1 = 0 : le dénominateur s’annule, on enlève 1.' },
+        { repere: 'resultat', texte: 'D_f = ]0 ; 1[ ∪ ]1 ; +∞[.' },
+      ],
+    },
+    valeur_absolue: {
+      titre: 'ln|u| : une condition, u ≠ 0',
+      dessiner(c, K) {
+        K.titre('ln|u| : une condition, u ≠ 0');
+        const yf = 84;
+        c.texte('f(x) = ln|x − 2|', 50, yf, { couleur: 'blanc', taille: 28 });
+        c.pause(.3);
+        entourerMot(c, 50, yf, 'f(x) = ln', '|x − 2|', 28, 'orange');
+        c.texte('|x − 2| > 0 ⇔ x ≠ 2', 50, 146, { couleur: 'blanc', taille: 25 });
+        K.marque('entoure');
+        c.pause(.4);
+        const y = 226, X = axeNum(c, { x0: 70, x1: 360, y, vmin: -1, vmax: 5, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        zone(c, X, -Infinity, 2, 'vert', 0, { ouvertB: true });
+        zone(c, X, 2, Infinity, 'vert', 0, { ouvertA: true });
+        rondVide(c, X(2), y, 'vert');
+        c.repere('axe', X.o.x0 - 10, y - 16, X.o.x1 - X.o.x0 + 22, 46, 'tout l’axe sauf 2');
+        K.marque('axe');
+        c.pause(.4);
+        const b = encadre(c, 'D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[', 60, 320, 24, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[');
+        K.marque('resultat');
+        c.pause(.5);
+        const px = 450, y2 = 226;
+        c.rect(px - 14, 112, 304, 174, { couleur: 'orange', arrondi: 10, largeur: 1.5 });
+        c.texte('ln(x − 2) : seulement x > 2', px, 146, { couleur: 'orange', taille: 20 });
+        const X2 = axeNum(c, { x0: px + 6, x1: px + 240, y: y2, vmin: -1, vmax: 5, grads: [[0, '0'], [2, '2'], [4, '4']] });
+        zone(c, X2, 2, Infinity, 'orange', 0, { ouvertA: true });
+        rondVide(c, X2(2), y2, 'orange');
+        c.repere('piege', px - 14, 112, 304, 174, 'le piège : ln(x − 2)');
+        K.marque('piege');
+      },
+      decrire: {
+        entoure: 'En haut : f(x) = ln|x − 2| ; « |x − 2| » est entouré ; écrit : « |x − 2| > 0 ⇔ x ≠ 2 ».',
+        axe: 'Sur l’axe, tout est colorié en vert sauf un rond vide en 2.',
+        resultat: 'Encadré en jaune : « D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[ ».',
+        piege: 'À droite, dans un cadre orange : « ln(x − 2) : seulement x > 2 » et un petit axe où seul ]2 ; +∞[ est colorié.',
+      },
+      motifs: { entoure: 'la valeur absolue', axe: 'tout l’axe sauf 2', resultat: 'le domaine', piege: 'le piège ln(x − 2)' },
+      explication: [
+        { repere: 'axe', texte: 'Une valeur absolue est positive ; il suffit qu’elle ne soit pas nulle : x ≠ 2.' },
+        { repere: 'resultat', texte: 'D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[.' },
+        { repere: 'piege', texte: 'Sans valeur absolue, ln(x − 2) n’existe que pour x > 2.' },
+      ],
+    },
+    tri: {
+      titre: 'ln a = ln b : le domaine d’abord',
+      dessiner(c, K) {
+        K.titre('ln a = ln b : le domaine d’abord');
+        c.texte('ln(x − 1) + ln(x + 2) = ln 4', 50, 82, { couleur: 'blanc', taille: 27 });
+        c.pause(.4);
+        const y = 256, X = axeNum(c, { x0: 80, x1: 650, y, vmin: -4, vmax: 4.4, grads: [[-4, '−4'], [-3, '−3'], [-2, '−2'], [-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        zone(c, X, 1, Infinity, 'vert', 30, { largeur: 5, alpha: .8 });
+        rondVide(c, X(1), y - 30, 'vert');
+        c.texte('x − 1 > 0 : x > 1', X(1) + 12, y - 40, { couleur: 'vert', taille: 17 });
+        zone(c, X, -2, Infinity, 'cyan', 62, { largeur: 5, alpha: .8 });
+        rondVide(c, X(-2), y - 62, 'cyan');
+        c.texte('x + 2 > 0 : x > −2', X(-2) + 12, y - 72, { couleur: 'cyan', taille: 17 });
+        K.marque('conditions');
+        c.pause(.4);
+        zone(c, X, 1, Infinity, 'blanc', 0, { largeur: 8, alpha: .85, ouvertA: true });
+        rondVide(c, X(1), y, 'blanc');
+        c.texte('D = ]1 ; +∞[', 50, 130, { couleur: 'jaune', taille: 24 });
+        c.repere('intersection', X(1) - 10, y - 14, X.o.x1 + 10 - X(1) + 10, 28, 'la partie commune ]1 ; +∞[');
+        K.marque('intersection');
+        c.pause(.4);
+        c.texte('x² + x − 6 = 0 ⇔ x = 2 ou x = −3', 300, 130, { couleur: 'blanc', taille: 22 });
+        c.point(X(2), y, 6, 'jaune'); c.point(X(-3), y, 6, 'jaune');
+        K.marque('solutions');
+        c.pause(.4);
+        croix(c, X(-3), y, 'rouge');
+        c.texte('hors de D', X(-3), y + 50, { couleur: 'rouge', taille: 16, align: 'center' });
+        c.repere('barre', X(-3) - 16, y - 16, 32, 32, '−3 barré : hors du domaine');
+        c.pause(.2);
+        c.cercle(X(2), y, 14, { couleur: 'vert', largeur: 2.4 });
+        K.marque('tri');
+        c.pause(.4);
+        const b = encadre(c, 'S = {2}', 470, 336, 28, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'S = {2}');
+        K.marque('resultat');
+      },
+      decrire: {
+        conditions: 'En haut : ln(x − 1) + ln(x + 2) = ln 4 ; au-dessus d’un axe, deux demi-droites : x > 1 en vert, x > −2 en cyan.',
+        intersection: 'La partie commune ]1 ; +∞[ est repassée épaisse sur l’axe ; écrit « D = ]1 ; +∞[ ».',
+        solutions: 'Écrit : « x² + x − 6 = 0 ⇔ x = 2 ou x = −3 » ; −3 et 2 sont posés en jaune sur l’axe.',
+        tri: '−3 est hors de la zone : barré en rouge ; 2 est entouré en vert.',
+        resultat: 'Encadré en jaune : « S = {2} ».',
+      },
+      motifs: { conditions: 'les deux conditions', intersection: 'le domaine D', solutions: 'les solutions trouvées', tri: 'le tri', resultat: 'S = {2}' },
+      explication: [
+        { repere: 'intersection', texte: 'Les deux ln existent en même temps sur ]1 ; +∞[ : c’est le domaine.' },
+        { repere: 'barre', texte: '−3 n’est pas dans le domaine : ce n’est pas une solution.' },
+        { repere: 'resultat', texte: 'Il reste une seule solution : S = {2}.' },
+      ],
+    },
+    inequation: {
+      titre: 'Inéquation : ln garde le sens',
+      dessiner(c, K) {
+        K.titre('Inéquation : ln garde le sens');
+        c.texte('ln(2x − 1) < 0', 50, 84, { couleur: 'blanc', taille: 28 });
+        c.pause(.4);
+        const y = 264, X = axeNum(c, { x0: 90, x1: 650, y, vmin: -1, vmax: 3, grads: [[-1, '−1'], [0, '0'], [0.5, '½'], [1, '1'], [2, '2'], [3, '3']] });
+        c.texte('domaine : 2x − 1 > 0 ⇔ x > ½', 50, 130, { couleur: 'cyan', taille: 22 });
+        zone(c, X, 0.5, Infinity, 'cyan', 56, { largeur: 5, alpha: .85 });
+        rondVide(c, X(0.5), y - 56, 'cyan');
+        c.repere('domaine', X(0.5) - 10, y - 70, X.o.x1 + 10 - X(0.5) + 10, 28, 'le domaine x > ½');
+        K.marque('domaine');
+        c.pause(.4);
+        c.texte('ln(2x − 1) < ln 1 ⇔ 2x − 1 < 1 ⇔ x < 1', 50, 172, { couleur: 'vert', taille: 22 });
+        zone(c, X, -Infinity, 1, 'vert', 30, { largeur: 5, alpha: .85 });
+        rondVide(c, X(1), y - 30, 'vert');
+        K.marque('resoudre');
+        c.pause(.4);
+        zone(c, X, 0.5, 1, 'jaune', 0, { largeur: 9, alpha: .9, ouvertA: true, ouvertB: true });
+        rondVide(c, X(0.5), y, 'jaune'); rondVide(c, X(1), y, 'jaune');
+        c.repere('intersection', X(0.5) - 12, y - 14, X(1) - X(0.5) + 24, 28, ']½ ; 1[');
+        K.marque('intersection');
+        c.pause(.4);
+        const b = encadre(c, 'S = ]½ ; 1[', 470, 336, 28, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'S = ]½ ; 1[');
+        K.marque('resultat');
+      },
+      decrire: {
+        domaine: 'En haut : ln(2x − 1) < 0 ; écrit « domaine : 2x − 1 > 0 ⇔ x > ½ » ; au-dessus de l’axe, x > ½ colorié en cyan.',
+        resoudre: 'Écrit : « ln(2x − 1) < ln 1 ⇔ 2x − 1 < 1 ⇔ x < 1 » ; x < 1 colorié en vert.',
+        intersection: 'Sur l’axe, la partie commune ]½ ; 1[ est repassée épaisse en jaune, ronds vides en ½ et 1.',
+        resultat: 'Encadré en jaune : « S = ]½ ; 1[ ».',
+      },
+      motifs: { domaine: 'le domaine', resoudre: 'on enlève les ln', intersection: 'la partie commune', resultat: 'S = ]½ ; 1[' },
+      explication: [
+        { repere: 'domaine', texte: 'D’abord le domaine : 2x − 1 > 0.' },
+        { repere: 'intersection', texte: 'ln est croissante : le sens reste ; on garde ce qui est aussi dans le domaine.' },
+        { repere: 'resultat', texte: 'S = ]½ ; 1[.' },
+      ],
+    },
+    produit_nul: {
+      titre: 'Produit nul avec ln',
+      dessiner(c, K) {
+        K.titre('Produit nul avec ln');
+        c.texte('2x ln x − 2x = 0 sur ]0 ; +∞[', 50, 84, { couleur: 'blanc', taille: 27 });
+        c.pause(.4);
+        c.texte('2x(ln x − 1) = 0', 50, 132, { couleur: 'blanc', taille: 25 });
+        K.marque('factoriser');
+        c.pause(.4);
+        c.texte('x = 0 ou ln x = 1 ⇔ x = 0 ou x = e', 50, 178, { couleur: 'blanc', taille: 25 });
+        K.marque('deux');
+        c.pause(.4);
+        const y = 262, X = axeNum(c, { x0: 90, x1: 650, y, vmin: -1, vmax: 4, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        zone(c, X, 0, Infinity, 'vert', 0, { ouvertA: true });
+        rondVide(c, X(0), y, 'vert');
+        c.texte('e', X(Math.E), y - 24, { couleur: 'jaune', taille: 19, align: 'center' });
+        c.point(X(Math.E), y, 5, 'jaune');
+        c.repere('axe', X(0) - 10, y - 16, X.o.x1 + 10 - X(0) + 10, 32, ']0 ; +∞[ sur l’axe');
+        K.marque('axe');
+        c.pause(.4);
+        croix(c, X(0), y, 'rouge');
+        c.texte('0 ∉ ]0 ; +∞[', X(0), y + 54, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.repere('barre', X(0) - 16, y - 16, 32, 32, '0 barré : hors du domaine');
+        c.pause(.2);
+        c.cercle(X(Math.E), y, 15, { couleur: 'vert', largeur: 2.4 });
+        K.marque('tri');
+        c.pause(.4);
+        const b = encadre(c, 'S = {e}', 470, 336, 28, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'S = {e}');
+        K.marque('resultat');
+      },
+      decrire: {
+        factoriser: 'En haut : 2x ln x − 2x = 0 sur ]0 ; +∞[ ; dessous, factorisé : « 2x(ln x − 1) = 0 ».',
+        deux: 'Écrit : « x = 0 ou ln x = 1 ⇔ x = 0 ou x = e ».',
+        axe: 'Sur l’axe, ]0 ; +∞[ est colorié en vert, rond vide en 0 ; e est marqué en jaune.',
+        tri: '0 est barré en rouge (0 ∉ ]0 ; +∞[) ; e est entouré en vert.',
+        resultat: 'Encadré en jaune : « S = {e} ».',
+      },
+      motifs: { factoriser: 'la factorisation', deux: 'les deux cas', axe: 'le domaine sur l’axe', tri: 'le tri', resultat: 'S = {e}' },
+      explication: [
+        { repere: 'axe', texte: 'L’équation est posée sur ]0 ; +∞[ : 0 n’en fait pas partie.' },
+        { repere: 'barre', texte: 'x = 0 est rejeté : il est hors du domaine.' },
+        { repere: 'resultat', texte: 'Seule e reste : S = {e}.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

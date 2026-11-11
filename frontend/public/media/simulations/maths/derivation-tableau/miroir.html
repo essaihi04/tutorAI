@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La fonction réciproque — le miroir y = x</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère orthonormé à la craie : la courbe de f(x) = x² + 1 sur [0 ; +∞[, la droite y = x en miroir, la courbe de la fonction réciproque f⁻¹ obtenue par reflet, les tangentes reflétées et leurs pentes inverses"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : fonction réciproque et sa dérivée.
+ * Vues : ?vue=reflet | pentes | verticale | restriction.
+ * f(x) = x² + 1 sur I = [0 ; +∞[ (continue et strictement croissante) ; J = f(I) = [1 ; +∞[ ; f⁻¹(x) = √(x − 1) sur J.
+ * Repère ORTHONORMÉ : même nombre de pixels par unité sur les deux axes (300 px pour 8,5 unités = 35,29 px), sinon le reflet
+ * par y = x ne serait pas un vrai reflet. La courbe de f⁻¹ est tracée comme le reflet EXACT de celle de f : points (f(t) ; t).
+ * Tangente en A(a ; f(a)) : pente f′(a) = 2a ; son reflet en A′(f(a) ; a) a la pente 1/(2a) = 1/f′(a) ; en a = 0 elle est verticale.
+ * Triangle de pente en A : C(a − 1 ; f(a)), B(a − 1 ; f(a) − 2a) (B est sur la tangente) ; le triangle reflet est son image exacte.
+ * Au tableau, f′ s’écrit f' (la police de la craie dessine « ′ » vide) ; les étiquettes se placent là où rien n’est déjà écrit.
+ */
+const f = x => x * x + 1, fp = x => 2 * x;
+const TIC = (sans = []) => [1, 2, 3, 4, 5, 6, 7].map(v => [v, sans.includes(v) ? '' : String(v)]);
+const OPT = { x0: 50, y0: 50, w: 300, h: 300, xmin: -1, xmax: 7.5, ymin: -1, ymax: 7.5 };
+const AX = (sx = [], sy = []) => ({ ...OPT, gx: TIC(sx), gy: TIC(sy) });
+/* Vue restriction : la parabole entière va jusqu’à x = −2,3 ; fenêtre élargie à gauche, même unité (352,94 px pour 10 unités). */
+const OPT_R = { x0: 30, y0: 50, w: 300 * 10 / 8.5, h: 300, xmin: -2.5, xmax: 7.5, ymin: -1, ymax: 7.5,
+  gx: [[-2, '−2'], [-1, '−1'], [1, ''], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], gy: TIC([1]) };
+const PX = 395, PX_R = 425;                       // colonne des textes, à droite du repère
+const fr4 = v => MathsTableau.fr(v, 4);
+
+function primes(c) {
+  if (c.__primes) return; c.__primes = true;
+  const texte = c.texte;
+  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+}
+const base = (c, K, o) => { primes(c); return K.axes(o); };
+
+/* Obstacles (en px du dessin) pour placer les étiquettes là où il n’y a rien. */
+function Obs() {
+  const pts = [];
+  const O = {
+    pts,
+    seg(x1, y1, x2, y2) { const n = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 3)); for (let i = 0; i <= n; i++) pts.push([x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n]); return O; },
+    poly(P) { for (let i = 1; i < P.length; i++) O.seg(P[i - 1][0], P[i - 1][1], P[i][0], P[i][1]); return O; },
+    box(b) { for (let x = b[0]; x <= b[2] + .1; x += 4) for (let y = b[1]; y <= b[3] + .1; y += 4) pts.push([x, y]); return O; },
+  };
+  return O;
+}
+function boite(c, s, x, y, T, al = 'left') {
+  const w = c.largeurTexte(String(s).replace(/[_{}^]/g, ''), T);
+  const x1 = al === 'center' ? x - w / 2 : al === 'right' ? x - w : x;
+  return [x1, y - .78 * T, x1 + w, y + .24 * T];
+}
+const CANDS = [[10, -9, 'left'], [-10, -9, 'right'], [10, 21, 'left'], [-10, 21, 'right'], [0, -13, 'center'], [0, 26, 'center'], [14, 6, 'left'], [-14, 6, 'right']];
+function placer(c, O, px, py, s, T, cands = CANDS, zone = [4, 42, PX - 10, 356]) {
+  let best = null;
+  cands.forEach(([dx, dy, al], i) => {
+    const x = px + dx, y = py + dy, b = boite(c, s, x, y, T, al);
+    let n = 0; for (const [u, v] of O.pts) if (u >= b[0] - 2 && u <= b[2] + 2 && v >= b[1] - 2 && v <= b[3] + 2) n++;
+    if (b[0] < zone[0] || b[1] < zone[1] || b[2] > zone[2] || b[3] > zone[3]) n += 1000;
+    const sc = n * 10 + i; if (!best || sc < best.sc) best = { sc, x, y, al, b };
+  });
+  O.box(best.b); return best;
+}
+function etiquette(c, O, px, py, s, couleur, T = 17, cands, zone) {
+  const p = placer(c, O, px, py, s, T, cands, zone);
+  c.texte(s, p.x, p.y, { couleur, taille: T, align: p.al }); return p;
+}
+/* Repère : axes, graduations et « O » comme obstacles. */
+function obstacles(c, G) {
+  const O = Obs();
+  O.seg(G.x0 - 6, G.Y(0), G.x0 + G.w + 14, G.Y(0)); O.seg(G.X(0), G.y0 + G.h + 6, G.X(0), G.y0 - 14);
+  for (const [x, l] of G.gx || []) { O.seg(G.X(x), G.Y(0) - 4, G.X(x), G.Y(0) + 4); if (l) O.box(boite(c, l, G.X(x), G.Y(0) + 19, 14, 'center')); }
+  for (const [y, l] of G.gy || []) { O.seg(G.X(0) - 4, G.Y(y), G.X(0) + 4, G.Y(y)); if (l) O.box(boite(c, l, G.X(0) - 8, G.Y(y) + 5, 14, 'right')); }
+  O.box(boite(c, 'O', G.X(0) - 14, G.Y(0) + 17, 14));
+  return O;
+}
+/* Points de la courbe de f (t de a à b) et de son reflet (f(t) ; t), en px. */
+const pf = (G, a, b, n = 100) => Array.from({ length: n + 1 }, (_, i) => { const t = a + (b - a) * i / n; return [G.X(t), G.Y(f(t))]; });
+const pr = (G, a, b, n = 100) => Array.from({ length: n + 1 }, (_, i) => { const t = a + (b - a) * i / n; return [G.X(f(t)), G.Y(t)]; });
+/* La courbe de f⁻¹ tracée en direct, reflet exact de celle de f (dans K.anime). */
+function reciproquePart(c, G, a, b, p, o = {}) {
+  if (p <= 0) return;
+  c.trait(pr(G, a, a + (b - a) * p, Math.max(4, Math.round(120 * p))), { tremble: .35, couleur: o.couleur || 'vert', largeur: o.largeur ?? 2.6 });
+}
+/* Segment (unités) coupé au cadre du repère ; null s’il en sort. */
+function clip(G, x1, y1, x2, y2) {
+  let t0 = 0, t1 = 1; const dx = x2 - x1, dy = y2 - y1;
+  for (const [p, r] of [[-dx, x1 - G.xmin], [dx, G.xmax - x1], [-dy, y1 - G.ymin], [dy, G.ymax - y1]]) {
+    if (Math.abs(p) < 1e-12) { if (r < 0) return null; continue; }
+    const t = r / p; if (p < 0) { if (t > t1) return null; if (t > t0) t0 = t; } else { if (t < t0) return null; if (t < t1) t1 = t; }
+  }
+  return [x1 + dx * t0, y1 + dy * t0, x1 + dx * t1, y1 + dy * t1];
+}
+const px = (G, s) => [G.X(s[0]), G.Y(s[1]), G.X(s[2]), G.Y(s[3])];
+const reflet = s => s && [s[1], s[0], s[3], s[2]];
+/* Tangente en A(a ; f(a)), longueur 2L le long de la direction (1 ; 2a), coupée au cadre. */
+const tangenteA = (G, a, L) => { const m = fp(a), n = Math.hypot(1, m); return clip(G, a - L / n, f(a) - L * m / n, a + L / n, f(a) + L * m / n); };
+function segPart(c, P, p, o) { if (p > 0 && P) c.ligne(P[0], P[1], P[0] + (P[2] - P[0]) * p, P[1] + (P[3] - P[1]) * p, o); }
+/* Le miroir y = x (pointillé violet) et son nom. */
+function miroirSeg(G) { const lo = Math.max(G.xmin, G.ymin), hi = Math.min(G.xmax, G.ymax); return [G.X(lo), G.Y(lo), G.X(hi), G.Y(hi)]; }
+function miroir(c, K, G, O, duree = 1.1) {
+  const S = miroirSeg(G);
+  K.anime(duree, p => segPart(c, S, p, { couleur: 'violet', largeur: 1.8, pointille: [7, 6] }));
+  etiquette(c, O, G.X(6.2), G.Y(6.2), 'y = x', 'violet', 18, [[12, 16, 'left'], [-12, -8, 'right'], [14, 4, 'left']]);
+  c.repere('miroir', G.X(4.6), G.Y(7.3), G.X(7.4) - G.X(4.6), G.Y(4.6) - G.Y(7.3), 'le miroir : la droite y = x');
+}
+/* « (C_f) » ou « (C_{f⁻¹}) » : le nom de la courbe avec l’indice (les indices imbriqués ne passent pas dans le kit). */
+function nomLargeur(c, sub, T) { const ts = T * .68; return c.largeurTexte('(C', T) + c.largeurTexte('f', ts) + (sub !== 'f' ? c.largeurTexte('−1', ts * .62) + 1 : 0) + 4 + c.largeurTexte(')', T); }
+function nomCourbe(c, O, x, y, sub, couleur, T = 19) {
+  const ts = T * .68, w1 = c.largeurTexte('(C', T), w2 = c.largeurTexte('f', ts) + (sub !== 'f' ? c.largeurTexte('−1', ts * .62) + 1 : 0);
+  c.texte('(C', x, y, { couleur, taille: T });
+  c.texte(sub, x + w1 + 1, y + T * .3, { couleur, taille: ts });
+  c.texte(')', x + w1 + w2 + 3, y, { couleur, taille: T });
+  if (O) O.box([x, y - .8 * T, x + nomLargeur(c, sub, T), y + .45 * T]);
+}
+/* Petit angle droit au milieu de [AA′], sur le miroir. */
+function angleDroit(c, G, a) {
+  const mx = G.X((a + f(a)) / 2), my = G.Y((a + f(a)) / 2), s = 8, r = Math.SQRT1_2;
+  const d1 = [r * s, -r * s], d2 = [-r * s, -r * s];
+  c.trait([[mx + d1[0], my + d1[1]], [mx + d1[0] + d2[0], my + d1[1] + d2[1]], [mx + d2[0], my + d2[1]]], { couleur: 'jaune', largeur: 1.4 });
+}
+/* Le point de la courbe de f le plus proche de (x ; y) px (poignée A). */
+function proche(G, x, y, lo, hi) {
+  let best = lo, d = Infinity;
+  for (let t = lo; t <= hi + 1e-9; t += .005) { const e = (G.X(t) - x) ** 2 + (G.Y(f(t)) - y) ** 2; if (e < d) { d = e; best = t; } }
+  return best;
+}
+/* Le repère commun aux trois premières vues et ses courbes. */
+function courbesDeBase(c, K, G, O, rapide) {
+  K.anime(rapide ? .9 : 1.8, p => K.courbePart(G, f, 0, 2.5, p, { couleur: 'cyan' }));
+  K.rond(G, 0, 1, true, 'cyan');
+  nomCourbe(c, O, G.X(2.5) + 8, G.Y(7.25) + 10, 'f', 'cyan');
+  c.repere('courbe_f', G.X(0) - 6, G.Y(7.3), G.X(2.6) - G.X(0) + 50, G.Y(0.9) - G.Y(7.3), 'la courbe de f');
+}
+function courbeReciproque(c, K, G, O, rapide, nom = true) {
+  K.anime(rapide ? .9 : 2, p => reciproquePart(c, G, 0, 2.5, p));
+  K.rond(G, 1, 0, true, 'vert');
+  if (nom) nomCourbe(c, O, G.X(5.5), G.Y(Math.sqrt(4.5)) + 30, 'f⁻¹', 'vert');
+  c.repere('courbe_reciproque', G.X(0.9), G.Y(2.6), G.X(7.35) - G.X(0.9), G.Y(-0.1) - G.Y(2.6) + 34, 'la courbe de f⁻¹');
+}
+function obstaclesCourbes(c, G, O) { O.poly(pf(G, 0, 2.5)); O.poly(pr(G, 0, 2.5)); O.seg(...miroirSeg(G)); return O; }
+/* Quelques étiquettes réservées d’avance (pour que les autres les évitent toujours). */
+function reserverNoms(c, G, O, nomR = true) {
+  O.box([G.X(2.5) + 8, G.Y(7.25) + 10 - 15, G.X(2.5) + 8 + nomLargeur(c, 'f', 19), G.Y(7.25) + 10 + 9]);
+  if (nomR) O.box([G.X(5.5), G.Y(Math.sqrt(4.5)) + 30 - 15, G.X(5.5) + nomLargeur(c, 'f⁻¹', 19), G.Y(Math.sqrt(4.5)) + 30 + 9]);
+  O.box(boite(c, 'y = x', G.X(6.2) + 12, G.Y(6.2) + 16, 18));
+}
+
+MathsTableau.page({
+  id: 'de_miroir', titre: 'La fonction réciproque et sa dérivée',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : f(x) = x² + 1 sur I = [0 ; +∞[, continue et strictement croissante ; la courbe de f⁻¹ (f⁻¹(x) = √(x − 1) sur J = [1 ; +∞[) est le reflet de celle de f par la droite y = x (repère orthonormé) ; une tangente de pente f′(a) se reflète en une tangente de pente 1/f′(a), d’où (f⁻¹)′(f(a)) = 1/f′(a) ; si f′(x₀) = 0 la tangente reflétée est verticale et f⁻¹ n’est pas dérivable en f(x₀)',
+  vues: {
+    reflet: {
+      titre: 'La courbe de f⁻¹ : le reflet de celle de f par la droite y = x',
+      params: { x_a: { min: 0, max: 2.5, pas: 0.05, defaut: 2, sens: 'abscisse du point A sur la courbe de f' } },
+      dessiner(c, K) {
+        K.titre('Le miroir y = x');
+        const a = K.P.x_a, fa = f(a);
+        const G = base(c, K, AX()); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère orthonormé');
+        const O = obstaclesCourbes(c, G, obstacles(c, G)); reserverNoms(c, G, O);
+        O.seg(G.X(a), G.Y(fa), G.X(fa), G.Y(a));
+        K.marque('repere_pose');
+        courbesDeBase(c, K, G, null, false);
+        let y = K.lignes(PX, 86, [{ t: 'f(x) = x² + 1 sur I = [0 ; +∞[', couleur: 'cyan', moment: 'courbe_f' }], 34);
+        c.pause(.2); miroir(c, K, G, O);
+        y = K.lignes(PX, y, [{ t: 'la droite y = x : le miroir', couleur: 'violet', moment: 'miroir' }], 34);
+        c.pause(.3); K.rond(G, a, fa, true, 'jaune');
+        etiquette(c, O, G.X(a), G.Y(fa), 'A', 'jaune', 18);
+        c.repere('point_a', G.X(a) - 14, G.Y(fa) - 14, 28, 28, 'le point A sur la courbe de f');
+        y = K.lignes(PX, y, [{ t: `A(${K.fr(a)} ; ${fr4(fa)}) sur (C_f)`, couleur: 'jaune', moment: 'point_a_place' }], 34);
+        c.pause(.2);
+        K.anime(1, p => segPart(c, [G.X(a), G.Y(fa), G.X(fa), G.Y(a)], p, { couleur: 'jaune', largeur: 1.4, pointille: [5, 5] }));
+        angleDroit(c, G, a);
+        K.rond(G, fa, a, true, 'jaune');
+        etiquette(c, O, G.X(fa), G.Y(a), 'A′', 'jaune', 18);
+        c.repere('point_a2', G.X(fa) - 14, G.Y(a) - 14, 28, 28, 'le reflet A′ du point A');
+        y = K.lignes(PX, y, [
+          { t: `A′(${fr4(fa)} ; ${K.fr(a)}) : le reflet de A`, couleur: 'jaune' },
+          { t: `f(${K.fr(a)}) = ${fr4(fa)} ⟺ f⁻¹(${fr4(fa)}) = ${K.fr(a)}`, couleur: 'blanc', cadre: 'jaune', repere: 'equivalence', label: 'f(a) = b ⟺ f⁻¹(b) = a', moment: 'reflet_du_point', inter: 40 },
+        ], 34);
+        c.pause(.4); courbeReciproque(c, K, G, null, false);
+        K.lignes(PX, y, [
+          { t: 'la courbe de f⁻¹ : reflet de (C_f)', couleur: 'vert' },
+          { t: 'f⁻¹(x) = √(x − 1) sur J = [1 ; +∞[', couleur: 'vert', moment: 'courbe_reciproque' },
+        ], 34);
+      },
+      poignees(K) { const G = K.grille(AX()); return [{ id: 'x_a', x: G.X(K.P.x_a), y: G.Y(f(K.P.x_a)), bouger: (x, y) => ({ x_a: proche(G, x, y, 0, 2.5) }) }]; },
+      lecture: K => { const a = K.P.x_a, fa = f(a); return `A(${K.fr(a)} ; ${fr4(fa)}), A′(${fr4(fa)} ; ${K.fr(a)}) : f(${K.fr(a)}) = ${fr4(fa)} donc f⁻¹(${fr4(fa)}) = ${K.fr(a)}.`; },
+      decrire: K => { const a = K.fr(K.P.x_a), fa = fr4(f(K.P.x_a)); return {
+        repere_pose: 'Un repère orthonormé (même unité sur les deux axes), x et y de −1 à 7,5.',
+        courbe_f: 'La courbe de f(x) = x² + 1 pour x ≥ 0 est tracée en cyan et nommée (C_f) ; écrit : f(x) = x² + 1 sur I = [0 ; +∞[.',
+        miroir: 'La droite d’équation y = x est tracée en pointillé violet : c’est le miroir.',
+        point_a_place: `Le point A(${a} ; ${fa}) est marqué en jaune sur la courbe de f : f(${a}) = ${fa}.`,
+        reflet_du_point: `Son reflet A′(${fa} ; ${a}) par rapport à la droite y = x : le segment [AA′] en pointillé est perpendiculaire au miroir, qui le coupe en son milieu ; écrit et encadré : f(${a}) = ${fa} ⟺ f⁻¹(${fa}) = ${a}.`,
+        courbe_reciproque: 'La courbe de f⁻¹ est tracée en vert, reflet de la courbe de f par la droite y = x, nommée (C_f⁻¹) ; elle part de (1 ; 0) ; écrit : f⁻¹(x) = √(x − 1) sur J = [1 ; +∞[.',
+      }; },
+      motifs: { courbe_f: 'la courbe de f', miroir: 'le miroir y = x', point_a_place: 'le point A', reflet_du_point: 'A et son reflet A′', courbe_reciproque: 'la courbe de f⁻¹' },
+      explication: [
+        { repere: 'point_a', texte: 'A est sur la courbe de f : f(a) = b.' },
+        { repere: 'point_a2', texte: 'Son reflet par y = x échange les coordonnées : (b ; a), donc f⁻¹(b) = a.' },
+        { repere: 'miroir', texte: 'La droite y = x est le miroir ; le repère doit être orthonormé.' },
+        { repere: 'courbe_reciproque', texte: 'Tous les points reflétés forment la courbe de f⁻¹.' },
+      ],
+    },
+
+    pentes: {
+      titre: 'La pente de la tangente reflétée : 1 / f′(a)',
+      params: { x_a: { min: 0.3, max: 2.5, pas: 0.05, defaut: 2, sens: 'abscisse du point A sur la courbe de f' } },
+      dessiner(c, K) {
+        K.titre('Les pentes au miroir');
+        const a = K.P.x_a, fa = f(a), m = fp(a), sa = K.fr(a), sfa = fr4(fa), sm = K.fr(m);
+        const G = base(c, K, AX()); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère orthonormé');
+        const O = obstaclesCourbes(c, G, obstacles(c, G)); reserverNoms(c, G, O, false);
+        const tA = clip(G, a - 1.35, fa - 1.35 * m, a + 0.45, fa + 0.45 * m), tR = reflet(tA);
+        const Cc = [a - 1, fa], B = [a - 1, fa - m], Cr = [fa, a - 1], Br = [fa - m, a - 1];
+        if (tA) { O.seg(...px(G, tA)); O.seg(...px(G, tR)); }
+        O.seg(G.X(a), G.Y(fa), G.X(Cc[0]), G.Y(Cc[1])); O.seg(G.X(Cc[0]), G.Y(Cc[1]), G.X(B[0]), G.Y(B[1]));
+        O.seg(G.X(fa), G.Y(a), G.X(Cr[0]), G.Y(Cr[1])); O.seg(G.X(Cr[0]), G.Y(Cr[1]), G.X(Br[0]), G.Y(Br[1]));
+        K.marque('repere_pose');
+        courbesDeBase(c, K, G, null, true); K.marque('courbe_f');
+        miroir(c, K, G, O, .5); K.marque('miroir');
+        courbeReciproque(c, K, G, null, true, false); K.marque('courbe_reciproque');
+        c.pause(.3);
+        K.rond(G, a, fa, true, 'jaune'); etiquette(c, O, G.X(a), G.Y(fa), 'A', 'jaune', 18);
+        c.repere('point_a', G.X(a) - 14, G.Y(fa) - 14, 28, 28, 'le point A');
+        K.anime(.9, p => segPart(c, tA && px(G, tA), p, { couleur: 'orange', largeur: 2.4 }));
+        let y = K.lignes(PX, 86, [
+          { t: 'f′(x) = 2x', couleur: 'blanc' },
+          { t: `pente en A(${sa} ; ${sfa}) : f′(${sa}) = ${sm}`, couleur: 'orange', moment: 'tangente_en_a' },
+        ], 34);
+        c.pause(.3);
+        K.anime(.5, p => segPart(c, [G.X(a), G.Y(fa), G.X(Cc[0]), G.Y(Cc[1])], p, { couleur: 'orange', largeur: 1.6 }));
+        K.anime(.7, p => segPart(c, [G.X(Cc[0]), G.Y(Cc[1]), G.X(B[0]), G.Y(B[1])], p, { couleur: 'orange', largeur: 1.6 }));
+        etiquette(c, O, G.X(a - .5), G.Y(fa), '1', 'orange', 17, [[0, -6, 'center'], [0, 20, 'center'], [-12, 36, 'center']], [4, 36, PX - 10, 356]);
+        etiquette(c, O, G.X(a - 1), G.Y(fa - m / 2), sm, 'orange', 17, [[-8, 6, 'right'], [8, 6, 'left']]);
+        c.repere('triangle_a', G.X(a - 1) - 34, G.Y(fa) - 22, G.X(a) - G.X(a - 1) + 48, G.Y(fa - m) - G.Y(fa) + 30, 'le triangle de pente en A');
+        y = K.lignes(PX, y, [{ t: `triangle : ${sm} / 1 = ${sm}`, couleur: 'orange', moment: 'triangle_a' }], 34);
+        c.pause(.4);
+        K.rond(G, fa, a, true, 'jaune'); etiquette(c, O, G.X(fa), G.Y(a), 'A′', 'jaune', 18);
+        c.repere('point_a2', G.X(fa) - 14, G.Y(a) - 14, 28, 28, 'le point A′, reflet de A');
+        K.anime(.9, p => segPart(c, tR && px(G, tR), p, { couleur: 'vert', largeur: 2.4 }));
+        y = K.lignes(PX, y, [{ t: `en A′(${sfa} ; ${sa}) : la tangente reflet`, couleur: 'vert', moment: 'tangente_reflet' }], 34);
+        c.pause(.3);
+        K.anime(.5, p => segPart(c, [G.X(fa), G.Y(a), G.X(Cr[0]), G.Y(Cr[1])], p, { couleur: 'vert', largeur: 1.6 }));
+        K.anime(.7, p => segPart(c, [G.X(Cr[0]), G.Y(Cr[1]), G.X(Br[0]), G.Y(Br[1])], p, { couleur: 'vert', largeur: 1.6 }));
+        etiquette(c, O, G.X(fa), G.Y(a - .5), '1', 'vert', 17, [[-8, 6, 'right'], [8, 6, 'left']]);
+        etiquette(c, O, G.X(fa - m / 2), G.Y(a - 1), sm, 'vert', 17, [[0, 20, 'center'], [-(G.X(fa) - G.X(fa - m)) / 2 - 7, 6, 'right'], [0, -8, 'center']]);
+        c.repere('triangle_reflet', G.X(fa - m) - 6, G.Y(a) - 10, G.X(fa) - G.X(fa - m) + 34, G.Y(a - 1) - G.Y(a) + 34, 'le triangle reflet');
+        y = K.lignes(PX, y, [{ t: `triangle reflet : 1 / ${sm}`, couleur: 'vert', moment: 'triangle_reflet' }], 34);
+        c.pause(.4);
+        y = K.lignes(PX, y, [{ t: `pente en A′ = 1/${sm} = 1 / f′(${sa})`, couleur: 'jaune', moment: 'pentes_inverses', inter: 44 }], 34);
+        c.pause(.3);
+        K.lignes(PX + 8, y, [{ t: `(f⁻¹)′(${sfa}) = 1 / f′(${sa}) = 1/${sm}`, couleur: 'blanc', cadre: 'jaune', taille: 20, repere: 'formule', label: '(f⁻¹)′(f(a)) = 1 / f′(a)', moment: 'formule' }], 34);
+      },
+      poignees(K) { const G = K.grille(AX()); return [{ id: 'x_a', x: G.X(K.P.x_a), y: G.Y(f(K.P.x_a)), bouger: (x, y) => ({ x_a: proche(G, x, y, 0.3, 2.5) }) }]; },
+      lecture: K => { const a = K.P.x_a, m = fp(a); return `A(${K.fr(a)} ; ${fr4(f(a))}) : pente f′(${K.fr(a)}) = ${K.fr(m)} ; A′(${fr4(f(a))} ; ${K.fr(a)}) : pente 1/${K.fr(m)} ≈ ${K.fr(1 / m, 3)} ; produit des deux pentes = ${K.fr(m)} × 1/${K.fr(m)} = 1.`; },
+      decrire: K => { const a = K.P.x_a, m = fp(a), sa = K.fr(a), sfa = fr4(f(a)), sm = K.fr(m); return {
+        repere_pose: 'Un repère orthonormé, x et y de −1 à 7,5.',
+        courbe_f: 'La courbe de f(x) = x² + 1 pour x ≥ 0 (cyan).',
+        miroir: 'La droite y = x en pointillé violet.',
+        courbe_reciproque: 'La courbe de f⁻¹ (vert), reflet de celle de f.',
+        tangente_en_a: `La tangente en A(${sa} ; ${sfa}) est tracée en orange ; écrit : f′(x) = 2x, pente en A : f′(${sa}) = ${sm}.`,
+        triangle_a: `Le triangle de pente en A (orange) : 1 à l’horizontale, ${sm} à la verticale ; écrit : ${sm} / 1 = ${sm}.`,
+        tangente_reflet: `La tangente en A′(${sfa} ; ${sa}) est tracée en vert : c’est le reflet de la première par y = x.`,
+        triangle_reflet: `Le triangle reflet (vert) : ${sm} à l’horizontale, 1 à la verticale ; écrit : 1 / ${sm}.`,
+        pentes_inverses: `Écrit : pente en A′ = 1/${sm} = 1 / f′(${sa}) ; les deux pentes sont inverses, leur produit vaut 1.`,
+        formule: `Encadré : (f⁻¹)′(${sfa}) = 1 / f′(${sa}) = 1/${sm}.`,
+      }; },
+      motifs: { tangente_en_a: 'la tangente en A', triangle_a: 'le triangle de pente en A', tangente_reflet: 'la tangente reflet en A′', triangle_reflet: 'le triangle reflet', pentes_inverses: 'les pentes inverses', formule: 'la formule de (f⁻¹)′' },
+      explication: [
+        { repere: 'triangle_a', texte: 'En A : 1 à l’horizontale, f′(a) à la verticale.' },
+        { repere: 'triangle_reflet', texte: 'Le miroir échange horizontale et verticale : f′(a) à l’horizontale, 1 à la verticale.' },
+        { repere: 'formule', texte: 'La pente en A′ est donc 1 / f′(a) : (f⁻¹)′(f(a)) = 1 / f′(a).' },
+      ],
+    },
+
+    verticale: {
+      titre: 'Si f′(x₀) = 0 : la tangente reflétée est verticale',
+      dessiner(c, K) {
+        K.titre('Quand f′(x_0) = 0');
+        const G = base(c, K, AX([1], [1])); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère orthonormé');
+        const O = obstaclesCourbes(c, G, obstacles(c, G)); reserverNoms(c, G, O);
+        O.box(boite(c, '(0 ; 1)', G.X(0) - 10, G.Y(1) - 9, 15, 'right')); O.box(boite(c, '(1 ; 0)', G.X(1) + 8, G.Y(0) + 20, 15));
+        K.marque('repere_pose');
+        courbesDeBase(c, K, G, null, true); K.marque('courbe_f');
+        miroir(c, K, G, O, .5); K.marque('miroir');
+        courbeReciproque(c, K, G, null, true); K.marque('courbe_reciproque');
+        c.pause(.3);
+        const L = 1.5;
+        K.anime(3.4, p => {
+          const e = p * p * (3 - 2 * p), a = 2 * (1 - e), fa = f(a), m = fp(a);
+          const tA = tangenteA(G, a, L), Q = Obs(); Q.pts.push(...O.pts);
+          if (tA) { c.ligne(...px(G, tA), { couleur: 'orange', largeur: 2.4 }); Q.seg(...px(G, tA)); }
+          if (tA) { c.ligne(...px(G, reflet(tA)), { couleur: 'vert', largeur: 2.4 }); Q.seg(...px(G, reflet(tA))); }
+          K.rond(G, a, fa, true, 'jaune'); K.rond(G, fa, a, true, 'jaune');
+          const pa = placer(c, Q, G.X(a), G.Y(fa), 'A', 18); c.texte('A', pa.x, pa.y, { couleur: 'jaune', taille: 18, align: pa.al });
+          const pb = placer(c, Q, G.X(fa), G.Y(a), 'A′', 18); c.texte('A′', pb.x, pb.y, { couleur: 'jaune', taille: 18, align: pb.al });
+          c.texte(`pente en A : f′(${K.fr(a)}) = ${K.fr(m)}`, PX, 86, { couleur: 'orange', taille: 19 });
+          c.texte(m > 1e-9 ? `pente en A′ : 1 / ${K.fr(m)} ≈ ${K.fr(1 / m, 2)}` : 'pente en A′ : 1 / 0 n’existe pas', PX, 120, { couleur: 'vert', taille: 19 });
+        });
+        c.repere('point_a', G.X(0) - 14, G.Y(1) - 14, 28, 28, 'le point A, arrivé en (0 ; 1)');
+        c.repere('point_a2', G.X(1) - 14, G.Y(0) - 14, 28, 28, 'le point A′, arrivé en (1 ; 0)');
+        K.marque('a_glisse');
+        c.pause(.4);
+        const tH = tangenteA(G, 0, L), tV = reflet(tH);
+        K.anime(.6, p => segPart(c, px(G, tH), p, { couleur: 'orange', largeur: 3.6 }));
+        c.texte('(0 ; 1)', G.X(0) - 10, G.Y(1) - 9, { couleur: 'jaune', taille: 15, align: 'right' });
+        c.repere('tangente_horizontale', G.X(tH[0]), G.Y(1) - 14, G.X(tH[2]) - G.X(tH[0]), 28, 'la tangente horizontale en (0 ; 1)');
+        let y = K.lignes(PX, 166, [{ t: 'en (0 ; 1) : tangente horizontale', couleur: 'orange', moment: 'tangente_horizontale' }], 34);
+        c.pause(.4);
+        K.anime(.6, p => segPart(c, px(G, tV), p, { couleur: 'vert', largeur: 3.6 }));
+        c.texte('(1 ; 0)', G.X(1) + 8, G.Y(0) + 20, { couleur: 'jaune', taille: 15 });
+        c.repere('tangente_verticale', G.X(1) - 14, G.Y(tV[3]), 28, G.Y(tV[1]) - G.Y(tV[3]), 'la tangente verticale en (1 ; 0)');
+        y = K.lignes(PX, y, [{ t: 'en (1 ; 0) : tangente VERTICALE', couleur: 'vert', moment: 'tangente_verticale', inter: 46 }], 34);
+        c.pause(.4);
+        K.lignes(PX, y, [
+          { t: 'f′(0) = 0 : f⁻¹ n’est pas', couleur: 'blanc' },
+          { t: 'dérivable en 1 ;', couleur: 'blanc', inter: 40 },
+          { t: 'il faut f′(x_0) ≠ 0', couleur: 'jaune', cadre: 'jaune', taille: 20, repere: 'conclusion', label: 'il faut f′(x₀) ≠ 0', moment: 'conclusion' },
+        ], 34);
+      },
+      decrire: {
+        repere_pose: 'Un repère orthonormé, x et y de −1 à 7,5.',
+        courbe_f: 'La courbe de f(x) = x² + 1 pour x ≥ 0 (cyan).',
+        miroir: 'La droite y = x en pointillé violet.',
+        courbe_reciproque: 'La courbe de f⁻¹ (vert), reflet de celle de f.',
+        a_glisse: 'Le point A glisse sur la courbe de f de (2 ; 5) jusqu’à (0 ; 1) avec sa tangente orange, et son reflet A′ glisse de (5 ; 2) jusqu’à (1 ; 0) avec sa tangente verte ; la pente en A tombe de 4 à 0, celle en A′ grandit sans fin : écrit, pente en A : f′(0) = 0, pente en A′ : 1 / 0 n’existe pas.',
+        tangente_horizontale: 'En (0 ; 1), la tangente à la courbe de f est horizontale (repassée en orange) : f′(0) = 0.',
+        tangente_verticale: 'Son reflet en (1 ; 0) est VERTICAL (repassé en vert) : la droite d’équation x = 1.',
+        conclusion: 'Écrit : f′(0) = 0 : f⁻¹ n’est pas dérivable en 1 ; encadré : il faut f′(x₀) ≠ 0.',
+      },
+      motifs: { a_glisse: 'A glisse vers (0 ; 1)', tangente_horizontale: 'la tangente horizontale', tangente_verticale: 'la tangente verticale', conclusion: 'il faut f′(x₀) ≠ 0' },
+      explication: [
+        { repere: 'tangente_horizontale', texte: 'En (0 ; 1), f′(0) = 0 : la tangente est horizontale.' },
+        { repere: 'tangente_verticale', texte: 'Le miroir la rend verticale : pas de pente, f⁻¹ n’est pas dérivable en 1.' },
+        { repere: 'conclusion', texte: 'Pour dériver f⁻¹ en f(x₀), il faut f′(x₀) ≠ 0.' },
+      ],
+    },
+
+    restriction: {
+      titre: 'Ne garder que la partie sur I = [0 ; +∞[ avant de refléter',
+      dessiner(c, K) {
+        K.titre('Ne refléter que la partie sur I');
+        const G = base(c, K, OPT_R); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère orthonormé');
+        const zone = [4, 42, PX_R - 10, 356];
+        const O = obstacles(c, G); O.poly(pf(G, -2.3, 2.5)); O.poly(pr(G, 0, 2.5)); O.seg(...miroirSeg(G));
+        const ech = [[0, 1], [1, 2], [2, 5]];
+        for (const [u, v] of ech) O.seg(G.X(u), G.Y(v), G.X(v), G.Y(u));
+        O.seg(G.X(-0.6), G.Y(1), G.X(0.6), G.Y(1)); O.seg(G.X(1), G.Y(-0.6), G.X(1), G.Y(0.6));
+        O.box(boite(c, 'y = x', G.X(6.2) + 12, G.Y(6.2) + 16, 18));
+        K.marque('repere_pose');
+        K.anime(2, p => K.courbePart(G, f, -2.3, 2.3, p, { couleur: 'faible', largeur: 2.2 }));
+        let y = K.lignes(PX_R, 80, [{ t: 'x² + 1 : descend puis remonte', couleur: 'faible', moment: 'parabole_entiere' }], 29);
+        c.pause(.4);
+        K.anime(1.2, p => K.courbePart(G, f, 0, 2.5, p, { couleur: 'cyan', largeur: 4.6 }));
+        K.rond(G, 0, 1, true, 'cyan');
+        K.anime(.6, p => segPart(c, [G.X(0), G.Y(0), G.X(0) + p * (G.X(7.3) - G.X(0)), G.Y(0)], 1, { couleur: 'cyan', largeur: 4.5, alpha: .6 }));
+        c.texte('I', G.X(7.2), G.Y(0) - 9, { couleur: 'cyan', taille: 18 });
+        c.repere('partie_sur_i', G.X(0) - 8, G.Y(7.3), G.X(2.6) - G.X(0) + 16, G.Y(0.8) - G.Y(7.3), 'la partie de la courbe sur I = [0 ; +∞[');
+        y = K.lignes(PX_R, y, [
+          { t: 'sur I = [0 ; +∞[ : f continue', couleur: 'cyan' },
+          { t: 'et strictement croissante', couleur: 'cyan', moment: 'partie_sur_i' },
+        ], 29);
+        c.pause(.3); miroir(c, K, G, O, 1);
+        K.marque('miroir');
+        c.pause(.3);
+        K.anime(2, p => reciproquePart(c, G, 0, 2.5, p));
+        K.rond(G, 1, 0, true, 'vert');
+        c.repere('reflet', G.X(0.9), G.Y(2.6), G.X(7.35) - G.X(0.9), G.Y(-0.1) - G.Y(2.6), 'le reflet de la partie sur I : la courbe de f⁻¹');
+        y = K.lignes(PX_R, y, [{ t: 'seule cette partie se reflète : f⁻¹', couleur: 'vert', moment: 'reflet_de_la_partie' }], 29);
+        c.pause(.3);
+        for (const [u, v] of ech) {
+          K.rond(G, u, v, true, 'cyan');
+          etiquette(c, O, G.X(u), G.Y(v), `(${u} ; ${v})`, 'cyan', 15, undefined, zone);
+          K.anime(.5, p => segPart(c, [G.X(u), G.Y(v), G.X(v), G.Y(u)], p, { couleur: 'jaune', largeur: 1.2, pointille: [4, 5] }));
+          K.rond(G, v, u, true, 'vert');
+          etiquette(c, O, G.X(v), G.Y(u), `(${v} ; ${u})`, 'vert', 15, undefined, zone);
+          c.pause(.2);
+        }
+        c.repere('points', G.X(0) - 14, G.Y(5) - 14, G.X(5) - G.X(0) + 28, G.Y(0) - G.Y(5) + 28, 'les points échangés par le miroir');
+        y = K.lignes(PX_R, y, [{ t: 'M(a ; b) devient M′(b ; a)', couleur: 'jaune', moment: 'points_echanges' }], 29);
+        c.pause(.3);
+        K.anime(.5, p => segPart(c, [G.X(-0.6), G.Y(1), G.X(0.6), G.Y(1)], p, { couleur: 'orange', largeur: 2.8 }));
+        K.anime(.5, p => segPart(c, [G.X(1), G.Y(-0.6), G.X(1), G.Y(0.6)], p, { couleur: 'orange', largeur: 2.8 }));
+        c.repere('tangentes', G.X(-0.6), G.Y(1.6), G.X(1.6) - G.X(-0.6), G.Y(-0.6) - G.Y(1.6), 'la tangente horizontale en (0 ; 1) et son reflet vertical en (1 ; 0)');
+        y = K.lignes(PX_R, y, [
+          { t: 'tangente horizontale en (0 ; 1)', couleur: 'orange' },
+          { t: '→ verticale en (1 ; 0)', couleur: 'orange', moment: 'tangente_devient_verticale' },
+        ], 29);
+        c.pause(.3);
+        K.anime(.6, p => segPart(c, [G.X(0), G.Y(1), G.X(0), G.Y(1) + p * (G.Y(7.3) - G.Y(1))], 1, { couleur: 'jaune', largeur: 4.5, alpha: .6 }));
+        c.texte('J', G.X(0) + 8, G.Y(7.3) + 6, { couleur: 'jaune', taille: 18 });
+        K.lignes(PX_R, y + 4, [
+          { t: 'J = f(I) = [1 ; +∞[', couleur: 'jaune', cadre: 'jaune', taille: 20, repere: 'intervalle_j', label: 'J = f(I) = [1 ; +∞[', inter: 36 },
+          { t: 'f⁻¹(x) = √(x − 1) sur J', couleur: 'vert', moment: 'intervalle_j' },
+        ], 29);
+      },
+      decrire: {
+        repere_pose: 'Un repère orthonormé, x de −2,5 à 7,5 et y de −1 à 7,5.',
+        parabole_entiere: 'La courbe de x² + 1 sur [−2,3 ; 2,3] en trait faible : elle descend puis remonte, la fonction x ↦ x² + 1 n’est pas monotone sur ℝ ; écrit : x² + 1 : descend puis remonte.',
+        partie_sur_i: 'La partie x ≥ 0 est repassée en cyan épais, I = [0 ; +∞[ marqué sur l’axe des abscisses ; écrit : sur I = [0 ; +∞[ : f continue et strictement croissante.',
+        miroir: 'La droite y = x en pointillé violet : le miroir.',
+        reflet_de_la_partie: 'Seule la partie sur I est reflétée par la droite y = x : la courbe de f⁻¹ en vert, qui part de (1 ; 0) ; écrit : seule cette partie se reflète : f⁻¹.',
+        points_echanges: 'Trois points et leurs reflets, reliés en pointillé : (0 ; 1) devient (1 ; 0), (1 ; 2) devient (2 ; 1), (2 ; 5) devient (5 ; 2) ; écrit : M(a ; b) devient M′(b ; a).',
+        tangente_devient_verticale: 'Une petite tangente horizontale en (0 ; 1) (f′(0) = 0) et son reflet en (1 ; 0), vertical ; écrit : tangente horizontale en (0 ; 1) → verticale en (1 ; 0).',
+        intervalle_j: 'J marqué en jaune sur l’axe des ordonnées, de 1 vers le haut ; encadré : J = f(I) = [1 ; +∞[ ; écrit : f⁻¹(x) = √(x − 1) sur J.',
+      },
+      motifs: { parabole_entiere: 'la parabole entière', partie_sur_i: 'la partie sur I', miroir: 'le miroir y = x', reflet_de_la_partie: 'le reflet de la partie sur I', points_echanges: 'les points échangés', tangente_devient_verticale: 'la tangente devient verticale', intervalle_j: 'J = f(I)' },
+      explication: [
+        { repere: 'partie_sur_i', texte: 'Sur I = [0 ; +∞[, f est continue et strictement croissante.' },
+        { repere: 'reflet', texte: 'Seule cette partie se reflète : c’est la courbe de f⁻¹.' },
+        { repere: 'points', texte: 'Chaque point (a ; b) devient (b ; a).' },
+        { repere: 'intervalle_j', texte: 'f⁻¹ est définie sur J = f(I) = [1 ; +∞[.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

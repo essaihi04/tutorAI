@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagramme d’énergie — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Diagramme énergétique d’une réaction nucléaire tracé à la craie : un axe vertical E en MeV (échelle non respectée), trois paliers horizontaux — nucléons séparés en haut, réactifs, produits — avec leurs valeurs à gauche, leurs noms à droite, des nucléons peints à côté, et les flèches cotées des énergies de liaison et de ΔE"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le diagramme énergétique d’une réaction nucléaire (cours « Noyaux, masse et énergie », phys_ch5_energie_nucleaire,
+ * 11 novembre 2026). Vue « Diagramme d’énergie » : axe E (MeV) sans graduation régulière (échelle non respectée, écrit
+ * au tableau), trois paliers à la craie (valeurs à gauche, noms à droite), nucléons peints posés sur chaque palier
+ * (proton rouge, neutron gris-bleu), flèches verticales cotées. Le palier le plus haut = les nucléons séparés.
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - fusion (défaut, national 2023 N) : 2 ¹₁p + 3 ¹₀n / ²₁H + ³₁H / ⁴₂He + ¹₀n ; E_ℓ(²H) + E_ℓ(³H) = 10,841 MeV ;
+ *    E_ℓ(⁴He) = 28,296 MeV ; ΔE = 10,841 − 28,296 = −17,455 MeV ; E_lib ≈ 17,5 MeV. Les valeurs à gauche sont repérées
+ *    par rapport au palier des nucléons séparés, noté E_0 (l’énoncé ne donne que des différences).
+ *  - polonium (national 2020 N) : 1,971820·10⁵ / 1,955372·10⁵ / 1,955318·10⁵ MeV ; E_ℓ(Po) = 1644,8 MeV ;
+ *    ΔE = −5,4 MeV ; E_lib = 5,4 MeV. Ajout : la flèche fleche_El_produits (E_ℓ(Pb) + E_ℓ(He) = 1650,2 MeV).
+ * L’élève touche un palier (poignée) : il s’entoure et affiche son nom complet (set_parameters {palier} pour le tuteur).
+ * Les gros noyaux (Po, Pb) sont représentés par un amas de 19 sphères (pas 210) : c’est une image, la valeur est écrite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const VITESSE = 1.5;                                   // horloge de l’écriture (s de scène par s réelle)
+
+/* ── Les deux diagrammes ─────────────────────────────────────────────── */
+const VUES = {
+  fusion: {
+    titre: 'fusion', equation: [[2, 1, 'H'], ' + ', [3, 1, 'H'], ' → ', [4, 2, 'He'], ' + ', [1, 0, 'n']], equationTexte: '²₁H + ³₁H → ⁴₂He + ¹₀n',
+    y: { nucleons: 76, reactifs: 170, produits: 322 },
+    paliers: {
+      nucleons: { expr: ['2 ', [1, 1, 'p'], ' + 3 ', [1, 0, 'n']], texte: '2 ¹₁p + 3 ¹₀n', valeur: 'E_{0}', valeurTexte: 'E₀ (énergie des nucléons séparés, prise comme repère)', nom: 'nucléons séparés au repos' },
+      reactifs: { expr: [[2, 1, 'H'], ' + ', [3, 1, 'H']], texte: '²₁H + ³₁H', valeur: 'E_{0} − 10,841 MeV', valeurTexte: 'E₀ − 10,841 MeV', nom: 'réactifs au repos' },
+      produits: { expr: [[4, 2, 'He'], ' + ', [1, 0, 'n']], texte: '⁴₂He + ¹₀n', valeur: 'E_{0} − 28,296 MeV', valeurTexte: 'E₀ − 28,296 MeV', nom: 'produits au repos' },
+    },
+    fleches: {
+      fleche_El_reactifs: { de: 'reactifs', vers: 'nucleons', couleur: 'orange', lignes: ['E_{ℓ}(²H) + E_{ℓ}(³H) = 10,841 MeV', 'on fournit cette énergie : les noyaux se séparent en nucléons'], ty: [118, 138],
+        dit: 'flèche orange montante du palier des réactifs au palier des nucléons : « E_ℓ(²H) + E_ℓ(³H) = 10,841 MeV » ; on fournit' },
+      fleche_El_produits: { de: 'nucleons', vers: 'produits', couleur: 'vert', lignes: ['E_{ℓ}(⁴He) = 28,296 MeV', 'on récupère cette énergie (le neutron seul : E_{ℓ} = 0)'], ty: [210, 230],
+        dit: 'flèche verte descendante du palier des nucléons au palier des produits : « E_ℓ(⁴He) = 28,296 MeV » ; on récupère (le neutron seul : E_ℓ = 0)' },
+      fleche_delta_E: { de: 'reactifs', vers: 'produits', couleur: 'jaune', lignes: ['ΔE = 10,841 − 28,296 = −17,455 MeV'], ty: [280],
+        dit: 'flèche jaune descendante du palier des réactifs au palier des produits : « ΔE = 10,841 − 28,296 = −17,455 MeV »' },
+    },
+    resultat: ['ΔE < 0 : énergie libérée ; E_{lib} = |ΔE| ≈ 17,5 MeV', 'ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)'],
+    resultatTexte: '« ΔE < 0 : énergie libérée ; E_lib = |ΔE| ≈ 17,5 MeV » et, encadré, « ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits) »',
+    moments: ['axe', 'niveau_nucleons', 'niveau_reactifs', 'fleche_El_reactifs', 'niveau_produits', 'fleche_El_produits', 'fleche_delta_E', 'resultat', 'fin'],
+    signe: 'ΔE = −17,455 MeV < 0 : énergie libérée, E_lib ≈ 17,5 MeV',
+  },
+  polonium: {
+    titre: 'désintégration du polonium 210', equation: [[210, 84, 'Po'], ' → ', [206, 82, 'Pb'], ' + ', [4, 2, 'He']], equationTexte: '²¹⁰₈₄Po → ²⁰⁶₈₂Pb + ⁴₂He',
+    y: { nucleons: 76, reactifs: 250, produits: 320 },
+    paliers: {
+      nucleons: { expr: ['126 ', [1, 0, 'n'], ' + 84 ', [1, 1, 'p']], texte: '126 ¹₀n + 84 ¹₁p', valeur: '1,971820·10⁵ MeV', valeurTexte: '1,971820·10⁵ MeV', nom: 'nucléons séparés au repos' },
+      reactifs: { expr: [[210, 84, 'Po']], texte: '²¹⁰₈₄Po', valeur: '1,955372·10⁵ MeV', valeurTexte: '1,955372·10⁵ MeV', nom: 'noyau de polonium 210 au repos' },
+      produits: { expr: [[206, 82, 'Pb'], ' + ', [4, 2, 'He']], texte: '²⁰⁶₈₂Pb + ⁴₂He', valeur: '1,955318·10⁵ MeV', valeurTexte: '1,955318·10⁵ MeV', nom: 'produits : plomb 206 et hélium 4' },
+    },
+    fleches: {
+      fleche_El_reactifs: { de: 'reactifs', vers: 'nucleons', couleur: 'orange', lignes: ['E_{ℓ}(Po) = 1,971820·10⁵ − 1,955372·10⁵', '= 1644,8 MeV ; on fournit'], ty: [118, 140],
+        dit: 'flèche orange montante du palier du polonium au palier des nucléons : « E_ℓ(Po) = 1,971820·10⁵ − 1,955372·10⁵ = 1644,8 MeV »' },
+      fleche_El_produits: { de: 'nucleons', vers: 'produits', couleur: 'vert', lignes: ['E_{ℓ}(Pb) + E_{ℓ}(He) = 1,971820·10⁵ − 1,955318·10⁵', '= 1650,2 MeV ; on récupère'], ty: [178, 200],
+        dit: 'flèche verte descendante du palier des nucléons au palier des produits : « E_ℓ(Pb) + E_ℓ(He) = 1,971820·10⁵ − 1,955318·10⁵ = 1650,2 MeV » ; on récupère' },
+      fleche_delta_E: { de: 'reactifs', vers: 'produits', couleur: 'jaune', lignes: ['ΔE = 1,955318·10⁵ − 1,955372·10⁵ = −5,4 MeV'], ty: [282],
+        dit: 'flèche jaune descendante du palier du polonium au palier des produits : « ΔE = 1,955318·10⁵ − 1,955372·10⁵ = −5,4 MeV »' },
+    },
+    resultat: ['ΔE < 0 : énergie libérée ; E_{lib} = |ΔE| = 5,4 MeV', 'ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)'],
+    resultatTexte: '« E_lib = |ΔE| = 5,4 MeV » (ΔE < 0 : énergie libérée) et, encadré, « ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits) »',
+    moments: ['axe', 'niveau_nucleons', 'niveau_reactifs', 'niveau_produits', 'fleche_El_reactifs', 'fleche_El_produits', 'fleche_delta_E', 'resultat', 'fin'],
+    signe: 'ΔE = −5,4 MeV < 0 : énergie libérée, E_lib = 5,4 MeV',
+  },
+};
+const NOMS_VUES = Object.keys(VUES), PALIERS = ['nucleons', 'reactifs', 'produits'];
+const demande = new URLSearchParams(location.search);
+const S = { vue: NOMS_VUES.includes(demande.get('vue')) ? demande.get('vue') : 'fusion', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, palier: null };
+const V = () => VUES[S.vue];
+let M = {}, MM = {};
+
+/* ── Géométrie ───────────────────────────────────────────────────────── */
+const AXE = { x: 148, bas: 352, haut: 40 }, LV = { x0: 160, x1: 372 }, XLAB = 382, XTXT = 280;
+const XF = { fleche_El_produits: 184, fleche_El_reactifs: 222, fleche_delta_E: 260 };
+const RES = { x: 160, y1: 366, y2: 396 };
+
+/* ── Écriture d’un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole ── */
+const taillePlus = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+function largeurNoyau(c, A, Z, X, t) {
+  const p = taillePlus(c, t * .6);
+  return Math.max(c.largeurTexte(String(A), p), c.largeurTexte(String(Z), p)) + 1 + c.largeurTexte(X, taillePlus(c, t));
+}
+function noyauTexte(c, A, Z, X, x, y, o = {}) {
+  const t = o.taille ?? 17, p = t * .6, pp = taillePlus(c, p), d = o.duree ?? .25;
+  const pre = Math.max(c.largeurTexte(String(A), pp), c.largeurTexte(String(Z), pp));
+  c.texte(String(A), x + pre, y - t * .45, { couleur: o.couleur, taille: p, align: 'right', duree: d / 3 });
+  c.texte(String(Z), x + pre, y + t * .3, { couleur: o.couleur, taille: p, align: 'right', duree: d / 3 });
+  c.texte(X, x + pre + 1, y, { couleur: o.couleur, taille: t, duree: d / 3 });
+  return pre + 1 + c.largeurTexte(X, taillePlus(c, t));
+}
+/** Une expression : chaînes et noyaux [A, Z, X] à la suite ; renvoie la largeur écrite. */
+function largeurExpr(c, parts, t) { return parts.reduce((w, q) => w + (Array.isArray(q) ? largeurNoyau(c, ...q, t) : c.largeurTexte(q, taillePlus(c, t))), 0); }
+function exprTexte(c, parts, x, y, o = {}) {
+  const t = o.taille ?? 17; let cx = x;
+  for (const q of parts) {
+    if (Array.isArray(q)) cx += noyauTexte(c, ...q, cx, y, o);
+    else { c.texte(q, cx, y, { couleur: o.couleur, taille: t, duree: Math.max(.08, q.length / 20) }); cx += c.largeurTexte(q, taillePlus(c, t)); }
+  }
+  return cx - x;
+}
+
+/* ── Peinture : nucléons en sphères ombrées (proton rouge, neutron gris-bleu) ── */
+const PROTON = [217, 83, 79], NEUTRON = [143, 163, 184];
+function sphere(ctx, x, y, r, rgb, ombre = true) {
+  const [R, G, B] = rgb, m = k => `rgb(${Math.round(R + (255 - R) * k)},${Math.round(G + (255 - G) * k)},${Math.round(B + (255 - B) * k)})`;
+  const f = k => `rgb(${Math.round(R * k)},${Math.round(G * k)},${Math.round(B * k)})`;
+  ctx.save();
+  if (ombre) { ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + r * .25, y + r * .85, r * .95, r * .32, 0, 0, Math.PI * 2); ctx.fill(); }
+  const g = ctx.createRadialGradient(x - r * .38, y - r * .42, r * .08, x, y, r);
+  g.addColorStop(0, m(.65)); g.addColorStop(.45, f(1)); g.addColorStop(1, f(.42));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.ellipse(x - r * .36, y - r * .4, r * .26, r * .16, -.6, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+/** Un noyau = un amas compact de sphères qui se touchent, posé sur le palier (base yb). n sphères au plus 19. */
+function amas(ctx, cx, yb, Z, N, r) {
+  const n = Math.min(Z + N, 19), s = r * 1.62, pts = [];
+  for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) { const x = (i + j / 2) * s, y = j * s * .866; pts.push([x, y, Math.hypot(x, y), Math.atan2(y, x)]); }
+  pts.sort((a, b) => a[2] - b[2] || a[3] - b[3]);
+  const pris = pts.slice(0, n), mx = pris.reduce((a, p) => a + p[0], 0) / n, my = pris.reduce((a, p) => a + p[1], 0) / n;
+  const bas = Math.max(...pris.map(p => p[1] - my)) + r;
+  const liste = pris.map((p, i) => [cx + p[0] - mx, yb - bas - 1 + p[1] - my, false]);
+  // Répartition des protons parmi les sphères dessinées (proportion Z / A).
+  liste.forEach((p, i) => { p[2] = Math.floor((i + 1) * Z / (Z + N)) > Math.floor(i * Z / (Z + N)); });
+  ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(cx + r * .3, yb - 1, bas * 1.05, r * .5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  liste.sort((a, b) => a[1] - b[1] || a[0] - b[0]).forEach(([x, y, p]) => sphere(ctx, x, y, r, p ? PROTON : NEUTRON, false));
+}
+function rangee(ctx, x0, yb, types, r, pas) { types.forEach((p, i) => sphere(ctx, x0 + i * pas, yb - r - 1, r, p ? PROTON : NEUTRON)); }
+const PEINTURES = {
+  fusion: {
+    nucleons: (ctx, yb) => rangee(ctx, 296, yb, [1, 1, 0, 0, 0], 5.5, 17),
+    reactifs: (ctx, yb) => { amas(ctx, 306, yb, 1, 1, 5.5); amas(ctx, 346, yb, 1, 2, 5.5); },
+    produits: (ctx, yb) => { amas(ctx, 312, yb, 2, 2, 5.5); sphere(ctx, 352, yb - 6.5, 5.5, NEUTRON); },
+  },
+  polonium: {
+    nucleons: (ctx, yb) => rangee(ctx, 294, yb, [0, 1, 0, 1, 0], 5, 17),
+    reactifs: (ctx, yb) => amas(ctx, 330, yb, 84, 126, 4.4),
+    produits: (ctx, yb) => { amas(ctx, 318, yb, 82, 124, 4.4); amas(ctx, 357, yb, 2, 2, 4.4); },
+  },
+};
+
+/* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const vu = (c, t0) => !Number.isFinite(c.t) || c.t >= t0;
+const LARG = {};                                       // largeur écrite de chaque étiquette de palier
+function dessiner(c) {
+  scene.cadre(61); MM = {};
+  const D = V(), Y = D.y;
+  c.texte('Diagramme d’énergie', 10, 26, { couleur: 'cyan', taille: 17, duree: .8 });
+  exprTexte(c, D.equation, 196, 26, { couleur: 'blanc', taille: 16, duree: .2 });
+  // L’axe E, sans graduation régulière.
+  c.fleche(AXE.x, AXE.bas, AXE.x, AXE.haut, { couleur: 'faible', largeur: 1.8 });
+  c.texte('E (MeV)', AXE.x - 8, AXE.haut + 10, { couleur: 'blanc', taille: 15, align: 'right', duree: .4 });
+  c.texte('échelle', 138, 378, { couleur: 'faible', taille: 13, align: 'right', duree: .3 });
+  c.texte('non respectée', 138, 394, { couleur: 'faible', taille: 13, align: 'right', duree: .5 });
+  marque(c, 'axe');
+
+  const peint = {}, apparuFl = {};
+  const niveau = (k) => {
+    c.pause(.3);
+    const y = Y[k], P = D.paliers[k];
+    c.ligne(LV.x0, y, LV.x1, y, { couleur: 'blanc', largeur: 2.6 });
+    peint[k] = c.cur;
+    c.ligne(AXE.x - 4, y, AXE.x + 4, y, { couleur: 'faible', largeur: 1.4, duree: .05 });
+    c.texte(P.valeur, 138, y + 5, { couleur: 'jaune', taille: 15, align: 'right', duree: .6 });
+    LARG[k] = exprTexte(c, P.expr, XLAB, y + 6, { couleur: 'blanc', taille: 17 });
+    marque(c, 'niveau_' + k);
+  };
+  const fleche = (id) => {
+    c.pause(.3);
+    const F = D.fleches[id], x = XF[id], y1 = Y[F.de], y2 = Y[F.vers], s = Math.sign(y2 - y1);
+    apparuFl[id] = c.cur;
+    c.fleche(x, y1 + s * 3, x, y2 - s * 2, { couleur: F.couleur, largeur: 2.4 });
+    c.ligne(x - 6, y1, x + 6, y1, { couleur: F.couleur, largeur: 1.6, duree: .05 });
+    F.lignes.forEach((l, i) => c.texte(l, XTXT, F.ty[i], { couleur: F.couleur, taille: 15, max: 470 }));
+    marque(c, id);
+  };
+  for (const id of D.moments) {
+    if (id.startsWith('niveau_')) niveau(id.slice(7));
+    else if (id.startsWith('fleche_')) fleche(id);
+  }
+  // Le résultat.
+  c.pause(.4);
+  c.texte(D.resultat[0], RES.x, RES.y1, { couleur: 'jaune', taille: 16 });
+  c.texte(D.resultat[1], RES.x + 6, RES.y2, { couleur: 'blanc', taille: 16 });
+  c.rect(RES.x - 2, RES.y2 - 20, c.largeurTexte(D.resultat[1].replace(/[_{}]/g, ''), 16) + 16, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'resultat');
+  c.pause(.8); marque(c, 'fin');
+
+  // Les nucléons peints, posés sur leur palier dès qu’il est tracé (sous la craie de l’étiquette : à droite du palier).
+  c.direct(() => { for (const k of PALIERS) if (peint[k] !== undefined && vu(c, peint[k])) PEINTURES[S.vue][k](c.ctx, Y[k]); });
+  // Le palier touché : entouré, avec son nom complet.
+  if (S.palier && peint[S.palier] !== undefined && vu(c, peint[S.palier])) c.direct(() => {
+    const k = S.palier, y = Y[k], P = D.paliers[k], xn = XLAB + (LARG[k] || 100) + 6;
+    c.texte(`: ${P.nom}`, xn, y + 6, { couleur: 'rose', taille: 15 });
+    c.rect(LV.x0 - 6, y - 30, xn + c.largeurTexte(`: ${P.nom}`, 15) + 12 - LV.x0, 42, { couleur: 'rose', largeur: 2, arrondi: 10 });
+  });
+
+  // Repères (toujours déclarés).
+  c.repere('vue_diagramme', 4, 34, 752, 380, `le diagramme d’énergie (${D.titre})`);
+  c.repere('axe_E', AXE.x - 14, AXE.haut, 60, AXE.bas - AXE.haut, 'l’axe des énergies E (MeV), sans graduation régulière');
+  c.repere('echelle', 50, 362, 94, 38, 'échelle non respectée');
+  for (const k of PALIERS) {
+    const P = D.paliers[k];
+    c.repere('niveau_' + k, LV.x0 - 4, Y[k] - 30, XLAB + (LARG[k] || 100) - LV.x0 + 10, 42, `le palier « ${P.texte} » (${P.nom}) : ${P.valeurTexte.replace(/ \(.*\)/, '')}`);
+  }
+  for (const [id, F] of Object.entries(D.fleches)) {
+    const ya = Math.min(Y[F.de], Y[F.vers]), yb = Math.max(Y[F.de], Y[F.vers]);
+    c.repere(id, XF[id] - 10, ya, 20, yb - ya, F.lignes.join(' ').replace(/[_{}]/g, ''));
+  }
+  c.repere('resultat', RES.x - 4, RES.y1 - 20, 470, RES.y2 - RES.y1 + 30, D.resultat.join(' ; ').replace(/[_{}]/g, ''));
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11;
+  // Garde-fou « hors cadre » seulement une fois la police du tableau chargée (la police de secours est plus large).
+  craie.cadre = !document.fonts || document.fonts.status === 'loaded' ? { w: VW, h: VH, haut: 0 } : null;
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; dessiner(craie); dessiner(craie); S.t = t; S.running = r; scene.sale = true; }
+const liste = () => V().moments;
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of liste()) out[k] = +M[k].toFixed(2); return out; }
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function finir() {
+  S.running = false; S.fait = true; S.pause = false; etiquette();
+  bulle($('feedback'), (S.vue === 'fusion' ? 'ΔE = −17,455 MeV < 0 : énergie libérée, Elib ≈ 17,5 MeV.' : 'ΔE = −5,4 MeV < 0 : énergie libérée, Elib = 5,4 MeV.') + ' Touche un palier pour lire son nom.', 'good');
+  pont.noter('measurement', { vue: S.vue }); pont.emettre();
+}
+const MOTIFS = {
+  axe: 'l’axe E (MeV), échelle non respectée', niveau_nucleons: 'le palier des nucléons séparés (le plus haut)', niveau_reactifs: 'le palier des réactifs',
+  niveau_produits: 'le palier des produits', fleche_El_reactifs: 'l’énergie de liaison des réactifs : on la fournit', fleche_El_produits: 'l’énergie de liaison des produits : on la récupère',
+  fleche_delta_E: 'ΔE : des réactifs aux produits', resultat: 'ΔE < 0 : énergie libérée', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function phase() { let p = 'rien encore'; for (const k of liste()) if (M[k] !== undefined && S.t >= M[k] - 1e-6) p = k; return p; }
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const D = V(), ok = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+  const etat = S.running ? 'la craie écrit' : S.fait ? 'fin : tout est écrit' : S.pause ? 'arrêt sur image' : 'pas encore lancée';
+  const m = [`Vue « ${S.vue} » : diagramme d’énergie de la réaction ${D.equationTexte}, ${etat} ; phase : ${phase()}.`];
+  if (ok('axe')) m.push('Axe vertical E (MeV) sans graduation régulière ; écrit « échelle non respectée ».');
+  const p = PALIERS.filter(k => ok('niveau_' + k)).map(k => `${{ nucleons: 'en haut', reactifs: 'au milieu', produits: 'en bas' }[k]}, « ${D.paliers[k].texte} » (${D.paliers[k].nom}) : ${D.paliers[k].valeurTexte}`);
+  m.push(p.length ? `Paliers tracés (nucléons peints à côté) : ${p.join(' ; ')}.` : 'Aucun palier tracé encore.');
+  const f = Object.keys(D.fleches).filter(ok).map(id => D.fleches[id].dit);
+  if (f.length) m.push(`Flèches : ${f.join(' ; ')}.`);
+  if (ok('fleche_delta_E')) m.push(`Signe : ${D.signe}.`);
+  if (ok('resultat')) m.push(`Écrit : ${D.resultatTexte}.`);
+  if (S.palier) m.push(`Palier entouré (touché) : « ${D.paliers[S.palier].texte} » : ${D.paliers[S.palier].nom}.`);
+  return m.join(' ');
+}
+
+/* ── Commandes ────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); bulle($('feedback'), 'On trace les paliers d’énergie…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function changerVue(v) { if (!NOMS_VUES.includes(v) || v === S.vue) return false; S.vue = v; S.palier = null; M = {}; S.t = 0; S.fait = false; S.pause = false; calculer(); return true; }
+function playUntil(p) {
+  if (p.vue) changerVue(p.vue);
+  calculer();
+  const nom = liste().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const nomPalier = k => k ? `${V().paliers[k].texte} : ${V().paliers[k].nom}` : '';
+function setParameters(p) {
+  const vue = p.vue ? changerVue(p.vue) : false;
+  if (p.palier !== undefined) { S.palier = PALIERS.includes(p.palier) ? p.palier : null; scene.sale = true; }
+  pont.noter('set_parameters', { vue: S.vue, palier: S.palier || 'aucun' });
+  if (vue) { start(); return; }
+  if (S.palier) bulle($('feedback'), `Palier : ${nomPalier(S.palier)}.`);
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignées : toucher un palier (le trait ou son étiquette) l’entoure et écrit son nom complet ; retoucher l’efface. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    if (M.fin === undefined) return null;
+    const [x, y] = scene.local(px, py), Y = V().y;
+    for (const k of PALIERS) {
+      if (S.t < M['niveau_' + k] - 1e-6) continue;
+      if (Math.abs(y - Y[k]) < 16 && x > LV.x0 - 8 && x < XLAB + (LARG[k] || 100) + 8) return k;
+    }
+    return null;
+  },
+  bouger: () => {},
+  lacher: (k) => {
+    S.palier = S.palier === k ? null : k; scene.sale = true;
+    bulle($('feedback'), S.palier ? `Palier : ${nomPalier(S.palier)}.` : 'Touche un palier pour lire son nom.');
+    pont.noter('set_parameters', { palier: S.palier || 'aucun' }); pont.emettre();
+  },
+});
+
+window.Tableau.explication({
+  fusion: [
+    { repere: 'niveau_nucleons', texte: 'En haut, les nucléons séparés au repos : 2 protons et 3 neutrons.' },
+    { repere: 'niveau_reactifs', texte: 'Plus bas, les réactifs : deutérium et tritium.' },
+    { repere: 'fleche_El_reactifs', texte: 'Pour les séparer en nucléons, on fournit E_ℓ(²H) + E_ℓ(³H) = 10,841 MeV.' },
+    { repere: 'niveau_produits', texte: 'Tout en bas, les produits : hélium 4 et un neutron.' },
+    { repere: 'fleche_El_produits', texte: 'En formant l’hélium, on récupère E_ℓ(⁴He) = 28,296 MeV ; le neutron seul a E_ℓ = 0.' },
+    { repere: 'fleche_delta_E', texte: 'ΔE = 10,841 − 28,296 = −17,455 MeV : la flèche descend.' },
+    { repere: 'resultat', texte: 'ΔE < 0 : la réaction libère E_lib = |ΔE| ≈ 17,5 MeV.' },
+    { repere: 'echelle', texte: 'Attention : l’échelle n’est pas respectée.' },
+  ],
+  polonium: [
+    { repere: 'niveau_nucleons', texte: 'En haut, 126 neutrons et 84 protons séparés : 1,971820·10⁵ MeV.' },
+    { repere: 'niveau_reactifs', texte: 'Le noyau de polonium 210 : 1,955372·10⁵ MeV.' },
+    { repere: 'niveau_produits', texte: 'Les produits, plomb 206 et hélium 4 : 1,955318·10⁵ MeV.' },
+    { repere: 'fleche_El_reactifs', texte: 'E_ℓ(Po) = 1,971820·10⁵ − 1,955372·10⁵ = 1644,8 MeV.' },
+    { repere: 'fleche_delta_E', texte: 'ΔE = 1,955318·10⁵ − 1,955372·10⁵ = −5,4 MeV.' },
+    { repere: 'resultat', texte: 'E_lib = |ΔE| = 5,4 MeV.' },
+    { repere: 'echelle', texte: 'L’échelle n’est pas respectée : 5,4 MeV est minuscule devant 1644,8 MeV.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'energie_nucleaire_diagramme', version: '1.0', title: 'Diagramme d’énergie', variants: NOMS_VUES.map(id => ({ id, label: id === 'fusion' ? 'Fusion ²H + ³H' : 'Polonium 210' })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'fusion | polonium (change le diagramme et le retrace depuis le début)', palier: 'nucleons | reactifs | produits | aucun (entoure ce palier et écrit son nom complet)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'fusion : ' + VUES.fusion.moments.join(' | ') + ' ; polonium : ' + VUES.polonium.moments.join(' | '), time_s: 'ou un instant en s', vue: 'facultatif : fusion | polonium' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Diagramme énergétique d’une réaction nucléaire : en haut les nucléons séparés au repos ; on monte des réactifs aux nucléons en fournissant Σ E_ℓ(réactifs), on descend des nucléons aux produits en récupérant Σ E_ℓ(produits). ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits) ; ΔE < 0 : énergie libérée, E_lib = |ΔE|. Fusion ²H + ³H : ΔE = −17,455 MeV. Polonium 210 : E_ℓ(Po) = 1644,8 MeV ; E_lib = 5,4 MeV. Échelle non respectée.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: { vue: S.vue, palier: S.palier || 'aucun' }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le diagramme d’énergie va s’écrire…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

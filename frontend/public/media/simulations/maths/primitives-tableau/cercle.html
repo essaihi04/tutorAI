@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>cos et sin : le cercle — fonctions primitives</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Cercle à la craie : sin x en haut, cos x à droite, −sin x en bas, −cos x à gauche ; dériver tourne dans un sens, primitiver dans l’autre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : le cercle (vue cercle) et cos(ax + b) (vue ax_plus_b).
+ * Moments et repères : voir le contrat du cours (les noms sont cités par le cours, ne pas les renommer).
+ */
+/* ——— Aides de craie de la page ——— */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants compris. */
+function L(c, s, t = 21) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+const largeurs = (c, ms, t) => ms.map(m => (m && m.fl ? (m.w || (m.mot ? Math.max(56, L(c, m.mot, 13) + 18) : 44)) : L(c, typeof m === 'string' ? m : m.t, t)));
+/** Écrit des morceaux à la suite : 'texte', {t, c} (couleur), {fl: couleur, mot, w} (flèche de craie). */
+function rang(c, x, y, ms, o = {}) {
+  let t = o.taille || 21, ws = largeurs(c, ms, t), tot = ws.reduce((a, b) => a + b, 0);
+  if (o.max && tot > o.max) { t = t * o.max / tot; ws = largeurs(c, ms, t); tot = ws.reduce((a, b) => a + b, 0); }
+  if (o.centre) x -= tot / 2;
+  const x0 = x, p = [];
+  ms.forEach((m, i) => {
+    const w = ws[i];
+    if (m && m.fl) {
+      const ya = y - t * .3;
+      c.fleche(x + 6, ya, x + w - 6, ya, { couleur: m.fl, largeur: 2.2, tete: 9 });
+      if (m.mot) c.texte(m.mot, x + w / 2, ya - 8, { couleur: m.fl, taille: 13, align: 'center' });
+    } else c.texte(typeof m === 'string' ? m : m.t, x, y, { couleur: (m && m.c) || o.couleur || 'blanc', taille: t });
+    p.push({ x, w, m: x + w / 2 }); x += w;
+  });
+  return { p, x0, x1: x, t, y };
+}
+const bout = (R, i, j = i) => [R.p[i].x, R.p[j].x + R.p[j].w];
+function cadre(c, R, coul = 'jaune', m = 9) { c.rect(R.x0 - m, R.y - R.t - 5, R.x1 - R.x0 + 2 * m, R.t + 16, { couleur: coul, arrondi: 7, largeur: 1.7 }); }
+function souligne(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a + 2, R.y + 7, b - 2, R.y + 7, { couleur: coul, largeur: 2.4 }); }
+function barre(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a - 2, R.y - R.t * .3 + 9, b + 2, R.y - R.t * .3 - 9, { couleur: coul, largeur: 2.6 }); }
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.2 }); }
+function entoure(c, R, i, coul = 'orange', j = i) { const [a, b] = bout(R, i, j); ovale(c, (a + b) / 2, R.y - R.t * .32, (b - a) / 2 + 10, R.t * .75, coul); }
+function entoureExp(c, R, i, coul = 'orange') { const [a, b] = bout(R, i); ovale(c, (a + b) / 2, R.y - R.t * .66, (b - a) / 2 + 7, R.t * .4, coul); }
+function coche(c, x, y) { c.trait([[x, y - 9], [x + 6, y - 1], [x + 19, y - 19]], { couleur: 'vert', largeur: 3, tremble: .4 }); }
+function zone(c, id, R, label, pad = 7) { c.repere(id, R.x0 - pad, R.y - R.t - pad, R.x1 - R.x0 + 2 * pad, R.t + 2 * pad + 6, label); }
+
+
+/* Un arc de craie fléché autour de (cx, cy), de l’angle a0 à a1 (radians, sens du canvas : croissant = aiguilles d’une montre). */
+function arcFleche(c, cx, cy, r, a0, a1, coul) {
+  c.courbe(u => { const a = a0 + (a1 - a0) * u; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }, 40, { couleur: coul, largeur: 2.6 });
+  const s = Math.sign(a1 - a0), ax = cx + r * Math.cos(a1), ay = cy + r * Math.sin(a1);
+  const tx = -Math.sin(a1) * s, ty = Math.cos(a1) * s;
+  c.fleche(ax - tx * 14, ay - ty * 14, ax + tx * 2, ay + ty * 2, { couleur: coul, largeur: 2.6, tete: 11 });
+}
+const CX = 200, CY = 205, RC = 92;
+
+MathsTableau.page({
+  id: 'pr_cercle', titre: 'Fonctions primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : le cercle sin x, cos x, −sin x, −cos x ; dériver tourne dans un sens, primitiver dans l’autre ; cos(ax + b) : on divise par le nombre a collé à x',
+  vues: {
+    cercle: {
+      titre: 'cos et sin : le cercle',
+      dessiner(c, K) {
+        K.titre('cos et sin : le cercle');
+        c.cercle(CX, CY, RC, { couleur: 'faible', largeur: 1.8 });
+        const pts = [['sin x', 0, -1, 'haut'], ['cos x', 1, 0, 'droite'], ['−sin x', 0, 1, 'bas'], ['−cos x', -1, 0, 'gauche']];
+        for (const [t, dx, dy] of pts) {
+          c.pause(.2);
+          c.point(CX + dx * RC, CY + dy * RC, 5, 'jaune');
+          const x = CX + dx * (RC + (dx ? 14 : 0)), y = CY + dy * (RC + 16) + (dy ? (dy > 0 ? 14 : 0) : 7);
+          c.texte(t, x, y, { couleur: 'cyan', taille: 22, align: dx > 0 ? 'left' : dx < 0 ? 'right' : 'center' });
+        }
+        c.repere('haut', CX - 48, CY - RC - 44, 96, 40, 'sin x en haut');
+        K.marque('quatre_points');
+        c.pause(.4);
+        arcFleche(c, CX, CY, RC - 26, -Math.PI / 2 + .25, Math.PI + .1, 'rouge');
+        c.texte('dériver', CX + RC * .72 + 8, CY + RC * .72 + 18, { couleur: 'rouge', taille: 18 });
+        c.repere('fleche_deriver', CX - RC + 20, CY - RC + 20, 2 * RC + 10, 2 * RC - 10, 'la flèche « dériver » : sens des aiguilles d’une montre');
+        K.marque('deriver');
+        c.pause(.4);
+        arcFleche(c, CX, CY, RC - 50, Math.PI / 2 - .25, -Math.PI, 'vert');
+        c.texte('primitiver', CX, CY + 26, { couleur: 'vert', taille: 17, align: 'center' });
+        c.repere('fleche_primitiver', CX - 50, CY + 4, 100, 50, 'la flèche « primitiver » : l’autre sens');
+        K.marque('primitiver');
+        c.pause(.4);
+        const R1 = rang(c, 400, 150, ['une primitive de ', { t: 'sin x', c: 'blanc' }, ' : ', { t: '−cos x', c: 'jaune' }], { taille: 21, couleur: 'blanc' });
+        cadre(c, R1, 'jaune');
+        c.pause(.2);
+        const R2 = rang(c, 400, 230, ['une primitive de ', { t: 'cos x', c: 'blanc' }, ' : ', { t: 'sin x', c: 'jaune' }], { taille: 21, couleur: 'blanc' });
+        cadre(c, R2, 'jaune');
+        c.texte('je tourne dans le sens vert', 400, 300, { couleur: 'vert', taille: 17 });
+        c.repere('exemple', 388, 118, Math.max(R1.x1, R2.x1) - 388 + 12, 130, 'les deux primitives lues sur le cercle');
+        K.marque('exemple');
+      },
+      decrire: {
+        quatre_points: 'Un cercle à la craie avec quatre points : « sin x » en haut, « cos x » à droite, « −sin x » en bas, « −cos x » à gauche.',
+        deriver: 'Une flèche rouge tourne dans le sens des aiguilles d’une montre, « dériver » : sin x → cos x → −sin x → −cos x.',
+        primitiver: 'Une flèche verte tourne dans l’autre sens, « primitiver » : sin x → −cos x → −sin x → cos x.',
+        exemple: 'À droite, encadrés en jaune : « une primitive de sin x : −cos x » et « une primitive de cos x : sin x ».',
+      },
+      motifs: { quatre_points: 'le cercle', deriver: 'dériver', primitiver: 'primitiver', exemple: 'les deux primitives' },
+      explication: [
+        { repere: 'haut', texte: 'On part de sin x, en haut du cercle.' },
+        { repere: 'fleche_deriver', texte: 'Dériver : un quart de tour dans le sens des aiguilles d’une montre.' },
+        { repere: 'fleche_primitiver', texte: 'Primitiver : un quart de tour dans l’autre sens.' },
+        { repere: 'exemple', texte: 'Une primitive de sin x est −cos x ; une primitive de cos x est sin x.' },
+      ],
+    },
+    ax_plus_b: {
+      titre: 'cos(ax + b) : diviser par a',
+      dessiner(c, K) {
+        K.titre('cos(ax + b) : diviser par a');
+        const R = rang(c, 70, 112, ['cos(', { t: '2', c: 'blanc' }, 'x', { t: ' − 1', c: 'blanc' }, ')'], { taille: 34, couleur: 'cyan' });
+        K.marque('expression');
+        c.pause(.4);
+        entoure(c, R, 1, 'orange');
+        c.texte('a = 2 : le nombre collé à x', R.x1 + 30, 92, { couleur: 'orange', taille: 18 });
+        c.pause(.2);
+        barre(c, R, 3, 'rouge');
+        c.texte('non', R.p[3].m, 66, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.texte('−1 ne compte pas', R.x1 + 30, 120, { couleur: 'rouge', taille: 17 });
+        c.repere('nombre_a', R.p[1].x - 14, 70, R.p[1].w + 28, 54, 'a = 2 : le nombre collé à x');
+        K.marque('entoure');
+        c.pause(.4);
+        const D = rang(c, 70, 182, [{ fl: 'vert', mot: 'primitive', w: 100 }, { t: '(1/2)sin(2x − 1)', c: 'jaune' }], { taille: 28 });
+        cadre(c, D, 'jaune');
+        c.repere('resultat', D.x0 - 10, D.y - 40, D.x1 - D.x0 + 20, 54, '(1/2)sin(2x − 1)');
+        K.marque('divise');
+        c.pause(.4);
+        const V = rang(c, 70, 246, ['((1/2)sin(2x − 1))’ = (1/2) × 2cos(2x − 1) = cos(2x − 1)'], { taille: 21, max: 620 });
+        coche(c, V.x1 + 14, 248);
+        zone(c, 'verification', V, 'la vérification par la dérivée');
+        K.marque('verifie');
+        c.pause(.4);
+        const B = rang(c, 70, 316, [{ t: 'sin(2x − 1)', c: 'cyan' }, ' est un bloc'], { taille: 22 });
+        c.rect(B.p[0].x - 6, B.y - 27, B.p[0].w + 12, 36, { couleur: 'cyan', arrondi: 6, largeur: 1.5 });
+        const P = rang(c, 420, 316, [{ t: 'sin(x − 1/2)', c: 'rouge' }], { taille: 22 });
+        barre(c, P, 0, 'rouge');
+        c.texte('fausse simplification', 420, 282, { couleur: 'rouge', taille: 16 });
+        c.repere('piege', 410, 260, P.x1 - 410 + 14, 70, 'piège : on ne simplifie pas dans le sinus');
+        K.marque('bloc');
+      },
+      decrire: {
+        expression: 'Écrit en grand : « cos(2x − 1) ».',
+        entoure: 'Le 2 collé à x est entouré en orange (« a = 2 : le nombre collé à x ») ; le −1 est barré d’un « non » rouge.',
+        divise: 'Une flèche verte « primitive » mène à « (1/2)sin(2x − 1) », encadré en jaune.',
+        verifie: 'Dessous : « ((1/2)sin(2x − 1))’ = (1/2) × 2cos(2x − 1) = cos(2x − 1) », avec une coche verte.',
+        bloc: 'En bas : « sin(2x − 1) est un bloc », le bloc encadré en cyan ; à droite, « sin(x − 1/2) », fausse simplification, barré en rouge.',
+      },
+      motifs: { expression: 'l’expression', entoure: 'le nombre a', divise: 'diviser par a', verifie: 'la vérification', bloc: 'le piège' },
+      explication: [
+        { repere: 'nombre_a', texte: 'On divise par a, le nombre collé à x ; b ne compte pas.' },
+        { repere: 'resultat', texte: 'Une primitive de cos(2x − 1) est (1/2)sin(2x − 1).' },
+        { repere: 'verification', texte: 'En dérivant, le 2 qui sort compense le 1/2.' },
+        { repere: 'piege', texte: 'sin(2x − 1) est un bloc : on n’y divise rien.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

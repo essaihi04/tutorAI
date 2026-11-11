@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La molécule d’ADN — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La molécule d’ADN : un nucléotide (acide phosphorique, désoxyribose, base azotée), un brin, deux brins antiparallèles, l’appariement A–T et C–G par liaisons hydrogène, la double hélice ; le tableau de Chargaff ; écrire le brin complémentaire"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * La molécule d’ADN (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacités NIG7, NIG8.
+ * Vue construire : nucléotide → un brin → deux brins, tête-bêche (antiparallèles, 5′ et 3′) → appariement A–T, C–G → liaisons
+ *   hydrogène (2 entre A et T, 3 entre C et G) → double hélice. Séquence du brin de gauche (de 5′ à 3′) : A T C G G A.
+ * Vue chargaff : le tableau de Chargaff, les rapports A/T et C/G se calculent et valent ≈ 1.
+ * Vue complementaire : 5′ ATCGGA 3′ ; on pose les bases libres en face (glisser : seule la complémentaire s’accroche) → 3′ TAGCCT 5′.
+ * Aucun numéro de carbone (hors programme) : seulement les extrémités 5′ et 3′. Couleurs fixes : A rouge, T jaune, C bleu, G vert.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+const COUL = { A: ['#fca5a5', '#dc2626'], T: ['#fef08a', '#ca8a04'], C: ['#93c5fd', '#2563eb'], G: ['#86efac', '#16a34a'] };
+const COMP = { A: 'T', T: 'A', C: 'G', G: 'C' };
+
+/* ── Peinture des molécules ────────────────────────────────────────── */
+function phosphate(x, cx, cy, r = 10, a = 1) {
+  x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx - 3, cy - 3, 1, cx, cy, r); g.addColorStop(0, '#fde2c4'); g.addColorStop(1, '#c2410c');
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
+  x.fillStyle = '#431407'; x.font = `700 ${Math.round(r * 1.1)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('P', cx, cy + .5); x.restore();
+}
+function sucre(x, cx, cy, r = 12, a = 1) {
+  x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx - 3, cy - 4, 1, cx, cy, r + 2); g.addColorStop(0, '#e2e8f0'); g.addColorStop(1, '#64748b');
+  x.fillStyle = g; x.beginPath(); for (let i = 0; i < 5; i++) { const an = -Math.PI / 2 + i * TAU / 5; x.lineTo(cx + r * Math.cos(an), cy + r * Math.sin(an)); } x.closePath(); x.fill();
+  x.strokeStyle = 'rgba(30,41,59,.6)'; x.lineWidth = 1; x.stroke(); x.restore();
+}
+function base(x, x0, y0, w, h, L, a = 1, lettre = true) {
+  if (h < .5) return;
+  x.save(); x.globalAlpha = a; const g = x.createLinearGradient(x0, y0, x0, y0 + h); g.addColorStop(0, COUL[L][0]); g.addColorStop(1, COUL[L][1]);
+  x.fillStyle = g; x.beginPath(); x.roundRect(x0, y0, w, h, Math.min(4, h / 2)); x.fill();
+  if (lettre && h > 10) { x.fillStyle = '#111827'; x.font = `700 ${Math.round(Math.min(16, h * .7))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, x0 + w / 2, y0 + h / 2 + .5); }
+  x.restore();
+}
+function lien(x, x1, y1, x2, y2, a = 1) { x.save(); x.globalAlpha = a; x.strokeStyle = 'rgba(203,213,225,.85)'; x.lineWidth = 2.4; x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke(); x.restore(); }
+
+/* ── Vue construire ─────────────────────────────────────────────────── */
+const SEQ = ['A', 'T', 'C', 'G', 'G', 'A'];
+const LD = { xP: 330, xS: 360, xB: 376, wB: 50, gap: 18, y0: 98, dy: 44 }, CYL = LD.y0 + 2.5 * LD.dy;
+LD.xB2 = LD.xB + LD.wB + LD.gap; LD.xS2 = LD.xB2 + LD.wB + 16; LD.xP2 = LD.xS2 + 30; LD.cx = (LD.xS + LD.xS2) / 2;
+const MC = { phosphate: 1.5, sucre: 3.0, base: 4.6, nucleotide: 5.8, chaine: 8.4, deux_brins: 10.2, tete_beche: 12.8, extremites_5_3: 14.4, appariement: 16.2, liaisons_hydrogene: 18.0, torsion_helice: 21.4 };
+const yRow = i => LD.y0 + i * LD.dy;
+function dessinerConstruire(c, k) {
+  const t = k.t;
+  const flip = rampe(t, 10.8, 1.6), s = Math.cos(Math.PI * flip), off = entre(46, 0, rampe(t, 14.8, 1.0)), helice = rampe(t, 18.6, 2.4);
+  const rot = t > 21 ? (t - 21) * .7 : 0;
+  c.direct(() => {
+    const x = c.ctx;
+    // le nucléotide isolé (légende, à gauche)
+    if (t >= .3) phosphate(x, 60, 152, 11, rampe(t, .3, .5));
+    if (t >= 1.8) { lien(x, 68, 158, 92, 168, rampe(t, 1.8, .5)); sucre(x, 102, 172, 13, rampe(t, 1.8, .5)); }
+    if (t >= 3.3) { lien(x, 114, 172, 122, 172, rampe(t, 3.3, .5)); base(x, 122, 160, 48, 24, 'A', rampe(t, 3.3, .5)); }
+    if (helice <= 0) {
+      // brin de gauche, construit de haut en bas
+      for (let i = 0; i < 6; i++) {
+        const ti = 6.2 + i * .28; if (t < ti) continue; const a = rampe(t, ti, .4), y = yRow(i);
+        if (i < 5 && t >= ti + .28) lien(x, LD.xS, y, LD.xP, yRow(i + 1) - 12, a);
+        lien(x, LD.xP, y - 12, LD.xS, y, a); phosphate(x, LD.xP, y - 12, 9, a); sucre(x, LD.xS, y, 11, a); base(x, LD.xB, y - 11, LD.wB, 22, SEQ[i], a);
+      }
+      // brin de droite : d’abord dans le même sens, puis retourné (tête-bêche) autour de la ligne du milieu
+      if (t >= 8.8) {
+        const a = rampe(t, 8.8, .6), Y = y => CYL + (y - CYL) * s;
+        for (let r = 0; r < 6; r++) {
+          const L = COMP[SEQ[5 - r]], y = yRow(r);
+          if (r < 5) lien(x, LD.xS2 + off, Y(y), LD.xP2 + off, Y(yRow(r + 1) - 12), a);
+          lien(x, LD.xP2 + off, Y(y - 12), LD.xS2 + off, Y(y), a);
+          phosphate(x, LD.xP2 + off, Y(y - 12), 9, a); sucre(x, LD.xS2 + off, Y(y), 11, a);
+          const h = 22 * Math.abs(s); base(x, LD.xB2 + off, Y(y) - h / 2, LD.wB, h, L, a);
+        }
+      }
+      // liaisons hydrogène
+      if (t >= 16.6) { const a = rampe(t, 16.6, .8); x.save(); x.globalAlpha = a; x.strokeStyle = '#f8fafc'; x.lineWidth = 1.6; x.setLineDash([2, 2]);
+        for (let i = 0; i < 6; i++) { const n = SEQ[i] === 'A' || SEQ[i] === 'T' ? 2 : 3, y = yRow(i); for (let j = 0; j < n; j++) { const yy = y + (j - (n - 1) / 2) * 6; x.beginPath(); x.moveTo(LD.xB + LD.wB, yy); x.lineTo(LD.xB2, yy); x.stroke(); } }
+        x.restore(); }
+      if (t >= 14.8 && t < 16.6) { const a = .5 * Math.sin(Math.PI * rampe(t, 14.8, 1.8)); for (let i = 0; i < 6; i++) Peint.halo(x, LD.cx, yRow(i), 40, `rgba(250,250,210,${.5 * a})`); }
+    } else {
+      // double hélice : l’échelle se tord (dessin pour l’œil ; les appariements restent A–T et C–G)
+      const W = (LD.xS2 - LD.xS) / 2, th = u => helice * u * .85 + rot, yU = u => LD.y0 + u * LD.dy;
+      const marches = [...Array(6).keys()].map(i => ({ i, z: Math.sin(th(i)) })).sort((p, q) => p.z - q.z);
+      const ruban = (sg, front) => { x.save(); x.lineCap = 'round'; for (let u = 0; u < 5; u += .1) { const z = sg * Math.sin(th(u + .05)); if ((z >= 0) !== front) continue; x.globalAlpha = .55 + .45 * (z + 1) / 2; x.strokeStyle = sg < 0 ? '#93c5fd' : '#cbd5e1'; x.lineWidth = 7; x.beginPath(); x.moveTo(LD.cx + sg * W * Math.cos(th(u)), yU(u)); x.lineTo(LD.cx + sg * W * Math.cos(th(u + .1)), yU(u + .1)); x.stroke(); } x.restore(); };
+      ruban(-1, false); ruban(1, false);
+      for (const { i } of marches) {
+        const c0 = Math.cos(th(i)), y = yRow(i), xl = LD.cx - W * c0, xr = LD.cx + W * c0, z = Math.sin(th(i)), a = .55 + .45 * (z + 1) / 2;
+        x.save(); x.globalAlpha = a; x.lineWidth = 9; x.lineCap = 'butt';
+        x.strokeStyle = COUL[SEQ[i]][1]; x.beginPath(); x.moveTo(xl, y); x.lineTo(LD.cx, y); x.stroke();
+        x.strokeStyle = COUL[COMP[SEQ[i]]][1]; x.beginPath(); x.moveTo(LD.cx, y); x.lineTo(xr, y); x.stroke(); x.restore();
+      }
+      ruban(-1, true); ruban(1, true);
+    }
+  });
+  c.texte('La molécule d’ADN', 14, 26, { couleur: 'cyan', taille: 19 });
+  if (t >= .3) c.repere('phosphate', 46, 138, 28, 28, 'l’acide phosphorique');
+  if (t >= 1.8) c.repere('sucre', 88, 158, 28, 28, 'le désoxyribose');
+  if (t >= 3.3) c.repere('base', 120, 158, 52, 28, 'une base azotée');
+  if (k.ecrit(c, 'p', .8)) k.T(c, 'acide phosphorique', 14, 102, { couleur: 'orange', taille: 14 });
+  if (k.ecrit(c, 's', 2.2)) k.T(c, 'désoxyribose', 60, 212, { couleur: 'blanc', taille: 14 });
+  if (k.ecrit(c, 'b', 3.7)) { k.T(c, 'base azotée : A, T, C ou G', 96, 124, { couleur: 'blanc', taille: 14 }); }
+  if (k.ecrit(c, 'n', 5.0)) { c.rect(40, 134, 136, 54, { couleur: 'jaune', largeur: 1.5, arrondi: 8 }); k.T(c, 'nucléotide', 108, 238, { couleur: 'jaune', taille: 16, align: 'center' }); c.repere('nucleotide', 40, 134, 136, 54, 'un nucléotide'); }
+  if (t >= 6.2) c.repere('brin_1', LD.xP - 12, LD.y0 - 26, LD.xB + LD.wB - LD.xP + 14, 5 * LD.dy + 40, 'le premier brin');
+  if (t >= 6.2 && helice <= 0) c.direct(() => { const x = c.ctx; x.save(); x.strokeStyle = 'rgba(226,232,240,.8)'; x.lineWidth = 2; x.beginPath(); x.moveTo(300, 88); x.lineTo(300, 330); x.lineTo(294, 318); x.moveTo(300, 330); x.lineTo(306, 318); x.stroke(); x.restore(); });
+  if (k.ecrit(c, 'ch', 8.0)) k.T(c, 'un brin', 300, 368, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (t >= 8.8 && helice <= 0) c.direct(() => { // la flèche du second brin, retournée avec lui
+    const x = c.ctx, xa = 572, y1 = CYL + (88 - CYL) * s, y2 = CYL + (330 - CYL) * s, sg = Math.sign(y2 - y1) || 1;
+    x.save(); x.globalAlpha = rampe(t, 8.8, .6); x.strokeStyle = 'rgba(226,232,240,.8)'; x.lineWidth = 2; x.beginPath(); x.moveTo(xa, y1); x.lineTo(xa, y2); x.lineTo(xa - 6, y2 - 12 * sg); x.moveTo(xa, y2); x.lineTo(xa + 6, y2 - 12 * sg); x.stroke(); x.restore();
+  });
+  if (t >= 8.8) c.repere('brin_2', LD.xB2, LD.y0 - 26, LD.xP2 - LD.xB2 + 60, 5 * LD.dy + 40, 'le second brin');
+  if (k.ecrit(c, 'db', 9.6)) k.T(c, 'un second brin', 572, 368, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'tb', 12.4)) k.T(c, 'tête-bêche', 640, 214, { couleur: 'jaune', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'ex', 13.2)) {
+    k.T(c, '5′', 300, 80, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, '3′', 300, 350, { couleur: 'vert', taille: 16, align: 'center' });
+    k.T(c, '3′', 572, 80, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, '5′', 572, 350, { couleur: 'vert', taille: 16, align: 'center' });
+    k.T(c, 'brins antiparallèles', LD.cx, 62, { couleur: 'vert', taille: 16, align: 'center' });
+    c.repere('extremite_5', 290, 64, 22, 22, 'l’extrémité 5′'); c.repere('extremite_3', 290, 334, 22, 22, 'l’extrémité 3′');
+  }
+  if (t >= 14.8) { c.repere('paire_at', LD.xB, yRow(0) - 12, 2 * LD.wB + LD.gap, 24, 'la paire A–T'); c.repere('paire_cg', LD.xB, yRow(2) - 12, 2 * LD.wB + LD.gap, 24, 'la paire C–G'); }
+  if (k.ecrit(c, 'ap', 15.6)) { k.T(c, 'A en face de T', 640, 134, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'C en face de G', 640, 156, { couleur: 'blanc', taille: 14, align: 'center' }); }
+  if (k.ecrit(c, 'lh', 17.2)) {
+    k.T(c, 'A = T : 2 liaisons hydrogène', 300, 392, { couleur: 'jaune', taille: 15 }); k.T(c, 'C ≡ G : 3 liaisons hydrogène', 300, 412, { couleur: 'jaune', taille: 15 });
+    c.repere('liaisons', LD.xB + LD.wB - 2, LD.y0 - 12, LD.gap + 4, 5 * LD.dy + 24, 'les liaisons hydrogène');
+  }
+  if (helice > 0) c.repere('helice', LD.xS - 20, LD.y0 - 16, LD.xS2 - LD.xS + 40, 5 * LD.dy + 32, 'la double hélice');
+  if (k.ecrit(c, 'dh', 20.8)) { k.T(c, 'double hélice', 640, 280, { couleur: 'cyan', taille: 18, align: 'center' }); }
+}
+function voitConstruire(k) {
+  const t = k.t, m = [];
+  if (t >= .3) m.push('À gauche, un nucléotide peint : acide phosphorique (rond orange « P »)' + (t >= 1.8 ? ', désoxyribose (pentagone gris)' : '') + (t >= 3.3 ? ', base azotée (rectangle rouge A ; écrit « A, T, C ou G »)' : '') + (t >= 5 ? ', encadré « nucléotide ».' : '.'));
+  if (t >= 6.2 && t < 18.6) m.push('Au centre, un brin vertical de six nucléotides, bases de haut en bas A T C G G A, flèche vers le bas.');
+  if (t >= 8.8 && t < 10.8) m.push('Un second brin arrive en face, d’abord dans le même sens (deux flèches vers le bas).');
+  if (t >= 10.8 && t < 12.4) m.push('Le second brin se retourne.');
+  if (t >= 12.4 && t < 18.6) m.push('Le second brin est tête-bêche : sa flèche monte ; en face de A T C G G A il porte T A G C C T.');
+  if (t >= 13.2 && t < 18.6) m.push('Écrit « 5′ » en haut et « 3′ » en bas du brin de gauche, « 3′ » en haut et « 5′ » en bas du brin de droite, et « brins antiparallèles ».');
+  if (t >= 14.8) m.push('Les deux brins se rapprochent : A en face de T, C en face de G.');
+  if (t >= 16.6) m.push('Entre les bases, des liaisons hydrogène en pointillés : deux entre A et T, trois entre C et G (écrit « A = T : 2 liaisons hydrogène », « C ≡ G : 3 liaisons hydrogène »).');
+  if (t >= 18.6) m.push('L’échelle se tord en double hélice (rubans des deux brins, marches colorées des paires de bases)' + (t >= 21 ? ' qui tourne lentement ; écrit « double hélice ».' : '.'));
+  return m;
+}
+
+/* ── Vue Chargaff ─────────────────────────────────────────────────── */
+const DONNEES = [['homme', 30.9, 29.4, 19.9, 19.8], ['mouton', 29.3, 28.3, 21.4, 21.0], ['poulet', 28.8, 29.2, 20.5, 21.5]];
+const COLS = [40, 180, 250, 320, 390, 480, 580], MCH = { tableau: 4.0, rapport_at: 6.8, rapport_cg: 9.4, conclusion: 12.0 };
+function dessinerChargaff(c, k) {
+  const t = k.t, fr = k.fr;
+  c.texte('Chargaff : la composition en bases de l’ADN (%)', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.repere('tableau', 30, 80, 600, 200, 'le tableau de Chargaff');
+  if (k.ecrit(c, 'tab', .4)) {
+    ['espèce', 'A', 'T', 'G', 'C'].forEach((h, j) => k.T(c, h, COLS[j], 110, { couleur: j ? (h === 'A' ? 'rouge' : h === 'T' ? 'jaune' : h === 'G' ? 'vert' : 'bleu') : 'faible', taille: 17, align: j ? 'center' : 'left' }));
+    c.ligne(30, 122, 640, 122, { couleur: 'faible', largeur: 1.3 });
+    DONNEES.forEach((d, i) => { const y = 160 + i * 46; k.T(c, d[0], COLS[0], y, { couleur: 'blanc', taille: 16 }); for (let j = 1; j <= 4; j++) k.T(c, fr(d[j], 1), COLS[j], y, { couleur: 'blanc', taille: 16, align: 'center' }); });
+  }
+  c.repere('ligne_homme', 30, 140, 600, 30, 'la ligne de l’homme');
+  if (k.ecrit(c, 'at', MCH.rapport_at - 1.6)) {
+    c.ligne(440, 86, 440, 290, { couleur: 'tresfaible', largeur: 1.1 }); k.T(c, 'A/T', COLS[5], 110, { couleur: 'orange', taille: 17, align: 'center' });
+    DONNEES.forEach((d, i) => k.T(c, fr(d[1] / d[2], 2), COLS[5], 160 + i * 46, { couleur: 'orange', taille: 16, align: 'center' }));
+    c.repere('colonne_at', COLS[5] - 34, 92, 68, 190, 'la colonne A/T');
+  }
+  if (k.ecrit(c, 'cg', MCH.rapport_cg - 1.6)) {
+    k.T(c, 'C/G', COLS[6], 110, { couleur: 'cyan', taille: 17, align: 'center' });
+    DONNEES.forEach((d, i) => k.T(c, fr(d[4] / d[3], 2), COLS[6], 160 + i * 46, { couleur: 'cyan', taille: 16, align: 'center' }));
+    c.repere('colonne_cg', COLS[6] - 34, 92, 68, 190, 'la colonne C/G');
+  }
+  if (k.ecrit(c, 'conc', MCH.conclusion - 1.6)) {
+    k.T(c, 'A/T ≈ 1 et C/G ≈ 1 : autant de A que de T,', 40, 330, { couleur: 'jaune', taille: 17 });
+    k.T(c, 'autant de C que de G', 40, 354, { couleur: 'jaune', taille: 17 });
+    k.T(c, '→ A s’associe à T, C s’associe à G', 40, 384, { couleur: 'vert', taille: 17 });
+    c.repere('conclusion', 34, 312, 420, 80, 'la conclusion');
+  }
+}
+function voitChargaff(k) {
+  const t = k.t, m = ['Tableau à la craie « composition en bases de l’ADN (%) » : homme A 30,9 / T 29,4 / G 19,9 / C 19,8 ; mouton 29,3 / 28,3 / 21,4 / 21,0 ; poulet 28,8 / 29,2 / 20,5 / 21,5.'];
+  if (t >= MCH.rapport_at - 1.6) m.push('Colonne A/T calculée en orange : 1,05 ; 1,04 ; 0,99.');
+  if (t >= MCH.rapport_cg - 1.6) m.push('Colonne C/G calculée en bleu : 0,99 ; 0,98 ; 1,05.');
+  if (t >= MCH.conclusion - 1.6) m.push('Écrit : « A/T ≈ 1 et C/G ≈ 1 : autant de A que de T, autant de C que de G → A s’associe à T, C s’associe à G ».');
+  return m;
+}
+
+/* ── Vue complémentaire ───────────────────────────────────────────── */
+const CP = { x0: 120, dx: 72, w: 50, h: 30, yB: 146, yC: 198 }, RES = { x: 668, ys: [126, 176, 226, 276] }, LETTRES = ['A', 'T', 'C', 'G'];
+const MCO = { brin_donne: 2.0, premiere_base: 4.0, bases_posees: 9.0, extremites: 11.0 };
+const manuel = new Set(); let glisse = null;
+const seqC = k => k.P.sequence.split('');
+const tPose = i => 3.4 + i * 1.0;
+function majMoments(k) { const n = seqC(k).length; MCO.bases_posees = tPose(n - 1) + .6; MCO.extremites = MCO.bases_posees + 2.0; VUES.complementaire.fin = MCO.extremites + 1.2; }
+function dessinerComplementaire(c, k) {
+  const t = k.t, sq = seqC(k), n = sq.length, xi = i => CP.x0 + i * CP.dx;
+  c.direct(() => {
+    const x = c.ctx;
+    // brin donné
+    if (t >= .2) { const a = rampe(t, .2, .6); lien(x, xi(0) - 10, CP.yB - 8, xi(n - 1) + CP.w + 10, CP.yB - 8, a); sq.forEach((L, i) => { sucre(x, xi(i) + CP.w / 2, CP.yB - 8, 8, a); base(x, xi(i), CP.yB, CP.w, CP.h, L, a); }); }
+    // cases vides et bases posées
+    sq.forEach((L, i) => {
+      const pose = t >= tPose(i) || manuel.has(i);
+      if (!pose) { x.save(); x.strokeStyle = 'rgba(226,232,240,.35)'; x.setLineDash([4, 4]); x.lineWidth = 1.4; x.strokeRect(xi(i), CP.yC, CP.w, CP.h); x.restore(); }
+      const vol = rampe(t, tPose(i) - .6, .6);
+      if (!manuel.has(i) && vol > 0 && vol < 1) { const r = LETTRES.indexOf(COMP[L]); base(x, entre(RES.x - CP.w / 2, xi(i), vol), entre(RES.ys[r] - CP.h / 2, CP.yC, vol), CP.w, CP.h, COMP[L]); }
+      if (pose) { base(x, xi(i), CP.yC, CP.w, CP.h, COMP[L]); x.save(); x.strokeStyle = '#f8fafc'; x.lineWidth = 1.4; x.setLineDash([2, 2]); const nb = L === 'A' || L === 'T' ? 2 : 3; for (let j = 0; j < nb; j++) { const xx = xi(i) + CP.w / 2 + (j - (nb - 1) / 2) * 8; x.beginPath(); x.moveTo(xx, CP.yB + CP.h); x.lineTo(xx, CP.yC); x.stroke(); } x.restore(); }
+    });
+    if (sq.every((L, i) => t >= tPose(i) || manuel.has(i))) lien(x, xi(0) - 10, CP.yC + CP.h + 8, xi(n - 1) + CP.w + 10, CP.yC + CP.h + 8);
+    // réserve de bases libres
+    LETTRES.forEach((L, r) => base(x, RES.x - CP.w / 2, RES.ys[r] - CP.h / 2, CP.w, CP.h, L));
+    if (glisse) base(x, glisse.x - CP.w / 2, glisse.y - CP.h / 2, CP.w, CP.h, glisse.L, .9);
+  });
+  c.texte('Écrire le brin complémentaire', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('brin_donne', xi(0) - 30, CP.yB - 16, (n - 1) * CP.dx + CP.w + 60, CP.h + 20, 'le brin donné');
+  c.repere('reserve', RES.x - 34, RES.ys[0] - 22, 68, 175, 'la réserve de nucléotides libres');
+  c.repere('brin_complementaire', xi(0) - 30, CP.yC - 6, (n - 1) * CP.dx + CP.w + 60, CP.h + 20, 'le brin complémentaire');
+  if (k.ecrit(c, 'bd', .6)) { k.T(c, '5′', xi(0) - 24, CP.yB + 22, { couleur: 'vert', taille: 17, align: 'center' }); k.T(c, '3′', xi(n - 1) + CP.w + 24, CP.yB + 22, { couleur: 'vert', taille: 17, align: 'center' }); k.T(c, 'brin donné', xi(0), CP.yB - 26, { couleur: 'faible', taille: 14 }); k.T(c, 'nucléotides', RES.x, 92, { couleur: 'faible', taille: 13, align: 'center' }); k.T(c, 'libres', RES.x, 108, { couleur: 'faible', taille: 13, align: 'center' }); }
+  if (k.ecrit(c, 'pb', MCO.premiere_base - .2)) k.T(c, 'en face de A : T', xi(0), CP.yC + 60, { couleur: 'jaune', taille: 14 });
+  if (k.ecrit(c, 'ext', MCO.extremites - .8)) {
+    k.T(c, '3′', xi(0) - 24, CP.yC + 22, { couleur: 'vert', taille: 17, align: 'center' }); k.T(c, '5′', xi(n - 1) + CP.w + 24, CP.yC + 22, { couleur: 'vert', taille: 17, align: 'center' });
+    k.T(c, 'brin complémentaire : 3′ ' + sq.map(L => COMP[L]).join('') + ' 5′', 330, 330, { couleur: 'jaune', taille: 18, align: 'center' });
+    k.T(c, 'il se lit aussi de 5′ à 3′ : 5′ ' + sq.map(L => COMP[L]).reverse().join('') + ' 3′', 330, 356, { couleur: 'faible', taille: 14, align: 'center' });
+    c.repere('extremite_5', xi(n - 1) + CP.w + 12, CP.yC + 4, 24, 24, 'l’extrémité 5′ du brin complémentaire'); c.repere('extremite_3', xi(0) - 36, CP.yC + 4, 24, 24, 'l’extrémité 3′ du brin complémentaire');
+    c.repere('resultat', 120, 312, 420, 52, 'le résultat');
+  }
+}
+function voitComplementaire(k) {
+  const t = k.t, sq = seqC(k), poses = sq.map((L, i) => (t >= tPose(i) || manuel.has(i) ? COMP[L] : '_'));
+  const m = [`Brin donné en haut : 5′ ${sq.join(' ')} 3′ (bases peintes). En dessous, le brin complémentaire en cours : ${poses.join(' ')}. Réserve de nucléotides libres à droite (A, T, C, G), qu’on peut glisser sous une base : seule la complémentaire s’accroche.`];
+  if (t >= MCO.premiere_base - .2) m.push('Écrit « en face de A : T ».');
+  if (t >= MCO.extremites - .8) m.push(`Écrit « 3′ » à gauche et « 5′ » à droite du brin complémentaire, et « brin complémentaire : 3′ ${sq.map(L => COMP[L]).join('')} 5′ ».`);
+  return m;
+}
+
+const VUES = {
+  construire: { titre: 'Construire la molécule d’ADN', fin: 24, moments: MC, dessiner: dessinerConstruire, voit: voitConstruire,
+    motifs: { phosphate: 'l’acide phosphorique', sucre: 'le désoxyribose, un sucre', base: 'une base azotée : A, T, C ou G', nucleotide: 'un nucléotide = acide phosphorique + désoxyribose + base', chaine: 'les nucléotides s’enchaînent : un brin', deux_brins: 'un second brin, d’abord dans le même sens', tete_beche: 'le second brin est retourné : tête-bêche', extremites_5_3: '5′ en face de 3′ : les brins sont antiparallèles', appariement: 'A en face de T, C en face de G', liaisons_hydrogene: '2 liaisons hydrogène entre A et T, 3 entre C et G', torsion_helice: 'l’échelle se tord : la double hélice' },
+    conclusion: 'L’ADN : deux brins antiparallèles, complémentaires (A–T, C–G), enroulés en double hélice.',
+    texte: 'Nucléotide = acide phosphorique + désoxyribose + base azotée (A, T, C, G). Deux brins antiparallèles (5′→3′ en face de 3′→5′), A en face de T (2 liaisons hydrogène), C en face de G (3 liaisons hydrogène), double hélice.',
+    explication: [{ repere: 'nucleotide', texte: 'Le nucléotide : acide phosphorique, désoxyribose, base.' }, { repere: 'extremite_5', texte: 'Chaque brin a une extrémité 5′ et une extrémité 3′ ; les deux brins sont tête-bêche.' }, { repere: 'liaisons', texte: 'Deux liaisons hydrogène entre A et T, trois entre C et G.' }, { repere: 'helice', texte: 'Les deux brins s’enroulent en double hélice.' }] },
+  chargaff: { titre: 'Les résultats de Chargaff', fin: 13, moments: MCH, dessiner: dessinerChargaff, voit: voitChargaff,
+    motifs: { tableau: 'le tableau de Chargaff : trois espèces, quatre pourcentages', rapport_at: 'les rapports A/T, proches de 1', rapport_cg: 'les rapports C/G, proches de 1', conclusion: 'A s’associe à T, C s’associe à G' },
+    conclusion: 'A/T ≈ 1 et C/G ≈ 1 : A s’associe à T, C à G.',
+    texte: 'Chargaff : homme A 30,9 %, T 29,4 %, G 19,9 %, C 19,8 % ; mouton et poulet ; A/T ≈ 1, C/G ≈ 1 : complémentarité des bases.',
+    explication: [{ repere: 'ligne_homme', texte: 'Chez l’homme, autant de A que de T à peu près.' }, { repere: 'colonne_at', texte: 'A sur T est proche de un.' }, { repere: 'conclusion', texte: 'A s’associe à T, C s’associe à G.' }] },
+  complementaire: { titre: 'Écrire le brin complémentaire', fin: 12.2, moments: MCO, dessiner: dessinerComplementaire, voit: voitComplementaire,
+    motifs: { brin_donne: 'le brin donné : 5′ … 3′', premiere_base: 'en face de A, on pose T', bases_posees: 'toutes les bases complémentaires sont posées', extremites: 'le brin complémentaire : 3′ à gauche, 5′ à droite' },
+    conclusion: 'Le brin complémentaire est antiparallèle : 3′ en face de 5′.',
+    surReglage: (k, cles, api) => { if (cles.includes('sequence')) { manuel.clear(); api.start(); } },
+    texte: 'Brin donné 5′ ATCGGA 3′ ; brin complémentaire 3′ TAGCCT 5′ (A en face de T, C en face de G, extrémités inversées).',
+    explication: [{ repere: 'brin_donne', texte: 'Le brin donné, de 5′ à 3′.' }, { repere: 'reserve', texte: 'On prend en face de chaque base sa base complémentaire.' }, { repere: 'resultat', texte: 'Le brin complémentaire, de 3′ à 5′.' }] },
+};
+window.Etapes.lancer({
+  id: 'genetique_adn', titre: 'La molécule d’ADN', graine: 37,
+  parametres: { sequence: { defaut: 'ATCGGA', schema: 'chaîne de 4 à 7 lettres A, T, C, G (vue complementaire, défaut ATCGGA)', lire: v => { const s = String(v || '').toUpperCase().replace(/[^ATCG]/g, ''); return s.length >= 4 && s.length <= 7 ? s : undefined; } } },
+  apresReglage: (k, cles) => { if (cles.includes('sequence')) majMoments(k); },
+  poignees: {
+    toucher: (x, y, k) => { if (k.vue !== 'complementaire') return null; const r = RES.ys.findIndex(yy => Math.abs(x - RES.x) < CP.w / 2 + 4 && Math.abs(y - yy) < CP.h / 2 + 4); return r >= 0 ? LETTRES[r] : null; },
+    bouger: (id, x, y) => { glisse = { L: id, x, y }; },
+    lacher: (id, k) => {
+      const g = glisse; glisse = null; if (!g) return;
+      const sq = seqC(k), i = sq.findIndex((L, j) => Math.abs(g.x - (CP.x0 + j * CP.dx + CP.w / 2)) < CP.w / 2 + 8 && Math.abs(g.y - (CP.yC + CP.h / 2)) < CP.h);
+      const fb = document.getElementById('feedback');
+      if (i < 0) return;
+      if (COMP[sq[i]] === id) { manuel.add(i); window.Tableau.bulle(fb, `Oui : en face de ${sq[i]}, on pose ${id}.`, 'good'); }
+      else window.Tableau.bulle(fb, `${id} ne s’accroche pas en face de ${sq[i]} : seule la base complémentaire s’accroche.`, 'bad');
+    },
+  },
+  vues: VUES,
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fonctions logarithmiques — la carte du chapitre</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte à la craie du chapitre des fonctions logarithmiques : au centre la courbe de ln passant par (1 ; 0), autour les savoir-faire du chapitre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln), ouverture du chapitre.
+ * Vue : ?vue=carte. Moments : courbe, domaine, regles, equations, limites, derivee, etude, primitives, log, national.
+ * Repères : courbe, regles, etude, national (+ domaine, equations, limites, derivee, primitives, log).
+ */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/* Une bulle : cadre arrondi tracé d'abord, puis les lignes écrites au centre. Renvoie [x, y, w, h]. */
+function bulle(c, cx, y0, lignes, o = {}) {
+  const t = o.taille || 15, inter = o.inter || 21;
+  const w = Math.max(...lignes.map(l => L(c, l.t, t))) + 26, h = (lignes.length - 1) * inter + t + 16;
+  const x = cx - w / 2, y = y0 - t - 6;
+  c.rect(x, y, w, h, { couleur: o.cadre || 'faible', arrondi: 13, largeur: 1.5, fond: o.fond, fondAlpha: .08 });
+  lignes.forEach((l, i) => c.texte(l.t, cx, y0 + i * inter, { couleur: l.couleur || 'blanc', taille: t, align: 'center' }));
+  return [x, y, w, h];
+}
+/* Le petit repère du centre. */
+const OPT = { x0: 282, y0: 78, w: 196, h: 196, xmin: -0.4, xmax: 5.4, ymin: -2.3, ymax: 2.1, gx: [[1, ''], [2, '2'], [4, '4']], gy: [[1, '1'], [-1, '−1']] };
+const XG = 120, XD = 640, YS = [78, 146, 214, 282];   // colonnes et lignes des bulles
+
+MathsTableau.page({
+  id: 'ln_ouverture', titre: 'Fonctions logarithmiques',
+  texte: 'Ouverture du chapitre Fonctions logarithmiques (2ᵉ Bac PC BIOF) : au centre la courbe de ln, qui passe par (1 ; 0) ; autour, ce que le chapitre apprend à faire, et sa place au national',
+  vues: {
+    carte: {
+      titre: 'Fonctions logarithmiques : la carte du chapitre',
+      dessiner(c, K) {
+        K.titre('Fonctions logarithmiques : la carte du chapitre');
+        // Le centre : un petit repère, la courbe de ln en rouge, le point (1 ; 0).
+        const G = K.axes(OPT);
+        K.anime(1.8, p => K.courbePart(G, Math.log, 0.105, 5.3, p, { couleur: 'rouge', n: 220 }));
+        c.texte('ln', G.X(5.1), G.Y(Math.log(5.1)) - 12, { couleur: 'rouge', taille: 22, align: 'center' });
+        K.rond(G, 1, 0, true, 'jaune');
+        c.texte('(1 ; 0)', G.X(1) + 8, G.Y(0) + 22, { couleur: 'jaune', taille: 15 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe de ln');
+        K.marque('courbe');
+        // Les bulles, une par moment, alternées à gauche et à droite.
+        const liens = (b, gauche) => c.ligne(gauche ? b[0] + b[2] + 4 : b[0] - 4, b[1] + b[3] / 2, gauche ? G.x0 - 6 : G.x0 + G.w + 8, G.y0 + G.h / 2, { couleur: 'tresfaible', largeur: 1.1 });
+        const B = [
+          ['domaine', true, 0, [{ t: 'Où existe-t-elle ?' }, { t: 'u(x) > 0', couleur: 'cyan' }], 'où existe ln u : u(x) > 0'],
+          ['regles', false, 0, [{ t: 'Règles de calcul' }, { t: 'ln(ab) = ln a + ln b', couleur: 'cyan' }], 'ln(ab) = ln a + ln b'],
+          ['equations', true, 1, [{ t: 'Équations, inéquations' }], 'équations et inéquations'],
+          ['limites', false, 1, [{ t: 'Limites : ln x → +∞ ;' }, { t: '(ln x)/x → 0', couleur: 'cyan' }], 'les limites'],
+          ['derivee', true, 2, [{ t: 'Dérivée' }, { t: '(ln u)’ = u’/u', couleur: 'cyan' }], '(ln u)’ = u’/u'],
+          ['etude', false, 2, [{ t: 'Le problème :' }, { t: 'étude d’une fonction', couleur: 'cyan' }], 'le problème : étude d’une fonction'],
+          ['primitives', true, 3, [{ t: 'Primitives' }, { t: 'u’/u → ln|u|', couleur: 'cyan' }], 'u’/u a pour primitive ln|u|'],
+          ['log', false, 3, [{ t: 'log et pH' }], 'le logarithme décimal et le pH'],
+        ];
+        for (const [nom, gauche, i, lignes, label] of B) {
+          c.pause(.35);
+          const b = bulle(c, gauche ? XG : XD, YS[i], lignes);
+          liens(b, gauche);
+          c.repere(nom, ...b, label);
+          K.marque(nom);
+        }
+        // Le bandeau du national.
+        c.pause(.5);
+        const s = 'ln dans 18 sujets sur 20 ; un problème avec ln dans 12';
+        const w = L(c, s, 18) + 30;
+        c.rect(380 - w / 2, 318, w, 32, { couleur: 'jaune', arrondi: 10, largeur: 1.7, fond: 'jaune', fondAlpha: .08 });
+        c.texte(s, 380, 340, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.repere('national', 380 - w / 2, 318, w, 32, 'ln au national');
+        K.marque('national');
+      },
+      decrire: {
+        courbe: 'Au centre, un petit repère ; la courbe de ln est tracée en rouge et nommée « ln » ; le point (1 ; 0) est marqué en jaune.',
+        domaine: 'En haut à gauche, une bulle : « Où existe-t-elle ? u(x) > 0 ».',
+        regles: 'En haut à droite, une bulle : « Règles de calcul : ln(ab) = ln a + ln b ».',
+        equations: 'À gauche, une bulle : « Équations, inéquations ».',
+        limites: 'À droite, une bulle : « Limites : ln x → +∞ ; (ln x)/x → 0 ».',
+        derivee: 'À gauche, une bulle : « Dérivée : (ln u)’ = u’/u ».',
+        etude: 'À droite, une bulle : « Le problème : étude d’une fonction ».',
+        primitives: 'En bas à gauche, une bulle : « Primitives : u’/u → ln|u| ».',
+        log: 'En bas à droite, une bulle : « log et pH ».',
+        national: 'Tout en bas, un bandeau jaune : « ln dans 18 sujets sur 20 ; un problème avec ln dans 12 ».',
+      },
+      motifs: { courbe: 'la courbe de ln', domaine: 'où existe ln', regles: 'les règles de calcul', equations: 'équations, inéquations', limites: 'les limites', derivee: 'la dérivée de ln u', etude: 'l’étude de fonction', primitives: 'les primitives u’/u', log: 'log et pH', national: 'ln au national' },
+      explication: [
+        { repere: 'courbe', texte: 'Voici la courbe de ln : elle passe par le point (1 ; 0).' },
+        { repere: 'regles', texte: 'La règle reine : ln transforme un produit en somme.' },
+        { repere: 'etude', texte: 'Tout le chapitre sert le problème du national : l’étude d’une fonction avec ln.' },
+        { repere: 'national', texte: 'ln est dans 18 sujets sur 20, et un problème entier dans 12.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

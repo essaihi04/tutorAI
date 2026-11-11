@@ -44,7 +44,7 @@ const VISITEUR = (() => {
 })();
 const PUBLIC = '/api/v1/public/cours-ondes';
 /** Les routes publiques qui existent ; les autres appels du lecteur (progression d'un compte…) n'ont pas lieu ici. */
-const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis'];
+const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis', 'memoire'];
 
 // Le lecteur parle au serveur comme pour un élève connecté (/course-player/…, /tts/speak) : ici, les mêmes demandes
 // partent vers les routes publiques (plafonnées), avec l'identifiant du visiteur à la place du jeton.

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La marche arrière — primitive</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Au tableau : x² se dérive en 2x ; en marche arrière, de 2x on revient à x², une primitive de 2x"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : la définition, par la marche arrière.
+ * Vue : ?vue=marche. Moments : avancer, reculer, verifier, nommer, pas_egal.
+ * Repères : fleche_deriver, fleche_retour, reponse, mot_primitive, pas_egal.
+ */
+const XG = 180, XD = 520, Y1 = 102, Y2 = 188;
+/* Instant (s) où le « ? » est effacé, relevé à l'image précédente (comme les moments du kit). */
+const Q = { efface: Infinity };
+function coche(c, x, y) { c.trait([[x, y], [x + 7, y + 8], [x + 22, y - 12]], { couleur: 'vert', largeur: 3.2, tremble: .3 }); }
+
+MathsTableau.page({
+  id: 'pr_marche', titre: 'Fonctions primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : on connaît la dérivée de x², c’est 2x ; la marche arrière part de 2x et retrouve x² : x² est une primitive de 2x, F’ = f',
+  vues: {
+    marche: {
+      titre: 'La marche arrière',
+      dessiner(c, K) {
+        const T = c.t;
+        K.titre('La marche arrière');
+        // Avancer : x² → 2x, on dérive.
+        c.texte('x²', XG, Y1, { couleur: 'cyan', taille: 36, align: 'center' });
+        c.pause(.2);
+        c.fleche(XG + 45, Y1 - 12, XD - 45, Y1 - 12, { couleur: 'rouge', largeur: 2.6 });
+        c.texte('dériver', (XG + XD) / 2, Y1 - 26, { couleur: 'rouge', taille: 19, align: 'center' });
+        c.texte('2x', XD, Y1, { couleur: 'blanc', taille: 36, align: 'center' });
+        c.repere('fleche_deriver', XG + 40, Y1 - 50, XD - XG - 80, 50, 'la flèche dériver');
+        K.marque('avancer');
+        // Reculer : de 2x, on cherche d'où l'on vient.
+        c.pause(.5);
+        c.texte('2x', XD, Y2, { couleur: 'blanc', taille: 36, align: 'center' });
+        K.anime(.3, () => { if (T < Q.efface) c.texte('?', XG, Y2, { couleur: 'orange', taille: 38, align: 'center' }); });
+        c.pause(.2);
+        c.fleche(XD - 45, Y2 - 12, XG + 45, Y2 - 12, { couleur: 'vert', largeur: 2.6 });
+        c.repere('fleche_retour', XG + 40, Y2 - 50, XD - XG - 80, 50, 'la flèche du retour');
+        K.marque('reculer');
+        // Vérifier : le « ? » devient x², car (x²)’ = 2x.
+        c.pause(.4);
+        Q.efface = c.cur;
+        c.texte('x²', XG, Y2, { couleur: 'cyan', taille: 36, align: 'center' });
+        c.pause(.2);
+        c.texte('(x²)’ = 2x', 584, Y2 - 4, { couleur: 'blanc', taille: 23 });
+        coche(c, 700, Y2 - 12);
+        c.repere('reponse', XG - 40, Y2 - 40, 80, 50, 'la réponse : x²');
+        K.marque('verifier');
+        // Nommer : primitive, F et f, F’(x) = f(x).
+        c.pause(.4);
+        c.texte('primitive', (XG + XD) / 2, Y2 - 24, { couleur: 'vert', taille: 20, align: 'center' });
+        c.repere('mot_primitive', (XG + XD) / 2 - 60, Y2 - 46, 120, 30, 'le mot primitive');
+        c.pause(.2);
+        c.texte('F', XG, Y2 + 44, { couleur: 'cyan', taille: 28, align: 'center' });
+        c.texte('f', XD, Y2 + 44, { couleur: 'blanc', taille: 28, align: 'center' });
+        c.pause(.2);
+        c.texte('F’(x) = f(x)', 350, 286, { couleur: 'jaune', taille: 26, align: 'center' });
+        c.rect(278, 258, 144, 40, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        K.marque('nommer');
+        // Pas égal : f n'est pas F.
+        c.pause(.5);
+        c.texte('f = F', 110, 338, { couleur: 'blanc', taille: 24 });
+        c.pause(.15);
+        c.ligne(102, 334, 168, 326, { couleur: 'rouge', largeur: 3 });
+        c.pause(.2);
+        c.texte('on dit : F’ = f', 200, 338, { couleur: 'vert', taille: 24 });
+        c.repere('pas_egal', 96, 310, 270, 40, 'f = F, faux ; on dit F’ = f');
+        K.marque('pas_egal');
+      },
+      decrire: {
+        avancer: 'En haut : « x² » à gauche, une flèche rouge « dériver » vers « 2x » à droite.',
+        reculer: 'Dessous : « 2x » à droite, un « ? » orange à gauche, et une flèche verte qui repart de droite à gauche.',
+        verifier: 'Le « ? » est devenu « x² » ; à droite, « (x²)’ = 2x » avec une coche verte.',
+        nommer: 'Le mot « primitive » est écrit sur la flèche verte ; « F » sous la gauche, « f » sous la droite ; « F’(x) = f(x) » encadré en jaune.',
+        pas_egal: 'En bas : « f = F » barré en rouge, puis « on dit : F’ = f » en vert.',
+      },
+      motifs: { avancer: 'dériver x²', reculer: 'la marche arrière', verifier: 'le ? devient x²', nommer: 'le mot primitive', pas_egal: 'f n’est pas égale à F' },
+      explication: [
+        { repere: 'fleche_deriver', texte: 'On sait aller dans ce sens : dériver x² donne 2x.' },
+        { repere: 'fleche_retour', texte: 'La primitive, c’est le chemin du retour : de 2x vers une fonction qui se dérive en 2x.' },
+        { repere: 'reponse', texte: 'x², car (x²)’ = 2x.' },
+        { repere: 'mot_primitive', texte: 'x² est une primitive de 2x.' },
+        { repere: 'pas_egal', texte: 'F n’est pas égale à f : c’est sa dérivée qui l’est.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carte du chapitre — information génétique</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte conceptuelle dessinée à la craie : l’information génétique, dans le noyau, portée par l’ADN, copiée puis partagée ; huit branches autour"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset play_until">Redessiner</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * La carte conceptuelle du cours « Notion de l'information génétique » (diapositive ig_b2_carte), adaptée de
+ * svt/role_muscle_strie_squelettique-tableau/carte.html : l'information génétique au centre (sa phrase s'écrit au moment `definition`),
+ * huit branches au rythme de la voix (play_until {moment: <branche>}), anneaux des lacunes de l'élève (set_parameters).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const CENTRE = { x: 380, y: 212, w: 212, h: 108, comps: ['C8'],
+  phrase: "L’information génétique, localisée dans le noyau et portée par l’ADN, est copiée en phase S puis partagée par la mitose : elle se conserve d’une cellule à ses cellules filles." };
+const NOEUDS = [
+  { id: 'localisation', x: 136, y: 76, w: 220, h: 64, couleur: 'cyan', comps: ['C1'], titre: 'Où ? Dans le noyau',
+    lignes: ['amibe, acétabulaire,', 'transfert de noyau'],
+    phrase: "Les expériences de l’amibe, de l’acétabulaire et du transfert de noyau montrent que l’information génétique est dans le noyau." },
+  { id: 'chromatine', x: 380, y: 62, w: 214, h: 64, couleur: 'cyan', comps: ['C2'], titre: 'Chromatine, chromosome',
+    lignes: ['ADN + histones', 'une ou deux chromatides'],
+    phrase: "En interphase l’ADN forme la chromatine ; en division il se condense en chromosomes à une ou deux chromatides." },
+  { id: 'cycle', x: 624, y: 76, w: 212, h: 64, couleur: 'orange', comps: ['C3'], titre: 'Le cycle cellulaire',
+    lignes: ['G1, S, G2, mitose', 'q → 2q → q'],
+    phrase: "Le cycle cellulaire : G1, S, G2 puis la mitose ; la quantité d’ADN double en phase S et revient à q à la fin de la mitose." },
+  { id: 'mitose', x: 640, y: 212, w: 222, h: 64, couleur: 'orange', comps: ['C4'], titre: 'La mitose',
+    lignes: ['quatre phases', 'cellules filles identiques'],
+    phrase: "Prophase, métaphase, anaphase, télophase : la mitose donne deux cellules filles génétiquement identiques." },
+  { id: 'support', x: 624, y: 350, w: 220, h: 64, couleur: 'jaune', comps: ['C5'], titre: 'L’ADN, support',
+    lignes: ['Griffith, Avery', 'principe transformant'],
+    phrase: "La transformation bactérienne montre que l’ADN est le support de l’information génétique." },
+  { id: 'structure', x: 380, y: 362, w: 214, h: 64, couleur: 'jaune', comps: ['C6'], titre: 'La double hélice',
+    lignes: ['A avec T, C avec G', 'brins antiparallèles'],
+    phrase: "L’ADN est une double hélice de deux brins complémentaires et antiparallèles : A en face de T, C en face de G." },
+  { id: 'replication', x: 136, y: 350, w: 220, h: 64, couleur: 'vert', comps: ['C7'], titre: 'La réplication',
+    lignes: ['semi-conservative', 'ADN polymérase, 5′ → 3′'],
+    phrase: "La réplication est semi-conservative : chaque molécule fille garde un brin de la molécule mère." },
+  { id: 'rediger', x: 122, y: 212, w: 200, h: 64, couleur: 'violet', comps: ['C8'], titre: 'Rédiger',
+    lignes: ['décrire, expliquer', 'schématiser'],
+    phrase: "Décrire un document avec ses valeurs, expliquer, et schématiser avec un titre et des légendes." },
+];
+const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
+const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
+
+// def : instant où la définition du centre s'écrit (null = pas encore dite) ; n branches dessinées ; apparu[i] leur instant.
+const S = { def: null, n: 0, cible: 0, running: false, lacunes: null, acquis: null, apparu: [], choisi: null };
+const DUREE_BRANCHE = 2.6;   // s par branche quand la carte se dessine seule
+
+function statut(comps) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis || []).some(a => comps.includes(a)) ? 'acquis' : null;
+}
+/* Anneau rouge/orange ou coche verte autour d'un cadre (état de l'élève). */
+function etat(c, comps, x, y, w, h) {
+  const st = statut(comps);
+  c.direct(() => {
+    if (st && ANNEAUX[st]) {
+      const [coul, etiq] = ANNEAUX[st];
+      c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
+  });
+}
+
+function branche(c, n) {
+  const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+  // du bord du centre au bord de la branche, avec une légère courbure
+  const d0 = Math.min(CENTRE.w / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h / 2 / Math.max(.2, Math.abs(uy)));
+  const d1 = Math.min(n.w / 2 / Math.max(.2, Math.abs(ux)), n.h / 2 / Math.max(.2, Math.abs(uy)));
+  const a = [CENTRE.x + ux * d0, CENTRE.y + uy * d0], b = [n.x - ux * d1, n.y - uy * d1];
+  const m = [(a[0] + b[0]) / 2 - uy * 12, (a[1] + b[1]) / 2 + ux * 12];
+  c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
+  const x = n.x - n.w / 2, y = n.y - n.h / 2;
+  c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
+  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
+  etat(c, n.comps, x, y, n.w, n.h);
+  if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
+}
+
+function dessiner(c) {
+  const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
+  if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
+  c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
+  c.texte('L’information', CENTRE.x, y + 26, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('génétique', CENTRE.x, y + 47, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : l’information génétique');
+  c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'l’information génétique et sa conservation');
+  const apres = c.cur;   // fin du titre du centre
+  if (S.def != null) {
+    c.depuis(S.def);
+    ['dans le noyau, portée par l’ADN,', 'copiée en phase S,', 'partagée par la mitose'].forEach((l, k) =>
+      c.texte(l, CENTRE.x, y + 68 + k * 14, { couleur: 'blanc', taille: 12, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+    etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
+    if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
+  }
+  // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
+  for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+}
+
+const canvas = $('canvas');
+const scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+let horloge = 0;
+scene.avancer = dt => {
+  if (!S.running) return false;
+  horloge += dt;
+  if (S.n < S.cible && horloge >= 0) {
+    // la branche suivante apparaît quand la précédente a fini de s'écrire
+    S.n += 1; S.apparu[S.n - 1] = maintenant(); horloge = -DUREE_BRANCHE;
+    bulle($('feedback'), NOEUDS[S.n - 1].titre + (S.n >= NOEUDS.length ? ' — la carte est complète.' : ''));
+    pont.noter('branche', { n: S.n, moment: NOEUDS[S.n - 1].id }); pont.emettre();
+    if (S.n >= S.cible) S.running = false;
+  }
+  return true;
+};
+function moments() { const m = { definition: 0 }; NOEUDS.forEach((n, i) => { m[n.id] = i + 1; }); m.complet = NOEUDS.length; return m; }
+/* Dessine la carte jusqu'à la branche `cible` (0 = la définition du centre). `pasAPas` : la carte se dessine seule,
+ * une branche après l'autre (bouton) ; sinon (la voix) les branches sautées s'écrivent d'un coup et la dernière à cet instant. */
+function montrer(cible, par, pasAPas) {
+  cible = Math.max(0, Math.min(NOEUDS.length, cible));
+  if (cible < S.n) { S.n = 0; S.apparu = []; S.def = null; scene.reecrire(); }   // retour en arrière : on redessine jusque-là
+  if (S.def == null) S.def = pasAPas || cible === 0 ? maintenant() : AVANT;
+  if (!pasAPas && cible > S.n) {
+    for (let i = S.n; i < cible - 1; i++) S.apparu[i] = AVANT;
+    S.apparu[cible - 1] = maintenant(); S.n = cible;
+    bulle($('feedback'), NOEUDS[cible - 1].titre + (cible >= NOEUDS.length ? ' — la carte est complète.' : ''));
+  } else if (cible === 0) bulle($('feedback'), 'Au centre : l’information génétique.');
+  S.cible = cible; S.running = S.n < cible; horloge = pasAPas ? -1.5 : 0; scene.sale = true;
+  pont.noter(par || 'play_until', { moment: NOEUDS[cible - 1]?.id || 'definition' }); pont.emettre();
+}
+function playUntil(p) { const M = moments(); const n = p.moment in M ? M[p.moment] : +p.time_s; if (Number.isFinite(n)) montrer(n, 'play_until'); }
+function start() { S.n = 0; S.apparu = []; S.def = null; S.choisi = null; scene.reecrire(); montrer(NOEUDS.length, 'start', true); bulle($('feedback'), 'La carte se dessine…'); }
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || ''), statut: String(l.statut || 'non_acquis') }));
+  if (Array.isArray(p.acquis_ids)) S.acquis = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const vues = NOEUDS.slice(0, S.n).map(n => n.titre);
+  const aReprendre = [...(S.def != null && statut(CENTRE.comps) && statut(CENTRE.comps) !== 'acquis' ? ['le centre (définition)'] : []),
+    ...NOEUDS.slice(0, S.n).filter(n => statut(n.comps) && statut(n.comps) !== 'acquis').map(n => n.titre)];
+  const etatEleve = S.lacunes ? ` Branches à reprendre : ${aReprendre.join(', ') || 'aucune'}.` : '';
+  return `Carte conceptuelle : « L’information génétique » au centre${S.def != null ? ' avec sa phrase (dans le noyau, portée par l’ADN, copiée en phase S, partagée par la mitose)' : ''}, ${S.n}/${NOEUDS.length} branche(s) dessinée(s)${vues.length ? ' (' + vues.join(', ') + ')' : ''}${S.running ? ', la carte se dessine' : ''}.${etatEleve}${S.choisi ? ` L'élève a touché « ${S.choisi === 'centre' ? 'le centre' : NOEUDS.find(n => n.id === S.choisi).titre} ».` : ''}`;
+}
+$('run').onclick = start;
+// Imprimer / PDF : la carte complète, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { n: S.n, cible: S.cible, running: S.running, apparu: S.apparu.slice(), def: S.def, choisi: S.choisi };
+  window.Tableau.imprimer({ titre: 'Carte du chapitre — notion de l’information génétique', scene,
+    pages: [{ nom: 'la carte complète', preparer: () => { S.n = NOEUDS.length; S.running = false; S.def = AVANT; S.apparu = NOEUDS.map(() => AVANT); S.choisi = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 1 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const n = NOEUDS.slice(0, S.n).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  if (n) { S.choisi = n.id; bulle($('feedback'), n.phrase); }
+  else if (S.def != null && Math.abs(x - CENTRE.x) <= CENTRE.w / 2 && Math.abs(y - CENTRE.y) <= CENTRE.h / 2) { S.choisi = 'centre'; bulle($('feedback'), CENTRE.phrase); }
+  else return;
+  scene.sale = true; pont.noter('touche', { moment: S.choisi === 'centre' ? 'definition' : S.choisi }); pont.emettre();
+});
+
+window.Tableau.explication({ carte: [{ repere: 'centre', texte: CENTRE.phrase }, ...NOEUDS.map(n => ({ repere: n.id, texte: n.phrase }))] });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters'];
+const config = { id: 'genetique_carte', version: '1.0', title: 'Carte du chapitre — information génétique', variants: [{ id: 'carte', label: 'carte' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (definition = la définition du centre ; sinon dessine la carte jusqu’à cette branche)' },
+    set_parameters: { lacunes: '[{id: C1..C9, statut: non_acquis|partiel}] (bilan de l’élève)', acquis_ids: '[C1, ..] compétences acquises' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Carte conceptuelle du chapitre de l’information génétique : l’information génétique au centre, huit branches autour (le noyau, chromatine et chromosome, le cycle cellulaire, la mitose, l’ADN support, la double hélice, la réplication, rédiger).',
+  etat: () => ({ simulation_status: S.running ? 'running' : 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: S.n, parameters: { definition: S.def != null, branches: S.n, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.n / NOEUDS.length,
+  executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+bulle($('feedback'), 'Le professeur va dessiner la carte du chapitre.');
+window.__carte = { S, scene, NOEUDS, CENTRE };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

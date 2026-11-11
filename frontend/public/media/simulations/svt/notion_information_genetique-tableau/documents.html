@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Documents du chapitre — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Documents écrits à la craie : la question du chapitre (parents, enfant, cellule-œuf), une courbe d’examen de la quantité d’ADN décrite et expliquée ligne par ligne, le calcul de la durée du cycle et des phases, une question à choix multiple corrigée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * Documents du chapitre « Notion de l’information génétique » (2 Bac PC BIOF, 11 novembre 2026), écrits à la craie au rythme du tuteur.
+ * Vue ouverture : parents, enfant, cellule-œuf et les quatre questions du chapitre.
+ * Vue courbe : document d’examen (quantité d’ADN, 0–30 h) puis la réponse rédigée comme le barème (décrire avec les valeurs, expliquer).
+ * Vue durees : 2,5·10³ → 10·10³ cellules en 40 h = 2 doublements = 2 cycles → 20 h ; G1 = 45 % × 20 h = 9 h ; S = 20 − (9 + 4 + 1) = 6 h.
+ * Vue restitution : un QCM corrigé leurre par leurre (phase G1).
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+
+/* ── Vue ouverture ─────────────────────────────────────────────────── */
+function personne(x, cx, cy, s, couleur, a = 1) {
+  x.save(); x.globalAlpha = a; x.translate(cx, cy); x.scale(s, s);
+  const g = x.createLinearGradient(-20, 0, 20, 0); g.addColorStop(0, couleur[1]); g.addColorStop(.5, couleur[0]); g.addColorStop(1, couleur[1]);
+  x.fillStyle = g; x.beginPath(); x.roundRect(-20, -10, 40, 62, 16); x.fill();
+  const gt = x.createRadialGradient(-4, -32, 2, 0, -28, 16); gt.addColorStop(0, '#f6d7b8'); gt.addColorStop(1, '#c08a5a');
+  x.fillStyle = gt; x.beginPath(); x.arc(0, -28, 14, 0, TAU); x.fill();
+  x.fillStyle = '#3f2a1a'; x.beginPath(); x.arc(0, -33, 14, Math.PI * 1.05, Math.PI * 1.95); x.fill();
+  x.restore();
+}
+const MO = { parents: 2.0, cellule_oeuf: 4.6, q1: 6.6, q2: 8.6, q3: 10.6, q4: 12.6 };
+const QUESTIONS = [['1. Où est l’information génétique ?'], ['2. Comment passe-t-elle d’une cellule', 'à ses cellules filles ?'], ['3. De quoi est-elle faite ?'], ['4. Comment se copie-t-elle ?']];
+function dessinerOuverture(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    personne(x, 60, 150, 1.05, ['#60a5fa', '#1e40af'], rampe(t, .2, .5)); personne(x, 160, 150, 1.0, ['#f472b6', '#9d174d'], rampe(t, .4, .5));
+    personne(x, 110, 290, .75, ['#4ade80', '#166534'], rampe(t, .9, .5));
+    if (t >= 2.6) { const a = rampe(t, 2.6, .8); Peint.cellule(x, 330, 220, 62, 58, a, ['rgba(255,236,214,.6)', 'rgba(250,210,180,.5)', 'rgba(220,170,130,.55)']); Peint.noyau(x, 336, 214, 22, a); }
+  });
+  c.texte('Pourquoi ressembles-tu à tes parents ?', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('parents', 30, 100, 160, 110, 'les parents'); c.repere('enfant', 80, 255, 60, 80, 'l’enfant');
+  if (k.ecrit(c, 'par', .8)) { k.T(c, 'les parents', 110, 236, { couleur: 'blanc', taille: 14, align: 'center' }); c.fleche(110, 244, 110, 252, { couleur: 'faible', largeur: 1.3 }); k.T(c, 'l’enfant', 110, 350, { couleur: 'blanc', taille: 14, align: 'center' }); }
+  if (t >= 2.6) c.repere('cellule_oeuf', 268, 162, 124, 116, 'la cellule-œuf');
+  if (k.ecrit(c, 'oeuf', 3.0)) {
+    c.fleche(262, 240, 150, 288, { couleur: 'faible', largeur: 1.3 }); k.T(c, 'au départ : une seule cellule,', 330, 120, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'la cellule-œuf', 330, 140, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.fleche(330, 284, 330, 318, { couleur: 'faible', largeur: 1.3 }); k.T(c, 'des milliers de milliards', 330, 340, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'de cellules', 330, 358, { couleur: 'blanc', taille: 14, align: 'center' });
+  }
+  QUESTIONS.forEach((q, i) => {
+    const y = 110 + i * 64, nom = 'q' + (i + 1);
+    if (t >= MO[nom] - .8) c.repere(nom, 448, y - 18, 306, 24 * q.length + 6, 'la question ' + (i + 1));
+    if (k.ecrit(c, nom, MO[nom] - .8)) q.forEach((l, j) => k.T(c, l, 454 + (j ? 16 : 0), y + j * 20, { couleur: 'jaune', taille: 16 }));
+  });
+}
+function voitOuverture(k) {
+  const t = k.t, m = ['Deux parents et leur enfant, peints simplement.'];
+  if (t >= 2.6) m.push('Une cellule-œuf peinte avec son noyau : « au départ : une seule cellule, la cellule-œuf » → « des milliers de milliards de cellules ».');
+  const q = Object.keys(MO).filter(n => n[0] === 'q' && t >= MO[n] - .8).length;
+  if (q) m.push(`À droite, ${q} question(s) du chapitre écrite(s) : ` + QUESTIONS.slice(0, q).map(x => x.join(' ')).join(' ; '));
+  return m;
+}
+
+/* ── Vue courbe ──────────────────────────────────────────────────── */
+const GC = { x0: 70, x1: 430, y0: 226, ux: 12, uy: 22 }, gx = h => GC.x0 + h * GC.ux, gy = q => GC.y0 - q * GC.uy;
+const ADN = h => { h = h % 20 === 0 && h > 0 ? 20 : h; if (h <= 8) return 3; if (h <= 14) return 3 + (h - 8) / 2; if (h <= 19) return 6; if (h <= 20) return 6 - 3 * (h - 19); if (h <= 28) return 3; return 3 + (h - 28) / 2; };
+const MCB = { document: 2.6, lecture_axes: 4.2, decrire_g1: 6.2, decrire_s: 8.2, decrire_g2: 10.2, decrire_m: 12.2, expliquer: 15.0 };
+const SEGS = { decrire_g1: [0, 8], decrire_s: [8, 14], decrire_g2: [14, 19], decrire_m: [19, 20] };
+const REP = [['decrire_g1', '• de 0 à 8 h : la quantité d’ADN reste constante, 3 UA ;', 282], ['decrire_s', '• de 8 à 14 h : elle augmente de 3 à 6 UA : elle double ;', 302], ['decrire_g2', '• de 14 à 19 h : elle reste constante, 6 UA ;', 322], ['decrire_m', '• de 19 à 20 h : elle chute de 6 à 3 UA.', 342]];
+function dessinerCourbe(c, k) {
+  const t = k.t, hMax = 30 * rampe(t, .3, 2.0);
+  c.texte('Document 1 : quantité d’ADN dans une cellule', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.axe(GC.x0, GC.y0, gx(31.5), GC.y0, [0, 4, 8, 12, 16, 20, 24, 28].map(h => [h * GC.ux / (gx(31.5) - GC.x0), String(h)]), { taille: 12 });
+  c.axe(GC.x0, GC.y0, GC.x0, gy(7.3), [1, 2, 3, 4, 5, 6, 7].map(v => [v * GC.uy / (GC.y0 - gy(7.3)), String(v)]), { vertical: true, taille: 12 });
+  c.texte('quantité d’ADN (UA)', GC.x0 + 8, gy(7.3) + 4, { couleur: 'faible', taille: 13, duree: .3 }); c.texte('temps (h)', gx(31.5), GC.y0 + 34, { couleur: 'faible', taille: 13, align: 'right', duree: .3 });
+  c.direct(() => {
+    const x = c.ctx; x.save(); x.strokeStyle = '#f8fafc'; x.lineWidth = 2.6; x.beginPath(); const n = Math.ceil(hMax * 8);
+    for (let i = 0; i <= n; i++) { const h = hMax * i / Math.max(1, n); x[i ? 'lineTo' : 'moveTo'](gx(h), gy(ADN(h))); } x.stroke(); x.restore();
+    for (const [nom, [a, b]] of Object.entries(SEGS)) if (t >= MCB[nom] - 1.2 && t < MCB[nom] + 1.6) { x.save(); x.strokeStyle = 'rgba(250,204,21,.85)'; x.lineWidth = 6; x.globalAlpha = .55; x.beginPath(); for (let h = a; h <= b + 1e-6; h += .1) x[h === a ? 'moveTo' : 'lineTo'](gx(h), gy(ADN(h))); x.stroke(); x.restore(); }
+  });
+  c.repere('courbe', GC.x0, gy(6.5), gx(30) - GC.x0, GC.y0 - gy(6.5), 'la courbe');
+  c.repere('axe_temps', GC.x0, GC.y0 - 4, gx(31.5) - GC.x0, 24, 'l’axe du temps (h)'); c.repere('axe_adn', GC.x0 - 30, gy(7.3), 34, GC.y0 - gy(7.3), 'l’axe de la quantité d’ADN (UA)');
+  c.repere('palier_g1', gx(0), gy(3) - 8, gx(8) - gx(0), 16, 'de 0 à 8 h'); c.repere('montee_s', gx(8), gy(6) - 4, gx(14) - gx(8), gy(3) - gy(6) + 8, 'de 8 à 14 h'); c.repere('palier_g2', gx(14), gy(6) - 8, gx(19) - gx(14), 16, 'de 14 à 19 h'); c.repere('chute_m', gx(19) - 4, gy(6) - 4, 20, gy(3) - gy(6) + 8, 'de 19 à 20 h');
+  if (k.ecrit(c, 'ax', MCB.lecture_axes - 1.0)) {
+    c.ligne(GC.x0, gy(3), gx(31), gy(3), { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] }); c.ligne(GC.x0, gy(6), gx(31), gy(6), { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
+    k.T(c, 'q = 3 UA', gx(31) + 6, gy(3) + 5, { couleur: 'jaune', taille: 14 }); k.T(c, '2q = 6 UA', gx(31) + 6, gy(6) + 5, { couleur: 'jaune', taille: 14 });
+    k.T(c, '1 graduation = 4 h', 560, 160, { couleur: 'faible', taille: 13 });
+  }
+  if (k.ecrit(c, 'desc', MCB.decrire_g1 - 1.0)) k.T(c, 'Description :', 30, 262, { couleur: 'cyan', taille: 15 });
+  for (const [nom, txt, y] of REP) if (k.ecrit(c, nom, MCB[nom] - 1.0)) k.T(c, txt, 40, y, { couleur: 'blanc', taille: 14 });
+  if (k.ecrit(c, 'expl', MCB.expliquer - 1.6)) {
+    k.T(c, 'Explication :', 30, 370, { couleur: 'cyan', taille: 15 });
+    k.T(c, '8 à 14 h : réplication de l’ADN (phase S) ;', 140, 370, { couleur: 'vert', taille: 14 });
+    k.T(c, '19 à 20 h : répartition égale de l’ADN entre deux cellules filles (mitose).', 40, 392, { couleur: 'vert', taille: 14 });
+  }
+  if (t >= MCB.decrire_g1 - 1) c.repere('reponse', 24, 246, 700, 156, 'la réponse rédigée');
+}
+function voitCourbe(k) {
+  const t = k.t, m = ['Document d’examen : courbe « quantité d’ADN (UA) en fonction du temps (h) », de 0 à 30 h : 3 UA de 0 à 8 h, montée de 3 à 6 UA de 8 à 14 h, 6 UA de 14 à 19 h, chute à 3 UA entre 19 et 20 h, puis 3 UA jusqu’à 28 h et nouvelle montée.'];
+  if (t >= MCB.lecture_axes - 1) m.push('Écrit : « q = 3 UA », « 2q = 6 UA », « 1 graduation = 4 h ».');
+  const d = REP.filter(([n]) => t >= MCB[n] - 1).map(([, s]) => s.replace('• ', ''));
+  if (d.length) m.push('Réponse écrite sous la courbe : « Description : ' + d.join(' ') + ' »');
+  for (const [nom, [a, b]] of Object.entries(SEGS)) if (t >= MCB[nom] - 1.2 && t < MCB[nom] + 1.6) m.push(`Le segment de ${a} à ${b} h est surligné en jaune.`);
+  if (t >= MCB.expliquer - 1.6) m.push('« Explication : 8 à 14 h : réplication de l’ADN (phase S) ; 19 à 20 h : répartition égale de l’ADN entre deux cellules filles (mitose). »');
+  return m;
+}
+
+/* ── Vue durées ─────────────────────────────────────────────────── */
+const MD = { tableau: 2.0, doublements: 4.6, duree_cycle: 6.6, pourcentages: 8.6, duree_g1: 10.6, duree_s: 13.0 };
+function dessinerDurees(c, k) {
+  const t = k.t;
+  c.texte('Calculer la durée du cycle et d’une phase', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('tableau', 30, 70, 290, 110, 'le tableau des cellules');
+  if (k.ecrit(c, 'tab', .4)) {
+    k.T(c, 'temps (h)', 50, 96, { couleur: 'faible', taille: 15 }); k.T(c, 'nombre de cellules', 160, 96, { couleur: 'faible', taille: 15 });
+    c.ligne(40, 106, 320, 106, { couleur: 'faible', largeur: 1.2 }); c.ligne(146, 76, 146, 176, { couleur: 'faible', largeur: 1.2 });
+    k.T(c, '0', 90, 136, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, '2,5·10³', 230, 136, { couleur: 'blanc', taille: 16, align: 'center' });
+    k.T(c, '40', 90, 166, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, '10·10³', 230, 166, { couleur: 'blanc', taille: 16, align: 'center' });
+  }
+  if (t >= MD.doublements - 1.4) c.repere('chaine', 30, 196, 320, 60, 'les doublements');
+  if (k.ecrit(c, 'dbl', MD.doublements - 1.4)) {
+    k.T(c, '2,5·10³', 40, 236, { couleur: 'blanc', taille: 16 }); c.fleche(104, 230, 150, 230, { couleur: 'orange', largeur: 1.6 }); k.T(c, '×2', 127, 220, { couleur: 'orange', taille: 14, align: 'center' });
+    k.T(c, '5·10³', 156, 236, { couleur: 'blanc', taille: 16 }); c.fleche(204, 230, 250, 230, { couleur: 'orange', largeur: 1.6 }); k.T(c, '×2', 227, 220, { couleur: 'orange', taille: 14, align: 'center' });
+    k.T(c, '10·10³', 256, 236, { couleur: 'blanc', taille: 16 });
+    k.T(c, '2 doublements = 2 cycles', 40, 266, { couleur: 'orange', taille: 15 });
+  }
+  if (t >= MD.duree_cycle - 1.2) c.repere('cycle', 30, 280, 330, 34, 'la durée d’un cycle');
+  if (k.ecrit(c, 'cyc', MD.duree_cycle - 1.2)) k.T(c, 'durée d’un cycle = 40 h / 2 = 20 h', 40, 302, { couleur: 'jaune', taille: 17 });
+  if (k.ecrit(c, 'pct', MD.pourcentages - 1.4)) {
+    c.repere('phases', 400, 70, 340, 110, 'les pourcentages des phases');
+    ['G1', 'S', 'G2', 'M'].forEach((p, i) => { k.T(c, p, 450 + i * 80, 96, { couleur: ['vert', 'orange', 'bleu', 'violet'][i], taille: 16, align: 'center' }); k.T(c, ['45 %', '?', '20 %', '5 %'][i], 450 + i * 80, 136, { couleur: 'blanc', taille: 16, align: 'center' }); });
+    c.ligne(410, 106, 740, 106, { couleur: 'faible', largeur: 1.2 }); k.T(c, '(cycle de 20 h)', 575, 166, { couleur: 'faible', taille: 14, align: 'center' });
+  }
+  if (k.ecrit(c, 'g1', MD.duree_g1 - 1.4)) { k.T(c, 'G1 = 45 % × 20 h = 9 h', 410, 220, { couleur: 'vert', taille: 17 }); k.T(c, 'G2 = 20 % × 20 h = 4 h ; M = 5 % × 20 h = 1 h', 410, 248, { couleur: 'blanc', taille: 15 }); }
+  if (k.ecrit(c, 's', MD.duree_s - 1.6)) { k.T(c, 'S = 20 − (9 + 4 + 1) = 6 h', 410, 284, { couleur: 'orange', taille: 17 }); c.repere('resultat', 404, 200, 340, 100, 'les durées des phases'); }
+}
+function voitDurees(k) {
+  const t = k.t, m = ['Tableau : à 0 h, 2,5·10³ cellules ; à 40 h, 10·10³ cellules.'];
+  if (t >= MD.doublements - 1.4) m.push('Écrit : 2,5·10³ ×2 → 5·10³ ×2 → 10·10³ ; « 2 doublements = 2 cycles ».');
+  if (t >= MD.duree_cycle - 1.2) m.push('« durée d’un cycle = 40 h / 2 = 20 h ».');
+  if (t >= MD.pourcentages - 1.4) m.push('Second tableau : G1 45 %, S ?, G2 20 %, M 5 % (cycle de 20 h).');
+  if (t >= MD.duree_g1 - 1.4) m.push('« G1 = 45 % × 20 h = 9 h » ; « G2 = 20 % × 20 h = 4 h ; M = 5 % × 20 h = 1 h ».');
+  if (t >= MD.duree_s - 1.6) m.push('« S = 20 − (9 + 4 + 1) = 6 h ».');
+  return m;
+}
+
+/* ── Vue restitution ────────────────────────────────────────────── */
+const MRS = { carte: 3.0, elimine_a: 5.0, elimine_c: 7.0, elimine_d: 9.0, reponse: 11.0 };
+const OPTS = [['a', 'à une chromatide et condensé', 'condensé : c’est en mitose'], ['b', 'à une chromatide et non condensé', ''], ['c', 'à deux chromatides et non condensé', 'deux chromatides : après la phase S'], ['d', 'à deux chromatides et condensé', 'en prophase ou en métaphase']];
+function dessinerRestitution(c, k) {
+  const t = k.t;
+  c.texte('Restitution : un QCM, leurre par leurre', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('carte', 30, 64, 700, 300, 'la carte du QCM');
+  if (k.ecrit(c, 'carte', .4)) { c.rect(30, 64, 700, 300, { couleur: 'faible', largeur: 1.4, arrondi: 10 }); k.T(c, 'Au cours de la phase G1, chaque chromosome est :', 50, 104, { couleur: 'jaune', taille: 18 }); OPTS.forEach(([l, s], i) => k.T(c, `${l}) ${s}`, 70, 154 + i * 50, { couleur: 'blanc', taille: 17 })); }
+  OPTS.forEach(([l], i) => c.repere(l, 60, 134 + i * 50, 360, 28, 'la proposition ' + l));
+  const elim = { a: MRS.elimine_a, c: MRS.elimine_c, d: MRS.elimine_d };
+  OPTS.forEach(([l, s, why], i) => {
+    if (!(l in elim)) return;
+    if (k.ecrit(c, 'el' + l, elim[l] - 1.0)) { const y = 148 + i * 50, w = c.largeurTexte(`${l}) ${s}`, 17); c.ligne(64, y, 74 + w, y, { couleur: 'rouge', largeur: 2.4 }); k.T(c, why, 450, y + 6, { couleur: 'rouge', taille: 14 }); }
+  });
+  if (k.ecrit(c, 'rep', MRS.reponse - 1.0)) { const y = 154 + 50; c.rect(56, y - 24, c.largeurTexte(`b) ${OPTS[1][1]}`, 17) + 26, 34, { couleur: 'vert', largeur: 2.2, arrondi: 14 }); k.T(c, 'G1 : avant la réplication, ADN déroulé', 450, y + 6, { couleur: 'vert', taille: 14 }); k.T(c, 'Réponse : b', 380, 392, { couleur: 'vert', taille: 18, align: 'center' }); }
+}
+function voitRestitution(k) {
+  const t = k.t, m = ['Carte de QCM : « Au cours de la phase G1, chaque chromosome est : a) à une chromatide et condensé ; b) à une chromatide et non condensé ; c) à deux chromatides et non condensé ; d) à deux chromatides et condensé ».'];
+  if (t >= MRS.elimine_a - 1) m.push('a) barrée en rouge : « condensé : c’est en mitose ».');
+  if (t >= MRS.elimine_c - 1) m.push('c) barrée : « deux chromatides : après la phase S ».');
+  if (t >= MRS.elimine_d - 1) m.push('d) barrée : « en prophase ou en métaphase ».');
+  if (t >= MRS.reponse - 1) m.push('b) entourée en vert : « G1 : avant la réplication, ADN déroulé » ; écrit « Réponse : b ».');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_documents', titre: 'Documents du chapitre', graine: 53,
+  vues: {
+    ouverture: { titre: 'Pourquoi ressembles-tu à tes parents ?', fin: 13.6, moments: MO, dessiner: dessinerOuverture, voit: voitOuverture,
+      motifs: { parents: 'les parents et leur enfant', cellule_oeuf: 'au départ, une seule cellule : la cellule-œuf', q1: 'question 1 : où est l’information génétique ?', q2: 'question 2 : comment passe-t-elle d’une cellule à ses cellules filles ?', q3: 'question 3 : de quoi est-elle faite ?', q4: 'question 4 : comment se copie-t-elle ?' },
+      conclusion: 'Quatre questions pour le chapitre.', texte: 'Ouverture : parents, enfant, cellule-œuf ; quatre questions : où, comment se transmet-elle, de quoi est-elle faite, comment se copie-t-elle.',
+      explication: [{ repere: 'cellule_oeuf', texte: 'Tout ton corps vient d’une seule cellule, la cellule-œuf.' }, { repere: 'q1', texte: 'Première question : où est l’information génétique ?' }] },
+    courbe: { titre: 'Décrire et expliquer une courbe', fin: 16.2, moments: MCB, dessiner: dessinerCourbe, voit: voitCourbe,
+      motifs: { document: 'le document : la quantité d’ADN en fonction du temps', lecture_axes: 'on lit les axes : q = 3 UA, 2q = 6 UA', decrire_g1: 'de 0 à 8 h : constante, 3 UA', decrire_s: 'de 8 à 14 h : de 3 à 6 UA, elle double', decrire_g2: 'de 14 à 19 h : constante, 6 UA', decrire_m: 'de 19 à 20 h : chute de 6 à 3 UA', expliquer: 'l’explication : réplication, puis répartition' },
+      conclusion: 'Décrire avec les valeurs, puis expliquer chaque variation par sa cause.', texte: 'Courbe d’examen de la quantité d’ADN (0–30 h) et sa réponse rédigée : description avec les valeurs, puis explication (réplication en S, répartition à la mitose).',
+      explication: [{ repere: 'axe_adn', texte: 'On lit d’abord les axes.' }, { repere: 'montee_s', texte: 'De 8 à 14 h, la quantité double : c’est la réplication.' }, { repere: 'chute_m', texte: 'De 19 à 20 h, elle revient à 3 UA : la mitose.' }, { repere: 'reponse', texte: 'La réponse : décrire avec les valeurs, puis expliquer.' }] },
+    durees: { titre: 'Durée du cycle et des phases', fin: 14.2, moments: MD, dessiner: dessinerDurees, voit: voitDurees,
+      motifs: { tableau: 'le tableau : 2,5·10³ cellules à 0 h, 10·10³ à 40 h', doublements: 'deux doublements : deux cycles', duree_cycle: 'un cycle dure 40 h / 2 = 20 h', pourcentages: 'les pourcentages de cellules dans chaque phase', duree_g1: 'G1 = 45 % × 20 h = 9 h', duree_s: 'S = 20 − (9 + 4 + 1) = 6 h' },
+      conclusion: 'Cycle de 20 h ; G1 9 h, S 6 h, G2 4 h, M 1 h.', texte: 'Calcul : 2,5·10³ → 10·10³ cellules en 40 h = 2 doublements = 2 cycles, donc un cycle = 20 h ; durée d’une phase = pourcentage × durée du cycle ; S = 20 − (9 + 4 + 1) = 6 h.',
+      explication: [{ repere: 'chaine', texte: 'Deux doublements : deux cycles.' }, { repere: 'cycle', texte: 'Un cycle dure 40 h divisé par 2, soit 20 h.' }, { repere: 'resultat', texte: 'La durée d’une phase : pourcentage × durée du cycle.' }] },
+    restitution: { titre: 'Restitution : QCM', fin: 12, moments: MRS, dessiner: dessinerRestitution, voit: voitRestitution,
+      motifs: { carte: 'la question : en G1, le chromosome est…', elimine_a: 'a est faux : condensé, c’est en mitose', elimine_c: 'c est faux : deux chromatides, c’est après la phase S', elimine_d: 'd est faux : prophase ou métaphase', reponse: 'la réponse : b, une chromatide et non condensé' },
+      conclusion: 'G1 : chromosome à une chromatide, non condensé.', texte: 'QCM : en G1, chaque chromosome est à une chromatide et non condensé (b) ; a, c, d éliminés avec leur raison.',
+      explication: [{ repere: 'a', texte: 'Condensé : c’est en mitose, pas en G1.' }, { repere: 'c', texte: 'Deux chromatides : seulement après la phase S.' }, { repere: 'b', texte: 'En G1 : une chromatide, ADN déroulé.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

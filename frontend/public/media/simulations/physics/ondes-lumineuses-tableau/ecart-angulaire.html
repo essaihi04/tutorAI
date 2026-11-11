@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Écart angulaire — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Montage vu de dessus : un laser éclaire une fente, la lumière s’étale jusqu’à l’écran ; l’angle θ va du centre de la tache centrale à son bord ; à droite, le triangle rectangle seul et tan θ = L/(2D)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Écart angulaire θ (cours « Propagation d’une onde lumineuse », 10 novembre 2026).
+ * Vue « Montage vu de dessus » : laser, fente de largeur a, éventail de lumière, écran à la distance D, tache centrale de
+ * largeur L. Vue « Le triangle seul » : fente – centre de la tache – bord de la tache, θ au sommet, L/2 en face, D collé.
+ * Physique exacte : θ = λ/a (rad), L = 2λD/a, L/2 = θ·D, tan θ calculé (≈ θ). Le dessin agrandit les distances
+ * transverses (3000 px/m contre 80 px/m le long de D) : l’angle est exagéré pour l’œil, et c’est écrit au tableau.
+ * La lumière est peinte (salle sombre dans le cadre de la vue, faisceau avec halo, tache en dégradé d’intensité,
+ * intensité en (sin u / u)², affichée en racine pour l’œil) ; la craie écrit lettres, cotes, rayons, arcs.
+ * Vues (?vue=) : montage (défaut, s’écrit depuis le début), triangle (s’ouvre figée sur tan_ecrit, puis petit_angle, egalite).
+ * Un seul bouton ; l’écran se glisse (D change, L change, θ ne change pas).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = demande === 'triangle' ? 'triangle' : 'montage';
+const RM = { x: 8, y: 44, w: 440, h: 368 }, RT = { x: 456, y: 44, w: 296, h: 368 };
+const YC = 222, YH = 104, YB = 340, XS = 110, PXD = 80, PXY = 3000;      // px par mètre le long de D, et en travers (exagéré)
+const TA = { x: 474, y: 214 }, DT = 200;                                   // triangle seul : sommet (fente) et côté adjacent (px)
+const S = { D: 2.0, a: 0.10, lam: 650, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+let M = {}, MM = {};
+const VITESSE = 1.5;                               // horloge de l’écriture (s de scène par s réelle)
+
+/* ── Physique et formats ─────────────────────────────────────────────── */
+const theta = () => (S.lam * 1e-9) / (S.a * 1e-3);           // rad
+const Lm = () => 2 * theta() * S.D;                           // m
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sup = n => String(n).split('').map(ch => SUP[ch]).join('');
+function sci(v, d = 1) {
+  let e = Math.floor(Math.log10(Math.abs(v))), m = v / 10 ** e;
+  if (+m.toFixed(d) >= 10) { e += 1; m = v / 10 ** e; }
+  return `${fr(m, d)}·10${sup(e)}`;
+}
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 2,60 → 2,6 ; 0,65 → 0,65
+function couleurDe(nm) {
+  const l = clamp(nm, 380, 780); let r = 0, g = 0, b = 0;
+  if (l < 440) { r = (440 - l) / 60; b = 1; } else if (l < 490) { g = (l - 440) / 50; b = 1; } else if (l < 510) { g = 1; b = (510 - l) / 20; }
+  else if (l < 580) { r = (l - 510) / 70; g = 1; } else if (l < 645) { r = 1; g = (645 - l) / 65; } else r = 1;
+  const f = l < 420 ? .45 + .55 * (l - 380) / 40 : l > 700 ? .45 + .55 * (780 - l) / 80 : 1;      // l’œil voit moins les bords du visible
+  return [r, g, b].map(v => Math.round(255 * Math.pow(v * f, .8)));
+}
+const nomCouleur = nm => (nm < 450 ? 'violet' : nm < 490 ? 'bleu' : nm < 560 ? 'vert' : nm < 590 ? 'jaune' : nm < 625 ? 'orange' : 'rouge');
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const sinc2 = u => (Math.abs(u) < 1e-6 ? 1 : (Math.sin(Math.PI * u) / (Math.PI * u)) ** 2);
+
+/* Géométrie du montage (px du cadre). */
+function geo() {
+  const XE = XS + S.D * PXD, hVrai = PXY * theta() * S.D, h = Math.min(hVrai, YC - YH - 4);
+  return { XE, h, g: 2 + S.a * 25, Ht: h * DT / (XE - XS) };
+}
+
+/* ── Peinture : salle sombre, laser, plaques de la fente, faisceau, éventail, écran et tache ───────────── */
+function cheminRond(ctx, R, r = 10) {
+  ctx.beginPath(); ctx.moveTo(R.x + r, R.y); ctx.arcTo(R.x + R.w, R.y, R.x + R.w, R.y + R.h, r); ctx.arcTo(R.x + R.w, R.y + R.h, R.x, R.y + R.h, r);
+  ctx.arcTo(R.x, R.y + R.h, R.x, R.y, r); ctx.arcTo(R.x, R.y, R.x + R.w, R.y, r); ctx.closePath();
+}
+function salle(ctx, R) {
+  const g = ctx.createRadialGradient(R.x + R.w * .55, R.y + R.h * .5, 20, R.x + R.w * .55, R.y + R.h * .5, R.w * .8);
+  g.addColorStop(0, 'rgba(24,28,36,.93)'); g.addColorStop(1, 'rgba(6,8,12,.96)');
+  ctx.fillStyle = g; ctx.fillRect(R.x, R.y, R.w, R.h);
+}
+function laser(ctx, x, y, w, h, col) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#a7afb8'); g.addColorStop(.35, '#5d656e'); g.addColorStop(1, '#262a30');
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(x + 3, y + h, w, 4);                     // ombre portée
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 4); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 3, y + 1.5); ctx.lineTo(x + w - 3, y + 1.5); ctx.stroke();
+  ctx.fillStyle = '#16191d'; ctx.fillRect(x + w, y + h / 2 - 5, 5, 10);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rgba(col, .9); ctx.shadowColor = rgba(col, 1); ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.arc(x + w + 4, y + h / 2, 2, 0, 7); ctx.fill(); ctx.restore();
+}
+function plaque(ctx, x, y1, y2, w, bordEnBas) {
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, '#3c4249'); g.addColorStop(.45, '#7b838c'); g.addColorStop(1, '#2b3036');
+  ctx.fillStyle = g; ctx.fillRect(x, y1, w, y2 - y1);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.2;                           // l’arête de la lèvre, éclairée
+  const yb = bordEnBas ? y2 - .6 : y1 + .6; ctx.beginPath(); ctx.moveTo(x, yb); ctx.lineTo(x + w, yb); ctx.stroke();
+}
+function faisceau(ctx, x1, y1, x2, y2, col, k = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [w, a] of [[16, .05], [9, .12], [4.5, .32], [2.2, .8]]) { ctx.strokeStyle = rgba(col, a); ctx.lineWidth = w * k; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = .8 * k; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.restore();
+}
+/* Éventail : du trou de la fente jusqu’à l’écran ; lumineux jusqu’aux premières extinctions, pâle au-delà (taches secondaires). */
+function eventail(ctx, G, col, p) {
+  const x2 = XS + (G.XE - XS) * p, h2 = G.g + (G.h - G.g) * p;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const lg = ctx.createLinearGradient(XS, 0, x2, 0); lg.addColorStop(0, rgba(col, .42)); lg.addColorStop(1, rgba(col, .16));
+  ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(XS + 4, YC - G.g); ctx.lineTo(x2, YC - h2); ctx.lineTo(x2, YC + h2); ctx.lineTo(XS + 4, YC + G.g); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = rgba(col, .05); const h3 = G.g + (2.6 * G.h - G.g) * p;
+  ctx.beginPath(); ctx.moveTo(XS + 4, YC - G.g); ctx.lineTo(x2, YC - h3); ctx.lineTo(x2, YC + h3); ctx.lineTo(XS + 4, YC + G.g); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function ecran(ctx, XE) {
+  const g = ctx.createLinearGradient(XE, 0, XE + 7, 0); g.addColorStop(0, '#d8d5cb'); g.addColorStop(1, '#8f8c83');
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(XE + 7, YH + 3, 3, YB - YH);
+  ctx.fillStyle = g; ctx.globalAlpha = .8; ctx.fillRect(XE, YH, 7, YB - YH); ctx.globalAlpha = 1;
+}
+/* La tache sur la face éclairée de l’écran : intensité (sin u / u)², u = y / (demi-largeur) ; racine pour l’œil. */
+function tache(ctx, XE, h, col, k) {
+  if (k <= 0) return; h = Math.max(h, 1.5);
+  const y0 = Math.max(YH, YC - 3.6 * h), y1 = Math.min(YB, YC + 3.6 * h), N = 72;
+  const grad = (alpha) => { const lg = ctx.createLinearGradient(0, y0, 0, y1); for (let i = 0; i <= N; i++) { const y = y0 + (y1 - y0) * i / N; lg.addColorStop(i / N, rgba(col, alpha * Math.sqrt(sinc2((y - YC) / h)))); } return lg; };
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = grad(.3 * k); ctx.fillRect(XE - 12, y0, 12, y1 - y0);                    // halo devant l’écran
+  ctx.fillStyle = grad(1 * k); ctx.fillRect(XE - 1, y0, 5, y1 - y0);
+  ctx.fillStyle = `rgba(255,255,255,${.55 * k})`; ctx.fillRect(XE, YC - h * .35, 2, h * .7); // cœur blanchi de la tache
+  ctx.restore();
+}
+function peindreMontage(ctx, p) {
+  const G = geo(), col = couleurDe(S.lam);
+  ctx.save(); cheminRond(ctx, RM); ctx.clip(); salle(ctx, RM);
+  laser(ctx, 18, YC - 13, 54, 26, col);
+  ecran(ctx, G.XE);
+  const p1 = clamp(p / .45), p2 = clamp((p - .45) / .45), p3 = clamp((p - .9) / .1);
+  if (p1 > 0) faisceau(ctx, 77, YC, 77 + (XS - 77) * p1, YC, col);
+  if (p2 > 0) eventail(ctx, G, col, p2);
+  tache(ctx, G.XE, G.h, col, p3);
+  plaque(ctx, XS - 4, YH, YC - G.g, 8, true); plaque(ctx, XS - 4, YC + G.g, YB, 8, false);
+  ctx.restore();
+}
+
+/* ── Dessin : l’écriture suit l’horloge de la scène (S.t) ; chaque moment = fin de l’écriture de sa phase ── */
+const marque = (c, nom) => { MM[nom] = c.cur; };
+function dessiner(c) {
+  scene.cadre(23); MM = {};
+  const G = geo(), XE = G.XE, h = G.h, col = couleurDe(S.lam), th = theta(), L = Lm();
+  const C = { x: TA.x + DT, y: TA.y }, B = { x: TA.x + DT, y: TA.y - G.Ht };
+  // 1. La lumière (peinte), puis les deux vues et leurs étiquettes.
+  const t0 = c.cur; c.pause(1.4); const pl = clamp((c.t - t0) / 1.4);
+  c.direct(() => peindreMontage(c.ctx, pl));
+  c.texte('Montage vu de dessus', RM.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RM.x, RM.y, RM.w, RM.h, { couleur: 'tresfaible', arrondi: 10 });
+  c.texte('Le triangle seul', RT.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RT.x, RT.y, RT.w, RT.h, { couleur: 'tresfaible', arrondi: 10 });
+  c.texte('angle exagéré pour l’œil', RM.x + 10, 70, { couleur: 'faible', taille: 14 });
+  c.texte('laser', 45, YC - 20, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte('fente', XS, 96, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte('écran', XE + 3, 96, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.cote(XS, 368, XE, 368, `D = ${fr(S.D, 1)} m`, { couleur: 'cyan', taille: 15 });
+  marque(c, 'montage');
+  // 2. Le rayon vers le centre de la tache.
+  c.pause(.4);
+  c.ligne(XS, YC, XE, YC, { couleur: 'blanc', largeur: 2 }); c.point(XE, YC, 4, 'jaune');
+  c.texte('vers le centre', XS + 12, YC + 20, { couleur: 'blanc', taille: 14 });
+  marque(c, 'rayon_centre');
+  // 3. Le rayon vers le bord de la tache centrale (première extinction).
+  c.pause(.4);
+  c.ligne(XS, YC, XE, YC - h, { couleur: 'jaune', largeur: 2 }); c.point(XE, YC - h, 4, 'rose');
+  const yb = clamp(Math.min(YC - h - 10, YC - 30), 102, 400);       // au-dessus du rayon, jamais sur l’écran ni sur « fente »
+  const xb = XS + 10 + clamp(XE - XS - 120, 0, 30), mb = XE - xb - 8;   // entre la fente et l’écran, réduit si l’écran est proche
+  c.texte('vers le bord', xb, yb - 16, { couleur: 'jaune', taille: 14, max: mb });
+  c.texte('(1re extinction)', xb, yb, { couleur: 'jaune', taille: 14, max: mb });
+  marque(c, 'rayon_bord');
+  // 4. L’angle θ, entre les deux rayons : du centre au bord.
+  c.pause(.4);
+  const al = Math.atan2(h, XE - XS), r = .55 * (XE - XS);
+  c.courbe(u => [XS + r * Math.cos(-al * u), YC + r * Math.sin(-al * u)], 14, { couleur: 'orange', largeur: 2.2 });
+  c.texte('θ', XS + (r + 13) * Math.cos(al / 2), al > .14 ? YC - (r + 13) * Math.sin(al / 2) + 6 : YC - (r + 13) * Math.sin(al) - 6, { couleur: 'orange', taille: 19, align: 'center' });
+  c.texte('θ : du centre au bord (pas d’un bord à l’autre)', RM.x + 10, 400, { couleur: 'orange', taille: 15, max: 420 });
+  marque(c, 'angle_theta');
+  // 5. La demi-largeur L/2 (du centre au bord), et L entière en pointillé pour comparer.
+  c.pause(.4);
+  c.cote(XE + 26, YC, XE + 26, YC - h, '', { couleur: 'rose' });
+  c.texte(`L/2 = ${fx(L * 50)} cm`, XE + 32, YC - h / 2 + 5, { couleur: 'rose', taille: 14 });
+  c.ligne(XE + 12, YC - h, XE + 12, YC + h, { couleur: 'faible', largeur: 1.8, pointille: [5, 5] });
+  c.ligne(XE + 7, YC - h, XE + 17, YC - h, { couleur: 'faible', largeur: 1.6, duree: .05 }); c.ligne(XE + 7, YC + h, XE + 17, YC + h, { couleur: 'faible', largeur: 1.6, duree: .05 });
+  c.texte(`L = ${fx(L * 100)} cm`, XE + 20, YC + Math.max(h / 2, 22) + 5, { couleur: 'faible', taille: 14 });
+  marque(c, 'demi_largeur');
+  // 6. Le triangle sort du montage et va dans « Le triangle seul » (agrandi, même angle).
+  c.pause(.3);
+  const t6 = c.cur; c.pause(1.3); const pg = clamp((c.t - t6) / 1.3);
+  if (pg > 0 && pg < 1) c.direct(() => {
+    const e = pg * pg * (3 - 2 * pg), lerp = (p, q) => [p[0] + (q[0] - p[0]) * e, p[1] + (q[1] - p[1]) * e];
+    c.trait([lerp([XS, YC], [TA.x, TA.y]), lerp([XE, YC], [C.x, C.y]), lerp([XE, YC - h], [B.x, B.y])], { ferme: true, couleur: 'jaune', largeur: 2.4 });
+  });
+  c.trait([[TA.x, TA.y], [C.x, C.y], [B.x, B.y]], { ferme: true, couleur: 'jaune', largeur: 2.4, duree: .5 });
+  c.trait([[C.x - 12, C.y], [C.x - 12, C.y - 12], [C.x, C.y - 12]], { couleur: 'blanc', largeur: 1.8, duree: .15 });
+  const at = Math.atan2(G.Ht, DT), rt = 66;
+  c.courbe(u => [TA.x + rt * Math.cos(-at * u), TA.y + rt * Math.sin(-at * u)], 14, { couleur: 'orange', largeur: 2.2 });
+  c.texte('θ', TA.x + (rt + 14) * Math.cos(at / 2), at > .14 ? TA.y - (rt + 14) * Math.sin(at / 2) + 6 : TA.y - (rt + 14) * Math.sin(at) - 6, { couleur: 'orange', taille: 19, align: 'center' });
+  const mid = Math.min(TA.y - G.Ht / 2, TA.y - 34);
+  c.texte('L/2', C.x + 8, mid - 8, { couleur: 'rose', taille: 17 });
+  c.texte(`= ${fx(L * 50)} cm`, C.x + 8, mid + 9, { couleur: 'rose', taille: 14 });
+  c.texte('côté opposé', C.x + 8, mid + 25, { couleur: 'faible', taille: 13 });
+  c.texte(`D = ${fr(S.D, 1)} m`, TA.x + DT / 2, TA.y + 24, { couleur: 'cyan', taille: 16, align: 'center' });
+  c.texte('côté adjacent', TA.x + DT / 2, TA.y + 42, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('fente', TA.x, TA.y + 22, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('centre', C.x, C.y + 22, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('bord', B.x - 6, B.y - 8, { couleur: 'faible', taille: 13, align: 'right' });
+  marque(c, 'triangle_isole');
+  // 7. tan θ dans le triangle.
+  c.pause(.4);
+  c.texte('tan θ = côté opposé / côté adjacent', RT.x + 10, 288, { couleur: 'blanc', taille: 16, max: 280 });
+  c.texte('tan θ = (L/2)/D = L/(2D)', RT.x + 10, 316, { couleur: 'jaune', taille: 20, max: 280 });
+  marque(c, 'tan_ecrit');
+  // 8. θ petit, en radian : tan θ ≈ θ.
+  c.pause(.5);
+  c.texte(`θ = ${sci(th)} rad ;  tan θ = ${sci(Math.tan(th))}`, RT.x + 10, 344, { couleur: 'blanc', taille: 16, max: 280 });
+  c.texte('θ petit, en radian : tan θ ≈ θ', RT.x + 10, 368, { couleur: 'vert', taille: 16, max: 280 });
+  c.texte('donc θ = L/(2D)', RT.x + 16, 396, { couleur: 'jaune', taille: 19 });
+  c.rect(RT.x + 8, 376, 138, 28, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  marque(c, 'petit_angle');
+  // 9. (vue triangle) L’égalité avec θ = λ/a.
+  if (vue === 'triangle') {
+    c.pause(.5);
+    c.texte('or θ = λ/a :', RT.x + 158, 386, { couleur: 'blanc', taille: 15 });
+    c.texte('λ/a = L/(2D)', RT.x + 164, 406, { couleur: 'vert', taille: 19 });
+    c.rect(RT.x + 156, 389, 104, 23, { couleur: 'vert', largeur: 1.6, arrondi: 6 });
+    marque(c, 'egalite');
+  }
+  c.pause(.8); marque(c, 'fin');
+  // Poignée de l’écran et repères (toujours déclarés : le tuteur peut les montrer à tout instant).
+  c.direct(() => {
+    c.cercle(XE + 3, YB + 10, 7, { couleur: 'jaune', largeur: 1.8 });
+    c.texte('⇔', XE + 14, YB + 15, { couleur: 'faible', taille: 13 });
+  });
+  const isole = c.t >= MM.triangle_isole;
+  c.repere('vue_montage', RM.x, RM.y, RM.w, RM.h, 'le montage vu de dessus');
+  c.repere('vue_triangle', RT.x, RT.y, RT.w, RT.h, 'le triangle seul');
+  c.repere('laser', 14, YC - 18, 66, 36, 'le laser');
+  c.repere('fente', XS - 12, YC - 40, 24, 80, `la fente : a = ${fr(S.a, 2)} mm`);
+  c.repere('ecran', XE - 6, YH, 20, YB - YH, 'l’écran');
+  c.repere('centre_tache', XE - 9, YC - 9, 18, 18, 'le centre de la tache');
+  c.repere('bord_tache', XE - 9, YC - h - 9, 18, 18, 'le bord de la tache centrale (1re extinction)');
+  c.repere('poignee_D', XE - 8, YB + 1, 30, 20, 'glisser l’écran : D change');
+  c.repere('L', XE + 6, YC - h - 4, 70, 2 * h + 26, `L = ${fx(L * 100)} cm`);
+  if (isole) {
+    c.repere('theta', TA.x - 4, TA.y - Math.max(30, G.Ht), 96, Math.max(30, G.Ht) + 6, `θ = ${sci(th)} rad`);
+    c.repere('L_sur_2', C.x - 6, B.y - 4, 84, G.Ht + 8, `L/2 = ${fx(L * 50)} cm (côté opposé)`);
+    c.repere('D', TA.x, TA.y - 6, DT, 54, `D = ${fr(S.D, 1)} m (côté adjacent)`);
+  } else {
+    c.repere('theta', XS - 4, YC - Math.max(30, h * .6), r + 30, Math.max(30, h * .6) + 6, `θ = ${sci(th)} rad`);
+    c.repere('L_sur_2', XE + 18, YC - h - 4, 100, h + 8, `L/2 = ${fx(L * 50)} cm`);
+    c.repere('D', XS, 348, XE - XS, 26, `D = ${fr(S.D, 1)} m`);
+  }
+  c.repere('angle_droit', C.x - 18, C.y - 18, 22, 22, 'l’angle droit (au centre de la tache)');
+  c.repere('formule_tan', RT.x + 4, 270, RT.w - 8, 140, 'tan θ = (L/2)/D = L/(2D)');
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;     // figée : l’image ne change plus, on cesse de la redessiner
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la scène (S.t) : le tuteur peut la figer sur un moment. */
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; dessiner(craie); S.t = t; S.running = r; scene.sale = true; }
+const momentsListe = () => (vue === 'triangle'
+  ? ['rayon_centre', 'rayon_bord', 'angle_theta', 'demi_largeur', 'triangle_isole', 'tan_ecrit', 'petit_angle', 'egalite', 'fin']
+  : ['rayon_centre', 'rayon_bord', 'angle_theta', 'demi_largeur', 'triangle_isole', 'tan_ecrit', 'petit_angle', 'fin']);
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of ['montage', ...momentsListe()]) out[k] = +M[k].toFixed(2); return out; }
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;   // la craie écrit un peu plus vite que le kit
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { S.fait = true; S.pause = false; etiquette(); bulle($('feedback'), message(), 'good'); pont.noter('measurement', { theta_rad: theta() }); pont.emettre(); return true; }
+    S.pause = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; S.running = false; S.fait = true; S.pause = false; etiquette(); bulle($('feedback'), message(), 'good'); pont.noter('measurement', { theta_rad: theta() }); pont.emettre(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const message = () => `θ = λ/a = ${sci(theta())} rad ; tan θ = L/(2D) ≈ θ.`;
+const MOTIFS = {
+  montage: 'le montage est posé', rayon_centre: 'le rayon qui va au centre de la tache', rayon_bord: 'le rayon qui va au bord de la tache centrale (1re extinction)',
+  angle_theta: 'l’angle θ, du centre au bord de la tache', demi_largeur: 'la demi-largeur L/2, du centre au bord ; L entière en pointillé',
+  triangle_isole: 'le triangle seul : θ, L/2 en face, D collé à θ, l’angle droit', tan_ecrit: 'tan θ = (L/2)/D = L/(2D)',
+  petit_angle: 'θ petit, en radian : tan θ ≈ θ, donc θ = L/(2D)', egalite: 'λ/a = L/(2D)', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function phase() {
+  const t = S.t, L = momentsListe(); let derniere = null;
+  for (const k of ['montage', ...L]) if (t >= M[k] - 1e-6) derniere = k;
+  return derniere;
+}
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const th = theta(), L = Lm(), ph = phase(), t = S.t, k = n => t >= M[n] - 1e-6;
+  const m = [`Vue « ${vue} »${S.running ? ' (la scène s’écrit)' : S.fait ? ' (fin, tout est écrit)' : S.pause ? ' (arrêt sur image)' : ' (pas encore lancée)'}. Deux vues : « Montage vu de dessus » à gauche, « Le triangle seul » à droite.`,
+    `Valeurs : λ = ${S.lam} nm (${nomCouleur(S.lam)}), a = ${fr(S.a, 2)} mm, D = ${fr(S.D, 1)} m ; θ = λ/a = ${sci(th)} rad ; L = ${fx(L * 100)} cm ; L/2 = ${fx(L * 50)} cm. L’angle est exagéré pour l’œil (c’est écrit).`];
+  if (!ph) m.push('Le laser s’allume : le faisceau traverse la fente et s’étale en éventail jusqu’à l’écran.');
+  else {
+    m.push('Montage : laser, fente, éventail de lumière, écran avec la tache centrale peinte ; cote D sous le montage.');
+    if (k('rayon_centre')) m.push('Rayon blanc tracé de la fente au centre de la tache.');
+    if (k('rayon_bord')) m.push('Rayon jaune tracé de la fente au bord de la tache centrale (première extinction).');
+    if (k('angle_theta')) m.push('Arc orange et lettre θ entre les deux rayons, au niveau de la fente ; écrit : « θ : du centre au bord (pas d’un bord à l’autre) ».');
+    if (k('demi_largeur')) m.push(`Cote rose L/2 = ${fx(L * 50)} cm du centre au bord ; L = ${fx(L * 100)} cm entière en pointillé à côté.`);
+    if (k('triangle_isole')) m.push(`Le triangle seul est tracé à droite (agrandi, même angle) : θ au sommet (fente), L/2 = ${fx(L * 50)} cm en face (côté opposé), D = ${fr(S.D, 1)} m collé à θ (côté adjacent), angle droit au centre de la tache.`);
+    else if (t > M.demi_largeur + .3) m.push('Le triangle sort du montage vers « Le triangle seul ».');
+    if (k('tan_ecrit')) m.push('Écrit : tan θ = côté opposé / côté adjacent ; tan θ = (L/2)/D = L/(2D).');
+    if (k('petit_angle')) m.push(`Écrit : θ = ${sci(th)} rad ; tan θ = ${sci(Math.tan(th))} ; « θ petit, en radian : tan θ ≈ θ » ; donc θ = L/(2D) (encadré).`);
+    if (vue === 'triangle' && k('egalite')) m.push('Écrit : or θ = λ/a, donc λ/a = L/(2D) (encadré).');
+  }
+  m.push(`Si on glisse l’écran, D change et L change (L = 2λD/a), mais θ ne change pas (θ = λ/a ne dépend pas de D).`);
+  return m.join(' ');
+}
+
+/* ── Commandes ────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); bulle($('feedback'), 'Le laser s’allume…'); pont.noter('start', { D_m: S.D, a_mm: S.a, lambda_nm: S.lam }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = (p.moment in M && (p.moment === 'montage' || momentsListe().includes(p.moment))) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+/* Un réglage change la longueur des traits et des textes, donc les instants : la scène reste sur la même phase. */
+function garderPhase(changer) {
+  if (M.fin === undefined) calculer();
+  const t = S.t, ph = phase(), dt = ph ? t - M[ph] : t, finAvant = S.t >= M.fin - 1e-6;
+  changer(); M = {}; calculer();
+  if (finAvant) S.t = M.fin; else if (ph) { const L = ['montage', ...momentsListe()], suivant = M[L[L.indexOf(ph) + 1]] ?? M.fin; S.t = Math.min(M[ph] + dt, suivant - .01); } else S.t = Math.min(t, M.montage);
+  if (S.jusqua != null) { const nom = Object.keys(MOTIFS).find(k => MOTIFS[k] === S.motif); if (nom && M[nom] !== undefined) S.jusqua = M[nom]; }
+  scene.sale = true;
+}
+const pas = (v, min, max, step) => clamp(Math.round(v / step) * step, min, max);
+function setParameters(p) {
+  const avant = { D: S.D, a: S.a, lam: S.lam }, ok = v => v !== undefined && v !== null && v !== '' && Number.isFinite(+v);
+  garderPhase(() => {
+    if (ok(p.D_m)) S.D = +pas(+p.D_m, 1, 3, .1).toFixed(1);
+    if (ok(p.a_mm)) S.a = +pas(+p.a_mm, .05, .4, .01).toFixed(2);
+    if (ok(p.lambda_nm)) S.lam = Math.round(pas(+p.lambda_nm, 400, 800, 10));
+  });
+  const dD = S.D !== avant.D, dTheta = S.a !== avant.a || S.lam !== avant.lam;
+  bulle($('feedback'), `${dD ? `D = ${fr(S.D, 1)} m : L = ${fx(Lm() * 100)} cm` : `L = ${fx(Lm() * 100)} cm`} ; θ = ${sci(theta())} rad${dD && !dTheta ? ' (θ ne change pas)' : ''}.`);
+  pont.noter('set_parameters', { D_m: S.D, a_mm: S.a, lambda_nm: S.lam }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée : l’écran (D de 1,0 à 3,0 m, pas de 0,1 m). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py), XE = geo().XE; return Math.abs(x - XE - 3) < 15 && y > YH - 12 && y < YB + 22 ? 'ecran' : null; },
+  bouger: (id, px) => { const [x] = scene.local(px, 0), D = +pas((x - XS) / PXD, 1, 3, .1).toFixed(1); if (D !== S.D) garderPhase(() => { S.D = D; }); },
+  lacher: () => { bulle($('feedback'), `Écran à D = ${fr(S.D, 1)} m : L = ${fx(Lm() * 100)} cm, mais θ = ${sci(theta())} rad ne change pas.`); pont.noter('set_parameters', { D_m: S.D }); pont.emettre(); },
+});
+
+const EXPLICATIONS = {
+  montage: [
+    { repere: 'centre_tache', texte: 'Un premier rayon va de la fente au centre de la tache.' },
+    { repere: 'bord_tache', texte: 'Un second va au bord de la tache centrale : la première extinction.' },
+    { repere: 'theta', texte: 'L’écart angulaire θ est entre ces deux rayons : du centre au bord, pas d’un bord à l’autre.' },
+    { repere: 'L_sur_2', texte: 'Du centre au bord, c’est la moitié de la tache : L/2.' },
+    { repere: 'vue_triangle', texte: 'On sort le triangle rectangle : θ au sommet, L/2 en face, D collé à θ.' },
+    { repere: 'formule_tan', texte: 'tan θ = (L/2)/D = L/(2D) ; θ est petit et en radian, donc tan θ ≈ θ.' },
+  ],
+  triangle: [
+    { repere: 'angle_droit', texte: 'Le triangle est rectangle au centre de la tache.' },
+    { repere: 'formule_tan', texte: 'tan θ = (L/2)/D = L/(2D).' },
+    { repere: 'theta', texte: 'θ = 6,5·10⁻³ rad : très petit, donc tan θ ≈ θ et θ = L/(2D).' },
+    { repere: 'formule_tan', texte: 'Avec θ = λ/a : λ/a = L/(2D).' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'ondes_lumineuses_ecart_angulaire', version: '1.0', title: 'Écart angulaire θ — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: { D_m: '1.0..3.0 pas 0.1 (distance fente–écran, m ; L change, θ ne change pas)', a_mm: '0.05..0.40 pas 0.01 (largeur de la fente, mm)', lambda_nm: '400..800 pas 10 (longueur d’onde, nm)' },
+    set_time: { time_s: `0..${fr(M.fin, 1)} (arrêt sur cet instant de l’écriture, en s)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Écart angulaire θ : du centre de la tache centrale à la première extinction. Montage vu de dessus (laser, fente, écran à D) et triangle rectangle fente – centre – bord : tan θ = (L/2)/D = L/(2D) ; θ petit, en radian : tan θ ≈ θ, donc θ = L/(2D). Valeurs : λ = 650 nm, a = 0,10 mm, D = 2,0 m → θ = 6,5·10⁻³ rad, L = 2,6 cm, L/2 = 1,3 cm. Angle exagéré pour l’œil.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), phase: phase() || 'laser_allume',
+    parameters: { D_m: S.D, a_mm: S.a, lambda_nm: S.lam, theta_rad: +theta().toPrecision(3), L_cm: +(Lm() * 100).toFixed(2), L_sur_2_cm: +(Lm() * 50).toFixed(2), tan_theta: +Math.tan(theta()).toPrecision(3) },
+    moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+
+if (vue === 'triangle') {
+  // La diapositive de l’égalité : la scène s’ouvre figée sur tan_ecrit (tout ce qui précède est déjà écrit).
+  S.t = M.tan_ecrit; S.pause = true; etiquette(); scene.sale = true;
+  bulle($('feedback'), 'Arrêt sur image : ' + MOTIFS.tan_ecrit + '.'); pont.emettre();
+} else {
+  bulle($('feedback'), 'Le laser va s’allumer…');
+  setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+}
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

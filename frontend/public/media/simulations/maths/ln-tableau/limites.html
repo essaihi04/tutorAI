@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les limites de ln — fonctions logarithmiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : ln x tend vers +∞ lentement, plonge vers −∞ en 0 ; x l’emporte sur ln x ; x ln x tend vers 0 en 0 ; ln x/(x − 1) tend vers 1 en 1"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : les limites de ln.
+ * Vues : ?vue=lente | plonge | course (param x) | zero_plus | nombre_derive (param x).
+ * lente : zoom_10, zoom_100, zoom_1000, fois_dix, limite, branche ; repères zoom_1000, limite, branche.
+ * plonge : courbe, zoom_0, asymptote, limite, jamais ; repères asymptote, limite, jamais.
+ * course : trois_courbes, rapport, limite ; repères trois_courbes, rapport, limite.
+ * zero_plus : tableau, rectangle, signe, limite ; repères tableau, rectangle, limite.
+ * nombre_derive : courbe, secante, approche, limite, seconde ; repères secante, limite, seconde.
+ */
+const fr = MathsTableau.fr;
+const ln = Math.log;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** « lim » avec, dessous en petit, « x → a » ; puis la suite. Renvoie [x, y, w, h] (o.cadre : encadré). */
+function lim(c, x, y, sous, suite, o = {}) {
+  const t = o.taille || 21, ts = Math.max(13, Math.round(t * .66)), coul = o.couleur || 'blanc';
+  const wl = L(c, 'lim', t), ws = L(c, sous, ts), bw = Math.max(wl, ws), x2 = x + bw + 8;
+  const w = x2 - x + L(c, suite, t) + 18, h = t * 1.8 + 12, R = [x - 9, y - t - 5, w, h];
+  c.texte('lim', x + (bw - wl) / 2, y, { couleur: coul, taille: t });
+  c.texte(sous, x + bw / 2, y + t * .8, { couleur: coul, taille: ts, align: 'center', duree: .2 });
+  c.texte(suite, x2, y, { couleur: coul, taille: t });
+  if (o.cadre) c.rect(...R, { couleur: o.cadre, arrondi: 9, largeur: 1.7 });
+  return R;
+}
+/** Courbe y = f(x) sur [a ; b] jusqu’à la fraction p, échantillonnée finement près de 0 (ln y plonge). */
+function courbeF(c, G, f, a, b, p = 1, o = {}) {
+  if (p <= 0) return;
+  const xs = [], n = o.n || 220;
+  for (let i = 0; i <= n; i++) xs.push(a + (b - a) * i / n);
+  if (a > 0) for (let i = 0; i <= 90; i++) xs.push(a * Math.pow(b / a, i / 90));
+  xs.sort((u, v) => u - v);
+  const fin = a + (b - a) * Math.min(1, p), m = (G.ymax - G.ymin) * .03, lo = G.ymin - m, hi = G.ymax + m;
+  const morceaux = [[]]; let prec = null;
+  const cl = y => Math.min(hi, Math.max(lo, y));
+  for (const x of xs.filter(x => x <= fin).concat(p < 1 ? [fin] : [])) {
+    const y = f(x), ok = Number.isFinite(y) && y >= lo && y <= hi;
+    const cur = morceaux[morceaux.length - 1];
+    if (ok) { if (!cur.length && prec && Number.isFinite(prec[1])) cur.push([G.X(prec[0]), G.Y(cl(prec[1]))]); cur.push([G.X(x), G.Y(y)]); }
+    else if (cur.length) { if (Number.isFinite(y)) cur.push([G.X(x), G.Y(cl(y))]); morceaux.push([]); }
+    prec = [x, y];
+  }
+  for (const pts of morceaux) if (pts.length > 1) c.trait(pts, { tremble: .35, couleur: o.couleur || 'rouge', largeur: o.largeur ?? 2.6, pointille: o.pointille, alpha: o.alpha, duree: o.duree });
+}
+/** Pas de graduation « rond » pour une étendue donnée (au plus `n` graduations). */
+function pasRond(etendue, n = 5) { for (const p of [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]) if (etendue / p <= n) return p; return 2000; }
+const grads = (max, n = 5) => { const p = pasRond(max, n), out = []; for (let v = p; v <= max * 1.0001; v += p) out.push(v); return out; };
+/** Avancement d’une transition qui commence à t0 et dure d (instant courant T ; Infinity = tout écrit). */
+const phase = (T, t0, d) => (!Number.isFinite(t0) ? (Number.isFinite(T) ? 0 : 1) : Math.min(1, Math.max(0, (T - t0) / d)));
+const doux = p => (1 - Math.cos(Math.PI * p)) / 2;
+const deux = v => (v === 0 ? '0' : fr(+v.toPrecision(2), 6));   // deux chiffres significatifs
+
+/* Instants relevés à l’image précédente (comme les moments du kit). */
+const Q = { z1: Infinity, z2: Infinity, r0: Infinity, a0: Infinity };
+const DZ = 2.2, DR = 3.4, XR = 505;
+
+/* lente : le repère se dézoome de [0 ; 10] à [0 ; 1000]. */
+function repereLent(K, X) {
+  return K.axes({ x0: 56, y0: 55, w: 400, h: 290, xmin: -0.04 * X, xmax: X, ymin: -1.2, ymax: 7.6, gx: grads(X), gy: [1, 2, 3, 4, 5, 6, 7], origine: false });
+}
+/* course : le repère suit le curseur xc. */
+function cadreCourse(xc) {
+  const xmax = Math.max(10, 1.15 * xc), ymax = Math.max(10, 1.3 * Math.sqrt(xmax));
+  return { x0: 50, y0: 52, w: 410, h: 296, xmin: -0.04 * xmax, xmax, ymin: -0.08 * ymax, ymax, gx: grads(xmax), gy: grads(ymax, 4), origine: false };
+}
+const OPL = { x0: 66, y0: 52, w: 300, h: 296, xmin: -0.4, xmax: 4.2, ymin: -5.4, ymax: 2, gx: [1, 2, 3, 4], gy: [[1, '1'], [-1, '−1'], [-2.3, '−2,3'], [-4.6, '−4,6']], origine: false };
+const OND = { x0: 50, y0: 52, w: 400, h: 296, xmin: -0.3, xmax: 3.6, ymin: -1.4, ymax: 1.9, gx: [1, 2, 3], gy: [[1, '1'], [-1, '−1']] };
+
+MathsTableau.page({
+  id: 'ln_limites', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie du cours Fonctions logarithmiques : ln x tend vers +∞ en +∞, lentement (branche parabolique de direction l’axe des abscisses) ; vers −∞ en 0 à droite (asymptote x = 0) ; (ln x)/x tend vers 0 ; x ln x tend vers 0 en 0 ; (ln x)/(x − 1) tend vers 1 en 1',
+  vues: {
+    lente: {
+      titre: 'ln x → +∞, mais lentement',
+      dessiner(c, K) {
+        K.titre('ln x → +∞, mais lentement');
+        const T = Number.isFinite(c.t) ? c.t : Infinity;
+        const X = 10 * Math.pow(10, doux(phase(T, Q.z1, DZ))) * Math.pow(10, doux(phase(T, Q.z2, DZ)));
+        const G = repereLent(K, X);
+        K.anime(2, p => courbeF(c, G, ln, 0.3, X, p, { couleur: 'rouge', n: 320 }));
+        const PX = v => Math.min(G.X(v), G.x0 + G.w);   // pendant le premier calcul, un point encore hors du repère reste au bord
+        const point = (v, s, y) => {
+          c.point(PX(v), G.Y(ln(v)), 5, 'jaune');
+          c.ligne(PX(v), G.Y(ln(v)), G.X(0), G.Y(ln(v)), { couleur: 'jaune', largeur: 1.2, pointille: [4, 5] });
+          c.texte(s, XR, y, { couleur: 'jaune', taille: 20 });
+        };
+        point(10, 'ln 10 ≈ 2,3', 92);
+        K.marque('zoom_10');
+        c.pause(.4);
+        if (Number.isFinite(c.t)) Q.z1 = c.cur;
+        K.anime(DZ, () => {});
+        point(100, 'ln 100 ≈ 4,6', 124);
+        K.marque('zoom_100');
+        c.pause(.4);
+        if (Number.isFinite(c.t)) Q.z2 = c.cur;
+        K.anime(DZ, () => {});
+        point(1000, 'ln 1000 ≈ 6,9', 156);
+        c.repere('zoom_1000', G.x0, G.y0, G.w, G.h, 'la courbe sur [0 ; 1000]');
+        K.marque('zoom_1000');
+        c.pause(.4);
+        [[10, 0], [100, ln(10)], [1000, ln(100)]].forEach(([v, bas], i) => {
+          const xa = PX(v) + 10, haut = ln(v);
+          c.fleche(xa, G.Y(bas), xa, G.Y(haut) + 3, { couleur: 'orange', largeur: 1.8, tete: 7 });
+          const yl = (G.Y(bas) + G.Y(haut)) / 2 + 5;
+          if (i === 2) c.texte('+2,3', xa - 8, yl, { couleur: 'orange', taille: 15, align: 'right' });
+          else c.texte('+2,3', xa + 6, yl, { couleur: 'orange', taille: 15 });
+        });
+        c.texte('x × 10 ⇒ ln x + 2,3', XR, 200, { couleur: 'orange', taille: 20 });
+        K.marque('fois_dix');
+        c.pause(.4);
+        const r = lim(c, XR + 9, 252, 'x → +∞', 'ln x = +∞', { taille: 22, couleur: 'jaune', cadre: 'jaune' });
+        c.repere('limite', ...r, 'la limite de ln en +∞');
+        K.marque('limite');
+        c.pause(.4);
+        c.texte('branche parabolique de direction', XR - 20, 318, { couleur: 'cyan', taille: 16 });
+        c.texte('l’axe des abscisses', XR - 20, 340, { couleur: 'cyan', taille: 16 });
+        c.repere('branche', XR - 26, 300, 270, 48, 'branche parabolique de direction l’axe des abscisses');
+        K.marque('branche');
+      },
+      decrire: {
+        zoom_10: 'Un repère de 0 à 10 en x (de 0 à 7 en y) ; la courbe de ln en rouge ; le point d’abscisse 10 : « ln 10 ≈ 2,3 ».',
+        zoom_100: 'L’échelle se dézoome jusqu’à [0 ; 100] : la courbe s’aplatit ; « ln 100 ≈ 4,6 ».',
+        zoom_1000: 'L’échelle se dézoome jusqu’à [0 ; 1000] : la courbe paraît presque plate ; « ln 1000 ≈ 6,9 ».',
+        fois_dix: 'Trois flèches orange « +2,3 » entre les hauteurs ; écrit : « x × 10 ⇒ ln x + 2,3 ».',
+        limite: 'Encadré : « lim ln x = +∞ quand x → +∞ ».',
+        branche: 'Écrit : « branche parabolique de direction l’axe des abscisses ».',
+      },
+      motifs: { zoom_10: 'la courbe sur [0 ; 10]', zoom_100: 'sur [0 ; 100]', zoom_1000: 'sur [0 ; 1000]', fois_dix: 'x × 10, ln x + 2,3', limite: 'la limite en +∞', branche: 'la branche parabolique' },
+      explication: [
+        { repere: 'zoom_1000', texte: 'Même jusqu’à 1000, ln x n’atteint que 6,9 : elle monte, mais très lentement.' },
+        { repere: 'limite', texte: 'Elle dépasse pourtant n’importe quelle hauteur : sa limite en +∞ est +∞.' },
+        { repere: 'branche', texte: 'Elle s’aplatit : branche parabolique de direction l’axe des abscisses.' },
+      ],
+    },
+    plonge: {
+      titre: 'En 0 à droite : ln x → −∞',
+      dessiner(c, K) {
+        K.titre('En 0 à droite : ln x → −∞');
+        const G = K.axes(OPL), XC = 400;
+        K.anime(2, p => courbeF(c, G, ln, Math.exp(-5.5), 4.1, p, { couleur: 'rouge', n: 260 }));
+        c.texte('ln', G.X(3.9), G.Y(ln(3.9)) - 14, { couleur: 'rouge', taille: 22, align: 'center' });
+        K.marque('courbe');
+        c.pause(.4);
+        for (const [v, s] of [[0.1, 'x = 0,1 → −2,3'], [0.01, 'x = 0,01 → −4,6']]) {
+          c.pause(.2);
+          K.rond(G, v, ln(v), true, 'jaune');
+          c.texte(s, G.X(v) + 14, G.Y(ln(v)) + 6, { couleur: 'jaune', taille: 17 });
+        }
+        c.fleche(G.X(2.2), G.Y(-1.8), G.X(2.2), G.Y(-4.6), { couleur: 'orange', largeur: 1.6, tete: 8 });
+        c.texte('elle plonge', G.X(2.2) + 8, G.Y(-3.3), { couleur: 'orange', taille: 15 });
+        K.marque('zoom_0');
+        c.pause(.4);
+        c.ligne(G.X(0), G.Y(G.ymax), G.X(0), G.Y(G.ymin), { couleur: 'orange', largeur: 2.2, pointille: [8, 6] });
+        c.texte('asymptote verticale : x = 0', XC, 96, { couleur: 'orange', taille: 20 });
+        c.repere('asymptote', G.X(0) - 10, G.y0, 20, G.h, 'l’asymptote x = 0');
+        K.marque('asymptote');
+        c.pause(.4);
+        const r = lim(c, XC + 9, 160, 'x → 0^{+}', 'ln x = −∞', { taille: 23, couleur: 'jaune', cadre: 'jaune' });
+        c.repere('limite', ...r, 'la limite de ln en 0 à droite');
+        K.marque('limite');
+        c.pause(.4);
+        c.texte('la courbe ne coupe jamais', XC, 250, { couleur: 'blanc', taille: 19 });
+        c.texte('l’axe des ordonnées : 0 ∉ ]0 ; +∞[', XC, 278, { couleur: 'blanc', taille: 19 });
+        c.repere('jamais', XC - 6, 230, 330, 56, '0 n’est pas dans ]0 ; +∞[');
+        K.marque('jamais');
+      },
+      decrire: {
+        courbe: 'Un repère ; la courbe de ln en rouge, nommée.',
+        zoom_0: 'Deux points jaunes : « x = 0,1 → −2,3 » et « x = 0,01 → −4,6 » ; une flèche orange « elle plonge » : la courbe descend le long de l’axe des ordonnées.',
+        asymptote: 'La droite x = 0 en pointillés orange ; écrit : « asymptote verticale : x = 0 ».',
+        limite: 'Encadré : « lim ln x = −∞ quand x → 0⁺ ».',
+        jamais: 'Écrit : « la courbe ne coupe jamais l’axe des ordonnées : 0 ∉ ]0 ; +∞[ ».',
+      },
+      motifs: { courbe: 'la courbe de ln', zoom_0: 'les valeurs près de 0', asymptote: 'l’asymptote x = 0', limite: 'la limite en 0⁺', jamais: 'jamais sur l’axe' },
+      explication: [
+        { repere: 'asymptote', texte: 'Près de 0, la courbe colle à l’axe des ordonnées : asymptote verticale x = 0.' },
+        { repere: 'limite', texte: 'Quand x tend vers 0 à droite, ln x tend vers −∞.' },
+        { repere: 'jamais', texte: '0 n’est pas dans le domaine : la courbe ne touche jamais cet axe.' },
+      ],
+    },
+    course: {
+      titre: '(ln x)/x → 0 : x l’emporte',
+      params: { x: { min: 1, max: 1000, pas: 1, defaut: 1000, sens: 'position du curseur x (de 1 à 1000)' } },
+      dessiner(c, K) {
+        K.titre('(ln x)/x → 0 : x l’emporte');
+        const X = K.P.x, T = Number.isFinite(c.t) ? c.t : Infinity;
+        const xc0 = Math.pow(X, phase(T, Q.r0, DR));
+        const G = K.axes(cadreCourse(xc0));
+        const dessinerCourbes = p => {
+          courbeF(c, G, x => x, 0, G.xmax, p, { couleur: 'blanc', n: 60 });
+          courbeF(c, G, Math.sqrt, 0, G.xmax, p, { couleur: 'cyan' });
+          courbeF(c, G, ln, Math.exp(G.ymin - .05), G.xmax, p, { couleur: 'rouge', n: 320 });
+        };
+        K.anime(2.4, dessinerCourbes);
+        c.texte('x', G.X(G.ymax * .78) - 10, G.Y(G.ymax * .78), { couleur: 'blanc', taille: 20, align: 'right' });
+        c.texte('√x', G.X(G.xmax * .9), G.Y(Math.sqrt(G.xmax * .9)) - 12, { couleur: 'cyan', taille: 20, align: 'center' });
+        c.texte('ln x', G.X(G.xmax * .9), G.Y(ln(G.xmax * .9)) - 12, { couleur: 'rouge', taille: 20, align: 'center' });
+        c.repere('trois_courbes', G.x0, G.y0, G.w, G.h, 'les courbes de x, √x et ln x');
+        K.marque('trois_courbes');
+        c.pause(.4);
+        if (Number.isFinite(c.t)) Q.r0 = c.cur;
+        K.anime(DR, p => {
+          const xc = Math.pow(X, p);
+          c.ligne(G.X(xc), G.Y(0), G.X(xc), G.Y(Math.min(G.ymax, xc)), { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+          if (xc <= G.ymax) c.point(G.X(xc), G.Y(xc), 4.5, 'blanc');
+          c.point(G.X(xc), G.Y(Math.sqrt(xc)), 4.5, 'cyan');
+          c.point(G.X(xc), G.Y(ln(xc)), 5.5, 'rouge');
+          const xr = Math.round(xc);
+          c.texte('x = ' + xr, XR - 20, 84, { couleur: 'blanc', taille: 20 });
+          c.texte('√x ≈ ' + fr(Math.sqrt(xr), 2), XR - 20, 112, { couleur: 'cyan', taille: 20 });
+          c.texte('ln x ≈ ' + fr(ln(xr), 2), XR - 20, 140, { couleur: 'rouge', taille: 20 });
+          c.texte('(ln x)/x ≈ ' + deux(ln(xr) / xr), XR - 20, 182, { couleur: 'jaune', taille: 23 });
+        });
+        c.repere('rapport', XR - 26, 62, 250, 132, 'les trois hauteurs et (ln x)/x');
+        K.marque('rapport');
+        c.pause(.4);
+        const r = lim(c, XR - 11, 262, 'x → +∞', '(ln x)/x = 0', { taille: 23, couleur: 'jaune', cadre: 'jaune' });
+        c.repere('limite', ...r, 'la limite de (ln x)/x en +∞');
+        K.marque('limite');
+      },
+      poignees(K) {
+        const G = K.grille(cadreCourse(K.P.x));
+        return [{ id: 'x', x: G.X(K.P.x), y: G.Y(ln(K.P.x)), bouger: (px) => ({ x: Math.max(1, G.inv(px, 0)[0]) }) }];
+      },
+      lecture: K => { const x = K.P.x; return `En x = ${x} : ln x ≈ ${fr(ln(x), 2)}, √x ≈ ${fr(Math.sqrt(x), 2)}, et (ln x)/x ≈ ${deux(ln(x) / x)} : x grandit bien plus vite que ln x.`; },
+      decrire: K => ({
+        trois_courbes: 'Un repère ; trois courbes tracées et nommées : x (blanc), √x (cyan), ln x (rouge).',
+        rapport: `Un curseur avance de x = 1 jusqu’à x = ${K.P.x}, le repère se dézoome ; les trois hauteurs s’affichent et « (ln x)/x ≈ ${deux(ln(K.P.x) / K.P.x)} » (0,23 en 10 ; 0,0069 en 1000).`,
+        limite: 'Encadré : « lim (ln x)/x = 0 quand x → +∞ ».',
+      }),
+      motifs: { trois_courbes: 'les trois courbes', rapport: 'le curseur avance', limite: 'la limite de (ln x)/x' },
+      explication: [
+        { repere: 'trois_courbes', texte: 'Trois courbes : x, √x et ln x. ln est la plus lente.' },
+        { repere: 'rapport', texte: 'En 1000, ln x vaut à peine 6,9 : le quotient (ln x)/x n’est plus que 0,0069.' },
+        { repere: 'limite', texte: 'x l’emporte : (ln x)/x tend vers 0.' },
+      ],
+    },
+    zero_plus: {
+      titre: 'x ln x → 0 en 0 à droite',
+      dessiner(c, K) {
+        K.titre('x ln x → 0 en 0 à droite');
+        // Le tableau de valeurs.
+        const tx = 50, ty = 66, g = 110, w = 280, h = 34, o = { couleur: 'faible', largeur: 1.3 };
+        c.rect(tx, ty, w, 4 * h, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
+        c.ligne(tx, ty + h, tx + w, ty + h, o); c.ligne(tx + g, ty, tx + g, ty + 4 * h, o);
+        c.texte('x', tx + g / 2, ty + 23, { couleur: 'faible', taille: 18, align: 'center' });
+        c.texte('x ln x', tx + g + (w - g) / 2, ty + 23, { couleur: 'faible', taille: 18, align: 'center' });
+        [['0,1', '−0,23'], ['0,01', '−0,046'], ['0,001', '−0,0069']].forEach(([a, b], i) => {
+          c.pause(.2);
+          const y = ty + (i + 1) * h + 24;
+          c.texte(a, tx + g / 2, y, { couleur: 'blanc', taille: 19, align: 'center' });
+          c.texte(b, tx + g + (w - g) / 2, y, { couleur: 'jaune', taille: 19, align: 'center' });
+        });
+        c.fleche(tx + w + 14, ty + h + 10, tx + w + 14, ty + 4 * h - 6, { couleur: 'faible', largeur: 1.6, tete: 8 });
+        c.texte('→ 0', tx + w + 22, ty + 3 * h + 8, { couleur: 'jaune', taille: 18 });
+        c.repere('tableau', tx - 4, ty - 4, w + 60, 4 * h + 8, 'le tableau de valeurs');
+        K.marque('tableau');
+        // Le rectangle de côtés x et |ln x|.
+        c.pause(.4);
+        const ox = 440, oy = 92, sx = 500, sy = 28;
+        c.fleche(ox - 6, oy, 740, oy, { couleur: 'faible', largeur: 1.5 });
+        c.texte('x', 744, oy + 6, { couleur: 'faible', taille: 16, align: 'right' });
+        c.ligne(ox, oy - 6, ox, 300, { couleur: 'faible', largeur: 1.5 });
+        c.texte('0', ox - 6, oy - 8, { couleur: 'faible', taille: 14, align: 'right' });
+        K.anime(3.6, p => {
+          const x = 0.5 * Math.pow(0.002, p), wx = x * sx, hy = -ln(x) * sy;
+          for (const xg of [0.5, 0.1, 0.01]) if (x < xg) c.rect(ox, oy, Math.max(1.5, xg * sx), -ln(xg) * sy, { couleur: 'faible', arrondi: 0, largeur: 1 });   // les rectangles déjà passés
+          c.rect(ox, oy, Math.max(1.5, wx), hy, { couleur: 'cyan', arrondi: 0, largeur: 1.8, fond: 'cyan', fondAlpha: .18 });
+          c.texte('x = ' + fr(x, x < 0.01 ? 3 : 2), ox + Math.max(1.5, wx) + 8, oy + 20, { couleur: 'cyan', taille: 15 });
+          c.texte('|ln x| = ' + fr(-ln(x), 2), ox + Math.max(1.5, wx) + 8, oy + hy - 4, { couleur: 'cyan', taille: 15 });
+          c.texte('aire : x |ln x| ≈ ' + deux(-x * ln(x)), 520, 322, { couleur: 'jaune', taille: 17 });
+        });
+        c.texte('de plus en plus fin', 560, 250, { couleur: 'faible', taille: 16 });
+        c.repere('rectangle', ox - 4, oy - 4, 300, 240, 'le rectangle de côtés x et |ln x|');
+        K.marque('rectangle');
+        c.pause(.4);
+        c.texte('pour 0 < x < 1 : x ln x < 0', 50, 248, { couleur: 'orange', taille: 20 });
+        K.marque('signe');
+        c.pause(.4);
+        const r = lim(c, 59, 310, 'x → 0^{+}', 'x ln x = 0', { taille: 23, couleur: 'jaune', cadre: 'jaune' });
+        c.repere('limite', ...r, 'la limite de x ln x en 0 à droite');
+        K.marque('limite');
+      },
+      decrire: {
+        tableau: 'À gauche, un tableau de valeurs de x ln x : x = 0,1 → −0,23 ; x = 0,01 → −0,046 ; x = 0,001 → −0,0069 ; une flèche : → 0.',
+        rectangle: 'À droite, un rectangle de largeur x et de hauteur |ln x| (vers le bas) : x diminue de 0,5 à 0,001, il devient de plus en plus haut mais de plus en plus fin ; son aire x |ln x| tend vers 0.',
+        signe: 'Écrit en orange : « pour 0 < x < 1 : x ln x < 0 ».',
+        limite: 'Encadré : « lim x ln x = 0 quand x → 0⁺ ».',
+      },
+      motifs: { tableau: 'le tableau de valeurs', rectangle: 'le rectangle qui s’écrase', signe: 'le signe de x ln x', limite: 'la limite en 0⁺' },
+      explication: [
+        { repere: 'tableau', texte: 'Les valeurs de x ln x se rapprochent de 0.' },
+        { repere: 'rectangle', texte: '|ln x| grandit, mais x rétrécit bien plus vite : l’aire x |ln x| s’écrase vers 0.' },
+        { repere: 'limite', texte: 'Ici encore, x l’emporte : x ln x tend vers 0 en 0 à droite.' },
+      ],
+    },
+    nombre_derive: {
+      titre: 'Deux limites qui sont un nombre dérivé',
+      params: { x: { min: 1.05, max: 3, pas: 0.05, defaut: 1.2, sens: 'abscisse du point M sur la courbe' } },
+      dessiner(c, K) {
+        K.titre('Deux limites qui sont un nombre dérivé');
+        const X = K.P.x, G = K.axes(OND), XD = 470;
+        const secante = (xm, couleur, largeur = 2) => {
+          const s = ln(xm) / (xm - 1);
+          let a = 0.25, b = 3.5;
+          a = Math.max(a, 1 + G.ymin / s); b = Math.min(b, 1 + G.ymax / s);
+          c.ligne(G.X(a), G.Y(s * (a - 1)), G.X(b), G.Y(s * (b - 1)), { couleur, largeur });
+          c.point(G.X(xm), G.Y(ln(xm)), 5.5, 'cyan');
+          c.texte('M', G.X(xm) + 8, G.Y(ln(xm)) + 20, { couleur: 'cyan', taille: 18 });
+          return s;
+        };
+        K.anime(2, p => courbeF(c, G, ln, 0.25, 3.5, p, { couleur: 'rouge' }));
+        c.texte('ln', G.X(3.4), G.Y(ln(3.4)) + 26, { couleur: 'rouge', taille: 20, align: 'center' });
+        K.rond(G, 1, 0, true, 'jaune');
+        c.texte('A(1 ; 0)', G.X(1) + 8, G.Y(0) + 24, { couleur: 'jaune', taille: 16 });
+        K.marque('courbe');
+        c.pause(.4);
+        const T = Number.isFinite(c.t) ? c.t : Infinity;
+        if (!(T >= Q.a0)) secante(2.5, 'cyan', 2);   // la première sécante, effacée dès que M se met à glisser
+        else c.pause(.6);
+        c.texte('(ln x − ln 1)/(x − 1)', XD, 92, { couleur: 'cyan', taille: 20 });
+        c.texte('pente de (AM)', XD, 118, { couleur: 'faible', taille: 16 });
+        c.repere('secante', G.X(0.8), G.Y(1.4), G.X(2.8) - G.X(0.8), G.Y(-0.4) - G.Y(1.4), 'la sécante (AM)');
+        K.marque('secante');
+        c.pause(.4);
+        if (Number.isFinite(c.t)) Q.a0 = c.cur;
+        K.anime(3.4, p => {
+          const xm = 2.5 + (X - 2.5) * p;
+          const s = secante(xm, 'cyan', 2.2);
+          c.texte('x = ' + fr(xm, 2) + ' : pente ≈ ' + fr(s, 3), XD, 156, { couleur: 'jaune', taille: 19 });
+        });
+        K.courbe(G, x => x - 1, 0.1, 2.9, { couleur: 'jaune', largeur: 1.6, pointille: [7, 6] });
+        c.texte('y = x − 1', G.X(2.75), G.Y(1.75) + 4, { couleur: 'jaune', taille: 15, align: 'right' });
+        K.marque('approche');
+        c.pause(.4);
+        const r = lim(c, XD + 9, 220, 'x → 1', '(ln x)/(x − 1) = 1', { taille: 22, couleur: 'jaune', cadre: 'jaune' });
+        c.repere('limite', ...r, 'la limite de (ln x)/(x − 1) en 1');
+        K.marque('limite');
+        c.pause(.4);
+        c.texte('x = 1 + h :', XD, 284, { couleur: 'blanc', taille: 19 });
+        const r2 = lim(c, XD + 9, 320, 'x → 0', 'ln(1 + x)/x = 1', { taille: 22, couleur: 'cyan', cadre: 'cyan' });
+        c.repere('seconde', XD - 6, 262, Math.max(r2[2] + 6, 120), r2[1] + r2[3] - 262, 'lim ln(1 + x)/x = 1 en 0');
+        K.marque('seconde');
+      },
+      poignees(K) { const G = K.grille(OND); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(ln(K.P.x)), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => `M d’abscisse x = ${fr(K.P.x, 2)} : la pente de (AM) vaut (ln x)/(x − 1) ≈ ${fr(ln(K.P.x) / (K.P.x - 1), 3)} ; plus M est proche de A, plus elle est proche de 1.`,
+      decrire: K => ({
+        courbe: 'Un repère ; la courbe de ln en rouge ; le point A(1 ; 0) en jaune.',
+        secante: 'Un point M(x ; ln x) en x = 2,5 et la sécante (AM) ; à droite : « (ln x − ln 1)/(x − 1) », la pente de (AM).',
+        approche: `M glisse vers A, de x = 2,5 jusqu’à x = ${fr(K.P.x, 2)} ; la pente de (AM) s’affiche (≈ ${fr(ln(K.P.x) / (K.P.x - 1), 3)}) et se rapproche de 1 ; la tangente y = x − 1 apparaît en pointillés jaunes.`,
+        limite: 'Encadré : « lim (ln x)/(x − 1) = 1 quand x → 1 ».',
+        seconde: 'Dessous : « x = 1 + h : », puis encadré « lim ln(1 + x)/x = 1 quand x → 0 ».',
+      }),
+      motifs: { courbe: 'la courbe et A', secante: 'la sécante (AM)', approche: 'M s’approche de A', limite: 'la limite en 1', seconde: 'la limite de ln(1 + x)/x' },
+      explication: [
+        { repere: 'secante', texte: 'La pente de (AM) est le taux (ln x − ln 1)/(x − 1).' },
+        { repere: 'limite', texte: 'Quand M arrive en A, cette pente devient celle de la tangente : ln’(1) = 1.' },
+        { repere: 'seconde', texte: 'En posant x = 1 + h, la même limite s’écrit ln(1 + x)/x → 1 en 0.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Datation au carbone 14 — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Dater un bois au carbone 14 : un arbre vivant échange du CO₂ avec l’air, l’arbre coupé n’échange plus et son carbone 14 se désintègre, un morceau de bois ancien est mesuré au compteur ; à droite le calcul de l’âge t = (t½/ln2)·ln(a₀/a)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Dater un objet au carbone 14 (cours « Décroissance radioactive », 2e Bac PC BIOF, novembre 2026 ; national 2022 R).
+ * Vue « Trois temps » (gauche, peinte) : 1. un arbre vivant (échanges de CO₂ avec l’air : la proportion de ¹⁴C reste
+ * constante, a₀) ; 2. l’arbre coupé (plus d’échanges : le ¹⁴C se désintègre, petits éclairs) ; 3. aujourd’hui, un morceau
+ * de bois ancien mesuré au compteur (a = 318 Bq ; même masse de bois récent : a₀ = 418 Bq).
+ * Vue « Calcul » (droite, craie) : a = a₀·e^{−λt} ; t = (1/λ)·ln(a₀/a) ; λ = ln2/t½ ; t = (t½/ln2)·ln(a₀/a) ;
+ * t = (5730/0,693)·ln(418/318) ≈ 2,26·10³ ans.
+ * Poignée : l’activité mesurée a (100 à 418 Bq, sur la règle sous le compteur) ; l’âge est recalculé (avec ln2 = 0,693,
+ * comme dans le calcul écrit). Les éclairs et les jauges sont pour l’œil ; les valeurs écrites sont exactes.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
+const A0 = 418, TD = 5730, LN2 = 0.693;
+const P = { a: 318 };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const age = (a = P.a) => TD / LN2 * Math.log(A0 / a);
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+function ageTexte(t = age()) {
+  if (t < 1) return '0 an (bois récent)';
+  if (t < 1000) return `${Math.round(t)} ans`;
+  let e = Math.floor(Math.log10(t)), m = t / 10 ** e;
+  if (+m.toFixed(2) >= 10) { e += 1; m /= 10; }
+  return `${fr(m, 2)}·10${String(e).split('').map(c => SUP[c]).join('')} ans`;
+}
+
+/* ── Instants clés (s de la scène) ───────────────────────────────────────────────────────────── */
+const SUITE = [
+  ['vivant', 1.2, 'l’arbre vivant'], ['echanges', 3.0, 'vivant : échanges de CO₂ avec l’air, la proportion de ¹⁴C reste constante (a₀)'],
+  ['mort', 4.8, 'l’arbre est coupé : plus d’échanges'], ['desintegration', 6.6, 'le ¹⁴C du bois mort se désintègre : a diminue'],
+  ['mesure', 8.6, 'aujourd’hui : le bois ancien est mesuré au compteur'], ['formule', 12.6, 'les formules : a = a₀·e^{−λt}, t = (1/λ)·ln(a₀/a), λ = ln2/t½'],
+  ['application', 14.4, 'l’application numérique'], ['resultat', 16.0, 'le résultat : l’âge du bois'], ['fin', 17.2, 'fin']];
+const M = {}; for (const [n, t] of SUITE) M[n] = t;
+const FIN = M.fin;
+
+/* ── Géométrie ─────────────────────────────────────────────────────────────────────────────────── */
+const R1 = { x: 8, y: 34, w: 440, h: 290 }, R2 = { x: 458, y: 34, w: 294, h: 290 };
+const PAN = [{ x: 14, w: 140 }, { x: 158, w: 140 }, { x: 302, w: 140 }], PY = 40, PH = 278;
+const SOL = 268;
+const BOITE = { x: 312, y: 92, w: 88, h: 54 }, LCD = { x: 320, y: 100, w: 72, h: 28 };
+const REGLE = { x0: 330, x1: 432, y: 178 }, xDeA = a => REGLE.x0 + (a - 100) / (A0 - 100) * (REGLE.x1 - REGLE.x0);
+const TUBE = { x: 318, y: 246, w: 38, r: 8 }, BOIS = { x: 364, y: 232, w: 62, h: 32 };
+const apparait = (t0, d = .6) => clamp((S.t - t0) / d);
+
+/* ── Peinture ─────────────────────────────────────────────────────────────────────────────────── */
+const hasard = k => { const x = Math.sin(k * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+function panneau(ctx, p, al) {
+  ctx.save(); ctx.globalAlpha = al;
+  const c = ctx.createLinearGradient(0, PY, 0, SOL);
+  c.addColorStop(0, 'rgba(70,120,170,.30)'); c.addColorStop(.45, 'rgba(40,70,100,.18)'); c.addColorStop(1, 'rgba(10,16,22,.4)');
+  ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect(p.x, PY, p.w, PH, 6); ctx.fill();
+  const s = ctx.createLinearGradient(0, SOL, 0, SOL + 14); s.addColorStop(0, '#5b4630'); s.addColorStop(1, 'rgba(40,30,20,.2)');
+  ctx.fillStyle = s; ctx.fillRect(p.x, SOL, p.w, 14);
+  ctx.restore();
+}
+function rond(ctx, x, y, r, c0, c1, c2) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  g.addColorStop(0, c0); g.addColorStop(.55, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function arbre(ctx, al) {
+  if (al <= 0) return;
+  ctx.save(); ctx.globalAlpha = al;
+  const tr = ctx.createLinearGradient(77, 0, 91, 0); tr.addColorStop(0, '#4a2e17'); tr.addColorStop(.4, '#8b5a2b'); tr.addColorStop(1, '#3b2412');
+  ctx.fillStyle = tr; ctx.beginPath(); ctx.moveTo(76, SOL); ctx.lineTo(79, 180); ctx.lineTo(89, 180); ctx.lineTo(92, SOL); ctx.closePath(); ctx.fill();
+  for (const [x, y, r] of [[64, 168, 22], [104, 168, 22], [84, 152, 30], [72, 130, 20], [97, 132, 20]]) rond(ctx, x, y, r, '#bbf7d0', '#22a355', '#14532d');
+  ctx.restore();
+}
+function co2(ctx) {                                                      // les molécules de CO₂ qui entrent et sortent
+  const k = S.t;
+  for (let i = 0; i < 4; i++) {
+    const u = (k * .45 + i / 4) % 1;
+    const xi = 30 + 28 * u, yi = 94 + 34 * u, xo = 112 + 28 * u, yo = 128 - 34 * u;
+    rond(ctx, xi, yi, 3.2, '#f1f5f9', '#94a3b8', '#334155'); rond(ctx, xo, yo, 3.2, '#f1f5f9', '#94a3b8', '#334155');
+  }
+}
+function buche(ctx, al) {
+  if (al <= 0) return;
+  ctx.save(); ctx.globalAlpha = al;
+  // La souche.
+  const so = ctx.createLinearGradient(196, 0, 216, 0); so.addColorStop(0, '#4a2e17'); so.addColorStop(.5, '#8b5a2b'); so.addColorStop(1, '#3b2412');
+  ctx.fillStyle = so; ctx.fillRect(196, SOL - 22, 20, 22);
+  ctx.fillStyle = '#c8a06a'; ctx.beginPath(); ctx.ellipse(206, SOL - 22, 10, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  // Le tronc couché.
+  const l = ctx.createLinearGradient(0, 226, 0, 252); l.addColorStop(0, '#9a6a3a'); l.addColorStop(.5, '#6b4423'); l.addColorStop(1, '#3b2412');
+  ctx.fillStyle = l; ctx.fillRect(172, 226, 94, 26);
+  ctx.fillStyle = '#d6b07a'; ctx.beginPath(); ctx.ellipse(266, 239, 6, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,70,35,.8)'; ctx.lineWidth = 1; for (const r of [3, 6, 9]) { ctx.beginPath(); ctx.ellipse(266, 239, r * .45, r, 0, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(172, 228, 94, 3);
+  ctx.restore();
+}
+function eclair(ctx, x, y, r, a) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(255,255,235,${a})`); g.addColorStop(.4, `rgba(253,200,120,${a * .55})`); g.addColorStop(1, 'rgba(253,200,120,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+/** Petits éclairs : des noyaux de ¹⁴C qui se désintègrent (pour l’œil ; plus rares quand a est faible). */
+function eclairs(ctx, R, n, graine) {
+  const k = Math.floor(S.t / .12);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < n; i++) {
+    const h = hasard(k * 17 + i * 5 + graine); if (h > .7) continue;
+    const x = R.x + 6 + hasard(k * 3 + i + graine) * (R.w - 12), y = R.y + 4 + hasard(k * 11 + i * 7 + graine) * (R.h - 8);
+    eclair(ctx, x, y, 4 + 6 * h, .9 * (1 - h));
+  }
+  ctx.restore();
+}
+function compteur(ctx, al) {
+  if (al <= 0) return;
+  ctx.save(); ctx.globalAlpha = al;
+  // La table et le bois ancien.
+  ctx.fillStyle = 'rgba(120,90,60,.5)'; ctx.fillRect(308, SOL - 4, 130, 4);
+  const b = ctx.createLinearGradient(0, BOIS.y, 0, BOIS.y + BOIS.h); b.addColorStop(0, '#7a5a3a'); b.addColorStop(.5, '#5a3e24'); b.addColorStop(1, '#2e1d0f');
+  ctx.fillStyle = b; ctx.beginPath(); ctx.roundRect(BOIS.x, BOIS.y, BOIS.w, BOIS.h, 3); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,18,8,.6)'; ctx.lineWidth = 1;
+  for (const dy of [8, 15, 23]) { ctx.beginPath(); ctx.moveTo(BOIS.x + 3, BOIS.y + dy); ctx.bezierCurveTo(BOIS.x + 20, BOIS.y + dy - 3, BOIS.x + 40, BOIS.y + dy + 3, BOIS.x + BOIS.w - 3, BOIS.y + dy); ctx.stroke(); }
+  // Le câble, le tube (fenêtre tournée vers le bois), le boîtier.
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(TUBE.x, TUBE.y); ctx.bezierCurveTo(300, TUBE.y, 306, 160, 322, BOITE.y + BOITE.h); ctx.stroke();
+  const gt = ctx.createLinearGradient(0, TUBE.y - TUBE.r, 0, TUBE.y + TUBE.r);
+  gt.addColorStop(0, '#d1d5db'); gt.addColorStop(.35, '#9ca3af'); gt.addColorStop(1, '#1f2937');
+  ctx.fillStyle = gt; ctx.beginPath(); ctx.roundRect(TUBE.x, TUBE.y - TUBE.r, TUBE.w, 2 * TUBE.r, 3); ctx.fill();
+  ctx.fillStyle = '#a16207'; ctx.beginPath(); ctx.ellipse(TUBE.x + TUBE.w, TUBE.y, 3, TUBE.r - 1, 0, 0, Math.PI * 2); ctx.fill();
+  const gb = ctx.createLinearGradient(0, BOITE.y, 0, BOITE.y + BOITE.h); gb.addColorStop(0, '#4b5563'); gb.addColorStop(1, '#111827');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect(BOITE.x, BOITE.y, BOITE.w, BOITE.h, 6); ctx.fill();
+  ctx.fillStyle = '#05140c'; ctx.beginPath(); ctx.roundRect(LCD.x, LCD.y, LCD.w, LCD.h, 3); ctx.fill();
+  const n = Math.round(P.a * lisse((S.t - 7.4) / .6));
+  ctx.font = '600 22px Consolas, "Courier New", monospace'; ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(134,239,172,.12)'; ctx.fillText('888', LCD.x + LCD.w - 6, LCD.y + 22);
+  ctx.fillStyle = '#86efac'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 7; ctx.fillText(String(S.t >= 7.4 ? n : 0), LCD.x + LCD.w - 6, LCD.y + 22); ctx.shadowBlur = 0;
+  ctx.font = '10px Consolas, monospace'; ctx.fillStyle = 'rgba(134,239,172,.7)'; ctx.textAlign = 'left'; ctx.fillText('Bq', LCD.x + 3, LCD.y + LCD.h + 12);
+  ctx.restore();
+}
+function jauge(ctx, p, f, al) {
+  if (al <= 0) return;
+  const x = p.x + 12, w = p.w - 24, y = 290;
+  ctx.save(); ctx.globalAlpha = al;
+  ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(x, y, w, 8);
+  const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#fb923c'); g.addColorStop(1, '#fde047');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w * f, 8); ctx.restore();
+}
+const fracMort = () => 1 - (1 - P.a / A0) * lisse((S.t - 5.0) / 1.4);
+function peindre(ctx) {
+  const a1 = apparait(.1), a2 = apparait(3.4), a3 = apparait(6.8);
+  panneau(ctx, PAN[0], a1); panneau(ctx, PAN[1], a2); panneau(ctx, PAN[2], a3);
+  arbre(ctx, a1);
+  if (S.t >= M.echanges - 1.4) co2(ctx);
+  buche(ctx, a2);
+  if (S.t >= 4.9) eclairs(ctx, { x: 172, y: 226, w: 94, h: 26 }, 4, 3);
+  compteur(ctx, a3);
+  if (S.t >= 7.4) eclairs(ctx, BOIS, Math.max(1, Math.round(4 * P.a / A0)), 9);
+  jauge(ctx, PAN[0], 1, a1); jauge(ctx, PAN[1], fracMort(), a2); jauge(ctx, PAN[2], P.a / A0, a3);
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────────── */
+function ecrit(c, t0, fn) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait ? Infinity : S.t; c.cur = t0;
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+function quand(c, nom, dur, fn) { if (S.fait || S.t >= M[nom] - dur) ecrit(c, M[nom] - dur, fn); }
+const vu = nom => S.fait || S.t >= M[nom] - 1e-6;
+const RE_N = /\[([^,\]]+),([^\]]+)\]([A-Za-z]+)/g;
+function formule(c, s, x, y, o = {}) {
+  const taille = o.taille ?? 18, ms = []; let i = 0, m; RE_N.lastIndex = 0;
+  while ((m = RE_N.exec(s))) { if (m.index > i) ms.push({ t: s.slice(i, m.index) }); ms.push({ A: m[1], Z: m[2], X: m[3] }); i = RE_N.lastIndex; }
+  if (i < s.length) ms.push({ t: s.slice(i) });
+  const long = ms.reduce((n, q) => n + (q.t != null ? q.t.length : 3), 0); let px = x;
+  for (const q of ms) {
+    const duree = o.duree != null ? o.duree * (q.t != null ? q.t.length : 3) / long : undefined;
+    if (q.t != null) { c.texte(q.t, px, y, { ...o, duree }); px += c.largeurTexte(q.t.replace(/_/g, ''), taille); }
+    else px = c.nucleide(q.X, q.A, q.Z, px, y, { ...o, duree });
+  }
+  return px;
+}
+
+function dessinerTemps(c) {
+  c.texte('Trois temps', 14, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_temps', R1.x, R1.y, R1.w, R1.h, 'les trois temps : vivant, mort, aujourd’hui');
+  c.repere('arbre', 40, 104, 90, 168, 'l’arbre vivant');
+  c.repere('air', PAN[0].x + 4, 66, PAN[0].w - 8, 40, 'l’air (CO₂ échangé avec l’arbre vivant)');
+  c.repere('bois_mort', 166, 220, 106, 50, 'l’arbre coupé : le bois mort');
+  c.repere('bois_ancien', BOIS.x - 4, BOIS.y - 4, BOIS.w + 8, BOIS.h + 8, 'le morceau de bois ancien');
+  c.repere('compteur', TUBE.x - 6, BOITE.y - 4, BOITE.w + 30, TUBE.y + TUBE.r + 6 - BOITE.y + 4, 'le compteur Geiger');
+  c.repere('a', LCD.x - 4, LCD.y - 4, LCD.w + 8, LCD.h + 8, `l’activité mesurée a = ${P.a} Bq`);
+  c.repere('a0', PAN[0].x + 6, 282, PAN[0].w - 12, 36, `a₀ = ${A0} Bq : bois vivant (ou récent, même masse)`);
+  const xa = xDeA(P.a);
+  c.repere('poignee_a', xa - 12, REGLE.y - 12, 24, 24, `la poignée de l’activité mesurée (a = ${P.a} Bq)`);
+  quand(c, 'vivant', .9, () => {
+    c.texte('1. vivant', PAN[0].x + PAN[0].w / 2, 60, { taille: 17, align: 'center', duree: .5 });
+    c.texte(`a_0 = ${A0} Bq`, PAN[0].x + PAN[0].w / 2, 314, { taille: 14, align: 'center', couleur: 'jaune', duree: .4 });
+  });
+  quand(c, 'echanges', 1.4, () => {
+    c.texte('air', PAN[0].x + PAN[0].w / 2, 84, { taille: 15, align: 'center', couleur: 'faible', duree: .2 });
+    c.fleche(30, 94, 58, 128, { couleur: 'bleu', largeur: 1.6, tete: 7, duree: .2 });
+    c.fleche(112, 128, 140, 94, { couleur: 'bleu', largeur: 1.6, tete: 7, duree: .2 });
+    c.texte('CO_2', 20, 112, { taille: 14, couleur: 'bleu', duree: .15 });
+    c.texte('CO_2', 148, 118, { taille: 14, couleur: 'bleu', align: 'right', duree: .15 });
+    formule(c, 'vivant : la proportion de [14,6]C reste constante, a_0', 14, 346, { taille: 17, couleur: 'vert', duree: .5 });
+  });
+  quand(c, 'mort', 1.4, () => {
+    c.texte('→', 156, 60, { taille: 16, align: 'center', couleur: 'faible', duree: .1 });
+    c.texte('2. mort', PAN[1].x + PAN[1].w / 2, 60, { taille: 17, align: 'center', duree: .3 });
+    c.texte('✗', PAN[1].x + PAN[1].w / 2, 112, { taille: 26, align: 'center', couleur: 'rouge', duree: .1 });
+    c.texte('plus d’échanges', PAN[1].x + PAN[1].w / 2, 136, { taille: 14, align: 'center', couleur: 'faible', duree: .3 });
+    c.texte('mort : plus d’échanges,', 14, 372, { taille: 17, couleur: 'orange', duree: .5 });
+  });
+  quand(c, 'desintegration', 1.2, () => {
+    c.texte('a diminue', PAN[1].x + PAN[1].w / 2, 314, { taille: 14, align: 'center', couleur: 'jaune', duree: .3 });
+    formule(c, ' le [14,6]C se désintègre', 14 + c.largeurTexte('mort : plus d’échanges,', 17), 372, { taille: 17, couleur: 'orange', duree: .6 });
+  });
+  quand(c, 'mesure', 1.4, () => {
+    c.texte('→', 300, 60, { taille: 16, align: 'center', couleur: 'faible', duree: .1 });
+    c.texte('3. aujourd’hui', PAN[2].x + PAN[2].w / 2, 60, { taille: 17, align: 'center', duree: .3 });
+    c.texte('bois ancien', BOIS.x + BOIS.w / 2, BOIS.y - 8, { taille: 13, align: 'center', couleur: 'faible', duree: .15 });
+  });
+  // L’activité mesurée : valeur sous la jauge, règle et poignée, ligne du bas (suivent la poignée).
+  if (vu('mesure')) ecrit(c, M.mesure - 1.0, () => {
+    c.texte(`a = ${P.a} Bq`, PAN[2].x + PAN[2].w / 2, 314, { taille: 14, align: 'center', couleur: 'jaune', duree: .2 });
+    c.texte(`mesure : a = ${P.a} Bq ; bois récent de même masse : a_0 = ${A0} Bq`, 14, 398, { taille: 17, couleur: 'jaune', duree: .6 });
+  });
+  if (S.t >= 7.4 || S.fait) c.direct(() => {
+    c.ligne(REGLE.x0, REGLE.y, REGLE.x1, REGLE.y, { couleur: 'faible', largeur: 1.5, tremble: .3 });
+    for (const a of [100, 200, 300, 418]) c.ligne(xDeA(a), REGLE.y - 4, xDeA(a), REGLE.y + 4, { couleur: 'faible', largeur: 1.2, tremble: .2 });
+    c.texte('100', REGLE.x0, REGLE.y + 17, { taille: 11, couleur: 'faible', align: 'center' });
+    c.texte('418', REGLE.x1, REGLE.y + 17, { taille: 11, couleur: 'faible', align: 'center' });
+    c.texte('a', REGLE.x0 - 14, REGLE.y + 5, { taille: 14, couleur: 'jaune', align: 'right' });
+    c.cercle(xa, REGLE.y, 6, { couleur: 'jaune', largeur: 2 });
+    c.texte('⇔', xa, REGLE.y - 10, { taille: 12, couleur: 'jaune', align: 'center' });
+  });
+}
+
+function dessinerCalcul(c) {
+  const X = R2.x + 12;
+  c.texte('Calcul', R2.x + 6, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_calcul', R2.x, R2.y, R2.w, R2.h, 'la colonne du calcul');
+  c.repere('formule', X - 6, 50, R2.w - 12, 140, 'les formules : a = a₀·e^{−λt}, t = (1/λ)·ln(a₀/a), λ = ln2/t½, t = (t½/ln2)·ln(a₀/a)');
+  c.repere('application', X - 6, 206, R2.w - 12, 30, `l’application numérique : t = (5730/0,693)·ln(418/${P.a})`);
+  c.repere('resultat', X - 6, 252, R2.w - 12, 46, `le résultat : t ≈ ${ageTexte()}`);
+  quand(c, 'formule', 3.8, () => {
+    c.texte('a = a_0·e^{−λt}', X, 74, { taille: 21, duree: .8 });
+    c.texte('t = (1/λ)·ln(a_0/a)', X, 110, { taille: 21, duree: .9 });
+    c.texte('λ = ln2/t½', X, 146, { taille: 21, duree: .7 });
+    c.texte('t = (t½/ln2)·ln(a_0/a)', X, 182, { taille: 21, couleur: 'jaune', duree: 1.0 });
+  });
+  quand(c, 'application', 1.3, () => c.texte(`t = (5730/0,693)·ln(418/${P.a})`, X, 228, { taille: 19, duree: 1.1 }));
+  quand(c, 'resultat', 1.1, () => {
+    c.rect(X - 4, 254, R2.w - 16, 42, { couleur: 'vert', arrondi: 10, largeur: 2, duree: .3 });
+    c.texte(`t ≈ ${ageTexte()}`, X + 8, 283, { taille: 24, couleur: 'vert', duree: .7 });
+  });
+}
+
+function dessiner(c) {
+  c.direct(() => peindre(c.ctx));
+  dessinerTemps(c); dessinerCalcul(c);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(61); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), `Âge du bois : t ≈ ${ageTexte()}. Fais glisser a pour un autre bois.`, 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce que voit le tuteur ────────────────────────────────────────────────────────────────────── */
+function phase() {
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  if (S.t <= 0) return 'rien n’est encore lancé';
+  return dernier ? (dernier[0] === 'fin' ? 'fin, tout est écrit' : dernier[1]) : 'l’arbre vivant apparaît';
+}
+function ceQuiSeVoit() {
+  const etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  const m = [`t (scène) = ${fr(S.t, 2)} s (${etat}). Carbone 14 : t½ = 5730 ans ; a₀ = 418 Bq (bois récent de même masse) ; a mesurée = ${P.a} Bq.`];
+  const v = [];
+  if (S.t > .1) v.push('1. un arbre vivant' + (S.t >= M.echanges - 1.4 ? ' qui échange du CO₂ avec l’air (flèches), jauge de ¹⁴C pleine, a₀ = 418 Bq' : ''));
+  if (S.t > 3.4) v.push('2. l’arbre coupé (souche et tronc couché), plus d’échanges' + (S.t >= 4.9 ? `, petits éclairs : le ¹⁴C se désintègre, la jauge baisse${S.t >= 6.4 ? ` jusqu’à ${P.a} Bq` : ''}` : ''));
+  if (S.t > 6.8) v.push(`3. aujourd’hui : un morceau de bois ancien devant le compteur Geiger, l’afficheur indique ${S.t >= 8.0 ? P.a : Math.round(P.a * lisse((S.t - 7.4) / .6))} Bq ; la poignée de a est sur la règle (100 à 418 Bq)`);
+  m.push(`Vue « Trois temps » : ${v.length ? v.join(' ; ') : 'vide'}.`);
+  const e = [];
+  if (vu('echanges')) e.push('« vivant : la proportion de ¹⁴C reste constante, a₀ »');
+  if (vu('mort')) e.push('« mort : plus d’échanges,' + (vu('desintegration') ? ' le ¹⁴C se désintègre »' : ' »'));
+  if (vu('mesure')) e.push(`« mesure : a = ${P.a} Bq ; bois récent de même masse : a₀ = 418 Bq »`);
+  if (vu('formule')) e.push('dans « Calcul » : « a = a₀·e^{−λt} », « t = (1/λ)·ln(a₀/a) », « λ = ln2/t½ », « t = (t½/ln2)·ln(a₀/a) »');
+  if (vu('application')) e.push(`« t = (5730/0,693)·ln(418/${P.a}) »`);
+  if (vu('resultat')) e.push(`le résultat encadré « t ≈ ${ageTexte()} »`);
+  if (e.length) m.push('Écrit à la craie : ' + e.join(' ; ') + '.');
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+
+/* ── Commandes ───────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Un arbre vivant…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+const reglage = () => `a = ${P.a} Bq : t = (5730/0,693)·ln(418/${P.a}) ≈ ${ageTexte()}.`;
+function setParameters(p) {
+  p = p || {};
+  if (p.a_Bq !== undefined && p.a_Bq !== null && p.a_Bq !== '' && Number.isFinite(+p.a_Bq)) { P.a = Math.round(clamp(+p.a_Bq, 100, A0)); scene.sale = true; }
+  bulle($('feedback'), reglage()); pont.noter('set_parameters', params()); pont.emettre();
+}
+function params() { const t = age(); return { a_Bq: P.a, a0_Bq: A0, t_demi_ans: TD, age_ans: +t.toFixed(0), age_texte: ageTexte(t), ln_a0_sur_a: +Math.log(A0 / P.a).toFixed(4) }; }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : l’activité mesurée, sur la règle sous le compteur. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { if (S.t < 7.4 && !S.fait) return null; const [x, y] = scene.local(px, py); return Math.abs(y - REGLE.y) < 14 && x > REGLE.x0 - 14 && x < REGLE.x1 + 14 ? 'a' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py), a = Math.round(clamp(100 + (x - REGLE.x0) / (REGLE.x1 - REGLE.x0) * (A0 - 100), 100, A0)); if (a !== P.a) { P.a = a; scene.sale = true; bulle($('feedback'), reglage()); } },
+  lacher: () => { bulle($('feedback'), reglage()); pont.noter('set_parameters', params()); pont.emettre(); },
+});
+
+window.Tableau.explication({ datation: [
+  { repere: 'arbre', texte: 'Un arbre vivant échange du CO₂ avec l’air : sa proportion de carbone 14 reste constante.' },
+  { repere: 'a0', texte: 'Son activité reste a₀ = 418 Bq.' },
+  { repere: 'bois_mort', texte: 'Quand il meurt, plus d’échanges : le carbone 14 se désintègre sans être remplacé.' },
+  { repere: 'a', texte: 'Aujourd’hui, le bois ancien a une activité a = 318 Bq.' },
+  { repere: 'formule', texte: 'a = a₀·e^{−λt}, donc t = (1/λ)·ln(a₀/a), avec λ = ln2/t½.' },
+  { repere: 'application', texte: 't = 5730/0,693 × ln(418/318).' },
+  { repere: 'resultat', texte: 'Le bois a environ 2 260 ans.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_datation', version: '1.0', title: 'Dater un objet au carbone 14', variants: [{ id: 'datation', label: 'datation' }], commands: commandes,
+  command_schema: {
+    set_parameters: { a_Bq: '100..418 (activité mesurée du bois ancien, Bq, pas 1 ; l’âge est recalculé)' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, s)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Datation au carbone 14 (t½ = 5730 ans) : un arbre vivant échange du CO₂ avec l’air, la proportion de ¹⁴C reste constante (a₀) ; mort, plus d’échanges, le ¹⁴C se désintègre ; un bois ancien a a = 318 Bq, le bois récent de même masse a₀ = 418 Bq. a = a₀·e^{−λt} ; t = (1/λ)·ln(a₀/a) ; λ = ln2/t½ ; t = (t½/ln2)·ln(a₀/a) = (5730/0,693)·ln(418/318) ≈ 2,26·10³ ans.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'datation',
+    time_s: +S.t.toFixed(3), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Dater un bois au carbone 14…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

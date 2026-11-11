@@ -1,0 +1,174 @@
+# Avancement — agent PHYSIQUE-CHIMIE (10 novembre 2026)
+
+Brief : BRIEF.md (même dossier). Témoin : phys_ch2_ondes_periodiques (ne pas toucher).
+Organisation : un sous-agent Opus par cours (deux en parallèle au plus), chacun tient sa section ci-dessous.
+Étapes par cours : 1 exploration · 2 ancien cours · 3 cours JSON · 4 simulations · 5 cadre OK · 6 réactions (texte) · 7 vérifications.
+
+## Décisions à faire valider
+- ondes_lumineuses — relations du prisme (sin i = n·sin r, sin i' = n·sin r', A = r + r', D = i + i' − A) :
+  tranché par l'agent principal physique-chimie. Elles sont au programme (OP-PC-2007) mais aucun national PC 2016-2025
+  ne les demande et le cadre de référence de l'examen ne retient du prisme que la dispersion (milieu dispersif, n dépend
+  de la fréquence). Donc : la dispersion est traitée en entier dans le corps du cours (C8) ; les quatre relations forment une
+  courte partie finale (C9, 3-4 diapositives), annoncée « pour les devoirs, pas demandée au national », capacité OL11
+  marquée dans la fiche du cadre avec statut « programme, hors examen national ».
+- ondes_lumineuses (agent du cours) : appliqué tel quel (C9 = 4 diapositives finales, avant le bilan). Autres choix à valider :
+  bilan et carte rattachés à C1 (comme le témoin) ; dispersion du prisme dessinée ×2 pour l'œil ; cuve : fente et écran dans l'eau ;
+  axe D en cm sur la figure 2021 N (comme l'examen) ; les « dit » du cadre écrits teta / nu / lambda zéro (corpus de la voix).
+
+## Organisation (agent principal, 11 novembre 2026, soir)
+- radioactivite (agent a485116da3e8ce287) et energie_nucleaire (agent a9ce952a9eeac6b1f) relancés avec les NOUVELLES RÈGLES :
+  méthode des blocs (methode_blocs/BRIEF_AGENTS.md : seances, rappels, prediction, blocs.py verifier « blocs : OK »),
+  réactions = seulement items.json dans <clé>_build/ (pas de SSH, le coordinateur les écrit), images en flux seulement.
+- Ensuite, deux à la fois : dipole_RC, dipole_RL, circuit_RLC, puis chimie (transformations_lentes_rapides, cinetique,
+  transformations_deux_sens, etat_equilibre, acides_bases).
+- DISQUE C: 256 Mo libres le 11/11 au soir (Temp/claude fait 2,1 Go, dont 1,4 Go dans une session youtube-channel
+  6be32ec57d3abeb1/fd624a13… qui n'est pas la nôtre : à faire nettoyer par l'utilisateur / le coordinateur). Puis 107 Mo seulement : URGENT, risque
+  d'échec d'écriture des fichiers de cours.
+
+- energie_nucleaire (agent du cours) : fission de l'²³⁵U et courbe d'Aston enseignées dans le corps du cours (au programme) alors
+  qu'aucun national PC 2016-2025 ne les pose (exercice de fission construit, dit « pas tombé au national ces dernières années ») ;
+  E = hν (2016 seulement) et rendement de centrale non retenus ; E_ℓ/A écrit ainsi (ξ admis) ; Δm pour le noyau ET la réaction
+  (comme les énoncés), le cours dit lequel ; bornes d'Aston « environ 20 » et « environ 190 » ; « exothermique/endothermique »
+  évités (mis en hors cadre) ; bilan et carte rattachés à C9 « rédiger » ; aucune vidéo filmée en vraie classe (toutes en studio) ;
+  capacités EN1-EN8 du cadre à collationner avec le texte officiel.
+
+## Cours
+
+(chaque sous-agent ajoute / met à jour sa section : étape faite, fichiers, nb diapositives, compétences, simulations,
+décisions, problèmes, « prêt pour la voix : oui/non »)
+
+## ondes_lumineuses
+- Étape 1 exploration : déjà faite (backend/data/curriculum/exploration/ondes_lumineuses.json), reprise telle quelle.
+- Étape 2 ancien cours : aucun (cours_existant.fichier = null, dossier images ch3_ondes_lumineuses vide) ; aucune ancienne simu reprise.
+- Étape 4 simulations : FAITES (6 sous-agents Opus), dossier frontend/public/media/simulations/physics/ondes-lumineuses-tableau/ :
+  commun.js, exposants.js, lumiere.css (copies du témoin), diffraction.html (vues ouverture|figure|reglage|mesure|fil|cuve|blanche),
+  ecart-angulaire.html (montage|triangle), courbe.html (L_inverse_a|L_a|theta_inverse_a|L_D), spectre.html, milieu.html
+  (verre|eau|deux), prisme-dispersion.html (blanche|rouge|verte), prisme-angles.html, figures.html (12 ?fig=), bilan.html, carte.html.
+  Contrat (noms de moments/repères) : cours/ondes_lumineuses_contrat_simulations.md (même dossier que ce fichier). node --check OK
+  partout, testées en headless par les sous-agents.
+- Étape 3 cours : ÉCRIT → backend/data/courses/phys_ch3_ondes_lumineuses.json (53 diapositives, 51 questions à clé, 11 exercices,
+  demonstration sur chaque calcul). Généré par des scripts python : cours/ondes_lumineuses_build/ (outils.py, p1..p5.py = contenu,
+  build.py → écrit le JSON ; `python build.py --garder-reponses` garde les réactions déjà posées). Modifier le contenu dans p*.py,
+  jamais à la main dans le JSON (sinon le refaire depuis les p*.py).
+  verifier_texte_corpus : darija 0 mot rare ; restent ~140 mots français rares = termes du programme gardés exprès (radiation,
+  spectre, dispersion, nanomètres, ultraviolet, infrarouge, violet, extinction, vue de dessus…).
+- Étape 5 cadre : FAIT. Fiche chapitres.ondes_lumineuses ajoutée par cours/ondes_lumineuses_build/cadre_ol.py (relit, remplace la
+  seule clé, réécrit). Lectures écrites comme le corpus (teta, nu, lambda zéro). controler_cadre → « cadre : OK » (≈50 « à relire »
+  non bloquants : applications numériques dites en lettres, distracteurs faux des QCM).
+- Étape 6 réactions (texte) : FAIT. items 319 → gen_reponses_vps.py sur moalim-vps (/tmp/gen_rep_ol, nettoyé) 319/319 → posées
+  (concentration.reponses). Deux paroles corrigées à la main (θ et « 2D » écrits). Liste des pistes à dire : scratchpad pistes.json
+  (régénérable : `preparer_reponses.py poser` refait la liste).
+- Étape 7 vérifications : node --check OK sur les 10 pages + commun.js/exposants.js ; preparer_reponses verifier : seules
+  manquent les voix (53 pistes de diapositives + 319 réactions) ; vérif. navigateur headless (Playwright, Chrome) de chaque
+  diapositive à simulation (ondes_lumineuses_build/verif_sims.py) : aucune erreur JS, encre, chaque moment play_until et chaque
+  repère du cours existent dans la simulation. Petit défaut : ecart-angulaire et courbe signalent 1 texte « hors cadre » au tout
+  premier dessin (avant le chargement de la police), plus rien ensuite.
+- programme_semestre1.json : ondes_lumineuses → statut « construit », cours phys_ch3_ondes_lumineuses (petit script prog.py).
+- PRÊT POUR LA VOIX : OUI (Bodi, par la session principale) : 53 pistes speech_text.mixed + 319 réactions (+ démonstrations).
+- Reste : voix ; publier_labo / ressources de leçon seulement après validation ; manips labo 3D P4 et P5 non construites
+  (planifiées dans l'exploration) ; lecture dans le lecteur /dev/course-player non faite (seulement les pages seules).
+- À valider (ondes_lumineuses) : C9 prisme en 4 diapositives finales « pour le devoir » ; le bilan et la carte rattachés à C1
+  comme dans le témoin ; fig_enonce_2021 garde l'axe D en cm comme l'examen ; la vue de gauche de diffraction s'appelle « Vue de
+  côté » quand la fente est horizontale ; dans la cuve la fente ET l'écran sont dans l'eau (pour L' = L/n exact) ; dispersion du
+  prisme dessinée ×2 pour l'œil (écrit au tableau) ; mot « électromagnétique » non employé (« n'est pas une onde mécanique »).
+  Plan : I diffraction (6, C1) · II θ = λ/a (4, C2) · III L = 2λD/a (9, C3) · IV comparer (5, C4) · V courbes (5, C5) ·
+  VI radiation (4, C6) · VII milieu n (5, C7) · VIII dispersion (5, C8) · IX cas types + nationaux 2023 R, 2021 N, 2025 R (4) ·
+  X pour le devoir : relations du prisme (4, C9) · XI bilan + carte (2).
+- Décision appliquée : relations du prisme en partie finale courte C9 (4 diapositives) annoncée « pour le devoir, pas au national ».
+
+## dipole_RC
+(sous-agent Opus du cours phys_ch6_dipole_RC, « Dipôle RC » ; outils : cours/dipole_RC_build/ ; audits : dipole_RC_build/audits/)
+- 11/11 : démarré, briefs et skills lus. Disque C: 2,1 Go libres.
+- Étape 1 exploration : EN COURS. 10 vidéos choisies (une à la fois, brief dipole_RC_build/audit_brief.md, images en flux) :
+  kzF1OzfrQ2w Noureddine (FAIT, sans sous-titres : images), sOQaDQkAY94+1xgsRm7SQI8 TOP PHYSIQUE (FAIT, transcription seule),
+  AOK4FfniVZA Driss DOTCOM (FAIT), mi1PcyGfR64 Zakaria Taousse, LUDX35FMJmY Hassan El Omrani, 0xCZvA5Wl-0 Laksabi,
+  GVSldw4rz8c Ridouan, hstTUKPqT5s Atif, gm5vLzAjBms Cours du Soir (B. Mouslim), OSLLzhxUtp0 Lahoucine Hajji (nationaux corrigés).
+
+## energie_nucleaire
+(sous-agent Opus du cours phys_ch5_energie_nucleaire, « Noyaux, masse et énergie » ; outils : cours/energie_nucleaire_build/)
+- Démarré. Outils copiés depuis ondes_lumineuses_build (outils.py, build.py, verif_sims.py, prog.py, cadre_ol.py → à adapter).
+- Étape 1 exploration : EN COURS (audits vidéo par sous-agents, un à la fois → energie_nucleaire_build/audits/).
+- Reprise 11/11 après la limite d'usage. Audits faits : F3zMlBg7xDg Noureddine, iluYXYGxjsI El Omrani (sans sous-titres : images
+  seules). Transcriptions déjà téléchargées (scratchpad/transcr) pour : Ng_45GhSl0w + oaaWBeKPMM8 TOP PHYSIQUE (2 parties),
+  TYpJZdkU76U Driss DOTCOM, yGeLyz2bHXI Marwane Chargui, y6Kq9jbFKG0 prof Oualid, QhMCnEeG-0c Prof Bazhar (national 2020 N),
+  5pPrYuWaND8 prof FIKRI (diagramme d'énergie), S2YFzigj-Gk + 5OkzbgzOu1A Prof Ridouan (cours + série), qUxsDrak79g prof.ghaloumi
+  = 10 professeurs. Images en flux (energie_nucleaire_build/images_flux.py, copie de celui de radioactivite).
+- Nationaux PC 2016-2025 lus : energie_nucleaire_build/nationaux.md (12 sessions sur 20 ; cas types ; pas de fission ni Aston au national).
+- Étape 4 : contrat écrit cours/energie_nucleaire_contrat_simulations.md (balance, liaison, aston, diagramme, reactions, figures,
+  bilan, carte) ; premiers sous-agents coupés par la limite (bilan.html/carte.html partiels) → relancés le 11/11.
+- Étape 4 simulations : FAITES (sous-agents Opus, testées en headless par eux) : frontend/public/media/simulations/physics/
+  energie-nucleaire-tableau/ balance.html (vues helium|noyau|fusion|fission), liaison.html (sens separer|former), aston.html
+  (courbe|comparer), diagramme.html (fusion|polonium), reactions.html (fission|chaine|fusion|spontanee), figures.html (19 ?fig=),
+  bilan.html, carte.html (+ commun.js, exposants.js, nucleaire.css). Noms = contrat cours/energie_nucleaire_contrat_simulations.md.
+- Audit TOP PHYSIQUE (Ng_45GhSl0w + oaaWBeKPMM8) fait. Restent : Driss, Chargui, Oualid, Bazhar, FIKRI, Ridouan, ghaloumi.
+- Règles du 11/11 (coordinateur) : disque ≈ 250 Mo → images en flux seulement ; PAS de SSH/VPS → réactions : seulement
+  items_cours.json et items_blocs.json/demos_blocs.json dans energie_nucleaire_build/ ; méthode des blocs (seances, rappels,
+  prediction) via methode_blocs/blocs.py.
+- Audits : 10 professeurs FAITS (audits/ : F3zMlBg7xDg Noureddine, iluYXYGxjsI El Omrani, Ng_45GhSl0w TOP PC (2 parties),
+  TYpJZdkU76U Driss, y6Kq9jbFKG0 Oualid, yGeLyz2bHXI Chargui (condensé : disque plein), QhMCnEeG-0c Bazhar (national 2020 N),
+  5pPrYuWaND8 FIKRI, S2YFzigj-Gk Ridouan (cours + série), qUxsDrak79g ghaloumi). Aucun filmé en vraie classe (limite notée).
+  Prochaine étape : exploration/energie_nucleaire.json (script energie_nucleaire_build/explo.py), puis cadre, puis cours p*.py.
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/energie_nucleaire.json (explo.py + plan.json ; 10 profs, nationaux,
+  6 notions complexes, cas types, pièges, questions d'élèves). Étape 2 ancien cours : aucun (pas d'images, pas d'ancienne simu).
+- Étape 5 cadre : FAIT. chapitres.energie_nucleaire (cadre_en.py : relit, remplace la seule clé, réécrit ; EN1-EN8, 16 formules avec
+  « dit »). controler_cadre → « cadre : OK » (61 « à relire » non bloquants : applications numériques négatives, Δm de l'exemple).
+- Étape 3 cours : ÉCRIT → backend/data/courses/phys_ch5_energie_nucleaire.json (draft, concentration) : 38 diapositives, 36 questions
+  à clé (13 prédictions), 8 exercices, démonstration sur chaque calcul, 9 compétences C1-C9 (cadre_ids, dit), bilan + carte (C9).
+  Généré par energie_nucleaire_build/build.py (p1..p4.py = contenu). Si on refait : `python build.py --garder-reponses` (garde
+  réactions, seances, rappels, prédictions) PUIS `blocs.py appliquer` de nouveau (les 2 énoncés réécrits des prédictions ne sont
+  pas dans p*.py). verifier_texte_corpus : darija presque propre (restent الميزان, خفاف, كتكبر… gardés) ; ~260 mots français rares
+  = termes du programme (fission, nucléons, deutérium, tritium, méga électron volt, polonium, strontium…).
+- Méthode des blocs : FAITE. methode_blocs/ajouts/phys_ch5_energie_nucleaire.json : 4 séances (3+3+3+2 blocs, 11 blocs de 3-4
+  diapositives), 31 rappels, 13 prédictions / 38, 2 énoncés réécrits (en_b4_fission_calcul, en_c1_cas_types). blocs.py verifier →
+  « cadre : OK », « blocs : OK » (avis : séance 4 = 2 blocs).
+- Étape 6 réactions : items seulement (pas de SSH) : energie_nucleaire_build/items_cours.json (230 réactions),
+  items_blocs.json (112) + demos_blocs.json (1 démonstration nouvelle). À faire écrire par le coordinateur puis `poser`.
+- Étape 7 vérifications : node --check OK (8 pages + commun.js + exposants.js) ; verif_sims.py (Playwright headless, serveur arrêté)
+  → AUCUN PROBLÈME sur les 38 diapositives (moments, repères, encre, pas d'erreur JS, rien hors cadre) ; preparer_reponses verifier :
+  seuls manquent 38 pistes audio et 230 réactions (+ celles des blocs).
+- programme_semestre1.json : energie_nucleaire → « construit », cours phys_ch5_energie_nucleaire (prog.py).
+- PRÊT POUR LA VOIX : OUI pour les 38 pistes speech_text.mixed (Bodi) ; les réactions d'abord à écrire (items) puis à dire.
+- À valider : voir « Décisions à faire valider » (energie_nucleaire).
+
+## radioactivite
+- Sous-agent Opus démarré (10 novembre 2026). Clé radioactivite, cours phys_ch4_radioactivite. Outils : cours/radioactivite_build/
+  (outils.py, verif_sims.py copiés d'ondes_lumineuses_build), audits vidéo dans radioactivite_build/audits/.
+- Étape 1 exploration : EN COURS. Vidéos choisies (une à la fois, brief radioactivite_build/audit_brief.md) : 19802wryS34 Noureddine
+  (FAIT, pas de sous-titres : images seules), iAbkXrexALk TOP PHYSIQUE, 9XYFQ1p7w7A Driss DOTCOM (cours + nationaux), wjhWYaWid3A
+  Hassan El Omrani, A3i7AFtVtok Prof othmane, UJzcGpTqf2E Prof Ridouan, 78rQkfYycMs Zakaria Taousse, PPfYofXMSNw prof Oualid,
+  aQrb1VHDdqs Amine Laaouani, HqIwcFleDY8 El-Morabite. Audits faits = fichiers présents dans radioactivite_build/audits/.
+  Images sans téléchargement (disque C: ≈ 1,5 Go) : radioactivite_build/images_flux.py (ffmpeg lit le flux YouTube).
+  Nationaux PC 2016-2025 lus : radioactivite_build/nationaux.md (cas types, écritures, pièges).
+- Étape 4 simulations : LANCÉES (5 sous-agents Opus) d'après le contrat cours/radioactivite_contrat_simulations.md ; dossier
+  frontend/public/media/simulations/physics/radioactivite-tableau/ (commun.js, exposants.js, radio.css copiés ; noyaux.js écrit :
+  notation ᴬ_Z X à la craie). Pages : noyau, segre, desintegration, population, courbe, activite, datation, figures, bilan, carte.
+  (11 nov.) Relancées après la coupure : FAITES et testées (rapports reçus) noyau, segre, population, courbe, figures, bilan, carte ;
+  desintegration.html et activite.html écrites, datation.html en cours (agent a0710a1f4b91563fa repris).
+  Audits faits : 19802wryS34, iAbkXrexALk (+CW3eEUpr7q0), 9XYFQ1p7w7A ; suite une vidéo à la fois.
+  (11 nov., nuit) Disque C: tombé à 0 octet pendant ~1 h : tout bloqué. Reprise quand 2,1 Go libres, sur ordre du coordinateur.
+  Audits faits : 19802wryS34, iAbkXrexALk (+CW3eEUpr7q0), 9XYFQ1p7w7A, wjhWYaWid3A (aucune n'a de sous-titres arabes : images + commentaires).
+  Othmane A3i7AFtVtok arrêté à 26:15 (sous-titres en 429), sans fichier d'audit. Restent : A3i7AFtVtok, UJzcGpTqf2E, 78rQkfYycMs,
+  PPfYofXMSNw, aQrb1VHDdqs, HqIwcFleDY8. exploration/radioactivite.json PAS encore écrit.
+  Étape 2 : aucun ancien cours de ce chapitre dans backend/data/courses/.
+  Plan du cours (prêt, pas encore écrit) : ~50 diapositives, préfixe ra_, 5 séances (4 × 3 blocs + 2 blocs : cas types, puis
+  bilan et carte), compétences C1 noyau, C2 diagramme (N,Z), C3 radioactivité + Soddy, C4 α β⁻ β⁺ γ, C5 famille, C6 loi N(t),
+  C7 demi-vie, C8 activité, C9 datation ; cadre RA1 à RA10.
+  Décisions à faire valider : le chapitre couvre radioactivite + cinetique_nucleaire de perimetre.json (énergie → energie_nucleaire :
+  MeV, énergie de liaison, fission, fusion interdits ici) ; t½ (variante t₁/₂) ; e^(−λt) écrit tel quel (le lecteur ne rend pas
+  les exposants : manque à signaler) ; pas de neutrino/antineutrino ; α = « noyaux lourds », pas de seuil chiffré (les profs
+  écrivent 150, 185, 195 ou 200).
+  Ordre de reprise : simus desintegration/activite/datation (rapport agent a0710a1f4b91563fa) → 6 audits → exploration JSON →
+  cours JSON + blocs → cadre → programme_semestre1 → items réactions → blocs.py verifier + controler_cadre.
+  (11 nov., reprise) desintegration (6 types), activite, datation : testées en headless (moments du contrat tous présents, play_until fin OK, pas d'erreur JS, rendu vérifié sur capture). Étape 4 FAITE.
+  Audit A3i7AFtVtok FAIT (images + 120 commentaires ; partie 1 seulement : noyau → α β γ, pas de décroissance).
+  Audit UJzcGpTqf2E FAIT (551 lignes de transcription, 46 images, 85 commentaires ; partie 1 : jusqu'à la famille).
+  Audit 78rQkfYycMs FAIT (images 54 + 150 commentaires ; décroissance : t½ par l'inverse, τ deux méthodes, datation démontrée).
+  Audit PPfYofXMSNw FAIT (1212 lignes, 59 images, 143 commentaires ; outils ln/exp, λt½ = ln2, N₀/2ⁿ, a = −dN/dt, K-Ar).
+  Audit aQrb1VHDdqs FAIT (66 images, 150 commentaires ; a = −dN/dt dérivée, deux colonnes courbe/calcul, « héritage incomplet »).
+  Audit HqIwcFleDY8 FAIT (images + 36 commentaires ; N, N_d, λ, τ, t½, deux courbes). LES 10 AUDITS SONT FAITS.
+  Étape 1 FAITE : backend/data/curriculum/exploration/radioactivite.json (171 Ko ; 15 cas types, 23 pièges, 9 notions complexes,
+  21 questions d'élèves, plan de 52 diapositives ra_ en 5 séances 11/12/12/11/6). Décisions nouvelles à valider : positon ⁰₁e (⁰₊₁e admis),
+  « photon » toléré (E = hν hors cadre), t½ démontrée par ln(1/2) = −ln2, analogie des 400 élèves qui lancent une pièce,
+  prérequis à créer exponentielle_ln_neperien + conversion_durees_secondes, perimetre.json écrit A(t)/t₁/₂ (à harmoniser : a, t½).
+  Note : population.html vue proportion montre ≈ 0,083 (= 1 − 2^(−1/8)) ; λ·Δt = 0,087 → dire « environ λ·Δt ».
+  Étape 5 (fiche) : chapitres.radioactivite ajouté au cadre (10 capacités RA1-RA10, 23 formules, 31 mots hors cadre, decisions). programme_semestre1 : statut explore, cours phys_ch4_radioactivite.

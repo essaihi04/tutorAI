@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LiveBoard from '../session/LiveBoard';
 import CourseFocusStage from './CourseFocusStage';
+import { COLONNE_TUTEUR } from '../session/AIAvatar';
+import { useMemoireDuCours } from './memoire/useMemoireDuCours';
+import { MINUTES_PAR_BLOC } from './memoire/CycleBloc';
 import { saveCourseProgress } from '../../services/api';
 import { slideVersScript } from './slideVersScript';
 
@@ -290,6 +293,13 @@ export default function CoursePlayer({
     if (mode === 'concentration' && started && !courseCompleted) onFocusChange?.(true);
   }, [mode, started, courseCompleted, onFocusChange]);
 
+  // La mémoire longue (11 novembre 2026) : rappel de début de séance, fin de bloc (cahier → retrouver → exercice),
+  // fin de séance et saturation. Un cours sans `seances` n'est pas touché.
+  const memoire = useMemoireDuCours({
+    deck, deckId: deck.stable_id || deck.id, slideId: current?.slide.id, actif: started && mode === 'concentration' && !courseCompleted,
+    onAvancer: goToNext,
+    onQuitter: (avancer) => { if (avancer) goToNext(); setStarted(false); },
+  });
   if (!current) {
     return <div className="h-full grid place-items-center text-white/60">Ce cours ne contient aucune diapositive.</div>;
   }
@@ -304,8 +314,19 @@ export default function CoursePlayer({
    * « Suivant » à des endroits différents. Le tableau les accueille désormais
    * dans son coin élève, à côté de la pause et de « Poser une question ».
    */
+  const ouEnEstOn = memoire.place ? (() => {
+    const p = memoire.place;
+    const nbBlocs = p.seanceCours.blocs.length;
+    return (
+      <span className="px-1 text-[11px] tabular-nums text-amber-100/70" title={p.seanceCours.titre || ''}>
+        Séance {p.seance + 1}/{memoire.nbSeances} · Bloc {p.bloc + 1}/{nbBlocs} · ~{(nbBlocs - p.bloc) * MINUTES_PAR_BLOC} min
+      </span>
+    );
+  })() : null;
+
   const commandesDuDeck = !courseCompleted ? (
     <>
+      {ouEnEstOn}
       <span
         className="px-1 text-[11px] tabular-nums text-white/40 hidden sm:inline"
         title={`${current.activity.title} — activité ${current.activityIndex + 1}/${deck.activities.length}`}
@@ -329,13 +350,16 @@ export default function CoursePlayer({
       >
         ↺
       </button>
-      <button
-        onClick={goToNext}
-        className="h-10 px-4 rounded-full text-sm font-semibold text-white hover:scale-[1.03] transition-transform"
-        style={{ background: 'rgba(79,70,229,0.95)', border: '1px solid rgba(129,140,248,0.5)' }}
-      >
-        {index >= flatSlides.length - 1 ? 'Terminer ✓' : 'Suivant →'}
-      </button>
+      {/* En concentration, le seul bouton pour avancer est « Suite → », posé par le tableau lui-même. */}
+      {mode !== 'concentration' && (
+        <button
+          onClick={goToNext}
+          className="h-10 px-4 rounded-full text-sm font-semibold text-white hover:scale-[1.03] transition-transform"
+          style={{ background: 'rgba(79,70,229,0.95)', border: '1px solid rgba(129,140,248,0.5)' }}
+        >
+          {index >= flatSlides.length - 1 ? 'Terminer ✓' : 'Suivant →'}
+        </button>
+      )}
     </>
   ) : null;
 
@@ -363,7 +387,18 @@ export default function CoursePlayer({
             tuteur3D={tuteur3D}
             deckId={deck.stable_id || deck.id}
             onSuivant={goToNext}
+            libelleSuite={index >= flatSlides.length - 1 ? 'Terminer ✓' : 'Suite →'}
+            finDeBloc={memoire.blocAFermer}
+            onFermerBloc={memoire.fermerBloc}
+            onReponseJugee={memoire.signalerReponse}
           />
+        )}
+        {started && memoire.ecran && (
+          // le tuteur 3D garde sa colonne à droite : il reste visible et parle pendant le cahier, le rappel, l'exercice
+          <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-3 backdrop-blur-sm sm:p-6 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)]' : ''}`}
+            style={{ ['--colonne-tuteur' as string]: `${COLONNE_TUTEUR}px` }}>
+            <div className="h-full w-full max-w-3xl">{memoire.ecran}</div>
+          </div>
         )}
         {started && mode !== 'concentration' && (
         <LiveBoard

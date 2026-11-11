@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le noyau — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="De l’atome au noyau : un atome peint, le zoom sur le noyau (protons et neutrons comptés), la notation du noyau A, Z, X et N = A − Z, les isotopes de l’hydrogène et du carbone"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Le noyau (cours « Décroissance radioactive », phys_ch4_radioactivite, 2e Bac PC BIOF, novembre 2026).
+ * Vues (?vue=) :
+ *  - atome (défaut) : un atome de carbone 14 peint (nuage d’électrons léger, 6 électrons), zoom sur le noyau (grappe de 14 sphères),
+ *    les 6 protons s’allument et sortent en ligne (Z = 6), puis les 8 neutrons (N = 8), puis A = 14 nucléons ;
+ *  - notation : ᴬ_Z X écrit lettre par lettre avec ses flèches, puis N = A − Z, puis un exemple (²³⁸₉₂U par défaut :
+ *    N = 238 − 92 = 146) ; la pastille à côté de l’exemple (touche = noyau suivant) : U238 → C14 → Ir192 → Co60 ;
+ *  - isotopes : ¹₁H, ²₁H, ³₁H peints côte à côte (1 proton, 0/1/2 neutrons), puis ¹²₆C et ¹⁴₆C, puis la définition.
+ * Rendu (règle 7) : chaque nucléon est une petite sphère ombrée (protons rouge-orangé, neutrons gris-bleu clair), les électrons de
+ * petites sphères bleues. La peinture ne change jamais les nombres : Z, N, A et les compositions écrites sont exacts.
+ * Le temps de la scène (S.t, en s) fait avancer la craie : une annotation s’écrit juste avant son instant clé (moments).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['atome', 'notation', 'isotopes'];
+const URLP = new URLSearchParams(location.search);
+let vue = VUES.includes(URLP.get('vue')) ? URLP.get('vue') : 'atome';
+const NOYAUX = {
+  U238: { X: 'U', A: 238, Z: 92, nom: 'uranium 238' },
+  C14: { X: 'C', A: 14, Z: 6, nom: 'carbone 14' },
+  Ir192: { X: 'Ir', A: 192, Z: 77, nom: 'iridium 192' },
+  Co60: { X: 'Co', A: 60, Z: 27, nom: 'cobalt 60' },
+};
+const ORDRE = Object.keys(NOYAUX);
+const P = { noyau: ORDRE.includes(URLP.get('noyau')) ? URLP.get('noyau') : 'U238' };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+
+/* ── Instants clés (s de la scène) : [nom, instant, ce qu’on voit, avance] — l’annotation s’écrit pendant « avance » s avant l’instant. */
+const SUITES = {
+  atome: [
+    ['atome', 1.4, 'l’atome de carbone 14 : un noyau minuscule au centre, des électrons autour', 1.2],
+    ['zoom_noyau', 3.8, 'zoom sur le noyau : une grappe de protons et de neutrons', 1.6],
+    ['protons', 6.6, 'les 6 protons s’allument et sortent : Z = 6 protons', 2.0],
+    ['neutrons', 9.4, 'les 8 neutrons sortent à leur tour : N = 8 neutrons', 2.0],
+    ['nucleons', 12.0, 'A = 14 nucléons : protons + neutrons', 1.6],
+    ['fin', 13.4, 'fin', .4]],
+  notation: [
+    ['symbole', 1.6, 'X : le symbole de l’élément', 1.2],
+    ['nombre_A', 3.8, 'A : le nombre de masse, nombre de nucléons', 1.6],
+    ['nombre_Z', 6.2, 'Z : le numéro atomique (nombre de charge), nombre de protons', 1.8],
+    ['formule_N', 8.4, 'N = A − Z : le nombre de neutrons', 1.6],
+    ['exemple_U', 11.0, 'l’exemple : Z protons, A nucléons, N = A − Z neutrons', 2.2],
+    ['fin', 12.6, 'fin', .4]],
+  isotopes: [
+    ['hydrogene', 2.4, 'trois noyaux d’hydrogène : 1 proton chacun, 0, 1 ou 2 neutrons', 2.2],
+    ['meme_Z', 4.4, 'même Z : même élément', 1.4],
+    ['A_different', 6.6, 'A différents : neutrons différents', 1.4],
+    ['carbone', 9.2, 'le carbone 12 et le carbone 14 : 6 protons, 6 ou 8 neutrons', 2.0],
+    ['definition', 11.6, 'Isotopes : noyaux de même Z et de A différents', 1.6],
+    ['fin', 13.2, 'fin', .4]],
+};
+let SUITE, M, FIN;
+function choisirSuite() { SUITE = SUITES[vue]; M = {}; for (const [n, t] of SUITE) M[n] = t; FIN = M.fin; }
+choisirSuite();
+const moments = () => ({ ...M });
+const avance = nom => (SUITE.find(s => s[0] === nom) || [])[3] ?? 1.2;
+const a_ = nom => (nom in M ? M[nom] - avance(nom) : Infinity);       // début d’écriture de l’annotation
+const vu = nom => nom in M && S.t >= a_(nom);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+
+/* ── Peinture : sphères ombrées (nucléons, électrons) ──────────────────────────────────────── */
+const TEINTES = { p: ['#ffd9c4', '#f2683a', '#8a280c'], n: ['#f4f8ff', '#a9b9cd', '#55657a'], e: ['#e3efff', '#5b9cf5', '#1c3d96'] };
+function sphere(ctx, x, y, r, type, o = {}) {
+  const [c0, c1, c2] = TEINTES[type];
+  ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
+  if (o.eclat > 0) { ctx.shadowColor = type === 'p' ? 'rgba(255,175,110,.95)' : 'rgba(205,228,255,.9)'; ctx.shadowBlur = 4 + r * 1.3 * o.eclat; }
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, c0); g.addColorStop(.45, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  if (r > 2.5) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .36, y - r * .42, r * .24, r * .15, -.6, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+function ombre(ctx, x, y, rx, ry, a = .32) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx); g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+/** Grappe de Z protons et N neutrons : positions en rayons de nucléon (spirale serrée), protons et neutrons mêlés (graine fixe). */
+const GRAPPES = {};
+function grappe(Z, N, graine = 3) {
+  const cle = `${Z},${N},${graine}`; if (GRAPPES[cle]) return GRAPPES[cle];
+  const n = Z + N; let pos;
+  if (n === 1) pos = [[0, 0]];
+  else if (n === 2) pos = [[-.8, 0], [.8, 0]];
+  else if (n === 3) pos = [[0, -.75], [-.8, .55], [.8, .55]];
+  else { pos = []; for (let i = 0; i < n; i++) { const rho = .98 * Math.sqrt(i + .5), a = i * 2.39996; pos.push([rho * Math.cos(a), rho * Math.sin(a)]); } }
+  const types = Array(Z).fill('p').concat(Array(N).fill('n'));
+  if (n > 3) { const r = window.Tableau.graine(graine * 97 + n); for (let i = types.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [types[i], types[j]] = [types[j], types[i]]; } }
+  const rayon = n === 1 ? 1 : n <= 3 ? 1.85 : .98 * Math.sqrt(n - .5) + 1;
+  return (GRAPPES[cle] = { pos, types, rayon });
+}
+/** Peint une grappe (les nucléons extérieurs d’abord : ceux du centre passent devant, la grappe paraît ronde). */
+function peindreGrappe(ctx, cx, cy, r, g, o = {}) {
+  ombre(ctx, cx + r * .3, cy + g.rayon * r * .85, g.rayon * r * 1.05, g.rayon * r * .32, .3 * (o.alpha ?? 1));
+  for (let i = g.pos.length - 1; i >= 0; i--) sphere(ctx, cx + g.pos[i][0] * r, cy + g.pos[i][1] * r, r, g.types[i], { alpha: o.alpha, eclat: o.eclat && o.eclat[g.types[i]] });
+}
+const rayonPour = (A, R) => Math.min(13, R / (.98 * Math.sqrt(A - .5) + 1));   // rayon d’un nucléon pour qu’une grappe de A tienne dans R
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────── */
+/**
+ * Écrit `fn` à la craie au rythme de la scène, à partir de l’instant t0 (s) : une annotation apparaît quand elle arrive.
+ * Le bloc doit être fini à l’instant clé suivant (`t1`, sinon le premier moment après t0) : s’il est plus long, son écriture
+ * est accélérée d’autant (première passe « à blanc » qui mesure sa durée), pour qu’un arrêt sur image le montre en entier.
+ */
+function ecrit(c, t0, fn, t1) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  try {
+    let k = 1;
+    if (!S.fait) {
+      const fin = t1 ?? Math.min(...SUITE.map(s => s[1]).filter(m => m > t0 + 1e-6));
+      if (Number.isFinite(fin)) { c.t = -1; c.cur = t0; fn(); const d = c.cur - t0; if (d > fin - t0) k = d / Math.max(.05, fin - t0); }
+    }
+    c.t = S.fait ? Infinity : t0 + (S.t - t0) * k; c.cur = t0; c.complet = true;
+    fn();
+    // Contrôle : sur une image figée, un bloc commencé doit être fini (sinon l’annotation de l’instant clé n’est pas lisible).
+    if (!c.complet && !S.running && SUITE.some(s => Math.abs(s[1] - S.t) < 1e-3)) { const l = (window.__ecritureInachevee ||= []), m = `${fr(S.t, 2)} s : bloc commencé à ${fr(t0, 2)} s`; if (!l.includes(m)) l.push(m); }
+  }
+  finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+const LIGNES = [326, 352, 378];
+
+/* ── Vue « atome » ─────────────────────────────────────────────────────────────────────────── */
+const AC = [190, 170];                    // centre de l’atome
+const NC = [570, 120], RN = 15;           // noyau agrandi : centre, rayon d’un nucléon
+const C14 = grappe(6, 8, 5);
+const PROT = [], NEUT = []; C14.types.forEach((t, i) => (t === 'p' ? PROT : NEUT).push(i));
+const RANG = { p: { x: 424, y: 228 }, n: { x: 424, y: 272 }, pas: 27, r: 11 };
+const zoomVu = () => S.t >= M.zoom_noyau - 1.2;
+const zoomS = () => .12 + .88 * lisse((S.t - (M.zoom_noyau - 1.2)) / .9);
+function electron(k, t) {
+  const w1 = [1.0, 1.37, .83, 1.21, .94, 1.52][k], w2 = [1.29, .88, 1.46, 1.07, 1.63, .97][k];
+  const p1 = [0, 2.3, 4.1, 1.2, 5.3, 3.4][k], p2 = [1.1, 4.6, .4, 3.0, 2.2, 5.6][k];
+  return [AC[0] + 92 * Math.sin(w1 * t * 1.5 + p1), AC[1] + 82 * Math.sin(w2 * t * 1.5 + p2)];
+}
+/** Position d’un nucléon du carbone 14 : dans la grappe, puis rangé en ligne (protons, puis neutrons). */
+function nucleon(i) {
+  const s = zoomS(), [px, py] = C14.pos[i], type = C14.types[i], liste = type === 'p' ? PROT : NEUT, k = liste.indexOf(i);
+  const Mx = type === 'p' ? M.protons : M.neutrons;
+  const f = lisse((S.t - (Mx - 1.5 + k * .07)) / .7);
+  const bx = NC[0] + px * RN * s, by = NC[1] + py * RN * s, cx = RANG[type].x + k * RANG.pas, cy = RANG[type].y;
+  return { x: bx + (cx - bx) * f, y: by + (cy - by) * f - Math.sin(f * Math.PI) * 16, r: RN * s + (RANG.r - RN * s) * f, f, type, k };
+}
+function peindreAtome(ctx) {
+  // Le nuage d’électrons : un halo bleu très léger (pour l’œil).
+  const g = ctx.createRadialGradient(AC[0], AC[1], 4, AC[0], AC[1], 112);
+  g.addColorStop(0, 'rgba(130,175,255,.20)'); g.addColorStop(.55, 'rgba(96,150,250,.11)'); g.addColorStop(1, 'rgba(96,150,250,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(AC[0], AC[1], 112, 0, Math.PI * 2); ctx.fill();
+  peindreGrappe(ctx, AC[0], AC[1], 1.5, C14);
+  for (let k = 0; k < 6; k++) { const [x, y] = electron(k, S.t); sphere(ctx, x, y, 5, 'e'); }
+  if (!zoomVu()) return;
+  // Le noyau agrandi, puis les nucléons qui sortent en ligne (ceux déjà sortis passent devant).
+  const s = zoomS(), al = clamp((S.t - (M.zoom_noyau - 1.2)) / .4, 0, 1);
+  const eclatP = clamp((S.t - (M.protons - 2.0)) / .3, 0, 1) * (1 - clamp((S.t - (M.neutrons - 2.0)) / .5, 0, 1));
+  const eclatN = clamp((S.t - (M.neutrons - 2.0)) / .3, 0, 1) * (1 - clamp((S.t - (M.nucleons - 1.6)) / .5, 0, 1));
+  const restants = C14.pos.map((_, i) => i).filter(i => nucleon(i).f <= 0);
+  if (restants.length) ombre(ctx, NC[0] + 5, NC[1] + C14.rayon * RN * s * .85, C14.rayon * RN * s, C14.rayon * RN * s * .3, .3 * al);
+  for (let i = C14.pos.length - 1; i >= 0; i--) {
+    const n = nucleon(i); if (n.f > 0) continue;
+    sphere(ctx, n.x, n.y, n.r, n.type, { alpha: al, eclat: n.type === 'p' ? eclatP : eclatN });
+  }
+  for (const i of PROT.concat(NEUT)) { const n = nucleon(i); if (n.f > 0) sphere(ctx, n.x, n.y, n.r, n.type, { eclat: n.type === 'p' ? eclatP : eclatN }); }
+  // Légende peinte.
+  sphere(ctx, 672, 60, 7, 'p'); sphere(ctx, 672, 84, 7, 'n');
+}
+function dessinerAtome(c) {
+  c.texte('L’atome', 16, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(10, 36, 360, 264, { couleur: 'tresfaible', arrondi: 8, duree: .4 });
+  c.texte('Le noyau (agrandi)', 396, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(390, 36, 360, 264, { couleur: 'tresfaible', arrondi: 8, duree: .4 });
+  c.repere('vue_atome', 10, 36, 740, 264, 'la vue « de l’atome au noyau »');
+  c.repere('atome', AC[0] - 115, AC[1] - 115, 230, 230, 'l’atome de carbone 14 (nuage d’électrons)');
+  if (zoomVu()) c.repere('noyau', NC[0] - 80, NC[1] - 80, 160, 160, 'le noyau agrandi');
+  else c.repere('noyau', AC[0] - 14, AC[1] - 14, 28, 28, 'le noyau, minuscule, au centre de l’atome');
+  if (vu('atome')) ecrit(c, a_('atome'), () => {
+    c.fleche(232, 124, 199, 160, { couleur: 'blanc', largeur: 1.6, tete: 8, duree: .2 });
+    c.texte('noyau', 236, 122, { couleur: 'blanc', taille: 16, duree: .2 });
+    c.fleche(70, 270, 104, 236, { couleur: 'bleu', largeur: 1.6, tete: 8, duree: .2 });
+    c.texte('nuage d’électrons', 20, 290, { couleur: 'bleu', taille: 16, duree: .25 });
+    c.texte('Atome de carbone 14 : un noyau minuscule au centre, 6 électrons autour.', 14, LIGNES[0], { couleur: 'blanc', taille: 17, max: 735, duree: .35 });
+  });
+  if (vu('zoom_noyau')) ecrit(c, a_('zoom_noyau'), () => {
+    c.rect(AC[0] - 13, AC[1] - 13, 26, 26, { couleur: 'jaune', largeur: 1.4, arrondi: 3, duree: .15 });
+    c.ligne(AC[0] + 13, AC[1] - 13, NC[0] - 55, NC[1] - 55, { couleur: 'jaune', largeur: 1.2, pointille: [5, 5], duree: .2 });
+    c.ligne(AC[0] + 13, AC[1] + 13, NC[0] - 55, NC[1] + 55, { couleur: 'jaune', largeur: 1.2, pointille: [5, 5], duree: .2 });
+    c.cercle(NC[0], NC[1], 78, { couleur: 'jaune', largeur: 1.6, duree: .3 });
+    c.texte('proton', 684, 65, { couleur: 'orange', taille: 15, duree: .15 });
+    c.texte('neutron', 684, 89, { couleur: 'blanc', taille: 15, duree: .15 });
+    c.texte('Le noyau, environ 100 000 fois plus petit que l’atome, contient des protons et des neutrons : les nucléons.', 14, LIGNES[1], { couleur: 'jaune', taille: 16, max: 735, duree: .4 });
+  });
+  if (vu('protons')) ecrit(c, M.protons - .6, () => {
+    PROT.forEach((_, k) => c.texte(String(k + 1), RANG.p.x + k * RANG.pas, RANG.p.y - 15, { couleur: 'orange', taille: 12, align: 'center', duree: .04 }));
+    c.texte('Z = 6 protons', 628, RANG.p.y + 6, { couleur: 'orange', taille: 17, duree: .3 });
+  });
+  if (vu('neutrons')) ecrit(c, M.neutrons - .6, () => {
+    NEUT.forEach((_, k) => c.texte(String(k + 1), RANG.n.x + k * RANG.pas, RANG.n.y + 25, { couleur: 'faible', taille: 12, align: 'center', duree: .03 }));
+    c.texte('N = 8 neutrons', 638, RANG.n.y + 6, { couleur: 'bleu', taille: 17, duree: .3 });
+  });
+  if (vu('nucleons')) ecrit(c, a_('nucleons'), () => {
+    c.trait([[414, 210], [407, 216], [407, 244], [400, 250], [407, 256], [407, 284], [414, 290]], { couleur: 'vert', largeur: 1.8, duree: .3 });
+    c.noyaux('[14,6]C', NC[0], NC[1] + 18, { taille: 54, align: 'center', couleur: 'blanc', couleurAZ: 'vert', duree: .6 });
+    c.texte('carbone 14', NC[0], NC[1] + 50, { couleur: 'faible', taille: 14, align: 'center', duree: .2 });
+    c.texte('A = 14 nucléons : protons + neutrons   (A = Z + N = 6 + 8)', 14, LIGNES[2], { couleur: 'vert', taille: 18, max: 735, duree: .4 });
+  });
+  // Repères des nucléons (où ils sont maintenant) et des comptes.
+  const p0 = nucleon(PROT[0]), n0 = nucleon(NEUT[0]);
+  if (zoomVu()) { c.repere('proton', p0.x - p0.r - 3, p0.y - p0.r - 3, 2 * p0.r + 6, 2 * p0.r + 6, 'un proton (sphère rouge-orangé)'); c.repere('neutron', n0.x - n0.r - 3, n0.y - n0.r - 3, 2 * n0.r + 6, 2 * n0.r + 6, 'un neutron (sphère gris-bleu)'); }
+  else { c.repere('proton', 662, 50, 20, 20, 'un proton (sphère rouge-orangé)'); c.repere('neutron', 662, 74, 20, 20, 'un neutron (sphère gris-bleu)'); }
+  c.repere('Z', 620, RANG.p.y - 16, 126, 28, 'Z = 6 protons');
+  c.repere('N', 630, RANG.n.y - 16, 120, 28, 'N = 8 neutrons');
+  const wC = c.largeurNucleide('C', 14, 6, 54);
+  c.repere('A', NC[0] - wC / 2 - 4, NC[1] - 30, 36, 30, 'A = 14 nucléons');
+  c.repere('symbole', NC[0] + wC / 2 - 32, NC[1] - 24, 36, 48, 'C : le symbole du carbone');
+}
+
+/* ── Vue « notation » ──────────────────────────────────────────────────────────────────────── */
+const NOT = { xs: 118, y: 175, T: 96 };                 // le bloc ᴬ_Z X générique
+const PAST = { x: 300, y: 330, r: 10 };                 // la pastille : noyau suivant
+const EX = { x: 676, y: 300, R: 52 };                   // l’exemple peint
+function peindreNotation(ctx) {
+  if (!vu('exemple_U')) return;
+  const n = NOYAUX[P.noyau], al = clamp((S.t - a_('exemple_U')) / .8, 0, 1), g = grappe(n.Z, n.A - n.Z, 11);
+  peindreGrappe(ctx, EX.x, EX.y, rayonPour(n.A, EX.R), g, { alpha: al });
+}
+function peindrePastille(ctx) {
+  const gp = ctx.createRadialGradient(PAST.x - 3, PAST.y - 3, 1, PAST.x, PAST.y, PAST.r);
+  gp.addColorStop(0, '#ffe2cf'); gp.addColorStop(.5, '#f2683a'); gp.addColorStop(1, '#7c240b');
+  ctx.fillStyle = gp; ctx.beginPath(); ctx.arc(PAST.x, PAST.y, PAST.r, 0, Math.PI * 2); ctx.fill();
+}
+function dessinerNotation(c) {
+  const { xs, y, T } = NOT, p = T * .6;
+  c.texte('La notation du noyau', 16, 26, { couleur: 'cyan', taille: 17 });
+  c.repere('vue_notation', 10, 36, 740, 360, 'la notation du noyau');
+  const wA = c.largeurTexte('A', p), wX = c.largeurTexte('X', T);
+  c.repere('symbole', xs - 4, y - T * .78, wX + 8, T * .86, 'X : le symbole de l’élément');
+  c.repere('A', xs - wA - 8, y - T * .42 - p * .8, wA + 8, p * .9, 'A : le nombre de masse (nombre de nucléons)');
+  c.repere('Z', xs - wA - 8, y + T * .22 - p * .75, wA + 8, p * .9, 'Z : le numéro atomique (nombre de protons)');
+  if (vu('symbole')) ecrit(c, a_('symbole'), () => {
+    c.texte('X', xs, y, { couleur: 'blanc', taille: T, duree: .45 });
+    c.fleche(xs + wX + 8, y - 30, 282, y - 30, { couleur: 'blanc', largeur: 1.6, tete: 9, duree: .3 });
+    c.texte('X : symbole de l’élément chimique', 290, y - 24, { couleur: 'blanc', taille: 18, duree: .4 });
+  });
+  if (vu('nombre_A')) ecrit(c, a_('nombre_A'), () => {
+    c.texte('A', xs - 2, y - T * .42, { couleur: 'jaune', taille: p, align: 'right', duree: .35 });
+    c.fleche(xs + 2, y - T * .42 - p * .45, 282, 86, { couleur: 'jaune', largeur: 1.6, tete: 9, duree: .3 });
+    c.texte('A : nombre de masse', 290, 92, { couleur: 'jaune', taille: 18, duree: .45 });
+    c.texte('= nombre de nucléons (protons + neutrons)', 290, 116, { couleur: 'jaune', taille: 16, duree: .5 });
+  });
+  if (vu('nombre_Z')) ecrit(c, a_('nombre_Z'), () => {
+    c.texte('Z', xs - 2, y + T * .22, { couleur: 'orange', taille: p, align: 'right', duree: .35 });
+    c.fleche(xs + 2, y + T * .22 - p * .3, 282, 214, { couleur: 'orange', largeur: 1.6, tete: 9, duree: .3 });
+    c.texte('Z : numéro atomique (nombre de charge)', 290, 220, { couleur: 'orange', taille: 18, duree: .6 });
+    c.texte('= nombre de protons', 290, 244, { couleur: 'orange', taille: 16, duree: .4 });
+  });
+  if (vu('formule_N')) ecrit(c, a_('formule_N'), () => {
+    c.rect(28, 252, 190, 44, { couleur: 'bleu', largeur: 1.8, arrondi: 8, duree: .4 });
+    c.texte('N = A − Z', 123, 284, { couleur: 'bleu', taille: 28, align: 'center', duree: .5 });
+    c.texte('N : nombre de neutrons', 236, 282, { couleur: 'bleu', taille: 18, duree: .5 });
+  });
+  c.repere('N', 28, 252, 190, 44, 'N = A − Z : le nombre de neutrons');
+  c.repere('formule_N', 28, 252, 420, 44, 'la formule N = A − Z');
+  const n = NOYAUX[P.noyau], N = n.A - n.Z;
+  // La pastille (noyau suivant), toujours là : l’élève peut changer d’exemple.
+  c.direct(() => {
+    c.cercle(PAST.x, PAST.y, PAST.r + 3, { couleur: 'faible', largeur: 1.4 });
+    c.texte('noyau suivant', PAST.x + 18, PAST.y + 5, { couleur: 'faible', taille: 13 });
+    c.repere('pastille_noyau', PAST.x - 16, PAST.y - 16, 120, 32, 'la pastille : noyau suivant');
+  });
+  if (vu('exemple_U')) ecrit(c, a_('exemple_U'), () => {
+    c.texte('Exemple :', 28, PAST.y + 6, { couleur: 'blanc', taille: 18, duree: .3 });
+    const xf = c.nucleide(n.X, n.A, n.Z, 112, PAST.y + 10, { taille: 32, couleur: 'blanc', couleurAZ: 'jaune', duree: .5 });
+    c.texte(`(${n.nom})`, Math.max(xf + 8, 168), PAST.y + 6, { couleur: 'faible', taille: 14, duree: .25 });
+    c.texte(`Z = ${n.Z} protons ;  A = ${n.A} nucléons ;  N = A − Z = ${n.A} − ${n.Z} = ${N} neutrons`, 28, 372, { couleur: 'vert', taille: 17, max: 580, duree: .8 });
+    c.texte(`${n.Z} p + ${N} n`, EX.x, EX.y + EX.R + 22, { couleur: 'faible', taille: 14, align: 'center', duree: .2 });
+  });
+  c.repere('noyau', EX.x - EX.R - 4, EX.y - EX.R - 4, 2 * EX.R + 8, 2 * EX.R + 8, `le noyau ${n.nom} peint : ${n.Z} protons et ${N} neutrons`);
+  c.repere('exemple', 20, PAST.y - 26, 600, 66, `l’exemple : ${n.nom}, N = ${n.A} − ${n.Z} = ${N}`);
+}
+
+/* ── Vue « isotopes » ──────────────────────────────────────────────────────────────────────── */
+const HYD = [
+  { x: 100, A: 1, nom: 'hydrogène 1', comp: '1 proton, 0 neutron' },
+  { x: 270, A: 2, nom: 'hydrogène 2 (deutérium)', comp: '1 proton, 1 neutron' },
+  { x: 440, A: 3, nom: 'hydrogène 3 (tritium)', comp: '1 proton, 2 neutrons' }];
+const CAR = [{ x: 597, A: 12, comp: '6 p, 6 n', etat: 'stable' }, { x: 700, A: 14, comp: '6 p, 8 n', etat: 'radioactif' }];
+const YH = 100, RH = 20, RC = 8.5, YNOT = 178;
+const apparu = (t0, d = .4) => clamp((S.t - t0) / d, 0, 1);
+function peindreIsotopes(ctx) {
+  HYD.forEach((h, k) => { const al = apparu(a_('hydrogene') + k * .5); if (al > 0) peindreGrappe(ctx, h.x, YH, RH, grappe(1, h.A - 1), { alpha: al }); });
+  CAR.forEach((h, k) => { const al = apparu(a_('carbone') + k * .7); if (al > 0) peindreGrappe(ctx, h.x, YH, RC, grappe(6, h.A - 6, 5 + k), { alpha: al }); });
+}
+/** Bord gauche d’un ᴬ_Z X centré en x, et taille. */
+const gaucheNot = (c, X, A, Z, x, t) => x - c.largeurNucleide(X, A, Z, t) / 2;
+function dessinerIsotopes(c) {
+  c.texte('Trois noyaux d’hydrogène', 16, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(10, 36, 520, 252, { couleur: 'tresfaible', arrondi: 8, duree: .4 });
+  c.texte('Deux noyaux de carbone', 546, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(540, 36, 210, 252, { couleur: 'tresfaible', arrondi: 8, duree: .3 });
+  c.repere('vue_isotopes', 10, 36, 740, 252, 'les isotopes de l’hydrogène et du carbone');
+  HYD.forEach((h, k) => c.repere('isotope_' + (k + 1), h.x - 70, 52, 140, 186, `${h.nom} : ${h.comp}`));
+  CAR.forEach((h) => c.repere('carbone_' + h.A, h.x - 50, 52, 100, 186, `carbone ${h.A} : 6 protons, ${h.A - 6} neutrons (${h.etat})`));
+  c.repere('proton', HYD[0].x - RH - 3, YH - RH - 3, 2 * RH + 6, 2 * RH + 6, 'le proton de l’hydrogène 1');
+  c.repere('neutron', HYD[1].x + .8 * RH - RH - 3, YH - RH - 3, 2 * RH + 6, 2 * RH + 6, 'le neutron de l’hydrogène 2');
+  const TN = 40, xg = HYD.map(h => gaucheNot(c, 'H', h.A, 1, h.x, TN)), wAZ = c.largeurTexte('1', TN * .6);
+  c.repere('Z', xg[0] - 8, YNOT + TN * .22 - TN * .21 - 12, xg[2] - xg[0] + wAZ + 16, 24, 'les Z : tous égaux à 1');
+  c.repere('A', xg[0] - 8, YNOT - TN * .42 - TN * .21 - 12, xg[2] - xg[0] + wAZ + 16, 24, 'les A : 1, 2 et 3');
+  if (vu('hydrogene')) ecrit(c, a_('hydrogene'), () => {
+    HYD.forEach((h, k) => {
+      c.nucleide('H', h.A, 1, xg[k], YNOT, { taille: TN, couleur: 'blanc', couleurAZ: 'blanc', duree: .25 });
+      c.texte(h.nom, h.x, 204, { couleur: 'faible', taille: 14, align: 'center', duree: .15 });
+      c.texte(h.comp, h.x, 226, { couleur: 'blanc', taille: 15, align: 'center', duree: .2 });
+    });
+  });
+  if (vu('meme_Z')) ecrit(c, a_('meme_Z'), () => {
+    xg.forEach(x => c.cercle(x + wAZ / 2, YNOT + TN * .22 - TN * .21, 11.5, { couleur: 'orange', largeur: 1.6, duree: .12 }));
+    c.texte('même Z = 1 : même élément (hydrogène)', 22, 256, { couleur: 'orange', taille: 17, duree: .7 });
+  });
+  if (vu('A_different')) ecrit(c, a_('A_different'), () => {
+    xg.forEach(x => c.cercle(x + wAZ / 2, YNOT - TN * .42 - TN * .21, 11.5, { couleur: 'jaune', largeur: 1.6, duree: .12 }));
+    c.texte('A différents (1, 2, 3) : neutrons différents (0, 1, 2)', 22, 280, { couleur: 'jaune', taille: 17, duree: .7 });
+  });
+  if (vu('carbone')) ecrit(c, a_('carbone'), () => {
+    CAR.forEach((h) => {
+      c.nucleide('C', h.A, 6, gaucheNot(c, 'C', h.A, 6, h.x, 30), YNOT, { taille: 30, couleur: 'blanc', couleurAZ: 'blanc', duree: .3 });
+      c.texte(h.comp, h.x, 204, { couleur: 'blanc', taille: 15, align: 'center', duree: .2 });
+      c.texte(h.etat, h.x, 226, { couleur: h.etat === 'stable' ? 'vert' : 'orange', taille: 14, align: 'center', duree: .15 });
+    });
+    c.texte('même Z = 6, A différents', 645, 266, { couleur: 'faible', taille: 14, align: 'center', duree: .3 });
+  });
+  if (vu('definition')) ecrit(c, a_('definition'), () => {
+    c.rect(122, 300, 516, 40, { couleur: 'vert', largeur: 1.8, arrondi: 8, duree: .35 });
+    c.texte('Isotopes : noyaux de même Z et de A différents', 380, 328, { couleur: 'vert', taille: 22, align: 'center', duree: .6 });
+    c.texte('même nombre de protons, nombres de neutrons différents : même élément chimique', 380, 364, { couleur: 'faible', taille: 16, align: 'center', max: 735, duree: .5 });
+  });
+  c.repere('definition', 122, 300, 516, 40, 'la définition des isotopes');
+}
+
+/* ── Image ─────────────────────────────────────────────────────────────────────────────────── */
+function dessiner(c) {
+  if (vue === 'atome') { c.direct(() => peindreAtome(c.ctx)); dessinerAtome(c); }
+  else if (vue === 'notation') { c.direct(() => { peindreNotation(c.ctx); peindrePastille(c.ctx); }); dessinerNotation(c); }
+  else { c.direct(() => peindreIsotopes(c.ctx)); dessinerIsotopes(c); }
+  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 26, { couleur: 'faible', taille: 13, align: 'right' }); });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce qui se voit (pour le tuteur) ───────────────────────────────────────────────────────── */
+function phase() {
+  if (S.t <= 0) return 'la scène n’a pas commencé';
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  if (!dernier) { const prochain = SUITE.find(s => S.t < s[1]); return prochain ? `en route vers : ${prochain[2]}` : ''; }
+  return dernier[0] === 'fin' ? 'fin, tout est écrit' : dernier[1];
+}
+function ceQuiSeVoit() {
+  const m = [], etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  m.push(`Vue « ${vue} », t = ${fr(S.t, 2)} s (${etat}).`);
+  if (vue === 'atome') {
+    m.push('À gauche « L’atome » : un atome de carbone 14 peint, un nuage d’électrons léger avec 6 électrons (petites sphères bleues) qui bougent autour d’un noyau minuscule au centre.');
+    if (vu('atome')) m.push('Écrit : « noyau » (flèche vers le centre), « nuage d’électrons », « Atome de carbone 14 : un noyau minuscule au centre, 6 électrons autour ».');
+    if (zoomVu()) m.push('À droite « Le noyau (agrandi) » : un zoom (carré et pointillés depuis le centre de l’atome) montre le noyau, une grappe de 14 sphères : protons rouge-orangé et neutrons gris-bleu (légende « proton », « neutron »). Écrit : « Le noyau, environ 100 000 fois plus petit que l’atome, contient des protons et des neutrons : les nucléons ».');
+    if (vu('protons')) m.push('Les 6 protons se sont allumés et sont sortis en ligne, numérotés 1 à 6 : « Z = 6 protons ».');
+    if (vu('neutrons')) m.push('Les 8 neutrons sont sortis à leur tour, sur une deuxième ligne numérotée 1 à 8 : « N = 8 neutrons ». Le noyau est vide : tous les nucléons sont rangés.');
+    if (vu('nucleons')) m.push('Une accolade réunit les deux lignes ; dans le cercle du noyau : la notation ¹⁴₆C (carbone 14). En bas : « A = 14 nucléons : protons + neutrons (A = Z + N = 6 + 8) ».');
+  } else if (vue === 'notation') {
+    const n = NOYAUX[P.noyau];
+    const ecrits = [];
+    if (vu('symbole')) ecrits.push('un grand X avec la flèche « X : symbole de l’élément chimique »');
+    if (vu('nombre_A')) ecrits.push('A en haut à gauche de X (jaune), flèche « A : nombre de masse = nombre de nucléons (protons + neutrons) »');
+    if (vu('nombre_Z')) ecrits.push('Z en bas à gauche de X (orange), flèche « Z : numéro atomique (nombre de charge) = nombre de protons »');
+    if (vu('formule_N')) ecrits.push('« N = A − Z » encadré en bleu, « N : nombre de neutrons »');
+    if (vu('exemple_U')) ecrits.push(`l’exemple ${n.nom} (A = ${n.A}, Z = ${n.Z}) : « Z = ${n.Z} protons ; A = ${n.A} nucléons ; N = A − Z = ${n.A} − ${n.Z} = ${n.A - n.Z} neutrons », et le noyau peint à droite (grappe de ${n.Z} protons et ${n.A - n.Z} neutrons)`);
+    m.push('La notation du noyau ᴬ_Z X s’écrit à la craie, lettre par lettre.');
+    m.push(ecrits.length ? 'Écrit : ' + ecrits.join(' ; ') + '.' : 'Rien n’est encore écrit.');
+    m.push(`Exemple choisi : ${n.nom} (pastille « noyau suivant » : U238 → C14 → Ir192 → Co60).`);
+  } else {
+    m.push('À gauche « Trois noyaux d’hydrogène », à droite « Deux noyaux de carbone ».');
+    if (vu('hydrogene')) m.push('Peints côte à côte : ¹₁H (1 proton, 0 neutron), ²₁H (1 proton, 1 neutron, deutérium), ³₁H (1 proton, 2 neutrons, tritium), avec leur notation.');
+    if (vu('meme_Z')) m.push('Les trois Z = 1 sont entourés en orange : « même Z = 1 : même élément (hydrogène) ».');
+    if (vu('A_different')) m.push('Les trois A (1, 2, 3) sont entourés en jaune : « A différents : neutrons différents (0, 1, 2) ».');
+    if (vu('carbone')) m.push('Le carbone 12 (6 protons, 6 neutrons, stable) et le carbone 14 (6 protons, 8 neutrons, radioactif) sont peints : « même Z = 6, A différents ».');
+    if (vu('definition')) m.push('Encadré en vert : « Isotopes : noyaux de même Z et de A différents » ; dessous : « même nombre de protons, nombres de neutrons différents : même élément chimique ».');
+  }
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+function message() {
+  if (vue === 'atome') return 'Carbone 14 : Z = 6 protons, N = 8 neutrons, A = 14 nucléons.';
+  if (vue === 'notation') { const n = NOYAUX[P.noyau]; return `${n.nom} : Z = ${n.Z}, A = ${n.A}, N = ${n.A} − ${n.Z} = ${n.A - n.Z}. Touche la pastille pour un autre noyau.`; }
+  return 'Isotopes : même Z, A différents (neutrons différents).';
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function changerVue(v) {
+  vue = v; choisirSuite(); S.t = 0; S.running = false; S.fait = false; S.jusqua = null; $('run').textContent = 'Lancer';
+  window.Tableau.explication({ [vue]: EXPLICATIONS[vue] }); scene.sale = true;
+  setTimeout(() => pont.manifeste(), 200);
+}
+function setParameters(p) {
+  p = p || {};
+  let vueChangee = false;
+  if (VUES.includes(p.vue) && p.vue !== vue) { changerVue(p.vue); vueChangee = true; }
+  if (ORDRE.includes(p.noyau)) P.noyau = p.noyau;
+  scene.sale = true;
+  bulle($('feedback'), reglage());
+  pont.noter('set_parameters', params()); pont.emettre();
+  if (vueChangee) start();
+}
+function reglage() { const n = NOYAUX[P.noyau]; return vue === 'notation' ? `Exemple : ${n.nom} — Z = ${n.Z}, A = ${n.A}, N = ${n.A} − ${n.Z} = ${n.A - n.Z}.` : `Vue « ${vue} ».`; }
+function params() { const n = NOYAUX[P.noyau]; return { vue, noyau: P.noyau, Z: n.Z, A: n.A, N: n.A - n.Z }; }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : la pastille (touche = noyau suivant), dans la vue « notation ». */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return vue === 'notation' && Math.hypot(x - PAST.x, y - PAST.y) < 18 ? 'noyau' : null; },
+  bouger: () => {},
+  lacher: () => {
+    P.noyau = ORDRE[(ORDRE.indexOf(P.noyau) + 1) % ORDRE.length]; scene.sale = true;
+    bulle($('feedback'), reglage()); pont.noter('set_parameters', params()); pont.emettre();
+  },
+});
+
+const EXPLICATIONS = {
+  atome: [
+    { repere: 'atome', texte: 'Voici un atome de carbone 14 : des électrons autour, un noyau minuscule au centre.' },
+    { repere: 'noyau', texte: 'Zoomons sur le noyau : une grappe de petites sphères, les nucléons.' },
+    { repere: 'proton', texte: 'Les sphères rouge-orangé sont les protons.' },
+    { repere: 'Z', texte: 'Il y en a 6 : Z = 6 protons.' },
+    { repere: 'neutron', texte: 'Les sphères gris-bleu sont les neutrons.' },
+    { repere: 'N', texte: 'Il y en a 8 : N = 8 neutrons.' },
+    { repere: 'A', texte: 'En tout, A = 14 nucléons : protons + neutrons.' },
+  ],
+  notation: [
+    { repere: 'symbole', texte: 'X est le symbole de l’élément chimique.' },
+    { repere: 'A', texte: 'En haut à gauche, A : le nombre de masse, c’est le nombre de nucléons.' },
+    { repere: 'Z', texte: 'En bas à gauche, Z : le numéro atomique, ou nombre de charge, c’est le nombre de protons.' },
+    { repere: 'formule_N', texte: 'Le nombre de neutrons : N = A − Z.' },
+    { repere: 'exemple', texte: 'Pour l’uranium 238 : N = 238 − 92 = 146 neutrons.' },
+  ],
+  isotopes: [
+    { repere: 'isotope_1', texte: 'L’hydrogène 1 : un proton, aucun neutron.' },
+    { repere: 'isotope_2', texte: 'L’hydrogène 2 : un proton et un neutron.' },
+    { repere: 'isotope_3', texte: 'L’hydrogène 3 : un proton et deux neutrons.' },
+    { repere: 'Z', texte: 'Même Z : c’est le même élément.' },
+    { repere: 'A', texte: 'Mais les A sont différents : les neutrons ne sont pas les mêmes.' },
+    { repere: 'carbone_14', texte: 'De même, le carbone 12 et le carbone 14 sont des isotopes.' },
+    { repere: 'definition', texte: 'Des isotopes sont des noyaux de même Z et de A différents.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_noyau', version: '1.0', title: 'Le noyau — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { noyau: 'U238 | C14 | Ir192 | Co60 (exemple de la vue notation ; la pastille touchée = noyau suivant)', vue: 'atome | notation | isotopes (change de vue et relance)' },
+    set_time: { time_s: '0..fin de la vue (arrêt sur cet instant, s)' },
+    play_until: { moment: 'atome : atome | zoom_noyau | protons | neutrons | nucleons | fin ; notation : symbole | nombre_A | nombre_Z | formule_N | exemple_U | fin ; isotopes : hydrogene | meme_Z | A_different | carbone | definition | fin (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Le noyau : de l’atome au noyau (carbone 14 : Z = 6 protons, N = 8 neutrons, A = 14 nucléons), la notation ᴬ_Z X (A nombre de masse = nombre de nucléons, Z numéro atomique = nombre de charge = nombre de protons, N = A − Z ; uranium 238 : N = 238 − 92 = 146), les isotopes (¹₁H, ²₁H, ³₁H ; ¹²₆C, ¹⁴₆C : même Z, A différents).',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), vue === 'atome' ? 'De l’atome au noyau…' : vue === 'notation' ? 'La notation du noyau…' : 'Les isotopes…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

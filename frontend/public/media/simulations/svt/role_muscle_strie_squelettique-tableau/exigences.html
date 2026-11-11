@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les exigences de la contraction — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Document reconstitué : une fibre musculaire glycérinée dans une cuve de liquide physiologique, reliée à un levier ; on ajoute ou non des ions Ca²⁺ et de l’ATP ; la fibre ne raccourcit que si les deux sont présents ; un tableau à quatre lignes se remplit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * De quoi la contraction a-t-elle besoin ? (cours « Rôle du muscle strié squelettique », 10 novembre 2026)
+ * Document RECONSTITUÉ (d’après les expériences classiques des manuels), écrit en haut de la scène.
+ * Une fibre musculaire isolée glycérinée (membrane rendue perméable, réserves perdues) est fixée en bas d’une cuve de
+ * liquide physiologique et reliée en haut à un levier. Deux interrupteurs dessinés : Ca²⁺ et ATP (ajoutés ou non au
+ * liquide). Le bouton lance un essai : la fibre ne raccourcit que si l’ATP ET le Ca²⁺ sont présents ; chaque essai
+ * remplit sa ligne du tableau (Ca²⁺ / ATP / résultat). Quand les quatre lignes sont remplies, la conclusion s’écrit :
+ * « L’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction. »
+ * Un essai dure 3 s de scène : ajout des substances (0 → 0,7 s), réponse de la fibre (0,9 → 2,1 s), ligne écrite (2,4 s).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const P = window.MoleculesPeintes;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const rampe = (t, a, b) => clamp((t - a) / (b - a));
+const doux = f => f * f * (3 - 2 * f);
+const FIN = 3.0, T_AJOUT = 0.7, T_REP0 = 0.9, T_REP1 = 2.1, T_LIGNE = 2.4;
+
+/* Les quatre essais, dans l’ordre des lignes du tableau. */
+const ESSAIS = [
+  { id: 'ca_et_atp', ca: true, atp: true, nom: 'Ca²⁺ et ATP' },
+  { id: 'sans_ca', ca: false, atp: true, nom: 'ATP sans Ca²⁺' },
+  { id: 'sans_atp', ca: true, atp: false, nom: 'Ca²⁺ sans ATP' },
+  { id: 'ni_l_un_ni_l_autre', ca: false, atp: false, nom: 'ni Ca²⁺ ni ATP' },
+];
+const essaiDe = (ca, atp) => ESSAIS.find(e => e.ca === ca && e.atp === atp);
+const S = { t: 0, running: false, jusqua: null, nom: null, fait: false, emis: 0, ca: true, atp: true, lignes: {}, complet: false };
+const contracte = () => S.ca && S.atp;
+const tousRemplis = () => ESSAIS.every(e => S.lignes[e.id]);
+
+/* ── Géométrie ────────────────────────────────────────────────────────────── */
+const CUVE = { x: 60, y: 128, w: 240, h: 192, niveau: 142 };
+const FIB = { x: 160, haut: 150, bas: 300, w: 20 }, RACC = 30;            // la fibre raccourcit de 30 (≈ 20 % de sa longueur)
+const LEV = { px: 230, py: 110, gauche: 70, droite: 130 };                 // pivot, bras vers l’attache (gauche) et vers la pointe (droite)
+const FIL = FIB.haut - LEV.py;                                             // longueur du fil fibre → levier
+const INT_CA = { x: 420, y: 60, w: 44, h: 22 }, INT_ATP = { x: 420, y: 94, w: 44, h: 22 };
+const TAB = { x: 400, y: 140, cols: [400, 470, 540, 748], h0: 26, h: 30 };
+const BILLES = [[84, 168], [112, 196], [92, 262], [128, 292], [204, 170], [262, 186], [238, 270], [284, 300], [78, 222], [270, 152]];
+const PASTILLES = [[100, 176], [80, 290], [210, 286], [258, 214], [286, 254], [136, 238]];
+
+const raccourci = t => (contracte() ? RACC * doux(rampe(t, T_REP0, T_REP1)) : 0);
+function levier(s) {
+  const th = Math.asin(clamp(s / LEV.gauche, -1, 1));
+  return { th, ax: LEV.px - LEV.gauche * Math.cos(th), ay: LEV.py + LEV.gauche * Math.sin(th), bx: LEV.px + LEV.droite * Math.cos(th), by: LEV.py - LEV.droite * Math.sin(th) };
+}
+
+/* Peinture : cuve, substances, fibre, fil, levier. */
+function peindre(ctx, t) {
+  const s = raccourci(t), L = levier(s), aj = rampe(t, 0, T_AJOUT);
+  P.cuve(ctx, CUVE.x, CUVE.y, CUVE.w, CUVE.h, CUVE.niveau);
+  if (S.ca) for (const [x, y] of BILLES) P.ca(ctx, x, y, 4.2, aj);
+  if (S.atp) for (const [x, y] of PASTILLES) P.pastille(ctx, x, y, 'ATP', { r: 9, alpha: aj });
+  // Pince du bas (fixe) et fibre.
+  ctx.save(); ctx.fillStyle = '#94a3b8'; ctx.fillRect(FIB.x - 9, FIB.bas - 2, 18, 8); ctx.fillRect(FIB.x - 3, FIB.bas + 6, 6, CUVE.y + CUVE.h - FIB.bas - 7); ctx.restore();
+  P.fibre(ctx, FIB.x, FIB.haut + s, FIB.bas, FIB.w);
+  // Fil et levier (barre métallique), support du pivot.
+  ctx.save();
+  ctx.strokeStyle = 'rgba(241,245,249,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(FIB.x, FIB.haut + s + 2); ctx.lineTo(L.ax, L.ay); ctx.stroke();
+  const gs = ctx.createLinearGradient(LEV.px - 4, 0, LEV.px + 4, 0); gs.addColorStop(0, '#64748b'); gs.addColorStop(.5, '#e2e8f0'); gs.addColorStop(1, '#475569');
+  ctx.fillStyle = gs; ctx.fillRect(LEV.px - 3, LEV.py, 6, CUVE.y - LEV.py); ctx.fillRect(CUVE.x - 4, CUVE.y - 3, CUVE.w + 8, 5);
+  ctx.translate(LEV.px, LEV.py); ctx.rotate(-L.th);
+  const gl = ctx.createLinearGradient(0, -3, 0, 3); gl.addColorStop(0, '#f1f5f9'); gl.addColorStop(.5, '#94a3b8'); gl.addColorStop(1, '#334155');
+  ctx.fillStyle = gl; ctx.beginPath(); ctx.roundRect(-LEV.gauche - 6, -3, LEV.gauche + LEV.droite + 6, 6, 3); ctx.fill();
+  ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(LEV.droite - 2, -3); ctx.lineTo(LEV.droite + 12, 0); ctx.lineTo(LEV.droite - 2, 3); ctx.fill();
+  ctx.restore();
+  ctx.save(); P.perle(ctx, LEV.px, LEV.py, 5, '#f8fafc', '#94a3b8', '#1e293b'); ctx.restore();
+  return { s, L };
+}
+
+/* Écriture « au moment dit » (horloge de la page). */
+const vus = {};
+function quand(c, cle, visible, fn) {
+  if (!visible) { delete vus[cle]; return; }
+  if (!(cle in vus)) vus[cle] = Math.max(0, (performance.now() - scene.ouvert) / 1000);
+  // Chaque élément s’écrit depuis SON instant d’apparition (après les parties fixes), sans attendre les autres.
+  c.cur = Math.max(c._fixe ?? 0, vus[cle]); fn();
+}
+function interrupteur(c, R, on, nom, id) {
+  const ctx = c.ctx;
+  ctx.save(); ctx.fillStyle = on ? 'rgba(74,222,128,.22)' : 'rgba(226,232,240,.06)'; ctx.beginPath(); ctx.roundRect(R.x, R.y, R.w, R.h, 11); ctx.fill(); ctx.restore();
+  c.rect(R.x, R.y, R.w, R.h, { couleur: on ? 'vert' : 'faible', arrondi: 11, largeur: 1.6 });
+  c.cercle(on ? R.x + R.w - 11 : R.x + 11, R.y + 11, 7, { couleur: on ? 'vert' : 'faible', fond: on ? 'vert' : 'faible', fondAlpha: .7, largeur: 1.4 });
+  c.texte(`${nom} : ${on ? 'présent' : 'absent'}`, R.x + R.w + 10, R.y + 16, { couleur: on ? (nom === 'ATP' ? 'vert' : 'jaune') : 'faible', taille: 16 });
+  c.repere(id, R.x - 4, R.y - 4, R.w + 150, R.h + 8, `l’interrupteur ${nom} : ${on ? 'présent' : 'absent'}`);
+}
+
+function dessiner(c) {
+  const t = S.t; let geo;
+  c.direct(() => { geo = peindre(c.ctx, t); });
+  const { s, L } = geo, e = essaiDe(S.ca, S.atp);
+  // Parties fixes.
+  c.texte('Document reconstitué (d’après les expériences classiques des manuels)', 12, 24, { couleur: 'cyan', taille: 15 });
+  c.texte('De quoi la contraction a-t-elle besoin ?', 12, 50, { couleur: 'blanc', taille: 18 });
+  c.texte('On ajoute au liquide :', 420, 50, { couleur: 'faible', taille: 14 });
+  // Le tableau : cadre et en-têtes.
+  const yb = TAB.y + TAB.h0 + 4 * TAB.h;
+  c.rect(TAB.x, TAB.y, TAB.cols[3] - TAB.x, yb - TAB.y, { duree: .18, couleur: 'tresfaible', arrondi: 4, largeur: 1.4 });
+  c.ligne(TAB.x, TAB.y + TAB.h0, TAB.cols[3], TAB.y + TAB.h0, { duree: .18, couleur: 'faible', largeur: 1.3 });
+  for (const x of [TAB.cols[1], TAB.cols[2]]) c.ligne(x, TAB.y, x, yb, { duree: .18, couleur: 'tresfaible', largeur: 1.2 });
+  for (let i = 1; i < 4; i++) c.ligne(TAB.x, TAB.y + TAB.h0 + i * TAB.h, TAB.cols[3], TAB.y + TAB.h0 + i * TAB.h, { duree: .18, couleur: 'tresfaible', largeur: 1 });
+  c.texte('Ca²⁺', 435, TAB.y + 19, { couleur: 'jaune', taille: 15, align: 'center' });
+  c.texte('ATP', 505, TAB.y + 19, { couleur: 'vert', taille: 15, align: 'center' });
+  c.texte('résultat', 644, TAB.y + 19, { couleur: 'blanc', taille: 15, align: 'center' }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  c.texte('levier', 384, 116, { couleur: 'blanc', taille: 15 });
+  c.texte('fibre glycérinée', 176, 236, { couleur: 'rose', taille: 15 });
+  c.texte('cuve : liquide physiologique', 60, 344, { couleur: 'blanc', taille: 15 });
+  c.texte('fibre glycérinée : membrane rendue perméable, réserves perdues', 60, 366, { couleur: 'faible', taille: 13 });
+  // Ce qui bouge.
+  c.direct(() => {
+    interrupteur(c, INT_CA, S.ca, 'Ca²⁺', 'interrupteur_ca'); interrupteur(c, INT_ATP, S.atp, 'ATP', 'interrupteur_atp');
+    c.texte(`essai : ${e.nom}`, 748, 24, { couleur: 'jaune', taille: 15, align: 'right' });
+    if (s > 0.5) { const r = levier(0); c.cercle(r.bx + 6, r.by, 2.5, { couleur: 'faible', largeur: 1.2 }); }
+    c.repere('cuve', CUVE.x, CUVE.y, CUVE.w, CUVE.h, 'la cuve de liquide physiologique');
+    c.repere('fibre', FIB.x - 14, FIB.haut + s - 4, 28, FIB.bas - FIB.haut - s + 8, 'la fibre glycérinée');
+    c.repere('levier', LEV.px - LEV.gauche - 6, Math.min(L.ay, L.by) - 8, LEV.gauche + LEV.droite + 20, Math.abs(L.ay - L.by) + 16, 'le levier');
+    c.repere('tableau', TAB.x, TAB.y, TAB.cols[3] - TAB.x, yb - TAB.y, 'le tableau des essais');
+    // L’essai en cours : sa ligne entourée.
+    const i = ESSAIS.indexOf(e), y0 = TAB.y + TAB.h0 + i * TAB.h;
+    c.rect(TAB.x - 4, y0 + 1, TAB.cols[3] - TAB.x + 8, TAB.h - 2, { couleur: 'jaune', arrondi: 6, largeur: 1.3, alpha: .55 });
+  });
+  // Lignes du tableau, écrites quand l’essai est fait.
+  ESSAIS.forEach((E, i) => {
+    const y = TAB.y + TAB.h0 + i * TAB.h + 21, ok = E.ca && E.atp;
+    quand(c, 'l' + i, !!S.lignes[E.id], () => {
+      c.texte(E.ca ? 'présent' : 'absent', 435, y, { couleur: E.ca ? 'jaune' : 'faible', taille: 15, align: 'center' });
+      c.texte(E.atp ? 'présent' : 'absent', 505, y, { couleur: E.atp ? 'vert' : 'faible', taille: 15, align: 'center' });
+      c.texte(ok ? 'contraction' : 'pas de contraction', 644, y, { couleur: ok ? 'vert' : 'rouge', taille: 16, align: 'center' });
+    });
+  });
+  quand(c, 'reponse', t >= T_REP1, () => c.texte(contracte() ? 'la fibre raccourcit' : 'la fibre ne raccourcit pas', 400, yb + 26, { couleur: contracte() ? 'vert' : 'rouge', taille: 16 }));
+  const conclu = tousRemplis();
+  quand(c, 'conclusion', conclu, () => c.texte('L’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction.', 12, 402, { couleur: 'vert', taille: 18 }));
+  c.direct(() => { if (conclu) c.repere('conclusion', 8, 382, 520, 28, 'la conclusion'); });
+}
+
+/* ── Boucle, moments, commandes ──────────────────────────────────────────── */
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(67); dessiner(c); return c.fin(); });
+function noterLigne() { const e = essaiDe(S.ca, S.atp); if (S.t >= T_LIGNE && !S.lignes[e.id]) { S.lignes[e.id] = true; scene.sale = true; } }
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt); noterLigne();
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fait = S.t >= FIN; $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + motif() + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2), moment: S.nom }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), contracte() ? 'good' : ''); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function resultat() { return contracte() ? 'contraction (la fibre raccourcit)' : 'pas de contraction'; }
+function motif() {
+  const e = essaiDe(S.ca, S.atp);
+  if (S.nom === 'tableau_complet') return 'le tableau est complet ; conclusion : l’ATP et les ions Ca²⁺ sont tous deux nécessaires';
+  if (S.nom && ESSAIS.some(x => x.id === S.nom)) return `essai ${e.nom} : ${resultat()}`;
+  return { ajout: `les substances sont ajoutées (${e.nom})`, reponse: `réponse de la fibre : ${resultat()}`, ligne: 'la ligne du tableau est écrite' }[S.nom] || `t = ${fr(S.t, 1)} s`;
+}
+function message() {
+  const e = essaiDe(S.ca, S.atp), base = `Essai ${e.nom} : ${resultat()}.`;
+  if (tousRemplis()) return base + ' Les quatre essais sont faits : l’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction.';
+  const reste = ESSAIS.filter(x => !S.lignes[x.id]).length;
+  return base + ` Change les interrupteurs pour un autre essai (${reste} ligne(s) à remplir).`;
+}
+const MOMENTS = () => ({ ajout: T_AJOUT, reponse: T_REP1, ligne: T_LIGNE + 0.3, fin: FIN, ca_et_atp: FIN, sans_ca: FIN, sans_atp: FIN, ni_l_un_ni_l_autre: FIN, tableau_complet: FIN });
+function playUntil(p) {
+  const nom = typeof p.moment === 'string' && p.moment in MOMENTS() ? p.moment : null;
+  const essai = ESSAIS.find(x => x.id === nom);
+  if (essai || nom === 'tableau_complet') {
+    if (essai) { S.ca = essai.ca; S.atp = essai.atp; }
+    if (nom === 'tableau_complet') for (const x of ESSAIS) S.lignes[x.id] = true;   // les essais manquants sont reportés d’un coup
+    S.t = 0;
+  }
+  const cible = nom ? MOMENTS()[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = clamp(cible, 0.001, FIN); S.nom = nom && nom !== 'fin' ? nom : null;
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  bulle($('feedback'), `Essai ${essaiDe(S.ca, S.atp).nom}… observe la fibre.`);
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua, ca: S.ca, atp: S.atp }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const t = S.t, e = essaiDe(S.ca, S.atp), s = raccourci(t);
+  const m = [`Document reconstitué (écrit en haut). Temps de l’essai ${fr(t, 1)} s${S.running ? ' (l’essai se déroule)' : S.fait ? ' (essai terminé)' : t > 0 ? ' (arrêt sur image)' : ' (essai pas encore lancé)'}.`];
+  m.push(`Interrupteurs : Ca²⁺ ${S.ca ? 'présent' : 'absent'}, ATP ${S.atp ? 'présent' : 'absent'} (essai « ${e.nom} », sa ligne du tableau entourée en jaune).`);
+  m.push(`Cuve de liquide bleuté avec la fibre glycérinée rose striée, fixée en bas et reliée en haut au levier${t > 0 ? (S.ca || S.atp ? ` ; dans le liquide : ${[S.ca ? 'billes jaunes de Ca²⁺' : '', S.atp ? 'pastilles vertes d’ATP' : ''].filter(Boolean).join(' et ')}` : ' ; rien n’est ajouté au liquide') : ''}.`);
+  if (t < T_REP0) m.push('La fibre a sa longueur de repos ; le levier est horizontal.');
+  else if (contracte()) m.push(s < RACC - 0.1 ? 'La fibre raccourcit (ses stries se resserrent) et la pointe du levier monte.' : 'La fibre a raccourci d’environ 20 % : la pointe du levier est montée (un petit rond marque sa position de repos) ; écrit « la fibre raccourcit ».');
+  else m.push(`La fibre ne raccourcit pas, le levier reste horizontal${t >= T_REP1 ? ' ; écrit « la fibre ne raccourcit pas »' : ''}.`);
+  const lignes = ESSAIS.filter(x => S.lignes[x.id]).map(x => `${x.nom} → ${x.ca && x.atp ? 'contraction' : 'pas de contraction'}`);
+  m.push(`Tableau (Ca²⁺ / ATP / résultat), ${lignes.length} ligne(s) sur 4 remplie(s)${lignes.length ? ' : ' + lignes.join(' ; ') : ''}.`);
+  if (tousRemplis()) m.push('Conclusion écrite en vert : « L’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction. »');
+  return m.join(' ');
+}
+
+function start() { S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), `Essai ${essaiDe(S.ca, S.atp).nom}… observe la fibre.`); pont.noter('start', { ca: S.ca, atp: S.atp }); pont.emettre(); }
+function reset() { S.lignes = {}; start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN; noterLigne();
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+const bool = v => (typeof v === 'string' ? !/^(false|0|non|no|off|absent)$/i.test(v.trim()) : !!v);
+/* Un interrupteur changé : la scène revient au début de l’essai (le bouton lance l’essai). */
+function nouvelEssai(par) {
+  S.running = false; S.jusqua = null; S.nom = null; S.t = 0; S.fait = false; $('run').textContent = 'Lancer'; scene.sale = true;
+  bulle($('feedback'), `Essai préparé : ${essaiDe(S.ca, S.atp).nom}. Appuie sur Lancer.`);
+  pont.noter('set_parameters', { ca: S.ca, atp: S.atp, par }); pont.emettre();
+}
+function setParameters(p) {
+  let change = false;
+  if ('ca' in p) { S.ca = bool(p.ca); change = true; }
+  if ('atp' in p) { S.atp = bool(p.atp); change = true; }
+  if (change) nouvelEssai('tuteur');
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py), dans = R => x > R.x - 8 && x < R.x + R.w + 140 && y > R.y - 6 && y < R.y + R.h + 6;
+    return dans(INT_CA) ? 'ca' : dans(INT_ATP) ? 'atp' : null;
+  },
+  bouger: () => {},
+  lacher: (id) => { if (id === 'ca') S.ca = !S.ca; else S.atp = !S.atp; nouvelEssai('eleve'); },
+});
+
+window.Tableau.explication({ exigences: [
+  { repere: 'fibre', texte: 'Une fibre glycérinée : sa membrane est rendue perméable et elle a perdu ses réserves ; on choisit ce qu’elle reçoit.' },
+  { repere: 'interrupteur_ca', texte: 'On ajoute, ou non, des ions Ca²⁺ au liquide…' },
+  { repere: 'interrupteur_atp', texte: '… et, ou non, de l’ATP.' },
+  { repere: 'levier', texte: 'Si la fibre raccourcit, le levier monte.' },
+  { repere: 'tableau', texte: 'Seul l’essai avec le Ca²⁺ ET l’ATP donne une contraction.' },
+  { repere: 'conclusion', texte: 'L’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_exigences_contraction', version: '1.0', title: 'De quoi la contraction a-t-elle besoin ? (document reconstitué)', variants: [{ id: 'exigences', label: 'exigences' }], commands: commandes,
+  command_schema: {
+    set_parameters: { ca: 'true | false (ions Ca²⁺ ajoutés au liquide)', atp: 'true | false (ATP ajouté au liquide) — prépare l’essai, start le lance' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (instant de l’essai en cours, en s)` },
+    play_until: { moment: 'ca_et_atp | sans_ca | sans_atp | ni_l_un_ni_l_autre (pose les deux interrupteurs, fait l’essai, ajoute la ligne, se fige) | tableau_complet (remplit les lignes manquantes, écrit la conclusion) | ajout | reponse | ligne | fin (instants de l’essai en cours)', time_s: 'ou un instant en s de l’essai' },
+    reset: 'vide le tableau et relance l’essai en cours' } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Document reconstitué (d’après les expériences classiques des manuels). Fibre musculaire glycérinée (membrane rendue perméable, réserves perdues) dans une cuve de liquide physiologique, reliée à un levier. On ajoute ou non des ions Ca²⁺ et de l’ATP : la fibre ne raccourcit que si les deux sont présents. Tableau à quatre lignes (Ca²⁺ / ATP / résultat). Conclusion : l’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'exigences',
+    time_s: +S.t.toFixed(2), parameters: { ca: S.ca, atp: S.atp, essai: essaiDe(S.ca, S.atp).id, lignes: ESSAIS.filter(x => S.lignes[x.id]).map(x => x.id), contraction: contracte() }, moments: MOMENTS() }),
+  progression: () => ESSAIS.filter(x => S.lignes[x.id]).length / 4,
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une fibre glycérinée dans sa cuve…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diffraction de la lumière — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Diffraction de la lumière : un laser éclaire une fente fine (ou un fil, ou un trou) ; vue de dessus du montage et écran vu de face avec la figure de diffraction, la tache centrale, les extinctions et la largeur L"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Diffraction de la lumière (cours « Propagation d’une onde lumineuse », 2e Bac PC BIOF, novembre 2026).
+ * Un laser (ou une lampe blanche) éclaire une fente de largeur a (ou un fil de diamètre d, ou un trou) ; l’écran est à D.
+ * Deux vues : « Vue de dessus » (schéma, PAS à l’échelle : l’angle est exagéré pour l’œil, et c’est écrit) et
+ * « Écran vu de face » (à l’échelle : 24 px par cm, règle graduée en cm).
+ *
+ * Physique (exacte, le rendu peint ne la change jamais) :
+ *  - dans le milieu d’indice n : λ = λ₀/n ; θ = λ/a ; L = 2λD/a, soit L = 2λ₀D/(n·a) ;
+ *  - intensité sur l’écran : I(x) = [sin(u)/u]², u = π·a·x/(λD) : nulle exactement en x = k·λD/a (extinctions),
+ *    tache centrale de largeur L = 2λD/a, taches secondaires deux fois plus étroites et bien plus pâles ;
+ *  - fil : même figure (d à la place de a) ; trou : tache ronde et anneaux (profil [2J₁(v)/v]², qualitatif, aucune
+ *    valeur affichée) ; lumière blanche : somme des radiations de 400 à 780 nm (chacune sa tache), qualitatif.
+ * Peinture : l’éclat suit √I (l’œil et l’appareil photo compressent : le centre sature presque en blanc, les taches
+ * secondaires restent visibles) — pour l’œil seulement : les positions des extinctions et la largeur L sont exactes.
+ * Couleur : couleurDe(λ₀), la couleur appartient à la source (elle ne change pas dans l’eau).
+ * Vues (?vue=) : ouverture (défaut), figure, reglage, mesure, fil, cuve, blanche.
+ * Poignées : la lèvre de la fente (a), l’écran (D), la pastille de couleur sur le laser (touche = couleur suivante).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['ouverture', 'figure', 'reglage', 'mesure', 'fil', 'cuve', 'blanche'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'ouverture';
+const N_EAU = 1.33;
+const PRESETS = {
+  ouverture: { a: 0.05, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'laser' },
+  figure: { a: 0.10, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'laser' },
+  reglage: { a: 0.20, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'laser' },
+  mesure: { a: 0.10, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'laser' },
+  fil: { a: 0.08, D: 2.0, lam: 600, objet: 'fil', milieu: 'air', orientation: 'verticale', source: 'laser' },
+  cuve: { a: 0.10, D: 2.0, lam: 600, objet: 'fente', milieu: 'eau', orientation: 'verticale', source: 'laser' },
+  blanche: { a: 0.10, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'blanche' },
+};
+const P = { ...PRESETS[vue] };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const PASTILLES = [400, 450, 520, 580, 650];
+
+/* ── Instants clés (s de la scène) : [nom, instant, ce qu’on voit] ─────────────────────────── */
+const SUITE_FIGURE = [['laser_allume', 0.6, 'le laser s’allume'], ['tache_s_etale', 1.8, 'la lumière s’étale derrière la fente'],
+  ['tache_centrale', 3.2, 'la tache centrale est entourée'], ['extinctions', 4.6, 'les extinctions sont marquées'],
+  ['mesure_L', 6.2, 'la largeur L de la tache centrale est mesurée'], ['fin', 7.8, 'fin']];
+const SUITES = {
+  ouverture: [['laser_allume', 0.6, 'le laser s’allume'], ['point_sur_ecran', 1.8, 'le faisceau nu fait un point net sur l’écran'],
+    ['fente_placee', 3.2, 'la fente (a = 0,40 mm) est posée'], ['fente_se_ferme', 5.0, 'la fente se ferme : a diminue'],
+    ['tache_s_etale', 7.6, 'a = 0,05 mm : la tache est large'], ['tache_centrale', 9.0, 'la tache centrale est entourée'],
+    ['extinctions', 10.4, 'les extinctions sont marquées'], ['mesure_L', 12.0, 'la largeur L de la tache centrale est mesurée'], ['fin', 13.6, 'fin']],
+  figure: SUITE_FIGURE, reglage: SUITE_FIGURE, mesure: SUITE_FIGURE, fil: SUITE_FIGURE,
+  cuve: [['laser_allume', 0.6, 'le laser s’allume'], ['tache_s_etale', 1.8, 'la lumière s’étale derrière la fente'],
+    ['mesure_L', 3.4, 'L est mesurée dans l’air'], ['cuve_se_remplit', 5.0, 'la cuve se remplit d’eau'],
+    ['tache_se_resserre', 6.8, 'dans l’eau, la tache se resserre'], ['mesure_L_prime', 8.4, 'L’ est mesurée dans l’eau'], ['fin', 10.0, 'fin']],
+  blanche: [['laser_allume', 0.6, 'la lampe s’allume'], ['tache_s_etale', 1.8, 'la lumière s’étale derrière la fente'],
+    ['tache_centrale', 3.2, 'la tache centrale : centre blanc'], ['bords_colores', 4.6, 'les bords de la tache sont colorés'], ['fin', 6.2, 'fin']],
+};
+const SUITE = SUITES[vue];
+const AV = 1.2;                                   // une annotation s’écrit pendant les 1,2 s qui précèdent son instant
+function moments() { const m = {}; for (const [n, t] of SUITE) m[n] = t; return m; }
+const M = moments();
+const FIN = M.fin;
+const a_ = nom => (nom in M ? M[nom] - AV : Infinity);      // début d’écriture de l’annotation
+const vu = nom => nom in M && S.t >= a_(nom);
+
+/* ── Déroulé de la scène ─────────────────────────────────────────────────────────────────── */
+const OUV = vue === 'ouverture', CUVE = vue === 'cuve';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const lumiere = () => clamp((S.t - 0.2) / 0.4, 0, 1);                  // le laser s’allume (0 → 1 entre 0,2 et 0,6 s)
+const glisseFente = () => (OUV ? lisse((S.t - 2.0) / 1.0) : 1);        // la fente descend sur le faisceau (vue ouverture)
+const objetPresent = () => !OUV || S.t >= 2.85;
+function aMaintenant() {                                                // a affichée (mm) : en vue ouverture, 0,40 → a final
+  if (!OUV) return P.a;
+  if (S.t < 3.6) return 0.40;
+  return 0.40 + (P.a - 0.40) * clamp((S.t - 3.6) / 3.0, 0, 1);
+}
+const remplissage = () => (P.milieu !== 'eau' ? 0 : CUVE ? lisse((S.t - 3.8) / 1.6) : 1);
+const nPhys = () => (P.milieu !== 'eau' ? 1 : CUVE ? (S.t >= 5.4 ? N_EAU : 1) : N_EAU);
+const nVis = () => (P.milieu !== 'eau' ? 1 : CUVE ? 1 + (N_EAU - 1) * lisse((S.t - 5.4) / 0.8) : N_EAU);   // pour l’œil : la tache se resserre en 0,8 s
+const resserre = () => CUVE && P.milieu === 'eau' && S.t > 5.4 && S.t < 6.2;
+
+/* Valeurs exactes (SI). */
+function valeurs(n = nPhys(), a = aMaintenant()) {
+  const lam0 = P.lam * 1e-9, lam = lam0 / n, am = a * 1e-3;
+  return { n, lam0, lam, a: am, D: P.D, theta: lam / am, L: 2 * lam * P.D / am };
+}
+
+/* ── Couleur d’une radiation (approximation usuelle du spectre visible) ──────────────────────── */
+function couleurDe(l) {
+  const x = clamp(l, 380, 780); let r = 0, g = 0, b = 0;
+  if (x < 440) { r = .8 * (440 - x) / 60; b = 1; } else if (x < 490) { g = (x - 440) / 50; b = 1; } else if (x < 510) { g = 1; b = (510 - x) / 20; }
+  else if (x < 580) { r = (x - 510) / 70; g = 1; } else if (x < 645) { r = 1; g = (645 - x) / 65; } else r = 1;
+  const f = x < 420 ? .3 + .7 * (x - 380) / 40 : x > 700 ? .3 + .7 * (780 - x) / 80 : 1;   // l’œil voit mal les bords du visible
+  return [r, g, b].map(v => Math.pow(v * f, .8));
+}
+const nomCouleur = l => (l < 425 ? 'violet' : l < 490 ? 'bleu' : l < 560 ? 'vert' : l < 590 ? 'jaune' : l < 620 ? 'orange' : 'rouge');
+const css = (rgb, a = 1) => `rgba(${rgb.map(v => Math.round(clamp(v, 0, 1) * 255)).join(',')},${a})`;
+const BLANC_L = []; for (let l = 400; l <= 780; l += 10) BLANC_L.push([l, couleurDe(l)]);
+const SOMME_BLANC = [0, 1, 2].map(k => BLANC_L.reduce((s, [, c]) => s + c[k], 0));
+
+/* ── Intensité sur l’écran (x en m depuis le centre) ──────────────────────────────────────── */
+const sinc2 = u => (Math.abs(u) < 1e-9 ? 1 : (Math.sin(u) / u) ** 2);
+function J1(x) { let s = 0; const n = 28; for (let i = 0; i < n; i++) { const t = (i + .5) / n * Math.PI; s += Math.cos(t - x * Math.sin(t)); } return s / n; }
+const airy = v => (Math.abs(v) < 1e-6 ? 1 : (2 * J1(v) / v) ** 2);
+/** Intensité relative (0..1) en x (m), pour la longueur d’onde dans le vide l0 (m), avec l’indice n. */
+function intensite(x, l0, n, a, objet) {
+  if (!objetPresent()) { const w = 1.2e-3; return Math.exp(-2 * (x / w) ** 2); }           // le faisceau nu : un point
+  const u = Math.PI * a * x / (l0 / n * P.D);
+  return objet === 'trou' ? airy(u) : sinc2(u);
+}
+/** Couleur peinte en x (m) : éclat ∝ √I, centre saturé vers le blanc (pour l’œil). */
+function peint(x, n, a, gain = 1) {
+  if (P.source === 'blanche') {
+    const lin = [0, 0, 0];
+    for (const [l, c] of BLANC_L) { const I = intensite(x, l * 1e-9, n, a, P.objet); for (let k = 0; k < 3; k++) lin[k] += c[k] * I; }
+    return lin.map((v, k) => Math.min(1, gain * 1.5 * Math.sqrt(v / SOMME_BLANC[k])));
+  }
+  const c = couleurDe(P.lam), B = gain * 1.7 * Math.sqrt(intensite(x, P.lam * 1e-9, n, a, P.objet)), sur = .55 * Math.max(0, B - 1);
+  return c.map(v => Math.min(1, v * B + sur));
+}
+
+/* ── Géométrie du dessin ──────────────────────────────────────────────────────────────────── */
+const R1 = { x: 8, y: 34, w: 372, h: 236 }, YC = 152, XF = 124;        // vue de dessus : la fente en XF
+const KT = 12;                                                          // vue de dessus : 12 px par cm sur l’écran (angle ×15)
+const XE = () => XF + 80 * P.D;                                         // l’écran (80 px par m)
+const R2 = { x: 392, y: 34, w: 360, h: 236 }, CX = 572, CY = 146, KS = 24;   // écran vu de face : 24 px par cm
+const VERT = () => P.orientation === 'horizontale';                     // fente horizontale → figure verticale
+const ecart = a => 3 + a * 50;                                          // ouverture dessinée (px), exagérée
+const LASER = { x: 18, w: 68, h: 26 }, PAST = { x: 52, y: YC + 32, r: 8 };
+
+function chemin(ctx, R, r = 8) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(R.x, R.y, R.w, R.h, r) : ctx.rect(R.x, R.y, R.w, R.h); }
+/** Salle sombre dans le cadre de la vue (le tableau du cours reste visible autour). */
+function salle(ctx, R) {
+  const g = ctx.createRadialGradient(R.x + R.w / 2, R.y + R.h / 2, 20, R.x + R.w / 2, R.y + R.h / 2, R.w * .7);
+  g.addColorStop(0, 'rgba(14,17,24,.95)'); g.addColorStop(1, 'rgba(5,7,11,.95)');
+  ctx.fillStyle = g; chemin(ctx, R); ctx.fill();
+}
+
+/** Un calque hors écran de la taille du canvas, avec le même repère : on y peint, puis on l’ajoute (lumière). */
+const CALQUE = document.createElement('canvas');
+function calque(ctx) {
+  if (CALQUE.width !== ctx.canvas.width || CALQUE.height !== ctx.canvas.height) { CALQUE.width = ctx.canvas.width; CALQUE.height = ctx.canvas.height; }
+  const o = CALQUE.getContext('2d'); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, CALQUE.width, CALQUE.height); o.setTransform(ctx.getTransform()); return o;
+}
+function poser(ctx) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(CALQUE, 0, 0); ctx.restore(); }
+
+/* ── Peinture : vue de dessus ─────────────────────────────────────────────────────────────── */
+function peindreDessus(ctx) {
+  const lum = lumiere(), present = objetPresent(), a = aMaintenant(), n = nVis(), gap = ecart(a), xe = XE();
+  ctx.save(); chemin(ctx, R1); ctx.clip(); salle(ctx, R1);
+  // La cuve d’eau (fente et écran dedans) : verre peint, eau teintée.
+  const f = remplissage();
+  if (P.milieu === 'eau') {
+    const C = { x: XF - 18, y: YC - 100, w: xe + 14 - (XF - 18), h: 204 };
+    ctx.fillStyle = `rgba(56,132,196,${.30 * f})`; ctx.fillRect(C.x, C.y, C.w, C.h);
+    if (f > 0) {
+      const g = ctx.createLinearGradient(C.x, C.y, C.x + C.w, C.y + C.h);
+      g.addColorStop(0, `rgba(160,220,255,${.10 * f})`); g.addColorStop(.5, 'rgba(160,220,255,0)'); g.addColorStop(1, `rgba(160,220,255,${.06 * f})`);
+      ctx.fillStyle = g; ctx.fillRect(C.x, C.y, C.w, C.h);
+    }
+    ctx.strokeStyle = 'rgba(200,230,255,.55)'; ctx.lineWidth = 2.5; ctx.strokeRect(C.x, C.y, C.w, C.h);       // arêtes du verre
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.strokeRect(C.x + 3, C.y + 3, C.w - 6, C.h - 6);
+    ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.fillRect(C.x + 6, C.y + 6, 5, C.h - 12);                      // reflet
+  }
+  // L’écran (vu par la tranche).
+  const ge = ctx.createLinearGradient(xe - 3, 0, xe + 5, 0);
+  ge.addColorStop(0, '#5b6472'); ge.addColorStop(.5, '#3b414c'); ge.addColorStop(1, '#22262e');
+  ctx.fillStyle = ge; ctx.fillRect(xe - 2, YC - 100, 7, 200);
+  if (lum > 0) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const col = P.source === 'blanche' ? [1, 1, 1] : couleurDe(P.lam);
+    // Le faisceau avant la fente : cœur lumineux et halo.
+    const xFin = present ? XF : xe, x0 = LASER.x + LASER.w;
+    for (const [w, al] of [[16, .16], [7, .55], [2.6, .9]]) {
+      const g = ctx.createLinearGradient(0, YC - w, 0, YC + w);
+      g.addColorStop(0, css(col, 0)); g.addColorStop(.5, css(col.map(v => Math.min(1, v + (w < 3 ? .45 : 0))), al * lum)); g.addColorStop(1, css(col, 0));
+      ctx.fillStyle = g; ctx.fillRect(x0, YC - w, xFin - x0, 2 * w);
+    }
+    if (present) {
+      // L’éventail : des coins fins depuis la fente, chacun de la couleur et de l’éclat de l’écran en face.
+      // Peints d’abord à part, sans s’additionner (les coins se chevauchent d’un demi-pixel : aucune couture), puis ajoutés.
+      const o = calque(ctx), NW = 160, SP = 100, pasW = 2 * SP / NW;
+      for (let i = 0; i < NW; i++) {
+        const y0 = -SP + pasW * i, y1 = y0 + pasW, x = ((y0 + y1) / 2) / KT / 100;      // x en m sur l’écran
+        const rgb = peint(x, n, a * 1e-3, .55).map(v => v * .72 * lum);
+        if (rgb[0] + rgb[1] + rgb[2] < .01) continue;
+        o.fillStyle = css(rgb); o.beginPath();
+        o.moveTo(XF, YC - gap / 2 * .4); o.lineTo(xe, YC + y0 - .4); o.lineTo(xe, YC + y1 + .4); o.lineTo(XF, YC + gap / 2 * .4); o.closePath(); o.fill();
+      }
+      poser(ctx);
+      // L’écran éclairé là où la lumière arrive.
+      for (let y = -SP; y < SP; y += 1.5) { const rgb = peint(y / KT / 100, n, a * 1e-3, 1); ctx.fillStyle = css(rgb, lum); ctx.fillRect(xe - 3, YC + y, 3, 1.6); }
+    } else {
+      const rgb = col; ctx.fillStyle = css(rgb.map(v => Math.min(1, v + .5)), lum); ctx.fillRect(xe - 3, YC - 3, 3, 6);
+    }
+    ctx.restore();
+    // La lumière diffusée faiblit en s’éloignant de la fente (pour l’œil).
+    if (present) {
+      ctx.save(); ctx.globalCompositeOperation = 'multiply';
+      const g = ctx.createRadialGradient(XF, YC, 10, XF, YC, 280); g.addColorStop(0, '#fff'); g.addColorStop(1, '#6a6a6a');
+      ctx.fillStyle = g; ctx.fillRect(XF, R1.y, xe - XF - 3, R1.h); ctx.restore();
+    }
+  }
+  // Le laser (ou la lampe) : boîtier ombré.
+  const gl = ctx.createLinearGradient(0, YC - LASER.h / 2, 0, YC + LASER.h / 2);
+  gl.addColorStop(0, '#6b7280'); gl.addColorStop(.35, '#374151'); gl.addColorStop(1, '#111827');
+  ctx.fillStyle = gl; ctx.beginPath(); ctx.roundRect(LASER.x, YC - LASER.h / 2, LASER.w, LASER.h, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(LASER.x + 4, YC - LASER.h / 2 + 2, LASER.w - 8, 2);
+  if (P.source === 'blanche') {                                    // lampe : fentes d’aération et condenseur
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; for (let k = 0; k < 4; k++) ctx.fillRect(LASER.x + 10 + k * 9, YC - 8, 3, 16);
+    ctx.fillStyle = 'rgba(190,215,235,.5)'; ctx.beginPath(); ctx.ellipse(LASER.x + LASER.w + 2, YC, 3, 11, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  const ouv = ctx.createRadialGradient(LASER.x + LASER.w, YC, 0, LASER.x + LASER.w, YC, 9);
+  const colL = P.source === 'blanche' ? [1, 1, 1] : couleurDe(P.lam);
+  ouv.addColorStop(0, lum > 0 ? css(colL.map(v => Math.min(1, v + .4)), 1) : '#0b0f14'); ouv.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = ouv; ctx.beginPath(); ctx.arc(LASER.x + LASER.w, YC, 9, 0, Math.PI * 2); ctx.fill();
+  // La pastille de couleur.
+  const gp = ctx.createRadialGradient(PAST.x - 3, PAST.y - 3, 1, PAST.x, PAST.y, PAST.r);
+  gp.addColorStop(0, '#fff'); gp.addColorStop(.35, css(colL)); gp.addColorStop(1, css(colL.map(v => v * .5)));
+  ctx.fillStyle = gp; ctx.beginPath(); ctx.arc(PAST.x, PAST.y, PAST.r, 0, Math.PI * 2); ctx.fill();
+  // L’objet diffractant.
+  const dy = (1 - glisseFente()) * -150, alphaO = OUV ? (S.t >= 2.0 ? 1 : 0) : 1;
+  if (alphaO > 0) {
+    ctx.save(); ctx.translate(0, dy);
+    const metal = (x, y, w, h) => {
+      const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#9ca3af'); g.addColorStop(.4, '#4b5563'); g.addColorStop(1, '#1f2937');
+      ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    };
+    if (P.objet === 'fil') {
+      ctx.strokeStyle = 'rgba(148,163,184,.5)'; ctx.lineWidth = 3; ctx.strokeRect(XF - 10, YC - 86, 20, 172);   // le cadre du fil
+      const r = Math.max(1.6, gap / 2), g = ctx.createRadialGradient(XF - r * .4, YC - r * .4, .2, XF, YC, r);
+      g.addColorStop(0, '#e5e7eb'); g.addColorStop(.5, '#6b7280'); g.addColorStop(1, '#1f2937');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(XF, YC, r, 0, Math.PI * 2); ctx.fill();
+    } else {
+      metal(XF - 4, YC - 88, 8, 88 - gap / 2); metal(XF - 4, YC + gap / 2, 8, 88 - gap / 2);
+      if (lum > 0 && present) {                                     // les arêtes des lèvres éclairées par le faisceau
+        ctx.fillStyle = css(colL.map(v => Math.min(1, v + .3)), .8 * lum);
+        ctx.fillRect(XF - 5, YC - gap / 2 - 9, 2, 9); ctx.fillRect(XF - 5, YC + gap / 2, 2, 9);
+      }
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ── Peinture : l’écran vu de face ───────────────────────────────────────────────────────── */
+function peindreEcran(ctx) {
+  const lum = lumiere(), a = aMaintenant() * 1e-3, n = nVis();
+  ctx.save(); chemin(ctx, R2); ctx.clip(); salle(ctx, R2);
+  const E = { x: R2.x + 12, y: R2.y + 10, w: R2.w - 24, h: R2.h - 20 };
+  const gc = ctx.createLinearGradient(E.x, E.y, E.x + E.w, E.y + E.h);
+  gc.addColorStop(0, '#20242c'); gc.addColorStop(.5, '#262a33'); gc.addColorStop(1, '#1a1d24');
+  ctx.fillStyle = gc; ctx.fillRect(E.x, E.y, E.w, E.h);                    // la feuille de l’écran, à peine éclairée
+  if (lum > 0) {
+    ctx.save(); ctx.beginPath(); ctx.rect(E.x, E.y, E.w, E.h); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+    const vert = VERT(), demi = vert ? E.h / 2 : E.w / 2, NS = 260;
+    if (P.objet === 'trou' && objetPresent()) {
+      const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, demi);
+      for (let i = 0; i <= NS; i++) { const r = demi * i / NS; g.addColorStop(i / NS, css(peint(r / KS / 100, n, a), lum)); }
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX, CY, demi, 0, Math.PI * 2); ctx.fill();
+      ctx.filter = 'blur(4px)'; ctx.globalAlpha = .45; ctx.fill(); ctx.filter = 'none'; ctx.globalAlpha = 1;
+    } else if (!objetPresent()) {
+      const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, 14), col = P.source === 'blanche' ? [1, 1, 1] : couleurDe(P.lam);
+      g.addColorStop(0, css(col.map(v => Math.min(1, v + .6)), lum)); g.addColorStop(.3, css(col, lum)); g.addColorStop(1, css(col, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX, CY, 14, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // La figure : un dégradé exact le long de la direction d’étalement, un faisceau de 2 mm de haut dans l’autre sens.
+      const g = vert ? ctx.createLinearGradient(0, CY - demi, 0, CY + demi) : ctx.createLinearGradient(CX - demi, 0, CX + demi, 0);
+      for (let i = 0; i <= NS; i++) { const u = -demi + 2 * demi * i / NS; g.addColorStop(i / NS, css(peint(u / KS / 100, n, a), 1)); }
+      ctx.fillStyle = g; const sig = 4.2;
+      for (let j = -12; j <= 12; j++) {
+        ctx.globalAlpha = lum * Math.exp(-(((j * 1.2) / sig) ** 2) / 2);
+        if (vert) ctx.fillRect(CX + j * 1.2 - .6, CY - demi, 1.3, 2 * demi); else ctx.fillRect(CX - demi, CY + j * 1.2 - .6, 2 * demi, 1.3);
+      }
+      ctx.filter = 'blur(5px)'; ctx.globalAlpha = .35 * lum;                  // halo
+      if (vert) ctx.fillRect(CX - 7, CY - demi, 14, 2 * demi); else ctx.fillRect(CX - demi, CY - 7, 2 * demi, 14);
+      ctx.filter = 'none'; ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────── */
+/** Écrit `fn` à la craie au rythme de la scène, à partir de l’instant t0 (s) : une annotation apparaît quand elle arrive. */
+function ecrit(c, t0, fn) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait ? Infinity : S.t; c.cur = t0;      // à la fin, tout est écrit
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+function sci(x, d = 1) {
+  if (!(x > 0)) return '0';
+  let e = Math.floor(Math.log10(x)), m = x / 10 ** e;
+  if (+m.toFixed(d) >= 10) { e += 1; m /= 10; }
+  const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+  return `${fr(m, d)}·10${String(e).split('').map(ch => SUP[ch]).join('')}`;
+}
+const lettreA = () => (P.objet === 'fil' ? 'd' : 'a');
+const nomObjet = () => (P.objet === 'fil' ? 'fil' : P.objet === 'trou' ? 'trou' : 'fente');
+const quantitatif = () => P.source === 'laser' && P.objet !== 'trou';
+
+function dessinerDessus(c) {
+  const xe = XE(), a = aMaintenant(), gap = ecart(a), v = valeurs(nVis(), a), dy = (1 - glisseFente()) * -150;
+  c.texte(VERT() ? 'Vue de côté' : 'Vue de dessus', 14, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_dessus', R1.x, R1.y, R1.w, R1.h, VERT() ? 'la vue de côté du montage' : 'la vue de dessus du montage');
+  c.texte(P.source === 'blanche' ? 'lampe' : 'laser', LASER.x + LASER.w / 2, YC - 20, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.repere('laser', LASER.x - 4, YC - 36, LASER.w + 14, LASER.h + 24, P.source === 'blanche' ? 'la lampe (lumière blanche)' : 'le laser');
+  c.direct(() => {
+    c.cercle(PAST.x, PAST.y, PAST.r + 3, { couleur: 'faible', largeur: 1.4 });
+    c.texte('couleur', PAST.x, PAST.y + 26, { couleur: 'faible', taille: 13, align: 'center' });
+    c.repere('pastille_couleur', PAST.x - 18, PAST.y - 14, 36, 44, 'la pastille de couleur (touche : couleur suivante)');
+    // L’objet : nom, cote a, poignée.
+    if (!OUV || S.t >= 3.0) {
+      c.texte(P.objet === 'fil' ? 'fil' : P.objet === 'trou' ? 'trou' : (VERT() ? 'fente (horizontale)' : 'fente'), XF, R1.y + 16, { couleur: 'blanc', taille: 15, align: 'center' });
+    }
+    c.repere('fente', XF - 14, YC - 90 + dy, 28, 180, `${P.objet === 'fil' ? 'le fil' : P.objet === 'trou' ? 'le trou' : 'la fente'} : ${lettreA()} = ${fr(a, 2)} mm`);
+    if (objetPresent()) {
+      const yh = YC - gap / 2 - 8;
+      c.cercle(XF, yh, 5.5, { couleur: 'jaune', largeur: 1.8 });
+      c.texte('⇕', XF + 9, yh - 2, { couleur: 'faible', taille: 13 });
+      c.repere('poignee_a', XF - 12, yh - 12, 24, 24, `la poignée de ${P.objet === 'fil' ? 'l’épaisseur du fil' : 'la lèvre de la fente'} (règle ${lettreA()})`);
+      c.ligne(XF - 12, YC - gap / 2, XF - 12, YC + gap / 2, { couleur: 'jaune', largeur: 1.6 });
+      c.texte(lettreA(), XF - 16, YC + 6, { couleur: 'jaune', taille: 17, align: 'right' });
+      c.repere('a', XF - 30, YC - 14, 26, 28, `${lettreA()} = ${fr(a, 2)} mm`);
+    } else { c.repere('poignee_a', XF - 12, YC - 30, 24, 24, 'la poignée de la lèvre de la fente'); c.repere('a', XF - 30, YC - 14, 26, 28, 'a'); }
+    // L’écran et la poignée D.
+    c.texte('écran', xe > 330 ? xe + 6 : xe, YC - 106, { couleur: 'blanc', taille: 15, align: xe > 330 ? 'right' : 'center' });
+    c.repere('ecran', xe - 10, YC - 104, 22, 208, 'l’écran');
+    c.cercle(xe + 1, YC + 92, 5.5, { couleur: 'jaune', largeur: 1.8 });
+    c.texte('⇔', xe + 1, YC + 82, { couleur: 'faible', taille: 13, align: 'center' });
+    c.repere('poignee_D', xe - 11, YC + 80, 24, 24, 'la poignée de l’écran (règle D)');
+    c.cote(XF, YC + 108, xe, YC + 108, `D = ${fr(P.D, 1)} m`, { couleur: 'orange', taille: 15 });
+    c.repere('D', XF, YC + 90, xe - XF, 28, `D = ${fr(P.D, 1)} m`);
+    if (P.milieu === 'eau') {
+      const f = remplissage();
+      if (f > 0) c.texte(`eau (n = ${fr(N_EAU, 2)})`, XF + 26, R1.y + 36, { couleur: 'bleu', taille: 14 });
+      c.repere('cuve', XF - 18, YC - 100, xe + 14 - (XF - 18), 204, `la cuve d’eau (n = ${fr(N_EAU, 2)})`);
+    }
+  });
+  // θ : du centre de la tache au bord de la tache centrale (première extinction), angle exagéré.
+  const demiTop = v.L / 2 * 100 * KT, ang = Math.atan2(demiTop, xe - XF);
+  const thetaVu = objetPresent() && P.objet !== 'trou' && P.source === 'laser' && ('tache_centrale' in M ? vu('tache_centrale') : vu('tache_s_etale'));
+  if (thetaVu) {
+    ecrit(c, 'tache_centrale' in M ? a_('tache_centrale') : a_('tache_s_etale') + .4, () => {
+      c.ligne(XF, YC, xe, YC, { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+      c.ligne(XF, YC, xe, YC - demiTop, { couleur: 'rose', largeur: 1.6 });
+      const r = 46; c.courbe(u => [XF + r * Math.cos(-ang * u), YC + r * Math.sin(-ang * u)], 12, { couleur: 'rose', largeur: 1.8 });
+      c.texte('θ', XF + r + 8, YC - Math.max(4, r * Math.sin(ang / 2)) + 4, { couleur: 'rose', taille: 18, duree: .15 });
+      c.texte('angle exagéré pour l’œil', XF + 14, R1.y + R1.h - 6 - 34, { couleur: 'faible', taille: 13, duree: .5 });
+    });
+  }
+  c.repere('theta', XF + 30, YC - 36, 44, 38, `θ = ${sci(v.theta)} rad (du centre au bord de la tache centrale)`);
+  if (vu('tache_s_etale') && objetPresent()) ecrit(c, a_('tache_s_etale'), () => c.texte('la lumière s’étale', XF + 40, YC - 46, { couleur: 'vert', taille: 15, duree: .7 }));
+  if (OUV && vu('point_sur_ecran') && !objetPresent()) ecrit(c, a_('point_sur_ecran'), () => c.texte('faisceau fin, tout droit', XF - 20, YC - 14, { couleur: 'vert', taille: 14, duree: .7 }));
+  if (OUV && S.t >= a_('fente_se_ferme') && S.t < 6.9) ecrit(c, a_('fente_se_ferme'), () => {
+    c.fleche(XF + 22, YC - 60, XF + 22, YC - 30, { couleur: 'vert', largeur: 1.6, tete: 8 });
+    c.fleche(XF + 22, YC + 60, XF + 22, YC + 30, { couleur: 'vert', largeur: 1.6, tete: 8 });
+    c.texte('la fente se ferme', XF + 30, YC - 64, { couleur: 'vert', taille: 14, duree: .6 });
+  });
+}
+
+function dessinerEcran(c) {
+  const vert = VERT(), v = valeurs(nVis()), Lpx = v.L * 100 * KS, a = aMaintenant();
+  c.texte('Écran vu de face', R2.x + 6, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_ecran', R2.x, R2.y, R2.w, R2.h, 'l’écran vu de face');
+  // La règle graduée en cm (0 à 14 à plat, 0 à 9 debout).
+  c.direct(() => {
+    if (!vert) {
+      const y = R2.y + R2.h - 34, x0 = CX - 7 * KS;
+      c.ligne(x0, y, x0 + 14 * KS, y, { couleur: 'faible', largeur: 1.6, tremble: .3 });
+      for (let k = 0; k <= 28; k++) { const x = x0 + k * KS / 2, h = k % 2 ? 4 : 8; c.ligne(x, y, x, y - h, { couleur: 'faible', largeur: 1.2, tremble: .2 }); if (k % 2 === 0) c.texte(String(k / 2), x, y + 15, { couleur: 'faible', taille: 12, align: 'center' }); }
+      c.texte('cm', x0 + 14 * KS + 2, y - 10, { couleur: 'faible', taille: 12, align: 'right' });
+      c.repere('regle', x0 - 6, y - 12, 14 * KS + 12, 32, 'la règle graduée en cm');
+    } else {
+      const x = R2.x + 34, y0 = CY - 4.5 * KS;
+      c.ligne(x, y0, x, y0 + 9 * KS, { couleur: 'faible', largeur: 1.6, tremble: .3 });
+      for (let k = 0; k <= 18; k++) { const y = y0 + k * KS / 2, h = k % 2 ? 4 : 8; c.ligne(x, y, x + h, y, { couleur: 'faible', largeur: 1.2, tremble: .2 }); if (k % 2 === 0) c.texte(String(k / 2), x - 5, y + 4, { couleur: 'faible', taille: 12, align: 'right' }); }
+      c.texte('cm', x + 12, y0 + 9 * KS - 2, { couleur: 'faible', taille: 12 });
+      c.repere('regle', x - 20, y0 - 6, 34, 9 * KS + 12, 'la règle graduée en cm');
+    }
+  });
+  const ext = k => k * Lpx / 2;                                         // extinction k (px depuis le centre)
+  const pt = (u, w = 0) => (vert ? [CX + w, CY + u] : [CX + u, CY + w]);
+  // Repères de la figure (toujours pointables).
+  if (vert) { c.repere('tache_centrale', CX - 14, CY - Lpx / 2, 28, Math.max(10, Lpx), 'la tache centrale'); c.repere('extinction', CX - 12, CY + Lpx / 2 - 8, 24, 16, 'une extinction (tache sombre)'); }
+  else { c.repere('tache_centrale', CX - Lpx / 2, CY - 14, Math.max(10, Lpx), 28, 'la tache centrale'); c.repere('extinction', CX + Lpx / 2 - 8, CY - 12, 16, 24, 'une extinction (tache sombre)'); }
+  if (!vert) c.repere('L', CX - Lpx / 2, CY - 62, Math.max(12, Lpx), 30, `L = ${fr(v.L * 100, 2)} cm`);
+  else c.repere('L', CX + 30, CY - Lpx / 2, 70, Math.max(12, Lpx), `L = ${fr(v.L * 100, 2)} cm`);
+  const fig = objetPresent();
+  if (OUV && vu('point_sur_ecran') && !fig) ecrit(c, a_('point_sur_ecran'), () => { c.fleche(CX + 60, CY - 40, CX + 16, CY - 8, { couleur: 'vert', largeur: 1.6 }); c.texte('un point net', CX + 62, CY - 44, { couleur: 'vert', taille: 15, duree: .6 }); });
+  if (!fig) return;
+  if (P.objet === 'trou') {
+    if (vu('tache_centrale')) ecrit(c, a_('tache_centrale'), () => { c.texte('tache ronde', R2.x + R2.w - 14, R2.y + 26, { couleur: 'jaune', taille: 15, align: 'right' }); });
+    if (vu('extinctions')) ecrit(c, a_('extinctions'), () => { c.texte('anneaux sombres et clairs', R2.x + R2.w - 14, R2.y + 46, { couleur: 'vert', taille: 15, align: 'right' }); });
+    return;
+  }
+  if (vu('tache_centrale')) ecrit(c, a_('tache_centrale'), () => {
+    if (!vert) {
+      const nomT = P.source === 'blanche' ? 'centre blanc' : 'tache centrale', w = c.largeurTexte(nomT, 15), xg = CX - Math.min(Lpx, 330) / 2 - 10;
+      c.rect(CX - Math.min(Lpx, 330) / 2 - 5, CY - 15, Math.min(Lpx, 330) + 10, 30, { couleur: 'jaune', arrondi: 14, largeur: 1.8 });
+      if (xg - w > R2.x + 14) c.texte(nomT, xg, CY + 5, { couleur: 'jaune', taille: 15, align: 'right', duree: .6 });
+      else c.texte(nomT, CX, CY - 66, { couleur: 'jaune', taille: 15, align: 'center', duree: .6 });
+    }
+    else { c.rect(CX - 15, CY - Lpx / 2 - 5, 30, Lpx + 10, { couleur: 'jaune', arrondi: 14, largeur: 1.8 }); c.texte(P.source === 'blanche' ? 'centre blanc' : 'tache centrale', CX - 22, CY + 5, { couleur: 'jaune', taille: 15, align: 'right', duree: .6 }); }
+  });
+  if (P.source === 'blanche') {
+    if (vu('bords_colores')) ecrit(c, a_('bords_colores'), () => {
+      const u = Math.min(150, Lpx * .62);
+      for (const s of [-1, 1]) { const [x, y] = pt(s * u, vert ? 0 : -2); c.fleche(vert ? x + 46 : x, vert ? y : y - 34, vert ? x + 14 : x, vert ? y : y - 12, { couleur: 'vert', largeur: 1.5, tete: 8 }); }
+      c.texte('bords colorés', vert ? CX + 50 : CX, vert ? CY - Lpx * .62 - 10 : CY - 52, { couleur: 'vert', taille: 15, align: vert ? 'left' : 'center' });
+    });
+    return;
+  }
+  if (vu('extinctions')) ecrit(c, a_('extinctions'), () => {
+    for (const k of [-2, -1, 1, 2]) {
+      const u = ext(k); if (Math.abs(u) > (vert ? 104 : 168)) continue;
+      const [x, y] = pt(u);
+      if (!vert) c.fleche(x, CY + 32, x, CY + 12, { couleur: 'vert', largeur: 1.5, tete: 7 }); else c.fleche(CX + 32, y, CX + 12, y, { couleur: 'vert', largeur: 1.5, tete: 7 });
+    }
+    if (!vert) c.texte('extinctions', CX, CY + 50, { couleur: 'vert', taille: 15, align: 'center', duree: .4 });
+    else c.texte('extinctions', CX + 36, CY + Lpx / 2 + 24, { couleur: 'vert', taille: 15, duree: .4 });
+  });
+  const coteL = (Lv, Lp, decal, nom, o = {}) => {
+    const h = Math.min(Lp, vert ? 210 : 330);
+    if (!vert) { c.cote(CX - h / 2, CY + decal, CX + h / 2, CY + decal, `${nom} = ${fr(Lv * 100, 2)} cm`, { couleur: 'orange', taille: 15, ...o }); }
+    else { c.cote(CX + 30 + decal, CY - h / 2, CX + 30 + decal, CY + h / 2, '', { couleur: 'orange', ...o }); c.texte(`${nom} = ${fr(Lv * 100, 2)} cm`, CX + 38 + decal, CY + 5, { couleur: 'orange', taille: 15, ...o }); }
+  };
+  if (P.source === 'laser' && vu('mesure_L')) {
+    const air = CUVE && P.milieu === 'eau' && S.t >= 5.4;
+    const vAir = valeurs(1), LpAir = vAir.L * 100 * KS;
+    ecrit(c, a_('mesure_L'), () => {
+      if (air) coteL(vAir.L, LpAir, vert ? 70 : -72, 'L', { alpha: .45, pointille: [4, 4] });
+      else coteL(v.L, Lpx, vert ? 0 : -40, 'L');
+      // Lecture sur la règle : les deux extinctions qui bordent la tache centrale.
+      if (!air && !vert && Lpx < 320) {
+        const y = R2.y + R2.h - 34;
+        for (const s of [-1, 1]) c.ligne(CX + s * Lpx / 2, CY + 14, CX + s * Lpx / 2, y - 2, { couleur: 'orange', largeur: 1.1, pointille: [3, 4], alpha: .7 });
+      }
+    });
+  }
+  if (CUVE && vu('mesure_L_prime') && P.milieu === 'eau') ecrit(c, a_('mesure_L_prime'), () => coteL(v.L, Lpx, vert ? 0 : -40, 'L’'));
+  if (CUVE && vu('tache_se_resserre') && P.milieu === 'eau') ecrit(c, a_('tache_se_resserre'), () => {
+    if (!vert) { c.fleche(CX - 130, CY + 30, CX - Lpx / 2 - 4, CY + 30, { couleur: 'vert', largeur: 1.5, tete: 8 }); c.fleche(CX + 130, CY + 30, CX + Lpx / 2 + 4, CY + 30, { couleur: 'vert', largeur: 1.5, tete: 8 }); c.texte('se resserre', CX, CY + 52, { couleur: 'vert', taille: 15, align: 'center' }); }
+    else c.texte('se resserre', CX + 40, CY + Lpx / 2 + 30, { couleur: 'vert', taille: 15 });
+  });
+  void a;
+}
+
+/** Lignes du bas : les valeurs et ce que l’on conclut. */
+function dessinerValeurs(c) {
+  const a = aMaintenant(), v = valeurs(), X = 14, Y = [298, 323, 348, 373, 398];
+  c.direct(() => {
+    const src = P.source === 'blanche' ? 'lumière blanche' : `λ₀ = ${P.lam} nm (${nomCouleur(P.lam)})`;
+    const obj = !objetPresent() ? 'pas encore de fente' : `${nomObjet()} : ${lettreA()} = ${fr(a, 2)} mm`;
+    const mil = P.milieu === 'eau' ? (remplissage() > 0 ? `eau (n = ${fr(N_EAU, 2)})` : 'air (la cuve est vide)') : 'air';
+    c.texte(`${obj} ;  D = ${fr(P.D, 1)} m ;  ${src} ;  ${mil}`, X, Y[0], { couleur: 'jaune', taille: 17, max: 735 });
+  });
+  const lA = lettreA();
+  if (vu('mesure_L')) ecrit(c, a_('mesure_L'), () => {
+    if (P.source === 'blanche') c.texte('lumière blanche : chaque couleur donne sa propre tache', X, Y[1], { couleur: 'vert', taille: 16, duree: 1.1 });
+    else if (P.objet === 'trou') c.texte('trou : tache ronde entourée d’anneaux (pas de formule ici)', X, Y[1], { couleur: 'vert', taille: 16, duree: 1.1 });
+    else if (CUVE) { const v1 = valeurs(1); c.texte(`dans l’air : L = 2λD/a = ${fr(v1.L * 100, 2)} cm ;  θ = λ/a = ${sci(v1.theta)} rad`, X, Y[1], { couleur: 'vert', taille: 16, max: 735, duree: 1.1 }); }
+    else {
+      const eau = v.n > 1 ? `λ = λ₀/n = ${Math.round(v.lam * 1e9)} nm ;  ` : '';
+      c.texte(`${eau}L = 2λD/${lA} = ${fr(v.L * 100, 2)} cm`, X, Y[1], { couleur: 'vert', taille: 17, max: 735, duree: .6 });
+      c.texte(`θ = λ/${lA} = ${sci(v.theta)} rad`, X, Y[2], { couleur: 'rose', taille: 17, duree: .5 });
+    }
+  });
+  if (vu('tache_s_etale') && objetPresent()) ecrit(c, a_('tache_s_etale'), () => {
+    const t = P.objet === 'trou' ? 'trou rond → la lumière s’étale tout autour : tache ronde et anneaux'
+      : `${P.objet === 'fil' ? 'fil' : 'fente'} ${VERT() ? 'horizontal' + (P.objet === 'fil' ? '' : 'e') : 'vertical' + (P.objet === 'fil' ? '' : 'e')} → taches sur une ligne ${VERT() ? 'verticale' : 'horizontale'} (perpendiculaire ${P.objet === 'fil' ? 'au fil' : 'à la fente'})`;
+    c.texte((OUV ? `a = ${fr(a, 2)} mm : la tache est large. ` : '') + t, X, Y[3], { couleur: 'blanc', taille: 15, max: 735, duree: .9 });
+  });
+  if (vu('extinctions') && quantitatif()) ecrit(c, a_('extinctions'), () => c.texte('taches secondaires : plus pâles et deux fois plus étroites que la tache centrale', X, Y[4], { couleur: 'faible', taille: 15, max: 735, duree: 1.1 }));
+  if (vu('bords_colores')) ecrit(c, a_('bords_colores'), () => c.texte('centre blanc : toutes les couleurs s’y superposent ; bords colorés : le violet s’étale le moins, le rouge le plus', X, Y[4], { couleur: 'vert', taille: 15, max: 735, duree: 1.1 }));
+  if (CUVE && P.milieu === 'eau') {
+    if (vu('cuve_se_remplit')) ecrit(c, a_('cuve_se_remplit'), () => c.texte('la cuve se remplit d’eau : n = 1,33', X, Y[2], { couleur: 'bleu', taille: 16, duree: .7 }));
+    if (vu('mesure_L_prime')) ecrit(c, a_('mesure_L_prime'), () => {
+      const v1 = valeurs(1), v2 = valeurs(N_EAU);
+      c.texte(`dans l’eau : λ = λ₀/n = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm ;  n = L/L’ = ${fr(v1.L * 100, 2)} / ${fr(v2.L * 100, 2)} = ${fr(v1.L / v2.L, 2)}`, X, Y[4], { couleur: 'vert', taille: 16, max: 735, duree: 1.1 });
+    });
+  }
+}
+
+function dessiner(c) {
+  c.direct(() => { peindreDessus(c.ctx); peindreEcran(c.ctx); });
+  dessinerDessus(c); dessinerEcran(c); dessinerValeurs(c);
+  c.direct(() => {
+    if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 26, { couleur: 'faible', taille: 13, align: 'right' });
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function phase() {
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  if (S.t <= 0) return 'le montage est prêt, la source est éteinte';
+  if (resserre()) return 'la cuve est pleine : la tache se resserre';
+  if (OUV && S.t > 3.6 && S.t < 6.6) return `la fente se ferme : a diminue (a = ${fr(aMaintenant(), 2)} mm), la tache s’étale`;
+  if (dernier && P.objet === 'trou' && ['tache_centrale', 'extinctions', 'mesure_L'].includes(dernier[0])) return 'on regarde la tache ronde et ses anneaux (qualitatif, pas de mesure)';
+  if (dernier && P.source === 'blanche' && ['extinctions', 'mesure_L'].includes(dernier[0])) return 'on regarde le centre blanc et les bords colorés (qualitatif, pas de mesure)';
+  return dernier ? (dernier[0] === 'fin' ? 'fin de l’expérience, tout est écrit' : dernier[1]) : 'la source s’allume';
+}
+function ceQuiSeVoit() {
+  const a = aMaintenant(), v = valeurs(), lA = lettreA(), m = [];
+  const etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  m.push(`Vue « ${vue} », t = ${fr(S.t, 2)} s (${etat}). Deux vues : « ${VERT() ? 'Vue de côté' : 'Vue de dessus'} » (schéma, angle exagéré pour l’œil) et « Écran vu de face » (règle en cm).`);
+  m.push(P.source === 'blanche' ? 'Source : lampe de lumière blanche.' : `Source : laser, λ₀ = ${P.lam} nm (${nomCouleur(P.lam)}), la figure est ${nomCouleur(P.lam)}.`);
+  if (S.t > 0 && lumiere() <= 0) m.push('La source n’est pas encore allumée.');
+  if (!objetPresent()) m.push(OUV && S.t >= 2.0 ? 'La fente descend sur le faisceau.' : 'Pas encore de fente : le faisceau va tout droit et fait un point net sur l’écran.');
+  else m.push(P.objet === 'fil' ? `Objet : un fil de diamètre d = ${fr(a, 2)} mm (même figure qu’une fente de largeur a = d).` : P.objet === 'trou' ? `Objet : un petit trou rond de diamètre ${fr(a, 2)} mm.` : `Objet : une fente ${VERT() ? 'horizontale' : 'verticale'} de largeur a = ${fr(a, 2)} mm.`);
+  m.push(`Écran à D = ${fr(P.D, 1)} m.`);
+  if (P.milieu === 'eau') m.push(CUVE && remplissage() < 1 ? (remplissage() > 0 ? 'La cuve entre la fente et l’écran se remplit d’eau.' : 'La cuve (fente et écran dedans) est encore vide : air, n = 1.') : `Milieu : eau, n = 1,33 ; λ = λ₀/n = ${Math.round(P.lam / N_EAU)} nm (la couleur ne change pas).`);
+  else m.push('Milieu : air (n = 1).');
+  if (objetPresent() && lumiere() > 0) {
+    if (P.objet === 'trou') m.push('Sur l’écran : une tache ronde très lumineuse entourée d’anneaux sombres et clairs (qualitatif, aucune valeur).');
+    else if (P.source === 'blanche') m.push(`Sur l’écran : des taches sur une ligne ${VERT() ? 'verticale' : 'horizontale'} ; centre blanc (toutes les couleurs s’y superposent), bords colorés (le violet s’étale le moins, le rouge le plus) ; qualitatif.`);
+    else {
+      m.push(`Sur l’écran : la figure s’étale ${VERT() ? 'verticalement' : 'horizontalement'}, perpendiculairement ${P.objet === 'fil' ? 'au fil' : 'à la fente'} : tache centrale très lumineuse de largeur L = 2λD/${lA} = ${fr(v.L * 100, 2)} cm, extinctions (noires) à ${fr(v.L * 50, 2)} cm, ${fr(v.L * 100, 2)} cm… du centre, taches secondaires plus pâles et deux fois plus étroites. θ = λ/${lA} = ${sci(v.theta)} rad.`);
+      if (CUVE && P.milieu === 'eau') { const v1 = valeurs(1), v2 = valeurs(N_EAU); m.push(`Dans l’air : L = ${fr(v1.L * 100, 2)} cm ; dans l’eau : L’ = L/n = ${fr(v2.L * 100, 2)} cm ; n = L/L’ = ${fr(v1.L / v2.L, 2)}.`); }
+    }
+  }
+  const ecrits = [];
+  if (vu('tache_centrale')) ecrits.push(P.objet === 'trou' ? '« tache ronde »' + (vu('extinctions') ? ' et « anneaux sombres et clairs »' : '') : P.source === 'blanche' ? 'la tache centrale entourée, « centre blanc »' : 'la tache centrale entourée');
+  if (vu('extinctions') && quantitatif()) ecrits.push('les extinctions marquées');
+  if (vu('mesure_L') && quantitatif()) ecrits.push(`la cote L = ${fr((CUVE ? valeurs(1) : v).L * 100, 2)} cm sur la règle et les valeurs de L et θ`);
+  if (vu('theta') || (vu('tache_centrale') && quantitatif())) ecrits.push('l’angle θ (du centre au bord de la tache centrale) dans la vue de dessus');
+  if (vu('mesure_L_prime')) ecrits.push(`la cote L’ = ${fr(valeurs(N_EAU).L * 100, 2)} cm et n = L/L’ = 1,33`);
+  if (vu('bords_colores')) ecrits.push('« bords colorés »');
+  if (ecrits.length) m.push('Écrit à la craie : ' + ecrits.join(' ; ') + '.');
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+function message() {
+  if (P.source === 'blanche') return 'Lumière blanche : centre blanc, bords colorés.';
+  if (P.objet === 'trou') return 'Un trou : tache ronde entourée d’anneaux.';
+  const v = valeurs();
+  return `L = ${fr(v.L * 100, 2)} cm ; θ = ${sci(v.theta)} rad. ${lettreA()} diminue → la tache s’élargit.`;
+}
+
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? (SUITE.find(s => s[0] === nom)[2]) : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), P.source === 'blanche' ? 'La lampe s’allume…' : 'Le laser s’allume…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+const pas = (v, p) => Math.round(v / p) * p;
+function setParameters(p) {
+  p = p || {};
+  const aIn = p.a_mm ?? p.d_mm;
+  if (Number.isFinite(+aIn) && aIn !== null && aIn !== '') P.a = +clamp(pas(+aIn, .01), .04, .40).toFixed(2);
+  if (Number.isFinite(+p.D_m) && p.D_m !== null && p.D_m !== '') P.D = +clamp(pas(+p.D_m, .1), 1, 3).toFixed(1);
+  if (Number.isFinite(+p.lambda_nm) && p.lambda_nm !== null && p.lambda_nm !== '') P.lam = Math.round(clamp(pas(+p.lambda_nm, 10), 400, 800));
+  if (['fente', 'fil', 'trou'].includes(p.objet)) P.objet = p.objet;
+  if (['air', 'eau'].includes(p.milieu)) P.milieu = p.milieu;
+  if (['verticale', 'horizontale'].includes(p.orientation)) P.orientation = p.orientation;
+  if (['laser', 'blanche'].includes(p.source)) P.source = p.source;
+  scene.sale = true;
+  bulle($('feedback'), reglage());
+  pont.noter('set_parameters', params()); pont.emettre();
+}
+function reglage() {
+  const v = valeurs();
+  return `${nomObjet()} ${lettreA()} = ${fr(P.a, 2)} mm ; D = ${fr(P.D, 1)} m ; ${P.source === 'blanche' ? 'lumière blanche' : `λ₀ = ${P.lam} nm (${nomCouleur(P.lam)})`}${quantitatif() ? ` → L = ${fr(v.L * 100, 2)} cm` : ''}.`;
+}
+function params() {
+  const v = valeurs();
+  return { a_mm: P.a, D_m: P.D, lambda_nm: P.lam, objet: P.objet, milieu: P.milieu, orientation: P.orientation, source: P.source,
+    a_affichee_mm: +aMaintenant().toFixed(3), n: v.n, lambda_milieu_nm: +(v.lam * 1e9).toFixed(1), couleur: P.source === 'blanche' ? 'blanche' : nomCouleur(P.lam),
+    L_cm: quantitatif() && objetPresent() ? +(v.L * 100).toFixed(2) : null, theta_rad: quantitatif() && objetPresent() ? +v.theta.toPrecision(3) : null,
+    direction_figure: P.objet === 'trou' ? 'ronde' : VERT() ? 'verticale' : 'horizontale' };
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignées : la lèvre de la fente (a), l’écran (D), la pastille (touche = couleur suivante). */
+let bouge = false;
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py), gap = ecart(aMaintenant());
+    if (Math.hypot(x - PAST.x, y - PAST.y) < 16) return 'couleur';
+    if (objetPresent() && Math.abs(x - XF) < 14 && Math.abs(Math.abs(y - YC) - (gap / 2 + 8)) < 12) return 'a';
+    if (Math.abs(x - XE()) < 12 && Math.abs(y - YC) < 104) return 'D';
+    return null;
+  },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py); bouge = true;
+    if (id === 'a') { const a = +clamp(pas((2 * (Math.abs(YC - y) - 8) - 3) / 50, .01), .04, .40).toFixed(2); if (a !== P.a) { P.a = a; scene.sale = true; } }
+    if (id === 'D') { const D = +clamp(pas((x - XF) / 80, .1), 1, 3).toFixed(1); if (D !== P.D) { P.D = D; scene.sale = true; } }
+  },
+  lacher: (id) => {
+    if (id === 'couleur') {
+      if (P.source === 'blanche') { P.source = 'laser'; P.lam = 400; }
+      else P.lam = PASTILLES.find(l => l > P.lam) ?? PASTILLES[0];
+      scene.sale = true;
+    }
+    if (id === 'a' && OUV && S.t > 2.85 && S.t < 6.6) S.t = Math.max(S.t, 6.6);       // l’élève a pris la fente : elle reste où il la met
+    bouge = false;
+    bulle($('feedback'), reglage()); pont.noter('set_parameters', params()); pont.emettre();
+  },
+});
+void bouge;
+
+const EXPL_FIGURE = [
+  { repere: 'laser', texte: 'Un laser envoie une lumière d’une seule couleur.' },
+  { repere: 'fente', texte: 'Il éclaire une fente très fine, de largeur a.' },
+  { repere: 'vue_ecran', texte: 'Sur l’écran, la lumière s’étale perpendiculairement à la fente.' },
+  { repere: 'tache_centrale', texte: 'Au milieu, la tache centrale, très lumineuse.' },
+  { repere: 'extinction', texte: 'Entre les taches, des extinctions : aucune lumière.' },
+  { repere: 'L', texte: 'L est la largeur de la tache centrale, d’une extinction à l’autre.' },
+  { repere: 'theta', texte: 'θ va du centre de la tache au bord de la tache centrale : θ = λ/a.' },
+];
+const EXPLICATIONS = {
+  ouverture: [
+    { repere: 'laser', texte: 'Le laser seul fait un point net sur l’écran.' },
+    { repere: 'fente', texte: 'On pose une fente sur le faisceau, puis on la ferme.' },
+    { repere: 'a', texte: 'Plus a est petite…' },
+    { repere: 'tache_centrale', texte: '… plus la tache s’étale : c’est la diffraction de la lumière.' },
+    { repere: 'extinction', texte: 'Des extinctions séparent les taches.' },
+    { repere: 'L', texte: 'L : la largeur de la tache centrale.' },
+  ],
+  figure: EXPL_FIGURE,
+  reglage: [{ repere: 'poignee_a', texte: 'On diminue a : la tache s’élargit.' }, { repere: 'pastille_couleur', texte: 'On change la couleur : le bleu donne une tache plus étroite que le rouge.' }, { repere: 'L', texte: 'L = 2λD/a.' }],
+  mesure: [{ repere: 'regle', texte: 'On lit L sur la règle, d’une extinction à l’autre.' }, { repere: 'L', texte: 'Ici L = 2,60 cm.' }, { repere: 'theta', texte: 'θ = λ/a = 6,5·10⁻³ rad.' }, { repere: 'D', texte: 'D = 2,0 m, a = 0,10 mm, λ = 650 nm.' }],
+  fil: [{ repere: 'fente', texte: 'Un fil fin de diamètre d donne la même figure qu’une fente de largeur d.' }, { repere: 'L', texte: 'L = 2λD/d = 3,00 cm.' }, { repere: 'vue_ecran', texte: 'La figure s’étale perpendiculairement au fil.' }],
+  cuve: [{ repere: 'L', texte: 'Dans l’air, L = 2,40 cm.' }, { repere: 'cuve', texte: 'On remplit la cuve d’eau : n = 1,33, λ = λ₀/n.' }, { repere: 'tache_centrale', texte: 'La tache se resserre : L’ = 1,80 cm.' }, { repere: 'L', texte: 'n = L/L’ = 1,33.' }],
+  blanche: [{ repere: 'laser', texte: 'Une lampe de lumière blanche remplace le laser.' }, { repere: 'tache_centrale', texte: 'Le centre est blanc : toutes les couleurs s’y superposent.' }, { repere: 'vue_ecran', texte: 'Les bords sont colorés : chaque couleur a sa propre tache.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_lumineuses_diffraction', version: '1.0', title: 'Diffraction de la lumière — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: { a_mm: '0.04..0.40 (largeur de la fente, ou diamètre d du fil, en mm, pas 0,01)', D_m: '1.0..3.0 (distance fente – écran, m, pas 0,1)',
+      lambda_nm: '400..800 (longueur d’onde dans le vide, nm, pas 10 ; pastilles 400 violet, 450 bleu, 520 vert, 580 jaune, 650 rouge)',
+      objet: 'fente | fil | trou', milieu: 'air | eau', orientation: 'verticale | horizontale', source: 'laser | blanche' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, s)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Diffraction de la lumière : un laser (ou une lampe blanche) éclaire une fente de largeur a (ou un fil de diamètre d, ou un trou) ; écran à la distance D. Vue de dessus (angle exagéré) et écran vu de face avec règle en cm. La figure s’étale perpendiculairement à la fente : tache centrale de largeur L = 2λD/a, extinctions, taches secondaires plus pâles et deux fois plus étroites ; θ = λ/a ; dans l’eau λ = λ₀/n et la tache se resserre (n = L/L’).`,
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), P.source === 'blanche' ? 'La lampe va s’allumer…' : 'Le laser va s’allumer…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

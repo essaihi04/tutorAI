@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fonctions usuelles — continuité sur un intervalle</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Quatre courbes usuelles tracées à la craie, chacune avec l’ensemble où elle est continue ; puis un quotient et sa valeur interdite"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), diapositives i1 et i2.
+ * Vues : ?vue=usuelles | quotient. `fin` = construction complète.
+ * quotient : f(x) = 2x/(x − 3), valeur interdite 3 ; continue sur [4 ; +∞[, pas sur [0 ; 5].
+ */
+MathsTableau.page({
+  id: 'lc_usuelles', titre: 'Continuité sur un intervalle',
+  texte: 'Construction à la craie du cours Limites et continuité : les fonctions usuelles se tracent d’un trait sur chaque intervalle de leur domaine',
+  vues: {
+    usuelles: {
+      titre: 'Quatre fonctions usuelles et où elles sont continues',
+      dessiner(c, K) {
+        K.titre('Les fonctions usuelles se tracent d’un trait');
+        const CAS = [
+          { id: 'polynome', x0: 34, nom: 'polynôme : x² − 2x', o: { xmin: -1.2, xmax: 3.2, ymin: -1.6, ymax: 3.2 }, sous: ['continue sur ℝ'] },
+          { id: 'inverse', x0: 218, nom: 'x ↦ 1/x', o: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 }, sous: ['continue sur ]−∞ ; 0[', 'et sur ]0 ; +∞['] },
+          { id: 'racine', x0: 402, nom: 'x ↦ √x', o: { xmin: -0.6, xmax: 4.2, ymin: -0.5, ymax: 2.3 }, sous: ['continue sur [0 ; +∞['] },
+          { id: 'sinus', x0: 586, nom: 'x ↦ sin x', o: { xmin: -6.6, xmax: 6.6, ymin: -1.7, ymax: 1.7 }, sous: ['continue sur ℝ'] },
+        ];
+        CAS.forEach(k => {
+          c.texte(k.nom, k.x0, 82, { couleur: 'cyan', taille: 17, max: 165 });
+          const G = K.axes({ x0: k.x0, y0: 104, w: 148, h: 150, gx: [], gy: [], origine: false, ...k.o });
+          if (k.id === 'polynome') K.anime(1.2, p => K.courbePart(G, x => x * x - 2 * x, -1, 3, p));
+          if (k.id === 'inverse') {
+            K.anime(.7, p => K.courbePart(G, x => 1 / x, -3, -0.34, p));
+            c.pause(.3);   // la craie se lève en 0
+            K.anime(.7, p => K.courbePart(G, x => 1 / x, 0.34, 3, p));
+          }
+          if (k.id === 'racine') { K.rond(G, 0, 0, true, 'cyan'); K.anime(1.1, p => K.courbePart(G, x => Math.sqrt(x), 0, 4.1, p)); }
+          if (k.id === 'sinus') K.anime(1.3, p => K.courbePart(G, Math.sin, -6.4, 6.4, p));
+          k.sous.forEach((s, j) => c.texte(s, k.x0 + 74, 292 + j * 22, { couleur: 'vert', taille: 16, align: 'center', max: 178 }));
+          c.repere(k.id, k.x0 - 6, 64, 172, 254, k.nom);
+          K.marque(k.id);
+          c.pause(.3);
+        });
+        c.texte('Une fonction usuelle est continue sur chaque intervalle de son domaine de définition.', 380, 350, { couleur: 'jaune', taille: 17, align: 'center', max: 730 });
+        K.marque('regle');
+      },
+      decrire: {
+        polynome: 'Premier repère : la parabole de x² − 2x, tracée d’un seul trait ; écrit : continue sur ℝ.',
+        inverse: 'Deuxième : x ↦ 1/x en deux morceaux, la craie se lève en 0 ; écrit : continue sur ]−∞ ; 0[ et sur ]0 ; +∞[.',
+        racine: 'Troisième : x ↦ √x qui naît en 0 ; écrit : continue sur [0 ; +∞[.',
+        sinus: 'Quatrième : x ↦ sin x, une vague d’un seul trait ; écrit : continue sur ℝ.',
+        regle: 'Écrit en bas : une fonction usuelle est continue sur chaque intervalle de son domaine de définition.',
+      },
+      motifs: { polynome: 'le polynôme', inverse: 'x ↦ 1/x', racine: 'x ↦ √x', sinus: 'x ↦ sin x', regle: 'la règle' },
+      explication: [{ repere: 'polynome', texte: 'Un polynôme : continu sur ℝ.' }, { repere: 'inverse', texte: '1/x : la craie se lève en 0, deux intervalles.' }, { repere: 'racine', texte: '√x : continue sur [0 ; +∞[.' }],
+    },
+    quotient: {
+      titre: 'f(x) = 2x/(x − 3) : la valeur interdite 3',
+      dessiner(c, K) {
+        K.titre('Le dénominateur ne doit pas s’annuler sur I');
+        const f = x => 2 * x / (x - 3);
+        const G = K.axes({ x0: 46, y0: 64, w: 390, h: 250, xmin: -1, xmax: 9.5, ymin: -10, ymax: 14, gx: [[3, '3'], [4, '4'], [5, '5']], gy: [[2, '2'], [10, '10']] });
+        c.texte('f(x) = 2x/(x − 3)', 470, 86, { couleur: 'cyan', taille: 20 });
+        K.anime(1.1, p => K.courbePart(G, f, -1, 2.65, p));
+        c.pause(.3);
+        K.anime(1.1, p => K.courbePart(G, f, 3.4, 9.4, p));
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        const y0 = G.Y(0), x3 = G.X(3);
+        c.ligne(x3 - 8, y0 - 8, x3 + 8, y0 + 8, { couleur: 'rouge', largeur: 2.4 });
+        c.ligne(x3 - 8, y0 + 8, x3 + 8, y0 - 8, { couleur: 'rouge', largeur: 2.4 });
+        c.texte('x − 3 = 0 : valeur interdite 3', 470, 130, { couleur: 'rouge', taille: 17 });
+        c.repere('valeur_interdite', x3 - 12, y0 - 12, 24, 24, 'la valeur interdite 3');
+        K.marque('valeur_interdite');
+        c.pause(.3);
+        c.ligne(G.X(4), y0 + 30, G.X(9.4), y0 + 30, { couleur: 'vert', largeur: 6, alpha: .8 });
+        c.texte('[4 ; +∞[', G.X(6.8), y0 + 52, { couleur: 'vert', taille: 16, align: 'center' });
+        K.lignes(470, 180, [{ t: 'Sur [4 ; +∞[ : 3 n’y est pas ✓', couleur: 'vert' }, { t: 'f est continue sur [4 ; +∞[.', couleur: 'vert' }], 28);
+        c.repere('intervalle_ok', G.X(4) - 4, y0 + 20, G.X(9.4) - G.X(4) + 8, 40, 'l’intervalle [4 ; +∞[');
+        K.marque('intervalle_ok');
+        c.pause(.3);
+        c.ligne(G.X(0), y0 - 30, G.X(5), y0 - 30, { couleur: 'orange', largeur: 6, alpha: .8 });
+        c.texte('[0 ; 5]', G.X(1.2), y0 - 40, { couleur: 'orange', taille: 16, align: 'center' });
+        K.lignes(470, 266, [{ t: '[0 ; 5] contient 3 ✗', couleur: 'orange' }, { t: 'pas continue sur [0 ; 5].', couleur: 'orange' }], 28);
+        c.repere('intervalle_non', G.X(0) - 4, y0 - 40, G.X(5) - G.X(0) + 8, 22, 'l’intervalle [0 ; 5]');
+        K.marque('intervalle_non');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de f(x) = 2x/(x − 3), en deux morceaux de part et d’autre de x = 3.',
+        valeur_interdite: 'Une croix rouge sur l’axe en x = 3 : x − 3 = 0, valeur interdite.',
+        intervalle_ok: 'L’intervalle [4 ; +∞[ est surligné en vert sous l’axe : 3 n’y est pas, f est continue sur [4 ; +∞[.',
+        intervalle_non: 'L’intervalle [0 ; 5] est surligné en orange : il contient 3, f n’est pas continue sur [0 ; 5].',
+      },
+      motifs: { courbe_tracee: 'la courbe en deux morceaux', valeur_interdite: 'la valeur interdite 3', intervalle_ok: '[4 ; +∞[ convient', intervalle_non: '[0 ; 5] contient 3' },
+      explication: [{ repere: 'valeur_interdite', texte: 'En 3, le dénominateur s’annule.' }, { repere: 'intervalle_ok', texte: 'Sur [4 ; +∞[, pas de 3 : continue.' }, { repere: 'intervalle_non', texte: '[0 ; 5] contient 3 : pas continue sur cet intervalle.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La réplication de l’ADN — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La réplication de l’ADN en phase S : des yeux de réplication s’ouvrent, deux fourches avancent en sens opposés, l’ADN polymérase pose en face de chaque base la base complémentaire dans le sens 5′ vers 3′, puis deux molécules identiques, chacune avec un brin ancien et un brin nouveau"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * Le mécanisme de la réplication (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité NIG10.
+ * Une molécule d’ADN horizontale : brin du haut 5′→3′ de gauche à droite, brin du bas 3′→5′ (brins anciens BLEUS).
+ * Des yeux de réplication s’ouvrent, les fourches avancent en sens opposés ; les brins nouveaux (ORANGÉS) sont complémentaires et
+ * antiparallèles à leur modèle, donc allongés dans le sens 5′→3′ : vers la gauche en haut, vers la droite en bas. Seule l’ADN
+ * polymérase est nommée (programme) ; aucune autre enzyme. Les yeux fusionnent : deux molécules, un brin ancien + un brin nouveau.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+const COUL = { A: '#dc2626', T: '#ca8a04', C: '#2563eb', G: '#16a34a' }, COMP = { A: 'T', T: 'A', C: 'G', G: 'C' };
+const ANC = '#60a5fa', NOUV = '#fb923c';
+const MR = { phase_s: 2.0, yeux_apparaissent: 5.0, fourches_opposees: 8.0, polymerase_pose: 11.0, sens_5_3: 13.6, yeux_fusionnent: 17.0, deux_molecules: 21.0 };
+const X0 = 30, X1 = 730, YH = 262, YB = 292, N = 26, PAS = (X1 - X0) / N;
+const seqPleine = s => Array.from({ length: N }, (_, i) => s[i % s.length]);
+/** Les yeux de réplication à l’instant t : [{c, demi}] (centre, demi-largeur en px). */
+function yeux(t) {
+  const a = rampe(t, 2.6, 2.4) * .35 + rampe(t, 5.0, 2.8) * .25 + rampe(t, 8.4, 2.6) * .12 + rampe(t, 13.8, 2.8) * .28;   // de 0 à 1
+  const l = rampe(t, 3.4, 2) * .4 + rampe(t, 5.0, 2.8) * .25 + rampe(t, 13.8, 2.8) * .35;
+  return [{ c: 380, demi: 240 * a }, { c: 105, demi: 75 * l }, { c: 655, demi: 75 * l }];
+}
+function ouverture(px, Y) { let f = 0; for (const e of Y) { const d = e.demi - Math.abs(px - e.c); if (d > 0) f = Math.max(f, Math.min(1, d / 24)); } return f; }
+function dessiner(c, k) {
+  const t = k.t, seq = seqPleine(k.P.sequence.split('')), Y = yeux(t), sep = rampe(t, 17.4, 2.6);
+  const ecart = 34;   // écart des brins anciens dans un œil
+  const yTop = px => YH - ecart * ouverture(px, Y) - sep * 46, yBot = px => YB + ecart * ouverture(px, Y) + sep * 46;
+  const yNewH = px => yTop(px) + 26 * Math.min(1, ouverture(px, Y) * 1.2 + sep), yNewB = px => yBot(px) - 26 * Math.min(1, ouverture(px, Y) * 1.2 + sep);
+  c.direct(() => {
+    const x = c.ctx;
+    // électronographie reconstituée (en haut à gauche)
+    if (t >= .3) {
+      x.save(); x.globalAlpha = rampe(t, .3, .6);
+      x.fillStyle = '#4b5563'; x.fillRect(20, 46, 240, 92);
+      let s = 7; const r = () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 4294967296; };
+      for (let i = 0; i < 380; i++) { x.fillStyle = `rgba(${150 + 60 * r()},${150 + 60 * r()},${150 + 60 * r()},.35)`; x.fillRect(20 + r() * 240, 46 + r() * 92, 1.5, 1.5); }
+      x.strokeStyle = 'rgba(15,15,15,.85)'; x.lineWidth = 2.2; x.beginPath(); x.moveTo(26, 92);
+      for (const [a, b] of [[50, 80], [120, 150], [190, 225]]) { x.lineTo(a, 92); x.moveTo(a, 92); x.quadraticCurveTo((a + b) / 2, 72, b, 92); x.moveTo(a, 92); x.quadraticCurveTo((a + b) / 2, 112, b, 92); x.moveTo(b, 92); }
+      x.lineTo(254, 92); x.stroke(); x.restore();
+    }
+    if (t >= .8) {
+      const a = rampe(t, .8, .8); x.save(); x.globalAlpha = a;
+      // nucléotides libres qui flottent autour
+      if (t >= 4 && sep < 1) for (let i = 0; i < 22; i++) { const px = 60 + ((i * 97 + t * 14 * (i % 2 ? 1 : -1)) % 640 + 640) % 640, py = 200 + (i * 53 % 150) + Math.sin(t + i) * 6; if (Math.abs(py - (YH + YB) / 2) < 50 && ouverture(px, Y) < .2) continue; x.fillStyle = COUL['ATCG'[i % 4]]; x.beginPath(); x.arc(px, py, 3.4, 0, TAU); x.fill(); }
+      // bases : barreaux entre les brins (fermé) ou bases portées par chaque brin (ouvert)
+      for (let i = 0; i < N; i++) {
+        const px = X0 + (i + .5) * PAS, f = Math.max(ouverture(px, Y), sep), L = seq[i];
+        if (f < .15) { x.strokeStyle = COUL[L]; x.lineWidth = 4; x.beginPath(); x.moveTo(px, yTop(px) + 2); x.lineTo(px, (YH + YB) / 2); x.stroke(); x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, (YH + YB) / 2); x.lineTo(px, yBot(px) - 2); x.stroke(); }
+        else {
+          const m1 = (yTop(px) + yNewH(px)) / 2, m2 = (yBot(px) + yNewB(px)) / 2;
+          x.lineWidth = 4;
+          x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, yTop(px) + 2); x.lineTo(px, m1); x.stroke();
+          x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, m1); x.lineTo(px, yNewH(px) - 2); x.stroke();
+          x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, yNewB(px) + 2); x.lineTo(px, m2); x.stroke();
+          x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, m2); x.lineTo(px, yBot(px) - 2); x.stroke();
+        }
+      }
+      // brins : anciens (bleus) partout, nouveaux (orangés) là où l’œil est ouvert
+      const brin = (fy, coul, garde) => { x.strokeStyle = coul; x.lineWidth = 5; x.lineCap = 'round'; x.beginPath(); let on = false; for (let px = X0; px <= X1; px += 3) { const ok = garde(px); if (ok && !on) { x.moveTo(px, fy(px)); on = true; } else if (ok) x.lineTo(px, fy(px)); else on = false; } x.stroke(); };
+      brin(yTop, ANC, () => true); brin(yBot, ANC, () => true);
+      const ouvert = px => Math.max(ouverture(px, Y), sep) >= .15;
+      brin(yNewH, NOUV, ouvert); brin(yNewB, NOUV, ouvert);
+      x.restore();
+      // l’ADN polymérase : sur le brin nouveau du haut à la fourche de gauche, sur celui du bas à la fourche de droite
+      if (t >= 5.0 && sep < .4) {
+        const e = Y[0], xl = e.c - e.demi + 22, xr = e.c + e.demi - 22, a2 = rampe(t, 5.0, .6) * (1 - sep * 2.5);
+        for (const [px, py] of [[xl, (yTop(xl) + yNewH(xl)) / 2], [xr, (yBot(xr) + yNewB(xr)) / 2]]) {
+          x.save(); x.globalAlpha = a2; const g = x.createRadialGradient(px - 5, py - 6, 2, px, py, 20); g.addColorStop(0, '#f5d0fe'); g.addColorStop(1, '#a21caf');
+          x.fillStyle = g; x.beginPath(); x.ellipse(px, py, 18, 14, 0, 0, TAU); x.fill(); x.restore();
+        }
+        if (t >= 9.6 && t < 11.6) { // un T libre vient se placer en face d’un A
+          const u = rampe(t, 9.6, 1.3), px = xl - 4, py = entre(yNewH(xl) - 70, yNewH(xl) - 6, u);
+          x.save(); x.fillStyle = COUL.T; x.beginPath(); x.arc(px, py, 6, 0, TAU); x.fill(); x.fillStyle = '#111'; x.font = '700 9px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('T', px, py + .5); x.restore();
+        }
+      }
+    }
+  });
+  c.texte('La réplication de l’ADN en phase S', 280, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('electronographie', 20, 46, 240, 92, 'l’électronographie : des yeux de réplication');
+  if (k.ecrit(c, 'el', .6)) { k.T(c, 'électronographie d’un ADN en phase S', 20, 158, { couleur: 'faible', taille: 13 }); k.T(c, '(document reconstitué)', 20, 174, { couleur: 'faible', taille: 12 }); }
+  c.repere('molecule', X0, YH - 10, X1 - X0, YB - YH + 20, 'la molécule d’ADN');
+  if (sep < .05 && k.ecrit(c, 'ps', 1.2)) { k.T(c, '5′', X0 - 14, YH + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', X1 + 14, YH + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', X0 - 14, YB + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '5′', X1 + 14, YB + 5, { couleur: 'vert', taille: 15, align: 'center' }); }
+  if (sep < .05 && k.ecrit(c, 'oeil', MR.yeux_apparaissent - .6)) { c.ligne(520, YH - 34, 590, 186, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'œil de réplication', 594, 182, { couleur: 'blanc', taille: 15 }); }
+  const e = Y[0];
+  if (t >= 3) c.repere('oeil', e.c - e.demi, YH - 40, 2 * e.demi, YB - YH + 80, 'l’œil de réplication');
+  if (t >= 5) { c.repere('fourche_gauche', e.c - e.demi - 12, YH - 40, 30, 110, 'la fourche de gauche'); c.repere('fourche_droite', e.c + e.demi - 18, YH - 40, 30, 110, 'la fourche de droite'); c.repere('polymerase', e.c - e.demi + 4, YH - 40, 40, 30, 'l’ADN polymérase'); c.repere('nucleotides_libres', 60, 200, 300, 40, 'des nucléotides libres'); }
+  if (sep < .05 && k.ecrit(c, 'fo', MR.fourches_opposees - .8)) {
+    c.fleche(e.c - e.demi - 4, 366, e.c - e.demi - 64, 366, { couleur: 'jaune', largeur: 1.8 }); c.fleche(e.c + e.demi + 4, 366, e.c + e.demi + 64, 366, { couleur: 'jaune', largeur: 1.8 });
+    k.T(c, 'deux fourches de réplication, en sens opposés', 380, 396, { couleur: 'jaune', taille: 15, align: 'center' });
+  }
+  if (sep < .05 && k.ecrit(c, 'pol', MR.polymerase_pose - 1.2)) { k.T(c, 'ADN polymérase', 130, 214, { couleur: 'rose', taille: 15 }); k.T(c, 'en face de A : T ; en face de C : G', 290, 196, { couleur: 'blanc', taille: 14 }); k.T(c, 'nucléotides libres', 640, 384, { couleur: 'faible', taille: 13 }); }
+  if (t >= 12.4 && sep < .5) { c.repere('brin_ancien', 300, YH - 44, 160, 14, 'un brin ancien (bleu)'); c.repere('brin_nouveau', 300, YH - 18, 160, 14, 'un brin nouveau (orangé)'); c.repere('sens', 286, 202, 260, 20, 'le sens 5′ → 3′'); }
+  if (sep < .05 && k.ecrit(c, 'sens', MR.sens_5_3 - 1.0)) { k.T(c, '← le brin nouveau s’allonge de 5′ vers 3′', 290, 216, { couleur: 'orange', taille: 13 }); k.T(c, 'le brin nouveau s’allonge de 5′ vers 3′ →', 290, 346, { couleur: 'orange', taille: 13 }); }
+  if (sep < .05 && k.ecrit(c, 'fus', MR.yeux_fusionnent - .6)) k.T(c, 'les yeux fusionnent', 640, 192, { couleur: 'blanc', taille: 14, align: 'center' });
+  if (sep > 0) { c.repere('molecule_1', X0, YH - 90, X1 - X0, 60, 'la molécule fille 1'); c.repere('molecule_2', X0, YB + 30, X1 - X0, 60, 'la molécule fille 2'); }
+  if (k.ecrit(c, 'deux', MR.deux_molecules - .8)) {
+    k.T(c, 'brin ancien', 300, 160, { couleur: 'bleu', taille: 14 }); k.T(c, 'brin nouveau', 430, 160, { couleur: 'orange', taille: 14 });
+    k.T(c, 'Deux molécules identiques à la molécule mère,', 520, 80, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, 'chacune : un brin ancien + un brin nouveau', 520, 100, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+}
+function voit(k) {
+  const t = k.t, Y = yeux(t), sep = rampe(t, 17.4, 2.6), m = ['En haut à gauche, une électronographie reconstituée d’un ADN en phase S, avec trois bulles. Au centre, une molécule d’ADN horizontale : deux brins anciens bleus (en haut 5′ à gauche, 3′ à droite ; en bas l’inverse), bases colorées A rouge, T jaune, C bleu, G vert.'];
+  if (Y[0].demi > 5 && sep <= 0) m.push(`Un œil de réplication ouvert au milieu (largeur ${Math.round(2 * Y[0].demi)} px)${Y[1].demi > 5 ? ', et deux petits yeux près des bords' : ''} : les deux brins anciens s’écartent ; un brin nouveau orangé se forme en face de chacun.`);
+  if (t >= 5 && sep < .4) m.push('Deux fourches avancent en sens opposés ; l’ADN polymérase (ovale rose) est sur le brin nouveau du haut à la fourche de gauche et sur celui du bas à la fourche de droite ; des nucléotides libres flottent autour.');
+  if (t >= 9.6 && t < 11.6) m.push('Un nucléotide T libre vient se placer en face d’un A (écrit « en face de A : T ; en face de C : G »).');
+  if (t >= MR.sens_5_3 - 1) m.push('Écrit : le brin nouveau du haut s’allonge de 5′ vers 3′ vers la gauche, celui du bas vers la droite.');
+  if (t >= 13.8 && sep <= 0) m.push('Les yeux s’agrandissent et fusionnent.');
+  if (sep > 0) m.push('Les deux molécules filles se séparent, l’une au-dessus de l’autre : chacune a un brin ancien (bleu) et un brin nouveau (orangé)' + (t >= MR.deux_molecules - .8 ? ' ; écrit « Deux molécules identiques à la molécule mère, chacune : un brin ancien + un brin nouveau ».' : '.'));
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_replication', titre: 'Le mécanisme de la réplication', graine: 47,
+  parametres: { sequence: { defaut: 'ATCGGATACG', schema: 'chaîne de 8 à 14 lettres A, T, C, G (la séquence du brin du haut)', lire: v => { const s = String(v || '').toUpperCase().replace(/[^ATCG]/g, ''); return s.length >= 8 && s.length <= 14 ? s : undefined; } } },
+  vues: {
+    replication: { titre: 'La réplication de l’ADN', fin: 22.6, moments: MR, dessiner, voit,
+      motifs: { phase_s: 'une molécule d’ADN en phase S', yeux_apparaissent: 'des yeux de réplication : les deux brins se séparent', fourches_opposees: 'deux fourches avancent en sens opposés', polymerase_pose: 'l’ADN polymérase pose en face de A un T', sens_5_3: 'chaque brin nouveau s’allonge dans le sens 5′ → 3′', yeux_fusionnent: 'les yeux fusionnent', deux_molecules: 'deux molécules identiques : un brin ancien + un brin nouveau' },
+      conclusion: 'Deux molécules identiques à la molécule mère : la réplication est semi-conservative.',
+      surReglage: (k, cles, api) => { if (cles.includes('sequence')) api.playUntil({ moment: 'polymerase_pose' }); },
+      texte: 'Réplication en phase S : yeux de réplication, deux fourches en sens opposés, l’ADN polymérase pose les nucléotides libres complémentaires (A en face de T, C en face de G) dans le sens 5′→3′ ; deux molécules, chacune un brin ancien et un brin nouveau.',
+      explication: [{ repere: 'oeil', texte: 'Les deux brins se séparent : un œil de réplication.' }, { repere: 'polymerase', texte: 'L’ADN polymérase pose en face de chaque base sa complémentaire.' }, { repere: 'sens', texte: 'Le brin nouveau s’allonge de 5′ vers 3′.' }, { repere: 'molecule_1', texte: 'Chaque molécule fille a un brin ancien et un brin nouveau.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

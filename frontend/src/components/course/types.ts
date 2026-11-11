@@ -1,4 +1,5 @@
 import type { ScientificVisualSpec } from '../session/scientific/types';
+import type { QuestionMemoire, SeanceCours } from './memoire/api';
 
 export type CourseSlideType =
   | 'diagnostic'
@@ -21,6 +22,12 @@ export interface CourseQuestion {
   correct?: number;
   /** Calcul ou raisonnement : la démonstration écrite à la main au tableau, après la réaction. */
   demonstration?: Demonstration;
+  /**
+   * Question de PRÉDICTION (11 novembre 2026, mode concentration) : posée AVANT la voix d'explication ; la voix
+   * et la simulation montrent ensuite la réponse, la question n'est pas reposée après. Une prédiction fausse
+   * n'est pas une erreur de compétence (suivi des acquis : `type: 'prediction'`, hors score).
+   */
+  prediction?: boolean;
 }
 
 /**
@@ -137,7 +144,11 @@ export interface CourseSlide {
 }
 
 /** Une compétence du cours : l'unité du suivi des acquis (skill `suivi-des-acquis`). */
-export interface CourseCompetence { id: string; label: string; slide_ids?: string[]; /** le nom dit par la voix (sans symbole) */ dit?: string }
+export interface CourseCompetence {
+  id: string; label: string; slide_ids?: string[]; /** le nom dit par la voix (sans symbole) */ dit?: string;
+  /** 3 à 4 questions de rappel espacé, sous des formes différentes (skill `suivi-des-acquis`, section 6). */
+  rappels?: QuestionMemoire[];
+}
 
 /**
  * Le mode concentration : l'écrit est fermé, le tuteur 3D montre au rythme de la voix.
@@ -197,6 +208,8 @@ export interface CourseDeck {
   source?: 'database' | 'manifest';
   activities: CourseActivity[];
   competences?: CourseCompetence[];
+  /** Séances de 3 blocs (explication → cahier → retrouver → exercice) : `components/course/memoire`. Sans séances, le cours marche comme avant. */
+  seances?: SeanceCours[];
   /** `concentration` : le cours se joue en mode concentration, avec le tuteur 3D du cours (cours refaits). */
   mode?: 'tableau' | 'concentration';
 }

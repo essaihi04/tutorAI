@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Demi-tangentes — dérivabilité à droite et à gauche</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : un point M glisse vers A par la droite puis par la gauche ; les sécantes deviennent deux demi-tangentes"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions), dérivabilité à droite et à gauche.
+ * Vues : ?vue=coin | verticale | sens.
+ *   coin      : f(x) = |x² − 1| en 1 : taux à droite x + 1 → 2, à gauche −(x + 1) → −2 : point anguleux.
+ *   verticale : f(x) = √x en 0 : taux 1/√x → +∞ : demi-tangente verticale dirigée vers le haut.
+ *   sens      : les quatre cas de demi-tangente verticale (la demi-tangente part du côté où est la courbe).
+ * Moments nommés (play_until) : voir chaque vue ; `fin` = construction complète.
+ */
+/* Indice après le prime (« f'_d(1) », « f'_g(1) ») : le kit ne met en indice qu'après une lettre ; on complète ici, pour cette page.
+ * Le prime est l'apostrophe droite ' : le ′ (U+2032) de la police du tableau ne fait que 2 px, il ne se voit pas. */
+(function () {
+  const C = Tableau.Craie, seg0 = C.segments, tx0 = C.prototype.texte, RE = /('_[dg])/;
+  C.segments = function (s) {
+    if (!RE.test(s)) return seg0(s);
+    const out = [];
+    for (const p of s.split(RE)) { if (RE.test(p)) out.push({ t: "'", sub: false }, { t: p[2], sub: true }); else if (p) out.push(...seg0(p)); }
+    return out;
+  };
+  C.prototype.texte = function (s, x, y, o = {}) {
+    s = String(s);
+    if (!RE.test(s)) return tx0.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${Tableau.POLICE}`;
+    this._verifierCadre(s.replace(/_/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(s, x, y, o, taille);
+  };
+})();
+const fr = MathsTableau.fr;
+/* Taille réduite pour qu’un texte tienne dans `maxw` px (le contrôle du cadre du kit mesure à la taille demandée). */
+const tient = (c, s, taille, maxw) => Math.min(taille, Math.floor(taille * maxw / Math.max(1, c.largeurTexte(String(s).replace(/[_^{}]/g, ''), taille)) * 10) / 10);
+const temps = (c) => (Number.isFinite(c.t) ? c.t : Infinity);
+function piste(t, segs) {
+  let v = null;
+  for (const [t0, d, de, a] of segs) {
+    if (t < t0) break;
+    const p = d > 0 ? Math.min(1, (t - t0) / d) : 1, e = (1 - Math.cos(Math.PI * p)) / 2;
+    v = de + (a - de) * e;
+  }
+  return v;
+}
+/* Droite de pente m passant par (x1 ; y1), entre xa et xb, coupée au cadre du repère. */
+function droite(c, G, x1, y1, m, xa, xb, o = {}) {
+  let a = Math.max(xa, G.xmin), b = Math.min(xb, G.xmax);
+  if (Math.abs(m) > 1e-9) { const u = x1 + (G.ymin - y1) / m, v = x1 + (G.ymax - y1) / m; a = Math.max(a, Math.min(u, v)); b = Math.min(b, Math.max(u, v)); }
+  if (b <= a) return;
+  const y = (x) => y1 + m * (x - x1);
+  c.ligne(G.X(a), G.Y(y(a)), G.X(b), G.Y(y(b)), { couleur: 'orange', largeur: 2.2, ...o });
+}
+
+/* ── coin : f(x) = |x² − 1| ── */
+const fc = (x) => Math.abs(x * x - 1);
+const tauxC = (x) => (x > 1 ? x + 1 : -(x + 1));          // (f(x) − f(1))/(x − 1), x ≠ 1
+const OPT_C = { x0: 50, y0: 58, w: 380, h: 287, xmin: -0.3, xmax: 2.3, ymin: -0.6, ymax: 3.2, gx: [[1, ''], [2, '2']], gy: [[1, '1'], [2, '2'], [3, '3']] };
+const COLC = 468;
+const surA = (x) => Math.abs(x - 1) < 0.005;
+const lireC = (x) => (surA(x) ? 'M sur A : le taux n’est pas défini en 1' : `M en x = ${fr(x, 2)} (${x > 1 ? 'à droite' : 'à gauche'}) : taux = ${fr(tauxC(x), 2)}`);
+
+/* ── verticale : f(x) = √x ── */
+const fv = (x) => Math.sqrt(Math.max(0, x));
+const OPT_V = { x0: 50, y0: 60, w: 380, h: 285, xmin: -0.2, xmax: 2.2, ymin: -0.3, ymax: 1.6, gx: [[1, '1'], [2, '2']], gy: [[1, '1']] };
+const COLV = 462;
+const tauxV = (x) => 1 / Math.sqrt(x);
+const lireV = (x) => `x = ${fr(x, 2)}, taux = 1/√x ${Math.abs(+tauxV(x).toFixed(2) - tauxV(x)) < 1e-9 ? '=' : '≈'} ${fr(tauxV(x), 2)}`;
+
+/* ── sens : quatre mini-repères ── */
+const CAS = [
+  { id: 'cas_dp', moment: 'droite_plus_infini', x: 22, y: 46, sx: 1, sy: -1, l1: 'à droite, +∞', l2: 'vers le haut', label: 'à droite, taux → +∞ : courbe au-dessus, demi-tangente vers le haut' },
+  { id: 'cas_dm', moment: 'droite_moins_infini', x: 392, y: 46, sx: 1, sy: 1, l1: 'à droite, −∞', l2: 'vers le bas', label: 'à droite, taux → −∞ : courbe en dessous, demi-tangente vers le bas' },
+  { id: 'cas_gp', moment: 'gauche_plus_infini', x: 22, y: 188, sx: -1, sy: 1, l1: 'à gauche, +∞', l2: 'vers le bas', label: 'à gauche, taux → +∞ : courbe en dessous, demi-tangente vers le bas' },
+  { id: 'cas_gm', moment: 'gauche_moins_infini', x: 392, y: 188, sx: -1, sy: -1, l1: 'à gauche, −∞', l2: 'vers le haut', label: 'à gauche, taux → −∞ : courbe au-dessus, demi-tangente vers le haut' },
+];
+
+MathsTableau.page({
+  id: 'de_demi_tangentes', titre: 'Demi-tangentes',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : un point M s’approche de A à droite puis à gauche ; les sécantes deviennent deux demi-tangentes (point anguleux), ou une demi-tangente verticale quand le taux tend vers l’infini',
+  vues: {
+    coin: {
+      titre: 'Deux demi-tangentes en A : un point anguleux',
+      params: { x_m: { min: 0.1, max: 1.9, pas: 0.01, defaut: 1.6, sens: 'abscisse du point M (à droite de A si x_m > 1, à gauche si x_m < 1)' } },
+      dessiner(c, K) {
+        const t = temps(c), xm = K.P.x_m;
+        K.titre('Dérivable à droite, à gauche ?');
+        const G = K.axes(OPT_C); K.marque('repere_pose');
+        K.anime(2.2, (p) => K.courbePart(G, fc, -0.3, 2.05, p, { couleur: 'cyan' }));
+        c.texte('(Cf) : y = |x² − 1|', 112, 82, { couleur: 'cyan', taille: 16 });
+        K.marque('courbe_tracee');
+        c.pause(.3); K.rond(G, 1, 0, true, 'jaune');
+        c.texte('A', G.X(1), G.Y(0) + 22, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.repere('point_a', G.X(1) - 12, G.Y(0) - 12, 24, 38, 'le point A(1 ; 0)');
+        K.marque('point_a');
+        // M arrive par la droite
+        c.pause(.3);
+        c.texte('taux = (f(x) − f(1)) / (x − 1)', COLC, 72, { couleur: 'blanc', taille: tient(c, 'taux = (f(x) − f(1)) / (x − 1)', 17, 276) });
+        const tR0 = c.cur; c.pause(.5); const tR1 = c.cur; K.anime(2.6, () => {});
+        K.marque('m_a_droite');
+        c.pause(.3);
+        K.anime(.9, (p) => droite(c, G, 1, 0, 2, 1, 1 + 1.2 * p, { couleur: 'jaune', largeur: 2.6 }));
+        c.texte("f'_d(1) = 2", COLC, 134, { couleur: 'jaune', taille: 19 });
+        c.repere('demi_droite', G.X(1) - 4, G.Y(2.4) - 4, G.X(2.2) - G.X(1) + 8, G.Y(0) - G.Y(2.4) + 8, 'la demi-tangente à droite, pente 2');
+        K.marque('demi_tangente_droite');
+        // M arrive par la gauche
+        c.pause(.4); const tL0 = c.cur; c.pause(.5); const tL1 = c.cur; K.anime(2.6, () => {});
+        K.marque('m_a_gauche');
+        c.pause(.3);
+        K.anime(.9, (p) => droite(c, G, 1, 0, -2, 1 - 1.15 * p, 1, { couleur: 'vert', largeur: 2.6 }));
+        c.texte("f'_g(1) = −2", COLC, 204, { couleur: 'vert', taille: 19 });
+        c.repere('demi_gauche', G.X(-0.15) - 4, G.Y(2.3) - 4, G.X(1) - G.X(-0.15) + 8, G.Y(0) - G.Y(2.3) + 8, 'la demi-tangente à gauche, pente −2');
+        K.marque('demi_tangente_gauche');
+        // le point anguleux
+        c.pause(.4);
+        const aD = Math.atan2(G.Y(2) - G.Y(0), G.X(2) - G.X(1)), aG = Math.atan2(G.Y(2) - G.Y(0), G.X(0) - G.X(1));
+        c.courbe((u) => { const an = aG + (aD - aG) * u; return [G.X(1) + 30 * Math.cos(an), G.Y(0) + 30 * Math.sin(an)]; }, 24, { couleur: 'orange', largeur: 2 });
+        c.repere('angle', G.X(1) - 34, G.Y(0) - 36, 68, 40, 'l’angle en A');
+        c.texte("f'_d(1) ≠ f'_g(1) : f n’est pas", COLC, 246, { couleur: 'blanc', taille: tient(c, "f'd(1) ≠ f'g(1) : f n’est pas", 17, 276) });
+        c.texte('dérivable en 1', COLC, 270, { couleur: 'blanc', taille: 17 });
+        c.texte('A est un point anguleux', COLC + 8, 306, { couleur: 'orange', taille: 18 });
+        c.rect(COLC, 306 - 21, c.largeurTexte('A est un point anguleux', 18) + 16, 30, { couleur: 'orange', arrondi: 6, largeur: 1.5 });
+        c.repere('conclusion', COLC - 4, 228, 280, 116, 'la conclusion : point anguleux');
+        K.marque('point_anguleux');
+        // pour finir, M au réglage x_m : la poignée de l'élève
+        c.pause(.4); const tF = c.cur; K.anime(1.2, () => {}); K.marque('m_libre');
+
+        const xR = piste(t, [[tR0, 0, 2, 2], [tR1, 2.6, 2, 1.02]]);
+        const xL = piste(t, [[tL0, 0, 0, 0], [tL1, 2.6, 0, 0.98]]);
+        const xF = piste(t, [[tF, 1.2, 0.98, xm]]);
+        c.direct(() => {
+          const x = xF !== null ? xF : xL !== null ? xL : xR;
+          if (x === null) return;
+          if (!surA(x)) {
+            const k = tauxC(x);
+            droite(c, G, 1, 0, k, Math.min(1, x) - 0.25, Math.max(1, x) + 0.2);
+            K.rond(G, x, fc(x), true, 'orange');
+            // libellé de M : en dessous près de A (à droite de « A » ou à sa gauche), sinon au-dessus à gauche sur la branche de droite
+            const [lx, ly] = x < 1 ? [-20, 18] : x < 1.15 ? [7, 18] : [-24, -8];
+            c.texte('M', G.X(x) + lx, G.Y(fc(x)) + ly, { couleur: 'orange', taille: 17 });
+          }
+          c.repere('point_m', G.X(x) - 12, G.Y(fc(x)) - 12, 24, 24, 'le point M');
+          if (xR !== null) c.texte(`M à droite : taux = ${fr(tauxC(xR), 2)}`, COLC, 104, { couleur: 'orange', taille: 17 });
+          if (xL !== null) c.texte(`M à gauche : taux = ${fr(tauxC(xL), 2)}`, COLC, 174, { couleur: 'orange', taille: 17 });
+          if (xF !== null) c.texte(lireC(x), COLC, 338, { couleur: 'orange', taille: tient(c, lireC(x), 16, 278) });
+        });
+      },
+      poignees(K) { const G = K.grille(OPT_C), x = K.P.x_m;
+        return [{ id: 'x_m', x: G.X(x), y: G.Y(fc(x)), bouger: (px, py) => ({ x_m: G.inv(px, py)[0] }) }]; },
+      lecture: (K) => lireC(K.P.x_m) + '.',
+      decrire: (K) => ({
+        repere_pose: 'Un repère : x de 0 à 2, y de 0 à 3.',
+        courbe_tracee: 'La courbe de f(x) = |x² − 1| (cyan) : 1 − x² à gauche de 1, x² − 1 à droite, en V arrondi qui touche l’axe en 1.',
+        point_a: 'Le point A(1 ; 0) est placé en jaune.',
+        m_a_droite: 'M arrive par la droite, de x = 2 à x = 1,02 ; la sécante (AM) orange pivote ; écrit : taux = (f(x) − f(1))/(x − 1), à droite taux = x + 1, de 3 à 2,02.',
+        demi_tangente_droite: 'La demi-tangente à droite (jaune), demi-droite d’origine A de pente 2, est tracée ; écrit : f′_d(1) = 2.',
+        m_a_gauche: 'M arrive par la gauche, de x = 0 à x = 0,98 ; à gauche taux = −(x + 1), de −1 à −1,98.',
+        demi_tangente_gauche: 'La demi-tangente à gauche (verte), demi-droite d’origine A de pente −2, est tracée ; écrit : f′_g(1) = −2.',
+        point_anguleux: 'Un petit arc orange marque l’angle en A entre les deux demi-tangentes ; écrit : f′_d(1) ≠ f′_g(1) : f n’est pas dérivable en 1 ; encadré : A est un point anguleux.',
+        m_libre: `M revient au réglage de la poignée : ${lireC(K.P.x_m)}.`,
+      }),
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe en V arrondi', point_a: 'le point A', m_a_droite: 'M arrive par la droite', demi_tangente_droite: 'la demi-tangente à droite', m_a_gauche: 'M arrive par la gauche', demi_tangente_gauche: 'la demi-tangente à gauche', point_anguleux: 'le point anguleux', m_libre: 'M à la poignée' },
+      explication: [
+        { repere: 'point_m', texte: 'M s’approche de A, d’un côté puis de l’autre.' },
+        { repere: 'demi_droite', texte: 'À droite, le taux tend vers 2 : demi-tangente de pente 2.' },
+        { repere: 'demi_gauche', texte: 'À gauche, il tend vers −2 : demi-tangente de pente −2.' },
+        { repere: 'angle', texte: 'Les deux demi-tangentes font un angle en A.' },
+        { repere: 'conclusion', texte: 'f′_d(1) ≠ f′_g(1) : f n’est pas dérivable en 1, A est un point anguleux.' },
+      ],
+    },
+    verticale: {
+      titre: 'Une demi-tangente verticale en O',
+      params: { x_m: { min: 0.01, max: 2, pas: 0.01, defaut: 1, sens: 'abscisse du point M sur la courbe de √x' } },
+      dessiner(c, K) {
+        const t = temps(c), xm = K.P.x_m;
+        K.titre('Quand le taux tend vers +∞');
+        const G = K.axes(OPT_V); K.marque('repere_pose');
+        K.anime(2, (p) => K.courbePart(G, fv, 0, 2.2, p, { couleur: 'cyan', n: 220 }));
+        c.texte('(Cf) : y = √x', G.X(1.3), G.Y(0.52), { couleur: 'cyan', taille: 16 });
+        K.marque('courbe_tracee');
+        c.pause(.3); K.rond(G, 0, 0, true, 'jaune');
+        c.repere('point_o', G.X(0) - 12, G.Y(0) - 12, 24, 24, 'le point O(0 ; 0)');
+        K.marque('point_o');
+        // M descend vers O ; le tableau des taux s'écrit au passage
+        c.pause(.3);
+        c.texte('x', COLV + 40, 74, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('taux = 1/√x', COLV + 170, 74, { couleur: 'faible', taille: 16, align: 'center' });
+        c.ligne(COLV, 82, COLV + 260, 82, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(COLV + 84, 58, COLV + 84, 156, { couleur: 'faible', largeur: 1.2 });
+        const ligne = (sx, st, y) => { c.texte(sx, COLV + 40, y, { couleur: 'blanc', taille: 16, align: 'center' }); c.texte(st, COLV + 170, y, { couleur: 'orange', taille: 16, align: 'center' }); };
+        const t0 = c.cur; ligne('1', '1', 102);
+        c.pause(.3); const t1 = c.cur; K.anime(1.8, () => {}); ligne('0,1', '≈ 3,16', 126);
+        c.pause(.2); const t2 = c.cur; K.anime(1.6, () => {}); ligne('0,01', '10', 150);
+        c.repere('taux', COLV - 4, 56, 268, 140, 'le taux 1/√x');
+        K.marque('secante_se_redresse');
+        c.pause(.4);
+        c.texte('(f(x) − f(0)) / (x − 0) = 1/√x', COLV, 220, { couleur: 'blanc', taille: tient(c, '(f(x) − f(0)) / (x − 0) = 1/√x', 17, 282) });
+        c.texte('1/√x → +∞ quand x → 0^{+}', COLV, 246, { couleur: 'orange', taille: 17 });
+        K.marque('taux_infini');
+        c.pause(.4);
+        c.fleche(G.X(0), G.Y(0), G.X(0), G.Y(1.45), { couleur: 'jaune', largeur: 3, tete: 13 });
+        c.repere('fleche', G.X(0) - 14, G.Y(1.45) - 6, 28, G.Y(0) - G.Y(1.45) + 12, 'la demi-tangente verticale');
+        c.texte('demi-tangente verticale', COLV, 282, { couleur: 'jaune', taille: 17 });
+        c.texte('dirigée vers le haut', COLV, 304, { couleur: 'jaune', taille: 17 });
+        c.texte('f n’est pas dérivable à droite en 0', COLV, 336, { couleur: 'orange', taille: tient(c, 'f n’est pas dérivable à droite en 0', 16, 282) });
+        K.marque('demi_tangente_verticale');
+        c.pause(.4); const tF = c.cur; K.anime(1.2, () => {}); K.marque('m_libre');
+
+        // M : exposant e (x = 10^e) de 0 à −1 puis −2, puis vers le réglage
+        const e = piste(t, [[t0, 0, 0, 0], [t1, 1.8, 0, -1], [t2, 1.6, -1, -2], [tF, 1.2, -2, Math.log10(xm)]]);
+        c.direct(() => {
+          if (e === null) return;
+          const x = Math.pow(10, e), y = fv(x), k = tauxV(x);
+          droite(c, G, 0, 0, k, -0.05, x + Math.max(0.12, 0.5 * x));
+          K.rond(G, x, y, true, 'orange');
+          c.texte('M', G.X(x) + 8, G.Y(y) + 16, { couleur: 'orange', taille: 17 });
+          c.repere('point_m', G.X(x) - 12, G.Y(y) - 12, 24, 24, 'le point M');
+          c.repere('secante', G.X(0) - 4, G.Y(Math.min(1.6, k * (x + 0.12))) - 4, G.X(x) - G.X(0) + 30, G.Y(0) - G.Y(Math.min(1.6, k * (x + 0.12))) + 8, 'la sécante (OM)');
+          c.texte('M : ' + lireV(x), COLV, 184, { couleur: 'orange', taille: tient(c, 'M : ' + lireV(x), 16, 282) });
+        });
+      },
+      poignees(K) { const G = K.grille(OPT_V), x = K.P.x_m;
+        return [{ id: 'x_m', x: G.X(x), y: G.Y(fv(x)), bouger: (px, py) => ({ x_m: G.inv(px, py)[0] }) }]; },
+      lecture: (K) => lireV(K.P.x_m) + '.',
+      decrire: (K) => ({
+        repere_pose: 'Un repère : x de 0 à 2, y de 0 à 1,5.',
+        courbe_tracee: 'La courbe de f(x) = √x (cyan) part de O en montant tout droit.',
+        point_o: 'Le point O(0 ; 0) est placé en jaune.',
+        secante_se_redresse: 'M descend sur la courbe de x = 1 à x = 0,01 ; la sécante (OM) orange se redresse ; tableau : x = 1 → taux 1 ; x = 0,1 → taux ≈ 3,16 ; x = 0,01 → taux 10.',
+        taux_infini: 'Écrit : (f(x) − f(0))/(x − 0) = 1/√x, et 1/√x → +∞ quand x → 0⁺.',
+        demi_tangente_verticale: 'Une flèche jaune verticale part de O vers le haut : la demi-tangente verticale dirigée vers le haut ; écrit : f n’est pas dérivable à droite en 0.',
+        m_libre: `M revient au réglage de la poignée : ${lireV(K.P.x_m)}.`,
+      }),
+      motifs: { repere_pose: 'le repère', courbe_tracee: 'la courbe de √x', point_o: 'le point O', secante_se_redresse: 'la sécante se redresse', taux_infini: 'le taux tend vers +∞', demi_tangente_verticale: 'la demi-tangente verticale', m_libre: 'M à la poignée' },
+      explication: [
+        { repere: 'point_m', texte: 'M descend vers O sur la courbe.' },
+        { repere: 'secante', texte: 'La sécante (OM) se redresse.' },
+        { repere: 'taux', texte: 'Son taux 1/√x grandit : 1, puis 3,16, puis 10.' },
+        { repere: 'fleche', texte: 'À la limite : une demi-tangente verticale dirigée vers le haut.' },
+      ],
+    },
+    sens: {
+      titre: 'Le sens de la demi-tangente verticale',
+      dessiner(c, K) {
+        K.titre('Vers le haut ou vers le bas ?');
+        for (const k of CAS) {
+          const W = 346, H = 134, ax = k.sx > 0 ? k.x + 70 : k.x + 150, ay = k.sy < 0 ? k.y + 104 : k.y + 34;
+          c.pause(.3);
+          c.rect(k.x, k.y, W, H, { couleur: 'tresfaible', arrondi: 8, largeur: 1.2 });
+          // mini-repère
+          c.fleche(k.x + 12, k.y + H - 12, k.x + 216, k.y + H - 12, { couleur: 'faible', largeur: 1.3, tete: 8 });
+          c.fleche(k.x + 20, k.y + H - 6, k.x + 20, k.y + 10, { couleur: 'faible', largeur: 1.3, tete: 8 });
+          c.ligne(ax, ay, ax, k.y + H - 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [4, 5] });
+          c.texte('a', ax, k.y + H + 4, { couleur: 'faible', taille: 13, align: 'center' });
+          // l'arc de courbe, du bon côté, avec une tangente verticale en A
+          K.anime(.9, (p) => c.trait(Array.from({ length: Math.max(2, Math.round(24 * p)) + 1 }, (_, i) => { const s = p * i / Math.max(2, Math.round(24 * p)); return [ax + k.sx * 62 * s * s, ay + k.sy * 58 * s]; }), { couleur: 'cyan', largeur: 2.4, tremble: .3 }));
+          c.point(ax, ay, 5, 'jaune');
+          c.texte('A', ax + (k.sx > 0 ? -18 : 9), ay + (k.sy < 0 ? 4 : 2) + (k.sy < 0 ? 12 : 12), { couleur: 'jaune', taille: 15 });
+          c.fleche(ax, ay, ax, ay + k.sy * 48, { couleur: 'jaune', largeur: 2.6, tete: 10 });
+          c.texte(k.l1, k.x + 226, k.y + 56, { couleur: 'blanc', taille: 16 });
+          c.texte(k.l2, k.x + 226, k.y + 82, { couleur: 'jaune', taille: 16 });
+          c.repere(k.id, k.x, k.y, W, H, k.label);
+          K.marque(k.moment);
+        }
+        c.pause(.4);
+        c.texte('la demi-tangente part du côté où est la courbe', 380, 348, { couleur: 'jaune', taille: 19, align: 'center' });
+        c.repere('regle', 150, 328, 460, 28, 'la règle');
+        K.marque('regle');
+      },
+      decrire: {
+        droite_plus_infini: 'Mini-repère 1 : à droite de A, taux → +∞ ; la courbe est à droite AU-DESSUS de A ; la flèche jaune part de A vers le haut.',
+        droite_moins_infini: 'Mini-repère 2 : à droite de A, taux → −∞ ; la courbe est à droite EN DESSOUS de A ; la flèche part de A vers le bas.',
+        gauche_plus_infini: 'Mini-repère 3 : à gauche de A, taux → +∞ ; la courbe est à gauche EN DESSOUS de A ; la flèche part de A vers le bas.',
+        gauche_moins_infini: 'Mini-repère 4 : à gauche de A, taux → −∞ ; la courbe est à gauche AU-DESSUS de A ; la flèche part de A vers le haut.',
+        regle: 'Écrit en bas : « la demi-tangente part du côté où est la courbe ».',
+      },
+      motifs: { droite_plus_infini: 'à droite, +∞ : vers le haut', droite_moins_infini: 'à droite, −∞ : vers le bas', gauche_plus_infini: 'à gauche, +∞ : vers le bas', gauche_moins_infini: 'à gauche, −∞ : vers le haut', regle: 'la règle' },
+      explication: [
+        { repere: 'cas_dp', texte: 'À droite, taux vers +∞ : la courbe monte, la demi-tangente va vers le haut.' },
+        { repere: 'cas_dm', texte: 'À droite, taux vers −∞ : la courbe descend, la demi-tangente va vers le bas.' },
+        { repere: 'cas_gp', texte: 'À gauche, taux vers +∞ : la courbe est en dessous, vers le bas.' },
+        { repere: 'cas_gm', texte: 'À gauche, taux vers −∞ : la courbe est au-dessus, vers le haut.' },
+        { repere: 'regle', texte: 'La demi-tangente part toujours du côté où est la courbe.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

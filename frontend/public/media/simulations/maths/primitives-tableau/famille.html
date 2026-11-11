@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Une infinité de primitives</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : les paraboles x² + k, toutes décalées verticalement, ont la même pente en chaque abscisse ; ce sont toutes des primitives de 2x"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : la famille des primitives, la primitive qui passe par un point.
+ * Vues : ?vue=famille (param k : hauteur de la courbe x² + k) | point (param k : l’essai de départ).
+ * famille : une_primitive, trois_courbes, translation, pentes, famille ; repères courbe_x2, trois_courbes, courbe_k, tangentes, legende.
+ * point : famille_fine, point, glisser, trouve, calcul, une_seule ; repères point_A, courbe_choisie, calcul, resultat.
+ */
+const fr = MathsTableau.fr;
+const OPT = { x0: 70, y0: 56, w: 370, h: 292, xmin: -2.6, xmax: 2.6, ymin: -3.3, ymax: 8.3, gx: [-2, -1, 1, 2], gy: [[-2, '−2'], [2, '2'], [4, '4'], [6, '6']] };
+const XL = 476;   // colonne de droite
+const nom = k => (Math.abs(k) < 1e-9 ? 'x²' : k > 0 ? `x² + ${fr(k)}` : `x² − ${fr(-k)}`);
+const par = k => x => x * x + k;
+/* Instants relevés à l'image précédente (comme les moments du kit). */
+const Q = { pale: Infinity };
+function encadre(c, s, x, y, taille, couleur) {
+  const w = c.largeurTexte(s, taille) + 18;
+  c.texte(s, x, y, { couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+
+MathsTableau.page({
+  id: 'pr_famille', titre: 'Fonctions primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : x², x² + 2, x² − 2… se dérivent toutes en 2x ; une primitive plus une constante k reste une primitive ; une condition F(x₀) = y₀ choisit une seule courbe',
+  vues: {
+    famille: {
+      titre: 'Une infinité de primitives',
+      params: { k: { min: -3, max: 5, pas: 0.5, defaut: 3, sens: 'hauteur de la courbe x² + k' } },
+      dessiner(c, K) {
+        K.titre('Une infinité de primitives');
+        const G = K.axes(OPT), k = K.P.k, X = 2.3;
+        // Une primitive : x².
+        K.anime(1.6, p => K.courbePart(G, par(0), -X, X, p, { couleur: 'cyan' }));
+        c.texte('x²', G.X(-X) - 6, G.Y(X * X) + 6, { couleur: 'cyan', taille: 18, align: 'right' });
+        c.repere('courbe_x2', G.X(-X), G.Y(X * X), G.X(X) - G.X(-X), G.Y(0) - G.Y(X * X), 'la courbe de x²');
+        K.marque('une_primitive');
+        // Deux autres : x² + 2 et x² − 2, plus fines.
+        c.pause(.3);
+        K.anime(1.2, p => K.courbePart(G, par(2), -X, X, p, { couleur: 'cyan', largeur: 1.4 }));
+        c.texte('x² + 2', G.X(-X) - 6, G.Y(X * X + 2) + 6, { couleur: 'cyan', taille: 17, align: 'right' });
+        K.anime(1.2, p => K.courbePart(G, par(-2), -X, X, p, { couleur: 'cyan', largeur: 1.4 }));
+        c.texte('x² − 2', G.X(-X) - 6, G.Y(X * X - 2) + 6, { couleur: 'cyan', taille: 17, align: 'right' });
+        c.repere('trois_courbes', G.X(-X), G.Y(8), G.X(X) - G.X(-X), G.Y(-2) - G.Y(8), 'les trois courbes');
+        K.marque('trois_courbes');
+        // La courbe épaisse x² + k glisse d'un bloc de x² jusqu'à k.
+        c.pause(.4);
+        K.anime(1.8, p => {
+          const kk = k * p;
+          K.courbe(G, par(kk), -X, X, { couleur: 'jaune', largeur: 4 });
+          if (Math.abs(kk) > .15) c.fleche(G.X(-1.5), G.Y(2.25), G.X(-1.5), G.Y(2.25 + kk), { couleur: 'jaune', largeur: 2, tete: 8 });
+          c.texte('+ k', G.X(-1.5) - 10, G.Y(2.25 + kk / 2) + 6, { couleur: 'jaune', taille: 18, align: 'right' });
+        });
+        c.texte('courbe épaisse : ' + nom(k), XL, 82, { couleur: 'jaune', taille: 18 });
+        c.texte('ici k = ' + fr(k), XL, 110, { couleur: 'jaune', taille: 18 });
+        const yh = Math.min(8.3, X * X + k);
+        c.repere('courbe_k', G.X(-X), G.Y(yh), G.X(X) - G.X(-X), Math.max(30, G.Y(Math.max(-3.3, k)) - G.Y(yh)), 'la courbe x² + k');
+        K.marque('translation');
+        // Même pente en x = 1 : tangentes parallèles.
+        c.pause(.4);
+        c.ligne(G.X(1), G.Y(-3.2), G.X(1), G.Y(8.2), { couleur: 'orange', largeur: 1.3, pointille: [5, 6] });
+        for (const kk of [-2, 0, 2, k]) {
+          const y = 1 + kk; if (y < -3.2 || y > 8.2) continue;
+          c.ligne(G.X(0.55), G.Y(y - 0.9), G.X(1.45), G.Y(y + 0.9), { couleur: 'vert', largeur: 2.2 });
+        }
+        c.texte('en x = 1 :', XL, 156, { couleur: 'vert', taille: 18 });
+        c.texte('même pente : 2', XL, 182, { couleur: 'vert', taille: 20 });
+        c.repere('tangentes', G.X(0.5), G.Y(Math.min(8.2, Math.max(3, 2 + k))), G.X(1.5) - G.X(0.5), G.Y(-2.2) - G.Y(Math.min(8.2, Math.max(3, 2 + k))), 'les tangentes parallèles');
+        K.marque('pentes');
+        // La légende : la famille.
+        c.pause(.4);
+        c.texte('(x² + k)’ = 2x', XL, 236, { couleur: 'blanc', taille: 22 });
+        c.pause(.2);
+        const b = encadre(c, 'x ↦ x² + k, k ∈ ℝ', XL + 6, 288, 22, 'jaune');
+        c.texte('toutes primitives de 2x', XL, 330, { couleur: 'faible', taille: 17 });
+        c.repere('legende', XL - 6, 210, 270, b[1] + b[3] - 200, 'la famille x² + k');
+        K.marque('famille');
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'k', x: G.X(0), y: G.Y(K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] }) }]; },
+      lecture: K => `La courbe épaisse est celle de ${nom(K.P.k)} (sommet (0 ; ${fr(K.P.k)})) : sa dérivée est 2x, c’est encore une primitive de 2x.`,
+      decrire: K => ({
+        une_primitive: 'Un repère ; la parabole de x² est tracée en cyan et nommée « x² ».',
+        trois_courbes: 'Deux autres paraboles, plus fines, sont tracées et nommées : « x² + 2 » au-dessus, « x² − 2 » en dessous.',
+        translation: `Une courbe épaisse jaune x² + k glisse verticalement d’un bloc depuis x² jusqu’à k = ${fr(K.P.k)}, avec une flèche verticale « + k » ; à droite : courbe épaisse ${nom(K.P.k)}.`,
+        pentes: 'En x = 1, un pointillé orange vertical ; sur chaque courbe un petit segment vert de tangente, tous parallèles ; à droite : « même pente : 2 ».',
+        famille: 'À droite : « (x² + k)’ = 2x » puis « x ↦ x² + k, k ∈ ℝ » encadré en jaune : toutes primitives de 2x.',
+      }),
+      motifs: { une_primitive: 'la courbe de x²', trois_courbes: 'trois courbes', translation: 'la courbe glisse de k', pentes: 'même pente', famille: 'la famille x² + k' },
+      explication: [
+        { repere: 'courbe_x2', texte: 'x² est une primitive de 2x.' },
+        { repere: 'trois_courbes', texte: 'x² + 2 et x² − 2 aussi : la constante disparaît en dérivant.' },
+        { repere: 'courbe_k', texte: 'Ajouter k fait glisser la courbe vers le haut ou le bas, sans changer sa forme.' },
+        { repere: 'tangentes', texte: 'Au même x, toutes les courbes ont la même pente : 2x.' },
+        { repere: 'legende', texte: 'Toutes les primitives de 2x : x ↦ x² + k, k ∈ ℝ.' },
+      ],
+    },
+    point: {
+      titre: 'La primitive qui passe par A',
+      params: { k: { min: -2, max: 5, pas: 0.5, defaut: -1, sens: 'premier essai : la courbe x² + k de départ' } },
+      dessiner(c, K) {
+        const T = c.t;
+        K.titre('La primitive qui passe par A');
+        const G = K.axes(OPT), k0 = K.P.k, X = 2.3, pale = T >= Q.pale;
+        // La famille en traits très fins.
+        K.anime(1.4, p => { for (let kk = -2; kk <= 5; kk++) K.courbePart(G, par(kk), -X, X, p, { couleur: pale ? 'rgba(226,232,240,.08)' : 'tresfaible', largeur: 1.1 }); });
+        K.marque('famille_fine');
+        // Le point A(1 ; 3).
+        c.pause(.3);
+        K.rond(G, 1, 3, true, 'jaune');
+        c.texte('A(1 ; 3)', G.X(1) - 14, G.Y(3) - 10, { couleur: 'jaune', taille: 18, align: 'right' });
+        c.repere('point_A', G.X(1) - 84, G.Y(3) - 30, 98, 44, 'le point A(1 ; 3)');
+        K.marque('point');
+        // L'essai de départ, puis la courbe épaisse qui glisse jusqu'à k = 2.
+        c.pause(.3);
+        const passe0 = Math.abs(k0 - 2) < 1e-9;
+        const ce = pale ? 'tresfaible' : (passe0 ? 'vert' : 'orange');
+        K.courbe(G, par(k0), -X, X, { couleur: ce, largeur: 1.4, pointille: [6, 5] });
+        K.rond(G, 0, k0, true, ce);
+        c.texte('essai k = ' + fr(k0), G.X(0) + 12, G.Y(k0) + 20, { couleur: ce, taille: 16 });
+        K.anime(2.2, p => {
+          const kk = k0 + (2 - k0) * p;
+          K.courbe(G, par(kk), -X, X, { couleur: 'cyan', largeur: 3.2 });
+          c.texte('k = ' + fr(Math.round(kk * 10) / 10), XL, 84, { couleur: 'cyan', taille: 22 });
+        });
+        K.marque('glisser');
+        // Trouvé : elle passe par A, elle s'épaissit.
+        c.pause(.3);
+        K.courbe(G, par(2), -X, X, { couleur: 'cyan', largeur: 5, duree: .6 });
+        c.cercle(G.X(1), G.Y(3), 13, { couleur: 'jaune', largeur: 1.8 });
+        c.texte('k = 2 : elle passe par A', XL, 116, { couleur: 'jaune', taille: 20 });
+        c.repere('courbe_choisie', G.X(-X), G.Y(7.3), G.X(X) - G.X(-X), G.Y(1.6) - G.Y(7.3), 'la courbe x² + 2');
+        K.marque('trouve');
+        // Le calcul.
+        c.pause(.4);
+        K.lignes(XL, 166, [
+          { t: 'F(1) = 3', couleur: 'blanc', taille: 22 },
+          { t: '⇔ 1² + k = 3', couleur: 'blanc', taille: 22 },
+          { t: '⇔ k = 2', couleur: 'jaune', taille: 22, moment: 'calcul' },
+        ], 38);
+        c.repere('calcul', XL - 6, 142, 220, 108, 'le calcul de k');
+        // Une seule : la famille pâlit, le résultat encadré.
+        c.pause(.4);
+        Q.pale = c.cur;
+        c.pause(.3);
+        const b = encadre(c, 'F(x) = x² + 2', XL + 6, 310, 26, 'jaune');
+        c.repere('resultat', ...b, 'F(x) = x² + 2');
+        K.marque('une_seule');
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'k', x: G.X(0), y: G.Y(K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] }) }]; },
+      lecture: K => (Math.abs(K.P.k - 2) < 1e-9
+        ? 'Essai k = 2 : la courbe x² + 2 passe par A(1 ; 3), car 1² + 2 = 3.'
+        : `Essai k = ${fr(K.P.k)} : la courbe ${nom(K.P.k)} passe en (1 ; ${fr(1 + K.P.k)}), pas par A(1 ; 3) ; il faut k = 2.`),
+      decrire: K => ({
+        famille_fine: 'Un repère ; les paraboles x² + k pour k = −2 à 5, en traits très fins.',
+        point: 'Le point A(1 ; 3) est placé en jaune et nommé.',
+        glisser: `Un essai pointillé x² + k avec k = ${fr(K.P.k)} ; une courbe épaisse cyan part de là et glisse jusqu’à k = 2 ; la valeur de k s’affiche à droite.`,
+        trouve: 'La courbe épaisse passe par A (entouré) : elle s’épaissit ; écrit « k = 2 », « passe par A ».',
+        calcul: 'À droite, trois lignes : « F(1) = 3 », « ⇔ 1² + k = 3 », « ⇔ k = 2 ».',
+        une_seule: 'Les autres paraboles et l’essai ont pâli ; « F(x) = x² + 2 » est encadré en jaune : une seule primitive passe par A.',
+      }),
+      motifs: { famille_fine: 'toute la famille', point: 'le point A', glisser: 'la courbe glisse', trouve: 'elle passe par A', calcul: 'le calcul de k', une_seule: 'une seule primitive' },
+      explication: [
+        { repere: 'point_A', texte: 'La condition F(1) = 3 : la courbe doit passer par A(1 ; 3).' },
+        { repere: 'courbe_choisie', texte: 'Une seule parabole de la famille passe par A : x² + 2.' },
+        { repere: 'calcul', texte: 'On remplace x par 1 et on résout en k.' },
+        { repere: 'resultat', texte: 'La primitive cherchée : F(x) = x² + 2.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

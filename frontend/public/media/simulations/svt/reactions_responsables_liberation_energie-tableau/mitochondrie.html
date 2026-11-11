@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La mitochondrie — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une mitochondrie peinte en coupe dans le hyaloplasme, avec ses deux membranes, ses crêtes et sa matrice, et à droite une crête agrandie portant des sphères pédonculées tournées vers la matrice ; les légendes s'écrivent une par une à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * L’ultrastructure de la mitochondrie, à légender (cours SVT « Libération de l’énergie », 10 novembre 2026).
+ * Une grande mitochondrie peinte en coupe (deux membranes, crêtes, matrice) dans le hyaloplasme ; à droite, une crête
+ * agrandie : la membrane interne repliée, l’espace intermembranaire dans le repli, les sphères pédonculées têtes vers
+ * la matrice. Les légendes s’écrivent une par une (t en s de la scène) :
+ *   membrane_externe (2)  membrane_interne (4)  cretes (6)  espace_intermembranaire (8)  matrice (10)
+ *   spheres_pedonculees (12,5)  lieux (16) : où se passe chaque étape.
+ * set_parameters {legendes: 'noms' | 'numeros'} (aussi ?legendes=numeros) : en « numeros », seuls les numéros 1 à 6.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux } = window.SVTTableau;
+const P = window.SVTPeinture;
+const $ = id => document.getElementById(id);
+
+const MI = { x: 270, y: 236, rx: 215, ry: 112, n: 12 };
+const MED = { x: 556, y: 64, w: 192, h: 252 };        // médaillon : une crête agrandie
+const ZOOM = { x: 336, y: 126, w: 40, h: 80 };         // cadre du zoom sur une crête de la grande mitochondrie
+const M = { membrane_externe: 2, membrane_interne: 4, cretes: 6, espace_intermembranaire: 8, matrice: 10, spheres_pedonculees: 12.5, lieux: 16 };
+const FIN = 18;
+const MOTIFS = {
+  membrane_externe: 'la membrane externe, qui limite la mitochondrie',
+  membrane_interne: 'la membrane interne, sous la membrane externe',
+  cretes: 'les crêtes : la membrane interne repliée vers l’intérieur',
+  espace_intermembranaire: 'l’espace intermembranaire, entre les deux membranes',
+  matrice: 'la matrice, à l’intérieur de la membrane interne',
+  spheres_pedonculees: 'les sphères pédonculées, sur la membrane interne, têtes vers la matrice',
+  lieux: 'où se passe chaque étape de la respiration',
+};
+const q = new URLSearchParams(location.search);
+const S = { legendes: q.get('legendes') === 'numeros' ? 'numeros' : 'noms' };
+
+/* Les six légendes : numéro, nom, position du texte, pointe de la flèche, instant où elle commence à s’écrire. */
+const LEG = [
+  { id: 'membrane_externe', n: 1, nom: 'membrane externe', x: 30, y: 74, de: [70, 80], a: [110, 158], couleur: 'orange' },
+  { id: 'membrane_interne', n: 2, nom: 'membrane interne', x: 30, y: 384, de: [70, 370], a: [88, 284], couleur: 'jaune' },
+  { id: 'cretes', n: 3, nom: 'crêtes', x: 176, y: 74, de: [200, 80], a: [218, 166], couleur: 'jaune' },
+  { id: 'espace_intermembranaire', n: 4, nom: 'espace intermembranaire', x: 258, y: 74, de: [300, 80], a: [254, 128], couleur: 'orange' },
+  { id: 'matrice', n: 5, nom: 'matrice', x: 282, y: 384, de: [300, 370], a: [272, 250], couleur: 'bleu' },
+  { id: 'spheres_pedonculees', n: 6, nom: 'sphères pédonculées', x: 652, y: 344, align: 'center', de: [672, 330], a: [700, 214], couleur: 'jaune' },
+];
+LEG.forEach(l => { l.t0 = M[l.id] - 1.3; });
+
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Observe la mitochondrie en coupe…', reinit: () => ecrit.oublier(),
+  fini: () => 'Deux membranes : la membrane externe et la membrane interne repliée en crêtes, qui porte les sphères pédonculées.' });
+scene.avancer = chrono.avancer;
+
+/* ── Peinture ──────────────────────────────────────────────────────────────────────────────── */
+const GRAINS = (() => { const r = P.graine(19), g = []; for (let i = 0; i < 120; i++) g.push([16 + r() * 728, 48 + r() * 366, .7 + r() * 1.4]); return g; })();
+function hyaloplasme(ctx) {
+  const g = ctx.createRadialGradient(280, 236, 40, 380, 236, 470);
+  g.addColorStop(0, P.rgba(P.T.hyalo, .20)); g.addColorStop(1, P.rgba(P.T.hyalo, .06));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(12, 44, 736, 372, 26) : ctx.rect(12, 44, 736, 372); ctx.fill();
+  ctx.fillStyle = P.rgba([200, 220, 180], .14);
+  for (const [x, y, r] of GRAINS) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+}
+/* Une sphère pédonculée orientée : `angle` 0 = tête vers le bas, π/2 = vers la gauche, −π/2 = vers la droite. */
+function sphere(ctx, x, y, angle, ep) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle); P.spherePedonculee(ctx, 0, 0, ep, 1, { r: 8 }); ctx.restore();
+}
+/* Une bande de membrane interne (double couche) entre deux points, peinte avec P.membrane dans un repère tourné. */
+function bande(ctx, x1, y1, x2, y2, ep) {
+  const L = Math.hypot(x2 - x1, y2 - y1), a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.save(); ctx.translate(x1, y1); ctx.rotate(a); P.membrane(ctx, 0, -ep / 2, L, ep, { pas: 7 }); ctx.restore();
+}
+const CR = { x: 652, haut: 112, bas: 244, demi: 18, ep: 12 };   // la crête du médaillon : un doigt de membrane
+function medaillon(ctx) {
+  const { x, y, w, h } = MED;
+  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 12) : ctx.rect(x, y, w, h); ctx.clip();
+  // matrice partout, espace intermembranaire en haut et dans le doigt de la crête
+  let g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, P.rgba(P.T.matrice, .55)); g.addColorStop(1, P.rgba(P.T.matrice, .35));
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = P.rgba(P.T.mitoEsp, .5); ctx.fillRect(x, y, w, CR.haut - 12 - y);
+  ctx.beginPath(); ctx.moveTo(CR.x - CR.demi, CR.haut - 14); ctx.lineTo(CR.x - CR.demi, CR.bas); ctx.arc(CR.x, CR.bas, CR.demi, Math.PI, 0, true); ctx.lineTo(CR.x + CR.demi, CR.haut - 14); ctx.closePath(); ctx.fill();
+  // membrane externe (en haut)
+  ctx.strokeStyle = P.rgba(P.T.mitoExt, .95); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, y + 14); ctx.lineTo(x + w, y + 14); ctx.stroke();
+  // membrane interne : à plat en haut, puis repliée en crête
+  const e = CR.ep, yh = CR.haut - 6, xg = CR.x - CR.demi - e / 2, xd = CR.x + CR.demi + e / 2;
+  bande(ctx, x, yh, xg + e / 2, yh, e); bande(ctx, xd - e / 2, yh, x + w, yh, e);
+  bande(ctx, xg, yh, xg, CR.bas, e); bande(ctx, xd, yh, xd, CR.bas, e);
+  const R = CR.demi + e / 2;
+  for (let k = 0; k < 8; k++) { const a1 = k / 8 * Math.PI, a2 = (k + 1) / 8 * Math.PI; bande(ctx, CR.x + R * Math.cos(a1), CR.bas + R * Math.sin(a1), CR.x + R * Math.cos(a2), CR.bas + R * Math.sin(a2), e); }
+  // sphères pédonculées : têtes vers la matrice
+  for (const yy of [150, 186, 222]) { sphere(ctx, xg, yy, Math.PI / 2, e); sphere(ctx, xd, yy, -Math.PI / 2, e); }
+  for (const xx of [580, 724]) sphere(ctx, xx, yh, 0, e);
+  sphere(ctx, CR.x, CR.bas + CR.demi + e / 2, 0, e);
+  ctx.restore();
+}
+function peindre(ctx) {
+  hyaloplasme(ctx);
+  P.mitochondrie(ctx, MI.x, MI.y, MI.rx, MI.ry, { cretes: MI.n, graine: 7 });
+  medaillon(ctx);
+}
+
+function legende(c, l) {
+  const num = S.legendes === 'numeros';
+  c.fleche(l.de[0], l.de[1], l.a[0], l.a[1], { couleur: 'blanc', largeur: 1.5, tete: 9 });
+  if (num) {
+    const [x, y] = l.de, cx = x, cy = l.y > 200 ? y + 8 : y - 10;
+    c.cercle(cx, cy, 10, { couleur: 'blanc', largeur: 1.5 }); c.texte(String(l.n), cx, cy + 5, { couleur: 'blanc', taille: 15, align: 'center' });
+  } else c.texte(l.nom, l.x, l.y, { couleur: l.couleur, taille: 15, align: l.align || 'left' });
+}
+function lieux(c) {
+  const num = S.legendes === 'numeros';
+  c.texte((num ? 'dans 5 : ' : '') + 'formation de l’acétyl-CoA, cycle de Krebs', num ? 282 : 282, 404, { couleur: 'vert', taille: 13 });
+  c.texte((num ? 'sur 2 : ' : '') + 'chaîne respiratoire, synthèse d’ATP', 30, 404, { couleur: 'vert', taille: 13 });
+  c.texte('hyaloplasme : glycolyse', 548, 384, { couleur: 'vert', taille: 13 });
+  c.texte('(hors de la mitochondrie)', 548, 404, { couleur: 'vert', taille: 13 });
+}
+
+function dessiner(c) {
+  const t = chrono.t;
+  c.direct(() => peindre(c.ctx));
+  c.texte('La mitochondrie : un organite à deux membranes', 18, 30, { couleur: 'cyan', taille: 20 });
+  c.texte('une crête agrandie', MED.x + MED.w / 2, 56, { couleur: 'faible', taille: 13, align: 'center' });
+  c.rect(MED.x, MED.y, MED.w, MED.h, { couleur: 'tresfaible', largeur: 1.4, arrondi: 12 });
+  c.rect(ZOOM.x, ZOOM.y, ZOOM.w, ZOOM.h, { couleur: 'jaune', largeur: 1.4, arrondi: 4 });
+  c.ligne(ZOOM.x + ZOOM.w, ZOOM.y, MED.x, MED.y + 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
+  c.ligne(ZOOM.x + ZOOM.w, ZOOM.y + ZOOM.h, MED.x, MED.y + MED.h - 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
+  for (const l of LEG) {
+    if (t < l.t0) continue;
+    // la structure qu’on légende brille un instant
+    const u = t - l.t0; if (u < 2) c.direct(() => P.eclat(c.ctx, l.a[0], l.a[1], 18, Math.sin(Math.min(1, u / 2) * Math.PI) * .8));
+    ecrit.ecrire(c, l.id + S.legendes, () => legende(c, l));
+  }
+  if (t >= M.lieux - 1.4) ecrit.ecrire(c, 'lieux' + S.legendes, () => lieux(c));
+  // repères
+  for (const l of LEG) c.repere(l.id, l.a[0] - 22, l.a[1] - 18, 44, 36, l.nom);
+  c.repere('medaillon', MED.x, MED.y, MED.w, MED.h, 'une crête agrandie');
+}
+
+/* ── Ce qui se voit ────────────────────────────────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  const t = chrono.t, num = S.legendes === 'numeros';
+  const ecrites = LEG.filter(l => t >= M[l.id]).map(l => (num ? `${l.n} (${l.nom})` : l.nom));
+  const cours = LEG.find(l => t >= l.t0 && t < M[l.id]);
+  let s = `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. Légendes en ${num ? 'numéros seuls (1 à 6, sans les noms)' : 'noms'}. Une mitochondrie peinte en coupe dans le hyaloplasme (deux membranes, nombreuses crêtes, matrice) ; à droite, une crête agrandie : membrane interne repliée, sphères pédonculées têtes vers la matrice. `;
+  s += ecrites.length ? `Légendes écrites : ${ecrites.join(', ')}.` : 'Aucune légende encore.';
+  if (cours) s += ` En train d’écrire : ${num ? cours.n + ' (' + cours.nom + ')' : cours.nom}.`;
+  if (t >= M.lieux) s += num ? ' Lieux écrits : dans 5 formation de l’acétyl-CoA et cycle de Krebs ; sur 2 chaîne respiratoire et synthèse d’ATP ; hyaloplasme : glycolyse (hors de la mitochondrie).'
+    : ' Lieux écrits : matrice → formation de l’acétyl-CoA, cycle de Krebs ; membrane interne → chaîne respiratoire, synthèse d’ATP ; hyaloplasme : glycolyse (hors de la mitochondrie).';
+  return s;
+}
+
+/* ── Réglages ──────────────────────────────────────────────────────────────────────────────── */
+function setParameters(p) {
+  if (p.legendes !== 'noms' && p.legendes !== 'numeros') return;
+  S.legendes = p.legendes;
+  chrono.running = false; chrono.jusqua = null; chrono.t = 0; chrono.fait = false; ecrit.oublier(); $('run').textContent = 'Lancer'; scene.sale = true;
+  bulle($('feedback'), S.legendes === 'numeros' ? 'Légendes en numéros seuls : à toi de trouver les noms.' : 'Légendes avec les noms.');
+  pont.noter('set_parameters', { legendes: S.legendes }); pont.emettre();
+}
+
+$('run').onclick = chrono.clic;
+const EXPL = [
+  { repere: 'membrane_externe', texte: 'La membrane externe limite la mitochondrie.' },
+  { repere: 'membrane_interne', texte: 'Juste dessous, la membrane interne.' },
+  { repere: 'cretes', texte: 'Elle se replie vers l’intérieur : ce sont les crêtes.' },
+  { repere: 'espace_intermembranaire', texte: 'Entre les deux membranes : l’espace intermembranaire.' },
+  { repere: 'matrice', texte: 'À l’intérieur : la matrice.' },
+  { repere: 'medaillon', texte: 'Agrandissons une crête.' },
+  { repere: 'spheres_pedonculees', texte: 'La membrane interne porte les sphères pédonculées, têtes vers la matrice.' } ];
+window.Tableau.explication({ noms: EXPL, numeros: EXPL });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'svt_energie_mitochondrie', version: '1.0', title: 'La mitochondrie : un organite à deux membranes',
+  variants: [{ id: 'noms', label: 'légendes avec les noms' }, { id: 'numeros', label: 'numéros seuls' }], commands: commandes,
+  command_schema: {
+    set_parameters: { legendes: 'noms | numeros (numéros 1 à 6 seuls)' },
+    set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'L’ultrastructure de la mitochondrie en coupe : 1 membrane externe, 2 membrane interne, 3 crêtes (replis de la membrane interne), 4 espace intermembranaire, 5 matrice, 6 sphères pédonculées sur la membrane interne, têtes vers la matrice (crête agrandie à droite). Lieux : matrice → formation de l’acétyl-CoA et cycle de Krebs ; membrane interne → chaîne respiratoire et synthèse d’ATP ; hyaloplasme → glycolyse, hors de la mitochondrie.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.legendes, time_s: +chrono.t.toFixed(2), parameters: { legendes: S.legendes }, moments: M }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
+    set_parameters: () => setParameters(p || {}), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une mitochondrie en coupe, dans le hyaloplasme…');
+setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M, S, ecrit };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

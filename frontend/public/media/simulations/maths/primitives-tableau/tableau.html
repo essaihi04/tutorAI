@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le tableau des primitives — fonctions primitives</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Tableau à la craie : les dérivées connues, puis le même tableau lu à l’envers pour trouver les primitives usuelles"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : le tableau des primitives usuelles.
+ * Vues : ?vue=derivees | envers | puissance | inverse | racine | trigo.
+ * Moments et repères : voir le contrat du cours (les noms sont cités par le cours, ne pas les renommer).
+ */
+/* ——— Aides de craie de la page ——— */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants compris. */
+function L(c, s, t = 21) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+const largeurs = (c, ms, t) => ms.map(m => (m && m.fl ? (m.w || (m.mot ? Math.max(56, L(c, m.mot, 13) + 18) : 44)) : L(c, typeof m === 'string' ? m : m.t, t)));
+/** Écrit des morceaux à la suite : 'texte', {t, c} (couleur), {fl: couleur, mot, w} (flèche de craie). */
+function rang(c, x, y, ms, o = {}) {
+  let t = o.taille || 21, ws = largeurs(c, ms, t), tot = ws.reduce((a, b) => a + b, 0);
+  if (o.max && tot > o.max) { t = t * o.max / tot; ws = largeurs(c, ms, t); tot = ws.reduce((a, b) => a + b, 0); }
+  if (o.centre) x -= tot / 2;
+  const x0 = x, p = [];
+  ms.forEach((m, i) => {
+    const w = ws[i];
+    if (m && m.fl) {
+      const ya = y - t * .3;
+      c.fleche(x + 6, ya, x + w - 6, ya, { couleur: m.fl, largeur: 2.2, tete: 9 });
+      if (m.mot) c.texte(m.mot, x + w / 2, ya - 8, { couleur: m.fl, taille: 13, align: 'center' });
+    } else c.texte(typeof m === 'string' ? m : m.t, x, y, { couleur: (m && m.c) || o.couleur || 'blanc', taille: t });
+    p.push({ x, w, m: x + w / 2 }); x += w;
+  });
+  return { p, x0, x1: x, t, y };
+}
+const bout = (R, i, j = i) => [R.p[i].x, R.p[j].x + R.p[j].w];
+function cadre(c, R, coul = 'jaune', m = 9) { c.rect(R.x0 - m, R.y - R.t - 5, R.x1 - R.x0 + 2 * m, R.t + 16, { couleur: coul, arrondi: 7, largeur: 1.7 }); }
+function souligne(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a + 2, R.y + 7, b - 2, R.y + 7, { couleur: coul, largeur: 2.4 }); }
+function barre(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a - 2, R.y - R.t * .3 + 9, b + 2, R.y - R.t * .3 - 9, { couleur: coul, largeur: 2.6 }); }
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.2 }); }
+function entoure(c, R, i, coul = 'orange', j = i) { const [a, b] = bout(R, i, j); ovale(c, (a + b) / 2, R.y - R.t * .32, (b - a) / 2 + 10, R.t * .75, coul); }
+function entoureExp(c, R, i, coul = 'orange') { const [a, b] = bout(R, i); ovale(c, (a + b) / 2, R.y - R.t * .66, (b - a) / 2 + 7, R.t * .4, coul); }
+function coche(c, x, y) { c.trait([[x, y - 9], [x + 6, y - 1], [x + 19, y - 19]], { couleur: 'vert', largeur: 3, tremble: .4 }); }
+function zone(c, id, R, label, pad = 7) { c.repere(id, R.x0 - pad, R.y - R.t - pad, R.x1 - R.x0 + 2 * pad, R.t + 2 * pad + 6, label); }
+
+/* Une rangée du tableau F | F’ : les traits puis les deux cases. */
+const TX = 150, TW = 360, TH = 34;
+function rangee(c, y, a, b) {
+  const mid = TX + TW / 2, o = { couleur: 'faible', largeur: 1.3, duree: .05 };
+  c.ligne(TX, y, TX, y + TH, o); c.ligne(mid, y, mid, y + TH, o); c.ligne(TX + TW, y, TX + TW, y + TH, o); c.ligne(TX, y + TH, TX + TW, y + TH, o);
+  c.texte(a, (TX + mid) / 2, y + TH / 2 + 8, { couleur: 'cyan', taille: 21, align: 'center' });
+  c.texte(b, (mid + TX + TW) / 2, y + TH / 2 + 8, { couleur: 'blanc', taille: 21, align: 'center' });
+}
+
+MathsTableau.page({
+  id: 'pr_tableau', titre: 'Le tableau des primitives usuelles',
+  texte: 'Construction à la craie du cours Fonctions primitives : le tableau des dérivées connues, lu à l’envers, donne les primitives usuelles (puissances, inverses, racines, trigonométrie)',
+  vues: {
+    derivees: {
+      titre: 'Ce qu’on sait : les dérivées',
+      dessiner(c, K) {
+        K.titre('Ce qu’on sait déjà : les dérivées');
+        const yh = 60, mid = TX + TW / 2, o = { couleur: 'faible', largeur: 1.4 };
+        c.ligne(TX, yh, TX + TW, yh, o); c.ligne(TX, yh, TX, yh + 36, o); c.ligne(mid, yh, mid, yh + 36, o); c.ligne(TX + TW, yh, TX + TW, yh + 36, o);
+        c.ligne(TX, yh + 36, TX + TW, yh + 36, { couleur: 'blanc', largeur: 1.8 });
+        c.texte('F', (TX + mid) / 2, yh + 26, { couleur: 'cyan', taille: 22, align: 'center' });
+        c.texte('F’', (mid + TX + TW) / 2, yh + 26, { couleur: 'blanc', taille: 22, align: 'center' });
+        rang(c, TX + TW + 30, yh + 26, [{ t: 'F', c: 'cyan' }, { fl: 'rouge', mot: 'dériver', w: 80 }, 'F’'], { taille: 22 });
+        const y0 = yh + 36, Y = i => y0 + i * TH;
+        const lignes = [['x²', '2x'], ['x³', '3x²'], ['x^{n}', 'nx^{n−1}'], ['√x', '1/(2√x)'], ['1/x', '−1/x²'], ['sin x', 'cos x'], ['cos x', '−sin x']];
+        const groupe = (de, a, id, label, moment, note) => {
+          for (let i = de; i < a; i++) { c.pause(.15); rangee(c, Y(i), ...lignes[i]); }
+          if (note) c.texte(note, TX + TW + 16, Y(a - 1) + TH / 2 + 7, { couleur: 'faible', taille: 16 });
+          c.repere(id, TX - 6, Y(de) - 2, TW + 12, (a - de) * TH + 4, label); K.marque(moment);
+        };
+        groupe(0, 3, 'puissances', 'les puissances : xⁿ a pour dérivée nxⁿ⁻¹', 'puissances', 'n ∈ ℕ*');
+        c.pause(.3); groupe(3, 4, 'racine', 'la racine carrée', 'racine', 'sur ]0 ; +∞[');
+        c.pause(.3); groupe(4, 5, 'inverse', 'l’inverse', 'inverse', 'sur ]0 ; +∞[ ou ]−∞ ; 0[');
+        c.pause(.3); groupe(5, 7, 'trigo', 'sinus et cosinus', 'trigo');
+      },
+      decrire: {
+        puissances: 'Un tableau à deux colonnes, F (cyan) et F’ ; flèche rouge « dériver » de F vers F’. Trois lignes : x² donne 2x, x³ donne 3x², xⁿ donne nxⁿ⁻¹ (n ∈ ℕ*).',
+        racine: 'Ligne suivante : √x donne 1/(2√x), sur ]0 ; +∞[.',
+        inverse: 'Ligne suivante : 1/x donne −1/x².',
+        trigo: 'Deux dernières lignes : sin x donne cos x, cos x donne −sin x.',
+      },
+      motifs: { puissances: 'les puissances', racine: 'la racine', inverse: 'l’inverse', trigo: 'sinus et cosinus' },
+      explication: [{ repere: 'puissances', texte: 'On dérive une puissance : l’exposant descend devant et baisse de 1.' }, { repere: 'racine', texte: 'La dérivée de √x est 1/(2√x).' }, { repere: 'inverse', texte: 'La dérivée de 1/x est −1/x².' }, { repere: 'trigo', texte: 'sin se dérive en cos, cos en −sin.' }],
+    },
+    envers: {
+      titre: 'Le tableau à l’envers',
+      dessiner(c, K) {
+        K.titre('Le tableau à l’envers');
+        c.texte('je connais F, je dérive', 60, 85, { couleur: 'rouge', taille: 17 });
+        const L1 = [['x²', '2x'], ['x³', '3x²'], ['x⁴', '4x³']], ys = [145, 205, 265];
+        const G = L1.map((l, i) => { c.pause(.15); return rang(c, 70, ys[i], [{ t: l[0], c: 'cyan' }, { fl: 'rouge', mot: 'dériver', w: 110 }, l[1]], { taille: 26 }); });
+        c.repere('gauche', 50, 62, 290, 220, 'les dérivées : F → F’');
+        K.marque('derivees');
+        c.pause(.4);
+        c.ligne(380, 64, 380, 290, { couleur: 'tresfaible', largeur: 1.4 });
+        c.texte('je connais f, je remonte à F', 420, 85, { couleur: 'vert', taille: 17 });
+        const D = L1.map((l, i) => { c.pause(.15); return rang(c, 440, ys[i], [l[1], { fl: 'vert', mot: 'primitive', w: 110 }, { t: l[0], c: 'cyan' }], { taille: 26 }); });
+        c.repere('droite', 410, 62, 320, 220, 'à l’envers : les primitives');
+        K.marque('retournement');
+        c.pause(.4);
+        const R = D[2], cx = (R.x0 + R.x1) / 2;
+        ovale(c, cx, R.y - 9, (R.x1 - R.x0) / 2 + 22, 27, 'jaune');
+        c.fleche(cx, R.y + 22, cx - 40, 304, { couleur: 'jaune', largeur: 1.8 });
+        const P = rang(c, 400, 336, ['une primitive de ', { t: '4x³', c: 'blanc' }, ' est ', { t: 'x⁴', c: 'cyan' }], { taille: 23, couleur: 'jaune' });
+        c.repere('lecture', R.x0 - 30, R.y - 40, Math.max(R.x1, P.x1) - R.x0 + 40, 345 - R.y + 40, 'une primitive de 4x³ est x⁴');
+        K.marque('lecture');
+        void G;
+      },
+      decrire: {
+        derivees: 'À gauche, trois lignes avec des flèches rouges « dériver » : x² → 2x, x³ → 3x², x⁴ → 4x³.',
+        retournement: 'À droite, les mêmes lignes lues à l’envers, flèches vertes « primitive » : 2x → x², 3x² → x³, 4x³ → x⁴.',
+        lecture: 'La ligne 4x³ → x⁴ est entourée en jaune ; écrit dessous : une primitive de 4x³ est x⁴.',
+      },
+      motifs: { derivees: 'les dérivées', retournement: 'le tableau retourné', lecture: 'lire une ligne' },
+      explication: [{ repere: 'gauche', texte: 'À gauche, on dérive : c’est ce qu’on sait faire.' }, { repere: 'droite', texte: 'À droite, on lit les mêmes lignes à l’envers.' }, { repere: 'lecture', texte: 'Puisque (x⁴)’ = 4x³, une primitive de 4x³ est x⁴.' }],
+    },
+    puissance: {
+      titre: 'Monter l’exposant, diviser',
+      dessiner(c, K) {
+        K.titre('Monter l’exposant, puis diviser');
+        const R = rang(c, 70, 110, [{ t: 'x^{n}', c: 'blanc' }, { fl: 'vert', mot: 'primitive', w: 96 }, { t: 'x^{n+1}/(n + 1)', c: 'jaune' }], { taille: 30 });
+        cadre(c, R, 'jaune');
+        c.texte('n ∈ ℕ*', R.x1 + 34, 108, { couleur: 'faible', taille: 19 });
+        zone(c, 'regle', R, 'la règle : xⁿ → xⁿ⁺¹/(n + 1)'); K.marque('regle');
+        c.pause(.4);
+        const E = rang(c, 70, 195, ['x', '⁵', { fl: 'vert', w: 72 }, 'x', '⁶', '/', '6'], { taille: 30 });
+        c.pause(.2); entoureExp(c, E, 4, 'orange');
+        souligne(c, E, 6, 'orange');
+        c.texte('5 + 1 = 6 : l’exposant monte', E.x1 + 40, 180, { couleur: 'orange', taille: 18 });
+        c.texte('puis on divise par 6', E.x1 + 40, 206, { couleur: 'blanc', taille: 18 });
+        zone(c, 'exemple', E, 'x⁵ → x⁶/6'); K.marque('exemple');
+        c.pause(.4);
+        c.texte('on vérifie :', 70, 270, { couleur: 'faible', taille: 17 });
+        const V = rang(c, 170, 270, ['(x⁶/6)’ = 6x⁵/6 = ', { t: 'x⁵', c: 'vert' }], { taille: 25 });
+        coche(c, V.x1 + 16, 268);
+        zone(c, 'verification', V, '(x⁶/6)’ = x⁵'); K.marque('verification');
+        c.pause(.4);
+        const C1 = rang(c, 70, 338, [{ t: 'k', c: 'blanc' }, { fl: 'vert', w: 60 }, { t: 'kx', c: 'jaune' }], { taille: 25 });
+        c.texte('(k réel)', C1.x1 + 14, 336, { couleur: 'faible', taille: 16 });
+        const C2 = rang(c, 290, 338, [{ t: '7', c: 'blanc' }, { fl: 'vert', w: 60 }, { t: '7x', c: 'jaune' }], { taille: 25 });
+        c.repere('constante', 60, 306, C2.x1 - 50, 42, 'une constante : k → kx');
+        K.marque('constante');
+      },
+      decrire: {
+        regle: 'Encadré : xⁿ → xⁿ⁺¹/(n + 1), avec n ∈ ℕ*.',
+        exemple: 'Exemple : x⁵ → x⁶/6 ; l’exposant 6 est entouré en orange (5 + 1 = 6), le 6 du dénominateur souligné : on divise par 6.',
+        verification: 'Vérification : (x⁶/6)’ = 6x⁵/6 = x⁵, coche verte.',
+        constante: 'En bas : k → kx et 7 → 7x.',
+      },
+      motifs: { regle: 'la règle', exemple: 'l’exemple x⁵', verification: 'la vérification', constante: 'les constantes' },
+      explication: [{ repere: 'regle', texte: 'On monte l’exposant de 1 et on divise par le nouvel exposant.' }, { repere: 'exemple', texte: 'x⁵ : l’exposant devient 6, on divise par 6.' }, { repere: 'verification', texte: 'On dérive x⁶/6 : on retrouve x⁵.' }, { repere: 'constante', texte: 'Une constante k a pour primitive kx.' }],
+    },
+    inverse: {
+      titre: '1/xⁿ : un moins apparaît',
+      dessiner(c, K) {
+        K.titre('1/xⁿ : un moins apparaît');
+        const A = rang(c, 70, 100, ['1/x²', ' = ', { t: 'x⁻²', c: 'cyan' }], { taille: 28 });
+        c.texte('on écrit en puissance', A.x1 + 30, 98, { couleur: 'faible', taille: 17 });
+        K.marque('ecriture_puissance');
+        c.pause(.4);
+        const P = rang(c, 70, 190, [{ t: 'x', c: 'cyan' }, { t: '⁻²', c: 'cyan' }, { fl: 'vert', w: 84 }, 'x', '⁻¹', '/(−1)', ' = ', { t: '−', c: 'jaune' }, { t: '1/x', c: 'jaune' }], { taille: 28 });
+        const xa = P.p[1].m, xb = P.p[4].m, yb = 190 - 28 * .95;
+        c.courbe(u => [xa + (xb - xa) * u, yb - 26 * Math.sin(Math.PI * u)], 30, { couleur: 'rouge', largeur: 2.3 });
+        c.fleche(xb - 6, yb - 7, xb, yb, { couleur: 'rouge', largeur: 2.3, tete: 8 });
+        c.texte('+1', (xa + xb) / 2, yb - 32, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.pause(.2); entoure(c, P, 7, 'orange');
+        c.texte('−2 + 1 = −1', P.x1 + 30, 188, { couleur: 'orange', taille: 17 });
+        c.repere('pont', P.x0 - 6, yb - 50, P.x1 - P.x0 + 12, 190 - yb + 58, 'le pont : l’exposant −2 monte à −1, un moins apparaît');
+        K.marque('pont');
+        c.pause(.4);
+        const E = rang(c, 70, 268, ['1/x⁴ = ', { t: 'x⁻⁴', c: 'cyan' }, { fl: 'vert', w: 70 }, 'x⁻³/(−3) = ', { t: '−1/(3x³)', c: 'jaune' }], { taille: 25 });
+        zone(c, 'exemple', E, '1/x⁴ → −1/(3x³)'); K.marque('exemple');
+        c.pause(.4);
+        const R = rang(c, 70, 338, ['1/x^{n}', { fl: 'vert', w: 64 }, { t: '−1/((n − 1)x^{n−1})', c: 'jaune' }, '     ', { t: 'n ≥ 2, sur ]0 ; +∞[', c: 'faible' }], { taille: 24 });
+        cadre(c, R, 'jaune');
+        zone(c, 'regle', R, 'la règle pour 1/xⁿ'); K.marque('regle');
+      },
+      decrire: {
+        ecriture_puissance: 'Écrit : 1/x² = x⁻² (on passe en puissance).',
+        pont: 'Écrit : x⁻² → x⁻¹/(−1) = −1/x ; un pont rouge « +1 » relie l’exposant −2 à −1 au-dessus de la flèche, le moins du résultat est entouré en orange.',
+        exemple: 'Exemple : 1/x⁴ = x⁻⁴ → x⁻³/(−3) = −1/(3x³).',
+        regle: 'Encadré : 1/xⁿ → −1/((n − 1)xⁿ⁻¹), n ≥ 2, sur ]0 ; +∞[.',
+      },
+      motifs: { ecriture_puissance: 'l’écriture en puissance', pont: 'le pont de l’exposant', exemple: 'l’exemple 1/x⁴', regle: 'la règle' },
+      explication: [{ repere: 'pont', texte: 'L’exposant −2 monte à −1 : on divise par −1, d’où le moins.' }, { repere: 'exemple', texte: 'Même chose avec x⁻⁴ : on divise par −3.' }, { repere: 'regle', texte: 'La règle générale, pour n ≥ 2, sur un intervalle sans 0.' }],
+    },
+    racine: {
+      titre: 'Racines : passer en puissance',
+      dessiner(c, K) {
+        K.titre('Racines : passer en puissance');
+        c.texte('rappel :', 70, 98, { couleur: 'faible', taille: 17 });
+        rang(c, 140, 100, ['(√x)’ = ', { t: '1/(2√x)', c: 'cyan' }], { taille: 25 });
+        K.marque('derivee_racine');
+        c.pause(.4);
+        rang(c, 70, 160, ['(2√x)’ = 2 × 1/(2√x) = ', { t: '1/√x', c: 'cyan' }], { taille: 25 });
+        c.texte('donc', 70, 220, { couleur: 'faible', taille: 19 });
+        const F = rang(c, 130, 222, ['1/√x', { fl: 'vert', mot: 'primitive', w: 92 }, { t: '2√x', c: 'jaune' }], { taille: 27 });
+        cadre(c, F, 'jaune');
+        c.texte('sur ]0 ; +∞[', F.x1 + 28, 220, { couleur: 'faible', taille: 17 });
+        zone(c, 'fois_deux', F, '1/√x → 2√x'); K.marque('fois_deux');
+        c.pause(.4);
+        const R = rang(c, 70, 288, ['x^{r}', { fl: 'vert', w: 70 }, { t: 'x^{r+1}/(r + 1)', c: 'jaune' }], { taille: 27 });
+        c.texte('r ∈ ℚ*, r ≠ −1, x > 0', R.x1 + 30, 286, { couleur: 'faible', taille: 18 });
+        zone(c, 'puissance_r', R, 'xʳ → xʳ⁺¹/(r + 1)'); K.marque('puissance_r');
+        c.pause(.4);
+        const E = rang(c, 70, 345, ['∛x = ', { t: 'x^{1/3}', c: 'cyan' }, { fl: 'vert', w: 64 }, 'x^{4/3}/(4/3) = ', { t: '(3/4)∛(x⁴)', c: 'jaune' }], { taille: 24 });
+        c.texte('1/3 + 1 = 4/3', E.x1 + 26, 343, { couleur: 'orange', taille: 17 });
+        zone(c, 'exemple_cubique', E, 'la racine cubique : ∛x → (3/4)∛(x⁴)', 5); K.marque('exemple_cubique');
+      },
+      decrire: {
+        derivee_racine: 'Rappel écrit : (√x)’ = 1/(2√x).',
+        fois_deux: 'Écrit : (2√x)’ = 2 × 1/(2√x) = 1/√x ; donc, encadré : 1/√x → 2√x (sur ]0 ; +∞[).',
+        puissance_r: 'Écrit : xʳ → xʳ⁺¹/(r + 1), pour r ∈ ℚ*, r ≠ −1, x > 0.',
+        exemple_cubique: 'Exemple : ∛x = x^(1/3) → x^(4/3)/(4/3) = (3/4)∛(x⁴) ; en orange 1/3 + 1 = 4/3.',
+      },
+      motifs: { derivee_racine: 'la dérivée de √x', fois_deux: '1/√x → 2√x', puissance_r: 'la puissance r', exemple_cubique: 'la racine cubique' },
+      explication: [{ repere: 'fois_deux', texte: 'On double √x pour que le 2 du dénominateur disparaisse.' }, { repere: 'puissance_r', texte: 'La même règle marche pour un exposant rationnel r ≠ −1.' }, { repere: 'exemple_cubique', texte: '∛x = x puissance 1/3 : l’exposant monte à 4/3, on divise par 4/3.' }],
+    },
+    trigo: {
+      titre: 'Pour mémoire : 1 + tan²x',
+      dessiner(c, K) {
+        K.titre('Pour mémoire : 1 + tan²x');
+        const D = rang(c, 70, 115, ['(tan x)’ = ', { t: '1 + tan²x', c: 'cyan' }, ' = ', { t: '1/cos²x', c: 'cyan' }], { taille: 28 });
+        zone(c, 'derivee_tan', D, '(tan x)’ = 1 + tan²x = 1/cos²x'); K.marque('derivee_tan');
+        c.pause(.4);
+        const A = rang(c, 70, 200, [{ t: '1 + tan²x', c: 'cyan' }, { fl: 'vert', mot: 'primitive', w: 100 }, { t: 'tan x', c: 'jaune' }], { taille: 28 });
+        c.pause(.15);
+        const B = rang(c, 70, 260, [{ t: '1/cos²x', c: 'cyan' }, { fl: 'vert', mot: 'primitive', w: 100 }, { t: 'tan x', c: 'jaune' }], { taille: 28 });
+        c.repere('envers', 60, 165, Math.max(A.x1, B.x1) - 50, 110, 'lu à l’envers : primitive tan x');
+        K.marque('envers');
+        c.pause(.4);
+        const I = rang(c, 70, 330, ['sur ', { t: ']−π/2 ; π/2[', c: 'jaune' }], { taille: 26 });
+        c.texte('là où cos x ≠ 0', I.x1 + 26, 328, { couleur: 'faible', taille: 17 });
+        c.rect(560, 46, 150, 34, { couleur: 'orange', arrondi: 8, largeur: 1.6 });
+        c.texte('pour mémoire', 635, 69, { couleur: 'orange', taille: 18, align: 'center' });
+        zone(c, 'intervalle', I, 'sur ]−π/2 ; π/2['); K.marque('intervalle');
+      },
+      decrire: {
+        derivee_tan: 'Écrit : (tan x)’ = 1 + tan²x = 1/cos²x.',
+        envers: 'Lu à l’envers, flèches vertes « primitive » : 1 + tan²x → tan x et 1/cos²x → tan x.',
+        intervalle: 'Écrit : sur ]−π/2 ; π/2[ (là où cos x ≠ 0) ; en haut à droite, une étiquette orange « pour mémoire ».',
+      },
+      motifs: { derivee_tan: 'la dérivée de tan', envers: 'le retournement', intervalle: 'l’intervalle' },
+      explication: [{ repere: 'derivee_tan', texte: 'La dérivée de tan x s’écrit de deux façons.' }, { repere: 'envers', texte: 'Donc une primitive de 1 + tan²x, ou de 1/cos²x, est tan x.' }, { repere: 'intervalle', texte: 'Sur ]−π/2 ; π/2[, là où cos x ne s’annule pas.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

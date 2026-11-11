@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le noyau commande — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Expériences qui localisent l’information génétique dans le noyau : amibe coupée en deux, acétabulaire sectionnée, greffe de noyaux entre deux espèces d’acétabulaire, transfert de noyau chez la grenouille"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * Le noyau commande (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité NIG1.
+ * Quatre vues : amibe (mérotomie), acetabulaire (section en trois), greffe (échange des noyaux entre A. mediterranea,
+ * chapeau lisse, et A. crenulata, chapeau crénelé), gurdon (noyau d’une cellule de têtard albinos dans un ovule irradié).
+ * Le vivant est peint (règle 7) ; la craie écrit les légendes, les flèches et les conclusions.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+
+/* ── Peinture ──────────────────────────────────────────────────────── */
+/** Amibe : masse grise translucide, pseudopodes qui ondulent ; `vie` 1 = active, 0 = morte (ronde, brunie). */
+function amibe(x, cx, cy, R, t, graine, vie, a = 1) {
+  x.save(); x.globalAlpha = a;
+  const pseudo = .22 * vie;
+  const pts = [];
+  for (let i = 0; i < 64; i++) {
+    const th = i / 64 * TAU;
+    const r = R * (1 + pseudo * (Math.sin(3 * th + t * .8 + graine) * .9 + Math.sin(5 * th - t * .55 + graine * 2) * .5 + Math.max(0, Math.sin(2 * th + graine + t * .3)) * .8));
+    pts.push([cx + r * Math.cos(th), cy + r * .78 * Math.sin(th)]);
+  }
+  const g = x.createRadialGradient(cx - R * .3, cy - R * .3, 4, cx, cy, R * 1.3);
+  const morte = 1 - vie;
+  g.addColorStop(0, `rgba(${220 - 40 * morte},${225 - 70 * morte},${230 - 110 * morte},.62)`);
+  g.addColorStop(1, `rgba(${150 - 20 * morte},${160 - 60 * morte},${175 - 100 * morte},.55)`);
+  x.fillStyle = g; x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.closePath(); x.fill();
+  x.strokeStyle = `rgba(${200 - 60 * morte},${215 - 90 * morte},${225 - 120 * morte},.85)`; x.lineWidth = 1.4; x.stroke();
+  x.save(); x.clip(); x.fillStyle = `rgba(90,100,110,${.3 + .3 * morte})`;
+  for (let i = 0; i < 40; i++) { const an = i * 2.4 + graine, rr = R * (.15 + .75 * ((i * 53) % 29) / 29); x.beginPath(); x.arc(cx + Math.cos(an) * rr, cy + Math.sin(an) * rr * .75, 1.4 + morte * .8, 0, TAU); x.fill(); }
+  x.restore(); x.restore();
+}
+function noyauSombre(x, cx, cy, r, a = 1, couleur = ['#6d5a8a', '#2e1f45']) {
+  x.save(); x.globalAlpha = a;
+  const g = x.createRadialGradient(cx - r * .35, cy - r * .35, 1, cx, cy, r);
+  g.addColorStop(0, couleur[0]); g.addColorStop(1, couleur[1]);
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill(); x.restore();
+}
+/** Acétabulaire : rhizoïde ramifié (base yb), tige jusqu’à yh, chapeau (lisse ou crénelé) de rayon rc ; `gris` 0..1 = mort. */
+const VERT_MED = ['rgba(120,220,120,.75)', 'rgba(40,140,60,.8)'], VERT_CREN = ['rgba(190,220,110,.75)', 'rgba(110,140,40,.8)'];
+function rhizoide(x, cx, yb, teinte, gris = 0, a = 1) {
+  x.save(); x.globalAlpha = a * (1 - .5 * gris);
+  const g = x.createRadialGradient(cx, yb - 12, 2, cx, yb - 8, 22); g.addColorStop(0, teinte[0]); g.addColorStop(1, teinte[1]);
+  x.fillStyle = g; x.beginPath(); x.ellipse(cx, yb - 10, 13, 11, 0, 0, TAU); x.fill();
+  x.strokeStyle = teinte[1]; x.lineWidth = 2.2; x.lineCap = 'round';
+  for (const [dx, dy] of [[-22, 10], [-12, 14], [2, 15], [14, 12], [24, 8]]) { x.beginPath(); x.moveTo(cx + dx * .3, yb - 4); x.quadraticCurveTo(cx + dx * .7, yb + 2, cx + dx, yb + dy - 4); x.stroke(); }
+  x.restore();
+}
+function tige(x, cx, y0, y1, teinte, gris = 0, a = 1) {
+  if (y1 >= y0) return;
+  x.save(); x.globalAlpha = a * (1 - .5 * gris);
+  const g = x.createLinearGradient(cx - 3, 0, cx + 3, 0); g.addColorStop(0, teinte[1]); g.addColorStop(.5, teinte[0]); g.addColorStop(1, teinte[1]);
+  x.fillStyle = g; x.fillRect(cx - 2.6, y1, 5.2, y0 - y1);
+  x.restore();
+}
+function chapeau(x, cx, cy, rc, crenele, teinte, gris = 0, a = 1) {
+  if (rc <= .5) return;
+  x.save(); x.globalAlpha = a * (1 - .5 * gris);
+  const g = x.createRadialGradient(cx, cy - 4, 1, cx, cy, rc); g.addColorStop(0, teinte[0]); g.addColorStop(1, teinte[1]);
+  x.fillStyle = g; x.beginPath();
+  const n = 15;
+  for (let i = 0; i <= 60; i++) {
+    const th = Math.PI + i / 60 * Math.PI;
+    let r = rc;
+    if (crenele) r = rc * (.84 + .16 * Math.abs(Math.sin(i / 60 * n * Math.PI / 2 * 2)));
+    const px = cx + r * Math.cos(th), py = cy + r * .42 * Math.sin(th);
+    i ? x.lineTo(px, py) : x.moveTo(px, py);
+  }
+  x.quadraticCurveTo(cx, cy + rc * .12, cx - rc, cy); x.closePath(); x.fill();
+  x.strokeStyle = 'rgba(30,80,30,.45)'; x.lineWidth = .7;
+  for (let i = 1; i < 10; i++) { const th = Math.PI + i / 10 * Math.PI; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + rc * .9 * Math.cos(th), cy + rc * .38 * Math.sin(th)); x.stroke(); }
+  if (gris > .5) { x.fillStyle = `rgba(120,110,90,${.4 * gris})`; x.fill(); }
+  x.restore();
+}
+function algue(x, cx, yb, yh, rc, crenele, teinte, o = {}) {
+  rhizoide(x, cx, yb, teinte, o.grisR || 0, o.a ?? 1);
+  tige(x, cx, yb - 18, yh, teinte, o.grisT || 0, o.a ?? 1);
+  chapeau(x, cx, yh, rc, crenele, teinte, o.grisC || 0, o.a ?? 1);
+}
+/** Grenouille simple, vue de dessus ; `albinos` : blanc rosé, yeux rouges. */
+function grenouille(x, cx, cy, s, albinos, a = 1) {
+  x.save(); x.globalAlpha = a; x.translate(cx, cy); x.scale(s, s);
+  const c0 = albinos ? '#fff1f2' : '#9bc46a', c1 = albinos ? '#f4c2cc' : '#4d6b2a';
+  x.strokeStyle = c1; x.lineWidth = 6; x.lineCap = 'round';
+  for (const sg of [-1, 1]) {
+    x.beginPath(); x.moveTo(sg * 12, 12); x.quadraticCurveTo(sg * 34, 20, sg * 26, 34); x.lineTo(sg * 38, 40); x.stroke();
+    x.beginPath(); x.moveTo(sg * 10, -10); x.lineTo(sg * 24, -2); x.lineTo(sg * 28, 6); x.stroke();
+  }
+  const g = x.createRadialGradient(-6, -8, 2, 0, 0, 30); g.addColorStop(0, c0); g.addColorStop(1, c1);
+  x.fillStyle = g; x.beginPath(); x.ellipse(0, 6, 20, 26, 0, 0, TAU); x.fill();
+  x.beginPath(); x.ellipse(0, -20, 16, 12, 0, 0, TAU); x.fill();
+  if (!albinos) { x.fillStyle = 'rgba(40,55,20,.55)'; for (const [px, py, r] of [[-8, 4, 3.5], [7, 12, 4], [-3, 20, 3], [9, -2, 2.6]]) { x.beginPath(); x.arc(px, py, r, 0, TAU); x.fill(); } }
+  for (const sg of [-1, 1]) { x.fillStyle = albinos ? '#ef4444' : '#1f2937'; x.beginPath(); x.arc(sg * 9, -26, 3.6, 0, TAU); x.fill(); x.fillStyle = 'rgba(255,255,255,.7)'; x.beginPath(); x.arc(sg * 9 - 1, -27, 1.1, 0, TAU); x.fill(); }
+  x.restore();
+}
+function tetard(x, cx, cy, s, albinos, t, a = 1) {
+  x.save(); x.globalAlpha = a; x.translate(cx, cy); x.scale(s, s);
+  const c0 = albinos ? '#fff1f2' : '#6b7a4a', c1 = albinos ? '#f0b8c4' : '#3a4526';
+  x.fillStyle = c1; x.beginPath(); x.moveTo(8, -5);
+  for (let i = 0; i <= 12; i++) { const u = i / 12; x.lineTo(8 + u * 34, Math.sin(u * 5 + t * 4) * 4 * u - 5 * (1 - u)); }
+  for (let i = 12; i >= 0; i--) { const u = i / 12; x.lineTo(8 + u * 34, Math.sin(u * 5 + t * 4) * 4 * u + 5 * (1 - u)); }
+  x.fill();
+  const g = x.createRadialGradient(-4, -4, 1, 0, 0, 14); g.addColorStop(0, c0); g.addColorStop(1, c1);
+  x.fillStyle = g; x.beginPath(); x.ellipse(0, 0, 13, 10, 0, 0, TAU); x.fill();
+  x.fillStyle = albinos ? '#ef4444' : '#111'; x.beginPath(); x.arc(-6, -3, 2, 0, TAU); x.fill();
+  x.restore();
+}
+function ovule(x, cx, cy, r, a = 1) {
+  x.save(); x.globalAlpha = a;
+  const g = x.createRadialGradient(cx - r * .3, cy - r * .5, 2, cx, cy, r);
+  g.addColorStop(0, '#6b5a4a'); g.addColorStop(.5, '#3f3328'); g.addColorStop(.62, '#d9c9a8'); g.addColorStop(1, '#bfae88');
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(240,230,200,.5)'; x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, r + 3, 0, TAU); x.stroke();
+  x.restore();
+}
+
+/* ── Vue amibe ─────────────────────────────────────────────────────── */
+const A = { cx: 300, cy: 215, R: 70 };
+const AM = { presentation: 2.2, coupe: 5.0, sans_noyau_meurt: 9.0, avec_noyau_regenere: 12.0, division: 15.4 };
+function dessinerAmibe(c, k) {
+  const t = k.t;
+  const sep = rampe(t, 4.6, 1.1);
+  const xG = entre(272, 175, sep), xD = entre(322, 440, sep);
+  const meurt = rampe(t, 5.8, 3.0), regen = rampe(t, 6.0, 5.8), div = rampe(t, 12.3, 3.0);
+  c.direct(() => {
+    const x = c.ctx;
+    if (t < 4.6) {
+      amibe(x, A.cx, A.cy, A.R, t, .7, 1);
+      noyauSombre(x, A.cx + 26, A.cy - 6, 15);
+      if (t >= 3.0) { const yA = entre(90, 330, rampe(t, 3.0, 1.6)); x.save(); x.strokeStyle = 'rgba(220,235,255,.95)'; x.lineWidth = 2; x.beginPath(); x.moveTo(282, 70); x.lineTo(282, yA); x.stroke(); x.restore(); }
+    } else {
+      amibe(x, xG, A.cy + 4, entre(A.R * .62, A.R * .5, meurt), t, 2.1, 1 - meurt);
+      if (div <= 0) {
+        amibe(x, xD, A.cy, A.R * entre(.74, 1, regen), t, .7, 1);
+        noyauSombre(x, xD + 14, A.cy - 6, 15);
+      } else {
+        const d = 72 * div, R = A.R * entre(1, .72, div);
+        amibe(x, xD, A.cy - d, R, t, .7, 1); amibe(x, xD, A.cy + d * .9, R, t, 3.3, 1);
+        noyauSombre(x, xD + 10, A.cy - d - 4, entre(15, 12, div)); noyauSombre(x, xD + 10, A.cy + d * .9 - 4, entre(15, 12, div));
+      }
+    }
+  });
+  c.texte('Mérotomie d’une amibe', 14, 26, { couleur: 'cyan', taille: 19 });
+  frise(c, t, [[0, 'jour 0'], [AM.sans_noyau_meurt, 'quelques jours']]);
+  if (t < 4.6) { c.repere('amibe', A.cx - 90, A.cy - 70, 180, 140, 'l’amibe'); c.repere('noyau', A.cx + 10, A.cy - 22, 32, 32, 'le noyau'); }
+  if (t < 4.6 && k.ecrit(c, 'pres', AM.presentation - 1.2)) {
+    k.T(c, 'amibe : une seule cellule', 70, 110, { couleur: 'blanc', taille: 16 });
+    c.ligne(330, 196, 360, 120, { couleur: 'blanc', largeur: 1.3 }); k.T(c, 'noyau', 362, 116, { couleur: 'violet', taille: 16 });
+    c.ligne(250, 250, 200, 330, { couleur: 'blanc', largeur: 1.3 }); k.T(c, 'cytoplasme', 150, 348, { couleur: 'blanc', taille: 16 });
+  }
+  if (k.ecrit(c, 'coupe', AM.coupe - .4)) {
+    k.T(c, 'fragment sans noyau', xG, 330, { couleur: 'orange', taille: 15, align: 'center' });
+    k.T(c, 'fragment avec noyau', 440, 330, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+  if (t >= 4.6) { c.repere('fragment_anucle', xG - 50, A.cy - 45, 100, 95, 'le fragment sans noyau'); }
+  if (t >= 4.6 && div <= 0) c.repere('fragment_nucle', xD - 75, A.cy - 60, 150, 125, 'le fragment avec noyau');
+  if (k.ecrit(c, 'meurt', AM.sans_noyau_meurt - .5)) {
+    c.ligne(xG - 22, A.cy - 18, xG + 22, A.cy + 22, { couleur: 'rouge', largeur: 2.4 }); c.ligne(xG + 22, A.cy - 18, xG - 22, A.cy + 22, { couleur: 'rouge', largeur: 2.4 });
+    k.T(c, 'il meurt', xG, 360, { couleur: 'rouge', taille: 16, align: 'center' });
+  }
+  if (k.ecrit(c, 'regen', AM.avec_noyau_regenere - .5)) k.T(c, 'il se nourrit et grandit', 440, 360, { couleur: 'vert', taille: 15, align: 'center' });
+  if (div > 0) c.repere('division', xD - 70, A.cy - 130, 150, 260, 'les deux amibes filles');
+  if (k.ecrit(c, 'div', AM.division - .3)) {
+    k.T(c, 'il se divise :', 560, 200, { couleur: 'vert', taille: 16 });
+    k.T(c, 'deux amibes', 560, 222, { couleur: 'vert', taille: 16 });
+    k.T(c, 'Le fragment nucléé vit et se divise.', 380, 396, { couleur: 'jaune', taille: 17, align: 'center' });
+  }
+}
+function voitAmibe(k) {
+  const t = k.t, m = [];
+  if (t < 4.6) m.push('Une amibe peinte (masse grise translucide aux pseudopodes) avec son noyau sombre' + (t >= 3 ? ' ; un fin fil de verre descend pour la couper en deux.' : '.'));
+  if (t >= AM.presentation - 1.2 && t < 4.6) m.push('Écrit : « amibe : une seule cellule », « noyau », « cytoplasme ».');
+  if (t >= 4.6) m.push('L’amibe est coupée : à gauche le fragment sans noyau (écrit en orange), à droite le fragment avec noyau (écrit en vert).');
+  if (t >= 5.8 && t < AM.sans_noyau_meurt) m.push('Le fragment sans noyau s’arrondit, perd ses pseudopodes et brunit.');
+  if (t >= AM.sans_noyau_meurt - .5) m.push('Le fragment sans noyau est mort : barré d’une croix rouge, écrit « il meurt ».');
+  if (t >= 6 && t < 12.3) m.push('Le fragment avec noyau refait ses pseudopodes et grandit.');
+  if (t >= 12.3) m.push('Le fragment avec noyau se divise en deux amibes, chacune avec un noyau ; écrit « il se divise : deux amibes » et « Le fragment nucléé vit et se divise. »');
+  return m;
+}
+
+/* ── Vue acétabulaire ──────────────────────────────────────────────── */
+const AC = { yb: 330, yh: 118, rc: 42, xM: 110, xC: 300, xE: 560 };
+const ACM = { presentation: 3.0, section: 7.4, fragments_meurent: 11.2, rhizoide_regenere: 15.4 };
+function yCoupe(P) { return AC.yb - 18 - P.coupe_basse * (AC.yb - 18 - AC.yh - 30); }
+function dessinerAcetabulaire(c, k) {
+  const t = k.t, P = k.P, yc = yCoupe(P), yHaut = AC.yh + 26;
+  const exp = rampe(t, 3.6, .8), ecart = rampe(t, 5.8, 1.2);
+  const x1 = entre(AC.xE, 470, ecart), x2 = entre(AC.xE, 580, ecart), x3 = entre(AC.xE, 690, ecart);
+  const mort1 = rampe(t, 8.0, 2.4), chap2 = rampe(t, 7.8, 1.5) * .45, mort2 = rampe(t, 9.4, 1.6);
+  const pousse = rampe(t, 11.6, 1.8), chap3 = rampe(t, 13.2, 2.0);
+  c.direct(() => {
+    const x = c.ctx;
+    algue(x, AC.xM, AC.yb, AC.yh, AC.rc, false, VERT_MED);
+    algue(x, AC.xC, AC.yb, AC.yh, AC.rc, true, VERT_CREN);
+    noyauSombre(x, AC.xM, AC.yb - 10, 5, 1, ['#3f7a3f', '#123d12']); noyauSombre(x, AC.xC, AC.yb - 10, 5, 1, ['#7a6a2a', '#3d300c']);
+    if (exp > 0) {
+      x.save(); x.globalAlpha = exp;
+      if (t < 5.8) algue(x, AC.xE, AC.yb, AC.yh, AC.rc, false, VERT_MED);
+      else {
+        chapeau(x, x1, AC.yh, AC.rc, false, VERT_MED, mort1); tige(x, x1, yHaut + 2, AC.yh, VERT_MED, mort1);
+        tige(x, x2, yc - 4, yHaut + 6, VERT_MED, mort2); chapeau(x, x2, yHaut + 6, AC.rc * chap2, false, VERT_MED, mort2);
+        rhizoide(x, x3, AC.yb, VERT_MED); tige(x, x3, AC.yb - 18, entre(yc + 4, AC.yh, pousse), VERT_MED);
+        if (chap3 > 0) chapeau(x, x3, AC.yh, AC.rc * chap3, false, VERT_MED);
+      }
+      noyauSombre(x, t < 5.8 ? AC.xE : x3, AC.yb - 10, 5, 1, ['#3f7a3f', '#123d12']);
+      x.restore();
+      if (t < 5.8) { // la position de la coupe basse : une poignée sur la tige
+        x.save(); x.strokeStyle = 'rgba(250,204,21,.9)'; x.lineWidth = 2; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(AC.xE - 16, yc); x.lineTo(AC.xE + 16, yc); x.stroke(); x.restore();
+        x.save(); x.fillStyle = 'rgba(250,204,21,.95)'; x.beginPath(); x.arc(AC.xE + 22, yc, 5, 0, TAU); x.fill(); x.restore();
+      }
+    }
+  });
+  c.texte('L’acétabulaire : une algue d’une seule cellule', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('mediterranea', AC.xM - 45, AC.yh - 25, 90, AC.yb - AC.yh + 40, 'Acetabularia mediterranea');
+  c.repere('crenulata', AC.xC - 45, AC.yh - 25, 90, AC.yb - AC.yh + 40, 'Acetabularia crenulata');
+  c.repere('chapeau', AC.xM - 44, AC.yh - 22, 88, 30, 'le chapeau'); c.repere('tige', AC.xM - 8, AC.yh + 20, 16, 200, 'la tige (pédoncule)');
+  c.repere('rhizoide', AC.xM - 26, AC.yb - 24, 52, 34, 'le rhizoïde'); c.repere('noyau', AC.xM - 9, AC.yb - 19, 18, 18, 'le noyau, dans le rhizoïde');
+  if (k.ecrit(c, 'pres', 1.0)) {
+    k.T(c, 'A. mediterranea', AC.xM, 64, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'A. crenulata', AC.xC, 64, { couleur: 'jaune', taille: 15, align: 'center' });
+    k.T(c, 'chapeau lisse', AC.xM, 90, { couleur: 'blanc', taille: 14, align: 'center' });
+    k.T(c, 'chapeau crénelé', AC.xC, 90, { couleur: 'blanc', taille: 14, align: 'center' });
+    c.ligne(AC.xM + 6, 230, AC.xM + 60, 214, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'tige (pédoncule)', AC.xM + 62, 210, { couleur: 'blanc', taille: 14 });
+    c.ligne(AC.xC - 20, AC.yb - 8, AC.xC - 60, AC.yb + 26, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'rhizoïde', AC.xC - 64, AC.yb + 40, { couleur: 'blanc', taille: 14, align: 'right' });
+    c.cercle(AC.xM, AC.yb - 10, 9, { couleur: 'violet', largeur: 1.6 });
+    c.ligne(AC.xM + 10, AC.yb - 6, AC.xM + 48, AC.yb + 22, { couleur: 'violet', largeur: 1.2 }); k.T(c, 'noyau', AC.xM + 50, AC.yb + 36, { couleur: 'violet', taille: 14 });
+    c.cote(28, AC.yh - 10, 28, AC.yb, '', { couleur: 'faible' }); k.T(c, '4 à 6 cm', 34, 250, { couleur: 'faible', taille: 13 });
+  }
+  if (t >= 3.6) frise(c, t, [[3.6, 'jour 0'], [ACM.fragments_meurent, 'quelques semaines']]);
+  if (k.ecrit(c, 'exp', 4.2)) k.T(c, 'on coupe A. mediterranea', 600, 74, { couleur: 'cyan', taille: 15, align: 'center' });
+  if (t >= 3.6 && t < 5.8) c.repere('coupe', AC.xE - 18, yc - 10, 50, 20, 'la coupe basse (poignée)');
+  if (k.ecrit(c, 'section', ACM.section - 1.2)) {
+    k.T(c, '1', x1 + 30, AC.yh + 30, { couleur: 'jaune', taille: 17 }); k.T(c, '2', x2 + 12, (yc + yHaut) / 2, { couleur: 'jaune', taille: 17 }); k.T(c, '3', x3 + 18, AC.yb - 30, { couleur: 'jaune', taille: 17 });
+  }
+  if (t >= 5.8) { c.repere('fragment_1', x1 - 44, AC.yh - 22, 88, 50, 'fragment 1 : le chapeau'); c.repere('fragment_2', x2 - 14, yHaut, 28, yc - yHaut, 'fragment 2 : la tige'); c.repere('fragment_3', x3 - 26, Math.min(yc, AC.yh), 52, AC.yb - Math.min(yc, AC.yh) + 10, 'fragment 3 : le rhizoïde, avec le noyau'); }
+  if (k.ecrit(c, 'meurent', ACM.fragments_meurent - .6)) {
+    k.T(c, 'meurt', x1, AC.yh + 60, { couleur: 'rouge', taille: 15, align: 'center' });
+    k.T(c, 'survie temporaire', x2, 352, { couleur: 'rouge', taille: 13, align: 'center' });
+    k.T(c, 'puis mort', x2, 368, { couleur: 'rouge', taille: 13, align: 'center' });
+  }
+  if (k.ecrit(c, 'regen', ACM.rhizoide_regenere - .4)) {
+    k.T(c, 'régénère', x3, 360, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'Seul le fragment avec le noyau régénère.', 560, 400, { couleur: 'jaune', taille: 16, align: 'center' });
+  }
+}
+function voitAcetabulaire(k) {
+  const t = k.t, m = ['À gauche deux algues acétabulaires peintes en vert, de 4 à 6 cm : A. mediterranea (chapeau à bord lisse) et A. crenulata (chapeau crénelé, en lobes) ; chacune a un chapeau, une tige (pédoncule) et un rhizoïde ramifié à la base, où se trouve le noyau (petit point sombre, entouré en violet).'];
+  if (t >= 3.6) m.push('À droite on coupe une A. mediterranea' + (t < 5.8 ? ` ; la coupe basse est marquée en jaune sur la tige (poignée, à ${Math.round(k.P.coupe_basse * 100)} % de la tige).` : ' en trois fragments numérotés : 1 le chapeau, 2 la tige, 3 le rhizoïde (qui garde le noyau).'));
+  if (t >= 8 && t < ACM.fragments_meurent - .6) m.push('Le fragment 1 grisit ; le fragment 2 forme un petit chapeau.');
+  if (t >= ACM.fragments_meurent - .6) m.push('Le fragment 1 est mort (écrit « meurt ») ; le fragment 2 a formé un petit chapeau puis est mort (écrit « survie temporaire puis mort »).');
+  if (t >= 11.6) m.push('Le fragment 3, avec le noyau, refait une tige' + (t >= 13.2 ? ' et un chapeau lisse complet.' : '.'));
+  if (t >= ACM.rhizoide_regenere - .4) m.push('Écrit « régénère » sous le fragment 3 et « Seul le fragment avec le noyau régénère. »');
+  return m;
+}
+
+/* ── Vue greffe ────────────────────────────────────────────────────── */
+const GR = { yb: 360, yh: 130, rc: 42, xG: 190, xD: 560 };
+const GRM = { avant: 2.4, extraction: 6.4, echange_noyaux: 10.0, chapeau_repousse: 14.6 };
+const NO_MED = ['#3f7a3f', '#123d12'], NO_CREN = ['#8a6a24', '#4a3208'];
+function dessinerGreffe(c, k) {
+  const t = k.t;
+  const coupe = rampe(t, 2.8, 1.0), sort = rampe(t, 4.2, 2.0), croise = rampe(t, 6.8, 3.0), pousse = rampe(t, 10.4, 3.8);
+  // trajets des noyaux : du rhizoïde vers le haut, puis croisés vers l’autre rhizoïde
+  const yS = 250;
+  const posMed = croise > 0 ? [entre(GR.xG, GR.xD, croise), entre(yS, GR.yb - 10, lisse(croise)) - 60 * Math.sin(Math.PI * croise)] : [GR.xG + 60 * sort, entre(GR.yb - 10, yS, sort)];
+  const posCren = croise > 0 ? [entre(GR.xD, GR.xG, croise), entre(yS, GR.yb - 10, lisse(croise)) - 30 * Math.sin(Math.PI * croise)] : [GR.xD - 60 * sort, entre(GR.yb - 10, yS, sort)];
+  if (croise > 0) { posMed[0] = entre(GR.xG + 60, GR.xD, croise); posCren[0] = entre(GR.xD - 60, GR.xG, croise); }
+  c.direct(() => {
+    const x = c.ctx;
+    // gauche : cytoplasme de mediterranea ; droite : cytoplasme de crenulata
+    rhizoide(x, GR.xG, GR.yb, VERT_MED); rhizoide(x, GR.xD, GR.yb, VERT_CREN);
+    tige(x, GR.xG, GR.yb - 18, GR.yh, VERT_MED); tige(x, GR.xD, GR.yb - 18, GR.yh, VERT_CREN);
+    if (coupe < 1) { chapeau(x, GR.xG, GR.yh, GR.rc, false, VERT_MED, 0, 1 - coupe); chapeau(x, GR.xD, GR.yh, GR.rc, true, VERT_CREN, 0, 1 - coupe); }
+    if (pousse > 0) { chapeau(x, GR.xG, GR.yh, GR.rc * pousse, true, VERT_MED); chapeau(x, GR.xD, GR.yh, GR.rc * pousse, false, VERT_CREN); }
+    noyauSombre(x, posMed[0], posMed[1], 6.5, 1, NO_MED); noyauSombre(x, posCren[0], posCren[1], 6.5, 1, NO_CREN);
+  });
+  c.texte('Échanger les noyaux de deux espèces', 14, 26, { couleur: 'cyan', taille: 19 });
+  frise(c, t, [[0, 'jour 0'], [GRM.chapeau_repousse, 'quelques semaines']]);
+  c.repere('rhizoide_med', GR.xG - 26, GR.yb - 24, 52, 34, 'le rhizoïde de mediterranea'); c.repere('rhizoide_cren', GR.xD - 26, GR.yb - 24, 52, 34, 'le rhizoïde de crenulata');
+  c.repere('noyau_med', posMed[0] - 10, posMed[1] - 10, 20, 20, 'le noyau de mediterranea'); c.repere('noyau_cren', posCren[0] - 10, posCren[1] - 10, 20, 20, 'le noyau de crenulata');
+  c.repere('chapeau_gauche', GR.xG - 44, GR.yh - 24, 88, 32, 'le chapeau de gauche'); c.repere('chapeau_droite', GR.xD - 44, GR.yh - 24, 88, 32, 'le chapeau de droite');
+  if (k.ecrit(c, 'avant', .8)) {
+    k.T(c, 'A. mediterranea', GR.xG, 70, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'A. crenulata', GR.xD, 70, { couleur: 'jaune', taille: 15, align: 'center' });
+    k.T(c, 'rhizoïde (cytoplasme)', GR.xG, 404, { couleur: 'faible', taille: 13, align: 'center' });
+    k.T(c, 'rhizoïde (cytoplasme)', GR.xD, 404, { couleur: 'faible', taille: 13, align: 'center' });
+  }
+  if (k.ecrit(c, 'coupe', 3.2)) {
+    if (t < 10.4) for (const xx of [GR.xG, GR.xD]) c.ligne(xx - 22, GR.yh + 14, xx + 22, GR.yh + 4, { couleur: 'blanc', largeur: 1.6 });
+    k.T(c, 'chapeau coupé', 375, 120, { couleur: 'faible', taille: 14, align: 'center' });
+  }
+  if (k.ecrit(c, 'extr', GRM.extraction - 1.4)) {
+    k.T(c, 'noyau de', GR.xG + 70, 215, { couleur: 'vert', taille: 14 }); k.T(c, 'mediterranea', GR.xG + 70, 232, { couleur: 'vert', taille: 14 });
+    k.T(c, 'noyau de', GR.xD - 140, 215, { couleur: 'jaune', taille: 14 }); k.T(c, 'crenulata', GR.xD - 140, 232, { couleur: 'jaune', taille: 14 });
+  }
+  if (k.ecrit(c, 'echange', GRM.echange_noyaux - 2.6)) {
+    c.fleche(GR.xG + 70, 262, GR.xD - 30, 330, { couleur: 'vert', largeur: 1.8 });
+    c.fleche(GR.xD - 70, 262, GR.xG + 30, 330, { couleur: 'jaune', largeur: 1.8 });
+    k.T(c, 'greffe croisée', 375, 322, { couleur: 'blanc', taille: 15, align: 'center' });
+  }
+  if (k.ecrit(c, 'pousse', GRM.chapeau_repousse - .5)) {
+    k.T(c, 'chapeau crénelé', GR.xG, 96, { couleur: 'jaune', taille: 15, align: 'center' });
+    k.T(c, 'chapeau lisse', GR.xD, 96, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, 'Le chapeau a la forme de l’espèce', 375, 360, { couleur: 'jaune', taille: 16, align: 'center' });
+    k.T(c, 'qui a donné le noyau.', 375, 380, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.repere('conclusion', 240, 342, 270, 46, 'la conclusion');
+  }
+}
+function voitGreffe(k) {
+  const t = k.t, m = ['Deux acétabulaires peintes : à gauche A. mediterranea (vert franc), à droite A. crenulata (vert jaune) ; chaque noyau a la couleur de son espèce.'];
+  if (t >= 2.8) m.push('Les deux chapeaux sont coupés.');
+  if (t >= 4.2 && t < 6.8) m.push('Les noyaux sortent des rhizoïdes : noyau de mediterranea (vert foncé) et noyau de crenulata (brun).');
+  if (t >= 6.8) m.push(t < GRM.echange_noyaux ? 'Les noyaux sont échangés (flèches croisées « greffe croisée »).' : 'Greffe croisée faite : le noyau de crenulata est dans le rhizoïde (cytoplasme) de mediterranea, à gauche, et le noyau de mediterranea dans celui de crenulata, à droite.');
+  if (t >= 10.4) m.push(t < GRM.chapeau_repousse ? 'Les chapeaux repoussent.' : 'Les chapeaux ont repoussé : à gauche un chapeau CRÉNELÉ (forme de crenulata, l’espèce du noyau), à droite un chapeau LISSE (forme de mediterranea).');
+  if (t >= GRM.chapeau_repousse - .5) m.push('Écrit : « Le chapeau a la forme de l’espèce qui a donné le noyau. »');
+  return m;
+}
+
+/* ── Vue Gurdon ────────────────────────────────────────────────────── */
+const GU = { gx: 90, gy: 110, tx: 90, ty: 300, ox: 270, oy: 120, ix: 270, iy: 300, dx: 470, dy: 210, ax: 650, ay: 210 };
+const GUM = { donneurs: 2.4, ovule_irradie: 6.2, noyau_injecte: 10.2, developpement: 13.6, adulte_albinos: 16.4 };
+function dessinerGurdon(c, k) {
+  const t = k.t;
+  const uv = rampe(t, 3.6, 1.6), pip = rampe(t, 6.8, 1.4), vol = rampe(t, 8.3, 1.7), dev = rampe(t, 10.6, 3.0), adu = rampe(t, 13.9, 2.5);
+  c.direct(() => {
+    const x = c.ctx;
+    grenouille(x, GU.gx, GU.gy, 1.15, false);
+    tetard(x, GU.tx, GU.ty, 1.5, true, t);
+    if (t >= 3.0) ovule(x, GU.ox, GU.oy, 26, rampe(t, 3.0, .6));
+    if (t >= 3.0 && t < 4.8) noyauSombre(x, GU.ox + 4, GU.oy - 8, 6, 1 - rampe(t, 4.4, .4), ['#9a8a7a', '#3a2a1a']);
+    if (uv > 0 && t < 6.2) { x.save(); x.globalAlpha = .8 * Math.min(1, uv * 3) * (1 - rampe(t, 5.6, .6)); x.strokeStyle = '#c084fc'; x.lineWidth = 2; for (let i = -2; i <= 2; i++) { x.beginPath(); x.moveTo(GU.ox - 70 + i * 12, GU.oy - 70); x.lineTo(GU.ox - 22 + i * 4, GU.oy - 18 + i * 2); x.stroke(); } x.restore(); }
+    if (t >= 6.4) { // cellule d’intestin du têtard
+      Peint.cellule(x, GU.ix, GU.iy, 30, 22, rampe(t, 6.4, .5));
+      if (vol <= 0) noyauSombre(x, GU.ix + 2, GU.iy - (pip > .6 ? 10 * (pip - .6) / .4 : 0), 8, 1, ['#d8b4fe', '#6b21a8']);
+    }
+    if (pip > 0 && t < 10.4) { // micropipette de verre
+      const tx = entre(GU.ix + 70, GU.ix + 14, Math.min(1, pip * 1.2)), ty = GU.iy - 40;
+      const px = vol > 0 ? entre(GU.ix + 14, GU.ox + 18, vol) : tx, py = vol > 0 ? entre(ty, GU.oy - 6, vol) : ty;
+      x.save(); x.strokeStyle = 'rgba(220,240,255,.85)'; x.lineWidth = 3; x.beginPath(); x.moveTo(px + 60, py - 30); x.lineTo(px, py); x.stroke(); x.restore();
+      if (vol > 0 && vol < 1) noyauSombre(x, px + 4, py - 2, 7, 1, ['#d8b4fe', '#6b21a8']);
+    }
+    if (vol >= 1 && t < 10.6) noyauSombre(x, GU.ox + 2, GU.oy - 6, 7, 1, ['#d8b4fe', '#6b21a8']);
+    if (dev > 0) { // œuf → divisions → têtard albinos
+      if (dev < .5) { ovule(x, GU.dx, GU.dy, 26 * (1 + dev * .2), Math.min(1, dev * 6)); const n = 1 + Math.floor(dev * 8); x.save(); x.strokeStyle = 'rgba(60,40,20,.6)'; x.lineWidth = 1.2; for (let i = 0; i < n; i++) { const a2 = i * Math.PI / n; x.beginPath(); x.moveTo(GU.dx - 30 * Math.cos(a2), GU.dy - 30 * Math.sin(a2)); x.lineTo(GU.dx + 30 * Math.cos(a2), GU.dy + 30 * Math.sin(a2)); x.stroke(); } x.restore(); }
+      else tetard(x, GU.dx, GU.dy, entre(.9, 1.6, (dev - .5) * 2), true, t, Math.min(1, (dev - .5) * 5));
+    }
+    if (adu > 0) grenouille(x, GU.ax, GU.ay, entre(.4, 1.3, adu), true, Math.min(1, adu * 4));
+  });
+  c.texte('Gurdon : un noyau dans un ovule', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('grenouille_pigmentee', GU.gx - 40, GU.gy - 45, 80, 95, 'la grenouille pigmentée'); c.repere('tetard_albinos', GU.tx - 25, GU.ty - 20, 90, 40, 'le têtard albinos');
+  if (k.ecrit(c, 'don', .9)) {
+    k.T(c, 'grenouille pigmentée', GU.gx, 186, { couleur: 'blanc', taille: 14, align: 'center' });
+    k.T(c, 'têtard albinos', GU.tx + 10, 348, { couleur: 'blanc', taille: 14, align: 'center' });
+  }
+  if (t >= 3.0) { c.repere('ovule', GU.ox - 30, GU.oy - 30, 60, 60, 'l’ovule'); if (t < 6.2) c.repere('uv', GU.ox - 95, GU.oy - 75, 70, 50, 'les rayons UV'); }
+  if (k.ecrit(c, 'ovule', 3.2)) { c.fleche(GU.gx + 44, GU.gy, GU.ox - 34, GU.oy, { couleur: 'faible', largeur: 1.5 }); k.T(c, 'ovule', GU.ox + 34, GU.oy - 22, { couleur: 'blanc', taille: 14 }); }
+  if (k.ecrit(c, 'uv', 4.0)) k.T(c, 'UV', GU.ox - 78, GU.oy - 74, { couleur: 'violet', taille: 15 });
+  if (k.ecrit(c, 'irr', GUM.ovule_irradie - .8)) {
+    c.ligne(GU.ox - 4, GU.oy - 16, GU.ox + 12, GU.oy, { couleur: 'rouge', largeur: 2 }); c.ligne(GU.ox + 12, GU.oy - 16, GU.ox - 4, GU.oy, { couleur: 'rouge', largeur: 2 });
+    k.T(c, 'noyau détruit', GU.ox + 34, GU.oy + 4, { couleur: 'rouge', taille: 14 });
+  }
+  if (t >= 6.4) c.repere('noyau_donne', GU.ix - 32, GU.iy - 24, 64, 48, 'la cellule d’intestin et son noyau');
+  if (k.ecrit(c, 'int', 7.0)) { c.fleche(GU.tx + 60, GU.ty, GU.ix - 36, GU.iy, { couleur: 'faible', largeur: 1.5 }); k.T(c, 'cellule d’intestin', GU.ix, GU.iy + 42, { couleur: 'blanc', taille: 14, align: 'center' }); }
+  if (pip > 0 && t < GUM.noyau_injecte + .2) c.repere('pipette', GU.ix + 10, GU.iy - 80, 80, 50, 'la micropipette');
+  if (k.ecrit(c, 'inj', GUM.noyau_injecte - .6)) { k.T(c, 'noyau injecté', GU.ox + 34, GU.oy + 26, { couleur: 'violet', taille: 14 }); }
+  if (dev > 0) c.repere('oeuf', GU.dx - 40, GU.dy - 32, 90, 64, 'l’œuf, puis le têtard');
+  if (k.ecrit(c, 'dev', GUM.developpement - .6)) { c.fleche(GU.ox + 30, GU.oy + 30, GU.dx - 34, GU.dy - 24, { couleur: 'faible', largeur: 1.5 }); k.T(c, 'œuf → têtard albinos', GU.dx, GU.dy + 52, { couleur: 'blanc', taille: 14, align: 'center' }); }
+  if (adu > 0) c.repere('adulte', GU.ax - 45, GU.ay - 50, 90, 100, 'la grenouille adulte');
+  if (k.ecrit(c, 'adu', GUM.adulte_albinos - .4)) {
+    c.fleche(GU.dx + 50, GU.dy, GU.ax - 50, GU.ay, { couleur: 'faible', largeur: 1.5 });
+    k.T(c, 'grenouille albinos', GU.ax, GU.ay + 70, { couleur: 'blanc', taille: 14, align: 'center' });
+    k.T(c, 'La grenouille obtenue a les caractères', 470, 360, { couleur: 'jaune', taille: 16, align: 'center' });
+    k.T(c, 'du donneur du noyau.', 470, 380, { couleur: 'jaune', taille: 16, align: 'center' });
+  }
+}
+function voitGurdon(k) {
+  const t = k.t, m = ['À gauche, peints : une grenouille pigmentée (vert brun tacheté) et un têtard albinos (blanc rosé, œil rouge).'];
+  if (t >= 3) m.push('Un ovule de la grenouille pigmentée' + (t >= 3.6 ? ' reçoit des rayons UV (traits violets) : son noyau est détruit (croix rouge, « noyau détruit »).' : '.'));
+  if (t >= 6.4) m.push('Une cellule d’intestin du têtard albinos ; une micropipette prend son noyau' + (t >= GUM.noyau_injecte - .6 ? ' et l’a injecté dans l’ovule (« noyau injecté »).' : '.'));
+  if (t >= 10.6) m.push('L’œuf se divise puis devient un têtard albinos (« œuf → têtard albinos »).');
+  if (t >= 13.9) m.push('Le têtard devient une grenouille adulte ALBINOS (« grenouille albinos ») ; écrit « La grenouille obtenue a les caractères du donneur du noyau. »');
+  return m;
+}
+
+/* ── Frise du temps (en haut à droite) ─────────────────────────────── */
+function frise(c, t, marques) {
+  const x0 = 520, x1 = 740, y = 50;
+  c.ligne(x0, y, x1, y, { couleur: 'tresfaible', largeur: 1.4 });
+  const tMax = marques[marques.length - 1][0] || 1;
+  marques.forEach(([tm, lib], i) => {
+    const xx = i === 0 ? x0 : x1;
+    if (t >= tm - 1e-6) { c.ligne(xx, y - 5, xx, y + 5, { couleur: 'faible', largeur: 1.4, duree: .05 }); c.texte(lib, xx, y - 9, { couleur: 'faible', taille: 13, align: i === 0 ? 'left' : 'right', duree: .3 }); }
+  });
+  c.direct(() => { const x = c.ctx, u = Math.min(1, Math.max(0, (t - marques[0][0]) / (tMax - marques[0][0]))); x.save(); x.fillStyle = 'rgba(250,204,21,.9)'; x.beginPath(); x.arc(x0 + (x1 - x0) * u, y, 4, 0, TAU); x.fill(); x.restore(); });
+}
+
+window.Etapes.lancer({
+  id: 'genetique_noyau', titre: 'Le noyau commande', graine: 11,
+  parametres: {
+    coupe_basse: { defaut: .5, schema: '0.2..0.8 (position de la coupe basse le long de la tige, vue acetabulaire)', lire: v => Math.min(.8, Math.max(.2, +v)) },
+    sens: { defaut: 'croise', schema: '\'croise\' (vue greffe : les deux greffes côte à côte)', lire: v => (v === 'croise' ? v : undefined) },
+  },
+  poignees: {
+    toucher: (x, y, k) => (k.vue === 'acetabulaire' && k.t >= 3.6 && k.t < 5.8 && Math.abs(x - (AC.xE + 22)) < 16 && Math.abs(y - yCoupe(k.P)) < 14 ? 'coupe' : null),
+    bouger: (id, x, y, k, api) => { const f = (AC.yb - 18 - y) / (AC.yb - 18 - AC.yh - 30); api.poser({ coupe_basse: Math.min(.8, Math.max(.2, f)) }); },
+  },
+  vues: {
+    amibe: { titre: 'Mérotomie d’une amibe', fin: 16.5, moments: AM, dessiner: dessinerAmibe, voit: voitAmibe,
+      motifs: { presentation: 'une amibe, une seule cellule, avec son noyau', coupe: 'l’amibe est coupée : un fragment avec noyau, un fragment sans noyau', sans_noyau_meurt: 'le fragment sans noyau meurt', avec_noyau_regenere: 'le fragment avec noyau se nourrit et grandit', division: 'le fragment avec noyau se divise : deux amibes' },
+      conclusion: 'Le fragment avec noyau vit et se divise ; le fragment sans noyau meurt.',
+      texte: 'Mérotomie d’une amibe : coupée en deux, le fragment sans noyau meurt, le fragment avec noyau grandit et se divise.',
+      explication: [{ repere: 'amibe', texte: 'L’amibe est une seule cellule, avec un noyau.' }, { repere: 'fragment_anucle', texte: 'Le fragment sans noyau ne se nourrit plus et meurt.' }, { repere: 'fragment_nucle', texte: 'Le fragment avec noyau vit, grandit et se divise.' }] },
+    acetabulaire: { titre: 'Section de l’acétabulaire', fin: 16.5, moments: ACM, dessiner: dessinerAcetabulaire, voit: voitAcetabulaire,
+      motifs: { presentation: 'deux espèces d’acétabulaire : chapeau lisse et chapeau crénelé ; le noyau est dans le rhizoïde', section: 'l’algue coupée en trois fragments : 1 chapeau, 2 tige, 3 rhizoïde', fragments_meurent: 'les fragments 1 et 2, sans noyau, meurent', rhizoide_regenere: 'le fragment 3, avec le noyau, a refait une tige et un chapeau' },
+      conclusion: 'Seul le fragment qui contient le noyau régénère une algue complète.',
+      surReglage: (k, cles, api) => { if (cles.includes('coupe_basse') && k.t >= 5.8) api.playUntil({ moment: 'section' }); },
+      texte: 'Acétabulaire, algue unicellulaire de 4 à 6 cm : A. mediterranea à chapeau lisse, A. crenulata à chapeau crénelé, noyau dans le rhizoïde. Coupée en trois : chapeau et tige meurent, le rhizoïde avec le noyau régénère.',
+      explication: [{ repere: 'chapeau', texte: 'La forme du chapeau est un caractère de l’espèce.' }, { repere: 'noyau', texte: 'Le noyau est en bas, dans le rhizoïde.' }, { repere: 'fragment_3', texte: 'Seul le fragment avec le noyau régénère.' }] },
+    greffe: { titre: 'Greffe croisée des noyaux', fin: 16, moments: GRM, dessiner: dessinerGreffe, voit: voitGreffe,
+      motifs: { avant: 'deux espèces : mediterranea (lisse) et crenulata (crénelé)', extraction: 'les chapeaux coupés, les noyaux sortis des rhizoïdes', echange_noyaux: 'les noyaux échangés : chacun dans le rhizoïde de l’autre espèce', chapeau_repousse: 'le chapeau repousse avec la forme de l’espèce qui a donné le noyau' },
+      conclusion: 'Le chapeau a la forme de l’espèce qui a donné le noyau : le noyau commande.',
+      texte: 'Greffe croisée : noyau de crenulata dans le rhizoïde de mediterranea → chapeau crénelé ; noyau de mediterranea dans le rhizoïde de crenulata → chapeau lisse.',
+      explication: [{ repere: 'noyau_cren', texte: 'Le noyau de crenulata est greffé dans le rhizoïde de mediterranea.' }, { repere: 'chapeau_gauche', texte: 'Le chapeau qui repousse est crénelé : il suit le noyau.' }, { repere: 'conclusion', texte: 'Le chapeau a la forme de l’espèce qui a donné le noyau.' }] },
+    gurdon: { titre: 'Transfert de noyau (Gurdon)', fin: 17.2, moments: GUM, dessiner: dessinerGurdon, voit: voitGurdon,
+      motifs: { donneurs: 'une grenouille pigmentée et un têtard albinos', ovule_irradie: 'l’ovule de la grenouille pigmentée : noyau détruit par les UV', noyau_injecte: 'le noyau d’une cellule d’intestin du têtard albinos est injecté dans l’ovule', developpement: 'l’œuf se développe en têtard albinos', adulte_albinos: 'une grenouille adulte albinos : elle a les caractères du donneur du noyau' },
+      conclusion: 'La grenouille obtenue a les caractères du donneur du noyau.',
+      texte: 'Gurdon : ovule de grenouille pigmentée irradié aux UV (noyau détruit), noyau d’une cellule d’intestin de têtard albinos injecté, l’œuf donne une grenouille albinos.',
+      explication: [{ repere: 'ovule', texte: 'L’ovule de la grenouille pigmentée perd son noyau sous les UV.' }, { repere: 'noyau_donne', texte: 'On prend le noyau d’une cellule du têtard albinos.' }, { repere: 'adulte', texte: 'La grenouille obtenue est albinos, comme le donneur du noyau.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

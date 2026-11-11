@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calculs au tableau — limites et continuité</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Calcul écrit à la craie ligne après ligne, comme au tableau : fractions, limites, facteurs barrés, conclusion encadrée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/calculs-donnees.js"></script>
+<script>
+/*
+ * Calculs et rédactions écrits à la main (cours « Limites et continuité », math_ch1_limites_continuite) : ?vue=<id>.
+ * Les données viennent de calculs-donnees.js, ÉCRIT PAR LE BUILD DU COURS (ne pas l’éditer à la main) :
+ *   window.CALCULS = { "<vue>": { titre: "titre de la vue", tete: "titre écrit au tableau (facultatif)", lignes: [ligne, …] } }
+ * Une ligne : { t, lim, frac: [num, den], apres, couleur, taille, moment, cadre, barre: [..], entoure: [..], souligne: [..],
+ *   sous: [[sous-chaîne, petit texte dessous], …], marge, repere, label, pause, col: 2, dx, inter }
+ *   - ordre d’écriture : « lim » (avec `lim` en petit dessous), puis t, puis la fraction à deux étages, puis apres ;
+ *   - barre / entoure / souligne / sous : sous-chaînes cherchées dans t, num, den, apres (première occurrence), décorées
+ *     APRÈS l’écriture de la ligne (barre en rouge, entoure en orange, souligne en jaune, sous : petit texte jaune) ;
+ *   - marge : petite note orange au bord droit de la colonne ; cadre : couleur du cadre autour de la ligne ;
+ *   - moment : nom marqué juste après la ligne (play_until) ; col: 2 = seconde colonne (x = 400), qui repart en haut.
+ * Mise en page : lignes à partir de y = 76, interligne 32 (50 pour une fraction) ; une colonne trop haute est réduite pour tenir
+ * au-dessus de y = 352 (la barre du lecteur couvre le bas).
+ */
+const T = window.Tableau;
+const CH = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', 'ⁿ': 'n' };
+/* Largeur d’un texte écrit à la craie, avec la même découpe que l’écriture (indices et exposants plus petits). */
+function mes(c, s, t) {
+  s = String(s || '');
+  if (/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]|\^|[A-Za-zτθΔλωφ]_/.test(s)) {
+    s = s.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((x) => CH[x]).join('') + '}');
+    let w = 0;
+    for (const g of T.Craie.segments(s)) { c.ctx.font = `${g.sub || g.sup ? t * 0.62 : t}px ${T.POLICE}`; w += c.ctx.measureText(g.t).width; }
+    return w;
+  }
+  c.ctx.font = `${t}px ${T.POLICE}`; return c.ctx.measureText(s).width;
+}
+const texteLigne = (l) => [l.lim ? 'lim (' + l.lim + ')' : '', l.t || '', l.frac ? `(${l.frac[0]})/(${l.frac[1]})` : '', l.apres || ''].filter(Boolean).join(' ');
+const hauteur = (l) => l.inter ?? (l.frac ? 50 : 32);
+
+function dessinerCalcul(c, K, V) {
+  K.titre(V.tete || V.titre);
+  const cols = [V.lignes.filter((l) => (l.col || 1) === 1), V.lignes.filter((l) => l.col === 2)];
+  const deux = cols[1].length > 0, X = [24, 400], LARG = deux ? [362, 344] : [712, 0];
+  const echelle = cols.map((ls) => { if (!ls.length) return 1; const H = ls.slice(0, -1).reduce((s, l) => s + hauteur(l), 0) + (ls[0].frac ? 14 : 0); return Math.min(1, 270 / Math.max(1, H)); });
+  const y = [76, 76];
+  for (const l of V.lignes) {
+    const k = (l.col || 1) - 1, e = echelle[k], t = Math.round((l.taille || 19) * Math.min(1, Math.max(0.78, e)));
+    if (l.frac && y[k] === 76) y[k] += 14 * e;
+    if (l.pause) c.pause(l.pause);
+    const coul = l.couleur || 'blanc', x0 = X[k] + (l.dx || 0), base = y[k];
+    let x = x0;
+    const pieces = [];
+    if (l.lim) x = LC.limite(c, x, base, l.lim, null, { couleur: coul, taille: t }) + 2;
+    if (l.t) { c.texte(l.t, x, base, { couleur: coul, taille: t }); pieces.push({ s: l.t, x, y: base }); x += mes(c, l.t, t) + 7; }
+    if (l.frac) {
+      const [n, d] = l.frac, wn = mes(c, n, t), wd = mes(c, d, t), w = Math.max(wn, wd) + 10, yb = base - t * 0.32;
+      c.texte(n, x + (w - wn) / 2, yb - 7, { couleur: coul, taille: t }); pieces.push({ s: n, x: x + (w - wn) / 2, y: yb - 7 });
+      c.ligne(x, yb, x + w, yb, { couleur: coul, largeur: 1.8, duree: .15 });
+      c.texte(d, x + (w - wd) / 2, yb + t * 0.98, { couleur: coul, taille: t }); pieces.push({ s: d, x: x + (w - wd) / 2, y: yb + t * 0.98 });
+      x += w + 7;
+    }
+    if (l.apres) { c.texte(l.apres, x, base, { couleur: coul, taille: t }); pieces.push({ s: l.apres, x, y: base }); x += mes(c, l.apres, t); }
+    const trouve = (sub) => { for (const p of pieces) { const i = p.s.indexOf(sub); if (i >= 0) return { x: p.x + mes(c, p.s.slice(0, i), t), w: mes(c, sub, t), y: p.y }; } return null; };
+    for (const sub of l.barre || []) { const r = trouve(sub); if (r) c.ligne(r.x - 2, r.y + 3, r.x + r.w + 2, r.y - t * 0.78, { couleur: 'rouge', largeur: 2.2, duree: .25 }); }
+    for (const sub of l.entoure || []) { const r = trouve(sub); if (r) c.rect(r.x - 6, r.y - t * 0.9, r.w + 12, t * 1.25, { couleur: 'orange', arrondi: t * 0.55, largeur: 1.8, duree: .35 }); }
+    for (const sub of l.souligne || []) { const r = trouve(sub); if (r) c.ligne(r.x, r.y + 5, r.x + r.w, r.y + 5, { couleur: 'jaune', largeur: 2, duree: .2 }); }
+    for (const [sub, txt] of l.sous || []) { const r = trouve(sub); if (r) c.texte(txt, r.x + r.w / 2, r.y + t * 0.95, { couleur: 'jaune', taille: Math.max(11, Math.round(t * 0.66)), align: 'center', duree: .3 }); }
+    if (l.cadre) c.rect(x0 - 8, base - t - (l.frac ? t * 0.7 : 0) - 2, x - x0 + 16, t * 1.5 + (l.frac ? t * 1.4 : 0), { couleur: l.cadre, arrondi: 8, largeur: 1.6, duree: .4 });
+    if (l.marge) c.texte(l.marge, X[k] + LARG[k], base, { couleur: 'orange', taille: Math.max(12, t - 4), align: 'right' });
+    if (l.repere) c.repere(l.repere, x0 - 6, base - t - 6, x - x0 + 12, t * 1.6, l.label || l.t || l.repere);
+    if (l.moment) K.marque(l.moment);
+    y[k] += hauteur(l) * e;
+  }
+}
+
+const vues = {};
+for (const [id, V] of Object.entries(window.CALCULS || {})) {
+  const avec = V.lignes.filter((l) => l.moment);
+  vues[id] = {
+    titre: V.titre,
+    dessiner: (c, K) => dessinerCalcul(c, K, V),
+    decrire: Object.fromEntries(avec.map((l) => [l.moment, 'Écrit : ' + texteLigne(l) + '.'])),
+    motifs: Object.fromEntries(avec.map((l) => [l.moment, (l.label || texteLigne(l)).slice(0, 60)])),
+    explication: V.lignes.filter((l) => l.repere).map((l) => ({ repere: l.repere, texte: l.label || texteLigne(l) })),
+  };
+}
+if (!Object.keys(vues).length) vues.vide = { titre: 'Aucun calcul', dessiner: (c, K) => K.titre('Aucun calcul') };
+MathsTableau.page({
+  id: 'lc_calculs', titre: 'Calculs au tableau',
+  texte: 'Calculs et rédactions du cours Limites et continuité, écrits à la craie ligne après ligne comme au tableau',
+  vues,
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

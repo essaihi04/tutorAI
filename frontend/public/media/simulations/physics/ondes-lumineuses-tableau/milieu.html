@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La lumière dans un milieu — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Vue de côté : une onde lumineuse colorée passe de l’air dans un bloc de verre puis ressort dans l’air ; dans le verre elle va moins vite et ses crêtes se resserrent ; deux compteurs comptent les crêtes par seconde de chaque côté"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * L’onde lumineuse passe de l’air au verre, en incidence normale (cours « Propagation d’une onde lumineuse », 10 novembre 2026).
+ * Vue « Air | Verre » (de côté) : un train d’onde sinusoïdal, de la couleur de la radiation, sort d’un laser à gauche, entre dans
+ * un bloc transparent peint (aucune déviation), puis ressort dans l’air. Vue « Compteurs » : crêtes comptées de chaque côté,
+ * chrono du front.
+ * Modèle exact : la date d’arrivée en x est τ(x) = (chemin dans l’air)/c + n·(chemin dans le bloc)/c ; l’élongation est
+ * A·sin 2π·ν·(t − τ(x)). Donc v = c/n dans le bloc, λ = λ₀/n, et la même fréquence ν = c/λ₀ des deux côtés (même couleur).
+ * Échelles (dites à l’écran) : 1 px = 10 nm ; mouvement ralenti énormément : 1 s à l’écran = 4·10⁻¹⁵ s
+ * (c = 120 px par seconde d’écran). Le halo et l’éclat de l’onde, la teinte du bloc sont pour l’œil seulement.
+ * Vues (?vue=) : verre (n = 1,5 ; λ₀ = 600 nm), eau (n = 1,33), deux (même verre, national 2021 N : rouge 767 nm, n = 1,62 ;
+ * jaune 589 nm, n = 1,66 ; le front jaune prend du retard).
+ * Poignée : l’étiquette du bloc (« eau / verre ») glissée sur le bloc règle n de 1,00 à 2,00.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const C_LUM = 3.00e8, C_PX = 120, PX_NM = 0.1, S_ECRAN = 4e-15, T0 = 0.6;
+const VUES = ['verre', 'eau', 'deux'];
+const qv = new URLSearchParams(location.search).get('vue');
+let vue = VUES.includes(qv) ? qv : 'verre';
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', n: 1.5, lam0: 600, ecrit: {}, emis: 0 };
+const DEUX = () => vue === 'deux';
+function preregler(v) { vue = v; S.n = v === 'eau' ? 1.33 : 1.5; S.lam0 = 600; }
+preregler(vue);
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────────────────────── */
+const SALLE = { x: 36, y: 38, w: 688, h: 176 };
+const G = () => (DEUX() ? { X0: 76, X1: 150, X2: 700, XE: 724, Y0: 44, Y1: 206, xc1: 112, xc2: 400 }
+  : { X0: 76, X1: 300, X2: 520, XE: 724, Y0: 44, Y1: 206, xc1: 200, xc2: 410 });
+const TRAINS = () => (DEUX()
+  ? [{ id: 'rouge', y: 92, A: 20, lam0: 767, n: 1.62, coul: 'rouge' }, { id: 'jaune', y: 164, A: 20, lam0: 589, n: 1.66, coul: 'jaune' }]
+  : [{ id: 'onde', y: 122, A: 26, lam0: S.lam0, n: S.n }]);
+
+/* ── Physique ─────────────────────────────────────────────────────────────────────────── */
+const nuDe = lam0 => C_LUM / (lam0 * 1e-9);                       // Hz (réel)
+const nuEcran = lam0 => C_PX / (lam0 * PX_NM);                     // crêtes par seconde à l’écran (ralenti)
+/** Date d’arrivée (s d’écran, depuis l’allumage du laser) au point x pour un train. */
+function tau(x, Tr) {
+  const g = G();
+  if (x <= g.X1) return (x - g.X0) / C_PX;
+  if (x <= g.X2) return (g.X1 - g.X0) / C_PX + Tr.n * (x - g.X1) / C_PX;
+  return (g.X1 - g.X0) / C_PX + Tr.n * (g.X2 - g.X1) / C_PX + (x - g.X2) / C_PX;
+}
+/** Position du front à l’instant tw (s d’écran depuis l’allumage). */
+function front(tw, Tr) {
+  const g = G(), t1 = (g.X1 - g.X0) / C_PX, t2 = t1 + Tr.n * (g.X2 - g.X1) / C_PX;
+  if (tw <= 0) return g.X0;
+  if (tw <= t1) return g.X0 + C_PX * tw;
+  if (tw <= t2) return g.X1 + C_PX * (tw - t1) / Tr.n;
+  return g.X2 + C_PX * (tw - t2);
+}
+const tw = () => Math.max(0, S.t - T0);
+const actif = () => S.running || S.pause || S.fait;
+/** Les crêtes visibles (x en px) d’un train à l’instant tw. */
+function cretes(Tr, t = tw()) {
+  const out = [], g = G(), xf = Math.min(front(t, Tr), g.XE), f = nuEcran(Tr.lam0);
+  // Crête en x quand f·(t − τ(x)) = k + 1/4 : on cherche τ(x) = t − (k + 1/4)/f.
+  for (let k = 0; k < 80; k++) {
+    const ta = t - (k + 0.25) / f; if (ta < 0) break;
+    let lo = g.X0, hi = xf;                                         // τ croissante : dichotomie
+    for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (tau(m, Tr) < ta) lo = m; else hi = m; }
+    out.push((lo + hi) / 2);
+  }
+  return out.sort((a, b) => a - b);
+}
+/** Crêtes passées par le compteur placé en x (nombre entier). */
+function comptees(x, Tr, t = tw()) { const d = t - tau(x, Tr); return d <= 0 ? 0 : Math.floor(nuEcran(Tr.lam0) * d - 0.25) + 1; }
+
+/* Couleur de la radiation (approximation réaliste pour l’œil, voir spectre.html). */
+function rgbDe(l) {
+  let r = 0, g = 0, b = 0;
+  if (l < 440) { r = Math.max(0, (440 - l) / 60); b = 1; } else if (l < 490) { g = (l - 440) / 50; b = 1; }
+  else if (l < 510) { g = 1; b = (510 - l) / 20; } else if (l < 580) { r = (l - 510) / 70; g = 1; }
+  else if (l < 645) { r = 1; g = (645 - l) / 65; } else r = 1;
+  let k = 0;
+  if (l >= 400 && l < 425) k = 0.35 + 0.65 * (l - 400) / 25; else if (l >= 425 && l <= 700) k = 1; else if (l > 700 && l <= 800) k = 1 - 0.7 * (l - 700) / 100;
+  return { r: r ** 0.8, g: g ** 0.8, b: b ** 0.8, k: Math.max(.55, k) };   // l’onde reste visible aux bords du spectre (pour l’œil)
+}
+function couleurDe(l, alpha = 1, blanc = 0) {
+  const c = rgbDe(l), k = blanc ? 1 : c.k, m = v => Math.round(255 * ((v * k) * (1 - blanc) + blanc));
+  return `rgba(${m(c.r)},${m(c.g)},${m(c.b)},${alpha})`;
+}
+function nomCouleur(l) { if (l < 445) return 'violet'; if (l < 490) return 'bleu'; if (l < 570) return 'vert'; if (l < 590) return 'jaune'; if (l < 620) return 'orange'; return 'rouge'; }
+function nomMilieu(n) { if (Math.abs(n - 1) < .005) return 'air'; if (Math.abs(n - 1.33) < .005) return 'eau'; if (Math.abs(n - 1.5) < .005) return 'verre'; return 'milieu'; }
+
+const SUPS = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+function sci(v, sig = 3) {
+  if (!(v > 0)) return '0';
+  let e = Math.floor(Math.log10(v)), s = (v / 10 ** e).toPrecision(sig);
+  if (+s >= 10) { e += 1; s = (v / 10 ** e).toPrecision(sig); }
+  return s.replace('.', ',') + '·10' + String(e).split('').map(ch => SUPS[ch]).join('');
+}
+const vDe = n => C_LUM / n;
+const lamDe = (lam0, n) => lam0 / n;
+
+/* ── Instants clés (recalculés quand n change) ───────────────────────────────────────── */
+function moments() {
+  const g = G(), t1 = (g.X1 - g.X0) / C_PX, m = {};
+  if (DEUX()) {
+    const R = TRAINS()[0];
+    m.onde_dans_air = t1 - 0.05;
+    m.front_entre = t1 + R.n * 80 / C_PX;
+    m.fronts_ecartes = t1 + R.n * 490 / C_PX;
+    m.mesure_vitesses = t1 + R.n * 530 / C_PX;
+    m.fin = m.mesure_vitesses + 0.3;                               // les deux fronts restent dans le cadre
+  } else {
+    // Repères en position du front : il entre (25 % du bloc), les crêtes se resserrent (55 %), le compteur 2 a vu deux
+    // crêtes, on mesure (le bloc est presque rempli), le front ressort (150 px après la sortie), fin avant le bord du cadre.
+    const n = S.n, D = n * (g.X2 - g.X1) / C_PX, f = nuEcran(S.lam0), tSort = t1 + D;
+    m.onde_dans_air = t1 - 0.35;
+    m.front_entre = t1 + 0.25 * D;
+    m.lambda_serree = t1 + 0.55 * D;
+    m.compte_frequence = Math.max(t1 + n * (g.xc2 - g.X1) / C_PX + 1.3 / f, m.lambda_serree + 0.2);
+    m.mesure_lambda = Math.max(m.compte_frequence + 0.6, tSort - 0.1);
+    m.ressort_dans_air = Math.max(tSort + 150 / C_PX, m.mesure_lambda + 0.5);
+    m.fin = Math.min(tSort + (g.XE - 8 - g.X2) / C_PX, m.ressort_dans_air + 0.4);
+    m.fin = Math.max(m.fin, m.ressort_dans_air + 0.2);
+  }
+  for (const k in m) m[k] = +(m[k] + T0).toFixed(3);
+  return m;
+}
+const FIN = () => moments().fin;
+const MOTIFS = {
+  onde_dans_air: 'l’onde avance dans l’air : λ₀ et c', front_entre: 'le front entre dans le bloc et ralentit : v = c/n',
+  lambda_serree: 'dans le bloc, les crêtes se resserrent', compte_frequence: 'les deux compteurs donnent le même nombre de crêtes par seconde : même ν',
+  mesure_lambda: 'λ₀ dans l’air, λ = λ₀/n dans le bloc', ressort_dans_air: 'l’onde ressort dans l’air : de nouveau c et λ₀',
+  fronts_ecartes: 'dans le verre, le front jaune prend du retard sur le rouge', mesure_vitesses: 'v rouge et v jaune sont écrites', fin: 'fin',
+};
+
+/* ── Peinture : salle sombre, bloc transparent, onde lumineuse ────────────────────────── */
+function teinte(n) {
+  const nom = nomMilieu(n);
+  if (nom === 'eau') return [70, 140, 220];
+  return [150, 215, 205];
+}
+function bloc(ctx, couche) {
+  const g = G(), n = DEUX() ? 1.64 : S.n, [r, gg, b] = teinte(n), a = 0.07 + 0.17 * Math.min(1, n - 1);
+  const x = g.X1, y = g.Y0, w = g.X2 - g.X1, h = g.Y1 - g.Y0;
+  ctx.save();
+  if (couche === 'corps') {
+    const gr = ctx.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, `rgba(${r},${gg},${b},${(a * 1.5).toFixed(3)})`); gr.addColorStop(.5, `rgba(${r},${gg},${b},${a.toFixed(3)})`); gr.addColorStop(1, `rgba(${r * .6 | 0},${gg * .6 | 0},${b * .6 | 0},${(a * 1.6).toFixed(3)})`);
+    ctx.fillStyle = gr; ctx.fillRect(x, y, w, h);
+  } else {
+    // Reflets (une bande oblique, pour l’œil), arêtes éclairées.
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,.055)';
+    ctx.beginPath(); ctx.moveTo(x + w * .12, y); ctx.lineTo(x + w * .30, y); ctx.lineTo(x + w * .12, y + h); ctx.lineTo(x - w * .06, y + h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.035)';
+    ctx.beginPath(); ctx.moveTo(x + w * .36, y); ctx.lineTo(x + w * .42, y); ctx.lineTo(x + w * .24, y + h); ctx.lineTo(x + w * .18, y + h); ctx.closePath(); ctx.fill();
+    ctx.restore(); ctx.save();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = `rgba(${Math.min(255, r + 80)},${Math.min(255, gg + 40)},${Math.min(255, b + 40)},.75)`;
+    ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 2, y + 2); ctx.lineTo(x + w - 2, y + 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x + w, y + h); ctx.stroke();
+  }
+  ctx.restore();
+}
+function laser(ctx, y) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y - 10, 0, y + 10);
+  g.addColorStop(0, '#6b7280'); g.addColorStop(.45, '#30353d'); g.addColorStop(1, '#16191e');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(40, y - 10, 34, 20, 4); ctx.fill();
+  ctx.fillStyle = '#0b0d10'; ctx.fillRect(72, y - 4, 4, 8);
+  ctx.restore();
+}
+function onde(ctx, Tr) {
+  const g = G(), t = tw(); if (!actif() || t <= 0) return;
+  const xf = Math.min(front(t, Tr), g.XE), f = nuEcran(Tr.lam0), pts = [];
+  for (let x = g.X0; x <= xf; x += 2) pts.push([x, Tr.y - Tr.A * Math.sin(2 * Math.PI * f * (t - tau(x, Tr)))]);
+  pts.push([xf, Tr.y - Tr.A * Math.sin(2 * Math.PI * f * (t - tau(xf, Tr)))]);
+  ctx.save();
+  // La lueur du faisceau le long de l’axe, puis l’onde : halo, corps, cœur clair.
+  const lg = ctx.createLinearGradient(0, Tr.y - Tr.A - 8, 0, Tr.y + Tr.A + 8);
+  lg.addColorStop(0, couleurDe(Tr.lam0, 0)); lg.addColorStop(.5, couleurDe(Tr.lam0, .10)); lg.addColorStop(1, couleurDe(Tr.lam0, 0));
+  ctx.fillStyle = lg; ctx.fillRect(g.X0, Tr.y - Tr.A - 8, xf - g.X0, 2 * Tr.A + 16);
+  const tracer = () => { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); };
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = couleurDe(Tr.lam0, .16); ctx.lineWidth = 13; tracer();
+  ctx.strokeStyle = couleurDe(Tr.lam0, .45); ctx.lineWidth = 5.5; tracer();
+  ctx.shadowColor = couleurDe(Tr.lam0, .9); ctx.shadowBlur = 10;
+  ctx.strokeStyle = couleurDe(Tr.lam0, 1, .45); ctx.lineWidth = 2.2; tracer();
+  ctx.restore();
+}
+
+/* Un texte apparu à un instant clé s’écrit à partir de cet instant (date absolue : reste juste si achever() décale l’écriture). */
+const quand = (c, nom) => { if (S.ecrit[nom] == null) S.ecrit[nom] = performance.now(); c.depuis((S.ecrit[nom] - scene.ouvert) / 1000); };
+/** Cote λ entre deux crêtes voisines comprises dans [a, b]. */
+function coteCretes(c, Tr, a, b, y, txt, coul, id, label) {
+  const cr = cretes(Tr).filter(x => x > a + 3 && x < b - 3);
+  if (cr.length < 2) return false;
+  const k = Math.max(0, Math.floor((cr.length - 2) / 2)), x1 = cr[k], x2 = cr[k + 1];
+  c.ligne(x1, y + 4, x1, Tr.y - Tr.A + 2, { couleur: coul, largeur: 1.1, pointille: [3, 3] });
+  c.ligne(x2, y + 4, x2, Tr.y - Tr.A + 2, { couleur: coul, largeur: 1.1, pointille: [3, 3] });
+  c.cote(x1, y, x2, y, '', { couleur: coul });
+  c.texte(txt, (x1 + x2) / 2, y - 7, { couleur: coul, taille: 15, align: 'center' });
+  c.repere(id, x1 - 6, y - 22, x2 - x1 + 12, Tr.y - y + 26, label);
+  return true;
+}
+
+function dessiner(c) {
+  scene.cadre(53);
+  const g = G(), M = moments(), Ts = TRAINS(), act = actif(), ctx = c.ctx;
+  // ── Vue « Air | Verre » : la salle sombre (dans le cadre de la vue), le bloc, les ondes ──
+  c.direct(() => {
+    ctx.save(); ctx.fillStyle = 'rgba(3,5,9,.86)'; ctx.beginPath(); ctx.roundRect(SALLE.x, SALLE.y, SALLE.w, SALLE.h, 8); ctx.fill(); ctx.restore();
+    bloc(ctx, 'corps');
+    for (const Tr of Ts) onde(ctx, Tr);
+    bloc(ctx, 'reflets');
+    for (const Tr of Ts) laser(ctx, Tr.y);
+  });
+  const nomB = DEUX() ? 'verre' : nomMilieu(S.n), Nom = nomB === 'milieu' ? 'Milieu' : nomB[0].toUpperCase() + nomB.slice(1);
+  c.texte(DEUX() ? 'Air | Verre : deux radiations (vue de côté)' : `Air | ${Nom} (vue de côté, incidence normale)`, 20, 26, { couleur: 'cyan', taille: 18 });
+  c.texte('mouvement ralenti énormément : 1 s ici = 4·10⁻¹⁵ s', 740, 26, { couleur: 'faible', taille: 14, align: 'right' });
+  c.rect(SALLE.x, SALLE.y, SALLE.w, SALLE.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.repere('vue_onde', SALLE.x, 8, SALLE.w, SALLE.h + 30, 'la vue « Air | Verre », de côté');
+  c.texte('air', DEUX() ? 134 : 120, DEUX() ? 125 : 206, { couleur: 'faible', taille: DEUX() ? 13 : 15, align: 'center' });
+  if (!DEUX()) c.texte('air', 640, 206, { couleur: 'faible', taille: 15, align: 'center' });
+  c.repere('air', SALLE.x + 2, SALLE.y + 2, g.X1 - SALLE.x - 4, SALLE.h - 4, 'l’air');
+  c.repere('bloc', g.X1, g.Y0, g.X2 - g.X1, g.Y1 - g.Y0, DEUX() ? 'le bloc de verre' : `le bloc : ${nomB}, n = ${fr(S.n, 2)}`);
+  if (DEUX()) {
+    c.texte('verre : n = 1,62 pour le rouge ; n = 1,66 pour le jaune', (g.X1 + g.X2) / 2, 64, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('rouge : 767 nm', 42, 66, { couleur: 'rouge', taille: 14 });
+    c.texte('jaune : 589 nm', 42, 139, { couleur: 'jaune', taille: 14 });
+  }
+
+  // Les compteurs : deux marques sous l’onde.
+  const T0r = Ts[0], ybas = Ts[Ts.length - 1].y + Ts[Ts.length - 1].A;
+  for (const [x, id, lab] of [[g.xc1, 'compteur_air', 'compteur 1'], [g.xc2, 'compteur_verre', 'compteur 2']]) {
+    c.ligne(x, ybas + 2, x, ybas + 14, { couleur: 'blanc', largeur: 1.6 });
+    c.texte(lab, x, ybas + (DEUX() ? 26 : 28), { couleur: 'blanc', taille: 13, align: 'center' });
+    c.repere(id, x - 34, (DEUX() ? Ts[0].y - Ts[0].A : T0r.y - T0r.A) - 4, 68, ybas + 32 - (DEUX() ? Ts[0].y - Ts[0].A : T0r.y - T0r.A) + 4, id === 'compteur_air' ? 'le compteur 1, dans l’air' : 'le compteur 2, dans le bloc');
+  }
+
+  // ── Vue « Compteurs » ──
+  c.rect(SALLE.x, 242, SALLE.w, 118, { couleur: 'tresfaible', arrondi: 8 });
+  c.texte('Compteurs', 48, 262, { couleur: 'cyan', taille: 17 });
+  c.repere('vue_compteurs', SALLE.x, 242, SALLE.w, 118, 'la vue « Compteurs »');
+
+  c.direct(() => {
+    const t = tw(), M2 = M;
+    // Le chrono du front (temps réel).
+    c.texte(`chrono du front : t = ${t > 0 ? fr(t * S_ECRAN * 1e15, 1) + '·10⁻¹⁵' : '0'} s`, 714, 262, { couleur: 'jaune', taille: 16, align: 'right' });
+    // Les fronts.
+    for (const Tr of Ts) {
+      const xf = front(t, Tr);
+      if (!act || t <= 0 || xf >= g.XE - 2) continue;
+      const coul = DEUX() ? Tr.coul : 'blanc';
+      c.ligne(xf, Tr.y - Tr.A - 10, xf, Tr.y + Tr.A + 10, { couleur: coul, largeur: 1.4, pointille: [4, 4], tremble: .2 });
+      if (!DEUX()) { c.texte('front', Math.max(60, Math.min(700, xf)), 232, { couleur: 'blanc', taille: 13, align: 'center' }); c.repere('front', xf - 12, Tr.y - Tr.A - 12, 24, 2 * Tr.A + 24, 'le front de l’onde'); }
+      else {
+        c.repere(Tr.id === 'rouge' ? 'front_rouge' : 'front_jaune', xf - 12, Tr.y - Tr.A - 12, 24, 2 * Tr.A + 24, `le front ${Tr.id}`);
+        if (Tr.id === 'rouge') c.repere('front', xf - 12, Tr.y - Tr.A - 12, 24, 2 * Tr.A + 24, 'le front rouge');
+      }
+    }
+    // Les compteurs : crêtes passées, crêtes par seconde (ralenti), ν réelle.
+    const boites = DEUX() ? Ts.map((Tr, i) => ({ Tr, x: i ? 390 : 48, titre: `${Tr.id} (${Tr.lam0} nm)`, coul: Tr.coul }))
+      : [{ Tr: Ts[0], x: 48, titre: 'compteur 1 (air)', xc: g.xc1, coul: 'blanc' }, { Tr: Ts[0], x: 390, titre: `compteur 2 (${nomB})`, xc: g.xc2, coul: 'blanc' }];
+    for (const B of boites) {
+      const f = nuEcran(B.Tr.lam0);
+      c.texte(B.titre, B.x, 288, { couleur: B.coul, taille: 15 });
+      if (DEUX()) {
+        const na = comptees(g.xc1, B.Tr, t), nv = comptees(g.xc2, B.Tr, t);
+        c.texte(`crêtes passées : air ${na} ; verre ${nv}`, B.x, 310, { couleur: 'blanc', taille: 15 });
+        c.texte(`${fr(f, 1)} crêtes par seconde (ralenti) des deux côtés`, B.x, 330, { couleur: 'faible', taille: 14, max: 320 });
+        c.texte(`ν = ${sci(nuDe(B.Tr.lam0))} Hz`, B.x, 350, { couleur: 'jaune', taille: 15 });
+      } else {
+        const nc = comptees(B.xc, B.Tr, t);
+        c.texte(`crêtes passées : ${nc}`, B.x + 150, 288, { couleur: 'blanc', taille: 15 });
+        c.texte(nc >= 2 ? `${fr(f, 1)} crêtes par seconde (ralenti)` : 'crêtes par seconde : …', B.x, 310, { couleur: 'faible', taille: 15 });
+        c.texte(nc >= 2 ? `donc ν = ${sci(nuDe(B.Tr.lam0))} Hz` : '', B.x, 332, { couleur: 'jaune', taille: 16 });
+      }
+    }
+  });
+  if (!DEUX() && act && S.t >= M.compte_frequence - 1e-6) {
+    quand(c, 'cf'); c.texte('même nombre de crêtes par seconde : même ν, même couleur', SALLE.x + SALLE.w / 2, 353, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+
+  // ── Ce qui s’écrit en route ──
+  const Tr = Ts[0], cTxt = 'c = 3,00·10⁸ m/s';
+  if (act && S.t >= M.onde_dans_air - 1e-6) {
+    quand(c, 'air');
+    c.texte(cTxt, DEUX() ? 42 : 84, DEUX() ? 52 : 58, { couleur: 'blanc', taille: DEUX() ? 14 : 15 });
+    if (!DEUX()) c.direct(() => coteCretes(c, Tr, g.X0, Math.min(g.X1, front(tw(), Tr)), 80, `λ_0 = ${S.lam0} nm`, 'jaune', 'lambda0', `λ₀ = ${S.lam0} nm dans l’air`));
+  }
+  if (act && S.t >= M.front_entre - 1e-6) {
+    quand(c, 'entre');
+    if (!DEUX()) c.texte(`v = c/n = 3,00·10⁸ / ${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s`, (g.X1 + g.X2) / 2, 60, { couleur: 'orange', taille: 15, align: 'center', max: g.X2 - g.X1 - 10 });
+    else c.texte('dans le verre : les deux fronts ralentissent', 40, 234, { couleur: 'orange', taille: 15, max: 330 });
+  }
+  if (!DEUX()) {
+    if (act && S.t >= M.lambda_serree - 1e-6) { quand(c, 'serre'); c.texte(`Dans le bloc (${nomB}), les crêtes se resserrent : λ < λ_0 ; même couleur.`, 40, 384, { couleur: 'vert', taille: 16, max: 690 }); }
+    if (act && S.t >= M.mesure_lambda - 1e-6) {
+      quand(c, 'mesure');
+      c.direct(() => coteCretes(c, Tr, g.X1, Math.min(g.X2, front(tw(), Tr)), 84, `λ = ${fr(lamDe(S.lam0, S.n), 0)} nm`, 'rose', 'lambda', `λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc`));
+      c.texte(`λ = λ_0/n = ${S.lam0} / ${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm ;  ν = c/λ_0 = ${sci(nuDe(S.lam0))} Hz des deux côtés`, 40, 408, { couleur: 'jaune', taille: 16, max: 690 });
+    }
+    if (act && S.t >= M.ressort_dans_air - 1e-6) {
+      quand(c, 'ressort');
+      c.texte(cTxt, g.X2 + 16, 58, { couleur: 'blanc', taille: 15 });
+      c.direct(() => coteCretes(c, Tr, g.X2, Math.min(g.XE, front(tw(), Tr)), 80, `λ_0 = ${S.lam0} nm`, 'jaune', 'lambda0_sortie', 'λ₀ de nouveau, dans l’air'));
+    }
+  } else {
+    if (act && S.t >= M.fronts_ecartes - 1e-6) {
+      quand(c, 'ecart');
+      c.direct(() => {
+        const [R, J] = Ts, xr = front(tw(), R), xj = front(tw(), J);
+        if (xr < g.XE - 2) {
+          c.ligne(xr, R.y + R.A + 10, xr, J.y + J.A + 10, { couleur: 'rouge', largeur: 1.2, pointille: [2, 4], tremble: .2 });
+          c.fleche(xr - 4, J.y + J.A + 18, xj + 1, J.y + J.A + 18, { couleur: 'jaune', largeur: 1.6, tete: 6 });
+        }
+      });
+      c.texte('le front jaune est en retard sur le rouge', 724, 234, { couleur: 'jaune', taille: 15, align: 'right', max: 320 });
+    }
+    if (act && S.t >= M.mesure_vitesses - 1e-6) {
+      quand(c, 'vitesses');
+      const [R, J] = Ts;
+      c.texte(`rouge : v = c/n = 3,00·10⁸ / 1,62 = ${sci(vDe(R.n))} m/s ;  λ = ${fr(lamDe(R.lam0, R.n), 0)} nm`, 40, 384, { couleur: 'rouge', taille: 16, max: 690 });
+      c.texte(`jaune : v = c/n = 3,00·10⁸ / 1,66 = ${sci(vDe(J.n))} m/s ;  λ = ${fr(lamDe(J.lam0, J.n), 0)} nm : le jaune va moins vite`, 40, 408, { couleur: 'jaune', taille: 16, max: 690 });
+    }
+  }
+
+  // ── La poignée : l’étiquette du bloc, glissée de n = 1,00 à 2,00 ──
+  if (!DEUX()) c.direct(() => {
+    const xe = xEtiquette(), y = 194;
+    const lab = `${nomB} · n = ${fr(S.n, 2)}`, w = c.largeurTexte(lab, 15) + 18;
+    ctx.save(); ctx.fillStyle = 'rgba(15,29,24,.78)'; ctx.beginPath(); ctx.roundRect(xe - w / 2, y - 12, w, 22, 6); ctx.fill(); ctx.restore();
+    c.rect(xe - w / 2, y - 12, w, 22, { couleur: 'jaune', arrondi: 6, largeur: 1.6 });
+    c.texte(lab, xe, y + 4, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.repere('etiquette', xe - w / 2, y - 12, w, 22, 'l’étiquette du bloc : glisse-la pour changer n');
+  });
+  return c.fin();
+}
+const xN = n => G().X1 + 40 + (n - 1) * (G().X2 - G().X1 - 80);
+const xEtiquette = () => xN(S.n);
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = S.t < FIN(); S.fait = !S.pause; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN()) {
+    S.running = false; S.pause = false; S.fait = true; etiquette();
+    bulle($('feedback'), message(), 'good'); pont.noter('measurement', mesure()); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function message() {
+  if (DEUX()) return 'Même verre : le jaune (1,81·10⁸ m/s) va moins vite que le rouge (1,85·10⁸ m/s) ; v dépend de la fréquence.';
+  return `Dans le ${nomMilieu(S.n) === 'milieu' ? 'milieu' : nomMilieu(S.n)} : v = c/n = ${sci(vDe(S.n))} m/s, λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm ; même ν = ${sci(nuDe(S.lam0))} Hz, même couleur.`;
+}
+const mesure = () => (DEUX() ? { rouge: { lambda0_nm: 767, n: 1.62, v_m_s: +vDe(1.62).toPrecision(3), nu_hz: +nuDe(767).toPrecision(3) }, jaune: { lambda0_nm: 589, n: 1.66, v_m_s: +vDe(1.66).toPrecision(3), nu_hz: +nuDe(589).toPrecision(3) } }
+  : { n: S.n, lambda0_nm: S.lam0, lambda_nm: +lamDe(S.lam0, S.n).toFixed(1), v_m_s: +vDe(S.n).toPrecision(3), nu_hz: +nuDe(S.lam0).toPrecision(3) });
+
+function start() {
+  S.t = 0; S.jusqua = null; S.motif = ''; S.ecrit = {}; S.running = true; S.pause = false; S.fait = false; etiquette();
+  bulle($('feedback'), 'Le laser s’allume… (mouvement ralenti énormément)'); pont.noter('start', { vue, n: S.n, lambda0_nm: S.lam0 }); pont.emettre();
+}
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = Math.min(FIN(), Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe… (mouvement ralenti énormément)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = Math.min(FIN(), Math.max(0, t)); S.fait = S.t >= FIN(); S.pause = !S.fait;
+  etiquette(); scene.sale = true; bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  const fait = {};
+  if (typeof p.vue === 'string' && VUES.includes(p.vue) && p.vue !== vue) { preregler(p.vue); fait.vue = vue; S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; S.ecrit = {}; scene.reecrire(); etiquette(); }
+  if (!DEUX()) {
+    if (Number.isFinite(+p.n) && p.n !== null && p.n !== '') { S.n = Math.min(2, Math.max(1, Math.round(+p.n * 100) / 100)); fait.n = S.n; }
+    if (Number.isFinite(+p.lambda0_nm) && p.lambda0_nm !== null && p.lambda0_nm !== '') { S.lam0 = Math.min(800, Math.max(400, Math.round(+p.lambda0_nm))); fait.lambda0_nm = S.lam0; }
+  }
+  if (S.t > FIN()) S.t = FIN();
+  scene.sale = true;
+  bulle($('feedback'), DEUX() ? 'Vue « deux » : rouge 767 nm (n = 1,62) et jaune 589 nm (n = 1,66) dans le même verre.' : `Bloc : ${nomMilieu(S.n)}, n = ${fr(S.n, 2)} ; λ₀ = ${S.lam0} nm.`);
+  pont.noter('set_parameters', fait); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* La poignée : l’étiquette du bloc, glissée le long du bloc (n de 1,00 à 2,00, pas 0,01 ; aimantée sur l’eau et le verre). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { if (DEUX()) return null; const [x, y] = scene.local(px, py); return Math.abs(x - xEtiquette()) < 64 && y > 178 && y < 216 ? 'etiquette' : null; },
+  bouger: (id, px) => {
+    const [x] = scene.local(px, 0);
+    let n = 1 + (x - xN(1)) / (xN(2) - xN(1)); n = Math.min(2, Math.max(1, Math.round(n * 100) / 100));
+    for (const a of [1.33, 1.5]) if (Math.abs(n - a) <= 0.02) n = a;
+    if (n !== S.n) { S.n = n; if (S.t > FIN()) S.t = FIN(); scene.sale = true; }
+  },
+  lacher: () => {
+    bulle($('feedback'), `Bloc : ${nomMilieu(S.n)}, n = ${fr(S.n, 2)} : v = c/n = ${sci(vDe(S.n))} m/s.`);
+    pont.noter('set_parameters', { n: S.n }); pont.emettre();
+    if (!S.running && (S.fait || S.t === 0)) start();
+  },
+});
+
+function phase() {
+  const M = moments(), t = S.t;
+  if (!actif() || t < T0) return 'le laser n’est pas encore allumé';
+  const passe = Object.entries(M).filter(([, v]) => v <= t + 1e-6).map(([k]) => k);
+  return passe.length ? 'dernier instant clé passé : ' + passe[passe.length - 1] : 'l’onde vient de partir du laser';
+}
+function ceQuiSeVoit() {
+  const g = G(), t = tw(), Ts = TRAINS(), m = [];
+  if (DEUX()) {
+    m.push('Vue « Air | Verre » de côté : deux trains d’onde l’un au-dessus de l’autre, rouge (λ₀ = 767 nm, ν = 3,91·10¹⁴ Hz) en haut, jaune (λ₀ = 589 nm, ν = 5,09·10¹⁴ Hz) en bas, qui entrent dans le même bloc de verre (n = 1,62 pour le rouge, 1,66 pour le jaune). c = 3,00·10⁸ m/s dans l’air. Mouvement ralenti énormément (1 s à l’écran = 4·10⁻¹⁵ s ; 1 px = 10 nm).');
+  } else {
+    const nom = nomMilieu(S.n);
+    m.push(`Vue « Air | ${nom === 'milieu' ? 'milieu' : nom} » de côté : une onde de couleur ${nomCouleur(S.lam0)} (λ₀ = ${S.lam0} nm) sort du laser à gauche, entre en incidence normale dans un bloc (${nom}, n = ${fr(S.n, 2)}), puis ressort dans l’air à droite. Mouvement ralenti énormément (1 s à l’écran = 4·10⁻¹⁵ s ; 1 px = 10 nm).`);
+    m.push(`Dans l’air : c = 3,00·10⁸ m/s, λ₀ = ${S.lam0} nm, ν = ${sci(nuDe(S.lam0))} Hz. Dans le bloc : v = c/n = ${sci(vDe(S.n))} m/s, λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm, ν = ${sci(nuDe(S.lam0))} Hz (la même), même couleur.`);
+  }
+  if (!actif() || t <= 0) { m.push('Le laser n’est pas encore allumé.'); return m.join(' '); }
+  m.push(`${S.pause ? 'Scène arrêtée, ' : S.fait ? 'Fin, ' : ''}t = ${fr(S.t, 2)} s à l’écran (chrono du front : ${fr(t * S_ECRAN * 1e15, 1)}·10⁻¹⁵ s) ; ${phase()}.`);
+  const ou = (Tr) => { const xf = front(t, Tr); return xf >= g.XE - 2 ? 'est sorti du cadre' : xf <= g.X1 ? `avance dans l’air, à ${Math.round(g.X1 - xf)} px du bloc` : xf <= g.X2 ? `est dans le bloc (${Math.round(xf - g.X1)} px après l’entrée), il avance moins vite` : 'est ressorti dans l’air, de nouveau à c'; };
+  if (DEUX()) {
+    const [R, J] = Ts, xr = front(t, R), xj = front(t, J);
+    m.push(`Le front rouge ${ou(R)} ; le front jaune ${ou(J)}.`);
+    if (xr > g.X1 && xr < g.XE - 2) m.push(`Le front jaune est ${fr((xr - xj) * 10, 0)} nm derrière le rouge (1 px = 10 nm).`);
+    m.push(`Compteurs : rouge ${fr(nuEcran(767), 1)} crêtes/s (ralenti) dans l’air et dans le verre ; jaune ${fr(nuEcran(589), 1)} crêtes/s des deux côtés.`);
+    if (S.t >= moments().mesure_vitesses - 1e-6) m.push('Écrit : rouge v = 3,00·10⁸ / 1,62 = 1,85·10⁸ m/s (λ = 473 nm dans le verre) ; jaune v = 3,00·10⁸ / 1,66 = 1,81·10⁸ m/s (λ = 355 nm) : le jaune va moins vite.');
+  } else {
+    const Tr = Ts[0], na = comptees(g.xc1, Tr, t), nv = comptees(g.xc2, Tr, t);
+    m.push(`Le front ${ou(Tr)}.`);
+    m.push(`Compteur 1 (air) : ${na} crêtes passées${na >= 2 ? `, ${fr(nuEcran(S.lam0), 1)} crêtes par seconde (ralenti)` : ''} ; compteur 2 (bloc) : ${nv} crêtes passées${nv >= 2 ? `, ${fr(nuEcran(S.lam0), 1)} crêtes par seconde (ralenti) : le même nombre` : ''}.`);
+    const M = moments();
+    if (S.t >= M.onde_dans_air - 1e-6) m.push(`Écrit : c = 3,00·10⁸ m/s et la cote λ₀ = ${S.lam0} nm dans l’air.`);
+    if (S.t >= M.front_entre - 1e-6) m.push(`Écrit sur le bloc : v = c/n = 3,00·10⁸ / ${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s.`);
+    if (S.t >= M.lambda_serree - 1e-6) m.push('Écrit : dans le bloc, les crêtes se resserrent, λ < λ₀, même couleur.');
+    if (S.t >= M.compte_frequence - 1e-6) m.push('Écrit : même nombre de crêtes par seconde, même ν, même couleur.');
+    if (S.t >= M.mesure_lambda - 1e-6) m.push(`Cotes : λ₀ = ${S.lam0} nm dans l’air, λ = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc ; écrit λ = λ₀/n = ${S.lam0} / ${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm.`);
+    if (S.t >= M.ressort_dans_air - 1e-6) m.push(`À la sortie, dans l’air : de nouveau c et λ₀ = ${S.lam0} nm.`);
+  }
+  return m.join(' ');
+}
+
+const EXPLICATIONS = {
+  verre: [
+    { repere: 'air', texte: 'Dans l’air, la lumière avance à c = 3,00·10⁸ m/s.' },
+    { repere: 'lambda0', texte: 'Entre deux crêtes voisines : λ₀ = 600 nm.' },
+    { repere: 'front', texte: 'Le front entre dans le verre : il ralentit, v = c/n = 2,00·10⁸ m/s.' },
+    { repere: 'lambda', texte: 'Dans le verre, les crêtes se resserrent : λ = λ₀/n = 400 nm.' },
+    { repere: 'vue_compteurs', texte: 'Les deux compteurs comptent le même nombre de crêtes par seconde : même fréquence, même couleur.' },
+  ],
+  eau: [
+    { repere: 'bloc', texte: 'Cette fois, de l’eau : n = 1,33.' },
+    { repere: 'front', texte: 'Le front ralentit : v = c/n = 2,26·10⁸ m/s.' },
+    { repere: 'lambda', texte: 'λ = λ₀/n = 600 / 1,33 = 451 nm.' },
+    { repere: 'vue_compteurs', texte: 'La fréquence ne change pas : 5,00·10¹⁴ Hz des deux côtés.' },
+  ],
+  deux: [
+    { repere: 'vue_onde', texte: 'Deux radiations, rouge et jaune, entrent dans le même verre.' },
+    { repere: 'front_rouge', texte: 'Le rouge : n = 1,62, v = 1,85·10⁸ m/s.' },
+    { repere: 'front_jaune', texte: 'Le jaune : n = 1,66, v = 1,81·10⁸ m/s ; il prend du retard.' },
+    { repere: 'vue_compteurs', texte: 'Chacune garde sa fréquence : 3,91·10¹⁴ Hz et 5,09·10¹⁴ Hz.' },
+  ],
+};
+window.Tableau.explication(EXPLICATIONS);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_lumineuses_milieu', version: '1.0', title: 'La lumière passe de l’air au verre', variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { n: '1.0..2.0 pas 0.01 (indice du bloc ; vues verre et eau)', lambda0_nm: '400..800 (longueur d’onde dans l’air ; vues verre et eau)', vue: VUES.join(' | ') + ' (préréglage : verre n = 1,5 ; eau n = 1,33 ; deux : rouge 767 nm et jaune 589 nm)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant, en s de la scène)' },
+    play_until: { moment: 'verre/eau : onde_dans_air | front_entre | lambda_serree | compte_frequence | mesure_lambda | ressort_dans_air | fin ; deux : onde_dans_air | front_entre | fronts_ecartes | mesure_vitesses | fin (rejoue et se fige)', time_s: 'ou un instant en s' } } };
+/* Le tuteur pilote : la scène doit être entièrement écrite pour que ce qu’il dit (ce_qui_se_voit) soit à l’écran. */
+function achever() { if (!scene.craie.complet || (performance.now() - scene.ouvert) < 8000) { scene.ouvert = performance.now() - 60000; scene.sale = true; } }
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Une onde lumineuse passe de l’air dans un bloc transparent en incidence normale, puis ressort. Dans le bloc : v = c/n, λ = λ₀/n, et la fréquence ν = c/λ₀ ne change pas (même couleur). Verre n = 1,5 : λ₀ = 600 nm → λ = 400 nm, v = 2,00·10⁸ m/s ; eau n = 1,33 : v = 2,26·10⁸ m/s, λ = 451 nm. Vue deux : rouge 767 nm (n = 1,62, v = 1,85·10⁸ m/s) et jaune 589 nm (n = 1,66, v = 1,81·10⁸ m/s). Mouvement ralenti énormément.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : S.fait ? 'finished' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), moments: moments(),
+    parameters: DEUX() ? { vue, radiations: [{ couleur: 'rouge', lambda0_nm: 767, n: 1.62 }, { couleur: 'jaune', lambda0_nm: 589, n: 1.66 }] } : { vue, n: S.n, lambda0_nm: S.lam0 },
+    valeurs: mesure() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => (achever(), { start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le laser va s’allumer…');
+setTimeout(() => { if (!S.running && !S.pause && !S.fait && S.t === 0) start(); }, 1500);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les trois voies de l’ATP — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un coureur avance sur une flèche du temps ; quatre jauges (réserve d’ATP, phosphocréatine, acide lactique, dioxygène consommé) évoluent et, quand une voie de régénération de l’ATP prend le relais, son nom et son équation s’écrivent ; une frise montre les trois voies qui se chevauchent"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le coureur et les trois voies de régénération de l'ATP (cours « Rôle du muscle strié squelettique », section 10
+ * du contrat, novembre 2026).
+ * Un coureur peint avance sur une flèche du temps à échelle NON linéaire (0 s, ~10 s, ~1 à 2 min, effort long) ;
+ * on le glisse sur la flèche pour choisir la durée d'effort montrée (paramètre duree_s, 0..600 s).
+ * Quatre jauges peintes (niveaux relatifs, allures du cours, pas des mesures) :
+ *   réserve d'ATP      : presque constante (petite baisse au tout début : elle est régénérée aussitôt) ;
+ *   phosphocréatine    : chute dans les dix premières secondes ;
+ *   acide lactique     : monte de ~10 s à ~2 min ;
+ *   dioxygène consommé : monte lentement, domine ensuite.
+ * Parts des trois voies (frise) : alactique e^{−(d/9)²}, lactique (1 − e^{−d/12})²·e^{−d/150}, aérobie 1 − e^{−d/70},
+ * normalisées : les bandes se chevauchent, aucune frontière nette.
+ * Quand une voie prend le relais (2 s, 10 s, 60 s), son nom et son équation s'écrivent à la craie.
+ * Après 600 s l'effort s'arrête : récupération (5 min montrées) : la phosphocréatine se reconstitue,
+ * l'acide lactique baisse lentement.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const vue = 'voies';
+
+/* ── Échelle du temps non linéaire : durée d'effort d (s) ↔ x sur la flèche ─ */
+const NOEUDS = [[0, 40], [10, 210], [120, 450], [600, 700]];
+function xDe(d) {
+  d = Math.max(0, Math.min(600, d));
+  for (let i = 1; i < NOEUDS.length; i++) { const [d0, x0] = NOEUDS[i - 1], [d1, x1] = NOEUDS[i]; if (d <= d1) return x0 + (d - d0) / (d1 - d0) * (x1 - x0); }
+  return 700;
+}
+function dDe(x) {
+  x = Math.max(40, Math.min(700, x));
+  for (let i = 1; i < NOEUDS.length; i++) { const [d0, x0] = NOEUDS[i - 1], [d1, x1] = NOEUDS[i]; if (x <= x1) return d0 + (x - x0) / (x1 - x0) * (d1 - d0); }
+  return 600;
+}
+/* Temps de la scène τ : le coureur avance à vitesse constante sur la flèche (16 s), puis 5 s de récupération (300 s). */
+const TE = 16, TREC = 5, RMAX = 300, FIN = TE + TREC + 0.5;
+const tauDeD = d => (xDe(d) - 40) / 660 * TE;
+const effort = tau => dDe(40 + 660 * Math.min(tau, TE) / TE);
+const recup = tau => Math.max(0, Math.min(RMAX, (tau - TE) / TREC * RMAX));
+
+/* ── Modèle ─────────────────────────────────────────────────────────── */
+const sig = z => 1 / (1 + Math.exp(-z));
+function niveauxEffort(d) {
+  return {
+    atp: 100 - 14 * (1 - Math.exp(-d / 0.8)) + 6 * (1 - Math.exp(-Math.max(0, d - 1.5) / 3)),
+    pc: 100 * (0.12 + 0.88 * Math.exp(-Math.max(0, d - 1.5) / 3)),
+    lactique: 85 * sig((d - 40) / 15) - 15 * Math.max(0, d - 120) / 480,
+    o2: 100 * (1 - Math.exp(-d / 70)),
+  };
+}
+function niveaux(tau) {
+  if (tau <= TE) return niveauxEffort(effort(tau));
+  const e = niveauxEffort(600), r = recup(tau);
+  return {
+    atp: 100 - (100 - e.atp) * Math.exp(-r / 15),
+    pc: 100 - (100 - e.pc) * Math.exp(-r / 30),
+    lactique: e.lactique * Math.exp(-r / 600),
+    o2: 10 + (e.o2 - 10) * Math.exp(-r / 80),
+  };
+}
+const rampe = (d, d0, d1) => { const u = Math.max(0, Math.min(1, (d - d0) / (d1 - d0))); return u * u * (3 - 2 * u); };
+/* Parts des voies dans la régénération de l'ATP ; `actif` < 1 au tout début (la réserve d'ATP est d'abord utilisée seule). */
+function parts(d) {
+  const a = rampe(d, 0.5, 2.2) * Math.exp(-((d / 9) ** 2)), l = 0.9 * (1 - Math.exp(-d / 12)) ** 2 * Math.exp(-d / 150), r = 1 - Math.exp(-d / 70) + 1e-6;
+  const s = a + l + r; return { alactique: a / s, lactique: l / s, aerobie: r / s, actif: Math.min(1, s) };
+}
+const SEUILS = { alactique: 2, lactique: 10, aerobie: 60 };
+
+/* ── Géométrie (cadre 760 × 420) ────────────────────────────────────── */
+const YF = 146;                          // flèche du temps
+const FR = { y: 168, h: 13, gap: 3 };    // frise : trois rangées
+const VOIES = [
+  { id: 'alactique', nom: 'anaérobie alactique', couleur: '#fb923c', craie: 'orange', xl: 46 },
+  { id: 'lactique', nom: 'anaérobie lactique', couleur: '#f472b6', craie: 'rose', xl: 232 },
+  { id: 'aerobie', nom: 'aérobie', couleur: '#60a5fa', craie: 'bleu', xl: 560 },
+];
+const JAUGES = [
+  { id: 'jauge_atp', cle: 'atp', l1: 'réserve', l2: 'd’ATP', haut: '#86efac', bas: '#15803d', label: 'la réserve d’ATP' },
+  { id: 'jauge_pc', cle: 'pc', l1: 'phospho-', l2: 'créatine', haut: '#fdba74', bas: '#c2410c', label: 'la phosphocréatine' },
+  { id: 'jauge_lactique', cle: 'lactique', l1: 'acide', l2: 'lactique', haut: '#fbcfe8', bas: '#be185d', label: 'l’acide lactique' },
+  { id: 'jauge_o2', cle: 'o2', l1: 'dioxygène', l2: 'consommé', haut: '#bfdbfe', bas: '#1d4ed8', label: 'le dioxygène consommé' },
+];
+const JG = { x0: 34, pas: 80, w: 42, y: 254, h: 98 };
+const EQ = { x: 356, max: 394 };
+
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const APPARU = {};
+
+/* ── Peinture : le coureur, les réservoirs, la frise ─────────────────── */
+function membre(ctx, a, b, c, larg, couleur) {
+  ctx.strokeStyle = couleur; ctx.lineWidth = larg; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.stroke();
+}
+function peindreCoureur(ctx, x, yb, phase, court) {
+  const lean = court ? 0.22 : 0.05;
+  const hip = [x, yb - 35], sh = [x + 24 * Math.sin(lean), yb - 35 - 24 * Math.cos(lean)];
+  const head = [sh[0] + 4 * Math.sin(lean) + 2, sh[1] - 10];
+  const jambe = (k) => {
+    const s = Math.sin(phase + k * Math.PI), co = Math.cos(phase + k * Math.PI);
+    const a = court ? 0.62 * s : (k ? -0.06 : 0.08), plie = court ? 0.25 + 0.95 * Math.max(0, -co) : 0.05;
+    const knee = [hip[0] + 17 * Math.sin(a), hip[1] + 17 * Math.cos(a)], b = a - plie;
+    return [hip, knee, [knee[0] + 18 * Math.sin(b), knee[1] + 18 * Math.cos(b)]];
+  };
+  const bras = (k) => {
+    const s = Math.sin(phase + k * Math.PI);
+    const a = court ? -0.75 * s : (k ? 0.12 : -0.1), coude = [sh[0] + 13 * Math.sin(a), sh[1] + 13 * Math.cos(a)];
+    const b = court ? a + 1.5 : a + 0.15;
+    return [sh, coude, [coude[0] + 12 * Math.sin(b), coude[1] + 12 * Math.cos(b)]];
+  };
+  // Ombre au sol.
+  let g = ctx.createRadialGradient(x + 4, yb + 1, 1, x + 4, yb + 1, 22); g.addColorStop(0, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x + 4, yb + 1, 22, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+  // Membres du côté lointain (plus sombres).
+  membre(ctx, ...jambe(1), 6.2, '#8a5a3c'); membre(ctx, ...bras(1), 4.6, '#8a5a3c');
+  // Short (sur le haut des cuisses) et maillot.
+  const [, kn1] = jambe(1), [, kn0] = jambe(0);
+  ctx.strokeStyle = '#1e3a8a'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+  for (const kn of [kn1, kn0]) { ctx.beginPath(); ctx.moveTo(hip[0], hip[1]); ctx.lineTo(hip[0] + (kn[0] - hip[0]) * .45, hip[1] + (kn[1] - hip[1]) * .45); ctx.stroke(); }
+  g = ctx.createLinearGradient(hip[0] - 8, sh[1], hip[0] + 10, hip[1]); g.addColorStop(0, '#fca5a5'); g.addColorStop(.45, '#ef4444'); g.addColorStop(1, '#991b1b');
+  ctx.fillStyle = g; ctx.beginPath();
+  const n = [Math.cos(lean), Math.sin(lean)];
+  ctx.moveTo(sh[0] - 7 * n[0], sh[1] - 7 * n[1]); ctx.lineTo(sh[0] + 7 * n[0], sh[1] + 7 * n[1]);
+  ctx.lineTo(hip[0] + 7, hip[1] + 2); ctx.lineTo(hip[0] - 7, hip[1] + 2); ctx.closePath(); ctx.fill();
+  // Jambe et bras du côté proche (plus clairs, avec un reflet).
+  g = ctx.createLinearGradient(x - 15, 0, x + 25, 0); g.addColorStop(0, '#c98b5e'); g.addColorStop(1, '#e8b48a');
+  const [h0, k0, f0] = jambe(0); membre(ctx, h0, k0, f0, 6.6, g);
+  ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.ellipse(f0[0] + 3, f0[1], 5, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+  const [, , f1] = jambe(1); ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.ellipse(f1[0] + 3, f1[1], 5, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+  membre(ctx, ...bras(0), 5, g);
+  // Tête ombrée.
+  g = ctx.createRadialGradient(head[0] + 2, head[1] - 3, 1, head[0], head[1], 8); g.addColorStop(0, '#f3c9a3'); g.addColorStop(1, '#a8703f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(head[0], head[1], 7.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2b1a10'; ctx.beginPath(); ctx.arc(head[0] - 1.5, head[1] - 2.5, 7, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+}
+function reservoir(ctx, x, y, w, h, niv, haut, bas) {
+  const ry = 5, yl = y + h * (1 - Math.max(0, Math.min(1, niv)));
+  // Fond du verre.
+  ctx.fillStyle = 'rgba(200,225,255,.07)'; ctx.beginPath(); ctx.rect(x, y, w, h); ctx.fill();
+  // Liquide : dégradé horizontal (bords sombres, centre clair) et ménisque.
+  let g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, bas); g.addColorStop(.42, haut); g.addColorStop(1, bas);
+  ctx.fillStyle = g; ctx.globalAlpha = .88;
+  ctx.beginPath(); ctx.moveTo(x, yl); ctx.lineTo(x, y + h); ctx.ellipse(x + w / 2, y + h, w / 2, ry, 0, Math.PI, 0, true); ctx.lineTo(x + w, yl); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+  g = ctx.createLinearGradient(0, yl - ry, 0, yl + ry); g.addColorStop(0, haut); g.addColorStop(1, bas);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2, ry, 0, 0, Math.PI * 2); ctx.fill();
+  // Le verre : bords, col, reflet, graduations.
+  ctx.strokeStyle = 'rgba(225,238,255,.55)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h); ctx.ellipse(x + w / 2, y + h, w / 2, ry, 0, Math.PI, 0, true); ctx.lineTo(x + w, y); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2, ry, 0, 0, Math.PI * 2); ctx.stroke();
+  g = ctx.createLinearGradient(x + 3, 0, x + 11, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.32)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(x + 3, y + 6, 8, h - 10);
+  ctx.strokeStyle = 'rgba(225,238,255,.35)'; ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { const yy = y + h * i / 4; ctx.beginPath(); ctx.moveTo(x + w - 9, yy); ctx.lineTo(x + w - 2, yy); ctx.stroke(); }
+}
+function peindreFrise(ctx, xmax) {
+  VOIES.forEach((v, i) => {
+    const y = FR.y + i * (FR.h + FR.gap);
+    ctx.fillStyle = 'rgba(226,232,240,.05)'; ctx.fillRect(40, y, 660, FR.h);
+    ctx.fillStyle = v.couleur;
+    for (let x = 40; x < xmax; x += 3) { const P = parts(dDe(x + 1.5)); ctx.globalAlpha = 0.08 + 0.8 * P[v.id] * P.actif; ctx.fillRect(x, y, Math.min(3, xmax - x), FR.h); }
+    ctx.globalAlpha = 1;
+  });
+}
+
+/* Un élément apparu en cours de route s'écrit à la craie à partir de son apparition, indépendamment des autres. */
+function plusTard(c, cle, visible, fn) {
+  if (!visible) { delete APPARU[cle]; return; }
+  if (!(cle in APPARU)) APPARU[cle] = (performance.now() - scene.ouvert) / 1000;
+  const base = c.cur; c.depuis(APPARU[cle]);
+  try { fn(); } finally { c.cur = base; }
+}
+const ecrites = (tau) => { const d = effort(tau); return { alactique: d >= SEUILS.alactique, lactique: d >= SEUILS.lactique, aerobie: d >= SEUILS.aerobie }; };
+
+function dessiner(c) {
+  const tau = S.t, d = effort(tau), enRecup = tau > TE, xr = xDe(d), N = niveaux(tau), E = ecrites(tau);
+  // 1. Peint : frise, coureur, réservoirs.
+  c.direct(() => {
+    peindreFrise(c.ctx, S.t > 0 || S.fait ? xr : 40);
+    peindreCoureur(c.ctx, xr, YF - 3, tau * 9, S.running && !enRecup || (!enRecup && tau > 0 && tau < TE));
+    JAUGES.forEach((j, i) => reservoir(c.ctx, JG.x0 + i * JG.pas, JG.y, JG.w, JG.h, N[j.cle] / 100, j.haut, j.bas));
+  });
+  // 2. La craie fixe.
+  c.texte('Le coureur et les trois voies de régénération de l’ATP', 12, 26, { couleur: 'cyan', taille: 17, max: 470 });
+  c.fleche(30, YF, 748, YF, { couleur: 'blanc', largeur: 2 });
+  for (const [dd, lib] of [[0, '0 s'], [10, '≈ 10 s'], [60, null], [120, null]]) {
+    c.ligne(xDe(dd), YF - 5, xDe(dd), YF + 5, { couleur: 'blanc', largeur: 1.5, duree: .04 });
+    if (lib) c.texte(lib, xDe(dd), YF + 17, { couleur: 'faible', taille: 13, align: 'center', duree: .12 });
+  }
+  c.texte('≈ 1 à 2 min', (xDe(60) + xDe(120)) / 2, YF + 17, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('effort long', 640, YF + 17, { couleur: 'faible', taille: 13, align: 'center' });
+  VOIES.forEach((v, i) => {
+    const y = FR.y + i * (FR.h + FR.gap);
+    c.texte(v.nom, v.xl, y + FR.h - 2, { couleur: 'blanc', taille: 12 });
+  });
+  c.texte('échelle du temps non linéaire', 748, 230, { couleur: 'faible', taille: 13, align: 'right' });
+  JAUGES.forEach((j, i) => {
+    const cx = JG.x0 + i * JG.pas + JG.w / 2;
+    c.texte(j.l1, cx, JG.y + JG.h + 22, { couleur: 'blanc', taille: 13, align: 'center' });
+    c.texte(j.l2, cx, JG.y + JG.h + 37, { couleur: 'blanc', taille: 13, align: 'center' });
+  });
+  c.texte('jauges : niveaux relatifs (allures)', 14, 410, { couleur: 'faible', taille: 12 });
+  c.texte('réserve d’ATP du muscle : quelques secondes d’effort seulement', EQ.x, 250, { couleur: 'vert', taille: 15, max: EQ.max });
+
+  // 3. Ce qui bouge : valeurs des jauges, durée, repères.
+  c.direct(() => {
+    JAUGES.forEach((j, i) => {
+      const x = JG.x0 + i * JG.pas;
+      c.texte(`${Math.round(N[j.cle])} %`, x + JG.w / 2, JG.y - 10, { couleur: 'jaune', taille: 13, align: 'center' });
+      c.repere(j.id, x - 4, JG.y - 24, JG.w + 8, JG.h + 66, `${j.label} : ${Math.round(N[j.cle])} %`);
+    });
+    if (S.t > 0 || S.fait) c.ligne(xr, FR.y - 2, xr, FR.y + 3 * (FR.h + FR.gap), { couleur: 'jaune', largeur: 1.4, pointille: [3, 3] });
+    const lib = enRecup ? `arrêt : récupération depuis ${recup(tau) < 60 ? Math.round(recup(tau)) + ' s' : fr(recup(tau) / 60, 1) + ' min'}` : `durée de l’effort : ${d < 10 ? fr(d, 1) + ' s' : d < 120 ? Math.round(d) + ' s' : fr(d / 60, 1) + ' min'}`;
+    c.texte(lib, 748, 50, { couleur: 'jaune', taille: 15, align: 'right' });
+    c.repere('coureur', xr - 26, YF - 80, 56, 84, `le coureur : ${lib}`);
+    c.repere('fleche_temps', 28, YF - 8, 722, 28, 'la flèche du temps (échelle non linéaire)');
+    c.repere('frise', 38, FR.y - 2, 664, 3 * (FR.h + FR.gap) + 2, 'la frise des trois voies, qui se chevauchent');
+  });
+
+  // 4. Ce qui s'écrit quand une voie prend le relais.
+  plusTard(c, 'alactique', E.alactique, () => {
+    c.texte('voie anaérobie alactique : PC + ADP → C + ATP', EQ.x, 276, { couleur: 'orange', taille: 15, max: EQ.max });
+    c.texte('ADP + ADP → ATP + AMP', EQ.x + 168, 295, { couleur: 'orange', taille: 15 });
+    c.repere('equation_alactique', EQ.x - 4, 262, EQ.max + 6, 38, 'la voie anaérobie alactique et ses équations');
+  });
+  plusTard(c, 'lactique', E.lactique, () => {
+    c.texte('voie anaérobie lactique (fermentation lactique) :', EQ.x, 320, { couleur: 'rose', taille: 15, max: EQ.max });
+    c.texte('C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CHOH-COOH + 2 ATP', EQ.x + 8, 339, { couleur: 'blanc', taille: 15, max: EQ.max - 8 });
+    c.repere('equation_lactique', EQ.x - 4, 306, EQ.max + 6, 38, 'la voie anaérobie lactique (fermentation lactique) et son équation');
+  });
+  plusTard(c, 'aerobie', E.aerobie, () => {
+    c.texte('voie aérobie (respiration) :', EQ.x, 364, { couleur: 'bleu', taille: 15, max: EQ.max });
+    c.texte('C₆H₁₂O₆ + 6 O₂ + 36 ADP + 36 Pi → 6 CO₂ + 6 H₂O + 36 ATP', EQ.x + 8, 383, { couleur: 'blanc', taille: 15, max: EQ.max - 8 });
+    c.repere('equation_aerobie', EQ.x - 4, 350, EQ.max + 6, 38, 'la voie aérobie (respiration) et son équation');
+  });
+  plusTard(c, 'long', !enRecup && d >= 300, () => c.texte('effort long : la respiration fournit presque tout l’ATP', EQ.x, 406, { couleur: 'vert', taille: 14, max: EQ.max }));
+  plusTard(c, 'recup', enRecup, () => c.texte('arrêt : la phosphocréatine se reconstitue, l’acide lactique baisse lentement', EQ.x, 406, { couleur: 'vert', taille: 14, max: EQ.max }));
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fait = S.t >= FIN - 1e-6;
+    $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || dureeTexte()) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'L’ATP reste presque constant : il est régénéré par trois voies qui se relaient sans frontière nette.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Instants clés (en s de la scène) ───────────────────────────────── */
+function moments() {
+  const m = {
+    depart_reserve_atp: tauDeD(1), phosphocreatine: tauDeD(6), fermentation_lactique: tauDeD(40), respiration: tauDeD(180),
+    effort_long: tauDeD(480), arret_recuperation: TE + 120 / RMAX * TREC, fin: FIN,
+  };
+  for (const k in m) m[k] = +m[k].toFixed(3);
+  return m;
+}
+const MOTIFS = {
+  depart_reserve_atp: 'au départ (1 s), la réserve d’ATP seule : elle ne dure que quelques secondes',
+  phosphocreatine: 'vers 6 s, la phosphocréatine chute : la voie anaérobie alactique régénère l’ATP',
+  fermentation_lactique: 'vers 40 s, l’acide lactique monte : la fermentation lactique a pris le relais',
+  respiration: 'vers 3 min, le dioxygène consommé domine : la respiration a pris le relais',
+  effort_long: 'effort long (8 min) : la respiration fournit presque tout l’ATP',
+  arret_recuperation: 'l’effort s’est arrêté : la phosphocréatine se reconstitue, l’acide lactique baisse lentement',
+  fin: 'fin de la récupération montrée',
+};
+function dureeTexte() { const d = effort(S.t); return S.t > TE ? `récupération depuis ${Math.round(recup(S.t))} s` : `effort de ${d < 10 ? fr(d, 1) : Math.round(d)} s`; }
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null;
+  let cible = nom ? M[nom] : +p.time_s;
+  if (!nom && Number.isFinite(+p.duree_s)) cible = tauDeD(+p.duree_s);
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (échelle du temps non linéaire : le début au ralenti, l’effort long en accéléré)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+function ceQuiSeVoit() {
+  const tau = S.t, d = effort(tau), N = niveaux(tau), E = ecrites(tau), P = parts(d), enRecup = tau > TE;
+  const pc = v => `${Math.round(v)} %`;
+  const m = [];
+  if (enRecup) m.push(`L’effort s’est arrêté après 10 min (le coureur est arrêté au bout de la flèche) ; récupération depuis ${Math.round(recup(tau))} s.`);
+  else if (tau <= 0) m.push('Le coureur est au départ (0 s), sur la flèche du temps.');
+  else m.push(`Le coureur ${S.running ? 'court' : 'est arrêté sur image'} sur la flèche du temps : durée de l’effort ${d < 10 ? fr(d, 1) : Math.round(d)} s (échelle non linéaire : 0 s, ≈ 10 s, ≈ 1 à 2 min, effort long).`);
+  m.push(`Jauges (niveaux relatifs) : réserve d’ATP ${pc(N.atp)} (presque constante), phosphocréatine ${pc(N.pc)}, acide lactique ${pc(N.lactique)}, dioxygène consommé ${pc(N.o2)}.`);
+  if (!enRecup && tau > 0 && d < 2) m.push('La réserve d’ATP est utilisée seule (petite baisse) ; les voies de régénération démarrent à peine : la frise est encore pâle.');
+  else if (!enRecup && tau > 0) m.push(`Frise jusqu’au coureur : part des voies à cet instant ≈ alactique ${pc(100 * P.alactique)}, lactique ${pc(100 * P.lactique)}, aérobie ${pc(100 * P.aerobie)} ; les bandes se chevauchent, sans frontière nette.`);
+  else if (enRecup) m.push('Frise des trois voies tracée en entier : bandes qui se chevauchent, sans frontière nette.');
+  const eq = ['écrit en vert « réserve d’ATP du muscle : quelques secondes d’effort seulement »'];
+  if (E.alactique) eq.push('« voie anaérobie alactique : PC + ADP → C + ATP » et « ADP + ADP → ATP + AMP »');
+  if (E.lactique) eq.push('« voie anaérobie lactique (fermentation lactique) : C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CHOH-COOH + 2 ATP »');
+  if (E.aerobie) eq.push('« voie aérobie (respiration) : C₆H₁₂O₆ + 6 O₂ + 36 ADP + 36 Pi → 6 CO₂ + 6 H₂O + 36 ATP »');
+  m.push(`Au tableau : ${eq.join(' ; ')}.`);
+  if (!enRecup && d >= 300) m.push('Écrit : « effort long : la respiration fournit presque tout l’ATP ».');
+  if (enRecup) m.push('Écrit : « arrêt : la phosphocréatine se reconstitue, l’acide lactique baisse lentement ».');
+  return m.join(' ');
+}
+
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le coureur part… (échelle du temps non linéaire : le début au ralenti, l’effort long en accéléré)'); pont.noter('start'); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image : ' + dureeTexte() + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function figer(tau, qui) {
+  S.running = false; S.jusqua = null; S.t = Math.min(FIN, Math.max(0, tau)); S.fait = S.t >= FIN - 1e-6;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), 'Arrêt sur image : ' + dureeTexte() + '.'); pont.noter(qui, { time_s: +S.t.toFixed(3), duree_s: Math.round(effort(S.t)) }); pont.emettre();
+}
+function setTime(p) { const t = +p.time_s; if (Number.isFinite(t)) figer(t, 'set_time'); }
+function setParameters(p) { const d = +p.duree_s; if (Number.isFinite(d)) figer(tauDeD(Math.max(0, Math.min(600, d))), 'set_parameters'); }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : le coureur, glissé sur la flèche du temps (choisit la durée d'effort montrée). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py), xr = xDe(effort(S.t)); return Math.abs(x - xr) < 28 && y > YF - 84 && y < YF + 10 ? 'coureur' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py); S.running = false; S.jusqua = null; S.fait = false; S.t = tauDeD(dDe(x)); $('run').textContent = 'Reprendre'; scene.sale = true; },
+  lacher: () => figer(S.t, 'set_parameters'),
+});
+
+window.Tableau.explication({ [vue]: [
+  { repere: 'coureur', texte: 'Le coureur avance sur la flèche du temps ; l’échelle n’est pas linéaire.' },
+  { repere: 'jauge_atp', texte: 'La réserve d’ATP reste presque constante : l’ATP est régénéré à mesure qu’il est utilisé.' },
+  { repere: 'jauge_pc', texte: 'Dans les dix premières secondes, la phosphocréatine chute.' },
+  { repere: 'equation_alactique', texte: 'C’est la voie anaérobie alactique : la phosphocréatine cède son phosphate à l’ADP.' },
+  { repere: 'jauge_lactique', texte: 'De dix secondes à deux minutes environ, l’acide lactique s’accumule.' },
+  { repere: 'equation_lactique', texte: 'La fermentation lactique : le glucose donne de l’acide lactique et seulement 2 ATP.' },
+  { repere: 'jauge_o2', texte: 'Le dioxygène consommé monte lentement, puis domine.' },
+  { repere: 'equation_aerobie', texte: 'La respiration : 36 ATP par glucose, avec du dioxygène.' },
+  { repere: 'frise', texte: 'Les trois voies se chevauchent : pas de frontière nette entre elles.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_voies_atp', version: '1.0', title: 'Le coureur et les trois voies de régénération de l’ATP', variants: [{ id: vue, label: 'les trois voies' }], commands: commandes,
+  command_schema: {
+    set_parameters: { duree_s: '0..600 (durée de l’effort montrée, en s : le coureur est placé sur la flèche et la scène se fige)' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (instant de la scène, en s ; effort jusqu’à ${TE} s, puis récupération)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant de la scène en s', duree_s: 'ou une durée d’effort en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Un coureur avance sur une flèche du temps (échelle non linéaire). Réserve d’ATP presque constante ; la phosphocréatine chute dans les dix premières secondes (voie anaérobie alactique : PC + ADP → C + ATP, ADP + ADP → ATP + AMP) ; l’acide lactique monte de ~10 s à ~2 min (voie anaérobie lactique, fermentation lactique : C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CHOH-COOH + 2 ATP) ; le dioxygène consommé monte lentement puis domine (voie aérobie, respiration : C₆H₁₂O₆ + 6 O₂ + 36 ADP + 36 Pi → 6 CO₂ + 6 H₂O + 36 ATP). Les voies se chevauchent, sans frontière nette. À l’arrêt : la phosphocréatine se reconstitue, l’acide lactique baisse lentement.',
+  etat: () => { const N = niveaux(S.t), P = parts(effort(S.t)); return { simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: { duree_s: Math.round(effort(S.t) * 10) / 10, recuperation_s: Math.round(recup(S.t)), atp_pct: Math.round(N.atp), phosphocreatine_pct: Math.round(N.pc), acide_lactique_pct: Math.round(N.lactique), dioxygene_consomme_pct: Math.round(N.o2),
+      part_alactique: +P.alactique.toFixed(2), part_lactique: +P.lactique.toFixed(2), part_aerobie: +P.aerobie.toFixed(2) }, moments: moments() }; },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le coureur va partir…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

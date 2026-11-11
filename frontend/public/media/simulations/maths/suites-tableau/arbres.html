@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Combien de termes ? — les arbres et la colonne</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois arbres numérotés 5, 6, 7 le long d’une route : 7 − 5 + 1 = 3 ; une colonne de termes uₖ = 1 + vₖ dont on sépare les 1 et les vₖ"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : nombre de termes d’une somme (a8) et somme d’une suite
+ * uₖ = 1 + vₖ (p2, national 2022 R). Vues : ?vue=arbres | colonne.
+ */
+function arbre(c, x, base) {
+  c.ligne(x - 4, base, x - 3, base - 58, { couleur: 'orange', largeur: 2.2 });
+  c.ligne(x + 4, base, x + 3, base - 58, { couleur: 'orange', largeur: 2.2 });
+  c.cercle(x, base - 86, 34, { couleur: 'vert', largeur: 2.2, fond: 'vert', fondAlpha: .1 });
+}
+MathsTableau.page({
+  id: 'su_arbres', titre: 'Combien de termes ?',
+  texte: 'Constructions à la craie : trois arbres numérotés 5, 6, 7 (de uₚ à uₙ il y a n − p + 1 termes) ; la somme des uₖ = 1 + vₖ séparée en 2022 fois 1 et une somme géométrique',
+  vues: {
+    arbres: {
+      titre: 'De uₚ à uₙ : n − p + 1 termes',
+      dessiner(c, K) {
+        K.titre('Combien de termes dans une somme ?');
+        const XS = [90, 200, 310], BASE = 250;
+        c.ligne(30, BASE + 4, 380, BASE + 4, { couleur: 'faible', largeur: 1.8 });
+        c.ligne(30, BASE + 40, 380, BASE + 40, { couleur: 'faible', largeur: 1.8 });
+        XS.forEach((x, i) => { c.pause(.2); arbre(c, x, BASE); c.texte(String(5 + i), x, BASE + 30, { couleur: 'jaune', taille: 22, align: 'center' }); });
+        c.repere('arbres', 40, 120, 320, 180, 'les arbres numéros 5, 6 et 7');
+        K.marque('arbres');
+        c.pause(.4);
+        c.texte('du 5 au 7 :', 420, 110, { couleur: 'blanc', taille: 20 });
+        c.texte('7 − 5 + 1 = 3 arbres', 420, 146, { couleur: 'jaune', taille: 22 });
+        c.texte('(et pas 7 − 5 = 2)', 420, 176, { couleur: 'orange', taille: 17 });
+        K.marque('compte');
+        c.pause(.4);
+        c.rect(410, 200, 330, 70, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+        c.texte('de u_p à u_n :', 425, 228, { couleur: 'blanc', taille: 19 });
+        c.texte('n − p + 1 termes', 425, 258, { couleur: 'jaune', taille: 22 });
+        c.repere('regle', 406, 196, 338, 78, 'la règle : n − p + 1 termes');
+        K.marque('regle');
+        c.pause(.4);
+        c.texte('de u_0 à u_{2021} :', 30, 322, { couleur: 'cyan', taille: 19 });
+        c.texte('2021 − 0 + 1 = 2022 termes', 220, 322, { couleur: 'cyan', taille: 21 });
+        c.repere('exemple', 26, 300, 470, 30, 'de u₀ à u₂₀₂₁ : 2022 termes');
+        K.marque('exemple');
+      },
+      decrire: {
+        arbres: 'Trois arbres à la craie le long d’une route, numérotés 5, 6 et 7.',
+        compte: 'Écrit : du 5 au 7 : 7 − 5 + 1 = 3 arbres (et pas 7 − 5 = 2).',
+        regle: 'Encadré : de uₚ à uₙ : n − p + 1 termes.',
+        exemple: 'En bas : de u₀ à u₂₀₂₁ : 2021 − 0 + 1 = 2022 termes.',
+      },
+      explication: [{ repere: 'arbres', texte: 'Trois arbres, du numéro 5 au numéro 7.' }, { repere: 'regle', texte: 'Dernier moins premier, plus un.' }],
+    },
+    colonne: {
+      titre: 'La somme des uₖ = 1 + vₖ',
+      dessiner(c, K) {
+        K.titre('Une somme qui n’est pas géométrique');
+        const L = [['u_0 = ', 'v_0'], ['u_1 = ', 'v_1'], ['u_2 = ', 'v_2'], null, ['u_{2021} = ', 'v_{2021}']];
+        const uns = [], vs = [];
+        L.forEach((l, i) => {
+          const y = 82 + i * 40;
+          c.pause(.15);
+          if (!l) { c.texte('⋮', 120, y, { couleur: 'faible', taille: 22 }); return; }
+          const xs = SU.morceaux(c, 40, y, [{ t: l[0] }, { t: '1', couleur: 'vert' }, { t: ' + ' }, { t: l[1], couleur: 'jaune' }], { taille: 21 });
+          uns.push([xs[1], y]); vs.push([xs[3], xs[4], y]);
+        });
+        c.repere('colonne', 34, 58, 260, 200, 'la colonne uₖ = 1 + vₖ');
+        K.marque('colonne');
+        c.pause(.4);
+        uns.forEach(([x, y]) => c.cercle(x + 5, y - 7, 12, { couleur: 'vert', largeur: 1.6 }));
+        c.texte('2022 fois 1 = 2022', 360, 110, { couleur: 'vert', taille: 21 });
+        c.repere('les_un', 340, 86, 260, 34, 'les 1 : 2022 fois 1');
+        K.marque('les_un');
+        c.pause(.4);
+        const xv = Math.max(...vs.map(v => v[1])) + 12;
+        SU.accolade(c, xv, 62, 252, { couleur: 'jaune' });
+        c.texte('v_0 + … + v_{2021} :', 360, 180, { couleur: 'jaune', taille: 20 });
+        c.texte('somme géométrique', 360, 210, { couleur: 'jaune', taille: 20 });
+        c.repere('les_v', xv - 4, 62, 380, 190, 'les vₖ : une somme géométrique');
+        K.marque('les_v');
+        c.pause(.4);
+        c.rect(40, 290, 560, 46, { couleur: 'blanc', arrondi: 8, largeur: 1.6 });
+        c.texte('S = 2022 + (v_0 + v_1 + … + v_{2021})', 60, 321, { couleur: 'blanc', taille: 22 });
+        c.repere('somme', 36, 286, 568, 54, 'la somme S');
+        K.marque('somme');
+      },
+      decrire: {
+        colonne: 'Une colonne : u₀ = 1 + v₀, u₁ = 1 + v₁, u₂ = 1 + v₂, ⋮, u₂₀₂₁ = 1 + v₂₀₂₁ ; les 1 en vert, les vₖ en jaune.',
+        les_un: 'Les 1 sont entourés en vert : 2022 fois 1 = 2022.',
+        les_v: 'Une accolade jaune rassemble les vₖ : v₀ + … + v₂₀₂₁, une somme géométrique.',
+        somme: 'Encadré : S = 2022 + (v₀ + v₁ + … + v₂₀₂₁).',
+      },
+      explication: [{ repere: 'les_un', texte: 'Autant de 1 que de termes : 2022.' }, { repere: 'les_v', texte: 'Le reste est une somme géométrique.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

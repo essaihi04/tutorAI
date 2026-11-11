@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les hauteurs atteintes — image d’un intervalle</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : un intervalle sur l’axe des abscisses, des pointillés montent à la courbe puis vont à l’axe des ordonnées ; l’intervalle image se colore"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc image d’un intervalle (j1 à j5, t8).
+ * Vues : ?vue=croissante (params a, b) | decroissante | borne_ouverte | tout_R | non_monotone. `fin` = construction complète.
+ * croissante : f(x) = x² − 4x + 1 sur [2 ; 5] → [−3 ; 6] ; decroissante : g(x) = 4/x sur [1 ; 4] → [1 ; 4] ;
+ * borne_ouverte : g sur ]0 ; 4] → [1 ; +∞[ ; tout_R : x³ + x − 1 sur ℝ → ℝ ; non_monotone : x³ − 3x sur [−2 ; 2] → [−2 ; 2].
+ */
+const fr = MathsTableau.fr;
+const COL = 470;
+const fC = x => x * x - 4 * x + 1;
+const OPT_C = { x0: 70, y0: 60, w: 370, h: 285, xmin: -0.5, xmax: 5.6, ymin: -4, ymax: 7, gx: [], gy: [] };
+const borneTxt = (v) => fr(v, 2);
+
+MathsTableau.page({
+  id: 'lc_projections', titre: 'Les hauteurs atteintes',
+  texte: 'Construction à la craie du cours Limites et continuité : l’image d’un intervalle par une fonction continue, lue en projetant sur l’axe des ordonnées',
+  vues: {
+    croissante: {
+      titre: 'f(x) = x² − 4x + 1, strictement croissante sur [2 ; 5]',
+      params: { a: { min: 2, max: 5, pas: 0.5, defaut: 2, sens: 'borne gauche' }, b: { min: 2, max: 5, pas: 0.5, defaut: 5, sens: 'borne droite' } },
+      dessiner(c, K) {
+        K.titre('Croissante : même ordre');
+        let a = Math.min(K.P.a, K.P.b), b = Math.max(K.P.a, K.P.b); if (b - a < 0.5) { if (b < 5) b = a + 0.5; else a = b - 0.5; }
+        const G = K.axes(OPT_C);
+        c.texte('f(x) = x² − 4x + 1', COL, 84, { couleur: 'cyan', taille: 19 });
+        K.anime(1.6, p => K.courbePart(G, fC, 1.6, 5.35, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        LC.segment(c, G, a, b, { couleur: 'jaune' });
+        c.texte('a', G.X(a), G.Y(0) + 22, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('b', G.X(b), G.Y(0) + 22, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.repere('segment', G.X(a) - 6, G.Y(0) - 10, G.X(b) - G.X(a) + 12, 36, 'le segment [a ; b]');
+        K.marque('segment_pose');
+        c.pause(.3);
+        K.proj(G, a, fC(a), { couleur: 'vert', ly: borneTxt(fC(a)) }); K.rond(G, a, fC(a), true, 'vert');
+        c.repere('fa', G.X(0) - 40, G.Y(fC(a)) - 12, 44, 24, 'f(a)');
+        K.marque('monte_a');
+        c.pause(.3);
+        K.proj(G, b, fC(b), { couleur: 'vert', ly: borneTxt(fC(b)) }); K.rond(G, b, fC(b), true, 'vert');
+        c.repere('fb', G.X(0) - 40, G.Y(fC(b)) - 12, 44, 24, 'f(b)');
+        K.marque('monte_b');
+        c.pause(.3);
+        LC.segment(c, G, fC(a), fC(b), { vertical: true, couleur: 'vert', largeur: 7 });
+        c.repere('image', G.X(0) - 8, G.Y(fC(b)) - 6, 16, G.Y(fC(a)) - G.Y(fC(b)) + 12, 'l’intervalle image');
+        K.marque('image_coloree');
+        c.pause(.3);
+        K.lignes(COL, 150, [
+          { t: 'f continue et strictement', couleur: 'blanc' },
+          { t: 'croissante sur [a ; b] :', couleur: 'blanc' },
+          { t: 'f([a ; b]) = [f(a) ; f(b)]', couleur: 'jaune', cadre: 'jaune' },
+          { t: `f([${fr(a, 1)} ; ${fr(b, 1)}]) = [${borneTxt(fC(a))} ; ${borneTxt(fC(b))}]`, couleur: 'vert' },
+        ], 38);
+        c.repere('regle', COL - 8, 186, 280, 40, 'la règle');
+        K.marque('regle');
+      },
+      poignees(K) { const G = K.grille(OPT_C); return [
+        { id: 'a', x: G.X(K.P.a), y: G.Y(0), bouger: (x) => ({ a: Math.min(G.inv(x, 0)[0], K.P.b - 0.5) }) },
+        { id: 'b', x: G.X(K.P.b), y: G.Y(0), bouger: (x) => ({ b: Math.max(G.inv(x, 0)[0], K.P.a + 0.5) }) }]; },
+      lecture: K => `a = ${fr(K.P.a, 1)}, b = ${fr(K.P.b, 1)} : f(a) = ${borneTxt(fC(K.P.a))}, f(b) = ${borneTxt(fC(K.P.b))}, f([a ; b]) = [${borneTxt(fC(K.P.a))} ; ${borneTxt(fC(K.P.b))}].`,
+      decrire: K => ({
+        courbe_tracee: 'La courbe de f(x) = x² − 4x + 1, qui monte à partir de x = 2.',
+        segment_pose: `Le segment [a ; b] = [${fr(K.P.a, 1)} ; ${fr(K.P.b, 1)}] est un trait jaune épais sur l’axe des abscisses.`,
+        monte_a: `Des pointillés montent de a jusqu’à la courbe puis vont à l’axe des ordonnées : f(a) = ${borneTxt(fC(K.P.a))}.`,
+        monte_b: `De même pour b : f(b) = ${borneTxt(fC(K.P.b))}, plus haut que f(a).`,
+        image_coloree: 'Sur l’axe des ordonnées, l’intervalle de f(a) à f(b) se colore en vert : ce sont toutes les hauteurs atteintes.',
+        regle: `Écrit : f continue et strictement croissante sur [a ; b], f([a ; b]) = [f(a) ; f(b)] = [${borneTxt(fC(K.P.a))} ; ${borneTxt(fC(K.P.b))}].`,
+      }),
+      motifs: { segment_pose: 'le segment [a ; b]', monte_a: 'f(a)', monte_b: 'f(b)', image_coloree: 'l’image colorée', regle: 'la règle' },
+      explication: [{ repere: 'segment', texte: 'x parcourt [a ; b].' }, { repere: 'image', texte: 'Les hauteurs atteintes : de f(a) à f(b).' }],
+    },
+    decroissante: {
+      titre: 'g(x) = 4/x, strictement décroissante sur [1 ; 4]',
+      dessiner(c, K) {
+        K.titre('Décroissante : l’ordre s’inverse');
+        const g = x => 4 / x, a = 1, b = 4;
+        const G = K.axes({ x0: 70, y0: 60, w: 330, h: 285, xmin: -0.4, xmax: 5.2, ymin: -0.4, ymax: 5.2, gx: [], gy: [] });
+        c.texte('g(x) = 4/x', COL, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.6, p => K.courbePart(G, g, 0.8, 5.1, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        LC.segment(c, G, a, b, { couleur: 'jaune' });
+        c.texte('a = 1', G.X(a), G.Y(0) + 22, { couleur: 'jaune', taille: 16, align: 'center' });
+        c.texte('b = 4', G.X(b), G.Y(0) + 22, { couleur: 'jaune', taille: 16, align: 'center' });
+        c.repere('segment', G.X(a) - 6, G.Y(0) - 10, G.X(b) - G.X(a) + 12, 36, 'le segment [1 ; 4]');
+        K.marque('segment_pose');
+        c.pause(.3);
+        K.proj(G, a, g(a), { couleur: 'vert', ly: 'f(a) = 4' }); K.rond(G, a, g(a), true, 'vert');
+        c.repere('fa', G.X(0) - 66, G.Y(4) - 12, 70, 24, 'f(a), en haut');
+        K.marque('monte_a');
+        c.pause(.3);
+        K.proj(G, b, g(b), { couleur: 'orange', ly: 'f(b) = 1' }); K.rond(G, b, g(b), true, 'orange');
+        c.repere('fb', G.X(0) - 66, G.Y(1) - 12, 70, 24, 'f(b), en bas');
+        K.marque('monte_b');
+        c.pause(.3);
+        c.cercle(G.X(1), G.Y(1), 13, { couleur: 'rouge', largeur: 1.8 });
+        c.texte('les pointillés se croisent', G.X(1) + 18, G.Y(1) + 34, { couleur: 'rouge', taille: 16 });
+        K.marque('pointilles_croises');
+        c.pause(.3);
+        LC.segment(c, G, 1, 4, { vertical: true, couleur: 'vert', largeur: 7 });
+        c.repere('image', G.X(0) - 8, G.Y(4) - 6, 16, G.Y(1) - G.Y(4) + 12, 'l’intervalle image');
+        K.marque('image_coloree');
+        c.pause(.3);
+        K.lignes(COL, 150, [
+          { t: 'g strictement décroissante :', couleur: 'blanc' },
+          { t: 'f([a ; b]) = [f(b) ; f(a)]', couleur: 'jaune', cadre: 'jaune' },
+          { t: 'g([1 ; 4]) = [1 ; 4]', couleur: 'vert' },
+          { t: 'du plus petit au plus grand', couleur: 'faible' },
+        ], 38);
+        c.repere('regle', COL - 8, 148, 280, 40, 'la règle');
+        K.marque('regle');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de g(x) = 4/x, qui descend.',
+        segment_pose: 'Le segment [1 ; 4] en jaune sur l’axe des abscisses.',
+        monte_a: 'Pointillés verts de a = 1 à la courbe puis à l’axe des ordonnées : f(a) = 4, en haut.',
+        monte_b: 'Pointillés orange de b = 4 : f(b) = 1, en bas.',
+        pointilles_croises: 'Les deux pointillés se croisent (cercle rouge) : l’image de a est au-dessus de celle de b.',
+        image_coloree: 'L’intervalle de 1 à 4 se colore sur l’axe des ordonnées.',
+        regle: 'Écrit : g strictement décroissante, f([a ; b]) = [f(b) ; f(a)] ; g([1 ; 4]) = [1 ; 4], du plus petit au plus grand.',
+      },
+      motifs: { pointilles_croises: 'les pointillés se croisent', image_coloree: 'l’image', regle: 'la règle' },
+      explication: [{ repere: 'fa', texte: 'L’image de a est en haut.' }, { repere: 'fb', texte: 'L’image de b est en bas : on écrit [f(b) ; f(a)].' }],
+    },
+    borne_ouverte: {
+      titre: 'g(x) = 4/x sur ]0 ; 4] : une borne ouverte',
+      dessiner(c, K) {
+        K.titre('Borne ouverte : une limite');
+        const g = x => 4 / x;
+        const G = K.axes({ x0: 70, y0: 60, w: 330, h: 285, xmin: -0.4, xmax: 5.2, ymin: -0.4, ymax: 8.6, gx: [[4, '4']], gy: [[1, '1']] });
+        c.texte('g(x) = 4/x sur ]0 ; 4]', COL, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.6, p => K.courbePart(G, g, 0.47, 5, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        LC.segment(c, G, 0.05, 4, { couleur: 'jaune' });
+        K.marque('segment_pose');
+        c.pause(.2);
+        K.rond(G, 0, 0, false, 'orange');
+        c.texte('0 exclu', G.X(0) + 8, G.Y(0) + 22, { couleur: 'orange', taille: 16 });
+        c.repere('rond_vide', G.X(0) - 10, G.Y(0) - 10, 20, 20, 'la borne ouverte 0');
+        K.marque('rond_vide');
+        c.pause(.3);
+        c.fleche(G.X(0.6), G.Y(5.5), G.X(0.6), G.y0 + 6, { couleur: 'orange', largeur: 1.8 });
+        LC.limite(c, COL, 146, 'x → 0⁺', 'g(x) = +∞', { couleur: 'orange', taille: 20 });
+        c.repere('limite', COL - 6, 124, 220, 44, 'la limite en 0⁺');
+        K.marque('limite_au_bord');
+        c.pause(.3);
+        K.proj(G, 4, 1, { couleur: 'vert', versY: true }); K.rond(G, 4, 1, true, 'vert');
+        LC.segment(c, G, 1, 8.5, { vertical: true, couleur: 'vert', largeur: 7 });
+        c.fleche(G.X(0), G.Y(8), G.X(0), G.y0 - 2, { couleur: 'vert', largeur: 2 });
+        c.repere('image', G.X(0) - 8, G.y0, 16, G.Y(1) - G.y0 + 6, 'l’intervalle image');
+        K.marque('image_coloree');
+        c.pause(.3);
+        K.lignes(COL, 214, [
+          { t: 'g(]0 ; 4]) = [1 ; +∞[', couleur: 'vert', cadre: 'vert' },
+          { t: 'ouvert → limite,', couleur: 'jaune' },
+          { t: 'fermé → image.', couleur: 'jaune' },
+        ], 38);
+        c.repere('regle', COL - 8, 230, 220, 70, 'ouvert → limite, fermé → image');
+        K.marque('regle');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de g(x) = 4/x pour x de 0 à 4 : elle monte très haut près de 0.',
+        segment_pose: 'L’intervalle ]0 ; 4] en jaune sur l’axe des abscisses.',
+        rond_vide: 'En 0, un rond vide orange : la borne 0 est exclue.',
+        limite_au_bord: 'Une flèche orange monte le long de la courbe ; écrit : lim g(x) = +∞ quand x → 0⁺.',
+        image_coloree: 'Sur l’axe des ordonnées, de 1 vers le haut sans fin : l’image [1 ; +∞[.',
+        regle: 'Écrit : g(]0 ; 4]) = [1 ; +∞[ ; ouvert → limite, fermé → image.',
+      },
+      motifs: { rond_vide: 'la borne ouverte', limite_au_bord: 'la limite au bord', image_coloree: 'l’image', regle: 'la règle' },
+      explication: [{ repere: 'rond_vide', texte: '0 n’est pas dans l’intervalle : on ne calcule pas g(0), on prend la limite.' }, { repere: 'limite', texte: 'La limite en 0⁺ vaut +∞ : crochet ouvert.' }],
+    },
+    tout_R: {
+      titre: 'f(x) = x³ + x − 1, strictement croissante sur ℝ',
+      dessiner(c, K) {
+        K.titre('Sur ℝ : les limites aux bornes');
+        const f = x => x * x * x + x - 1, AL = 0.6823;
+        const G = K.axes({ x0: 70, y0: 60, w: 330, h: 285, xmin: -2.2, xmax: 2.2, ymin: -7, ymax: 7, gx: [[1, '1']], gy: [] });
+        c.texte('f(x) = x³ + x − 1', COL, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.8, p => K.courbePart(G, f, -1.75, 1.75, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.fleche(G.X(-1.6), G.Y(f(-1.6)) - 30, G.X(-1.78), G.y0 + G.h - 2, { couleur: 'orange', largeur: 1.6 });
+        LC.limite(c, COL, 130, 'x → −∞', 'f(x) = −∞', { couleur: 'orange', taille: 19 });
+        K.marque('limite_moins');
+        c.pause(.3);
+        c.fleche(G.X(1.6), G.Y(f(1.6)) + 30, G.X(1.78), G.y0 + 2, { couleur: 'orange', largeur: 1.6 });
+        LC.limite(c, COL, 174, 'x → +∞', 'f(x) = +∞', { couleur: 'orange', taille: 19 });
+        K.marque('limite_plus');
+        c.pause(.3);
+        LC.segment(c, G, -6.9, 6.9, { vertical: true, couleur: 'vert', largeur: 6, alpha: .6 });
+        c.texte('f(ℝ) = ]−∞ ; +∞[ = ℝ', COL, 226, { couleur: 'vert', taille: 20 });
+        c.repere('image', G.X(0) - 8, G.y0, 16, G.h, 'f(ℝ) = ℝ');
+        K.marque('image_R');
+        c.pause(.3);
+        c.cercle(G.X(0), G.Y(0), 11, { couleur: 'jaune', largeur: 2 });
+        c.texte('0 ∈ f(ℝ)', COL, 266, { couleur: 'jaune', taille: 20 });
+        c.repere('zero', G.X(0) - 12, G.Y(0) - 12, 24, 24, '0 dans f(ℝ)');
+        K.marque('zero_dans');
+        c.pause(.3);
+        K.rond(G, AL, 0, true, 'jaune');
+        c.texte('α', G.X(AL) + 2, G.Y(0) + 24, { couleur: 'jaune', taille: 20 });
+        c.texte('f(x) = 0 : une solution unique α', COL, 306, { couleur: 'jaune', taille: 18, max: 280 });
+        c.repere('alpha', G.X(AL) - 12, G.Y(0) - 12, 24, 40, 'la solution α');
+        K.marque('alpha');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de f(x) = x³ + x − 1, qui monte tout le temps.',
+        limite_moins: 'À gauche, flèche orange vers le bas ; écrit : lim f(x) = −∞ quand x → −∞.',
+        limite_plus: 'À droite, flèche orange vers le haut ; écrit : lim f(x) = +∞ quand x → +∞.',
+        image_R: 'Tout l’axe des ordonnées est coloré ; écrit : f(ℝ) = ]−∞ ; +∞[ = ℝ.',
+        zero_dans: '0 est entouré sur l’axe des ordonnées ; écrit : 0 ∈ f(ℝ).',
+        alpha: 'La courbe coupe l’axe des abscisses en un seul point α ; écrit : f(x) = 0 a une solution unique α.',
+      },
+      motifs: { limite_moins: 'la limite en −∞', limite_plus: 'la limite en +∞', image_R: 'f(ℝ) = ℝ', zero_dans: '0 dans f(ℝ)', alpha: 'la solution α' },
+      explication: [{ repere: 'image', texte: 'Toutes les hauteurs sont atteintes : f(ℝ) = ℝ.' }, { repere: 'zero', texte: '0 est une de ces hauteurs.' }],
+    },
+    non_monotone: {
+      titre: 'h(x) = x³ − 3x sur [−2 ; 2] : ni croissante ni décroissante',
+      dessiner(c, K) {
+        K.titre('Le creux et la bosse');
+        const h = x => x * x * x - 3 * x;
+        const G = K.axes({ x0: 50, y0: 60, w: 320, h: 285, xmin: -2.5, xmax: 2.5, ymin: -2.9, ymax: 2.9, gx: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], gy: [] });
+        c.texte('h(x) = x³ − 3x', 420, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.8, p => K.courbePart(G, h, -2, 2, p, { couleur: 'cyan' }));
+        K.rond(G, -2, -2, true, 'cyan'); K.rond(G, 2, 2, true, 'cyan');
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        K.rond(G, -1, 2, true, 'vert'); K.proj(G, -1, 2, { couleur: 'vert', versX: false, ly: 'M = 2' });
+        K.rond(G, 1, -2, true, 'orange'); K.proj(G, 1, -2, { couleur: 'orange', versX: false });
+        c.texte('m = −2', G.X(0) + 6, G.Y(-2) + 22, { couleur: 'orange', taille: 15 });
+        c.texte('bosse', G.X(-1), G.Y(2) - 12, { couleur: 'vert', taille: 15, align: 'center' });
+        c.texte('creux', G.X(1), G.Y(-2) + 22, { couleur: 'orange', taille: 15, align: 'center' });
+        c.repere('bosse', G.X(-1) - 14, G.Y(2) - 14, 28, 28, 'la bosse M = 2');
+        c.repere('creux', G.X(1) - 14, G.Y(-2) - 14, 28, 28, 'le creux m = −2');
+        K.marque('creux_et_bosse');
+        c.pause(.3);
+        LC.tabVar(c, 420, 110, 320, 'h(x)', ['−2', '−1', '1', '2'], [['−2', 'b'], ['2', 'h'], ['−2', 'b'], ['2', 'h']]);
+        c.repere('tableau', 416, 106, 328, 100, 'le tableau de variations');
+        K.marque('tableau');
+        c.pause(.3);
+        LC.segment(c, G, -2, 2, { vertical: true, couleur: 'vert', largeur: 7 });
+        c.repere('image', G.X(0) - 8, G.Y(2) - 6, 16, G.Y(-2) - G.Y(2) + 12, 'l’intervalle image');
+        K.marque('image_coloree');
+        c.pause(.3);
+        K.lignes(420, 260, [
+          { t: 'h([a ; b]) = [m ; M]', couleur: 'jaune', cadre: 'jaune' },
+          { t: 'h([−2 ; 2]) = [−2 ; 2]', couleur: 'vert' },
+        ], 40);
+        K.marque('regle');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de h(x) = x³ − 3x de −2 à 2 : elle monte, redescend, remonte.',
+        creux_et_bosse: 'La bosse (−1 ; 2) en vert : M = 2 ; le creux (1 ; −2) en orange : m = −2.',
+        tableau: 'À droite, le tableau de variations : −2 ↗ 2 ↘ −2 ↗ 2 pour x = −2, −1, 1, 2.',
+        image_coloree: 'L’intervalle de −2 à 2 se colore sur l’axe des ordonnées.',
+        regle: 'Écrit : h([a ; b]) = [m ; M] ; h([−2 ; 2]) = [−2 ; 2].',
+      },
+      motifs: { creux_et_bosse: 'le creux et la bosse', tableau: 'le tableau de variations', image_coloree: 'l’image', regle: 'la règle' },
+      explication: [{ repere: 'bosse', texte: 'La plus grande valeur : M = 2.' }, { repere: 'creux', texte: 'La plus petite : m = −2.' }, { repere: 'tableau', texte: 'On les lit dans le tableau de variations.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

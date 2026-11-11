@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tracer une courbe — étude complète</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À la craie : à gauche le tableau de variations de f(x) = x + 1/x, à droite le repère où se tracent les asymptotes, les tangentes horizontales, les points puis la courbe, chaque élément annoncé par une case du tableau qui s’allume"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : tracer la courbe après l’étude.
+ * Vues : ?vue=etapes | lecture | etude.
+ * etapes  : f(x) = x + 1/x sur ℝ* ; f′(x) = 1 − 1/x² = (x² − 1)/x² ; maximum f(−1) = −2, minimum f(1) = 2 ;
+ *           asymptotes x = 0 (lim ±∞ en 0) et y = x (f(x) − x = 1/x → 0 en ±∞), (Cf) au-dessus de y = x pour x > 0 ;
+ *           f(−x) = −f(x) : O centre de symétrie. Le tableau à gauche, le repère à droite : chaque élément tracé est
+ *           annoncé par la case du tableau qui s’allume au même moment. Ordre : droites, points, courbe.
+ * lecture : la même courbe et la droite y = m (poignée) : m > 2 ou m < −2 : 2 solutions ; m = ±2 : 1 ; −2 < m < 2 : 0.
+ * etude   : f(x) = x√(x + 1) sur [−1 ; +∞[ ; f′(x) = (3x + 2)/(2√(x + 1)) ; minimum f(−2/3) = −2√3/9 ≈ −0,38 ;
+ *           (f(x) − f(−1))/(x + 1) = x/√(x + 1) → −∞ en −1⁺ : demi-tangente verticale (vers le bas) ;
+ *           f(x)/x = √(x + 1) → +∞ : branche parabolique de direction l’axe des ordonnées.
+ */
+const f = x => x + 1 / x;
+const X0 = 3 - 2 * Math.SQRT2;                           // f(X0) = 6 : la courbe entre dans le cadre (y ≤ 6)
+/* La police de la craie dessine « ′ » (U+2032) vide : au tableau, f′ s’écrit f'. */
+function primes(c) {
+  if (c.__primes) return; c.__primes = true;
+  const texte = c.texte;
+  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+}
+/* Cases du tableau qui s’allument pendant que la craie trace l’élément qu’elles annoncent (et jusqu’au moment marqué). */
+function lumieres(c) {
+  const L = [], t = c.t;
+  return {
+    debut(cases, couleur) { const e = { cases, couleur, t0: c.cur, t1: Infinity }; L.push(e); return e; },
+    fin(e) { e.t1 = c.cur; },
+    dessiner() {
+      if (!Number.isFinite(t)) return;
+      c.direct(() => { for (const e of L) if (t >= e.t0 - 1e-6 && t <= e.t1 + .35) for (const [x, y, w, h] of e.cases) c.rect(x, y, w, h, { couleur: e.couleur, fond: e.couleur, fondAlpha: .2, largeur: 2, arrondi: 4 }); });
+    },
+  };
+}
+
+/* ---------- vue etapes : tableau à gauche, repère à droite ---------- */
+const OPT1 = { x0: 360, y0: 52, w: 370, h: 300, xmin: -4.5, xmax: 4.5, ymin: -6, ymax: 6, origine: false,
+  gx: [[-1, ''], [1, '1']], gy: [[2, '2'], [-2, '']] };
+const TB = { g: 12, lab: 60, d: 335, haut: 74, l1: 100, l2: 126, bas: 206, yx: 93, yfp: 119, yh: 146, yb: 200 };
+const COL = { minf: 80, m1: 128, z: 196, u: 264, pinf: 316 };
+const NOTE = { x: 16, y: [234, 260, 286, 312, 338] };
+// Cases (x, y, w, h) du tableau
+const CASE = {
+  barre: [COL.z - 26, TB.l1 + 2, 52, TB.bas - TB.l1 - 4],
+  bouts: [[COL.minf - 16, TB.yb - 19, 32, 25], [COL.pinf - 16, TB.yh - 19, 32, 25]],
+  zeros: [[COL.m1 - 12, TB.l1 + 3, 24, 22], [COL.u - 12, TB.l1 + 3, 24, 22]],
+  extremums: [[COL.m1 - 16, TB.yh - 19, 32, 25], [COL.u - 13, TB.yb - 19, 26, 25]],
+  droite: [COL.z + 3, TB.l2 + 2, TB.d - COL.z - 5, TB.bas - TB.l2 - 4],
+  gauche: [TB.lab + 2, TB.l2 + 2, COL.z - 3 - TB.lab - 2, TB.bas - TB.l2 - 4],
+  ligneF: [TB.lab + 2, TB.l2 + 2, TB.d - TB.lab - 4, TB.bas - TB.l2 - 4],
+};
+const caseNote = (c, i, s, taille = 15) => [NOTE.x - 5, NOTE.y[i] - taille - 2, c.largeurTexte(s, taille) + 10, taille + 9];
+
+function tableauX(c) {
+  const o = { couleur: 'faible', largeur: 1.4 };
+  c.texte('f(x) = x + 1/x   pour x ≠ 0', 20, 60, { couleur: 'cyan', taille: 18 });
+  c.ligne(TB.g, TB.haut, TB.d, TB.haut, o); c.ligne(TB.g, TB.l1, TB.d, TB.l1, o); c.ligne(TB.g, TB.l2, TB.d, TB.l2, o);
+  c.ligne(TB.g, TB.bas, TB.d, TB.bas, o); c.ligne(TB.lab, TB.haut, TB.lab, TB.bas, o);
+  c.texte('x', 36, TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f′(x)', 36, TB.yfp, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f(x)', 36, (TB.yh + TB.yb) / 2 + 4, { couleur: 'blanc', taille: 17, align: 'center' });
+  // ligne x
+  [['−∞', COL.minf], ['−1', COL.m1], ['0', COL.z], ['1', COL.u], ['+∞', COL.pinf]].forEach(([s, x]) => c.texte(s, x, TB.yx, { couleur: 'blanc', taille: 17, align: 'center', duree: .12 }));
+  // ligne f′(x) et double barre
+  c.texte('+', (COL.minf + COL.m1) / 2, TB.yfp, { couleur: 'vert', taille: 20, align: 'center' });
+  c.texte('0', COL.m1, TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+  c.texte('−', (COL.m1 + COL.z) / 2, TB.yfp, { couleur: 'rouge', taille: 20, align: 'center' });
+  c.ligne(COL.z - 2, TB.l1, COL.z - 2, TB.bas, { couleur: 'blanc', largeur: 1.6 });
+  c.ligne(COL.z + 2, TB.l1, COL.z + 2, TB.bas, { couleur: 'blanc', largeur: 1.6 });
+  c.texte('−', (COL.z + COL.u) / 2, TB.yfp, { couleur: 'rouge', taille: 20, align: 'center' });
+  c.texte('0', COL.u, TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+  c.texte('+', (COL.u + COL.pinf) / 2 + 2, TB.yfp, { couleur: 'vert', taille: 20, align: 'center' });
+  // ligne f(x)
+  c.texte('−∞', COL.minf, TB.yb, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.fleche(92, TB.yb - 14, 117, TB.yh + 6, { couleur: 'vert', largeur: 2, tete: 8 });
+  c.texte('−2', COL.m1, TB.yh, { couleur: 'jaune', taille: 17, align: 'center' });
+  c.fleche(140, TB.yh + 6, 170, TB.yb - 16, { couleur: 'rouge', largeur: 2, tete: 8 });
+  c.texte('−∞', COL.z - 6, TB.yb, { couleur: 'blanc', taille: 17, align: 'right' });
+  c.texte('+∞', COL.z + 6, TB.yh, { couleur: 'blanc', taille: 17 });
+  c.fleche(222, TB.yh + 6, 254, TB.yb - 16, { couleur: 'rouge', largeur: 2, tete: 8 });
+  c.texte('2', COL.u, TB.yb, { couleur: 'jaune', taille: 17, align: 'center' });
+  c.fleche(275, TB.yb - 14, 304, TB.yh + 6, { couleur: 'vert', largeur: 2, tete: 8 });
+  c.texte('+∞', COL.pinf, TB.yh, { couleur: 'blanc', taille: 17, align: 'center' });
+}
+/* Les quatre limites, encadrées une à une. */
+const LIMITES = [[COL.minf - 15, TB.yb - 18, 30, 23], [COL.z - 26, TB.yb - 18, 23, 23], [COL.z + 3, TB.yh - 18, 23, 23], [COL.pinf - 15, TB.yh - 18, 30, 23]];
+
+/* ---------- vue lecture ---------- */
+const OPT2 = { x0: 40, y0: 50, w: 420, h: 300, xmin: -5.5, xmax: 5.5, ymin: -6, ymax: 6,
+  gx: [[-1, '−1'], [1, '1']], gy: [[2, '2'], [-2, '']] };
+function solutions(m) {
+  const D = m * m - 4;
+  if (Math.abs(D) < 1e-9) return [m / 2];
+  if (D < 0) return [];
+  const r = Math.sqrt(D); return [(m - r) / 2, (m + r) / 2];
+}
+const NB = ['aucune solution', 'une solution', 'deux solutions'];
+const valeurs = (m, fr) => { const s = solutions(m);
+  return s.length === 2 ? `x ≈ ${fr(s[0], 2)} et x ≈ ${fr(s[1], 2)}` : s.length === 1 ? `x = ${fr(s[0], 2)}` : 'la droite passe entre −2 et 2'; };
+
+/* ---------- vue etude ---------- */
+const g = x => x * Math.sqrt(x + 1);
+const XM = -2 / 3, YM = -2 * Math.sqrt(3) / 9;       // minimum : f(−2/3) = −2√3/9 ≈ −0,385
+const OPT3 = { x0: 420, y0: 50, w: 310, h: 300, xmin: -1.5, xmax: 3.2, ymin: -1, ymax: 6, origine: false,
+  gx: [[-1, ''], [1, '1'], [2, '2'], [3, '3']], gy: [[2, '2'], [4, '4']] };
+const TE = { g: 12, lab: 74, d: 395, haut: 74, l1: 100, l2: 126, bas: 200, yx: 93, yfp: 119, yh: 148, yb: 194 };
+const CE = { a: 105, m: 230, p: 370 };
+const NE = { x: 16, y: [224, 248, 272, 296, 320, 344] };
+function tableauE(c) {
+  const o = { couleur: 'faible', largeur: 1.4 };
+  c.texte('f′(x) = (3x + 2)/(2√(x + 1))', 20, 62, { couleur: 'cyan', taille: 18 });
+  c.ligne(TE.g, TE.haut, TE.d, TE.haut, o); c.ligne(TE.g, TE.l1, TE.d, TE.l1, o); c.ligne(TE.g, TE.l2, TE.d, TE.l2, o);
+  c.ligne(TE.g, TE.bas, TE.d, TE.bas, o); c.ligne(TE.lab, TE.haut, TE.lab, TE.bas, o);
+  c.texte('x', 43, TE.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f′(x)', 43, TE.yfp, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f(x)', 43, (TE.yh + TE.yb) / 2 + 4, { couleur: 'blanc', taille: 17, align: 'center' });
+  [['−1', CE.a], ['−2/3', CE.m], ['+∞', CE.p]].forEach(([s, x]) => c.texte(s, x, TE.yx, { couleur: 'blanc', taille: 17, align: 'center', duree: .15 }));
+  c.ligne(CE.a - 2, TE.l1, CE.a - 2, TE.l2, { couleur: 'blanc', largeur: 1.6 });
+  c.ligne(CE.a + 2, TE.l1, CE.a + 2, TE.l2, { couleur: 'blanc', largeur: 1.6 });
+  c.texte('−∞', CE.a + 7, TE.yfp - 1, { couleur: 'orange', taille: 14 });
+  c.texte('−', (CE.a + CE.m) / 2 + 10, TE.yfp, { couleur: 'rouge', taille: 20, align: 'center' });
+  c.texte('0', CE.m, TE.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+  c.texte('+', (CE.m + CE.p) / 2, TE.yfp, { couleur: 'vert', taille: 20, align: 'center' });
+  c.texte('0', CE.a, TE.yh, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.fleche(CE.a + 14, TE.yh + 6, CE.m - 28, TE.yb - 18, { couleur: 'rouge', largeur: 2, tete: 8 });
+  c.texte('−2√3/9', CE.m, TE.yb, { couleur: 'jaune', taille: 16, align: 'center' });
+  c.fleche(CE.m + 28, TE.yb - 18, CE.p - 16, TE.yh + 6, { couleur: 'vert', largeur: 2, tete: 8 });
+  c.texte('+∞', CE.p, TE.yh, { couleur: 'blanc', taille: 17, align: 'center' });
+}
+
+MathsTableau.page({
+  id: 'de_trace', titre: 'Tracer la courbe d’une fonction',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : la courbe de f(x) = x + 1/x tracée à partir de son tableau de variations (asymptotes, tangentes horizontales, points, puis la courbe, la branche x < 0 par symétrie de centre O) ; lecture du nombre de solutions de f(x) = m ; étude complète de x√(x + 1)',
+  vues: {
+    etapes: {
+      titre: 'Du tableau de variations à la courbe',
+      dessiner(c, K) {
+        primes(c);
+        const Lu = lumieres(c);
+        K.titre('Tracer la courbe de f(x) = x + 1/x');
+        // 1. Le tableau, puis les limites encadrées une à une
+        tableauX(c);
+        c.texte('f′(x) = 1 − 1/x² = (x² − 1)/x²', NOTE.x, NOTE.y[0], { couleur: 'cyan', taille: 15 });
+        c.repere('tableau', TB.g, TB.haut, TB.d - TB.g, TB.bas - TB.haut, 'le tableau de variations');
+        c.repere('case_double_barre', CASE.barre[0], CASE.barre[1], CASE.barre[2], CASE.barre[3], 'la double barre en 0 : lim f = −∞ à gauche, +∞ à droite');
+        for (const [x, y, w, h] of LIMITES) { c.pause(.35); c.rect(x, y, w, h, { couleur: 'jaune', largeur: 1.5, arrondi: 5 }); }
+        K.marque('tableau_lu');
+        // 2. Le repère
+        c.pause(.3);
+        const G = K.axes(OPT1);
+        c.texte('−1', G.X(-1), G.Y(0) - 8, { couleur: 'faible', taille: 14, align: 'center' });
+        c.texte('−2', G.X(0) + 8, G.Y(-2) + 5, { couleur: 'faible', taille: 14 });
+        c.texte('O', G.X(0) + 6, G.Y(0) + 18, { couleur: 'faible', taille: 14 });
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        // 3. Asymptote verticale x = 0
+        c.pause(.4);
+        let e = Lu.debut([CASE.barre], 'rouge');
+        c.ligne(G.X(0), G.Y(6), G.X(0), G.Y(-6), { couleur: 'rouge', largeur: 2.2, pointille: [8, 7] });
+        c.texte('x = 0', G.X(0) + 7, G.Y(-5.2), { couleur: 'rouge', taille: 16 });
+        c.repere('asymptote_v', G.X(0) - 9, G.y0, 18, G.h, 'l’asymptote verticale x = 0');
+        Lu.fin(e); K.marque('asymptote_verticale');
+        // 4. Asymptote oblique y = x
+        c.pause(.4);
+        e = Lu.debut(CASE.bouts.concat([caseNote(c, 1, 'f(x) − x = 1/x → 0 en ±∞')]), 'rouge');
+        c.texte('f(x) − x = 1/x → 0 en ±∞', NOTE.x, NOTE.y[1], { couleur: 'rouge', taille: 15 });
+        c.ligne(G.X(-4.5), G.Y(-4.5), G.X(4.5), G.Y(4.5), { couleur: 'rouge', largeur: 2.2, pointille: [8, 7] });
+        K.rond(G, 0, 0, true, 'rouge'); K.rond(G, 2, 2, true, 'rouge');
+        c.texte('(2 ; 2)', G.X(2) + 7, G.Y(2) + 16, { couleur: 'rouge', taille: 13 });
+        c.texte('y = x', G.X(3.4), G.Y(2.6), { couleur: 'rouge', taille: 16 });
+        c.repere('asymptote_o', G.X(-4.5), G.Y(4.5), G.X(4.5) - G.X(-4.5), G.Y(-4.5) - G.Y(4.5), 'l’asymptote oblique y = x');
+        Lu.fin(e); K.marque('asymptote_oblique');
+        // 5. Tangentes horizontales
+        c.pause(.4);
+        e = Lu.debut(CASE.zeros, 'orange');
+        c.ligne(G.X(0.55), G.Y(2), G.X(1.45), G.Y(2), { couleur: 'orange', largeur: 2.4 });
+        c.ligne(G.X(-1.45), G.Y(-2), G.X(-0.55), G.Y(-2), { couleur: 'orange', largeur: 2.4 });
+        Lu.fin(e); K.marque('tangentes_horizontales');
+        // 6. Points
+        c.pause(.4);
+        e = Lu.debut(CASE.extremums.concat([caseNote(c, 2, 'A(2 ; 2,5) et B(0,5 ; 2,5)')]), 'jaune');
+        K.proj(G, 1, 2, { couleur: 'jaune' }); K.rond(G, 1, 2, true, 'jaune');
+        c.repere('minimum', G.X(1) - 16, G.Y(2) - 16, 32, 32, 'le minimum f(1) = 2');
+        K.proj(G, -1, -2, { couleur: 'jaune' }); K.rond(G, -1, -2, true, 'jaune');
+        c.repere('maximum', G.X(-1) - 16, G.Y(-2) - 16, 32, 32, 'le maximum f(−1) = −2');
+        c.texte('A(2 ; 2,5) et B(0,5 ; 2,5)', NOTE.x, NOTE.y[2], { couleur: 'jaune', taille: 15 });
+        K.rond(G, 2, 2.5, true, 'blanc'); c.texte('A', G.X(2) - 4, G.Y(2.5) - 9, { couleur: 'blanc', taille: 15, align: 'center' });
+        K.rond(G, 0.5, 2.5, true, 'blanc'); c.texte('B', G.X(0.5) + 8, G.Y(2.5) - 6, { couleur: 'blanc', taille: 15 });
+        Lu.fin(e); K.marque('points_places');
+        // 7. Branche droite, d’un trait
+        c.pause(.4);
+        e = Lu.debut([CASE.droite, caseNote(c, 3, '1/x > 0 : (Cf) au-dessus de y = x pour x > 0')], 'cyan');
+        c.texte('1/x > 0 : (Cf) au-dessus de y = x pour x > 0', NOTE.x, NOTE.y[3], { couleur: 'cyan', taille: 15 });
+        K.anime(2.6, p => K.courbePart(G, f, X0, 4.5, p, { couleur: 'cyan' }));
+        c.repere('branche_droite', G.X(0), G.Y(6), G.X(4.5) - G.X(0), G.Y(2) - G.Y(6) + 6, 'la branche x > 0');
+        Lu.fin(e); K.marque('branche_droite');
+        // 8. Branche gauche par symétrie de centre O
+        c.pause(.4);
+        e = Lu.debut([CASE.gauche, caseNote(c, 4, 'f(−x) = −f(x) : O centre de symétrie')], 'violet');
+        c.texte('f(−x) = −f(x) : O centre de symétrie', NOTE.x, NOTE.y[4], { couleur: 'violet', taille: 15 });
+        c.cercle(G.X(0), G.Y(0), 9, { couleur: 'violet', largeur: 1.8 });
+        c.texte('O centre de symétrie', G.X(0) + 34, G.Y(-1.5), { couleur: 'violet', taille: 15 });
+        c.repere('centre_o', G.X(0) - 12, G.Y(0) - 12, 24, 24, 'O, centre de symétrie');
+        K.anime(2.6, p => {
+          K.courbePart(G, f, -X0, -4.5, p, { couleur: 'cyan' });
+          if (p < 1) { const x = X0 + (4.5 - X0) * p;     // M sur la branche droite, son image M′ par la symétrie de centre O
+            c.ligne(G.X(x), G.Y(f(x)), G.X(-x), G.Y(-f(x)), { couleur: 'violet', largeur: 1.3, pointille: [4, 6] });
+            c.point(G.X(x), G.Y(f(x)), 4.5, 'violet'); c.point(G.X(-x), G.Y(-f(x)), 4.5, 'violet'); }
+        });
+        c.ligne(G.X(2), G.Y(2.5), G.X(-2), G.Y(-2.5), { couleur: 'violet', largeur: 1.3, pointille: [4, 6] });
+        K.rond(G, -2, -2.5, true, 'violet'); c.texte('A′', G.X(-2) + 8, G.Y(-2.5) + 16, { couleur: 'violet', taille: 15 });
+        c.repere('branche_gauche', G.X(-4.5), G.Y(-2) - 6, G.X(0) - G.X(-4.5), G.Y(-6) - G.Y(-2) + 6, 'la branche x < 0, image de la branche x > 0');
+        Lu.fin(e); K.marque('branche_gauche_par_symetrie');
+        // 9. La courbe nommée
+        c.pause(.3);
+        e = Lu.debut([CASE.ligneF], 'cyan');
+        c.texte('(Cf)', G.X(2.2), G.Y(4.8), { couleur: 'cyan', taille: 20 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (Cf)');
+        Lu.fin(e); K.marque('courbe_complete');
+        Lu.dessiner();
+      },
+      decrire: {
+        tableau_lu: 'À gauche, le tableau de variations de f(x) = x + 1/x sur ℝ* : x : −∞, −1, 0, 1, +∞ ; f′(x) : + 0 − ‖ − 0 + (double barre en 0) ; f(x) monte de −∞ à −2, descend vers −∞, puis redescend de +∞ à 2 et remonte vers +∞ ; dessous, f′(x) = (x² − 1)/x². Les quatre limites s’encadrent une à une en jaune.',
+        repere_pose: 'À droite, le repère : x de −4,5 à 4,5, y de −6 à 6.',
+        asymptote_verticale: 'La case de la double barre s’allume en rouge (−∞ en 0 à gauche, +∞ en 0 à droite) : l’axe des ordonnées est repassé en pointillé rouge, « x = 0 », asymptote verticale.',
+        asymptote_oblique: 'Les cases −∞ et +∞ des deux bouts s’allument avec f(x) − x = 1/x → 0 en ±∞ : la droite y = x en pointillé rouge, avec ses points (0 ; 0) et (2 ; 2), asymptote oblique au voisinage de +∞ et de −∞.',
+        tangentes_horizontales: 'Les deux 0 de la ligne f′(x) s’allument en orange : petits traits horizontaux orange en (1 ; 2) et en (−1 ; −2), les tangentes horizontales.',
+        points_places: 'Les valeurs 2 et −2 du tableau s’allument en jaune : le point (1 ; 2), minimum, et le point (−1 ; −2), maximum, avec leurs pointillés vers les axes ; deux points de plus, A(2 ; 2,5) et B(0,5 ; 2,5).',
+        branche_droite: 'La moitié droite de la ligne f(x) s’allume : la branche x > 0 est tracée d’un trait ; elle descend le long de x = 0, passe par le minimum (1 ; 2) avec sa tangente horizontale, puis remonte en longeant y = x par-dessus (1/x > 0).',
+        branche_gauche_par_symetrie: 'La moitié gauche de la ligne f(x) s’allume avec f(−x) = −f(x) : O est entouré, « O centre de symétrie » ; la branche x < 0 apparaît comme l’image de la branche x > 0 par la symétrie de centre O (A(2 ; 2,5) a pour image A′(−2 ; −2,5)) ; elle passe par le maximum (−1 ; −2) et longe y = x par-dessous.',
+        courbe_complete: 'La courbe complète est nommée (Cf) : deux branches symétriques par rapport à O, entre l’asymptote verticale x = 0 et l’asymptote oblique y = x.',
+      },
+      motifs: { tableau_lu: 'le tableau lu', repere_pose: 'le repère', asymptote_verticale: 'l’asymptote x = 0', asymptote_oblique: 'l’asymptote y = x', tangentes_horizontales: 'les tangentes horizontales', points_places: 'les points placés', branche_droite: 'la branche x > 0', branche_gauche_par_symetrie: 'la branche x < 0 par symétrie', courbe_complete: 'la courbe complète' },
+      explication: [
+        { repere: 'tableau', texte: 'On lit le tableau : chaque case annonce un élément du tracé.' },
+        { repere: 'case_double_barre', texte: 'Double barre et limites infinies en 0 : asymptote verticale x = 0.' },
+        { repere: 'asymptote_v', texte: 'L’axe des ordonnées est l’asymptote verticale.' },
+        { repere: 'asymptote_o', texte: 'f(x) − x = 1/x tend vers 0 : la droite y = x est asymptote oblique.' },
+        { repere: 'minimum', texte: 'f′(1) = 0 et f′ change de signe : minimum f(1) = 2, tangente horizontale.' },
+        { repere: 'maximum', texte: 'f′(−1) = 0 et f′ change de signe : maximum f(−1) = −2.' },
+        { repere: 'branche_droite', texte: 'On trace d’abord la branche x > 0, en s’appuyant sur les asymptotes et les points.' },
+        { repere: 'centre_o', texte: 'f est impaire : O est centre de symétrie de la courbe.' },
+        { repere: 'branche_gauche', texte: 'La branche x < 0 est l’image de la branche x > 0 par la symétrie de centre O.' },
+      ],
+    },
+
+    lecture: {
+      titre: 'Lire le nombre de solutions de f(x) = m',
+      params: { m: { min: -5, max: 5, pas: 0.1, defaut: 3, sens: 'hauteur de la droite y = m' } },
+      dessiner(c, K) {
+        primes(c);
+        K.titre('Combien de solutions pour f(x) = m ?');
+        const G = K.axes(OPT2);
+        c.texte('−2', G.X(0) + 8, G.Y(-2) + 5, { couleur: 'faible', taille: 14 });
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        c.pause(.3);
+        c.ligne(G.X(-5.5), G.Y(-5.5), G.X(5.5), G.Y(5.5), { couleur: 'tresfaible', largeur: 1.3, pointille: [6, 7] });
+        K.anime(1.6, p => K.courbePart(G, f, X0, 5.5, p, { couleur: 'cyan' }));
+        K.anime(1.6, p => K.courbePart(G, f, -X0, -5.5, p, { couleur: 'cyan' }));
+        K.rond(G, 1, 2, true, 'cyan'); K.rond(G, -1, -2, true, 'cyan');
+        K.proj(G, 1, 2, { versX: false }); K.proj(G, -1, -2, { versX: false });
+        c.texte('(Cf) : y = x + 1/x', 495, 90, { couleur: 'cyan', taille: 18 });
+        c.texte('minimum 2, maximum −2', 495, 116, { couleur: 'cyan', taille: 16 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (Cf)');
+        K.marque('courbe_complete');
+        // La droite y = m
+        const m = K.P.m, S = solutions(m), n = S.length, mt = K.fr(m, 1);
+        c.pause(.3);
+        K.anime(.9, p => c.ligne(G.X(-5.4), G.Y(m), G.X(-5.4) + p * (G.X(5.4) - G.X(-5.4)), G.Y(m), { couleur: 'jaune', largeur: 2.2 }));
+        if (m >= 0) c.texte('y = ' + mt, G.X(-5.4) + 14, G.Y(m) - 8, { couleur: 'jaune', taille: 16 });
+        else c.texte('y = ' + mt, G.X(5.4), G.Y(m) + 20, { couleur: 'jaune', taille: 16, align: 'right' });
+        c.texte('f(x) = ' + mt + ' : on coupe (Cf)', 495, 160, { couleur: 'jaune', taille: 17 });
+        c.texte('par la droite y = ' + mt, 495, 186, { couleur: 'jaune', taille: 17 });
+        c.repere('droite_m', G.X(-5.4), G.Y(m) - 12, G.X(5.4) - G.X(-5.4), 24, 'la droite y = m');
+        K.marque('droite_m');
+        // Les points d’intersection entourés
+        c.pause(.3);
+        for (const x of S) { K.rond(G, x, m, true, 'jaune'); c.cercle(G.X(x), G.Y(m), 10, { couleur: 'jaune', largeur: 1.8 }); }
+        c.texte('f(x) = ' + mt + ' : ' + NB[n], 495, 228, { couleur: 'jaune', taille: 19, max: 255 });
+        c.texte(valeurs(m, K.fr), 495, 254, { couleur: 'blanc', taille: 16, max: 255 });
+        if (n) { const xa = Math.min(...S), xb = Math.max(...S);
+          c.repere('solutions', G.X(xa) - 14, G.Y(m) - 14, G.X(xb) - G.X(xa) + 28, 28, 'les points d’intersection : les solutions'); }
+        else c.repere('solutions', G.X(-1), G.Y(m) - 14, G.X(1) - G.X(-1), 28, 'aucun point d’intersection');
+        K.marque('solutions_comptees');
+        // La règle selon m
+        c.pause(.3);
+        const cas = n === 2 ? 0 : n === 1 ? 1 : 2;
+        [['m > 2 ou m < −2 : 2 solutions', 0], ['m = 2 ou m = −2 : 1 solution', 1], ['−2 < m < 2 : aucune solution', 2]].forEach(([s, i]) =>
+          c.texte(s, 495, 296 + 24 * i, { couleur: i === cas ? 'jaune' : 'faible', taille: 16, max: 255 }));
+        c.repere('regle', 490, 278, 260, 72, 'le nombre de solutions selon m');
+        K.marque('regle_ecrite');
+      },
+      poignees(K) { const G = K.grille(OPT2);
+        return [{ id: 'm', x: G.X(-5.4), y: G.Y(K.P.m), bouger: (x, y) => ({ m: G.inv(x, y)[1] }) }]; },
+      lecture: K => { const m = K.P.m, n = solutions(m).length;
+        return `y = ${K.fr(m, 1)} : la droite coupe (Cf) en ${['aucun point', 'un point', 'deux points'][n]}, f(x) = ${K.fr(m, 1)} a ${NB[n]}${n ? ' : ' + valeurs(m, K.fr) : ''}.`; },
+      decrire: K => { const m = K.P.m, n = solutions(m).length, mt = K.fr(m, 1);
+        return {
+          repere_pose: 'Un repère : x de −5,5 à 5,5, y de −6 à 6.',
+          courbe_complete: 'La courbe complète de f(x) = x + 1/x (cyan), ses deux branches, minimum 2 en x = 1 et maximum −2 en x = −1 ; la droite y = x en pointillé faible.',
+          droite_m: `La droite horizontale y = ${mt} (jaune) est tracée ; à droite : f(x) = ${mt}, on coupe (Cf) par la droite y = ${mt}.`,
+          solutions_comptees: n ? `Les ${n === 2 ? 'deux points' : 'un point'} d’intersection sont entourés : « f(x) = ${mt} : ${NB[n]} » (${valeurs(m, K.fr)}).` : `La droite y = ${mt} passe entre le maximum −2 et le minimum 2 sans couper (Cf) : « f(x) = ${mt} : aucune solution ».`,
+          regle_ecrite: 'Écrit : m > 2 ou m < −2 : 2 solutions ; m = 2 ou m = −2 : 1 solution ; −2 < m < 2 : aucune solution (le cas actuel en jaune).',
+        }; },
+      motifs: { courbe_complete: 'la courbe complète', droite_m: 'la droite y = m', solutions_comptees: 'les solutions comptées', regle_ecrite: 'la règle selon m' },
+      explication: [
+        { repere: 'droite_m', texte: 'Résoudre f(x) = m, c’est couper (Cf) par la droite horizontale y = m.' },
+        { repere: 'solutions', texte: 'Autant de points d’intersection que de solutions.' },
+        { repere: 'regle', texte: 'Le minimum 2 et le maximum −2 séparent les cas.' },
+      ],
+    },
+
+    etude: {
+      titre: 'Étude complète de f(x) = x√(x + 1)',
+      dessiner(c, K) {
+        primes(c);
+        const Lu = lumieres(c);
+        K.titre('Étudier f(x) = x√(x + 1) sur [−1 ; +∞[');
+        tableauE(c);
+        c.repere('tableau', TE.g, TE.haut, TE.d - TE.g, TE.bas - TE.haut, 'le tableau de variations');
+        K.marque('tableau_lu');
+        c.pause(.3);
+        const G = K.axes(OPT3);
+        c.texte('−1', G.X(-1) - 6, G.Y(0) - 7, { couleur: 'faible', taille: 14, align: 'right' });
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        // Demi-tangente verticale en A(−1 ; 0)
+        c.pause(.4);
+        const n1 = 'taux : x/√(x + 1) → −∞ quand x → −1^{+}', n2 = 'demi-tangente verticale en A(−1 ; 0)';
+        let e = Lu.debut([[CE.a - 6, TE.l1 + 2, 38, 24], [NE.x - 5, NE.y[0] - 17, 300, 46]], 'orange');
+        c.texte(n1, NE.x, NE.y[0], { couleur: 'orange', taille: 15, max: 380 });
+        c.texte(n2, NE.x, NE.y[1], { couleur: 'orange', taille: 15, max: 380 });
+        K.rond(G, -1, 0, true, 'orange');
+        c.fleche(G.X(-1), G.Y(0), G.X(-1), G.Y(0) + 38, { couleur: 'orange', largeur: 2.4, tete: 9 });
+        c.texte('A', G.X(-1) - 16, G.Y(0) + 20, { couleur: 'orange', taille: 15 });
+        c.repere('demi_tangente', G.X(-1) - 14, G.Y(0) - 8, 28, 50, 'la demi-tangente verticale en A(−1 ; 0)');
+        Lu.fin(e); K.marque('demi_tangente');
+        // Minimum
+        c.pause(.4);
+        e = Lu.debut([[CE.m - 12, TE.l1 + 3, 24, 22], [CE.m - 30, TE.yb - 18, 60, 24]], 'jaune');
+        c.ligne(G.X(XM), G.Y(YM), G.X(XM), G.Y(0), { couleur: 'jaune', largeur: 1.3, pointille: [5, 5] });
+        c.ligne(G.X(XM), G.Y(YM), G.X(0), G.Y(YM), { couleur: 'jaune', largeur: 1.3, pointille: [5, 5] });
+        c.ligne(G.X(XM - 0.22), G.Y(YM), G.X(XM + 0.22), G.Y(YM), { couleur: 'orange', largeur: 2.4 });
+        K.rond(G, XM, YM, true, 'jaune');
+        c.texte('−2/3', G.X(XM) + 2, G.Y(0) - 8, { couleur: 'jaune', taille: 14, align: 'center' });
+        c.texte('−2√3/9 ≈ −0,38', G.X(0) + 6, G.Y(YM) + 6, { couleur: 'jaune', taille: 14 });
+        c.repere('minimum', G.X(XM) - 16, G.Y(YM) - 16, 32, 32, 'le minimum f(−2/3) = −2√3/9');
+        Lu.fin(e); K.marque('minimum_place');
+        // Point O
+        c.pause(.4);
+        e = Lu.debut([[NE.x - 5, NE.y[2] - 17, c.largeurTexte('f(0) = 0 : (Cf) passe par O', 15) + 10, 24]], 'cyan');
+        c.texte('f(0) = 0 : (Cf) passe par O', NE.x, NE.y[2], { couleur: 'cyan', taille: 15 });
+        K.rond(G, 0, 0, true, 'cyan'); c.texte('O', G.X(0) - 14, G.Y(0) - 6, { couleur: 'cyan', taille: 15 });
+        c.repere('point_o', G.X(0) - 14, G.Y(0) - 14, 28, 28, 'le point O : f(0) = 0');
+        Lu.fin(e); K.marque('point_o');
+        // La courbe d’un trait
+        c.pause(.4);
+        e = Lu.debut([[TE.lab + 2, TE.l2 + 2, TE.d - TE.lab - 4, TE.bas - TE.l2 - 4]], 'cyan');
+        K.anime(2.4, p => K.courbePart(G, g, -1, 3, p, { couleur: 'cyan' }));
+        c.texte('(Cf)', G.X(1.4), G.Y(4.4), { couleur: 'cyan', taille: 19 });
+        c.repere('courbe', G.X(-1), G.Y(6), G.X(3) - G.X(-1), G.Y(YM) - G.Y(6) + 6, 'la courbe (Cf)');
+        Lu.fin(e); K.marque('courbe_tracee');
+        // Branche parabolique
+        c.pause(.4);
+        const b = ['lim f(x)/x = lim √(x + 1) = +∞ (x → +∞) :', 'branche parabolique de direction l’axe des', 'ordonnées au voisinage de +∞'];
+        e = Lu.debut([[CE.p - 18, TE.yh - 19, 36, 25], [NE.x - 5, NE.y[3] - 17, 386, 72]], 'vert');
+        b.forEach((s, i) => c.texte(s, NE.x, NE.y[3 + i], { couleur: 'vert', taille: 15, max: 380 }));
+        c.fleche(G.X(3) + 12, G.Y(4.6), G.X(3) + 12, G.Y(5.9), { couleur: 'vert', largeur: 2, tete: 8 });
+        c.repere('branche', G.X(2.2), G.Y(6), G.X(3.2) - G.X(2.2), G.Y(4.4) - G.Y(6), 'la branche parabolique de direction l’axe des ordonnées');
+        Lu.fin(e); K.marque('branche_oy');
+        Lu.dessiner();
+      },
+      decrire: {
+        tableau_lu: 'À gauche, f′(x) = (3x + 2)/(2√(x + 1)) et le tableau : x : −1, −2/3, +∞ ; f′(x) : double barre en −1 (−∞ juste à droite), −, 0, + ; f(x) descend de 0 à −2√3/9 puis monte vers +∞.',
+        repere_pose: 'À droite, un repère : x de −1,5 à 3,2, y de −1 à 6.',
+        demi_tangente: 'La case de f′ en −1 s’allume : au point A(−1 ; 0), une flèche verticale orange vers le bas ; écrit : le taux x/√(x + 1) → −∞ quand x → −1⁺, demi-tangente verticale en A(−1 ; 0).',
+        minimum_place: 'Le 0 de f′ et la valeur −2√3/9 s’allument : le point (−2/3 ; −2√3/9 ≈ −0,38), minimum, avec son petit trait horizontal orange et ses pointillés vers les axes.',
+        point_o: 'Écrit : f(0) = 0 ; le point O est marqué, la courbe passe par l’origine.',
+        courbe_tracee: 'La ligne f(x) s’allume : la courbe (Cf) est tracée d’un trait de A(−1 ; 0), en partant vers le bas, jusqu’au minimum, puis par O, et elle monte de plus en plus vite.',
+        branche_oy: 'La case +∞ s’allume : écrit, lim f(x)/x = lim √(x + 1) = +∞ en +∞ : branche parabolique de direction l’axe des ordonnées au voisinage de +∞ ; une flèche verte vers le haut au bout de la courbe.',
+      },
+      motifs: { tableau_lu: 'le tableau lu', repere_pose: 'le repère', demi_tangente: 'la demi-tangente verticale', minimum_place: 'le minimum', point_o: 'la courbe passe par O', courbe_tracee: 'la courbe tracée', branche_oy: 'la branche parabolique' },
+      explication: [
+        { repere: 'tableau', texte: 'f′(x) a le signe de 3x + 2 : négatif avant −2/3, positif après.' },
+        { repere: 'demi_tangente', texte: 'Le taux tend vers −∞ à droite de −1 : demi-tangente verticale, vers le bas.' },
+        { repere: 'minimum', texte: 'f′ s’annule en −2/3 en changeant de signe : minimum −2√3/9.' },
+        { repere: 'point_o', texte: 'f(0) = 0 : la courbe passe par O.' },
+        { repere: 'branche', texte: 'f(x)/x = √(x + 1) tend vers +∞ : branche parabolique de direction l’axe des ordonnées.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

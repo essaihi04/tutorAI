@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les réactions nucléaires — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Des noyaux faits de protons (rouges) et de neutrons (gris-bleu) : un noyau qui se transforme seul, une fission, une réaction en chaîne ou une fusion, avec l’équation écrite à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Les réactions nucléaires (cours « Noyaux, masse et énergie », 2e Bac PC BIOF, novembre 2026).
+ * Paramètre vue (?vue= ou set_parameters {vue}) :
+ *   fission (défaut) : un neutron lent frappe un noyau ²³⁵₉₂U qui s’allonge, se coupe en ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe, 2 neutrons partent ;
+ *   chaine           : 1 fission → 2 neutrons → 2 fissions → 4 neutrons → 4 fissions (schéma qualitatif) ;
+ *   fusion           : ²₁H et ³₁H se repoussent à basse température, on chauffe (≈ 10⁸ K), ils fusionnent en ⁴₂He + ¹₀n ;
+ *                      paramètre temperature (basse | haute, poignée : le thermomètre) = la température de départ ;
+ *   spontanee        : un noyau ²¹⁰₈₄Po seul émet une particule α et devient ²⁰⁶₈₂Pb.
+ * Peint : nucléons en sphères ombrées (proton rouge, neutron gris-bleu), énergie libérée en éclair jaune-orangé.
+ * Pour l’œil seulement : les vitesses et les tailles ne sont pas à l’échelle ; l’instant de l’émission α est fixé
+ * (la scène doit se rejouer à l’identique). Les valeurs (équations, E_lib) sont celles du cours, exactes.
+ */
+const { fr, protocole } = window.Tableau;
+const bulle = (el, t, k) => window.Tableau.bulle(el, String(t).replace(/_\{?([^}\s]*)\}?/g, '$1'), k);   // jamais de « _ » visible
+const $ = id => document.getElementById(id);
+const VUES = ['fission', 'chaine', 'fusion', 'spontanee'];
+const TEMPERATURES = ['basse', 'haute'];
+const q = new URLSearchParams(location.search);
+const P = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'fission', temperature: TEMPERATURES.includes(q.get('temperature')) ? q.get('temperature') : 'basse' };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const NOMS_VUES = { fission: 'La fission', chaine: 'La réaction en chaîne', fusion: 'La fusion', spontanee: 'La réaction spontanée' };
+const EQUATIONS = {
+  fission: '²³⁵₉₂U + ¹₀n → ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + 2 ¹₀n',
+  fusion: '²₁H + ³₁H → ⁴₂He + ¹₀n',
+  spontanee: '²¹⁰₈₄Po → ²⁰⁶₈₂Pb + ⁴₂He',
+};
+
+/* ── Instants clés (s de la scène) : [nom, instant, ce qu’on voit] ─────────────────────────── */
+function suite() {
+  if (P.vue === 'chaine') return [
+    ['premiere_fission', 2.6, 'la première fission : un neutron frappe un noyau d’uranium 235, il se scinde et libère 2 neutrons'],
+    ['deux_fissions', 4.6, 'les 2 neutrons provoquent 2 fissions, qui libèrent 4 neutrons'],
+    ['quatre_fissions', 6.6, 'les 4 neutrons provoquent 4 fissions, qui libèrent 8 neutrons'],
+    ['legende', 9.6, 'la légende de la réaction en chaîne est écrite'], ['fin', 10.4, 'fin']];
+  if (P.vue === 'fusion') {
+    if (P.temperature === 'haute') return [
+      ['chauffage', 1.0, 'la température est déjà très élevée : ≈ 10⁸ K'],
+      ['approche', 1.6, 'deux noyaux légers ²₁H et ³₁H foncent l’un vers l’autre'],
+      ['repulsion', 2.2, 'ils se repoussent, mais vont assez vite pour se toucher'],
+      ['fusion', 3.0, 'ils se touchent et fusionnent'], ['produits', 4.8, 'les produits : ⁴₂He et un neutron qui part'],
+      ['energie', 5.6, 'l’énergie libérée : E_lib = 17,6 MeV'], ['equation', 8.2, 'l’équation de la fusion est écrite'],
+      ['definition', 10.4, 'la définition de la fusion est écrite'], ['fin', 11.4, 'fin']];
+    return [
+      ['approche', 1.6, 'deux noyaux légers ²₁H et ³₁H s’approchent l’un de l’autre (basse température)'],
+      ['repulsion', 3.6, 'ils se repoussent et rebondissent : deux charges positives'],
+      ['chauffage', 5.8, 'on chauffe : température très élevée, ≈ 10⁸ K'],
+      ['fusion', 7.6, 'ils foncent l’un vers l’autre, se touchent et fusionnent'], ['produits', 9.4, 'les produits : ⁴₂He et un neutron qui part'],
+      ['energie', 10.2, 'l’énergie libérée : E_lib = 17,6 MeV'], ['equation', 12.8, 'l’équation de la fusion est écrite'],
+      ['definition', 15.0, 'la définition de la fusion est écrite'], ['fin', 16.0, 'fin']];
+  }
+  if (P.vue === 'spontanee') return [
+    ['noyau_seul', 1.6, 'un noyau de polonium 210 seul : rien ne le touche'],
+    ['emission', 3.2, 'à un instant, le noyau émet une particule α'],
+    ['produits', 5.0, 'les produits : un noyau de plomb 206 et une particule α (⁴₂He)'],
+    ['legende', 8.0, 'l’équation et la légende « réaction spontanée » sont écrites'], ['fin', 9.0, 'fin']];
+  return [
+    ['neutron_arrive', 1.8, 'un neutron lent arrive de la gauche vers le noyau d’uranium 235'],
+    ['choc', 2.6, 'le neutron frappe le noyau et y entre'],
+    ['noyau_deforme', 4.2, 'le noyau se déforme : il s’allonge en cacahuète'],
+    ['coupure', 5.0, 'le noyau se coupe en deux noyaux moyens'],
+    ['produits_partent', 6.4, 'le strontium 94 et le xénon 140 s’écartent vite, 2 neutrons partent'],
+    ['energie', 7.0, 'l’énergie libérée : E_lib ≈ 185 MeV'],
+    ['equation', 10.6, 'l’équation de la fission est écrite'],
+    ['definition', 13.0, 'la définition de la fission est écrite'], ['fin', 14.0, 'fin']];
+}
+let SUITE = suite();
+const moments = () => Object.fromEntries(SUITE.map(([n, t]) => [n, t]));
+let M = moments();
+const FIN = () => M.fin;
+/** Temps d’écriture (s) d’une annotation avant son instant. */
+const AV = { equation: 2.8, definition: 2.0, legende: 3.0, energie: 0.8, produits: 1.0, produits_partent: 1.0 };
+const av = nom => AV[nom] ?? 0.9;
+const a_ = nom => (nom in M ? M[nom] - av(nom) : Infinity);
+const fini = nom => nom in M && (S.fait || S.t >= M[nom] - 1e-6);
+const vu = nom => nom in M && (S.fait || S.t >= a_(nom));
+const tv = () => (S.fait ? FIN() : S.t);                   // le temps de la physique (fin : tout est posé)
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const sortie = u => { u = clamp(u, 0, 1); return 1 - (1 - u) ** 3; };     // part vite, ralentit
+const lerp = (a, b, u) => a + (b - a) * u;
+const lerp2 = (p, q2, u) => [lerp(p[0], q2[0], u), lerp(p[1], q2[1], u)];
+
+/* ── Peinture : nucléons (sphères ombrées), amas, traînée, éclair ──────────────────────────── */
+const TEINTES = { p: ['#f6b6b0', '#d9534f', '#6e1d1a'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
+function sphere(ctx, x, y, r, k) {
+  const [cl, cb, cf] = TEINTES[k];
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, cl); g.addColorStop(.42, cb); g.addColorStop(1, cf);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  if (r > 3.5) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill(); }
+}
+/** Petite ombre douce sous un objet qui flotte (décalée vers le bas). */
+function ombre(ctx, x, y, R) {
+  const g = ctx.createRadialGradient(x + R * .12, y + R * .28, R * .2, x + R * .12, y + R * .28, R * 1.08);
+  g.addColorStop(0, 'rgba(0,0,0,.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + R * .12, y + R * .28, R * 1.08, 0, Math.PI * 2); ctx.fill();
+}
+function nucleonLibre(ctx, x, y, r, k) { ombre(ctx, x, y, r); sphere(ctx, x, y, r, k); }
+/** Traînée derrière une particule : (dx, dy) = son déplacement récent. */
+function trainee(ctx, x, y, dx, dy, r, k = 'n') {
+  if (Math.hypot(dx, dy) < 3) return;
+  const g = ctx.createLinearGradient(x - dx, y - dy, x, y), c = k === 'p' ? '240,140,130' : '186,204,222';
+  g.addColorStop(0, `rgba(${c},0)`); g.addColorStop(1, `rgba(${c},.55)`);
+  ctx.save(); ctx.strokeStyle = g; ctx.lineWidth = r * 1.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - dx, y - dy); ctx.lineTo(x, y); ctx.stroke(); ctx.restore();
+}
+const MELANGE = {};
+const hache = (k, s = 0) => { let x = ((k + 1) * 2654435761 + s * 40503) % 4294967296; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; return x / 4294967296; };
+const estProton = (i, Z, A) => {                                // protons et neutrons mêlés au hasard (fixé), sans motif
+  if (A <= 4) return Math.floor((i + 1) * Z / A) > Math.floor(i * Z / A);
+  const cle = A + '/' + Z;
+  if (!MELANGE[cle]) { const rang = Array.from({ length: A }, (_, k) => k).sort((a, b) => hache(a) - hache(b)); MELANGE[cle] = new Set(rang.slice(0, Z)); }
+  return MELANGE[cle].has(i);
+};
+/** Positions (relatives au centre) des nucléons d’un amas compact de A nucléons de rayon r (comme balance.html). */
+function positionsAmas(A, r) {
+  const d = 1.7 * r;
+  if (A === 1) return [[0, 0]];
+  if (A === 2) return [[-.5 * d, 0], [.5 * d, 0]];
+  if (A === 3) return [[-.5 * d, .29 * d], [.5 * d, .29 * d], [0, -.58 * d]];
+  if (A === 4) return [[-.5 * d, .25 * d], [.5 * d, .25 * d], [0, -.6 * d], [0, .05 * d]];
+  const pts = []; for (let i = 0; i < A; i++) { const rho = r * 1.05 * Math.sqrt(i), th = i * 2.39996; pts.push([rho * Math.cos(th), rho * Math.sin(th)]); }
+  return pts;
+}
+const rayonAmas = (A, r) => Math.max(...positionsAmas(A, r).map(([x, y]) => Math.hypot(x, y))) + r;
+/** Un amas peint une fois dans une image (les gros noyaux ont des centaines de sphères) puis recopié. */
+const CACHE = {};
+function imageAmas(A, Z, r) {
+  const cle = A + '/' + Z + '/' + r; if (CACHE[cle]) return CACHE[cle];
+  const R = rayonAmas(A, r), K = 4, m = 2, cv = document.createElement('canvas');
+  cv.width = cv.height = Math.ceil((2 * R + 2 * m) * K);
+  const g = cv.getContext('2d'); g.scale(K, K); g.translate(R + m, R + m);
+  const pts = positionsAmas(A, r).map(([x, y], i) => [x, y, i]);
+  if (A > 4) pts.sort((a, b) => Math.hypot(b[0], b[1]) - Math.hypot(a[0], a[1]));   // le cœur devant : une boule
+  for (const [x, y, i] of pts) sphere(g, x, y, r, A === 1 ? (Z ? 'p' : 'n') : (estProton(i, Z, A) ? 'p' : 'n'));
+  return (CACHE[cle] = { cv, R, L: R + m });
+}
+/** Un noyau peint au centre (x, y) ; sx, sy : étirement (le noyau qui s’allonge). Renvoie son rayon. */
+function noyauPeint(ctx, A, Z, r, x, y, sx = 1, sy = 1) {
+  const im = imageAmas(A, Z, r);
+  ombre(ctx, x, y, im.R * Math.max(sx, sy));
+  ctx.drawImage(im.cv, x - im.L * sx, y - im.L * sy, 2 * im.L * sx, 2 * im.L * sy);
+  return im.R;
+}
+/** L’énergie libérée : un halo jaune-orangé qui s’étend puis s’efface (u de 0 à 1). */
+function eclair(ctx, x, y, u, Rmax) {
+  if (u <= 0 || u >= 1) return;
+  const R = Rmax * (.15 + .85 * Math.sqrt(u)), al = Math.sin(Math.PI * Math.min(1, u * 1.15)) * .9;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+  g.addColorStop(0, `rgba(255,250,215,${al})`); g.addColorStop(.25, `rgba(255,214,102,${al * .8})`); g.addColorStop(.6, `rgba(251,146,60,${al * .35})`); g.addColorStop(1, 'rgba(251,146,60,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = `rgba(255,230,150,${al * .7})`; ctx.lineWidth = 2;
+  for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6 + .2, r0 = R * .35, r1 = R * .85; ctx.beginPath(); ctx.moveTo(x + r0 * Math.cos(a), y + r0 * Math.sin(a)); ctx.lineTo(x + r1 * Math.cos(a), y + r1 * Math.sin(a)); ctx.stroke(); }
+  ctx.restore();
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────── */
+const VIT = 40;                                  // lettres par seconde pour les annotations
+/**
+ * Écrit `fn` à la craie au rythme de la scène entre t0 et t1 (s de la scène) : la durée d’écriture est mesurée,
+ * puis comprimée s’il le faut, pour que tout soit écrit à t1. Rien avant t0.
+ */
+function ecritA(c, t0, t1, fn) {
+  if (!S.fait && S.t < t0) return;
+  const t = c.t, cur = c.cur, comp = c.complet, tip = c.tip;
+  let k = 1;
+  if (!S.fait) { c.t = -1e9; c.cur = t0; try { fn(); } finally { k = Math.max(1, (c.cur - t0) / Math.max(.1, t1 - t0)); } }
+  c.t = S.fait ? Infinity : t0 + (S.t - t0) * k; c.cur = t0; c.tip = tip;
+  try { fn(); } finally { const nt = c.tip; c.t = t; c.cur = cur; c.complet = comp; c.tip = nt; }
+}
+/** Écrit pendant les av(nom) s qui précèdent le moment `nom`. */
+const ecrit = (c, nom, fn) => { if (vu(nom)) ecritA(c, a_(nom), M[nom], fn); };
+const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: Math.max(.12, String(s).length / VIT), ...o });
+/** Écrit un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole. Renvoie la largeur. */
+function noyauTexte(c, A, Z, X, x, y, o = {}) {
+  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  const w = wN + 1 + c.largeurTexte(X, t);
+  const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  if (o.mesure) return w;
+  const d = s => Math.max(.06, String(s).length / VIT);
+  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
+  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(X, x0 + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
+  return w;
+}
+/** Une ligne faite de morceaux : texte (chaîne ou {t, couleur}) ou noyau {A, Z, X}. `o.pause` : silence entre les termes. */
+function ligne(c, parts, x, y, o = {}) {
+  const taille = o.taille ?? 16;
+  const larg = p => (typeof p === 'string' || p.t != null ? c.largeurTexte(String(p.t ?? p).replace(/[_{}]/g, ''), taille) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
+  const tot = parts.reduce((s, p) => s + larg(p), 0);
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  for (const p of parts) {
+    if (typeof p === 'string' || p.t != null) { const s = String(p.t ?? p); if (s.trim()) T(c, s, px, y, { couleur: p.couleur || o.couleur, taille }); }
+    else { noyauTexte(c, p.A, p.Z, p.X, px, y, { taille, couleur: p.couleur || o.couleur }); if (o.pause) c.pause(o.pause); }
+    px += larg(p);
+  }
+  return { x: o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, w: tot };
+}
+const N1 = { A: 1, Z: 0, X: 'n' };
+const PARTS_EQ = {
+  fission: [{ A: 235, Z: 92, X: 'U' }, ' + ', N1, ' → ', { A: 94, Z: 38, X: 'Sr' }, ' + ', { A: 140, Z: 54, X: 'Xe' }, ' + 2 ', N1],
+  fusion: [{ A: 2, Z: 1, X: 'H' }, ' + ', { A: 3, Z: 1, X: 'H' }, ' → ', { A: 4, Z: 2, X: 'He' }, ' + ', N1],
+  spontanee: [{ A: 210, Z: 84, X: 'Po' }, ' → ', { A: 206, Z: 82, X: 'Pb' }, ' + ', { A: 4, Z: 2, X: 'He' }],
+};
+const VB = { x: 6, y: 32, w: 748, h: 382 };
+const Y_EQ = 330, Y_DEF = 384;
+/** L’équation, terme par terme, et son repère. */
+function equation(c, vue, nom) {
+  const parts = PARTS_EQ[vue];
+  c.repere('equation', 380 - 190, Y_EQ - 30, 380, 42, `l’équation : ${EQUATIONS[vue]}`);
+  ecrit(c, nom, () => ligne(c, parts, 380, Y_EQ, { taille: 24, couleur: 'blanc', align: 'center', pause: .22 }));
+}
+/** La phrase de définition (encadrée) et son repère. */
+function definition(c, nom, texte, id = 'definition') {
+  c.repere(id, 14, Y_DEF - 22, 732, 32, texte);
+  ecrit(c, nom, () => {
+    T(c, texte, 380, Y_DEF, { couleur: 'jaune', taille: 17, align: 'center', max: 716 });
+    c.rect(16, Y_DEF - 21, 728, 30, { couleur: 'jaune', arrondi: 7, largeur: 1.3, alpha: .7 });
+  });
+}
+/** Commun à toutes les vues : titre, cadre de la vue, légende des couleurs. */
+function cadreVue(c) {
+  c.texte(NOMS_VUES[P.vue], 14, 24, { couleur: 'cyan', taille: 17 });
+  c.rect(VB.x, VB.y, VB.w, VB.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_' + P.vue, VB.x, VB.y, VB.w, VB.h, 'la vue « ' + NOMS_VUES[P.vue] + ' »');
+  c.direct(() => { sphere(c.ctx, 22, 50, 6, 'p'); sphere(c.ctx, 84, 50, 6, 'n'); });
+  c.texte('proton', 32, 55, { couleur: 'faible', taille: 13 });
+  c.texte('neutron', 94, 55, { couleur: 'faible', taille: 13 });
+}
+/** Une légende de phase, visible de son écriture jusqu’à `jusqua` (le professeur l’efface ensuite). */
+function legendePhase(c, nom, texte, x, y, jusqua = Infinity, o = {}) {
+  if (!vu(nom) || (!S.fait && S.t >= jusqua) || (S.fait && jusqua < FIN())) return;
+  ecrit(c, nom, () => T(c, texte, x, y, { couleur: 'faible', taille: 15, align: 'center', ...o }));
+}
+
+/* ══ Vue « La fission » ══════════════════════════════════════════════════════════════════════ */
+const FI = (() => {
+  const C = [330, 165], r = 3.2, A = 235, R = rayonAmas(A, r), RN = 6;
+  const pts = positionsAmas(A, r); pts.push([-(R - r), 0]);              // + le neutron absorbé (indice 235)
+  const n = pts.length, ordre = [...pts.keys()].sort((a, b) => pts[a][0] - pts[b][0]);
+  const xe = ordre.slice(0, 140), nn = ordre.slice(140, 142), sr = ordre.slice(142);   // 140 + 2 + 94 = 236
+  const sorte = new Array(n).fill('n');
+  const choisir = (g, nb, s) => g.filter(i => i !== 235).sort((a, b) => hache(a, s) - hache(b, s)).slice(0, nb).forEach(i => { sorte[i] = 'p'; });
+  choisir(xe, 54, 1); choisir(sr, 38, 2);                                 // Z(Xe) = 54, Z(Sr) = 38 : 92 protons en tout
+  const xb = (pts[nn[0]][0] + pts[nn[1]][0]) / 2;                          // le col de la cacahuète
+  const deforme = ([x, y], e) => [xb + (x - xb) * (1 + .6 * e), y * (1 - .1 * e) * (1 - .62 * e * Math.exp(-(((x - xb) / (.4 * R)) ** 2)))];
+  const centre = g => g.reduce(([sx, sy], i) => { const p = deforme(pts[i], 1); return [sx + p[0] / g.length, sy + p[1] / g.length]; }, [0, 0]);
+  const gXe = centre(xe), gSr = centre(sr);
+  const places = (g, c0, Ag) => {                                        // chaque nucléon garde sa direction depuis le centre du groupe :
+    const Rf = rayonAmas(Ag, r) - r, out = {}, d = i => { const p = deforme(pts[i], 1); return [p[0] - c0[0], p[1] - c0[1]]; };   // l’amas s’arrondit sans se brouiller
+    g.slice().sort((a, b) => Math.hypot(...d(a)) - Math.hypot(...d(b))).forEach((i, k) => {
+      const [dx, dy] = d(i), L = Math.hypot(dx, dy) || 1, rho = Rf * Math.sqrt((k + .5) / g.length);
+      out[i] = [dx / L * rho, dy / L * rho];
+    });
+    return out;
+  };
+  const place = { ...places(xe, gXe, 140), ...places(sr, gSr, 94) };
+  const ordreAvant = [...pts.keys()].sort((a, b) => Math.hypot(...pts[b]) - Math.hypot(...pts[a]));
+  const ordreApres = xe.concat(sr).sort((a, b) => Math.hypot(...place[b]) - Math.hypot(...place[a]));
+  const [nHaut, nBas] = pts[nn[0]][1] < pts[nn[1]][1] ? nn : [nn[1], nn[0]];
+  return { C, r, R, RN, pts, xe, sr, nn, sorte, deforme, gXe, gSr, place, ordreAvant, ordreApres,
+    XE_F: [-140, 40], SR_F: [160, -45], N_F: { [nHaut]: [0, -95], [nBas]: [280, 65] },
+    t: { depart: .5, choc: 2.6, absorbe: 2.9, def0: 3.0, def1: 4.2, coupe: 5.0, parti: 6.2, flash0: 5.4, flash1: 8.4 } };
+})();
+const XE_R = rayonAmas(140, FI.r), SR_R = rayonAmas(94, FI.r);
+/** Position du neutron qui arrive (absolue) avant le choc. */
+function neutronEntrant(t) {
+  const xc = FI.C[0] - FI.R - FI.RN + 1, u = clamp((t - FI.t.depart) / (FI.t.choc - FI.t.depart), 0, 1);
+  return [lerp(30, xc, u), FI.C[1]];
+}
+/** Position (relative au centre du noyau) et rayon du nucléon i à l’instant t. */
+function posFission(i, t) {
+  const L = FI.t, r = FI.r;
+  let p = FI.pts[i];
+  if (i === 235 && t < L.absorbe) {                                      // le neutron entre dans le noyau
+    const u = lisse((t - L.choc) / (L.absorbe - L.choc)), e0 = neutronEntrant(t);
+    return [lerp(e0[0] - FI.C[0], p[0], u), lerp(e0[1] - FI.C[1], p[1], u), lerp(FI.RN, r, u)];
+  }
+  const e = lisse((t - L.def0) / (L.def1 - L.def0));
+  p = FI.deforme(p, e);
+  if (t > L.choc && t < 3.4) p = [p[0] + 2 * Math.sin(40 * t) * Math.exp(-(t - L.choc) * 5), p[1]];   // le choc fait trembler le noyau
+  if (FI.nn.includes(i)) {                                                // les 2 neutrons du col partent
+    const w = sortie((t - L.coupe) / (L.parti + .2 - L.coupe));
+    const f = FI.N_F[i];
+    return [lerp(p[0], f[0], w), lerp(p[1], f[1], w), lerp(r, FI.RN, clamp((t - L.coupe) / .4, 0, 1))];
+  }
+  const u = lisse((t - L.def1) / (L.coupe - L.def1));
+  if (u <= 0) return [p[0], p[1], r];
+  const estXe = FI.place[i] && FI.xe.includes(i), g = estXe ? FI.gXe : FI.gSr, dir = estXe ? -1 : 1;
+  const w = sortie((t - L.coupe) / (L.parti - L.coupe));
+  const c1 = [g[0] + dir * 14, g[1]], cF = lerp2(c1, estXe ? FI.XE_F : FI.SR_F, w), cg = w > 0 ? cF : [g[0] + dir * 14 * u, g[1]];
+  const s = FI.place[i];
+  return [lerp(p[0], cg[0] + s[0], u), lerp(p[1], cg[1] + s[1], u), r];
+}
+const centreFragment = (estXe, t) => {
+  const L = FI.t, g = estXe ? FI.gXe : FI.gSr, dir = estXe ? -1 : 1;
+  if (t < L.def1) return [FI.C[0] + g[0], FI.C[1] + g[1]];
+  const u = lisse((t - L.def1) / (L.coupe - L.def1)), w = sortie((t - L.coupe) / (L.parti - L.coupe));
+  const c = w > 0 ? lerp2([g[0] + dir * 14, g[1]], estXe ? FI.XE_F : FI.SR_F, w) : [g[0] + dir * 14 * u, g[1]];
+  return [FI.C[0] + c[0], FI.C[1] + c[1]];
+};
+function peindreFission(ctx) {
+  const t = tv(), L = FI.t, [cx, cy] = FI.C;
+  if (t < L.choc) {                                                       // le neutron lent arrive (traînée)
+    const [x, y] = neutronEntrant(t), [x0] = neutronEntrant(Math.max(0, t - .35));
+    trainee(ctx, x, y, x - x0, 0, FI.RN); nucleonLibre(ctx, x, y, FI.RN, 'n');
+  }
+  {
+    const apres = t >= L.def1 + .3 * (L.coupe - L.def1);
+    const liste = apres ? FI.ordreApres : FI.ordreAvant;
+    if (!apres) ombre(ctx, cx, cy, FI.R * (1 + .3 * lisse((t - L.def0) / (L.def1 - L.def0))));
+    else { const a = centreFragment(true, t), b = centreFragment(false, t); ombre(ctx, a[0], a[1], XE_R); ombre(ctx, b[0], b[1], SR_R); }
+    for (const i of liste) { if (FI.nn.includes(i) || (i === 235 && t < L.choc)) continue; const [x, y, rr] = posFission(i, t); sphere(ctx, cx + x, cy + y, rr, FI.sorte[i]); }
+    for (const i of FI.nn) {                                              // les 2 neutrons émis (traînée)
+      const [x, y, rr] = posFission(i, t);
+      if (t > L.coupe) { const [x0, y0] = posFission(i, Math.max(L.coupe, t - .3)); trainee(ctx, cx + x, cy + y, x - x0, y - y0, rr); nucleonLibre(ctx, cx + x, cy + y, rr, 'n'); }
+      else sphere(ctx, cx + x, cy + y, rr, 'n');
+    }
+  }
+  eclair(ctx, cx, cy, (t - L.flash0) / (L.flash1 - L.flash0), 130);
+}
+function craieFission(c) {
+  const t = tv(), L = FI.t, [cx, cy] = FI.C;
+  c.direct(() => peindreFission(c.ctx));
+  // Écrit à l’ouverture : le neutron lent et le noyau d’uranium (effacé quand il s’est coupé).
+  ligne(c, ['neutron lent ', N1], 24, 138, { taille: 16, couleur: 'blanc' });
+  c.fleche(28, 148, 120, 148, { couleur: 'faible', largeur: 1.4, tete: 8 });
+  if (t < L.coupe) noyauTexte(c, 235, 92, 'U', cx, cy - FI.R - 12, { taille: 18, couleur: 'blanc', align: 'center' });
+  // Les phases, au rythme de la scène (une légende chasse l’autre).
+  legendePhase(c, 'choc', 'le neutron frappe le noyau', cx, 294, a_('noyau_deforme'));
+  legendePhase(c, 'noyau_deforme', 'le noyau se déforme et s’allonge', cx, 294, a_('coupure'));
+  legendePhase(c, 'coupure', 'il se coupe en deux noyaux moyens', cx, 294, a_('produits_partent'));
+  ecrit(c, 'produits_partent', () => {
+    noyauTexte(c, 140, 54, 'Xe', FI.C[0] + FI.XE_F[0], FI.C[1] + FI.XE_F[1] + XE_R + 27, { taille: 18, couleur: 'blanc', align: 'center' });
+    noyauTexte(c, 94, 38, 'Sr', FI.C[0] + FI.SR_F[0], FI.C[1] + FI.SR_F[1] - SR_R - 12, { taille: 18, couleur: 'blanc', align: 'center' });
+    for (const i of FI.nn) { const f = FI.N_F[i]; noyauTexte(c, 1, 0, 'n', cx + f[0] + 11, cy + f[1] + 5, { taille: 16, couleur: 'blanc' }); }
+    T(c, 'deux noyaux plus légers et 2 neutrons partent vite', cx, 294, { couleur: 'faible', taille: 15, align: 'center' });
+  });
+  ecrit(c, 'energie', () => {
+    T(c, 'énergie libérée', 745, 160, { couleur: 'jaune', taille: 17, align: 'right' });
+    T(c, 'E_{lib} ≈ 185 MeV', 745, 184, { couleur: 'jaune', taille: 17, align: 'right' });
+  });
+  equation(c, 'fission', 'equation');
+  definition(c, 'definition', 'La fission : un noyau lourd, frappé par un neutron, se scinde en deux noyaux plus légers');
+  // Repères (suivent ce qui bouge).
+  c.direct(() => {
+    let nb;
+    if (t < L.choc) { const [x, y] = neutronEntrant(t); nb = [x - 14, y - 14, 28, 28, 'le neutron lent ¹₀n qui arrive']; }
+    else if (t < L.coupe) nb = [cx - FI.R - 8, cy - 14, 26, 28, 'le neutron est entré dans le noyau'];
+    else {
+      const ps = FI.nn.map(i => posFission(i, t)), xs = ps.map(p => cx + p[0]), ys = ps.map(p => cy + p[1]);
+      nb = [Math.min(...xs) - 12, Math.min(...ys) - 12, Math.max(...xs) - Math.min(...xs) + 24, Math.max(...ys) - Math.min(...ys) + 24, 'les 2 neutrons ¹₀n émis'];
+    }
+    c.repere('neutron', nb[0], nb[1], nb[2], nb[3], nb[4]);
+    c.repere('noyau_uranium', cx - FI.R - 4, cy - FI.R - 4, 2 * FI.R + 8, 2 * FI.R + 8, t < L.coupe ? 'le noyau d’uranium 235 (²³⁵₉₂U)' : 'là où était le noyau d’uranium 235 (il s’est scindé)');
+    const a = centreFragment(true, Math.max(t, L.coupe)), b = centreFragment(false, Math.max(t, L.coupe));
+    const x0 = Math.min(a[0] - XE_R, b[0] - SR_R) - 4, y0 = Math.min(a[1] - XE_R, b[1] - SR_R) - 4;
+    const x1 = Math.max(a[0] + XE_R, b[0] + SR_R) + 4, y1 = Math.max(a[1] + XE_R, b[1] + SR_R) + 4;
+    c.repere('produits', x0, y0, x1 - x0, y1 - y0, 'les produits : ⁹⁴₃₈Sr, ¹⁴⁰₅₄Xe et 2 neutrons');
+    c.repere('energie', cx - 70, cy - 70, 140, 140, 'l’énergie libérée (éclair) : E_lib ≈ 185 MeV');
+  });
+}
+function motsFission() {
+  const t = tv(), L = FI.t, m = [];
+  if (t < L.choc) m.push(`Un neutron lent ¹₀n (sphère gris-bleu avec une traînée) ${t < L.depart ? 'attend à gauche' : 'avance de la gauche vers le noyau'} ; le noyau ²³⁵₉₂U (gros amas de 92 protons et 143 neutrons) est au repos.`);
+  else if (t < L.def0) m.push('Le neutron vient de frapper le noyau d’uranium 235 et y entre ; le noyau tremble.');
+  else if (t <= L.def1 + 1e-6) m.push('Le noyau qui a absorbé le neutron se déforme : il s’allonge en cacahuète.');
+  else if (t <= L.coupe + 1e-6) m.push('Le noyau allongé se coupe en deux au niveau du col.');
+  else if (t < L.parti) m.push('Deux noyaux moyens ⁹⁴₃₈Sr et ¹⁴⁰₅₄Xe s’écartent vite ; 2 neutrons partent (traînées).');
+  else m.push('Les produits sont écartés : ⁹⁴₃₈Sr (en haut à droite), ¹⁴⁰₅₄Xe (en bas à gauche) et 2 neutrons ¹₀n.');
+  const f = (t - L.flash0) / (L.flash1 - L.flash0);
+  if (f > 0 && f < 1) m.push('Un éclair d’énergie jaune-orangé est peint au centre.');
+  m.push(`Noyaux présents : ${t < L.coupe ? '²³⁵₉₂U et le neutron ¹₀n' : '⁹⁴₃₈Sr, ¹⁴⁰₅₄Xe et 2 neutrons ¹₀n'}.`);
+  return m;
+}
+
+/* ══ Vue « La réaction en chaîne » (qualitative) ════════════════════════════════════════════ */
+const CH = (() => {
+  const g1 = [[140, 200]], g2 = [[330, 118], [330, 282]], g3 = [[520, 70], [520, 152], [520, 236], [520, 318]];
+  const r = 1.6, RU = rayonAmas(235, r), tf = [1.6, 3.6, 5.6];
+  const noeuds = [];
+  g1.forEach(p => noeuds.push({ p, gen: 0, parent: null }));
+  g2.forEach(p => noeuds.push({ p, gen: 1, parent: 0 }));
+  g3.forEach((p, k) => noeuds.push({ p, gen: 2, parent: 1 + (k >> 1) }));
+  return { noeuds, r, RU, tf, RN: 4, depart: [20, 200], t0: .4 };
+})();
+const RXE_CH = rayonAmas(140, CH.r), RSR_CH = rayonAmas(94, CH.r);
+/** Les neutrons : [départ, arrivée, t départ, t arrivée] (le premier, puis 2 par fission). */
+function neutronsChaine() {
+  const out = [], N = CH.noeuds;
+  const arrivee = (de, vers) => { const a = Math.atan2(vers[1] - de[1], vers[0] - de[0]); return [vers[0] - (CH.RU + 5) * Math.cos(a), vers[1] - (CH.RU + 5) * Math.sin(a)]; };
+  out.push([CH.depart, arrivee(CH.depart, N[0].p), CH.t0, CH.tf[0], 0]);
+  N.forEach((nd, k) => { if (nd.parent != null) out.push([N[nd.parent].p, arrivee(N[nd.parent].p, nd.p), CH.tf[nd.gen - 1] + .5, CH.tf[nd.gen], nd.gen]); });
+  N.filter(nd => nd.gen === 2).forEach(nd => { for (const s of [-1, 1]) out.push([nd.p, [700, nd.p[1] + s * 16], CH.tf[2] + .5, CH.tf[2] + 1.9, 3]); });
+  return out;
+}
+function peindreChaine(ctx) {
+  const t = tv();
+  for (const nd of CH.noeuds) {
+    const tf = CH.tf[nd.gen], [x, y] = nd.p;
+    if (t < tf) { const s = lisse((t - (tf - .3)) / .3); noyauPeint(ctx, 235, 92, CH.r, x, y, 1 + .22 * s, 1 - .1 * s); }
+    else {
+      const d = 6 + 20 * sortie((t - tf) / .8);
+      noyauPeint(ctx, 140, 54, CH.r, x - d, y); noyauPeint(ctx, 94, 38, CH.r, x + d, y);
+    }
+    eclair(ctx, x, y, (t - tf) / 1.3, 48);
+  }
+  for (const [a, b, t0, t1] of neutronsChaine()) {
+    if (t < t0 || (t > t1 + .01 && b[0] < 690)) continue;                // absorbé à l’arrivée (sauf les derniers, qui continuent)
+    const u = clamp((t - t0) / (t1 - t0), 0, 1), x = lerp(a[0], b[0], u), y = lerp(a[1], b[1], u);
+    const u0 = clamp((t - .3 - t0) / (t1 - t0), 0, 1);
+    trainee(ctx, x, y, x - lerp(a[0], b[0], u0), y - lerp(a[1], b[1], u0), CH.RN); nucleonLibre(ctx, x, y, CH.RN, 'n');
+  }
+}
+function craieChaine(c) {
+  const t = tv();
+  c.direct(() => peindreChaine(c.ctx));
+  c.texte('schéma qualitatif', 210, 24, { couleur: 'faible', taille: 13 });
+  noyauTexte(c, 1, 0, 'n', 14, 186, { taille: 15, couleur: 'blanc' });
+  if (t < CH.tf[0]) noyauTexte(c, 235, 92, 'U', 140, 200 - CH.RU - 10, { taille: 15, couleur: 'blanc', align: 'center' });
+  // Le compteur « fissions : 1, 2, 4 ».
+  c.repere('compteur', 414, 6, 210, 26, 'le compteur des fissions : 1, 2, 4');
+  ecrit(c, 'premiere_fission', () => T(c, 'fissions : 1', 420, 24, { couleur: 'jaune', taille: 17 }));
+  const x2 = 420 + c.largeurTexte('fissions : 1', 17);
+  ecrit(c, 'deux_fissions', () => T(c, ', 2', x2, 24, { couleur: 'jaune', taille: 17 }));
+  ecrit(c, 'quatre_fissions', () => T(c, ', 4', x2 + c.largeurTexte(', 2', 17), 24, { couleur: 'jaune', taille: 17 }));
+  if (vu('legende')) ecritA(c, CH.tf[2] + 1.9, M.legende - 2.2, () => { for (const nd of CH.noeuds.filter(n => n.gen === 2)) for (const s of [-1, 1]) T(c, '…', 711, nd.p[1] + s * 16 + 4, { couleur: 'blanc', taille: 16 }); });
+  definition(c, 'legende', 'chaque fission libère des neutrons qui provoquent d’autres fissions : réaction en chaîne');
+  c.direct(() => {
+    const [a, b, t0, t1] = neutronsChaine()[0];
+    const u = clamp((t - t0) / (t1 - t0), 0, 1), x = lerp(a[0], b[0], u);
+    c.repere('neutron', Math.min(a[0], x) - 10, a[1] - 12, Math.abs(x - a[0]) + 20, 24, t < t1 ? 'le premier neutron ¹₀n' : 'le chemin du premier neutron');
+    const [nx, ny] = CH.noeuds[0].p;
+    c.repere('noyau_uranium', nx - CH.RU - 4, ny - CH.RU - 4, 2 * CH.RU + 8, 2 * CH.RU + 8, 'le premier noyau d’uranium 235');
+    c.repere('produits', nx - 26 - RXE_CH - 4, ny - RXE_CH - 4, 52 + RXE_CH + RSR_CH + 8, 2 * RXE_CH + 8, 'les deux noyaux plus légers de la première fission');
+    c.repere('energie', nx - 40, ny - 40, 80, 80, 'l’énergie libérée par la première fission (éclair)');
+  });
+}
+function motsChaine() {
+  const t = tv(), nf = CH.tf.reduce((s, tf, g) => s + (t >= tf ? 2 ** g : 0), 0), m = [];
+  const vol = neutronsChaine().filter(([a, b, t0, t1]) => t >= t0 && (t <= t1 || b[0] >= 690)).length;
+  m.push(`Arbre qui s’ouvre de gauche à droite (schéma qualitatif, noyaux d’uranium 235 en petits amas) : ${nf} fission(s) déjà faite(s) ; ${vol} neutron(s) en vol (traînées).`);
+  if (t < CH.tf[0]) m.push(t < CH.t0 ? 'Un neutron attend à gauche.' : 'Un neutron avance vers le premier noyau d’uranium 235.');
+  m.push('Noyaux présents : ' + (nf ? `${7 - nf} noyau(x) ²³⁵U intact(s) et ${nf} paire(s) de noyaux plus légers (⁹⁴Sr et ¹⁴⁰Xe)` : '7 noyaux ²³⁵U intacts') + '.');
+  return m;
+}
+
+/* ══ Vue « La fusion » ═══════════════════════════════════════════════════════════════════════ */
+const FU = { M: [335, 180], r: 11, HE_F: [300, 190], N_F: [580, 240], TH: { x: 700, y0: 70, y1: 248, by: 262 } };
+const RD = rayonAmas(2, FU.r), RT = rayonAmas(3, FU.r), RHE = rayonAmas(4, FU.r);
+function tlFusion() {
+  return P.temperature === 'haute' ? { contact: 2.6, fusionne: 3.3, flash0: 3.1, prod1: 4.4 } : { contact: 7.2, fusionne: 7.9, flash0: 7.7, prod1: 9.0 };
+}
+function distFusion(t) {
+  const C = RD + RT;
+  if (P.temperature === 'haute') {
+    if (t <= .4) return 440; if (t >= 2.6) return C;
+    return C + (440 - C) * Math.pow(1 - (t - .4) / 2.2, 1.15);           // ils ralentissent un peu, mais se touchent
+  }
+  const hyper = s => 80 + Math.sqrt(1600 + (180 * (s - 2.6)) ** 2) - 40;   // rebond : approche, plus proche à 80 px, recul
+  if (t <= .4) return hyper(.4);
+  if (t <= 3.8) return hyper(t);
+  const d6 = hyper(3.8) + 90 * (1 - Math.exp(-2 * 2.2));
+  if (t <= 6.0) return hyper(3.8) + 90 * (1 - Math.exp(-2 * (t - 3.8)));
+  if (t >= 7.2) return C;
+  return d6 - (d6 - C) * Math.pow((t - 6) / 1.2, 1.5);                   // très chauds : ils foncent l’un vers l’autre
+}
+/** Lecture du thermomètre, de 0 à 1 (0,95 ≈ 10⁸ K). */
+function chaleur(t) {
+  if (P.temperature === 'haute') return .95;
+  return t < 3.9 ? .15 : .15 + .8 * lisse((t - 3.9) / 1.7);
+}
+function centresDT(t) {
+  const d = distFusion(t), h = chaleur(t), a = .6 + 2.6 * Math.max(0, (h - .4) / .55), L = tlFusion();
+  const j = t < L.contact - .15 ? 1 : 0;                                  // l’agitation : plus forte quand c’est chaud
+  return [[FU.M[0] - d / 2 + j * a * Math.sin(23 * t), FU.M[1] + j * a * Math.cos(29 * t + 1)],
+    [FU.M[0] + d / 2 + j * a * Math.sin(19 * t + 2), FU.M[1] + j * a * Math.cos(31 * t)]];
+}
+const PD = positionsAmas(2, FU.r), PT = positionsAmas(3, FU.r), PHE = positionsAmas(4, FU.r);
+// D : [n, p] ; T : [n, n, p] ; ⁴He : [n, p, n, p]. Le 2e neutron du tritium devient le neutron libre.
+const VERS_HE = [['D', 1, 1], ['T', 2, 3], ['D', 0, 0], ['T', 0, 2]];
+function nucleonsFusion(t) {
+  const L = tlFusion(), out = [];
+  const [D, Tc] = centresDT(Math.min(t, L.contact));
+  const posD = i => [D[0] + PD[i][0], D[1] + PD[i][1]], posT = i => [Tc[0] + PT[i][0], Tc[1] + PT[i][1]];
+  if (t < L.contact) {
+    [0, 1].forEach(i => out.push({ p: posD(i), k: estProton(i, 1, 2) ? 'p' : 'n' }));
+    [0, 1, 2].forEach(i => out.push({ p: posT(i), k: estProton(i, 1, 3) ? 'p' : 'n' }));
+    return { out, libre: null };
+  }
+  const u = lisse((t - L.contact) / (L.fusionne - L.contact)), w = sortie((t - L.fusionne) / (L.prod1 - L.fusionne));
+  const cHe = lerp2(FU.M, FU.HE_F, w);
+  VERS_HE.forEach(([qui, i, s]) => { const p0 = qui === 'D' ? posD(i) : posT(i); out.push({ p: lerp2(p0, [cHe[0] + PHE[s][0], cHe[1] + PHE[s][1]], u), k: estProton(s, 2, 4) ? 'p' : 'n' }); });
+  const nPos = w > 0 ? lerp2([FU.M[0] + RHE + FU.r + 3, FU.M[1] - 4], FU.N_F, w) : lerp2(posT(1), [FU.M[0] + RHE + FU.r + 3, FU.M[1] - 4], u);
+  return { out, libre: nPos, cHe };
+}
+function thermometre(ctx, h) {
+  const { x, y0, y1, by } = FU.TH, haut = lerp(y1, y0 + 6, h);
+  // Le verre.
+  ctx.fillStyle = 'rgba(226,232,240,.16)'; ctx.strokeStyle = 'rgba(226,232,240,.55)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.roundRect(x - 7, y0, 14, by - y0, 7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, by, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // Le liquide : bleu quand c’est froid, rouge vif quand c’est très chaud.
+  const coul = h < .5 ? ['#93c5fd', '#2563eb'] : ['#fca5a5', '#dc2626'];
+  const g = ctx.createRadialGradient(x - 4, by - 4, 1, x, by, 11); g.addColorStop(0, coul[0]); g.addColorStop(1, coul[1]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, by, 10, 0, Math.PI * 2); ctx.fill();
+  const gl = ctx.createLinearGradient(x - 4, 0, x + 4, 0); gl.addColorStop(0, coul[0]); gl.addColorStop(1, coul[1]);
+  ctx.fillStyle = gl; ctx.fillRect(x - 3.5, haut, 7, by - haut);
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x - 5, y0 + 6, 1.6, by - y0 - 20);   // reflet du verre
+}
+function peindreFusion(ctx) {
+  const t = tv(), L = tlFusion(), h = chaleur(t);
+  if (h > .4) {                                                           // la chaleur : une lueur orangée autour des noyaux
+    const a = .10 * (h - .4) / .55, g = ctx.createRadialGradient(FU.M[0], FU.M[1], 10, FU.M[0], FU.M[1], 260);
+    g.addColorStop(0, `rgba(251,146,60,${a})`); g.addColorStop(1, 'rgba(251,146,60,0)');
+    ctx.save(); ctx.translate(FU.M[0], FU.M[1]); ctx.scale(1, .55); ctx.translate(-FU.M[0], -FU.M[1]);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(FU.M[0], FU.M[1], 260, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  thermometre(ctx, h);
+  const { out, libre } = nucleonsFusion(t);
+  if (t < L.contact) { const [D, Tc] = centresDT(t); ombre(ctx, D[0], D[1], RD); ombre(ctx, Tc[0], Tc[1], RT); }
+  else { const c0 = nucleonsFusion(t).cHe; ombre(ctx, c0[0], c0[1], RHE); }
+  for (const o of out) sphere(ctx, o.p[0], o.p[1], FU.r, o.k);
+  if (libre) {
+    const avant = nucleonsFusion(Math.max(L.fusionne, t - .3)).libre;
+    if (t > L.fusionne && avant) trainee(ctx, libre[0], libre[1], libre[0] - avant[0], libre[1] - avant[1], FU.r);
+    nucleonLibre(ctx, libre[0], libre[1], FU.r, 'n');
+  }
+  eclair(ctx, FU.M[0], FU.M[1], (t - L.flash0) / 3.0, 120);
+}
+function craieFusion(c) {
+  const t = tv(), L = tlFusion(), H = P.temperature === 'haute', { x: tx, y0, by } = FU.TH;
+  c.direct(() => peindreFusion(c.ctx));
+  c.texte('thermomètre', tx, by + 36, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('(touche)', tx, by + 52, { couleur: 'faible', taille: 12, align: 'center' });
+  c.repere('thermometre', tx - 18, y0 - 6, 36, by - y0 + 26, `le thermomètre (température de départ : ${P.temperature})`);
+  // Les noms des deux noyaux (ils suivent les noyaux jusqu’au contact).
+  c.direct(() => {
+    if (t >= L.contact) return;
+    const [D, Tc] = centresDT(t);
+    noyauTexte(c, 2, 1, 'H', D[0], D[1] - RD - 10, { taille: 18, couleur: 'blanc', align: 'center' });
+    noyauTexte(c, 3, 1, 'H', Tc[0], Tc[1] - RT - 10, { taille: 18, couleur: 'blanc', align: 'center' });
+  });
+  legendePhase(c, 'approche', 'deux noyaux légers s’approchent', FU.M[0], 74, Math.max(M.approche + .3, a_('repulsion')));
+  if (H) {
+    ecrit(c, 'chauffage', () => { T(c, 'température très élevée,', 682, 84, { couleur: 'orange', taille: 15, align: 'right' }); T(c, '≈ 10⁸ K', 682, 106, { couleur: 'orange', taille: 15, align: 'right' }); });
+    ecrit(c, 'repulsion', () => T(c, 'ils se repoussent, mais vont assez vite pour se toucher', FU.M[0] - 20, 102, { couleur: 'jaune', taille: 15, align: 'center', max: 420 }));
+  } else {
+    T(c, 'basse', tx + 16, FU.TH.y1 - 2, { couleur: 'faible', taille: 12 });
+    ecrit(c, 'repulsion', () => {
+      T(c, 'ils se repoussent : deux charges positives', FU.M[0], 102, { couleur: 'jaune', taille: 15, align: 'center' });
+      c.fleche(200, 226, 148, 226, { couleur: 'jaune', largeur: 1.6, tete: 8 });
+      c.fleche(470, 226, 522, 226, { couleur: 'jaune', largeur: 1.6, tete: 8 });
+    });
+    ecrit(c, 'chauffage', () => { T(c, 'on chauffe : température très élevée,', 682, 84, { couleur: 'orange', taille: 15, align: 'right' }); T(c, '≈ 10⁸ K', 682, 106, { couleur: 'orange', taille: 15, align: 'right' }); });
+  }
+  legendePhase(c, 'fusion', 'ils se touchent : fusion', FU.M[0], 126, Infinity, {});
+  ecrit(c, 'produits', () => {
+    noyauTexte(c, 4, 2, 'He', FU.HE_F[0], FU.HE_F[1] - RHE - 10, { taille: 18, couleur: 'blanc', align: 'center' });
+    noyauTexte(c, 1, 0, 'n', FU.N_F[0] + FU.r + 6, FU.N_F[1] + 5, { taille: 16, couleur: 'blanc' });
+  });
+  ecrit(c, 'energie', () => T(c, 'énergie libérée : E_{lib} = 17,6 MeV', FU.M[0], 284, { couleur: 'jaune', taille: 17, align: 'center' }));
+  equation(c, 'fusion', 'equation');
+  definition(c, 'definition', 'La fusion : deux noyaux légers s’unissent pour former un noyau plus lourd');
+  c.direct(() => {
+    const { libre, cHe } = nucleonsFusion(t);
+    if (t < L.contact) {
+      const [D, Tc] = centresDT(t);
+      c.repere('deuterium', D[0] - RD - 4, D[1] - RD - 4, 2 * RD + 8, 2 * RD + 8, 'le noyau de deutérium ²₁H (1 proton, 1 neutron)');
+      c.repere('tritium', Tc[0] - RT - 4, Tc[1] - RT - 4, 2 * RT + 8, 2 * RT + 8, 'le noyau de tritium ³₁H (1 proton, 2 neutrons)');
+    } else {
+      c.repere('deuterium', FU.M[0] - RD - 24, FU.M[1] - RD - 4, 2 * RD + 8, 2 * RD + 8, 'le deutérium ²₁H a fusionné');
+      c.repere('tritium', FU.M[0] + 16 - RT, FU.M[1] - RT - 4, 2 * RT + 8, 2 * RT + 8, 'le tritium ³₁H a fusionné');
+    }
+    const ch = cHe || FU.HE_F;
+    c.repere('helium', ch[0] - RHE - 4, ch[1] - RHE - 4, 2 * RHE + 8, 2 * RHE + 8, t >= L.fusionne ? 'le noyau d’hélium ⁴₂He formé' : 'ici se formera le noyau d’hélium ⁴₂He');
+    const nP = libre || FU.N_F;
+    c.repere('neutron', nP[0] - 16, nP[1] - 16, 32, 32, t >= L.fusionne ? 'le neutron ¹₀n libéré' : 'ici partira le neutron ¹₀n');
+    const x0 = Math.min(ch[0] - RHE, nP[0] - 12) - 4, x1 = Math.max(ch[0] + RHE, nP[0] + 12) + 4, y0 = Math.min(ch[1] - RHE, nP[1] - 12) - 4, y1 = Math.max(ch[1] + RHE, nP[1] + 12) + 4;
+    c.repere('produits', x0, y0, x1 - x0, y1 - y0, 'les produits : ⁴₂He et ¹₀n');
+    c.repere('energie', FU.M[0] - 80, FU.M[1] - 70, 160, 140, 'l’énergie libérée (éclair) : E_lib = 17,6 MeV');
+  });
+}
+function motsFusion() {
+  const t = tv(), L = tlFusion(), h = chaleur(t), m = [];
+  m.push(`Température de départ : ${P.temperature} ; le thermomètre peint indique ${h > .9 ? 'une température très élevée, ≈ 10⁸ K' : h < .2 ? 'une température basse' : 'une température qui monte (on chauffe)'}.`);
+  const d = distFusion(t);
+  if (t < L.contact) {
+    let quoi;
+    if (P.temperature === 'basse' && t < 3.8) quoi = t < 2.6 ? 'les deux noyaux s’approchent lentement' : 'les deux noyaux se repoussent et rebondissent (ils ne se touchent pas)';
+    else if (P.temperature === 'basse' && t < 6) quoi = 'les deux noyaux sont écartés et s’agitent de plus en plus (on chauffe)';
+    else quoi = 'les deux noyaux foncent l’un vers l’autre';
+    m.push(`²₁H (1 proton, 1 neutron) et ³₁H (1 proton, 2 neutrons) sont séparés (distance entre centres ≈ ${Math.round(d)} px à l’écran) : ${quoi}.`);
+  } else if (t < L.fusionne) m.push('Les deux noyaux se touchent et fusionnent : les nucléons se réarrangent.');
+  else m.push(`Produits : un noyau ⁴₂He (2 protons, 2 neutrons) et un neutron ¹₀n ${t < L.prod1 ? 'qui part vite (traînée)' : 'parti à droite'}.`);
+  const f = (t - L.flash0) / 3;
+  if (f > 0 && f < 1) m.push('Un éclair d’énergie jaune-orangé est peint au point de fusion.');
+  m.push(`Noyaux présents : ${t < L.contact ? '²₁H et ³₁H' : t < L.fusionne ? '²₁H et ³₁H en train de fusionner' : '⁴₂He et ¹₀n'}.`);
+  return m;
+}
+
+/* ══ Vue « La réaction spontanée » ══════════════════════════════════════════════════════════ */
+const SP = (() => {
+  const C = [260, 175], r = 3.6, A = 210, pts = positionsAmas(A, r), R = rayonAmas(A, r);
+  const ordre = [...pts.keys()].sort((a, b) => pts[b][0] - pts[a][0]);
+  const alpha = ordre.slice(0, 4), reste = ordre.slice(4);
+  const sorte = new Array(A).fill('n');
+  alpha.forEach((i, k) => { sorte[i] = k % 2 ? 'p' : 'n'; });
+  reste.slice().sort((a, b) => hache(a, 7) - hache(b, 7)).slice(0, 82).forEach(i => { sorte[i] = 'p'; });   // 82 + 2 = 84 protons
+  const sA = positionsAmas(4, r), slotA = {};
+  alpha.forEach((i, k) => { slotA[i] = sA[k]; });
+  const ordreDessin = [...pts.keys()].sort((a, b) => Math.hypot(...pts[b]) - Math.hypot(...pts[a]));
+  return { C, r, R, pts, alpha, reste, sorte, slotA, ordreDessin, PB: [-8, 0], A_F: [620, 150], t: { emet: 2.6, pb: 3.4, alpha1: 3.8, flash0: 2.6, flash1: 4.4 } };
+})();
+const RPB = rayonAmas(206, SP.r), RAL = rayonAmas(4, SP.r);
+function centreAlpha(t) {
+  const L = SP.t, d0 = [SP.C[0] + SP.R - RAL, SP.C[1]];
+  return lerp2(d0, SP.A_F, sortie((t - L.emet) / (L.alpha1 - L.emet)));
+}
+function peindreSpontanee(ctx) {
+  const t = tv(), L = SP.t, [cx, cy] = SP.C;
+  if (t < L.emet) { ombre(ctx, cx, cy, SP.R); for (const i of SP.ordreDessin) sphere(ctx, cx + SP.pts[i][0], cy + SP.pts[i][1], SP.r, SP.sorte[i]); }
+  else {
+    const u = lisse((t - L.emet) / (L.pb - L.emet)), ua = lisse((t - L.emet) / .3), ca = centreAlpha(t);
+    ombre(ctx, cx + SP.PB[0], cy, RPB);
+    for (const i of SP.ordreDessin) {
+      if (SP.alpha.includes(i)) continue;
+      const p = SP.pts[i];
+      sphere(ctx, cx + p[0] + SP.PB[0] * u, cy + p[1] + SP.PB[1] * u, SP.r, SP.sorte[i]);
+    }
+    const ca0 = centreAlpha(Math.max(L.emet, t - .3));
+    trainee(ctx, ca[0], ca[1], ca[0] - ca0[0], ca[1] - ca0[1], RAL * .9, 'p');
+    ombre(ctx, ca[0], ca[1], RAL);
+    for (const i of SP.alpha) {
+      const p = SP.pts[i], s = SP.slotA[i];
+      sphere(ctx, lerp(cx + p[0], ca[0] + s[0], ua), lerp(cy + p[1], ca[1] + s[1], ua), SP.r, SP.sorte[i]);
+    }
+  }
+  eclair(ctx, cx + SP.R, cy, (t - L.flash0) / (L.flash1 - L.flash0), 80);
+}
+function craieSpontanee(c) {
+  const t = tv(), L = SP.t, [cx, cy] = SP.C;
+  c.direct(() => peindreSpontanee(c.ctx));
+  if (t < L.pb) noyauTexte(c, 210, 84, 'Po', cx, cy - SP.R - 12, { taille: 18, couleur: 'blanc', align: 'center' });
+  legendePhase(c, 'noyau_seul', 'un noyau seul : rien ne le touche', cx, 268);
+  legendePhase(c, 'emission', 'à un instant, il émet une particule α', cx, 292);
+  ecrit(c, 'produits', () => {
+    noyauTexte(c, 206, 82, 'Pb', cx + SP.PB[0], cy - RPB - 12, { taille: 18, couleur: 'blanc', align: 'center' });
+    ligne(c, ['particule α : ', { A: 4, Z: 2, X: 'He' }], SP.A_F[0], SP.A_F[1] - 22, { taille: 16, couleur: 'blanc', align: 'center' });
+    T(c, 'énergie libérée : 5,4 MeV', 500, 238, { couleur: 'jaune', taille: 15, align: 'center' });
+  });
+  if (vu('legende')) ecritA(c, a_('legende'), M.legende - 1.2, () => ligne(c, PARTS_EQ.spontanee, 380, Y_EQ, { taille: 24, couleur: 'blanc', align: 'center', pause: .22 }));
+  c.repere('equation', 380 - 190, Y_EQ - 30, 380, 42, `l’équation : ${EQUATIONS.spontanee}`);
+  c.repere('definition', 14, Y_DEF - 22, 732, 32, 'réaction spontanée : le noyau se transforme seul (radioactivité)');
+  if (vu('legende')) ecritA(c, M.legende - 1.2, M.legende, () => {
+    T(c, 'réaction spontanée : le noyau se transforme seul (radioactivité)', 380, Y_DEF, { couleur: 'jaune', taille: 17, align: 'center', max: 716 });
+    c.rect(16, Y_DEF - 21, 728, 30, { couleur: 'jaune', arrondi: 7, largeur: 1.3, alpha: .7 });
+  });
+  c.direct(() => {
+    const pb = t >= L.emet;
+    c.repere('noyau_polonium', cx - SP.R - 4, cy - SP.R - 4, 2 * SP.R + 8, 2 * SP.R + 8, pb ? 'le noyau de polonium 210 est devenu ²⁰⁶₈₂Pb' : 'le noyau de polonium 210 (²¹⁰₈₄Po)');
+    const ca = t >= L.emet ? centreAlpha(t) : [cx + SP.R - RAL, cy];
+    c.repere('particule_alpha', ca[0] - 16, ca[1] - 16, 32, 32, t >= L.emet ? 'la particule α (⁴₂He)' : 'ici partira la particule α');
+    const x0 = cx + SP.PB[0] - RPB - 4, x1 = Math.max(ca[0] + 16, cx + RPB);
+    c.repere('produits', x0, cy - RPB - 4, x1 - x0, 2 * RPB + 8, 'les produits : ²⁰⁶₈₂Pb et la particule α ⁴₂He');
+    c.repere('energie', cx + SP.R - 50, cy - 50, 100, 100, 'l’énergie libérée à l’émission (éclair) : 5,4 MeV');
+  });
+}
+function motsSpontanee() {
+  const t = tv(), L = SP.t, m = [];
+  if (t < L.emet) m.push('Un noyau ²¹⁰₈₄Po (amas de 84 protons et 126 neutrons) est seul, au repos : rien ne le touche.');
+  else if (t < L.alpha1) m.push('Le noyau vient d’émettre une particule α (⁴₂He : 2 protons, 2 neutrons) qui part vite vers la droite (traînée) ; le reste devient ²⁰⁶₈₂Pb.');
+  else m.push('La particule α (⁴₂He) est partie à droite ; il reste un noyau ²⁰⁶₈₂Pb.');
+  const f = (t - L.flash0) / (L.flash1 - L.flash0);
+  if (f > 0 && f < 1) m.push('Un éclair d’énergie jaune-orangé est peint au bord du noyau.');
+  m.push(`Noyaux présents : ${t < L.emet ? '²¹⁰₈₄Po' : '²⁰⁶₈₂Pb et ⁴₂He'}.`);
+  return m;
+}
+
+/* ── La scène ──────────────────────────────────────────────────────────────────────────────── */
+function dessiner(c) {
+  cadreVue(c);
+  ({ fission: craieFission, chaine: craieChaine, fusion: craieFusion, spontanee: craieSpontanee })[P.vue](c);
+  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
+}
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(43); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN()) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN()) { S.running = false; S.fait = true; S.jusqua = null; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce que l’on voit, en mots ─────────────────────────────────────────────────────────────── */
+function phase() {
+  if (S.fait) return 'fin, tout est écrit';
+  if (S.t <= 0) return 'la scène est prête, rien n’a encore bougé';
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  const prochain = SUITE.find(([, t]) => S.t < t - 1e-6);
+  if (dernier) return dernier[0] === 'fin' ? 'fin, tout est écrit' : `${dernier[1]}${prochain ? ` (ensuite : ${prochain[2]})` : ''}`;
+  return prochain ? `avant « ${prochain[0]} » : ${prochain[2]}` : '';
+}
+function ecritsCraie() {
+  const e = [], v = P.vue;
+  if (v === 'fission') {
+    if (fini('produits_partent')) e.push('les noms ¹⁴⁰₅₄Xe, ⁹⁴₃₈Sr, ¹₀n à côté des produits');
+    if (fini('energie')) e.push('« énergie libérée : E_lib ≈ 185 MeV »');
+    if (fini('definition')) e.push('« La fission : un noyau lourd, frappé par un neutron, se scinde en deux noyaux plus légers »');
+  } else if (v === 'chaine') {
+    const n = ['premiere_fission', 'deux_fissions', 'quatre_fissions'].filter(fini).length;
+    if (n) e.push(`le compteur « fissions : ${['1', '1, 2', '1, 2, 4'][n - 1]} »`);
+    if (fini('legende')) e.push('« chaque fission libère des neutrons qui provoquent d’autres fissions : réaction en chaîne »');
+  } else if (v === 'fusion') {
+    if (fini('repulsion')) e.push(P.temperature === 'haute' ? '« ils se repoussent, mais vont assez vite pour se toucher »' : '« ils se repoussent : deux charges positives » (deux flèches qui s’écartent)');
+    if (fini('chauffage')) e.push('« température très élevée, ≈ 10⁸ K »');
+    if (fini('produits')) e.push('les noms ⁴₂He et ¹₀n à côté des produits');
+    if (fini('energie')) e.push('« énergie libérée : E_lib = 17,6 MeV »');
+    if (fini('definition')) e.push('« La fusion : deux noyaux légers s’unissent pour former un noyau plus lourd »');
+  } else {
+    if (fini('produits')) e.push('les noms ²⁰⁶₈₂Pb et « particule α : ⁴₂He », « énergie libérée : 5,4 MeV »');
+    if (fini('legende')) e.push('« réaction spontanée : le noyau se transforme seul (radioactivité) »');
+  }
+  return e;
+}
+function equationEcrite() {
+  if (P.vue === 'chaine') return null;
+  return fini(P.vue === 'spontanee' ? 'legende' : 'equation') ? EQUATIONS[P.vue] : null;
+}
+function ceQuiSeVoit() {
+  const m = [], etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  m.push(`Vue « ${P.vue} » (${NOMS_VUES[P.vue]}${P.vue === 'fusion' ? `, température de départ ${P.temperature}` : ''}), t = ${fr(S.t, 2)} s (${etat}). Protons en rouge, neutrons en gris-bleu.`);
+  m.push(...({ fission: motsFission, chaine: motsChaine, fusion: motsFusion, spontanee: motsSpontanee })[P.vue]());
+  const e = ecritsCraie();
+  if (e.length) m.push('Écrit à la craie : ' + e.join(' ; ') + '.');
+  if (P.vue !== 'chaine') { const eq = equationEcrite(); m.push(eq ? `Équation écrite : « ${eq} ».` : 'L’équation n’est pas encore écrite.'); }
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+function message() {
+  return { fission: `Fission : ${EQUATIONS.fission} ; E_lib ≈ 185 MeV.`, chaine: 'Réaction en chaîne : 1, 2, 4 fissions… chaque fission libère des neutrons qui provoquent d’autres fissions.',
+    fusion: `Fusion : ${EQUATIONS.fusion} ; E_lib = 17,6 MeV.`, spontanee: `Réaction spontanée : ${EQUATIONS.spontanee}.` }[P.vue];
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +(p && p.time_s);
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN(), Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe les noyaux…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN()); S.fait = S.t >= FIN();
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function recalculer() { SUITE = suite(); M = moments(); }
+function remettre() { S.running = false; S.jusqua = null; S.t = 0; S.fait = false; $('run').textContent = 'Lancer'; scene.reecrire(); }
+function setParameters(p) {
+  p = p || {};
+  const avant = P.vue + '/' + P.temperature;
+  if (VUES.includes(p.vue)) P.vue = p.vue;
+  if (TEMPERATURES.includes(p.temperature)) P.temperature = p.temperature;
+  recalculer();
+  if (P.vue + '/' + P.temperature !== avant) remettre();
+  scene.sale = true;
+  bulle($('feedback'), reglage());
+  pont.noter('set_parameters', params()); pont.emettre(); pont.manifeste();
+}
+function reglage() {
+  if (P.vue === 'fusion') return `Fusion : ${EQUATIONS.fusion} — température de départ ${P.temperature}.`;
+  return { fission: `Fission : ${EQUATIONS.fission}.`, chaine: 'La réaction en chaîne : 1 → 2 → 4 fissions.', spontanee: `Réaction spontanée : ${EQUATIONS.spontanee}.` }[P.vue];
+}
+function params() {
+  return { vue: P.vue, temperature: P.vue === 'fusion' ? P.temperature : null,
+    equation: EQUATIONS[P.vue] || null, E_lib_MeV: { fission: '≈ 185', fusion: '17,6', spontanee: '5,4', chaine: null }[P.vue] };
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN() && !S.fait ? resume() : start()));
+
+/* Poignée de l’élève (vue fusion) : le thermomètre — une touche bascule la température de départ (basse ↔ haute), et la scène repart. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    if (P.vue !== 'fusion') return null;
+    const [x, y] = scene.local(px, py), { x: tx, y0, by } = FU.TH;
+    return Math.abs(x - tx) < 26 && y > y0 - 12 && y < by + 56 ? 'thermometre' : null;
+  },
+  bouger: () => {},
+  lacher: () => {
+    P.temperature = P.temperature === 'basse' ? 'haute' : 'basse';
+    recalculer(); S.jusqua = null; S.t = 0; S.fait = false; scene.sale = true;
+    pont.noter('set_parameters', params()); start(); bulle($('feedback'), reglage());
+  },
+});
+
+const EXPLICATIONS = {
+  fission: [
+    { repere: 'neutron', texte: 'Un neutron lent arrive sur un noyau d’uranium 235.' },
+    { repere: 'noyau_uranium', texte: 'Frappé par le neutron, le noyau lourd se déforme, s’allonge, puis se coupe en deux.' },
+    { repere: 'produits', texte: 'On obtient deux noyaux plus légers, le strontium 94 et le xénon 140, et 2 neutrons.' },
+    { repere: 'energie', texte: 'La fission libère de l’énergie : environ 185 MeV par noyau.' },
+    { repere: 'equation', texte: 'L’équation : uranium 235 plus un neutron donne strontium 94, xénon 140 et 2 neutrons ; A et Z se conservent.' },
+    { repere: 'definition', texte: 'La fission : un noyau lourd, frappé par un neutron, se scinde en deux noyaux plus légers.' },
+  ],
+  chaine: [
+    { repere: 'neutron', texte: 'Un neutron provoque une première fission.' },
+    { repere: 'noyau_uranium', texte: 'Ce noyau se scinde et libère 2 neutrons.' },
+    { repere: 'compteur', texte: 'Ces 2 neutrons provoquent 2 fissions, puis 4 : le nombre de fissions augmente très vite.' },
+    { repere: 'definition', texte: 'Chaque fission libère des neutrons qui provoquent d’autres fissions : c’est la réaction en chaîne.' },
+  ],
+  fusion: [
+    { repere: 'deuterium', texte: 'Un noyau de deutérium, un proton et un neutron.' },
+    { repere: 'tritium', texte: 'Un noyau de tritium, un proton et deux neutrons.' },
+    { repere: 'thermometre', texte: 'À basse température, ils se repoussent : ce sont deux charges positives. Il faut une température très élevée, environ 10⁸ K.' },
+    { repere: 'helium', texte: 'Très chauds, ils se touchent et fusionnent en un noyau d’hélium 4…' },
+    { repere: 'neutron', texte: '…et un neutron.' },
+    { repere: 'energie', texte: 'La fusion libère 17,6 MeV.' },
+    { repere: 'equation', texte: 'L’équation : deutérium plus tritium donne hélium 4 plus un neutron.' },
+    { repere: 'definition', texte: 'La fusion : deux noyaux légers s’unissent pour former un noyau plus lourd.' },
+  ],
+  spontanee: [
+    { repere: 'noyau_polonium', texte: 'Un noyau de polonium 210, seul : rien ne le touche.' },
+    { repere: 'particule_alpha', texte: 'À un instant, il émet une particule α, un noyau d’hélium 4.' },
+    { repere: 'produits', texte: 'Il reste un noyau de plomb 206.' },
+    { repere: 'equation', texte: 'Polonium 210 donne plomb 206 plus hélium 4 : A et Z se conservent.' },
+    { repere: 'definition', texte: 'C’est une réaction spontanée : le noyau se transforme seul, c’est la radioactivité.' },
+  ],
+};
+window.Tableau.explication(EXPLICATIONS);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'energie_nucleaire_reactions', version: '1.0', title: 'Les réactions nucléaires', variants: VUES.map(v => ({ id: v, label: NOMS_VUES[v] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'fission | chaine | fusion | spontanee (change la scène et la remet à zéro)', temperature: 'basse | haute (vue fusion : température de départ ; basse = ils se repoussent puis on chauffe ; haute = déjà ≈ 10⁸ K, ils fusionnent tout de suite)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant, s ; voir moments)' },
+    play_until: { moment: 'fission : neutron_arrive | choc | noyau_deforme | coupure | produits_partent | energie | equation | definition | fin ; chaine : premiere_fission | deux_fissions | quatre_fissions | legende | fin ; fusion : approche | repulsion | chauffage | fusion | produits | energie | equation | definition | fin ; spontanee : noyau_seul | emission | produits | legende | fin (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Les réactions nucléaires, dessinées au tableau (protons rouges, neutrons gris-bleu). Réaction spontanée : ²¹⁰₈₄Po → ²⁰⁶₈₂Pb + ⁴₂He, le noyau se transforme seul (radioactivité). Fission : ²³⁵₉₂U + ¹₀n → ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + 2 ¹₀n, un noyau lourd frappé par un neutron se scinde en deux noyaux plus légers (E_lib ≈ 185 MeV). Réaction en chaîne : chaque fission libère des neutrons qui provoquent d’autres fissions (1, 2, 4…). Fusion : ²₁H + ³₁H → ⁴₂He + ¹₀n, deux noyaux légers s’unissent en un noyau plus lourd ; il faut une température très élevée (≈ 10⁸ K) car ils se repoussent (E_lib = 17,6 MeV).',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: P.vue,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: moments(), equation_ecrite: equationEcrite() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'On va regarder des noyaux se transformer…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

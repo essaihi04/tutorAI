@@ -556,6 +556,17 @@ export const listAvisProfs = () => adminApi.get<{ avis: AvisProf[] }>('/avis-pro
 export const setStatutAvisProf = (a: Pick<AvisProf, 'visiteur' | 'deck_id' | 'slide_id'>, statut: AvisProf['statut']) =>
   adminApi.post('/avis-profs/statut', { visiteur: a.visiteur, deck_id: a.deck_id, slide_id: a.slide_id, statut });
 
+/** Mémoire longue (11 novembre 2026) : rétention aux rappels espacés, par cours, compétence et élève. */
+export interface TauxRetention { n: number; reussis: number; taux: number | null }
+export interface Retention {
+  par_cours: { cours_id: string; titre: string; matiere: string; rappels: TauxRetention; j7: TauxRetention; j30: TauxRetention }[];
+  par_competence: { cle: string; cours_id: string; competence_id: string; label: string; rappels: TauxRetention; j7: TauxRetention; j30: TauxRetention }[];
+  par_eleve: { eleve: string; public: boolean; competences_suivies: number; dus: number; rappels: TauxRetention; j7: TauxRetention; j30: TauxRetention;
+    seances: number; duree_moyenne_min: number | null; cahiers: number; saturations: Record<string, number>; notifications: Record<string, number>; dernier_evenement: string }[];
+  definition: string;
+}
+export const getRetention = () => adminApi.get<Retention>('/retention');
+
 export const listRegistrationRequests = (status?: string) =>
   adminApi.get('/registration-requests', { params: status ? { status } : {} });
 

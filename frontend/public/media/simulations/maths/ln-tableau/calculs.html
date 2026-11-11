@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calculs au tableau — fonctions logarithmiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Calcul écrit à la craie, ligne après ligne, comme au tableau : les mots importants encadrés, les erreurs barrées"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/calculs-vues.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : les calculs écrits à la main au tableau (?vue=<id de la
+ * diapositive>, par ex. ?vue=n1). Le contenu de chaque vue vient de calculs-vues.js, ÉCRIT PAR LE BUILD DU COURS
+ * (maths_build/fonctions_ln/build.py, depuis les p*.py) : ne pas le modifier à la main.
+ * Chaque ligne : {t: texte, c: couleur, m: moment marqué juste après elle, cadre: couleur d’un cadre, r: [repère, libellé],
+ * barre: true (barrée en rouge après écriture), x / dx: position, meme: true (même hauteur que la précédente),
+ * taille, inter (interligne), p: pause avant (s)}.
+ */
+const IND = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', 'n': 'ₙ', 'p': 'ₚ', 'k': 'ₖ', '+': '₊', '−': '₋', '-': '₋' };
+const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', 'n': 'ⁿ', '+': '⁺', '−': '⁻', '-': '⁻', 'p': 'ᵖ' };
+const lisible = s => String(s)
+  .replace(/_\{([^}]+)\}|_([A-Za-z0-9])/g, (m, a, b) => [...(a || b)].map(ch => IND[ch] || ch).join(''))
+  .replace(/\^\{([^}]+)\}|\^([0-9])/g, (m, a, b) => [...(a || b)].map(ch => SUP[ch] || ch).join(''));
+const nettoyer = s => String(s).replace(/[_^{}]/g, '');
+const SU = {
+  larg: (c, s, taille = 18) => c.largeurTexte(nettoyer(s), taille),
+  barre: (c, x, y, w, o = {}) => c.ligne(x - 3, y + 2, x + w + 3, y - 14, { couleur: o.couleur || 'rouge', largeur: o.largeur || 2.4 }),
+};
+const vues = {};
+for (const [id, d] of Object.entries(window.CALCULS || {})) {
+  vues[id] = {
+    titre: d.titre,
+    dessiner(c, K) {
+      K.titre(d.titre);
+      let y = d.y0 || 82, yPrec = y, xPrec = 30;
+      for (const l of d.lignes) {
+        c.pause(l.p ?? .25);
+        const taille = l.taille || d.taille || 19;
+        if (l.meme) y = yPrec;
+        const x = l.x ?? (l.meme ? xPrec : 30 + (l.dx || 0));
+        const w = Math.min(740 - x, SU.larg(c, l.t, taille));
+        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x });
+        if (l.cadre) c.rect(x - 8, y - taille - 4, w + 16, taille + 14, { couleur: l.cadre, arrondi: 7, largeur: 1.6 });
+        if (l.barre) SU.barre(c, x, y - 4, w, { couleur: 'rouge' });
+        if (l.r) c.repere(l.r[0], x - 6, y - taille - 6, w + 12, taille + 16, l.r[1]);
+        if (l.m) K.marque(l.m);
+        yPrec = y; xPrec = x + w + 14;
+        y += l.inter ?? Math.round(taille * 1.8);
+      }
+    },
+    decrire(K) {
+      const D = {}; let acc = [];
+      for (const l of d.lignes) { acc.push(lisible(l.t) + (l.barre ? ' (barré)' : '')); if (l.m) { D[l.m] = 'Écrit : ' + acc.join(' ; ') + '.'; acc = []; } }
+      return D;
+    },
+    explication: (d.lignes.filter(l => l.r).map(l => ({ repere: l.r[0], texte: lisible(l.r[1]) }))),
+  };
+}
+MathsTableau.page({
+  id: 'ln_calculs', titre: 'Calculs au tableau',
+  texte: 'Calculs et démonstrations du cours Fonctions logarithmiques écrits à la craie, ligne après ligne, rédigés comme au barème du national',
+  vues,
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
