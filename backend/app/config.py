@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     # Claude (Anthropic) : modèle principal du tuteur depuis le 11 novembre 2026, DeepSeek reste en secours
     # (llm_service.chat / chat_stream). Clé dans /etc/moalim/backend.env : ANTHROPIC_API_KEY=… (jamais dans le dépôt).
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-opus-5-5"
-    anthropic_effort: str = "low"          # low : réponses courtes et rapides du tuteur ; thinking toujours actif sur Opus 5.5
+    anthropic_model: str = "claude-haiku-5-5"   # tuteur en direct : rapide (2–3 s) et économe ; claude-sonnet-5-5 ou claude-opus-5-5 possibles
+    anthropic_effort: str = "low"
 
     # Google Cloud (not used - using Gemini API key instead)
     # google_application_credentials: str = ""

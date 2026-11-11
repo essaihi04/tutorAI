@@ -49,7 +49,7 @@ def test_claude_repond(monkeypatch):
     s = _service(monkeypatch, faux)
     assert asyncio.run(s.chat([{"role": "user", "content": "x"}], "sys", temperature=0.4, max_tokens=500)) == "bonjour"
     kw = faux.appels[0]
-    assert kw["model"] == s.claude_model and "temperature" not in kw and kw["fallbacks"] == "default"
+    assert kw["model"] == s.claude_model and "temperature" not in kw
     assert kw["max_tokens"] > 500
 
 
@@ -64,3 +64,13 @@ def test_secours_deepseek_sur_erreur_ou_refus(monkeypatch):
 def test_sans_cle_deepseek_seul(monkeypatch):
     s = _service(monkeypatch, None)
     assert asyncio.run(s.chat([{"role": "user", "content": "x"}], "sys")) == "deepseek"
+
+
+def test_systeme_claude_met_le_fixe_en_cache_et_le_tour_a_la_fin():
+    p = "[ROLE]\nprof\n\n[PROFIL_ETUDIANT]\nNom: Amine\n\n[PROTOCOLE_UI_UNIFIÉ]\nui\n\n[PROGRAMME OFFICIEL — PHYSIQUE]\nprog\n\n[REGLES_PHASE]\nphase"
+    blocs = L._systeme_claude(p)
+    assert [b.get("cache_control") is not None for b in blocs] == [True, True, False]
+    assert "[ROLE]" in blocs[0]["text"] and "[PROTOCOLE_UI_UNIFIÉ]" in blocs[0]["text"] and "Amine" not in blocs[0]["text"]
+    assert "[PROGRAMME OFFICIEL" in blocs[1]["text"]
+    assert "Amine" in blocs[2]["text"] and "[REGLES_PHASE]" in blocs[2]["text"]
+    assert L._systeme_claude("Tu es un professeur.") == [{"type": "text", "text": "Tu es un professeur."}]

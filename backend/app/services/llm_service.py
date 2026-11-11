@@ -4,6 +4,7 @@ Handles all interactions with DeepSeek API for tutoring dialogue.
 """
 import httpx
 import logging
+import re
 from datetime import date
 from typing import AsyncGenerator, Optional
 from app.config import get_settings
@@ -20,6 +21,45 @@ try:  # Claude, modèle principal depuis le 11 novembre 2026 ; DeepSeek reste en
     import anthropic
 except ImportError:  # dépendance absente : DeepSeek seul
     anthropic = None
+
+
+# Parties du prompt qui ne dépendent ni de l'élève ni du tour : identiques pour tous (premier cache),
+# puis celles qui ne dépendent que de la matière ou du chapitre (second cache). Tout le reste — profil,
+# leçon, phase, contenu trouvé pour la question, acquis, geste du tour… — passe après, non mis en cache.
+_PARTIES_COMMUNES = (
+    "[ROLE]", "[NIVEAU PÉDAGOGIQUE", "[CANAUX_PEDAGOGIQUES", "[COMPORTEMENTS_PROF_EXPERT_BAC",
+    "[EXPERTISE EXAMEN BAC", "[PROTOCOLE_UI_UNIFIÉ", "[RÈGLE DE SÉCURITÉ", "[PROTOCOLE D'ÉCOUTE",
+    "[RYTHME HUMAIN", "[MODE PROF EN DIRECT", "[QUESTION PENDANT LE COURS", "[BOUTONS_REPONSE_CONTEXTUELS",
+    "[SKILL VISUELS SCIENTIFIQUES", "[SCHÉMAS SVG DISPONIBLES", "[MODE LIBRE", "[COMMANDES_DISPONIBLES",
+    "[RÈGLES DE DÉCISION", "[RÈGLES GÉNÉRALES", "[RUBRIQUES DU TABLEAU BLANC", "[UTILISATION DU TABLEAU BLANC",
+    "[INSTRUCTIONS_PEDAGOGIQUES", "[CONTROLE_INTELLIGENT", "[STRATÉGIE DE PRÉPARATION BAC",
+)
+_PARTIES_MATIERE = (
+    "[PROGRAMME OFFICIEL", "[COEFFICIENTS OFFICIELS", "[ÉLÉMENTS PRIORITAIRES", "[TERMINOLOGIE_OFFICIELLE",
+)
+_TITRE_PARTIE = re.compile(r"\n(?=\[[^\]\n]{3,80}\]\s*\n)")
+
+
+def _systeme_claude(texte: str) -> list[dict]:
+    """Découpe le prompt système en trois blocs : commun (cache), matière (cache), propre au tour.
+    L'ordre relatif des parties est gardé dans chaque bloc."""
+    communes, matiere, reste = [], [], []
+    for partie in _TITRE_PARTIE.split(texte or ""):
+        tete = partie.lstrip()
+        if tete.startswith(_PARTIES_COMMUNES):
+            communes.append(partie)
+        elif tete.startswith(_PARTIES_MATIERE):
+            matiere.append(partie)
+        elif partie.strip():
+            reste.append(partie)
+    blocs = []
+    for parties, cache in ((communes, True), (matiere, True), (reste, False)):
+        if parties:
+            bloc = {"type": "text", "text": "\n".join(parties)}
+            if cache:
+                bloc["cache_control"] = {"type": "ephemeral"}
+            blocs.append(bloc)
+    return blocs or [{"type": "text", "text": texte or ""}]
 
 
 def _messages_claude(messages: list[dict], system_prompt: str) -> tuple[str, list[dict]]:
@@ -2442,24 +2482,37 @@ class LLMService:
         l'effort, pas de temperature) ; max_tokens garde de la marge pour elle, la longueur visible reste
         tenue par le prompt ; fallbacks « default » : un refus est rejoué côté serveur sur un autre modèle."""
         systeme, tours = _messages_claude(messages, system_prompt)
-        return {
+        req = {
             "model": self.claude_model,
-            "max_tokens": max(max_tokens, 0) + 4000,
-            "system": systeme,
+            "system": _systeme_claude(systeme),
             "messages": tours,
             "output_config": {"effort": settings.anthropic_effort},
-            "betas": ["server-side-fallback-2026-07-01"],
-            "fallbacks": "default",
         }
+        if self.claude_model.startswith("claude-haiku"):
+            # Haiku 5.5 : réflexion coupée (permis jusqu'à l'effort high), pas de repli serveur sur refus.
+            req.update(thinking={"type": "disabled"}, max_tokens=max(max_tokens, 0) + 1000)
+        elif self.claude_model.startswith("claude-sonnet"):
+            # Sonnet 5.5 : réflexion coupée par « between_tools » (effort high au plus), repli « default ».
+            req.update(thinking={"type": "between_tools"}, max_tokens=max(max_tokens, 0) + 1000,
+                       betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        else:
+            # Opus : réflexion toujours active, on lui laisse de la marge.
+            req.update(max_tokens=max(max_tokens, 0) + 4000,
+                       betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        return req
 
     async def _suivre_claude(self, reponse, student_id, student_email, session_type, endpoint, debut):
         u = getattr(reponse, "usage", None)
         entree, sortie = getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0
+        lu = getattr(u, "cache_read_input_tokens", 0) or 0
+        ecrit = getattr(u, "cache_creation_input_tokens", 0) or 0
+        entree += lu + ecrit   # le total d'entrée, cache compris (input_tokens n'en compte que la partie hors cache)
         await token_tracker.record_usage(
             student_id=student_id, student_email=student_email, provider="anthropic",
             model=getattr(reponse, "model", None) or self.claude_model, endpoint=endpoint,
             prompt_tokens=entree, completion_tokens=sortie, total_tokens=entree + sortie,
             request_duration_ms=token_tracker.elapsed_ms(debut), session_type=session_type,
+            metadata={"cache_lu": lu, "cache_ecrit": ecrit},
         )
     
     def _ensure_rag_initialized(self) -> bool:
