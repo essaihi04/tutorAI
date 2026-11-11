@@ -303,11 +303,14 @@ def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str,
               .replace('"__TEXTE_PARLE_B64__"', repr(regles), 1))
     (dossier / "serveur.py").write_text(source, encoding="utf-8")
     u = settings.kaggle_username
-    sources = [f"{u}/{settings.kaggle_tts_modele}"]
+    # Propriétaire des poids et du socle : un 2e compte Kaggle (voix en parallèle, 11 novembre 2026) pousse
+    # le kernel sous son nom mais lit les notebooks partagés par le compte principal.
+    p = settings.kaggle_sources_proprietaire or u
+    sources = [f"{p}/{settings.kaggle_tts_modele}"]
     if settings.kaggle_tts_socle:
-        sources.append(f"{u}/{settings.kaggle_tts_socle}")
+        sources.append(f"{p}/{settings.kaggle_tts_socle}")
     if settings.kaggle_stt_modele and settings.kaggle_stt_source:
-        sources.append(f"{u}/{settings.kaggle_stt_source}")   # poids MoulSot affinés
+        sources.append(f"{p}/{settings.kaggle_stt_source}")   # poids MoulSot affinés
     kernel = kernel or settings.kaggle_tts_kernel
     meta = {"id": f"{u}/{kernel}", "title": kernel,
             "code_file": "serveur.py", "language": "python", "kernel_type": "script",

@@ -122,6 +122,7 @@ class Settings(BaseSettings):
     kaggle_tts_actif: int = 0
     kaggle_username: str = ""
     kaggle_api_token: str = ""            # KAGGLE_API_TOKEN (jamais dans le dépôt)
+    kaggle_sources_proprietaire: str = ""   # compte qui possède academy-v5-bodi et le socle (vide = kaggle_username)
     kaggle_tts_kernel: str = "academy-tts-direct"
     kaggle_tts_modele: str = "academy-v5-bodi"   # v4 affiné 1 h sur la voix Bodi (2026-11-10 ; ne jamais relancer ce kernel : sa sortie porte les poids)
     kaggle_tts_reference: str = "reference_bodi.flac"   # voix Bodi choisie le 2026-11-10 (écoute à l'aveugle : affiné gagne en darija)
