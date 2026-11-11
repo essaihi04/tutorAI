@@ -9,6 +9,7 @@ import pytest
 from app.config import get_settings
 from app.services import kaggle_tts
 from app.services.kaggle_tts import PiloteKaggle, construire_kernel
+from app.services.kaggle_tts import kaggle_cli as kaggle_cli_reel
 
 settings = get_settings()
 
@@ -19,8 +20,13 @@ def actif(monkeypatch):
     monkeypatch.setattr(settings, "kaggle_username", "prof")
     monkeypatch.setattr(settings, "kaggle_api_token", "jeton-kaggle")
     monkeypatch.setattr(settings, "kaggle_tts_socle", "")
+    monkeypatch.setattr(kaggle_tts, "_env_fichier", lambda: {})     # pas de comptes de secours venus de backend/.env
+    for n in range(2, 11):
+        monkeypatch.delenv(f"KAGGLE{n}_USERNAME", raising=False)
+        monkeypatch.delenv(f"KAGGLE{n}_API_TOKEN", raising=False)
     pousses = []
-    monkeypatch.setattr(kaggle_tts, "pousser_kernel", lambda cle, lancement, jeton: pousses.append((cle, lancement)))
+    monkeypatch.setattr(kaggle_tts, "pousser_kernel", lambda cle, lancement, jeton, **k: pousses.append(
+        (cle, lancement, getattr(k.get("compte"), "nom", None))))
 
     async def sante_ok(url, jeton):
         return True
@@ -121,7 +127,21 @@ def test_budget_hebdo(tmp_path, actif, monkeypatch):
     assert p.etat == "eteint" and not actif
 
 
-def test_kernel_construit(tmp_path, actif):
+@pytest.fixture
+def dossier_kernel(tmp_path, monkeypatch):
+    """La voix de référence n'existe que sur le serveur : en local, on la remplace par un faux FLAC."""
+    if (kaggle_tts.DOSSIER_KERNEL / settings.kaggle_tts_reference).exists():
+        return
+    import shutil
+    d = tmp_path / "kernel_src"
+    d.mkdir()
+    for nom in ("serveur.py", "texte_parle.py"):
+        shutil.copy(kaggle_tts.DOSSIER_KERNEL / nom, d / nom)
+    (d / settings.kaggle_tts_reference).write_bytes(b"fLaC" + bytes(64))
+    monkeypatch.setattr(kaggle_tts, "DOSSIER_KERNEL", d)
+
+
+def test_kernel_construit(tmp_path, actif, dossier_kernel):
     construire_kernel(tmp_path, "CLE'\"", "l1", "jeton")
     meta = json.loads((tmp_path / "kernel-metadata.json").read_text(encoding="utf-8"))
     assert meta["id"] == "prof/academy-tts-direct" and meta["is_private"] and meta["enable_gpu"]
@@ -235,3 +255,272 @@ def test_un_morceau_qui_murmure_est_refait():
     marmonne = 0.01 * np.sin(2 * np.pi * 120 * t)              # ~ -43 dB pendant 1,5 s
     assert ns["murmure"](np.concatenate([parole, silence, parole]), sr) == 0
     assert ns["murmure"](np.concatenate([parole, marmonne, parole]), sr) >= 1.4
+
+
+# ── Plusieurs comptes Kaggle (11 novembre 2026) ──
+
+@pytest.fixture
+def comptes(actif, monkeypatch):
+    """Principal « prof » + deux comptes de secours."""
+    monkeypatch.setenv("KAGGLE2_USERNAME", "secours1")
+    monkeypatch.setenv("KAGGLE2_API_TOKEN", "t2")
+    monkeypatch.setenv("KAGGLE3_USERNAME", "secours2")
+    monkeypatch.setenv("KAGGLE3_API_TOKEN", "t3")
+    return actif
+
+
+def _noms(pousses):
+    return [n for _, _, n in pousses]
+
+
+async def _laisser_finir(p):
+    """Laisse finir les lancements, et la bascule qui suit un échec."""
+    for _ in range(10):
+        await asyncio.sleep(0)
+        t = p._tache
+        if t and not t.done():
+            await t
+
+
+def _besoin(p, raison="parole"):
+    async def go():
+        p.besoin_de_voix(raison)
+        await _laisser_finir(p)
+    asyncio.run(go())
+
+
+def _compte(p, nom):
+    return next(c for c in p.comptes() if c.nom == nom)
+
+
+def _pret(p, nom):
+    c = _compte(p, nom)
+    url = f"https://{nom}.trycloudflare.com"
+    assert asyncio.run(p.recevoir_annonce({"etat": "pret", "cle": c.cle, "lancement": c.lancement,
+                                           "url": url, "jeton": "j-" + nom}))
+    return url
+
+
+def test_un_seul_compte_comme_avant(tmp_path, actif):
+    p = _pilote(tmp_path)
+    assert [c.nom for c in p.comptes()] == ["prof"]
+    _besoin(p)
+    _pret(p, "prof")
+    r = p.resume()
+    assert r["etat"] == "pret" and [c["nom"] for c in r["comptes"]] == ["prof"] and r["comptes"][0]["sert"]
+    assert _noms(actif) == ["prof"]
+
+
+def test_comptes_lus_dans_l_environnement(actif, monkeypatch):
+    monkeypatch.setenv("KAGGLE3_USERNAME", "trois")      # un numéro manquant n'arrête pas la lecture
+    monkeypatch.setenv("KAGGLE3_API_TOKEN", "t3")
+    monkeypatch.setenv("KAGGLE4_USERNAME", "sans-jeton")
+    monkeypatch.setenv("KAGGLE5_USERNAME", "prof")       # doublon du principal : ignoré
+    monkeypatch.setenv("KAGGLE5_API_TOKEN", "x")
+    assert kaggle_tts.comptes_configures() == [("prof", "jeton-kaggle"), ("trois", "t3")]
+
+
+def test_principal_garde_la_priorite(tmp_path, comptes):
+    p = _pilote(tmp_path)
+    _besoin(p)
+    assert _noms(comptes) == ["prof"]                    # un seul réveil, le principal
+    _besoin(p)
+    assert _noms(comptes) == ["prof"]                    # il démarre : on attend, pas de 2e réveil
+    url = _pret(p, "prof")
+    _besoin(p)
+    assert p.cible() == (url, "j-prof") and _noms(comptes) == ["prof"]
+
+
+def test_saturation_reveille_le_secours_puis_bascule(tmp_path, comptes, monkeypatch):
+    monkeypatch.setattr(settings, "kaggle_tts_attente_max", 3)
+    p = _pilote(tmp_path)
+    _besoin(p)
+    url_prof = _pret(p, "prof")
+    principal = _compte(p, "prof")
+    principal.porte.attente = 2                          # presque saturé : réveil à l'avance
+    _besoin(p)
+    assert _noms(comptes) == ["prof", "secours1"]
+    assert p.cible() == (url_prof, "j-prof")            # le principal parle encore
+    _besoin(p)
+    assert len(comptes) == 2                             # le secours démarre : pas d'autre réveil
+    url_s1 = _pret(p, "secours1")
+    principal.porte.attente = 3                          # saturé : la voix passe au secours
+    assert p.cible() == (url_s1, "j-secours1")
+    assert {c["nom"]: c["statut"] for c in p.resume()["comptes"]}["prof"] == "sature"
+    principal.porte.attente = 0                          # plus de file : le principal reprend la main
+    assert p.cible() == (url_prof, "j-prof")
+
+
+def test_porte_par_kernel_dans_tts_service(tmp_path, comptes, monkeypatch):
+    from app.services import tts_service
+    p = _pilote(tmp_path)
+    monkeypatch.setattr(kaggle_tts, "pilote", p)
+    _besoin(p)
+    url = _pret(p, "prof")
+    assert tts_service._academy_sem(url) is _compte(p, "prof").porte
+
+    async def deux_requetes():
+        porte = tts_service._academy_sem(url)
+        async with porte:
+            assert porte.en_cours == 1 and _compte(p, "prof").charge() == 1
+        assert porte.en_cours == 0
+    asyncio.run(deux_requetes())
+
+
+def test_503_bascule_sans_perdre_le_principal(tmp_path, comptes):
+    p = _pilote(tmp_path)
+    _besoin(p)
+    url_prof = _pret(p, "prof")
+
+    async def scenario():
+        p.signaler_injoignable(url_prof)                 # 503 : saturé, mais /health répond encore
+        await _laisser_finir(p)
+    asyncio.run(scenario())
+    assert _noms(comptes) == ["prof", "secours1"]
+    principal = _compte(p, "prof")
+    assert principal.etat == "pret" and p.cible() is None   # au repos ; le secours démarre
+    principal.repos_jusqua = 0
+    assert p.cible() == (url_prof, "j-prof")
+
+
+def test_tunnel_mort_en_multi_comptes(tmp_path, comptes, monkeypatch):
+    p = _pilote(tmp_path)
+    _besoin(p)
+    url_prof = _pret(p, "prof")
+
+    async def muet(url, jeton):
+        return False
+    monkeypatch.setattr(kaggle_tts, "_sante", muet)
+
+    async def scenario():
+        p.signaler_injoignable(url_prof)
+        await _laisser_finir(p)
+    asyncio.run(scenario())
+    assert _compte(p, "prof").etat == "eteint"
+    assert _noms(comptes) == ["prof", "secours1"]
+
+
+def test_quota_epuise_passe_au_suivant(tmp_path, comptes, monkeypatch):
+    monkeypatch.setattr(settings, "kaggle_tts_budget_h_semaine", 2.0)
+    p = _pilote(tmp_path)
+    now = time.time()
+    _compte(p, "prof").sessions = [[now - 3 * 3600, now - 0.5 * 3600]]
+    _besoin(p)
+    assert _noms(comptes) == ["secours1"]
+    statuts = {c["nom"]: c["statut"] for c in p.resume()["comptes"]}
+    assert statuts["prof"] == "quota" and statuts["secours1"] == "file_kaggle"
+
+
+@pytest.mark.parametrize("message, statut", [
+    ("Maximum batch GPU session count of 2 reached", "sessions_pleines"),
+    ("You have exceeded your weekly GPU quota", "quota"),
+    ("401 Unauthorized", "erreur"),
+])
+def test_push_refuse_passe_au_suivant(tmp_path, comptes, monkeypatch, message, statut):
+    def pousser(cle, lancement, jeton, **k):
+        if k["compte"].nom == "prof":
+            raise RuntimeError(message)
+        comptes.append((cle, lancement, k["compte"].nom))
+    monkeypatch.setattr(kaggle_tts, "pousser_kernel", pousser)
+    p = _pilote(tmp_path)
+    _besoin(p)
+    assert _noms(comptes) == ["secours1"]               # parti aussitôt, sans attendre la phrase suivante
+    r = {c["nom"]: c for c in p.resume()["comptes"]}
+    assert r["prof"]["statut"] == statut and message in r["prof"]["derniere_erreur"]
+    _compte(p, "secours1").etat = "eteint"
+    _compte(p, "secours1").dernier_echec = time.time()
+    _besoin(p)
+    assert _noms(comptes) == ["secours1", "secours2"]   # le principal en pause n'est pas relancé
+
+
+def test_compte_en_erreur_au_demarrage(tmp_path, comptes):
+    p = _pilote(tmp_path)
+    _besoin(p)
+    _compte(p, "prof").depuis = time.time() - settings.kaggle_tts_demarrage_max_s - 1
+    _besoin(p)
+    assert _noms(comptes) == ["prof", "secours1"]
+    assert {c["nom"]: c["statut"] for c in p.resume()["comptes"]}["prof"] == "erreur"
+
+
+def test_file_kaggle_trop_longue_un_seul_reveil_de_plus(tmp_path, comptes, monkeypatch):
+    monkeypatch.setattr(settings, "kaggle_tts_file_kaggle_max_s", 180)
+    p = _pilote(tmp_path)
+    _besoin(p)
+    _compte(p, "prof").depuis = time.time() - 200       # toujours dans la file de Kaggle
+    _besoin(p)
+    assert _noms(comptes) == ["prof", "secours1"]
+    _compte(p, "secours1").depuis = time.time() - 200
+    _besoin(p)
+    assert _noms(comptes) == ["prof", "secours1"]       # jamais un troisième
+
+
+def test_kernel_sorti_de_file_pas_de_reveil_en_plus(tmp_path, comptes):
+    p = _pilote(tmp_path)
+    _besoin(p)
+    c = _compte(p, "prof")
+    assert asyncio.run(p.recevoir_annonce({"etat": "demarrage", "cle": c.cle, "lancement": c.lancement}))
+    c.depuis = time.time() - 200
+    _besoin(p)
+    assert _noms(comptes) == ["prof"]
+
+
+def test_moins_charge_parmi_les_secours(tmp_path, comptes):
+    p = _pilote(tmp_path)
+    for nom in ("prof", "secours1", "secours2"):
+        c = _compte(p, nom)
+        c.cle, c.lancement = "cle-" + nom, "l-" + nom
+        _pret(p, nom)
+    _compte(p, "prof").repos_jusqua = time.time() + 60     # le principal vient de répondre 503
+    _compte(p, "secours1").porte.en_cours = 2
+    assert p.cible() == ("https://secours2.trycloudflare.com", "j-secours2")
+    _compte(p, "secours1").porte.en_cours = 0
+    _compte(p, "secours1").sessions = [[time.time() - 3600, 0]]
+    _compte(p, "secours2").sessions = [[time.time() - 7200, 0]]
+    assert p.cible() == ("https://secours1.trycloudflare.com", "j-secours1")   # à charge égale : moins d'heures
+
+
+def test_annonce_d_un_compte_de_secours(tmp_path, comptes):
+    p = _pilote(tmp_path)
+    c1, c2 = _compte(p, "secours1"), _compte(p, "secours2")
+    c1.cle, c1.lancement = "cle1", "l1"
+    c2.cle, c2.lancement = "cle2", "l2"
+    pret = {"etat": "pret", "url": "https://x.trycloudflare.com", "jeton": "j"}
+    assert not asyncio.run(p.recevoir_annonce({**pret, "cle": "cle1", "lancement": "l2"}))   # clés croisées
+    assert asyncio.run(p.recevoir_annonce({**pret, "cle": "cle2", "lancement": "l2"}))
+    assert c2.etat == "pret" and c1.etat == "eteint"
+    assert _pilote(tmp_path).cible() == ("https://x.trycloudflare.com", "j")   # survit au redémarrage
+
+
+def test_ancien_fichier_d_etat_repris(tmp_path, comptes):
+    (tmp_path / "etat.json").write_text(json.dumps({
+        "etat": "pret", "url": "https://vieux.trycloudflare.com", "jeton": "j", "cle": "c", "lancement": "l",
+        "depuis": time.time(), "sessions": [[time.time() - 60, 0]], "derniere_parole": time.time()}),
+        encoding="utf-8")
+    p = _pilote(tmp_path)
+    assert p.cible() == ("https://vieux.trycloudflare.com", "j")
+    assert _compte(p, "prof").etat == "pret" and _compte(p, "secours1").etat == "eteint"
+
+
+def test_kernel_d_un_compte_de_secours(tmp_path, comptes, dossier_kernel):
+    p = _pilote(tmp_path)
+    construire_kernel(tmp_path, "c", "l", "j", compte=_compte(p, "secours1"))
+    meta = json.loads((tmp_path / "kernel-metadata.json").read_text(encoding="utf-8"))
+    assert meta["id"] == "secours1/academy-tts-direct"
+    assert meta["kernel_sources"] and all(s.startswith("prof/") for s in meta["kernel_sources"])   # poids du principal
+
+
+def test_cli_avec_le_jeton_du_compte(tmp_path, comptes, monkeypatch):
+    vus = {}
+
+    class R:
+        returncode, stdout, stderr = 0, "ok", ""
+
+    def run(cmd, **k):
+        vus.update(k["env"])
+        return R()
+    monkeypatch.setattr(kaggle_tts.subprocess, "run", run)
+    p = _pilote(tmp_path)
+    kaggle_cli_reel("kernels", "list", compte=_compte(p, "secours1"))
+    assert vus["KAGGLE_USERNAME"] == "secours1" and vus["KAGGLE_API_TOKEN"] == "t2"
+    kaggle_cli_reel("kernels", "list")
+    assert vus["KAGGLE_USERNAME"] == "prof" and vus["KAGGLE_API_TOKEN"] == "jeton-kaggle"

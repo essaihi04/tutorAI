@@ -340,8 +340,14 @@ _ACADEMY_SEM = asyncio.Semaphore(1)
 _KAGGLE_SEM = asyncio.Semaphore(2)
 
 
-def _academy_sem() -> asyncio.Semaphore:
+def _academy_sem(base: str = ""):
+    # Chaque kernel Kaggle a sa propre « porte » (deux requêtes à la fois) qui
+    # compte les requêtes en attente : c'est ce qui fait passer la voix au compte
+    # Kaggle suivant quand celui-ci est saturé (kaggle_tts.PiloteKaggle).
     from app.services.kaggle_tts import pilote
+    porte = pilote.porte(base) if base else None
+    if porte is not None:
+        return porte
     return _KAGGLE_SEM if pilote.cible() else _ACADEMY_SEM
 
 # Un 500 isolé arrive quand le GPU vient d'enchaîner un autre job : ce n'est
@@ -484,7 +490,7 @@ async def _synthesize_academy(text: str, lang: str) -> Optional[bytes]:
         headers["Authorization"] = f"Bearer {jeton}"
 
     try:
-        async with _academy_sem():
+        async with _academy_sem(base):
             t0 = time.time()
             # Une tentative, puis UN essai de rattrapage : le GPU renvoie
             # parfois un 500 quand il vient juste de finir un autre segment.
@@ -691,7 +697,7 @@ async def stream_academy_pcm(text: str, lang: str):
     try:
         # Le GPU ne traite qu'une synthèse à la fois : deux flux simultanés se
         # hacheraient mutuellement. Le sémaphore est le même que pour /tts.
-        async with _academy_sem():
+        async with _academy_sem(base):
             timeout = httpx.Timeout(300.0, connect=15.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 async with client.stream(

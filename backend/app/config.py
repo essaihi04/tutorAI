@@ -131,7 +131,13 @@ class Settings(BaseSettings):
     kaggle_tts_veille_s: int = 300        # extinction après 5 min sans parler
     kaggle_tts_duree_max_s: int = 3 * 3600
     kaggle_tts_demarrage_max_s: int = 600  # au-delà, le lancement est tenu pour raté
-    kaggle_tts_budget_h_semaine: float = 25.0  # quota Kaggle = 30 h GPU / semaine
+    kaggle_tts_budget_h_semaine: float = 25.0  # quota Kaggle = 30 h GPU / semaine   (par compte)
+    # Plusieurs comptes (11 novembre 2026) : KAGGLE2_USERNAME / KAGGLE2_API_TOKEN … KAGGLE10_… dans l'environnement
+    # (cf. app/services/kaggle_tts.py). Le principal parle tant qu'il n'a pas plus de `kaggle_tts_attente_max`
+    # requêtes de voix en attente ; au-delà, la voix passe au compte suivant.
+    kaggle_tts_comptes_max: int = 10
+    kaggle_tts_attente_max: int = 3
+    kaggle_tts_file_kaggle_max_s: int = 180   # kernel encore dans la file de Kaggle : on réveille UN compte de plus
     kaggle_tts_etat_path: str = "data/kaggle_tts_etat.json"
     kaggle_tts_fp16: int = 0              # calcul en demi-précision (cf. banc_fp16.py)
     kaggle_tts_pas_flow: int = 4          # passages du flow S3Gen (lahgtna : 10). Écoute à l'aveugle du 2026-11-05 :
