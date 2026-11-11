@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     deepseek_api_url: str = "https://api.deepseek.com/chat/completions"
     deepseek_model: str = "deepseek-chat"
 
+    # Claude (Anthropic) : modèle principal du tuteur depuis le 11 novembre 2026, DeepSeek reste en secours
+    # (llm_service.chat / chat_stream). Clé dans /etc/moalim/backend.env : ANTHROPIC_API_KEY=… (jamais dans le dépôt).
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-opus-5-5"
+    anthropic_effort: str = "low"          # low : réponses courtes et rapides du tuteur ; thinking toujours actif sur Opus 5.5
+
     # Google Cloud (not used - using Gemini API key instead)
     # google_application_credentials: str = ""
     # google_cloud_project_id: str = ""

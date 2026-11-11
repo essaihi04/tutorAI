@@ -3,6 +3,7 @@ DeepSeek LLM Service - AI Tutor Brain
 Handles all interactions with DeepSeek API for tutoring dialogue.
 """
 import httpx
+import logging
 from datetime import date
 from typing import AsyncGenerator, Optional
 from app.config import get_settings
@@ -13,6 +14,37 @@ from app.services.scientific_visual_skill import SCIENTIFIC_VISUAL_PROMPT
 from app.services.token_tracking_service import token_tracker
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+try:  # Claude, modèle principal depuis le 11 novembre 2026 ; DeepSeek reste en secours
+    import anthropic
+except ImportError:  # dépendance absente : DeepSeek seul
+    anthropic = None
+
+
+def _messages_claude(messages: list[dict], system_prompt: str) -> tuple[str, list[dict]]:
+    """Convertit l'historique au format Claude : système à part, tours user/assistant alternés,
+    premier tour « user » (les tours consécutifs du même rôle sont fusionnés)."""
+    systeme = [system_prompt] if system_prompt else []
+    tours: list[dict] = []
+    for m in messages:
+        role, texte = m.get("role"), m.get("content")
+        if not isinstance(texte, str):
+            texte = str(texte or "")
+        if role == "system":
+            systeme.append(texte)
+            continue
+        if role not in ("user", "assistant") or not texte.strip():
+            continue
+        if tours and tours[-1]["role"] == role:
+            tours[-1]["content"] += "\n\n" + texte
+        else:
+            tours.append({"role": role, "content": texte})
+    while tours and tours[0]["role"] != "user":
+        tours.pop(0)
+    if not tours:
+        tours = [{"role": "user", "content": "Bonjour"}]
+    return "\n\n".join(systeme), tours
 
 UI_CONTROL_PROMPT = """[PROTOCOLE_UI_UNIFIÉ]
 
@@ -2401,6 +2433,34 @@ class LLMService:
         self.base_url = settings.deepseek_base_url
         self.model = "deepseek-chat"
         self._rag_initialized = False
+        self.claude_model = settings.anthropic_model
+        self._claude = (anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=1)
+                        if anthropic is not None and settings.anthropic_api_key else None)
+
+    def _requete_claude(self, messages: list[dict], system_prompt: str, max_tokens: int) -> dict:
+        """Paramètres communs d'un appel Claude. Opus 5.5 : la réflexion est toujours active (on règle
+        l'effort, pas de temperature) ; max_tokens garde de la marge pour elle, la longueur visible reste
+        tenue par le prompt ; fallbacks « default » : un refus est rejoué côté serveur sur un autre modèle."""
+        systeme, tours = _messages_claude(messages, system_prompt)
+        return {
+            "model": self.claude_model,
+            "max_tokens": max(max_tokens, 0) + 4000,
+            "system": systeme,
+            "messages": tours,
+            "output_config": {"effort": settings.anthropic_effort},
+            "betas": ["server-side-fallback-2026-07-01"],
+            "fallbacks": "default",
+        }
+
+    async def _suivre_claude(self, reponse, student_id, student_email, session_type, endpoint, debut):
+        u = getattr(reponse, "usage", None)
+        entree, sortie = getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0
+        await token_tracker.record_usage(
+            student_id=student_id, student_email=student_email, provider="anthropic",
+            model=getattr(reponse, "model", None) or self.claude_model, endpoint=endpoint,
+            prompt_tokens=entree, completion_tokens=sortie, total_tokens=entree + sortie,
+            request_duration_ms=token_tracker.elapsed_ms(debut), session_type=session_type,
+        )
     
     def _ensure_rag_initialized(self) -> bool:
         """Dit si le RAG est prêt. N'INDEXE JAMAIS ICI.
@@ -3271,6 +3331,34 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
         student_email: Optional[str] = None,
         session_type: str = "coaching",
     ) -> str:
+        """Claude d'abord (si une clé est posée), DeepSeek en secours sur toute erreur ou réponse vide."""
+        if self._claude is not None:
+            debut = token_tracker.start_timer()
+            try:
+                r = await self._claude.beta.messages.create(
+                    **self._requete_claude(messages, system_prompt, max_tokens),
+                    timeout=90.0 if max_tokens >= 800 else 45.0,
+                )
+                texte = "".join(b.text for b in r.content if getattr(b, "type", "") == "text").strip()
+                if r.stop_reason != "refusal" and texte:
+                    await self._suivre_claude(r, student_id, student_email, session_type, "chat", debut)
+                    return texte
+                logger.warning("Claude sans réponse utilisable (%s), secours DeepSeek", r.stop_reason)
+            except Exception as e:  # erreur d'API, réseau, crédit : on bascule
+                logger.warning("Claude indisponible (%s), secours DeepSeek", repr(e)[:200])
+        return await self._chat_deepseek(messages, system_prompt, temperature, max_tokens,
+                                         student_id, student_email, session_type)
+
+    async def _chat_deepseek(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 250,
+        student_id: Optional[str] = None,
+        student_email: Optional[str] = None,
+        session_type: str = "coaching",
+    ) -> str:
         full_messages = [{"role": "system", "content": system_prompt}] + messages
         timeout = 90.0 if max_tokens >= 800 else 30.0
         _start = token_tracker.start_timer()
@@ -3314,6 +3402,42 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
             return content
 
     async def chat_stream(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 600,
+        student_id: Optional[str] = None,
+        student_email: Optional[str] = None,
+        session_type: str = "coaching",
+    ) -> AsyncGenerator[str, None]:
+        """Claude en flux d'abord ; si Claude échoue AVANT le premier morceau, DeepSeek prend le relais.
+        Une coupure après le début du texte arrête le flux (on ne redit pas le début avec un autre modèle)."""
+        if self._claude is not None:
+            debut, envoye = token_tracker.start_timer(), False
+            try:
+                async with self._claude.beta.messages.stream(
+                    **self._requete_claude(messages, system_prompt, max_tokens), timeout=120.0,
+                ) as flux:
+                    async for morceau in flux.text_stream:
+                        if morceau:
+                            envoye = True
+                            yield morceau
+                    r = await flux.get_final_message()
+                if envoye:
+                    await self._suivre_claude(r, student_id, student_email, session_type, "chat_stream", debut)
+                    return
+                logger.warning("Claude en flux sans texte (%s), secours DeepSeek", r.stop_reason)
+            except Exception as e:
+                if envoye:
+                    logger.warning("Flux Claude coupé en route (%s)", repr(e)[:200])
+                    return
+                logger.warning("Claude indisponible en flux (%s), secours DeepSeek", repr(e)[:200])
+        async for morceau in self._chat_stream_deepseek(messages, system_prompt, temperature, max_tokens,
+                                                        student_id, student_email, session_type):
+            yield morceau
+
+    async def _chat_stream_deepseek(
         self,
         messages: list[dict],
         system_prompt: str,

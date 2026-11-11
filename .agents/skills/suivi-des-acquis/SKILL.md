@@ -32,6 +32,24 @@ Storage today: one JSONL per student in `backend/data/suivi_acquis/` (no table b
 - **Next course / remediation**: `lacunes(bilan)` lists the competences to rework with `reprendre_avec` and the trajet. When a new course of the same subject is built (skill `cours-concentration`), its first slide revisits these gaps **with the recommended method** (a manipulated simulation and an exercise rather than another image), and its questions re-ask them so the status can change.
 - **Teacher / student view** (to build): GET `/course-player/acquis/{deck_id}` already returns the full bilan, the lacunes and the prompt block.
 
+## 6. Spaced recall: from short-term to long-term memory (user rule, 11 November 2026)
+
+- **One schedule per student and per competence**: after the course, each competence is due at J+1, then J+3, J+7, J+21, then before the exam (an interval ladder). A successful recall (right at the first try, no help) moves it one step up; a failed one moves it back to J+1; a hesitant one (right at the second try) stays on its step. A competence not acquired in the course starts at J+1 with the method recommended by `a_reprendre_avec`.
+- **Same subject only**: the recall that opens a session draws only from competences of courses of the **same subject** as the course being opened (physique-chimie, SVT, mathématiques, each on its own). Never mix subjects.
+- **3 minutes, 3–5 questions**, the most overdue first, from `competences[].rappels` (another wording than last time), without the course, without hints; then the session goes on. A free recall answer is judged live; a QCM one uses its prepared reaction.
+- A recall counts as « retained » only when it is a first-try success after at least one day: that is what the J+7 and J+30 rates measure.
+
+## 7. Traceability
+
+Every event is recorded with its date and kept (JSONL per student today, the same place as the answers, `suivi_acquis.enregistrer`): course answers (as now), notebook written (block, time spent), retrieval of a block, exercise, recall (competence, step of the ladder, days since the last time, answer, verdict, time to answer), saturation detected (cause) and what the tutor did, session start/end and duration, notification sent / opened. From it, per student and per competence: the history (« trajet »), the next due date, the retention rate at J+7 / J+30. The admin dashboard shows the retention per course and per competence (what actually stays), and per student.
+
+## 8. Notifications, per student
+
+- A notification only when something is due for THIS student: « 3 rappels de physique t'attendent (3 min) » — the subject, the number, the duration; never a generic reminder.
+- At the student's usual study time (learned from his sessions), at most one per day, none when nothing is due; quieter after several ignored ones.
+- The student chooses the time or turns them off in one tap; the notification opens straight on the recall, one tap away.
+- Channels: in-app first (badge and banner on the home screen); web push or e-mail only where the platform already has them and the student agreed.
+
 ## 5. Rules of a good experience
 
 - **The reprise cycle feeds the status** (professeur rule 22): each twin question is recorded as `cycle<n>` (1 try) with `methodes.reexplication = n`; a hand move away during a cycle is recorded as `cycle<n>_abandon`, wrong. So a competence left after a failed cycle, or abandoned, scores 0 on those items and comes out NOT ACQUIRED, with the reprise entries counted among the methods tried.
@@ -41,3 +59,4 @@ Storage today: one JSONL per student in `backend/data/suivi_acquis/` (no table b
 - A status moves only with evidence: `acquis` needs a first-try success; `partiel` says « revu avec aide » ; a gap leaves only through a new success on another question.
 - Always pair a gap with a method: the point is not a red mark but « reprends-le avec la simulation que tu manipules toi-même ».
 - Keep the labels in the bac's words, so the student recognises them in the exam instructions.
+- Simple and pleasant first: recall, notebook and exercise steps add no menu and no new screen to learn; one main button; a failed recall is « on la revoit bientôt », never a red mark.
