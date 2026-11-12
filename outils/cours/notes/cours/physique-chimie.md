@@ -136,7 +136,29 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
 - À valider (exploration) : analyse dimensionnelle de τ et influence de R gardées (1 diapo chacune) alors que jamais au national ; étincelle en une
   phrase, diode + R₁ par l'exercice 2025 R, « roue libre » jamais dit ; courant triangulaire (GBF) pour faire voir u = L·di/dt (b6-b7) ;
   I₀ écrit (I_p annoncé), u_b écrit (u_L, u_B annoncés) ; couleurs vert = établissement, bleu = rupture.
-- Étapes 3-4 (même passage) : cours p1..p4.py et 12 pages de simulation confiés à 7 sous-agents (voir suite ci-dessous).
+- COURS CONSTRUIT (même passage) → backend/data/courses/phys_ch7_dipole_RL.json (draft, concentration) : 48 diapositives (préfixe rl_),
+  48 questions, 22 prédictions, 33 exercices, démonstration sur chaque calcul ; 10 parties (I bobine, II tension, III échelon, IV équation,
+  V solution et τ, VI rupture, VII lire les courbes, VIII énergie, IX nationaux 2022 R et 2024 N, X bilan + carte) ; C1-C8 (cadre RL1-RL8).
+  Build : dipole_RL_build/ (p1…p4.py écrits par 4 sous-agents, check_part.py « AUCUNE ERREUR » chacun ; refaire : `python3 dipole_RL_build/build.py
+  --garder-reponses` puis ajouts.py + `blocs.py appliquer`).
+- Méthode des blocs : ajouts.py → methode_blocs/ajouts/phys_ch7_dipole_RL.json : 4 séances × 3 blocs × 4 diapositives, 28 rappels,
+  22 prédictions / 48. blocs.py verifier → « cadre : OK », « blocs : OK ». controler_cadre → « cadre : OK » (295 « à relire » : applications
+  numériques et lectures dites). preparer_reponses verifier : seulement réactions et pistes audio manquantes.
+- Réactions : items seulement → dipole_RL_build/items_cours.json (435), items_blocs.json (97), demos_blocs.json (2). À écrire sur le serveur.
+- verifier_texte_corpus (texte_parle.py copié de backend/kaggle_tts dans le scratchpad, il manque dans outils/cours/voxtts) : 317 mots à revoir ;
+  darija rare = formes conjuguées ou négatives (كتعارض, الكروسة, كتأخر, كنحلو, بقاتش…) une à cinq fois, et termes du programme (henry, palier,
+  échelon, rupture, transitoire, millihenry…) : gardés, à écouter au contrôle des murmures.
+- Simulations (frontend/public/media/simulations/physics/dipole-rl-tableau/, contrat cours/dipole_RL_contrat_simulations.md, 3 sous-agents) :
+  lampes, bobine (objet|mesure), triangle, circuit-rl (montage|etablissement|rupture), courbe (trace|tangente|pourcent|ub), influence (L|R),
+  rupture (descente|diode), droite, energie (barre|calcul), figures (16 ?fig=), bilan (9 blocs), carte. node --check OK ; chaque page testée en
+  headless par son agent. verif_sims.js sur les 48 diapositives : voir ligne suivante.
+- À valider (cours) : prédictions ajoutées sur e3, b8, l1 (une par bloc) ; t1 sur circuit-rl?vue=rupture (fig_ed_rupture non utilisée) ;
+  lampes : à l'ouverture les DEUX lampes s'éteignent en retard (le courant de la bobine passe aussi par R et L₁ — physique juste, le tableau le dit) ;
+  oscilloscope : voie 2 donne −u_b avec la masse au point commun, seule u_R est tracée ; couleurs u_R orange, u_b violet ; question de la carte
+  remplacée (« quelle grandeur ne peut jamais sauter ? ») ; énergie : rupture et effet Joule en l7 (pas l8) ; s5 dit que l'analyse dimensionnelle
+  tombe rarement ; s8 met en garde (RC : τ augmente avec R ; RL : τ diminue).
+- PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items). Reste : audits vidéo (PC),
+  réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : circuit_RLC (exploration à faire).
 
 ## energie_nucleaire
 (sous-agent Opus du cours phys_ch5_energie_nucleaire, « Noyaux, masse et énergie » ; outils : cours/energie_nucleaire_build/)
