@@ -372,7 +372,18 @@ outils : cours/cinetique_build/ ; contrat : cours/cinetique_contrat_simulations.
   des termes de chimie absents du corpus (diiode, iodure, thiosulfate, titrage, prélèvement, conductimétrie, manomètre, palier…) gardés ; darija
   rare remplacée (كنغطسو → كندخلو, كنعايرو → كنديرو le titrage ديال, كيغمق → كيولي brun, مبطوح → plat, كتمس → touche…) ; restent une fois
   chacune (كتسالى, كيهزو, كيتبدلوش, كنقيسو, سالاتش, كتتأكسد, وكيسولنا…) : à écouter au contrôle des murmures.
+- Simulations (frontend/public/media/simulations/chimie/cinetique-tableau/, 5 sous-agents) : suivi (methodes|mesures|prelevement|titrage),
+  avancement (tableau|limitant|lien|composition[t]), courbe (points|lecture[t]|palier), conductimetrie (cellule|ions|formule|saponification|droite|
+  calcul[t]), pression (ballon|relation|volume), vitesse (pente[t]|definition|tangente[t]|calcul|diminue|concentration|fin|temperature),
+  demi-reaction (definition|lecture|piege|comparer), figures (?fig= 10 nationaux), bilan, carte. node --check OK (10 pages + commun.js, exposants.js) ;
+  chaque page testée en headless par son agent ; verif_sims.js (Playwright) sur les 48 diapositives : 48 ok, « AUCUN PROBLÈME ».
+  Choix des simulations à valider : valeurs ajoutées hors contrat (G = 2,49 mS pour la soude avec k = 10⁻² m, eau 0,01 mS, NaCl 1,26 mS) ;
+  saponification : afficheur porté à 0,091 S/m à « final » ; vue volume avec erlenmeyer ; titrage : teinte qui pâlit en racine carrée ;
+  pente : triangle Δt = 4 min à 2, 16, 34 min ; figures retouchées d'une demi-division (2016 R, 2018 R, 2024 N, 2025 N) pour que la tangente
+  du corrigé touche la courbe ; 2017 R : le cadre du sujet officiel s'arrête aussi à 0,5 mol, dessin selon le texte (départ 0,6 mol).
 - PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : transformations_deux_sens
+  (exploration à faire).
 - À valider : conductimétrie en 6 diapositives (g1-g6) ; pression en 3 courtes (p1-p3, au programme, jamais au national) ; exemple B
   (saponification) annoncé « étudiée plus tard », voix « ion acétate » ; facteurs cinétiques seulement rappelés (v8, h4) ; « chocs efficaces » :
   la grille officielle 2024 N les cite, perimetre.json les exclut → non dits (« les entités se rencontrent moins souvent ») ; t₁/₂ défini par
