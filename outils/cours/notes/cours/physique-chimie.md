@@ -84,6 +84,16 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
   AOK4FfniVZA Driss DOTCOM (FAIT), mi1PcyGfR64 Zakaria Taousse, LUDX35FMJmY Hassan El Omrani, 0xCZvA5Wl-0 Laksabi,
   GVSldw4rz8c Ridouan, hstTUKPqT5s Atif, gm5vLzAjBms Cours du Soir (B. Mouslim), OSLLzhxUtp0 Lahoucine Hajji (nationaux corrigés).
 
+- 12 nov. (routine cloud) : Étape 1 FAITE → backend/data/curriculum/exploration/dipole_RC.json (sous-agent, ≈ 125 Ko, mêmes clés que
+  operations_formes.json) : 9 audits (Laksabi, Driss, Ridouan, El Omrani, Mouslim, Atif, Noureddine, Taousse, TOP PHYSIQUE) + les 20 nationaux PC
+  2016-2025 du dépôt (RC dans 11/20). 10e vidéo (OSLLzhxUtp0) NON auditée : YouTube bloqué depuis le cloud (yt-dlp absent) → « vidéos non auditées ».
+  Plan : 48 diapositives (25 prédictions), 4 séances × 3 blocs × 4, compétences C1–C8 (3–4 rappels), cadre RC1–RC9 provisoire, 8 simulations
+  à créer (moments nommés), labo-3d/rc gardé comme manip. Ancien matériel : seed phys_ch6_l1.json, image circuits_lab.webp (pas d'ancien cours).
+  Décisions à valider : associations de condensateurs gardées (2018 N) ; charge à courant constant gardée (3 sujets, à ajouter à perimetre.json) ;
+  RC·du_C/dt + u_C = E puis forme des corrigés ; pas de ln u_C = f(t) ; énergie ½ C u_C² admise ; analyse dimensionnelle de τ (1 diapo) ; en décharge
+  i < 0 avec le sens de la charge (2018 N fait l'autre choix) ; prérequis « fonction_exponentielle » à ajouter. Erreurs dans 2 corrigés du dépôt :
+  2024 R (10⁻⁴ F = 0,10 µF) et 2023 R (7,2·10⁻⁶ J = 0,72 mJ). Reste : cadre, contrat + simulations, cours JSON, blocs, items, contrôles.
+
 ## energie_nucleaire
 (sous-agent Opus du cours phys_ch5_energie_nucleaire, « Noyaux, masse et énergie » ; outils : cours/energie_nucleaire_build/)
 - Démarré. Outils copiés depuis ondes_lumineuses_build (outils.py, build.py, verif_sims.py, prog.py, cadre_ol.py → à adapter).
