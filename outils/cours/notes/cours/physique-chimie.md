@@ -121,6 +121,23 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
 - Note dépôt : les fichiers *.json hors backend/data sont ignorés par .gitignore : les items, ajouts et blocs_s*.json sont ajoutés avec `git add -f`.
   Les items de radioactivite et operations_formes (perdus aux passages précédents) ont été régénérés et commités ce passage.
 
+## dipole_RL
+(routine cloud du 12 nov., cours phys_ch7_dipole_RL, « Dipôle RL » ; outils : cours/dipole_RL_build/ ; contrat : cours/dipole_RL_contrat_simulations.md)
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/dipole_RL.json (dipole_RL_build/explo.py = explo_a.py + explo_b.py + nationaux).
+  VIDÉOS NON AUDITÉES : YouTube bloqué depuis le cloud (yt-dlp absent, pip refusé). Appui : les 20 nationaux PC 2016-2025 du dépôt
+  (analyse complète : dipole_RL_build/nationaux.md ; RL dans 10 sessions sur 20, une par année, 1,5 à 4 pts ; équation différentielle et valeur
+  de L dans les 10), perimetre.json, exploration dipole_RC (même méthode). À compléter par 10 audits vidéo depuis le PC avant validation.
+  Plan : 48 diapositives, 4 séances × 3 blocs × 4, 19 prédictions, compétences C1-C8 (28 rappels), toutes les capacités RL1-RL8 couvertes.
+  Ancien matériel : seed phys_ch7_l1.json (labo guidé, τ = L/R sans r) ; CircuitLab advanced/electricity (à ne pas reprendre).
+- Étape 5 cadre : chapitres.dipole_RL ajoutée (dipole_RL_build/cadre_rl.py : RL1-RL8, 17 formules, 12 mots hors cadre). programme_semestre1 : explore.
+- Erreurs relevées dans le dépôt (nationaux.md § 6) : corrigé 2024 N 2.2.2 faux (τ = 6,7·10⁻⁴ s au lieu de 2 µs : axe i en mA lu en A) ;
+  données manquantes dans exam.json (2016 R, 2017 N, 2018 R, 2020 N, 2024 N : seulement dans extraction.json) ; 2022 R : questions RL liées aux
+  figures RLC/mécanique ; hors RL : 2021 R III.1 courbes inversées, 2024 R C = 0,10 µF incohérent, 2023 R µJ écrits mJ.
+- À valider (exploration) : analyse dimensionnelle de τ et influence de R gardées (1 diapo chacune) alors que jamais au national ; étincelle en une
+  phrase, diode + R₁ par l'exercice 2025 R, « roue libre » jamais dit ; courant triangulaire (GBF) pour faire voir u = L·di/dt (b6-b7) ;
+  I₀ écrit (I_p annoncé), u_b écrit (u_L, u_B annoncés) ; couleurs vert = établissement, bleu = rupture.
+- Étapes 3-4 (même passage) : cours p1..p4.py et 12 pages de simulation confiés à 7 sous-agents (voir suite ci-dessous).
+
 ## energie_nucleaire
 (sous-agent Opus du cours phys_ch5_energie_nucleaire, « Noyaux, masse et énergie » ; outils : cours/energie_nucleaire_build/)
 - Démarré. Outils copiés depuis ondes_lumineuses_build (outils.py, build.py, verif_sims.py, prog.py, cadre_ol.py → à adapter).
