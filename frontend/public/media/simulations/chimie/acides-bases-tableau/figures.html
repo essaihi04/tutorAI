@@ -497,9 +497,11 @@ const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(
 /* ── Pièces peintes du dosage : burette graduée, agitateur magnétique, conductimètre, cellule ────────────────────────── */
 Object.assign(Peint, {
   /** Burette graduée (0 en haut → vmax en bas) sur sa potence : solution `col` ; `vv` mL déjà versés ; robinet ; pointe en yp. */
-  burette(ctx, x, yH, yR, vv, vmax, col, a = 1) {
+  burette(ctx, x, yH, yR, vv, vmax, col, a = 1, o = {}) {
     ctx.save(); ctx.globalAlpha = a;
-    ctx.fillStyle = '#5c6670'; ctx.fillRect(x - 34, yH - 12, 5, yR + 150 - yH); ctx.fillRect(x - 32, yH + 26, 26, 5);   // potence et pince
+    const tige = o.tige ?? -34, bas = o.bas ?? yR + 140;   // la tige de la potence passe à côté du bécher
+    ctx.fillStyle = '#5c6670'; ctx.fillRect(x + tige, yH - 12, 5, bas - yH + 12); ctx.fillRect(x + tige + 2, yH + 26, -tige - 6, 5);   // potence et pince
+    ctx.fillRect(x + tige - 8, bas - 4, 22, 5);   // pied
     const y0 = yH + 8, yl = lerp(y0, yR - 6, clamp(vv / vmax, 0, 1));
     const g = ctx.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, rgba(sombre(col, .1), 1.6)); g.addColorStop(.5, rgba(eclair(col, .3), 1.6)); g.addColorStop(1, rgba(sombre(col, .15), 1.6));
     ctx.fillStyle = g; ctx.fillRect(x - 4.5, yl, 9, yR - yl);
@@ -600,6 +602,8 @@ function bandeV(ctx, x, yA, yB, w, cols, a = 1) {
   ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
 }
 const ION = { h3o: ['#ffe1c7', '#f97316', '#7c2d12'], na: ['#f3e8ff', '#a855f7', '#581c87'], cl: ['#dcfce7', '#22c55e', '#14532d'], ho: ['#dbeafe', '#3b82f6', '#1e3a8a'] };
+
+
 
 
 /* ── Le graphe (à gauche), le panneau (à droite), les lignes du bas ────────────────────────────────────────────────── */
@@ -740,7 +744,7 @@ const FIGS = {
     g: { xmin: 0, xmax: 14, ymin: 0, ymax: 100, dx: 1, dy: 10, xLab: [2, 4, 6, 8, 10, 12, 14], yLab: [20, 40, 60, 80, 100], gx: .5, gy: 5, xNom: 'pH', yNom: '%', dec: 0 },
     pKa: 10.8,
     courbes: [{ f: pctA(10.8), a: 0, b: 14, col: 'rose', nom: 'forme acide', lab: [.4, 88] }, { f: pctB(10.8), a: 0, b: 14, col: 'vert', nom: 'forme basique', lab: [.4, 8], pointille: [6, 5] }],
-    point: { x: 10.8, y: 50, lab: 'pKa = 10,8', dit: 'le croisement des deux courbes : 50 % chacune, pH = pKa = 10,8' },
+    point: { x: 10.8, y: 50, labX: 10.1, labY: 54, lab: 'pKa = 10,8', dit: 'le croisement des deux courbes : 50 % chacune, pH = pKa = 10,8' },
     marque: { x: 11.88, dit: 'pH = 11,88 (la solution du sujet)' },
     calc: { de: 'y', x: 10.2, y: 80, courbe: 0, dit: '80 % de forme acide : pH = 10,2' },
     panneau: {
@@ -858,15 +862,15 @@ function etiquettes(c, M, nom) {
     c.fleche(g.X(23.6), g.Y(3.6), g.X(21.4), g.Y(f.derivee(21.4)) - 4, { couleur: 'orange', largeur: 1.5, tete: 7 });
   }
   if (nom === 'lecture') {
-    if (f.type === 'distribution') c.texte(f.point.lab, g.X(f.point.x) - 10, g.Y(50) - 8, { couleur: 'jaune', taille: 15, align: 'right' });
+    if (f.type === 'distribution') c.texte(f.point.lab, g.X(f.point.labX ?? f.point.x) - 10, g.Y(f.point.labY ?? 50) - 8, { couleur: 'jaune', taille: 15, align: 'right' });
     if (f.type === 'distribution' && f.marque) c.texte('11,88', g.X(f.marque.x) + 4, g.Y(64), { couleur: 'violet', taille: 14 });
     if (f.type === 'dosage') c.texte('E', g.X(f.E.x) + (f.T.s > 0 ? -16 : 10), g.Y(f.E.y) + (f.T.s > 0 ? -2 : -6), { couleur: 'jaune', taille: 17 });
     if (f.type === 'derivee') { c.texte('20', g.X(20), g.y0 + 34, { couleur: 'jaune', taille: 14, align: 'center' }); c.texte('4,4', g.x0 + 4, g.Y(4.4) - 6, { couleur: 'jaune', taille: 14 }); }
   }
   if (nom === 'calcul') {
     if (f.type === 'distribution' && f.calc.de === 'x') c.texte('20 %', g.x0 + 4, g.Y(f.calc.y) - 6, { couleur: 'violet', taille: 14 });
-    if (f.type === 'distribution' && f.calc.de === 'y') c.texte('10,2', g.X(f.calc.x) - 6, g.y0 - 6, { couleur: 'violet', taille: 14, align: 'right' });
-    if (f.bande) c.texte(f.bande.nom, g.X(g.xmax) + 34, g.Y((f.bande.a + f.bande.b) / 2) + 5, { couleur: 'faible', taille: 13, align: 'left', max: PX - g.X(g.xmax) - 40 });
+    if (f.type === 'distribution' && f.calc.de === 'y') c.texte('10,2', g.X(f.calc.x) - 4, g.Y(30), { couleur: 'violet', taille: 14, align: 'right' });
+    if (f.bande) c.texte(f.bande.nom, g.X(g.xmax) + 20, g.Y(f.bande.b) - 8, { couleur: 'blanc', taille: 13, align: 'center' });
   }
 }
 

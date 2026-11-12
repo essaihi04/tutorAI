@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comparer acides et bases — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ab.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Simulations à la craie : deux acides et deux bases de même concentration (pKa, Ka, pH, τ) ; axe des pKa ; K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁) ; K = Ka/Ke = 1,6·10⁹ ; national 2020 R (K = 10)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * comparer.html : vues acides | bases | classement | reaction | puissance | totale | national
+ * (contrat outils/cours/notes/cours/acides_bases_contrat_simulations.md § 4 ; données communes : exemples E, F, G).
+ * Cours phys_ch13_acides_bases « Transformations liées aux réactions acide-base » (2e Bac PC BIOF, novembre 2026).
+ * Moteur du déroulé, formules chimiques, flèches dessinées, fractions dessinées et pièces peintes : copiés de
+ * chimie/etat-equilibre-tableau/constante.html (moteur corrigé : durée d’une étape = la plus longue de ses écritures, Math.max),
+ * + morceau { pow } (« 10 » et son exposant écrit à la main). Aucune poignée (le contrat n’en met pas sur ces vues).
+ * Nombres vérifiés avec python : τ = 10^(−3,41)/10⁻² = 0,039 ; 10^(−2,90)/10⁻² = 0,126 ; 10^(10,60 − 14)/10⁻² = 0,040 ;
+ * 10^(11,30 − 14)/10⁻² = 0,20 ; 10^(1,05) = 11,2 ; 1/11,2 = 8,9·10⁻² ; 10^(4,4) = 2,5·10⁴ ; 10^(9,2) = 1,6·10⁹ ; 10^(4,8 − 3,8) = 10.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de chimie/transformations-lentes-rapides-tableau/courbes.html, + M.finir) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      /* HOLD : la plus longue des écritures d’une même étape (plusieurs M.etape du même nom). */
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] ?? 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    for (const k of Object.keys(HOLD)) delete HOLD[k];
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette, finir });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+
+/* Indice après une parenthèse (« (dx/dt)₀ ») : le kit ne le découpe que derrière une lettre ; on passe alors par l’écriture
+ * à indices d’exposants.js (qui utilise le découpage « _{…} » ci-dessus). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim(s);
+    if (!/[^A-Za-zτθΔλωφ_]_\{/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
+/* ── Flèches DESSINÉES (la police n’a pas toutes les flèches) : → sens 1, ← sens 2, ⇌ les deux sens ─────────────────── */
+/** Flèche entre xa et xb à la hauteur y : '→', '←' ou '⇌' (demi-flèche haute c1 vers la droite, demi-flèche basse c2 vers la gauche). */
+function flecheType(c, xa, xb, y, type, o = {}) {
+  const col = o.couleur ?? 'blanc', l = o.largeur ?? 1.8;
+  if (type === '→') c.fleche(xa, y, xb, y, { couleur: col, largeur: l, tete: 7 });
+  else if (type === '←') c.fleche(xb, y, xa, y, { couleur: col, largeur: l, tete: 7 });
+  else {
+    const c1 = o.c1 ?? col, c2 = o.c2 ?? col, d = 3.4;
+    c.trait([[xa, y - d], [xb, y - d], [xb - 8, y - d - 6]], { couleur: c1, largeur: l });
+    c.trait([[xb, y + d], [xa, y + d], [xa + 8, y + d + 6]], { couleur: c2, largeur: l });
+  }
+}
+/** Équation « gauche (flèche) droite » ; renvoie { x, w, xa, xb, ya } (position de la flèche). */
+function eqf(c, x, y, gauche, droite, o = {}) {
+  let t = o.taille ?? 17;
+  const mesure = tt => larg(c, gauche, tt) + (o.fl ?? 34) + 20 + larg(c, droite, tt);
+  if (o.max && mesure(t) > o.max) t = t * o.max / mesure(t);
+  const w1 = larg(c, gauche, t), fl = o.fl ?? 34, tot = mesure(t);
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  if (!o.sansTexte) c.texte(gauche, x0, y, { couleur: col, taille: t });
+  const xa = x0 + w1 + 10, xb = xa + fl, ya = y - t * .3;
+  if (!o.sansFleche) flecheType(c, xa, xb, ya, o.type ?? '→', { couleur: o.couleurFleche ?? col, c1: o.c1, c2: o.c2 });
+  if (!o.sansTexte) c.texte(droite, xb + 10, y, { couleur: col, taille: t });
+  return { x: x0, w: tot, xa, xb, ya };
+}
+
+/* ── Peint (copie de cinetique-tableau/suivi.html) + pH-mètre, sonde, flacon, chauffe-ballon, réfrigérant ───────────── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${Math.min(1, a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const INCOLORE = [222, 234, 244, .13];               // solutions acides et basiques : incolores, comme en vrai
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, fonce], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + r * .25, y + r * .9, r * .8, r * .25, 0, 0, 7); ctx.fill();
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, fonce);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), graduations. niveau 0 → 1 ; renvoie la hauteur de la surface. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** pH-mètre gris à afficheur vert (le texte est peint : c’est l’appareil qui l’affiche, pas la craie). */
+  phmetre(ctx, x, y, w, h, txt) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 8); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#c3cad0'); g.addColorStop(.5, '#959ea6'); g.addColorStop(1, '#646d75');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
+    const sx = x + 10, sy = y + 8, sw = w - 20, sh = h * .56;
+    ctx.fillStyle = '#26302a'; ctx.beginPath(); ctx.roundRect(sx - 2, sy - 2, sw + 4, sh + 4, 4); ctx.fill();
+    const e = ctx.createLinearGradient(0, sy, 0, sy + sh); e.addColorStop(0, '#c6f5b9'); e.addColorStop(1, '#93d987');
+    ctx.fillStyle = e; ctx.beginPath(); ctx.roundRect(sx, sy, sw, sh, 3); ctx.fill();
+    ctx.fillStyle = '#123b17'; ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.round(sh * .34)}px monospace`; ctx.textAlign = 'left'; ctx.fillText('pH', sx + 6, sy + sh * .5);
+    ctx.font = `700 ${Math.round(sh * .62)}px monospace`; ctx.textAlign = 'right'; ctx.fillText(txt, sx + sw - 8, sy + sh * .54);
+    ctx.fillStyle = '#3e464d'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(x + w * (.3 + k * .2), y + h * .84, 3.4, 0, 7); ctx.fill(); }
+    ctx.restore();
+  },
+  /** Sonde de verre du pH-mètre : tête sombre, tube de verre, bulbe en bas (pointe en (x, yB)), longueur L. */
+  sonde(ctx, x, yB, L = 104) {
+    const yH = yB - L;
+    ctx.save();
+    const g = ctx.createLinearGradient(x - 6, 0, x + 6, 0); g.addColorStop(0, '#22272b'); g.addColorStop(.45, '#5d666e'); g.addColorStop(1, '#1b1f22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 6, yH, 12, 24, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(215,235,250,.16)'; ctx.fillRect(x - 4, yH + 24, 8, L - 34);
+    ctx.strokeStyle = 'rgba(225,238,250,.8)'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(x - 4, yH + 24); ctx.lineTo(x - 4, yB - 10); ctx.moveTo(x + 4, yH + 24); ctx.lineTo(x + 4, yB - 10); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,205,210,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, yH + 24); ctx.lineTo(x, yB - 8); ctx.stroke();
+    const b = ctx.createRadialGradient(x - 2, yB - 8, 1, x, yB - 6, 7); b.addColorStop(0, 'rgba(255,255,255,.7)'); b.addColorStop(1, 'rgba(190,220,245,.25)');
+    ctx.fillStyle = b; ctx.beginPath(); ctx.arc(x, yB - 6, 6, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.stroke();
+    ctx.restore();
+    return yH;
+  },
+  /** Fil électrique (courbe de Bézier). */
+  fil(ctx, pts, col = '#1f2a33') {
+    ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.bezierCurveTo(...pts[1], ...pts[2], ...pts[3]); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  },
+  /** Flacon de verre : goulot en (mx, my), incliné de `ang` (rad, négatif : verse vers la gauche) ; `niveau` 0 → 1 ; liquide `col`. */
+  flacon(ctx, mx, my, ang, niveau, col) {
+    const L = 96, demi = 25;
+    const corps = () => { ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(-8, 14); ctx.quadraticCurveTo(-demi, 18, -demi, 30); ctx.lineTo(-demi, L - 6);
+      ctx.quadraticCurveTo(-demi, L, -demi + 6, L); ctx.lineTo(demi - 6, L); ctx.quadraticCurveTo(demi, L, demi, L - 6); ctx.lineTo(demi, 30); ctx.quadraticCurveTo(demi, 18, 8, 14); ctx.lineTo(8, 0); };
+    ctx.save(); ctx.translate(mx, my); ctx.rotate(ang);
+    ctx.fillStyle = 'rgba(210,230,250,.07)'; corps(); ctx.fill();
+    if (niveau > .01) {
+      const ys = [[-demi, 30], [demi, 30], [-demi, L], [demi, L]].map(([px, py]) => px * Math.sin(ang) + py * Math.cos(ang));
+      const bas = Math.max(...ys), haut = Math.min(...ys), ws = bas - niveau * .62 * (bas - haut);
+      ctx.save(); corps(); ctx.clip(); ctx.rotate(-ang);
+      const g = ctx.createLinearGradient(0, ws, 0, bas); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .2)));
+      ctx.fillStyle = g; ctx.fillRect(-120, ws, 240, 140); ctx.restore();
+    }
+    ctx.fillStyle = 'rgba(245,245,240,.82)'; ctx.fillRect(-17, 46, 34, 30);
+    ctx.fillStyle = 'rgba(120,130,140,.6)'; for (let k = 0; k < 3; k++) ctx.fillRect(-12, 53 + k * 8, 24 - k * 6, 2);
+    ctx.strokeStyle = 'rgba(225,238,250,.82)'; ctx.lineWidth = 2; corps(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(-demi + 5, 34, 4, L - 44);
+    ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col) { ctx.save(); ctx.fillStyle = rgba(col, 2.4); ctx.fillRect(x - 1.6, y1, 3.2, Math.max(0, y2 - y1)); ctx.restore(); },
+};
+
+
+/* ── Fractions DESSINÉES (numérateur sur dénominateur, barre tracée) et suites de morceaux (d’après avancement.html) ── */
+const FL = 34;
+/** Morceau : texte, '→', '←', '⇌', { frac: [numérateur, dénominateur] } ou { pow: exposant, base: '10' }. */
+function largeurMorceau(c, p, t) {
+  if (p === '→' || p === '←' || p === '⇌') return FL;
+  if (p && p.frac) return Math.max(larg(c, p.frac[0], t), larg(c, p.frac[1], t)) + 14;
+  if (p && p.pow != null) return larg(c, p.base ?? '10', t) + 2 + larg(c, p.pow, t * .62);
+  return larg(c, p, t);
+}
+/** Positions x de chaque morceau d’une ligne : elles ne dépendent pas du temps, chaque étape écrit les siens. */
+function placer(c, x, morceaux, t, o = {}) {
+  const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  const xs = ws.map(w => { const r = px; px += w + gap; return r; });
+  return { xs, ws, x0: xs[0], tot, t };
+}
+function morceau(c, p, x, y, t, col = 'blanc') {
+  if (p === '→' || p === '←' || p === '⇌') return flecheType(c, x + 2, x + FL - 2, y - t * .32, p, { couleur: col });
+  if (p && p.frac) {
+    const w = largeurMorceau(c, p, t), yb = y - t * .32;
+    c.texte(p.frac[0], x + w / 2, yb - 7, { taille: t, align: 'center', couleur: col });
+    c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 1.8, duree: .1 });
+    c.texte(p.frac[1], x + w / 2, yb + t * .98, { taille: t, align: 'center', couleur: col });
+    return;
+  }
+  if (p && p.pow != null) {
+    /* « 10 » puis l’exposant écrit à la main (plus petit, relevé) : l’exposant peut contenir des indices (pK_{a2}). */
+    const wb = larg(c, p.base ?? '10', t);
+    c.texte(p.base ?? '10', x, y, { taille: t, couleur: col });
+    c.texte(p.pow, x + wb + 2, y - t * .42, { taille: t * .62, couleur: col });
+    return;
+  }
+  c.texte(p, x, y, { taille: t, couleur: col });
+}
+/** Écrit une ligne de morceaux (o.seul : indices des morceaux à écrire maintenant ; o.cols : couleur par morceau). */
+function ligneM(c, x, y, morceaux, o = {}) {
+  const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
+  morceaux.forEach((p, i) => { if (o.seul && !o.seul.includes(i)) return; morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'); });
+  return P;
+}
+/** Rectangle autour des morceaux i0 → i1 d’une ligne (plus haut s’il y a une fraction). */
+function boite(P, y, morceaux, i0 = 0, i1 = morceaux.length - 1) {
+  const t = P.t, f = morceaux.slice(i0, i1 + 1).some(p => p && p.frac);
+  const x = P.xs[i0] - 6, w = P.xs[i1] + P.ws[i1] - P.xs[i0] + 12;
+  return f ? { x, y: y - t * 1.55 - 8, w, h: t * 2.6 + 12 } : { x, y: y - t - 6, w, h: t + 14 };
+}
+function cadreB(c, b, col = 'jaune') { c.rect(b.x, b.y, b.w, b.h, { couleur: col, largeur: 2, arrondi: 8 }); }
+/** Barre (à la craie) un mot de largeur w écrit en (x, y), taille t. */
+function barrer(c, x, y, w, t, col = 'orange') { c.ligne(x - 2, y + 3, x + w + 2, y - t * .8, { couleur: col, largeur: 2.4 }); }
+/** pH au centième, virgule décimale. */
+const ph2 = v => fr(v, 2);
+/** Lecture qui se stabilise (pour l’œil) : de `depuis` à `vers` pendant la part p de 0 à 1 ; « - -,- - » avant `debut`. */
+function lecture(p, depuis, vers, debut = .45) {
+  if (p < debut) return { txt: '- -,- -', v: null };
+  const f = clamp((p - debut) / (1 - debut - .12), 0, 1), v = f >= 1 ? vers : lerp(depuis, vers, lisse(f)) + Math.sin(p * 40) * .02 * (1 - f);
+  return { txt: ph2(f >= 1 ? vers : v), v: f >= 1 ? vers : v };
+}
+/** pH-mètre, câble et sonde (pointe en (sx, syB), longueur L). */
+function montagePH(c, MET, sx, syB, txt, L = 104) {
+  c.direct(() => {
+    const ctx = c.ctx, yH = syB - L;
+    Peint.fil(ctx, [[MET.x + MET.w * .5, MET.y + MET.h - 4], [MET.x + MET.w * .5, MET.y + MET.h + 40], [sx, yH - 34], [sx, yH + 2]]);
+    Peint.sonde(ctx, sx, syB, L);
+    Peint.phmetre(ctx, MET.x, MET.y, MET.w, MET.h, txt);
+  });
+}
+const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+const etapeEnCours = M => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; };
+
+/* ── comparer.html : vues acides | bases | classement | reaction | puissance | totale | national ───────────────────── */
+const VUES = ['acides', 'bases', 'classement', 'reaction', 'puissance', 'totale', 'national'];
+const TITRES = {
+  acides: 'comparer deux acides de même concentration (exemple F)', bases: 'comparer deux bases de même concentration (exemple F)',
+  classement: 'classer les couples sur un axe des pKa', reaction: 'la constante K d’une réaction acide-base : K = Ka₁/Ka₂ (exemple G)',
+  puissance: 'K = 10^(pKa₂ − pKa₁) : exemples (exemple G)', totale: 'réaction d’un acide avec HO⁻ : K = Ka/Ke (exemple G)',
+  national: 'national 2020 R : K = Ka₂/Ka₁ (notation du sujet)',
+};
+const TITRE_TABLEAU = {
+  acides: 'Deux acides, même concentration (exemple F)', bases: 'Deux bases, même concentration (exemple F)',
+  classement: 'Classer les couples par leur pK_{a}', reaction: 'La constante d’une réaction acide-base',
+  puissance: 'Calculer K avec les pK_{a} : des exemples', totale: 'Un acide avec HO⁻ : une réaction totale',
+  national: 'Au national : la constante K d’une réaction acide-base',
+};
+const KA = 'K_{a}', PKA = 'pK_{a}', KA1 = 'K_{a1}', KA2 = 'K_{a2}';
+
+/* Exemple F (vérifié avec python). */
+const DUO = {
+  acides: [
+    { nom: 'acide éthanoïque', court: 'éthanoïque', f: 'CH₃COOH', pKa: '4,8', Ka: '1,6·10⁻⁵', pH: 3.41, tau: .039, tauTxt: '0,039' },
+    { nom: 'acide méthanoïque', court: 'méthanoïque', f: 'HCOOH', pKa: '3,75', Ka: '1,8·10⁻⁴', pH: 2.90, tau: .126, tauTxt: '0,126' },
+  ],
+  bases: [
+    { nom: 'ammoniac', court: 'ammoniac', f: 'NH₃', pKa: '9,2', Ka: '6,3·10⁻¹⁰', pH: 10.60, tau: .040, tauTxt: '0,040' },
+    { nom: 'méthylamine', court: 'méthylamine', f: 'CH₃NH₂', pKa: '10,7', Ka: '2,0·10⁻¹¹', pH: 11.30, tau: .20, tauTxt: '0,20' },
+  ],
+};
+const etapesDuo = v => {
+  const a = v === 'acides', D = DUO[v], [d1, d2] = D;
+  const l = [
+    { nom: 'bechers', anim: .8, motif: `deux béchers, 1,0·10⁻² mol/L : ${d1.nom} (pKa ${d1.pKa}) et ${d2.nom} (pKa ${d2.pKa})`, bulle: () => a ? 'Deux acides, à la même concentration.' : 'Deux bases, à la même concentration.',
+      vu: `Deux béchers incolores (C = 1,0·10⁻² mol/L) : « ${d1.nom} » (pKa = ${d1.pKa}) et « ${d2.nom} » (pKa = ${d2.pKa}) ; un pH-mètre au-dessus de chacun.` },
+    { nom: 'mesures', anim: 4.4, motif: `les afficheurs indiquent ${fr(d1.pH, 2)} et ${fr(d2.pH, 2)}`, bulle: () => 'On mesure le pH des deux solutions.',
+      vu: `Les deux sondes sont dans les béchers ; afficheurs ${fr(d1.pH, 2)} (${d1.nom}) et ${fr(d2.pH, 2)} (${d2.nom}).` },
+    { nom: 'tableau', anim: .3, motif: `tableau pKa · Ka · pH · τ : ${d1.court} ${d1.pKa} · ${d1.Ka} · ${fr(d1.pH, 2)} · ${d1.tauTxt} ; ${d2.court} ${d2.pKa} · ${d2.Ka} · ${fr(d2.pH, 2)} · ${d2.tauTxt}`, bulle: () => 'On range tout dans un tableau.',
+      vu: `Tableau (${a ? 'acide' : 'base'} · pKa · Ka · pH · τ) : ${d1.court} ${d1.pKa} · ${d1.Ka} · ${fr(d1.pH, 2)} · ${d1.tauTxt} ; ${d2.court} ${d2.pKa} · ${d2.Ka} · ${fr(d2.pH, 2)} · ${d2.tauTxt}.` },
+    { nom: 'barres', anim: 1.4, motif: `deux barres τ : ${d1.tauTxt} et ${d2.tauTxt}`, bulle: () => 'Compare les taux d’avancement final.',
+      vu: `Deux barres bleues τ : ${d1.court} ${d1.tauTxt}, ${d2.court} ${d2.tauTxt} (la seconde est ${a ? 'trois' : 'cinq'} fois plus longue).` },
+    { nom: 'regle', anim: .3, motif: a ? '« même C : plus Ka est grand (pKa petit), plus τ est grand, plus le pH est petit »' : '« même C : plus le pKa du couple est grand, plus la base est forte (τ et pH plus grands) »',
+      bulle: () => 'La règle.',
+      vu: a ? 'Écrit : « même C : plus Ka est grand (pKa petit), plus τ est grand, plus le pH est petit ».'
+        : 'Écrit : « même C : plus le pKa du couple est grand, plus la base est forte (τ et pH plus grands) » ; « la méthylamine est la base la plus forte ».' },
+  ];
+  if (a) l.push({ nom: 'conclusion', anim: .3, motif: '« l’acide méthanoïque est le plus fort »', bulle: () => 'Conclusion.',
+    vu: 'Cadre jaune : « l’acide méthanoïque est le plus fort ».' });
+  return l;
+};
+const COUPLES = [
+  { pk: 0, pkTxt: '0', a: 'H₃O⁺', b: 'H₂O' }, { pk: 3.75, pkTxt: '3,75', a: 'HCOOH', b: 'HCOO⁻' }, { pk: 4.8, pkTxt: '4,8', a: 'CH₃COOH', b: 'CH₃COO⁻' },
+  { pk: 9.2, pkTxt: '9,2', a: 'NH₄⁺', b: 'NH₃' }, { pk: 10.7, pkTxt: '10,7', a: 'CH₃NH₃⁺', b: 'CH₃NH₂' }, { pk: 14, pkTxt: '14', a: 'H₂O', b: 'HO⁻' },
+];
+const ETAPES = {
+  acides: etapesDuo('acides'),
+  bases: etapesDuo('bases'),
+  classement: [
+    { nom: 'axe', anim: .3, motif: 'axe vertical des pKa de 0 (en bas) à 14 (en haut)', bulle: () => 'Un axe vertical des pKa.',
+      vu: 'Axe vertical des pKa gradué de 0 (en bas) à 14 (en haut).' },
+    { nom: 'couples', anim: .3, motif: 'les six couples se posent : 0 · 3,75 · 4,8 · 9,2 · 10,7 · 14', bulle: () => 'Chaque couple se pose à son pKa.',
+      vu: 'Sur l’axe : H₃O⁺/H₂O (0), HCOOH/HCOO⁻ (3,75), CH₃COOH/CH₃COO⁻ (4,8), NH₄⁺/NH₃ (9,2), CH₃NH₃⁺/CH₃NH₂ (10,7), H₂O/HO⁻ (14) ; l’acide à gauche, la base à droite.' },
+    { nom: 'acides', anim: .3, motif: 'les acides, à gauche, en rose', bulle: () => 'À gauche, les acides.',
+      vu: 'Colonne de gauche, en rose, titre « acides » : H₃O⁺, HCOOH, CH₃COOH, NH₄⁺, CH₃NH₃⁺, H₂O.' },
+    { nom: 'bases', anim: .3, motif: 'les bases, à droite, en vert', bulle: () => 'À droite, les bases.',
+      vu: 'Colonne de droite, en vert, titre « bases » : H₂O, HCOO⁻, CH₃COO⁻, NH₃, CH₃NH₂, HO⁻.' },
+    { nom: 'fleches', anim: .3, motif: 'flèche « acide de plus en plus fort » vers le bas, « base de plus en plus forte » vers le haut', bulle: () => 'Dans quel sens la force augmente-t-elle ?',
+      vu: 'À gauche, une flèche rose vers le bas « acide de plus en plus fort » (pKa plus petit) ; à droite, une flèche verte vers le haut « base de plus en plus forte » (pKa plus grand).' },
+  ],
+  reaction: [
+    { nom: 'equation', anim: .3, motif: 'AH₁ + A₂⁻ ⇌ A₁⁻ + AH₂', bulle: () => 'Un acide d’un couple réagit avec la base d’un autre couple.',
+      vu: 'Écrit : « AH₁ + A₂⁻ ⇌ A₁⁻ + AH₂ » ; dessous « couple 1 : AH₁/A₁⁻ (Ka₁) ; couple 2 : AH₂/A₂⁻ (Ka₂) ».' },
+    { nom: 'quotient', anim: .3, motif: 'K = [A₁⁻]éq·[AH₂]éq / ([AH₁]éq·[A₂⁻]éq)', bulle: () => 'Sa constante d’équilibre.',
+      vu: 'Écrit : « K = [A₁⁻]éq·[AH₂]éq / ([AH₁]éq·[A₂⁻]éq) » (barre dessinée).' },
+    { nom: 'multiplier', anim: .3, motif: '× [H₃O⁺]éq / [H₃O⁺]éq (craie jaune)', bulle: () => 'On multiplie en haut et en bas par [H₃O⁺]éq.',
+      vu: 'Écrit en jaune, à droite : « × [H₃O⁺]éq / [H₃O⁺]éq ».' },
+    { nom: 'separer', anim: .3, motif: 'deux fractions : la première est Ka₁, la seconde 1/Ka₂', bulle: () => 'On sépare en deux fractions.',
+      vu: 'Écrit : « K = [A₁⁻]éq·[H₃O⁺]éq / [AH₁]éq × [AH₂]éq / ([A₂⁻]éq·[H₃O⁺]éq) » ; sous la première fraction « Ka₁ », sous la seconde « 1/Ka₂ » (en jaune).' },
+    { nom: 'relation', anim: .3, motif: 'K = Ka₁/Ka₂ (encadré jaune)', bulle: () => 'La relation à retenir.',
+      vu: 'Encadré jaune : « K = Ka₁/Ka₂ ».' },
+  ],
+  puissance: [
+    { nom: 'relation', anim: .3, motif: 'K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁)', bulle: () => 'Avec les pKa : Ka = 10^(−pKa).',
+      vu: 'Encadré jaune : « K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁) ».' },
+    { nom: 'exemple_1', anim: .3, motif: 'HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH : K = 10^(4,8 − 3,75) = 11', bulle: () => 'Premier exemple.',
+      vu: 'Écrit : « HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH » (acide HCOOH, pKa₁ = 3,75 ; base CH₃COO⁻, pKa₂ = 4,8) et « K = 10^(4,8 − 3,75) = 10^(1,05) = 11,2 ≈ 11 ».' },
+    { nom: 'inverse', anim: .3, motif: 'sens inverse : K = 1/11,2 = 8,9·10⁻²', bulle: () => 'La réaction dans l’autre sens.',
+      vu: 'Écrit : « sens inverse : CH₃COOH + HCOO⁻ ⇌ CH₃COO⁻ + HCOOH » et « K = 1/11,2 = 8,9·10⁻² ».' },
+    { nom: 'exemple_2', anim: .3, motif: 'CH₃COOH + NH₃ ⇌ CH₃COO⁻ + NH₄⁺ : K = 10^(9,2 − 4,8) = 2,5·10⁴', bulle: () => 'Deuxième exemple.',
+      vu: 'Écrit : « CH₃COOH + NH₃ ⇌ CH₃COO⁻ + NH₄⁺ » (acide CH₃COOH, pKa₁ = 4,8 ; base NH₃, pKa₂ = 9,2) et « K = 10^(9,2 − 4,8) = 10^(4,4) = 2,5·10⁴ ».' },
+    { nom: 'piege', anim: .3, motif: '⚠ « Ka₁ : couple de l’acide qui réagit »', bulle: () => 'Attention au piège.',
+      vu: 'En orange, avec un triangle ⚠ : « Ka₁ : couple de l’acide qui réagit ; Ka₂ : couple de la base qui réagit ».' },
+  ],
+  totale: [
+    { nom: 'equation', anim: .3, motif: 'CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O', bulle: () => 'L’acide éthanoïque avec les ions hydroxyde.',
+      vu: 'Écrit : « CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O » (flèche simple).' },
+    { nom: 'couple_eau', anim: .3, motif: 'couple de la base HO⁻ : H₂O/HO⁻, Ka = Ke', bulle: () => 'HO⁻ est la base du couple H₂O/HO⁻.',
+      vu: 'Écrit : « acide : CH₃COOH/CH₃COO⁻, Ka (pKa = 4,8) » et « base : H₂O/HO⁻, Ka = Ke (pKa = 14) ».' },
+    { nom: 'relation', anim: .3, motif: 'K = Ka/Ke', bulle: () => 'K = Ka₁/Ka₂ avec Ka₂ = Ke.',
+      vu: 'Encadré jaune : « K = Ka/Ke » ; à côté « K = Ka₁/Ka₂ avec Ka₂ = Ke ».' },
+    { nom: 'application', anim: .3, motif: 'K = 10^(14 − 4,8) = 1,6·10⁹', bulle: () => 'L’application numérique.',
+      vu: 'Écrit : « K = 10^(14 − 4,8) = 10^(9,2) = 1,6·10⁹ ».' },
+    { nom: 'totale', anim: .3, motif: '« K > 10⁴ : réaction pratiquement totale » ; « elle servira au dosage »', bulle: () => 'Une constante énorme.',
+      vu: 'Cadre jaune : « K > 10⁴ : réaction pratiquement totale » ; en cyan « elle servira au dosage ».' },
+  ],
+  national: [
+    { nom: 'donnees', anim: .6, motif: 'mélange de 400 mL : HCOOH, CH₃COO⁻, CH₃COOH, HCOO⁻', bulle: () => 'Le sujet du national 2020 R.',
+      vu: 'Bécher incolore « 400 mL » ; écrit en cyan « national 2020 R (2.2, 0,5 pt) » et « mélange (400 mL) : HCOOH, CH₃COO⁻, CH₃COOH, HCOO⁻ ».' },
+    { nom: 'equation', anim: .3, motif: 'HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH', bulle: () => 'La réaction.',
+      vu: 'Écrit : « HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH ».' },
+    { nom: 'couples', anim: .3, motif: 'Ka₁ : CH₃COOH/CH₃COO⁻, pKa₁ = 4,8 ; Ka₂ : HCOOH/HCOO⁻, pKa₂ = 3,8 (notation du sujet)', bulle: () => 'Les notations du sujet.',
+      vu: 'Écrit : « Ka₁ : CH₃COOH/CH₃COO⁻, pKa₁ = 4,8 » et « Ka₂ : HCOOH/HCOO⁻, pKa₂ = 3,8 » ; « (notation du sujet) ».' },
+    { nom: 'relation', anim: .3, motif: 'K = Ka₂/Ka₁ = 10^(pKa₁ − pKa₂)', bulle: () => 'Ici, l’acide qui réagit est HCOOH : son couple est noté Ka₂.',
+      vu: 'Écrit : « K = Ka₂/Ka₁ = 10^(pKa₁ − pKa₂) ».' },
+    { nom: 'resultat', anim: .3, motif: 'K = 10^(4,8 − 3,8) = 10', bulle: () => 'Le résultat.',
+      vu: 'Encadré jaune : « K = 10^(4,8 − 3,8) = 10^1 = 10 ».' },
+    { nom: 'piege', anim: .3, motif: '⚠ « lire qui est Ka₁ dans le sujet »', bulle: () => 'Attention au piège.',
+      vu: 'En orange, avec un triangle ⚠ : « lire qui est Ka₁ dans le sujet » ; dessous : « ici, Ka₁ est le couple de la base qui réagit (CH₃COO⁻), pas celui de l’acide ».' },
+  ],
+};
+let MO = null;
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
+const rectB = b => [b.x, b.y, b.w, b.h];
+
+/* ── Vues acides et bases (exemple F) : deux béchers, deux pH-mètres, un tableau, deux barres τ ─────────────────────── */
+const VD = {
+  MET: [{ x: 14, y: 44, w: 128, h: 56 }, { x: 186, y: 44, w: 128, h: 56 }], B: [{ x: 26, y: 172, w: 104, h: 88 }, { x: 198, y: 172, w: 104, h: 88 }],
+  L: 62, OUT: 168, IN: 250, G: { x: 340, y: 44, h: 30, ws: [118, 66, 96, 58, 64] }, BAR: { x: 470, y: 170, dy: 34, h: 20, w: 260, max: .25 },
+  XR: 340, YR1: 270, YR2: 296, YR3: 322, CC: { x: 340, y: 340, w: 404, h: 46 },
+};
+const sxD = i => VD.B[i].x + VD.B[i].w * .7;
+const gxD = k => VD.G.x + VD.G.ws.slice(0, k).reduce((a, b) => a + b, 0);
+function etatDuo(M) {
+  const D = DUO[M.S.vue], r = [0, 1].map(() => ({ syB: VD.OUT, txt: '- -,- -', ph: null }));
+  if (!M.commence('mesures')) return r;
+  const p = M.p('mesures');
+  [0, 1].forEach(i => {
+    const q = clamp((p - i * .5) / .5, 0, 1); if (q <= 0) return;
+    r[i].syB = lerp(VD.OUT, VD.IN, lisse(clamp(q / .35, 0, 1)));
+    const l = lecture(q, D[i].pH + (M.S.vue === 'acides' ? .5 : -.5), D[i].pH, .35); r[i].txt = l.txt; r[i].ph = l.v;
+  });
+  return r;
+}
+/** Barre τ peinte (verre bleu clair), longueur f de 0 à 1. */
+function barre(ctx, x, y, w, h, f, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(x + 2, y + 3, w * f, h);
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#bfdbfe'); g.addColorStop(.5, '#60a5fa'); g.addColorStop(1, '#2563eb');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, Math.max(1, w * f), h, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x + 2, y + 3, Math.max(0, w * f - 4), 3);
+  ctx.restore();
+}
+function vueDuo(c, M) {
+  const v = M.S.vue, a = v === 'acides', D = DUO[v], { MET, B, L, G, BAR, XR, YR1, YR2, YR3, CC } = VD, E = etatDuo(M);
+  c.ligne(14, 262, 318, 262, { couleur: 'faible', largeur: 1.6 });
+  const ap = M.commence('bechers') ? lisse(clamp(M.p('bechers') * 1.5, 0, 1)) : 0;
+  if (ap > 0) c.direct(() => B.forEach(b => Peint.becher(c.ctx, b, .62, INCOLORE, ap)));
+  [0, 1].forEach(i => montagePH(c, MET[i], sxD(i), E[i].syB, E[i].txt === '- -,- -' ? '--,--' : E[i].txt, L));   // afficheur plus étroit : tirets serrés
+  M.etape(c, 'bechers', () => {
+    D.forEach((d, i) => {
+      const cx = B[i].x + B[i].w / 2;
+      c.texte(d.nom, cx, 284, { taille: 16, align: 'center', couleur: a ? 'rose' : 'vert' });
+      c.texte(`${PKA} = ${d.pKa}`, cx, 304, { taille: 15, align: 'center', couleur: 'faible' });
+    });
+    c.texte('C = 1,0·10⁻² mol/L pour les deux', 166, 334, { taille: 15, align: 'center' });
+  });
+  M.etape(c, 'mesures', () => {
+    const w0 = c.cur, e = M.ev('mesures');
+    D.forEach((d, i) => { c.depuis(w0 + ((i + .9) / 2) * e.anim * 1.7); c.texte(`pH = ${fr(d.pH, 2)}`, B[i].x + B[i].w / 2, 160, { taille: 16, align: 'center', couleur: 'jaune' }); });
+  });
+  const ys = k => G.y + k * G.h + G.h * .7, cxg = k => gxD(k) + G.ws[k] / 2, W = G.ws.reduce((x, y) => x + y, 0);
+  M.etape(c, 'tableau', () => {
+    for (let k = 0; k <= 3; k++) c.ligne(G.x, G.y + k * G.h, G.x + W, G.y + k * G.h, { couleur: 'faible', largeur: 1.4, duree: .08 });
+    for (let k = 0; k <= 5; k++) c.ligne(gxD(k), G.y, gxD(k), G.y + 3 * G.h, { couleur: 'faible', largeur: 1.4, duree: .05 });
+    [a ? 'acide' : 'base', PKA, KA, 'pH', 'τ'].forEach((s, k) => c.texte(s, cxg(k), ys(0), { taille: 16, align: 'center', couleur: 'cyan' }));
+    D.forEach((d, i) => [d.court, d.pKa, d.Ka, fr(d.pH, 2), d.tauTxt].forEach((s, k) =>
+      c.texte(s, cxg(k), ys(i + 1), { taille: k ? 16 : 15, align: 'center', max: G.ws[k] - 6, couleur: k === 4 ? 'bleu' : k === 1 || k === 2 ? 'jaune' : 'blanc' })));
+  });
+  if (M.commence('barres')) {
+    const p = M.p('barres');
+    c.direct(() => D.forEach((d, i) => barre(c.ctx, BAR.x, BAR.y + i * BAR.dy, BAR.w, BAR.h, (d.tau / BAR.max) * lisse(clamp(p / .8, 0, 1)))));
+  }
+  M.etape(c, 'barres', () => {
+    c.texte('taux d’avancement final τ :', XR, BAR.y - 8, { taille: 15, couleur: 'faible' });
+    D.forEach((d, i) => {
+      const y = BAR.y + i * BAR.dy;
+      c.texte(d.court, BAR.x - 10, y + 16, { taille: 15, align: 'right' });
+      c.texte(d.tauTxt, BAR.x + BAR.w * d.tau / BAR.max + 10, y + 16, { taille: 16, couleur: 'bleu' });
+    });
+    c.ligne(BAR.x, BAR.y - 4, BAR.x, BAR.y + BAR.dy + BAR.h + 4, { couleur: 'faible', largeur: 1.4 });
+  });
+  M.etape(c, 'regle', () => {
+    if (a) {
+      c.texte('même C : plus K_{a} est grand (pK_{a} petit),', XR, YR1, { taille: 18 });
+      c.texte('plus τ est grand, plus le pH est petit', XR, YR2, { taille: 18 });
+    } else {
+      c.texte('même C : plus le pK_{a} du couple est grand,', XR, YR1, { taille: 18 });
+      c.texte('plus la base est forte (τ et pH plus grands)', XR, YR2, { taille: 18 });
+      c.texte('la méthylamine est la base la plus forte', XR, YR3 + 4, { taille: 17, couleur: 'vert' });
+    }
+  });
+  if (a) M.etape(c, 'conclusion', () => {
+    c.rect(CC.x, CC.y, CC.w, CC.h, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+    c.texte('l’acide méthanoïque est le plus fort', CC.x + CC.w / 2, CC.y + 30, { taille: 21, align: 'center', couleur: 'jaune', max: CC.w - 20 });
+  });
+  M.duo = E;
+}
+
+/* ── Vue classement ─────────────────────────────────────────────────── */
+const VC = { X: 385, Y0: 398, Y14: 86, XA: 330, XV: 396, XB: 470, FA: 60, FB: 700 };
+const yPk = pk => VC.Y0 - pk / 14 * (VC.Y0 - VC.Y14);
+function vueClassement(c, M) {
+  const { X, Y0, Y14, XA, XV, XB, FA, FB } = VC;
+  M.etape(c, 'axe', () => {
+    c.fleche(X, Y0 + 8, X, Y14 - 22, { couleur: 'blanc', largeur: 1.8, tete: 8 });
+    c.texte('pK_{a}', X + 12, Y14 - 16, { taille: 18 });
+    for (let k = 0; k <= 14; k += 2) c.ligne(X - 4, yPk(k), X + 4, yPk(k), { couleur: 'faible', largeur: 1.2, duree: .02 });
+  });
+  const ca = M.commence('acides') ? 'rose' : 'blanc', cb = M.commence('bases') ? 'vert' : 'blanc';
+  M.etape(c, 'couples', () => {
+    for (const k of COUPLES) {
+      const y = yPk(k.pk);
+      c.ligne(X - 9, y, X + 9, y, { couleur: 'jaune', largeur: 2.2, duree: .04 });
+      c.texte(k.pkTxt, XV, y + 5, { taille: 15, couleur: 'jaune' });
+      c.texte(k.a, XA, y + 6, { taille: 18, align: 'right', couleur: ca });
+      c.ligne(XA + 6, y, X - 12, y, { couleur: 'tresfaible', largeur: 1, duree: .03 });
+      c.ligne(XV + 32, y, XB - 8, y, { couleur: 'tresfaible', largeur: 1, duree: .03 });
+      c.texte(k.b, XB, y + 6, { taille: 18, couleur: cb });
+    }
+  });
+  M.etape(c, 'acides', () => c.texte('acides', XA, 62, { taille: 20, align: 'right', couleur: 'rose' }));
+  M.etape(c, 'bases', () => c.texte('bases', XB, 62, { taille: 20, couleur: 'vert' }));
+  M.etape(c, 'fleches', () => {
+    c.fleche(FA, Y14 + 4, FA, Y0 - 4, { couleur: 'rose', largeur: 2.4, tete: 10 });
+    c.texte('acide de plus', FA + 14, 236, { taille: 17, couleur: 'rose' });
+    c.texte('en plus fort', FA + 14, 258, { taille: 17, couleur: 'rose' });
+    c.fleche(FB, Y0 - 4, FB, Y14 + 4, { couleur: 'vert', largeur: 2.4, tete: 10 });
+    c.texte('base de plus', FB - 14, 236, { taille: 17, couleur: 'vert', align: 'right' });
+    c.texte('en plus forte', FB - 14, 258, { taille: 17, couleur: 'vert', align: 'right' });
+  });
+}
+
+/* ── Vue reaction (exemple G) ───────────────────────────────────────── */
+const VR = { cx: 380, YE: 76, YC: 108, X: 24, YQ: 178, YS: 252, YL: 306, YK: 384 };
+const LR_Q = ['K =', { frac: ['[A₁⁻]_{éq}·[AH₂]_{éq}', '[AH₁]_{éq}·[A₂⁻]_{éq}'] }];
+const LR_M = ['×', { frac: ['[H₃O⁺]_{éq}', '[H₃O⁺]_{éq}'] }];
+const LR_S = ['K =', { frac: ['[A₁⁻]_{éq}·[H₃O⁺]_{éq}', '[AH₁]_{éq}'] }, '×', { frac: ['[AH₂]_{éq}', '[A₂⁻]_{éq}·[H₃O⁺]_{éq}'] }];
+const LR_R = ['K =', { frac: [KA1, KA2] }];
+function vueReaction(c, M) {
+  const { cx, YE, YC, X, YQ, YS, YL, YK } = VR, t = 21;
+  M.etape(c, 'equation', () => {
+    eqf(c, cx, YE, 'AH₁ + A₂⁻', 'A₁⁻ + AH₂', { taille: 26, type: '⇌', align: 'center', fl: 40 });
+    c.texte('couple 1 : AH₁/A₁⁻ (K_{a1}) ; couple 2 : AH₂/A₂⁻ (K_{a2})', cx, YC, { taille: 16, align: 'center', couleur: 'faible' });
+  });
+  const PQ = placer(c, X, LR_Q, t, { gap: 12 }), xm = PQ.x0 + PQ.tot + 18, PM = placer(c, xm, LR_M, t, { gap: 10 });
+  M.etape(c, 'quotient', () => ligneM(c, X, YQ, LR_Q, { taille: t, gap: 12 }));
+  M.etape(c, 'multiplier', () => {
+    ligneM(c, xm, YQ, LR_M, { taille: t, gap: 10, couleur: 'jaune' });
+    c.texte('on multiplie en haut et en bas par [H₃O⁺]_{éq}', xm + PM.tot + 22, YQ - 4, { taille: 15, couleur: 'jaune', max: 740 - xm - PM.tot - 22 });
+  });
+  const PS = placer(c, X, LR_S, t, { gap: 12 });
+  M.etape(c, 'separer', () => {
+    ligneM(c, X, YS, LR_S, { taille: t, gap: 12 });
+    const c1 = PS.xs[1] + PS.ws[1] / 2, c2 = PS.xs[3] + PS.ws[3] / 2, yb = YS + t * .98 + 6;
+    c.fleche(c1, yb, c1, YL - 22, { couleur: 'jaune', largeur: 1.8, tete: 7 });
+    c.fleche(c2, yb, c2, YL - 26, { couleur: 'jaune', largeur: 1.8, tete: 7 });
+    c.texte(KA1, c1, YL + 2, { taille: 24, align: 'center', couleur: 'jaune' });
+    ligneM(c, c2, YL + 4, [{ frac: ['1', KA2] }], { taille: 20, align: 'center', couleur: 'jaune' });
+  });
+  const PR = placer(c, cx, LR_R, 28, { gap: 14, align: 'center' });
+  M.etape(c, 'relation', () => { ligneM(c, cx, YK, LR_R, { taille: 28, gap: 14, align: 'center', couleur: 'jaune' }); cadreB(c, boite(PR, YK, LR_R)); });
+  M.rea = { PQ, PM, PS, PR };
+}
+
+/* ── Vue puissance (exemple G) ──────────────────────────────────────── */
+const VPU = { cx: 380, Y0: 84, X: 24, XK: 438, Y1: 160, Y2: 238, Y3: 316, YP: 392 };
+const LP_R = ['K =', { frac: [KA1, KA2] }, '=', { pow: 'pK_{a2} − pK_{a1}' }];
+const LP_1 = ['K =', { pow: '4,8 − 3,75' }, '=', { pow: '1,05' }, '= 11,2 ≈ 11'];
+const LP_I = ['K =', { frac: ['1', '11,2'] }, '= 8,9·10⁻²'];
+const LP_2 = ['K =', { pow: '9,2 − 4,8' }, '=', { pow: '4,4' }, '= 2,5·10⁴'];
+function vuePuissance(c, M) {
+  const { cx, Y0, X, XK, Y1, Y2, Y3, YP } = VPU, t = 20;
+  const PR = placer(c, cx, LP_R, 28, { gap: 12, align: 'center' });
+  M.etape(c, 'relation', () => { ligneM(c, cx, Y0, LP_R, { taille: 28, gap: 12, align: 'center', couleur: 'jaune' }); cadreB(c, boite(PR, Y0, LP_R)); });
+  const P1 = placer(c, XK, LP_1, t, { gap: 8 }), PI = placer(c, XK, LP_I, t, { gap: 10 }), P2 = placer(c, XK, LP_2, t, { gap: 8 });
+  M.etape(c, 'exemple_1', () => {
+    eqf(c, X, Y1, 'HCOOH + CH₃COO⁻', 'HCOO⁻ + CH₃COOH', { taille: 18, type: '⇌', max: 390 });
+    c.texte('acide : HCOOH (pK_{a1} = 3,75) ; base : CH₃COO⁻ (pK_{a2} = 4,8)', X, Y1 + 24, { taille: 14, couleur: 'faible', max: 400 });
+    ligneM(c, XK, Y1, LP_1, { taille: t, gap: 8, cols: ['blanc', 'blanc', 'blanc', 'blanc', 'jaune'] });
+  });
+  M.etape(c, 'inverse', () => {
+    c.texte('sens inverse :', X, Y2 - 24, { taille: 15, couleur: 'faible' });
+    eqf(c, X, Y2, 'CH₃COOH + HCOO⁻', 'CH₃COO⁻ + HCOOH', { taille: 18, type: '⇌', max: 390 });
+    ligneM(c, XK, Y2, LP_I, { taille: t, gap: 10, cols: ['blanc', 'blanc', 'jaune'] });
+  });
+  M.etape(c, 'exemple_2', () => {
+    eqf(c, X, Y3, 'CH₃COOH + NH₃', 'CH₃COO⁻ + NH₄⁺', { taille: 18, type: '⇌', max: 390 });
+    c.texte('acide : CH₃COOH (pK_{a1} = 4,8) ; base : NH₃ (pK_{a2} = 9,2)', X, Y3 + 24, { taille: 14, couleur: 'faible', max: 400 });
+    ligneM(c, XK, Y3, LP_2, { taille: t, gap: 8, cols: ['blanc', 'blanc', 'blanc', 'blanc', 'jaune'] });
+  });
+  M.etape(c, 'piege', () => {
+    attention(c, X, YP, { h: 20 });
+    c.texte(KA1 + ' : couple de l’acide qui réagit ; ' + KA2 + ' : couple de la base qui réagit', X + 32, YP - 2, { taille: 18, couleur: 'orange', max: 690 });
+  });
+  M.pui = { PR, P1, PI, P2 };
+}
+
+/* ── Vue totale (exemple G) ─────────────────────────────────────────── */
+const VTO = { cx: 380, YE: 80, X: 40, YC1: 138, YC2: 166, YR: 240, XH: 250, YA: 314, YT: 374, BT: { x: 30, y: 344, w: 440, h: 44 } };
+const LT_R = ['K =', { frac: [KA, 'K_{e}'] }];
+const LT_H = ['(K =', { frac: [KA1, KA2] }, 'avec ' + KA2 + ' = K_{e})'];
+const LT_A = ['K =', { frac: [KA, 'K_{e}'] }, '=', { pow: '14 − 4,8' }, '=', { pow: '9,2' }, '= 1,6·10⁹'];
+function vueTotale(c, M) {
+  const { cx, YE, X, YC1, YC2, YR, XH, YA, YT, BT } = VTO;
+  M.etape(c, 'equation', () => eqf(c, cx, YE, 'CH₃COOH + HO⁻', 'CH₃COO⁻ + H₂O', { taille: 26, type: '→', align: 'center', fl: 40 }));
+  M.etape(c, 'couple_eau', () => {
+    c.texte('acide : CH₃COOH/CH₃COO⁻ : ' + KA + ' (pK_{a} = 4,8)', X, YC1, { taille: 18, couleur: 'rose' });
+    c.texte('base HO⁻ : couple H₂O/HO⁻ : ' + KA + ' = K_{e} (pK_{a} = 14)', X, YC2, { taille: 18, couleur: 'vert' });
+  });
+  const PR = placer(c, X + 20, LT_R, 28, { gap: 14 }), PH = placer(c, XH, LT_H, 17, { gap: 8 }), PA = placer(c, X, LT_A, 22, { gap: 10 });
+  M.etape(c, 'relation', () => {
+    ligneM(c, X + 20, YR, LT_R, { taille: 28, gap: 14, couleur: 'jaune' }); cadreB(c, boite(PR, YR, LT_R));
+    ligneM(c, XH, YR, LT_H, { taille: 17, gap: 8, couleur: 'faible' });
+  });
+  M.etape(c, 'application', () => ligneM(c, X, YA, LT_A, { taille: 22, gap: 10, cols: ['blanc', 'blanc', 'blanc', 'blanc', 'blanc', 'blanc', 'jaune'] }));
+  M.etape(c, 'totale', () => {
+    c.rect(BT.x, BT.y, BT.w, BT.h, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+    c.texte('K > 10⁴ : réaction pratiquement totale', BT.x + BT.w / 2, YT, { taille: 22, align: 'center', couleur: 'jaune', max: BT.w - 20 });
+    c.texte('elle servira au dosage', 500, YT, { taille: 21, couleur: 'cyan' });
+  });
+  M.tot = { PR, PH, PA };
+}
+
+/* ── Vue national (2020 R) ──────────────────────────────────────────── */
+const VN = { B: { x: 24, y: 76, w: 112, h: 96 }, X: 170, YD1: 70, YD2: 100, YE: 146, YC1: 192, YC2: 220, XR: 24, YR: 290, XS: 430, YP: 364, YP2: 392 };
+const LN_R = ['K =', { frac: [KA2, KA1] }, '=', { pow: 'pK_{a1} − pK_{a2}' }];
+const LN_S = ['K =', { pow: '4,8 − 3,8' }, '=', { pow: '1' }, '= 10'];
+function vueNational(c, M) {
+  const { B, X, YD1, YD2, YE, YC1, YC2, XR, YR, XS, YP, YP2 } = VN;
+  const a = M.commence('donnees') ? lisse(clamp(M.p('donnees') * 1.5, 0, 1)) : 0;
+  if (a > 0) c.direct(() => Peint.becher(c.ctx, B, .72, INCOLORE, a));
+  M.etape(c, 'donnees', () => {
+    c.texte('400 mL', B.x + B.w / 2, B.y + B.h + 24, { taille: 16, align: 'center' });
+    c.texte('national 2020 R (2.2, 0,5 pt)', X, YD1, { taille: 19, couleur: 'cyan' });
+    c.texte('mélange (400 mL) : HCOOH, CH₃COO⁻, CH₃COOH, HCOO⁻', X, YD2, { taille: 18, max: 570 });
+  });
+  M.etape(c, 'equation', () => eqf(c, X, YE, 'HCOOH + CH₃COO⁻', 'HCOO⁻ + CH₃COOH', { taille: 22, type: '⇌' }));
+  M.etape(c, 'couples', () => {
+    c.texte(KA1 + ' : CH₃COOH/CH₃COO⁻, pK_{a1} = 4,8', X, YC1, { taille: 19 });
+    c.texte(KA2 + ' : HCOOH/HCOO⁻, pK_{a2} = 3,8', X, YC2, { taille: 19 });
+    c.texte('(notation du sujet)', 740, YC2, { taille: 15, couleur: 'faible', align: 'right' });
+  });
+  const PR = placer(c, XR, LN_R, 26, { gap: 12 }), PS = placer(c, XS, LN_S, 26, { gap: 10 });
+  M.etape(c, 'relation', () => ligneM(c, XR, YR, LN_R, { taille: 26, gap: 12 }));
+  M.etape(c, 'resultat', () => { ligneM(c, XS, YR, LN_S, { taille: 26, gap: 10, couleur: 'jaune' }); cadreB(c, boite(PS, YR, LN_S)); });
+  M.etape(c, 'piege', () => {
+    attention(c, XR, YP, { h: 20 });
+    c.texte('lire qui est ' + KA1 + ' dans le sujet', XR + 32, YP - 2, { taille: 21, couleur: 'orange' });
+    c.texte('ici, ' + KA1 + ' est le couple de la base qui réagit (CH₃COO⁻), pas celui de l’acide', XR + 32, YP2, { taille: 15, couleur: 'faible', max: 700 });
+  });
+  M.nat = { PR, PS };
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(137);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20, max: 730 });
+  ({ acides: vueDuo, bases: vueDuo, classement: vueClassement, reaction: vueReaction, puissance: vuePuissance, totale: vueTotale, national: vueNational })[v](c, M);
+  reperes(c, M);
+  return c.fin();
+}
+
+/* ── Repères (tous déclarés à chaque image dès le début ; le libellé dit à quel moment ils apparaissent) ── */
+function reperes(c, M) {
+  const v = M.S.vue, R = (id, r, l) => c.repere(id, r[0], r[1], r[2], r[3], l), q = nom => quand(M, nom);
+  if (v === 'acides' || v === 'bases') {
+    const D = DUO[v], { MET, B, G, BAR, XR, YR1, YR3, CC } = VD, E = M.duo || etatDuo(M);
+    D.forEach((d, i) => R(`becher_${i + 1}`, [B[i].x - 10, MET[i].y, Math.max(B[i].w, MET[i].w) + 20, 312 - MET[i].y],
+      `le bécher ${i + 1} : ${d.nom} 1,0·10⁻² mol/L (pKa ${d.pKa}) ; afficheur ${E[i].txt === '- -,- -' ? 'pas encore de mesure' : 'pH = ' + E[i].txt}`));
+    R('tableau', [G.x - 4, G.y - 4, G.ws.reduce((a, b) => a + b, 0) + 8, 3 * G.h + 8], `le tableau pKa · Ka · pH · τ${q('tableau')}`);
+    R('barres', [XR - 4, BAR.y - 26, 410, BAR.dy + BAR.h + 32], `les deux barres τ : ${D[0].tauTxt} et ${D[1].tauTxt}${q('barres')}`);
+    R('regle', [XR - 4, YR1 - 22, 410, (v === 'acides' ? 52 : 82)], `la règle : ${v === 'acides' ? 'même C, Ka plus grand → τ plus grand, pH plus petit' : 'même C, pKa plus grand → base plus forte'}${q('regle')}`);
+    if (v === 'acides') R('conclusion', [CC.x, CC.y, CC.w, CC.h], `« l’acide méthanoïque est le plus fort »${q('conclusion')}`);
+  } else if (v === 'classement') {
+    const { X, Y0, Y14, XA, XB, FA, FB } = VC;
+    R('axe', [X - 14, Y14 - 34, 50, Y0 - Y14 + 46], `l’axe vertical des pKa, de 0 à 14${q('axe')}`);
+    R('couples', [XA - 100, Y14 - 16, XB + 100 - XA + 100, Y0 - Y14 + 30], `les six couples posés à leur pKa (acide à gauche, base à droite)${q('couples')}`);
+    R('fleche_acides', [FA - 12, Y14, 150, Y0 - Y14], `la flèche « acide de plus en plus fort » (vers le bas)${q('fleches')}`);
+    R('fleche_bases', [FB - 138, Y14, 150, Y0 - Y14], `la flèche « base de plus en plus forte » (vers le haut)${q('fleches')}`);
+  } else if (v === 'reaction') {
+    if (!M.rea) return;
+    const { cx, YE, YC, YQ, YS, YL, YK } = VR, { PQ, PM, PS, PR } = M.rea;
+    R('equation', [cx - 280, YE - 32, 560, YC - YE + 42], `AH₁ + A₂⁻ ⇌ A₁⁻ + AH₂${q('equation')}`);
+    R('quotient', rectB(boite(PQ, YQ, LR_Q)), `K = [A₁⁻]éq·[AH₂]éq / ([AH₁]éq·[A₂⁻]éq)${q('quotient')}`);
+    R('multiplier', rectB(boite(PM, YQ, LR_M)), `× [H₃O⁺]éq / [H₃O⁺]éq${q('multiplier')}`);
+    const bs = boite(PS, YS, LR_S); R('separer', [bs.x, bs.y, bs.w, YL + 30 - bs.y], `les deux fractions : Ka₁ et 1/Ka₂${q('separer')}`);
+    R('relation', rectB(boite(PR, YK, LR_R)), `K = Ka₁/Ka₂${q('relation')}`);
+  } else if (v === 'puissance') {
+    if (!M.pui) return;
+    const { Y0, X, XK, Y1, Y2, Y3, YP } = VPU, { PR } = M.pui;
+    R('relation', rectB(boite(PR, Y0, LP_R)), `K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁)${q('relation')}`);
+    R('exemple_1', [X - 6, Y1 - 26, 730, 56], `HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH : K = 10^(4,8 − 3,75) = 11${q('exemple_1')}`);
+    R('inverse', [X - 6, Y2 - 42, 730, 66], `sens inverse : K = 1/11,2 = 8,9·10⁻²${q('inverse')}`);
+    R('exemple_2', [X - 6, Y3 - 26, 730, 56], `CH₃COOH + NH₃ ⇌ CH₃COO⁻ + NH₄⁺ : K = 10^(9,2 − 4,8) = 2,5·10⁴${q('exemple_2')}`);
+    R('piege', [X - 4, YP - 24, 730, 32], `⚠ « Ka₁ : couple de l’acide qui réagit »${q('piege')}`);
+  } else if (v === 'totale') {
+    if (!M.tot) return;
+    const { cx, YE, X, YC1, YC2, YR, YA, BT } = VTO, { PR, PH, PA } = M.tot;
+    R('equation', [cx - 260, YE - 32, 520, 44], `CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O${q('equation')}`);
+    R('couple_eau', [X - 6, YC1 - 22, 560, YC2 - YC1 + 32], `couple H₂O/HO⁻ : Ka = Ke${q('couple_eau')}`);
+    R('relation', rectB(boite(PR, YR, LT_R)), `K = Ka/Ke${q('relation')}`);
+    R('application', rectB(boite(PA, YA, LT_A)), `K = 10^(14 − 4,8) = 1,6·10⁹${q('application')}`);
+    R('totale', [BT.x, BT.y, 730 - BT.x, BT.h], `« K > 10⁴ : réaction pratiquement totale » ; « elle servira au dosage »${q('totale')}`);
+  } else {
+    if (!M.nat) return;
+    const { B, X, YD1, YD2, YE, YC1, YC2, XR, YR, YP, YP2 } = VN, { PR, PS } = M.nat;
+    R('donnees', [B.x - 6, YD1 - 24, 730, B.y + B.h + 34 - YD1 + 24], `national 2020 R : mélange de 400 mL (HCOOH, CH₃COO⁻, CH₃COOH, HCOO⁻)${q('donnees')}`);
+    R('equation', [X - 6, YE - 26, 500, 36], `HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH${q('equation')}`);
+    R('couples', [X - 6, YC1 - 22, 740 - X + 6, YC2 - YC1 + 30], `Ka₁ : CH₃COOH/CH₃COO⁻ (4,8) ; Ka₂ : HCOOH/HCOO⁻ (3,8) — notation du sujet${q('couples')}`);
+    R('relation', rectB(boite(PR, YR, LN_R)), `K = Ka₂/Ka₁ = 10^(pKa₁ − pKa₂)${q('relation')}`);
+    R('resultat', rectB(boite(PS, YR, LN_S)), `K = 10^(4,8 − 3,8) = 10${q('resultat')}`);
+    R('piege', [XR - 4, YP - 24, 730, YP2 - YP + 32], `⚠ « lire qui est Ka₁ dans le sujet »${q('piege')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
+  if (v === 'acides' || v === 'bases') {
+    const E = etatDuo(M), D = DUO[v];
+    if (M.commence('bechers')) m.push(`Afficheurs : ${D.map((d, i) => `${d.nom} ${E[i].txt === '- -,- -' ? '« - -,- - » (sonde hors solution)' : 'pH = ' + E[i].txt}`).join(' ; ')}.`);
+  }
+  for (const e of ETAPES[v]) if (M.commence(e.nom)) m.push(e.vu);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v };
+  if (v === 'acides' || v === 'bases') {
+    const E = etatDuo(M), D = DUO[v];
+    Object.assign(p, { C_mol_L: 1.0e-2, especes: D.map(d => d.nom), pKa: D.map(d => +d.pKa.replace(',', '.')), pH: D.map(d => d.pH), tau: D.map(d => d.tau),
+      pH_affiches: E.map(e => (e.ph == null ? null : +e.ph.toFixed(2))) });
+  }
+  if (v === 'classement') Object.assign(p, { couples: COUPLES.map(k => `${k.a}/${k.b}`), pKa: COUPLES.map(k => k.pk) });
+  if (v === 'puissance') Object.assign(p, { K_1: 11.2, K_inverse: 8.9e-2, K_2: 2.5e4 });
+  if (v === 'totale') Object.assign(p, { pKa: 4.8, pKe: 14, K: 1.6e9 });
+  if (v === 'national') Object.assign(p, { pKa1: 4.8, pKa2: 3.8, K: 10 });
+  return p;
+};
+const MOT = Moteur({
+  id: 'ab_comparer', titre: 'Comparer les acides et les bases ; constante d’une réaction acide-base : K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁), K = Ka/Ke, national 2020 R', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ acides: 'Deux acides à la même concentration : lequel est le plus fort ?', bases: 'Deux bases à la même concentration : laquelle est la plus forte ?',
+    classement: 'Ranger les couples sur un axe des pKa.', reaction: 'Un acide réagit avec la base d’un autre couple : quelle constante ?',
+    puissance: 'Calculer K avec les pKa.', totale: 'Et si la base est HO⁻ ?', national: 'Le national 2020 R : attention aux notations.' })[M.S.vue],
+  messageFin: M => ({ acides: 'Même C : Ka plus grand → τ plus grand, pH plus petit ; l’acide méthanoïque est le plus fort.',
+    bases: 'Même C : pKa plus grand → base plus forte ; la méthylamine est la plus forte.', classement: 'Acide plus fort vers le bas (pKa petit), base plus forte vers le haut (pKa grand).',
+    reaction: 'K = Ka₁/Ka₂.', puissance: 'K = 10^(pKa₂ − pKa₁) : 11 ; 8,9·10⁻² ; 2,5·10⁴.', totale: 'K = Ka/Ke = 1,6·10⁹ > 10⁴ : réaction pratiquement totale.',
+    national: 'National 2020 R : K = Ka₂/Ka₁ = 10^(4,8 − 3,8) = 10.' })[M.S.vue],
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Comparer (exemple F, C = 1,0·10⁻² mol/L) : acide éthanoïque pKa 4,8 (Ka 1,6·10⁻⁵) pH 3,41 τ 0,039 ; acide méthanoïque pKa 3,75 (Ka 1,8·10⁻⁴) pH 2,90 τ 0,126 : même C, plus Ka est grand (pKa petit), plus τ est grand, plus le pH est petit ; l’acide méthanoïque est le plus fort. ' +
+    'Ammoniac pKa 9,2 pH 10,60 τ 0,040 ; méthylamine pKa 10,7 pH 11,30 τ 0,20 : plus le pKa du couple est grand, plus la base est forte. ' +
+    'Axe des pKa : H₃O⁺/H₂O 0 · HCOOH/HCOO⁻ 3,75 · CH₃COOH/CH₃COO⁻ 4,8 · NH₄⁺/NH₃ 9,2 · CH₃NH₃⁺/CH₃NH₂ 10,7 · H₂O/HO⁻ 14 ; acide de plus en plus fort vers le bas, base de plus en plus forte vers le haut. ' +
+    'AH₁ + A₂⁻ ⇌ A₁⁻ + AH₂ : K = [A₁⁻]éq·[AH₂]éq/([AH₁]éq·[A₂⁻]éq) ; × [H₃O⁺]éq/[H₃O⁺]éq : K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁) (Ka₁ : couple de l’acide qui réagit). ' +
+    'HCOOH + CH₃COO⁻ : K = 10^(4,8 − 3,75) = 11 ; sens inverse K = 1/11,2 = 8,9·10⁻² ; CH₃COOH + NH₃ : K = 10^(9,2 − 4,8) = 2,5·10⁴. ' +
+    'CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O : couple H₂O/HO⁻, Ka = Ke ; K = Ka/Ke = 10^(14 − 4,8) = 1,6·10⁹ > 10⁴ : réaction pratiquement totale, elle servira au dosage. ' +
+    'National 2020 R : HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH ; Ka₁ : CH₃COOH/CH₃COO⁻ (pKa₁ = 4,8), Ka₂ : HCOOH/HCOO⁻ (pKa₂ = 3,8) ; K = Ka₂/Ka₁ = 10^(pKa₁ − pKa₂) = 10 ; lire qui est Ka₁ dans le sujet.',
+  explications: {
+    acides: [
+      { repere: 'becher_1', texte: 'Acide éthanoïque : pH 3,41.' },
+      { repere: 'becher_2', texte: 'Acide méthanoïque : pH 2,90.' },
+      { repere: 'tableau', texte: 'pKa, Ka, pH et τ côte à côte.' },
+      { repere: 'barres', texte: 'τ = 0,039 contre 0,126.' },
+      { repere: 'regle', texte: 'Ka plus grand : τ plus grand, pH plus petit.' },
+      { repere: 'conclusion', texte: 'L’acide méthanoïque est le plus fort.' },
+    ],
+    bases: [
+      { repere: 'becher_1', texte: 'Ammoniac : pH 10,60.' },
+      { repere: 'becher_2', texte: 'Méthylamine : pH 11,30.' },
+      { repere: 'tableau', texte: 'pKa, Ka, pH et τ côte à côte.' },
+      { repere: 'barres', texte: 'τ = 0,040 contre 0,20.' },
+      { repere: 'regle', texte: 'pKa plus grand : base plus forte.' },
+    ],
+    classement: [
+      { repere: 'axe', texte: 'Un axe des pKa de 0 à 14.' },
+      { repere: 'couples', texte: 'Chaque couple à son pKa : l’acide à gauche, la base à droite.' },
+      { repere: 'fleche_acides', texte: 'Vers le bas : acide de plus en plus fort.' },
+      { repere: 'fleche_bases', texte: 'Vers le haut : base de plus en plus forte.' },
+    ],
+    reaction: [
+      { repere: 'equation', texte: 'L’acide du couple 1 réagit avec la base du couple 2.' },
+      { repere: 'quotient', texte: 'La constante d’équilibre K.' },
+      { repere: 'multiplier', texte: 'On multiplie en haut et en bas par [H₃O⁺].' },
+      { repere: 'separer', texte: 'On reconnaît Ka₁ et 1 sur Ka₂.' },
+      { repere: 'relation', texte: 'K = Ka₁ sur Ka₂.' },
+    ],
+    puissance: [
+      { repere: 'relation', texte: 'K = 10 puissance pKa₂ − pKa₁.' },
+      { repere: 'exemple_1', texte: 'K ≈ 11.' },
+      { repere: 'inverse', texte: 'Dans l’autre sens : 1 sur 11,2.' },
+      { repere: 'exemple_2', texte: 'K = 2,5·10⁴.' },
+      { repere: 'piege', texte: 'Ka₁ est le couple de l’acide qui réagit.' },
+    ],
+    totale: [
+      { repere: 'equation', texte: 'L’acide avec les ions hydroxyde.' },
+      { repere: 'couple_eau', texte: 'Couple H₂O/HO⁻ : Ka = Ke.' },
+      { repere: 'relation', texte: 'K = Ka sur Ke.' },
+      { repere: 'application', texte: 'K = 1,6·10⁹.' },
+      { repere: 'totale', texte: 'Réaction pratiquement totale : elle servira au dosage.' },
+    ],
+    national: [
+      { repere: 'donnees', texte: 'Un mélange de quatre espèces.' },
+      { repere: 'equation', texte: 'La réaction étudiée.' },
+      { repere: 'couples', texte: 'Le sujet appelle Ka₁ le couple de l’acide éthanoïque.' },
+      { repere: 'relation', texte: 'Donc K = Ka₂ sur Ka₁.' },
+      { repere: 'resultat', texte: 'K = 10.' },
+      { repere: 'piege', texte: 'Lire qui est Ka₁ dans le sujet.' },
+    ],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

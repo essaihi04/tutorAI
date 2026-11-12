@@ -469,7 +469,7 @@ function pipette(ctx, x, yTip, col, a = 1) {
   ctx.save(); ctx.clip(); ctx.fillStyle = rgba(col); ctx.fillRect(x - 5, yTip - 22, 10, 22); ctx.restore();
   ctx.strokeStyle = 'rgba(225,238,250,.8)'; ctx.lineWidth = 1.2; ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x - 2.6, yTip - 33, 1.2, 16);
-  Peint.sphere(ctx, x, yTip - 44, 9, ['#fca5a5', '#b91c1c', '#450a0a']);
+  Peint.sphere(ctx, x, yTip - 44, 9, ['#fca5a5', '#b91c1c', '#450a0a'], a);
   ctx.restore();
 }
 /** Petite flèche courbe (arc) à la craie, de (x1, y1) à (x2, y2), bombée de `h` vers le haut ; k = part tracée (0 → 1). */
@@ -657,7 +657,7 @@ function etatAuto(M) {
   const e = { a: 0, ax: LA.x - 70, bx: LA.x + 70, k: 0, apres: false, sep: 0 };
   if (M.commence('loupe')) { const p = M.p('loupe'); e.a = lisse(seg(p, 0, .3)); e.ax = lerp(LA.x - 70, LA.x - 36, lisse(seg(p, .35, 1))); e.bx = lerp(LA.x + 70, LA.x + 36, lisse(seg(p, .35, 1))); }
   if (M.commence('transfert')) { const p = M.p('transfert'); e.k = lisse(seg(p, .15, .85)); e.apres = p >= .85; }
-  if (M.commence('ions')) { const p = M.p('ions'); e.sep = lisse(seg(p, 0, .6)); e.ax = lerp(LA.x - 36, LA.x - 70, e.sep); e.bx = lerp(LA.x + 36, LA.x + 70, e.sep); }
+  if (M.commence('ions')) { const p = M.p('ions'); e.sep = lisse(seg(p, 0, .6)); e.ax = lerp(LA.x - 36, LA.x - 54, e.sep); e.bx = lerp(LA.x + 36, LA.x + 54, e.sep); }
   return e;
 }
 const XR = 372;
@@ -688,7 +688,7 @@ function vueAuto(c, M) {
   if (M.commence('transfert')) {
     const k = clamp(e.k * 1.1, 0, 1), d = posH(LA.x - 36, y, gA[0], 13), f = posH(LA.x + 36, y, Math.PI, 13);
     if (!e.apres || !M.vu('ions')) c.direct(() => arcFleche(c, d[0], d[1] - 12, f[0], f[1] - 12, 26, 'jaune', k));
-    c.direct(() => c.texte('H⁺', LA.x, y - 58, { couleur: 'jaune', taille: 18, align: 'center', alpha: clamp(e.k * 3, 0, 1) }));
+    if (!e.apres || !M.vu('ions')) c.direct(() => c.texte('H⁺', LA.x, y - 58, { couleur: 'jaune', taille: 18, align: 'center', alpha: clamp(e.k * 3, 0, 1) }));
   }
   M.etape(c, 'ions', () => {
     c.texte('c’est très rare : une paire d’ions', XR, 352, { couleur: 'faible', taille: 17 });
@@ -778,7 +778,7 @@ function vueSolutions(c, M) {
   M.etape(c, 'axe', () => {
     c.axe(AX.x0, AX.y, AX.x1 + 18, AX.y, Array.from({ length: 15 }, (_, i) => [i / 14 * (AX.x1 - AX.x0) / (AX.x1 + 18 - AX.x0), String(i)]), { couleur: 'blanc', taille: 15 });
     c.texte('pH', AX.x1 + 22, AX.y + 6, { couleur: 'blanc', taille: 17 });
-    c.ligne(xPH(7), AX.y - 10, xPH(7), AX.y + 10, { couleur: 'jaune', largeur: 3 });
+    c.ligne(xPH(7), AX.y - 13, xPH(7), AX.y + 6, { couleur: 'jaune', largeur: 3 });
     // légende des barres
     c.direct(() => { barre(c.ctx, 470, 26, 12, 14, ROSE_B); barre(c.ctx, 592, 26, 12, 14, VERT_B); });
     c.texte('[H₃O⁺]', 488, 26, { couleur: 'rose', taille: 16 });
@@ -1012,7 +1012,7 @@ function voir(M) {
     m.push(`Loupe dans l’eau pure : des molécules H₂O ; au centre deux molécules H₂O ${e.apres ? 'sont devenues un ion HO⁻ (à gauche) et un ion H₃O⁺ (à droite)' : e.k > 0 ? 'échangent un proton H⁺ (boule jaune, flèche jaune)' : 'se rapprochent'}.`);
   }
   if (v === 'ke' && M.keT > 0) m.push(`Thermomètre peint à droite : ${Math.round(25 * M.keT)} °C.`);
-  if (v === 'solutions' && M.sol && M.commence('regle')) m.push(`Bécher violet (poignée) sous l’axe à pH = ${fr(M.sol.pH, 2)} : [H₃O⁺] = ${sci(Math.pow(10, -M.sol.pH))} mol/L, [HO⁻] = ${sci(Math.pow(10, M.sol.pH - 14))} mol/L, solution ${M.sol.mot}.`);
+  if (v === 'solutions' && M.commence('regle')) { const pH = phVue(); m.push(`Bécher violet (poignée) sous l’axe à pH = ${fr(pH, 2)} : [H₃O⁺] = ${sci(Math.pow(10, -pH))} mol/L, [HO⁻] = ${sci(Math.pow(10, pH - 14))} mol/L, solution ${motDe(pH)}.`); }
   if (v === 'soude' && M.sou) {
     const s = M.sou;
     m.push(`Flacon de soude ${s.filet ? 'qui verse dans le bécher' : s.a > 0 ? 'posé' : 'pas encore là'} ; bécher ${s.nivB > 0 ? 'rempli (incolore)' : 'vide'} ; pH-mètre : ${s.aff === '- - -' ? 'pas de valeur' : s.aff}.`);
