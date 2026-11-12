@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures à la craie — circuit RLC</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rlc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une figure du cours sur les oscillations libres du circuit RLC série, écrite à la craie pas à pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Figures fixes du cours « Oscillations libres d’un circuit RLC série » (phys_ch8_circuit_RLC, 12 novembre 2026), écrites à la
+ * craie pas à pas : ?fig=<nom> (liste dans FIGS, noms exacts du contrat circuit_RLC_contrat_simulations.md, groupe C).
+ * Même architecture que dipole-rl-tableau/figures.html. Chaque figure : des étapes nommées (les moments), puis `fin`.
+ * Le tuteur fige l’écriture sur une étape (`play_until {moment}`) et montre chaque élément (`highlight {target}`) :
+ * le repère `figure`, et un repère par étape (même nom que l’étape).
+ * Écriture : indices par le kit (« u_C » → u avec C en indice), exposants par exposants.js (« 10⁻³ », « T₀² »).
+ * Couleurs fixes : rouge = condensateur (u_C, q, E_e), vert = bobine (i, E_m), blanc = énergie totale et craie ordinaire,
+ * jaune = surlignage seulement (cadres des résultats, éliminations). Seconde courbe de comparaison : même couleur en pointillés.
+ * Ce qui est réel (condensateur, bobine de cuivre, boîte G) est peint ; la physique reste à la craie.
+ * Données des nationaux vérifiées en Python (outils/cours/notes/cours/circuit_RLC_build/nationaux.md et les figures assets/ des
+ * sujets) : 2021 R fig5p6 (q en mC, (a) trait plein R₃, (b) pointillés R₄, T = 45 ms) ; 2022 N fig3p6 (C₁ 12 V, C₂ 10 V qui
+ * part de −10 V, C₃ amortie) ; 2023 N fig4p4 (flèches 5 V et 0,5 ms) ; 2020 N fig4p6 et fig6p6 (i part de 0 en descendant) ;
+ * 2025 N fig3p5 (flèche 7·10⁻⁵ s, t_A au sommet 7 V, t_B sur la descente qui suit, comme sur la figure du sujet).
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+
+/* Chaque figure : titre ; étapes dans l’ordre : [nom, motif (bulle « Arrêt sur image : … »), ce qui se voit (pour le tuteur)]. */
+const FIGS = {
+  fig_prerequis: { titre: 'Les outils du chapitre', etapes: [
+    ['charge', 'i = dq/dt ; q = C·u_C', 'Le condensateur (vu au RC) : i = dq/dt et q = C·u_C ; à droite un condensateur chimique bleu peint et son symbole (deux traits rouges).'],
+    ['bobine', 'u_b = L·di/dt + r·i', 'La bobine (vue au RL) : u_b = L·di/dt + r·i, en convention récepteur ; à droite une bobine de cuivre peinte et son symbole.'],
+    ['derivee', 'la dérivée du cosinus', 'Dérivée : (cos(2πt/T₀))’ = −(2π/T₀)·sin(2πt/T₀) ; elle servira à vérifier la solution u_C = U_m·cos(2πt/T₀ + φ).'],
+    ['recette', 'additivité → équation → solution', 'La méthode, comme au RC et au RL : additivité des tensions → équation différentielle → solution.'],
+    ['fin', 'figure complète', 'Tout le chapitre s’appuie sur ces outils.']] },
+  fig_2021R: { titre: 'Deux résistances, deux courbes (national 2021 R)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : bobine L = 0,51 H, r = 5 Ω ; condensateur C = 100 µF chargé ; conducteur ohmique R₃ = 10 Ω puis R₄ = 100 Ω ; on enregistre q(t).'],
+    ['courbes', 'les deux courbes', 'Graphe q (mC) de −0,6 à 0,6 en fonction de t (ms) de 0 à 140 : courbe (a) rouge en trait plein, peu amortie (sommets 0,6 ; 0,52 ; 0,45 mC) ; courbe (b) rouge en pointillés, très amortie (creux −0,33 mC, sommet 0,18 mC, puis presque 0).'],
+    ['comparer', 'R₃ + r et R₄ + r', 'R₃ + r = 10 + 5 = 15 Ω ; R₄ + r = 100 + 5 = 105 Ω ; plus R + r est grande, plus l’amortissement est fort.'],
+    ['resultat', '(a) → R₃ ; (b) → R₄', 'Encadré : (a) → R₃ ; (b) → R₄.'],
+    ['periode', 'T = 45 ms ≈ T₀', 'Cote entre deux sommets successifs de (a) : T = 45 ms ; T₀ = 2π√(LC) = 2π√(0,51 × 10⁻⁴) ≈ 44,9 ms ≈ T.'],
+    ['fin', 'figure complète', 'T ≈ T₀ : la courbe (a) est peu amortie.']] },
+  fig_2022N: { titre: 'Choisir la bonne courbe (national 2022 N)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : condensateur chargé sous E = 12 V ; C = 50 µF ; bobine de résistance nulle (r = 0) ; on enregistre u_C(t).'],
+    ['courbes', 'les trois courbes', 'Trois graphes u_C (V) en fonction de t (ms) de 0 à 20 : C₁ cosinus rouge de 12 V (sommets à 0, 10 et 20 ms) ; C₂ cosinus de 10 V qui part de −10 V (sommets à 5 et 15 ms) ; C₃ amortie qui part de 12 V (creux ≈ −9 V à 5 ms, sommet ≈ 7,4 V à 10 ms).'],
+    ['eliminer_C3', 'r = 0 : pas C₃', 'C₃ barrée en jaune : r = 0, régime périodique sans amortissement, donc pas C₃.'],
+    ['eliminer_C2', 'u_C(0) = E : pas C₂', 'C₂ barrée en jaune : u_C(0) = E = 12 V, donc pas C₂ (10 V).'],
+    ['lecture', 'T₀ = 10 ms', 'Sur C₁, cote entre deux sommets successifs : T₀ = 10 ms.'],
+    ['L', 'L = 0,05 H', 'Encadré : L = T₀²/(4π²·C) = (10⁻²)²/(40 × 5·10⁻⁵) = 0,05 H.'],
+    ['fin', 'figure complète', 'π² = 10 ; sans arrondi, L ≈ 0,051 H.']] },
+  fig_carre: { titre: 'Isoler L ou C dans T₀ = 2π√(LC)', etapes: [
+    ['formule', 'T₀ = 2π√(LC)', 'En haut : T₀ = 2π√(LC).'],
+    ['carre', 'T₀² = 4π²·L·C', 'Flèche « on élève au carré » : T₀² = 4π²·L·C.'],
+    ['isoler', 'C = T₀²/(4π²·L)', 'Deux encadrés : C = T₀²/(4π²·L) et L = T₀²/(4π²·C).'],
+    ['an', 'C = 2,5 µF', 'Application (2020 N) : T ≈ T₀ = 10 ms = 10⁻² s, L = 1 H, π² = 10 ; encadré : C = (10⁻²)²/(40 × 1) = 2,5·10⁻⁶ F = 2,5 µF.'],
+    ['fin', 'figure complète', 'En orange : élever au carré d’abord ; T₀ en secondes.']] },
+  fig_2023N: { titre: 'u_C(t) dans un circuit LC (national 2023 N)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : circuit LC idéal ; L = 1 H ; on enregistre u_C(t).'],
+    ['courbe', 'la courbe u_C(t)', 'Graphe quadrillé : u_C(t) rouge, un cosinus qui part de son sommet ; flèches d’échelle « 5 V » (2 carreaux) et « 0,5 ms » (2 carreaux) ; U_m = 10 V.'],
+    ['lecture', 'T₀ = 2 ms', 'Cote entre deux sommets : T₀ = 4 × 0,5 = 2 ms ; U_m = 2 × 5 = 10 V.'],
+    ['C', 'C = 0,1 µF', 'C = T₀²/(4π²·L) = (2·10⁻³)²/(40 × 1) ; encadré : C = 10⁻⁷ F = 0,1 µF.'],
+    ['Em', 'E_m = 1,8·10⁻⁶ J', 'Point à t = 1,8 ms sur la courbe : u_C = 8 V ; E_m = E − ½·C·u_C² ; encadré : E_m = ½·C·(10² − 8²) = 1,8·10⁻⁶ J.'],
+    ['fin', 'figure complète', 'LC idéal : E = ½·C·U_m² = 5·10⁻⁶ J reste constante.']] },
+  fig_2020N: { titre: 'Du pseudo-périodique à l’entretien (national 2020 N)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : bobine L = 1 H, r = 10 Ω ; conducteur ohmique R = 90 Ω ; condensateur C chargé, puis décharge.'],
+    ['courbe_uC', 'la courbe u_C(t)', 'Graphe en haut à gauche : u_C(t) rouge pseudo-périodique, t (ms) de 0 à 30 ; sommets qui baissent ; T = 10 ms.'],
+    ['regime', 'pseudo-périodique', 'Écrit : régime pseudo-périodique (R + r = 100 Ω).'],
+    ['equation', 'l’équation en u_C', 'LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0.'],
+    ['C', 'C = 2,5·10⁻⁶ F', 'T ≈ T₀ = 10 ms ; encadré : C = T₀²/(4π²·L) = (10⁻²)²/(40 × 1) = 2,5·10⁻⁶ F.'],
+    ['entretien', 'u_G = k·i ; k₀ = 100 Ω', 'On ajoute la boîte G (peinte) : u_G = k·i ; oscillations sinusoïdales pour k₀ = R + r = 100 Ω.'],
+    ['courbe_i', 'la courbe i(t)', 'Graphe en bas à gauche : i(t) verte entretenue, i (mA) de −8 à 8, t (ms) de 0 à 30 : I_m = 8 mA, T₀ = 10 ms, part de 0 en descendant.'],
+    ['phase', 'φ = +π/2', 'i = I_m·cos(2πt/T₀ + φ) ; i(0) = 0 → cos φ = 0 → φ = ±π/2 ; i descend → sin φ > 0 → φ = +π/2 rad.'],
+    ['energie', 'E_t = 3,2·10⁻⁵ J', 'E_t = ½·L·I_m² = ½ × 1 × (8·10⁻³)² = 3,2·10⁻⁵ J.'],
+    ['Ee', 'E_e ≈ 2,05·10⁻⁵ J', 'Point à 16 ms sur i(t) : i = 4,8 mA ; E_e = 3,2·10⁻⁵ − ½ × 1 × (4,8·10⁻³)² ≈ 2,05·10⁻⁵ J (encadré).'],
+    ['fin', 'figure complète', 'Entretenu : k₀ = R + r, le circuit oscille à la période propre T₀.']] },
+  fig_2025N: { titre: 'Pseudo-période et énergie perdue (national 2025 N)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : condensateur C₀ = 1 µF chargé à U₀ = 10 V ; décharge dans une bobine (L, r) seule.'],
+    ['equation', 'l’équation en u_C', 'L·C₀·d²u_C/dt² + r·C₀·du_C/dt + u_C = 0.'],
+    ['courbe', 'la courbe u_C(t)', 'Graphe quadrillé : u_C(t) rouge pseudo-périodique qui part de 10 V ; graduations 7, 4, −4 V ; flèche d’échelle « 7·10⁻⁵ s » = 1 carreau ; t_A au sommet suivant (7 V, pointillé), t_B un peu plus loin sur la descente.'],
+    ['periode', 'T = 2,8·10⁻⁴ s', 'Cote de 0 à t_A : 4 carreaux ; T = 4 × 7·10⁻⁵ = 2,8·10⁻⁴ s.'],
+    ['signe_i', 'i < 0 entre t_A et t_B', 'Entre t_A et t_B, u_C décroît : i = C₀·du_C/dt < 0.'],
+    ['dE_dt', 'dE_T/dt = −r·i²', 'dE_T/dt = C₀·u_C·du_C/dt + L·i·di/dt = i·(u_C + L·di/dt) = −r·i².'],
+    ['energie', '|E_th| = 2,55·10⁻⁵ J', 'Encadré : |E_th| = ½·C₀·(U₀² − u_C(t_A)²) = ½ × 10⁻⁶ × (10² − 7²) = 2,55·10⁻⁵ J.'],
+    ['fin', 'figure complète', 'Cette énergie est partie en chaleur dans r (effet Joule).']] },
+};
+let fig = FIGS[P.get('fig')] ? P.get('fig') : 'fig_prerequis';
+const VITESSE = 1.6;                              // l’écriture va un peu plus vite que la craie du kit
+const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.tw);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+let MM = {};
+const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Une partie peinte apparaît quand l’écriture arrive à elle, d’un coup. */
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
+
+// ───────────────────────── Le rendu « réel » (peint, pour l’œil ; la physique reste à la craie) ─────────────────────────
+function arrondi(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+/** Bobine : fil de cuivre enroulé en spires orangées sur un mandrin (deux flasques), deux pattes. (x, y) = haut gauche. */
+function bobinePeinte(ctx, x, y, w = 56, h = 22) {
+  ctx.strokeStyle = 'rgba(234,88,12,.9)'; ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.moveTo(x + 7, y + h); ctx.lineTo(x + 5, y + h + 9); ctx.moveTo(x + w - 7, y + h); ctx.lineTo(x + w - 5, y + h + 9); ctx.stroke();
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#7c2d12'); g.addColorStop(.22, '#ea8a1a'); g.addColorStop(.42, '#fcd34d'); g.addColorStop(.68, '#c2410c'); g.addColorStop(1, '#6b2410');
+  ctx.fillStyle = g; ctx.fillRect(x + 5, y, w - 10, h);
+  ctx.strokeStyle = 'rgba(67,20,7,.55)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let sx = x + 7; sx < x + w - 6; sx += 3) { ctx.moveTo(sx, y + .5); ctx.lineTo(sx + 1.3, y + h - .5); }
+  ctx.stroke();
+  for (const fx of [x, x + w - 5]) {
+    const f = ctx.createLinearGradient(fx, 0, fx + 5, 0); f.addColorStop(0, '#efe0bd'); f.addColorStop(1, '#a8895a');
+    ctx.fillStyle = f; arrondi(ctx, fx, y - 4, 5, h + 8, 1.5); ctx.fill();
+  }
+}
+/** Condensateur chimique peint (cylindre bleu, chapeau argenté, bande claire « − »). (x, y) = haut gauche. */
+function condensateurPeint(ctx, x, y, w = 26, h = 46) {
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 3, w / 2 + 2, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, '#1e3a8a'); g.addColorStop(.35, '#3b82f6'); g.addColorStop(.55, '#60a5fa'); g.addColorStop(1, '#1e3a8a');
+  ctx.fillStyle = g; arrondi(ctx, x, y, w, h, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(226,232,240,.55)'; ctx.fillRect(x + w - 9, y + 4, 5, h - 8);
+  const a = ctx.createLinearGradient(x, 0, x + w, 0); a.addColorStop(0, '#94a3b8'); a.addColorStop(.5, '#e2e8f0'); a.addColorStop(1, '#94a3b8');
+  ctx.fillStyle = a; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 2, w / 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+}
+/** La boîte G (générateur d’entretien) : boîtier sombre, voyant, deux bornes. (x, y) = haut gauche. */
+function boiteG(ctx, x, y, w = 50, h = 36) {
+  const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#475569'); g.addColorStop(1, '#1e293b');
+  arrondi(ctx, x, y, w, h, 6); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('G', x + w / 2 - 6, y + h / 2 + 6);
+  ctx.fillStyle = 'rgba(74,222,128,.85)'; ctx.beginPath(); ctx.arc(x + w - 11, y + 10, 3, 0, 7); ctx.fill();
+  const borne = (bx, k) => { ctx.fillStyle = k; ctx.beginPath(); ctx.arc(bx, y + h - 7, 3.5, 0, 7); ctx.fill(); };
+  borne(x + w - 18, '#dc2626'); borne(x + w - 8, '#111827');
+}
+/** Quadrillage léger d’un graphe (comme du papier millimétré). */
+function quadrillage(ctx, g, X, Y) {
+  ctx.strokeStyle = 'rgba(96,165,250,.15)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let v = g.xmin; v <= g.xmax + 1e-9; v += g.dx) { ctx.moveTo(X(v), Y(g.ymin)); ctx.lineTo(X(v), Y(g.ymax)); }
+  for (let v = g.ymin; v <= g.ymax + 1e-9; v += g.dy) { ctx.moveTo(X(g.xmin), Y(v)); ctx.lineTo(X(g.xmax), Y(v)); }
+  ctx.stroke();
+}
+
+// ───────────────────────── Morceaux de craie ─────────────────────────
+const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur d’un texte de craie (indices et exposants plus petits, comme le kit et exposants.js les écrivent). */
+function larg(c, s, t = 24) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(s).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? t * .62 : t), 0);
+}
+/** Texte entouré d’un cadre jaune (le résultat à retenir). Renvoie le rectangle. */
+function encadre(c, s, x, y, o = {}) {
+  const t = o.taille ?? 24, w = Math.min(o.max ?? 1e9, larg(c, s, t)) + 22, x0 = o.align === 'left' ? x : x - w / 2, cx = x0 + w / 2;
+  c.texte(s, cx, y, { couleur: o.couleur ?? 'blanc', taille: t, align: 'center', max: o.max });
+  c.rect(x0, y - t * .95, w, t * 1.42, { couleur: 'jaune', arrondi: 8, largeur: 2 });
+  return { x: x0, y: y - t * .95, w, h: t * 1.42 };
+}
+/** Titre de la figure, et le repère `figure` (tout le dessin). */
+function titre(c, s, label) {
+  c.texte(s, 40, 32, { couleur: 'cyan', taille: 21, max: 680 });
+  c.ligne(40, 42, 40 + Math.min(680, larg(c, s, 21)), 42, { couleur: 'tresfaible', largeur: 1.2, duree: .2 });
+  c.repere('figure', 16, 12, 728, 380, label);
+}
+/** Symbole de la bobine à la craie : quatre créneaux arrondis, horizontal de (x1, y) à (x2, y). */
+function symboleL(c, y, x1, x2, couleur = 'blanc') {
+  const n = 4, r = (x2 - x1) / (2 * n), pts = [];
+  for (let k = 0; k < n; k++) for (let j = 0; j <= 8; j++) {
+    const a = -Math.PI / 2 + j / 8 * Math.PI, cx = x1 + r * (2 * k + 1);
+    pts.push([cx + r * Math.sin(a), y - r * 1.1 * Math.cos(a)]);
+  }
+  c.trait(pts, { couleur, largeur: 2.4, tremble: .3 });
+}
+/** Symbole du condensateur à la craie : deux traits verticaux (fil horizontal) centrés en (x, y). */
+function symboleC(c, x, y, couleur = 'rouge') {
+  c.ligne(x - 30, y, x - 6, y, { couleur: 'blanc', largeur: 2 }).ligne(x + 6, y, x + 30, y, { couleur: 'blanc', largeur: 2 });
+  c.ligne(x - 6, y - 16, x - 6, y + 16, { couleur, largeur: 3 }).ligne(x + 6, y - 16, x + 6, y + 16, { couleur, largeur: 3 });
+}
+/**
+ * Axes d’un graphe (les valeurs négatives sont sous l’axe des temps), graduations, noms et unités.
+ * g = { x, y, w, h, xmin, xmax, ymin, ymax, dx, dy (quadrillage), xt, yt (graduations écrites), xl, yl, sansY }. Renvoie X(v), Y(v).
+ */
+function graphe(c, g) {
+  g = { xmin: 0, ...g };
+  const X = v => g.x + (v - g.xmin) / (g.xmax - g.xmin) * g.w, Y = v => g.y + (g.ymax - v) / (g.ymax - g.ymin) * g.h;
+  if (g.dx) peindre(c, ctx => quadrillage(ctx, g, X, Y));
+  const nb = v => String(+v.toFixed(4)).replace('.', ',').replace('-', '−');
+  c.fleche(X(g.xmin), Y(0), X(g.xmax) + 16, Y(0), { couleur: 'blanc', largeur: 2 });
+  c.fleche(X(0), Y(g.ymin), X(0), Y(g.ymax) - 14, { couleur: 'blanc', largeur: 2 });
+  for (const v of g.xt || []) { c.ligne(X(v), Y(0) - 4, X(v), Y(0) + 4, { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(nb(v), X(v), Y(0) + 17, { couleur: 'blanc', align: 'center', taille: 12, duree: .1 }); }
+  for (const v of g.yt || []) { c.ligne(X(0) - 4, Y(v), X(0) + 4, Y(v), { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(nb(v), X(0) - 7, Y(v) + 4, { couleur: 'blanc', align: 'right', taille: 12, duree: .1 }); }
+  c.texte('0', X(0) - 7, Y(0) + 15, { couleur: 'blanc', align: 'right', taille: 12 });
+  c.texte(g.yl, X(0) + 8, Y(g.ymax) - 6, { couleur: 'cyan', taille: 15 });
+  c.texte(g.xl, X(g.xmax) + 16, Y(0) - 8, { couleur: 'cyan', align: 'right', taille: 14 });
+  return { X, Y };
+}
+/** Une croix jaune qui barre une courbe éliminée. */
+function barrer(c, x, y, w, h) { c.ligne(x, y, x + w, y + h, { couleur: 'jaune', largeur: 3 }).ligne(x + w, y, x, y + h, { couleur: 'jaune', largeur: 3 }); }
+/** Oscillation amortie qui part d’un sommet : A·k^(t/T)·(cos + a·sin), a = −ln k/(2π) (dérivée nulle à t = 0 ; sommets à t = nT valant A·kⁿ). */
+const amortie = (A, T, k) => { const a = -Math.log(k) / (2 * Math.PI); return t => A * k ** (t / T) * (Math.cos(2 * Math.PI * t / T) + a * Math.sin(2 * Math.PI * t / T)); };
+
+// ───────────────────────── Les figures ─────────────────────────
+const DESSINS = {
+  fig_prerequis(c) {
+    titre(c, 'Les outils du chapitre', 'les outils : le condensateur, la bobine, la dérivée du cosinus, la méthode');
+    c.texte('i = dq/dt  ;  q = C·u_C', 40, 96, { couleur: 'rouge', taille: 26 });
+    c.texte(': le condensateur (vu au RC)', 300, 96, { couleur: 'faible', taille: 18 });
+    peindre(c, ctx => condensateurPeint(ctx, 590, 64));
+    symboleC(c, 680, 88);
+    c.repere('charge', 32, 58, 712, 58, 'i = dq/dt ; q = C·u_C');
+    marque(c, 'charge'); c.pause(.4);
+    c.texte('u_b = L·di/dt + r·i', 40, 172, { couleur: 'vert', taille: 26 });
+    c.texte(': la bobine (vue au RL)', 300, 172, { couleur: 'faible', taille: 18 });
+    peindre(c, ctx => bobinePeinte(ctx, 576, 150));
+    c.ligne(646, 162, 656, 162, { couleur: 'blanc', largeur: 2 }); symboleL(c, 162, 656, 712, 'vert'); c.ligne(712, 162, 724, 162, { couleur: 'blanc', largeur: 2 });
+    c.texte('(L, r)', 684, 192, { couleur: 'vert', taille: 15, align: 'center' });
+    c.repere('bobine', 32, 136, 712, 64, 'u_b = L·di/dt + r·i');
+    marque(c, 'bobine'); c.pause(.4);
+    c.texte('(cos(2πt/T₀))’ = −(2π/T₀)·sin(2πt/T₀)', 40, 244, { couleur: 'blanc', taille: 25 });
+    c.texte('pour vérifier la solution u_C = U_m·cos(2πt/T₀ + φ)', 60, 274, { couleur: 'orange', taille: 18, max: 660 });
+    c.repere('derivee', 32, 216, 712, 68, '(cos(2πt/T₀))’ = −(2π/T₀)·sin(2πt/T₀)');
+    marque(c, 'derivee'); c.pause(.4);
+    c.texte('additivité  →  équation  →  solution', 40, 330, { couleur: 'cyan', taille: 25 });
+    c.texte(': comme au RC et au RL', 440, 330, { couleur: 'faible', taille: 18 });
+    c.repere('recette', 32, 302, 712, 40, 'additivité → équation → solution');
+    marque(c, 'recette'); c.pause(.3);
+    c.texte('Tout le chapitre s’appuie sur ces outils.', 40, 372, { couleur: 'blanc', taille: 19, max: 680 });
+    c.repere('fin', 32, 352, 600, 30, 'tout le chapitre s’appuie sur ces outils');
+    marque(c, 'fin');
+  },
+
+  fig_2021R(c) {
+    titre(c, 'Deux résistances, deux courbes (national 2021 R)', 'national 2021 R : affecter les courbes (a) et (b)');
+    c.texte('Bobine L = 0,51 H, r = 5 Ω ; C = 100 µF chargé ; R_3 = 10 Ω puis R_4 = 100 Ω', 40, 72, { couleur: 'blanc', taille: 18, max: 600 });
+    c.texte('on enregistre q(t) pour chaque résistance', 40, 96, { couleur: 'faible', taille: 16 });
+    peindre(c, ctx => bobinePeinte(ctx, 670, 62));
+    c.repere('enonce', 32, 52, 712, 54, 'L = 0,51 H ; r = 5 Ω ; C = 100 µF ; R₃ = 10 Ω, R₄ = 100 Ω');
+    marque(c, 'enonce'); c.pause(.4);
+    const g = graphe(c, { x: 70, y: 126, w: 330, h: 220, xmax: 140, ymin: -.66, ymax: .66, dx: 7.5, dy: .1, xt: [45, 90, 135], yt: [.6, .3, -.3, -.6], xl: 't (ms)', yl: 'q (mC)' });
+    const a = amortie(.6, 45, .87), b = amortie(.6, 45, .3);
+    c.courbe(u => [g.X(140 * u), g.Y(a(140 * u))], 160, { couleur: 'rouge', largeur: 2.6 });
+    c.courbe(u => [g.X(140 * u), g.Y(b(140 * u))], 160, { couleur: 'rouge', largeur: 2.2, pointille: [6, 5] });
+    c.texte('(a)', g.X(50), g.Y(.56), { couleur: 'rouge', taille: 16 });
+    c.texte('(b)', g.X(52), g.Y(.24), { couleur: 'rouge', taille: 16 });
+    c.repere('courbes', 30, 112, 384, 250, '(a) trait plein peu amortie ; (b) pointillés très amortie');
+    marque(c, 'courbes'); c.pause(.4);
+    const x = 432;
+    c.texte('R_3 + r = 10 + 5 = 15 Ω', x, 152, { couleur: 'blanc', taille: 19 });
+    c.texte('R_4 + r = 100 + 5 = 105 Ω', x, 180, { couleur: 'blanc', taille: 19 });
+    c.texte('plus R + r est grande, plus l’amortissement est fort', x, 206, { couleur: 'faible', taille: 15, max: 312 });
+    c.repere('comparer', x - 8, 132, 320, 84, 'R₃ + r = 15 Ω ; R₄ + r = 105 Ω');
+    marque(c, 'comparer'); c.pause(.4);
+    const r = encadre(c, '(a) → R_3  ;  (b) → R_4', x, 250, { taille: 22, align: 'left' });
+    c.repere('resultat', r.x - 4, r.y - 4, r.w + 8, r.h + 8, '(a) → R₃ ; (b) → R₄');
+    marque(c, 'resultat'); c.pause(.4);
+    c.ligne(g.X(45), g.Y(.52), g.X(45), g.Y(-.62), { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
+    c.cote(g.X(0), g.Y(-.62), g.X(45), g.Y(-.62), 'T', { couleur: 'jaune', largeur: 1.6, taille: 15, dessous: true });
+    c.texte('sur (a) : T = 45 ms', x, 296, { couleur: 'blanc', taille: 19 });
+    c.texte('T₀ = 2π√(LC) = 2π√(0,51 × 10⁻⁴) ≈ 44,9 ms', x, 324, { couleur: 'blanc', taille: 17, max: 312 });
+    c.repere('periode', x - 8, 276, 320, 58, 'T = 45 ms ; T₀ ≈ 44,9 ms');
+    marque(c, 'periode'); c.pause(.3);
+    c.texte('T ≈ T₀ : (a) est peu amortie.', x, 360, { couleur: 'cyan', taille: 18, max: 312 });
+    c.repere('fin', x - 8, 342, 320, 28, 'T ≈ T₀');
+    marque(c, 'fin');
+  },
+
+  fig_2022N(c) {
+    titre(c, 'Choisir la bonne courbe (national 2022 N)', 'national 2022 N : C₁, C₂ ou C₃ ?');
+    c.texte('Condensateur chargé sous E = 12 V ; C = 50 µF ; bobine de résistance nulle (r = 0)', 40, 72, { couleur: 'blanc', taille: 18, max: 680 });
+    c.repere('enonce', 32, 54, 712, 28, 'E = 12 V ; C = 50 µF ; r = 0');
+    marque(c, 'enonce'); c.pause(.4);
+    const G3 = [
+      { nom: 'C_1', x: 64, A: 12, f: t => 12 * Math.cos(2 * Math.PI * t / 10), yt: [12, 6, -6, -12] },
+      { nom: 'C_2', x: 316, A: 10, f: t => -10 * Math.cos(2 * Math.PI * t / 10), yt: [10, 5, -5, -10] },
+      { nom: 'C_3', x: 568, A: 12, f: amortie(12, 10, .62), yt: [12, 6, -6, -12] },
+    ];
+    const gs = G3.map(d => {
+      const g = graphe(c, { x: d.x, y: 98, w: 150, h: 134, xmax: 20, ymin: -d.A * 1.1, ymax: d.A * 1.1, dx: 2.5, dy: d.A / 4, xt: [5, 10, 15], yt: d.yt, xl: 't (ms)', yl: 'u_C (V)' });
+      c.courbe(u => [g.X(20 * u), g.Y(d.f(20 * u))], 90, { couleur: 'rouge', largeur: 2.4 });
+      c.texte(`(${d.nom})`, d.x + 75, 268, { couleur: 'blanc', taille: 17, align: 'center' });
+      return g;
+    });
+    c.repere('courbes', 30, 84, 712, 194, 'C₁ : 12 V ; C₂ : 10 V ; C₃ : amortie');
+    marque(c, 'courbes'); c.pause(.4);
+    barrer(c, 568, 104, 160, 128);
+    c.texte('r = 0 : régime périodique, sans amortissement → pas C_3', 40, 300, { couleur: 'blanc', taille: 18, max: 680 });
+    c.repere('eliminer_C3', 32, 282, 712, 26, 'r = 0 : pas C₃');
+    marque(c, 'eliminer_C3'); c.pause(.4);
+    barrer(c, 316, 104, 160, 128);
+    c.texte('u_C(0) = E = 12 V → pas C_2 (10 V)', 40, 328, { couleur: 'blanc', taille: 18, max: 680 });
+    c.repere('eliminer_C2', 32, 310, 712, 26, 'u_C(0) = E = 12 V : pas C₂');
+    marque(c, 'eliminer_C2'); c.pause(.4);
+    c.cote(gs[0].X(0), gs[0].Y(-13.6), gs[0].X(10), gs[0].Y(-13.6), '', { couleur: 'jaune', largeur: 1.6 });
+    c.texte('T₀', gs[0].X(5), gs[0].Y(-13.6) + 15, { couleur: 'jaune', taille: 14, align: 'center' });
+    c.texte('C_1 : T₀ = 10 ms', 40, 364, { couleur: 'blanc', taille: 19 });
+    c.repere('lecture', 32, 344, 160, 28, 'T₀ = 10 ms');
+    marque(c, 'lecture'); c.pause(.4);
+    const r = encadre(c, 'L = T₀²/(4π²·C) = (10⁻²)²/(40 × 5·10⁻⁵) = 0,05 H', 210, 364, { taille: 19, align: 'left' });
+    c.repere('L', r.x - 4, r.y - 4, r.w + 8, r.h + 8, 'L = 0,05 H');
+    marque(c, 'L'); c.pause(.3);
+    c.texte('π² = 10 ; sans arrondi : 0,051 H', 744, 398, { couleur: 'cyan', taille: 15, align: 'right' });
+    c.repere('fin', 500, 384, 248, 22, 'π² = 10');
+    marque(c, 'fin');
+  },
+
+  fig_carre(c) {
+    titre(c, 'Isoler L ou C dans T₀ = 2π√(LC)', 'élever au carré, puis isoler L ou C');
+    c.texte('T₀ = 2π√(LC)', 380, 98, { couleur: 'blanc', taille: 32, align: 'center' });
+    c.repere('formule', 270, 66, 220, 44, 'T₀ = 2π√(LC)');
+    marque(c, 'formule'); c.pause(.4);
+    c.fleche(380, 112, 380, 140, { couleur: 'faible', largeur: 1.8, tete: 9 });
+    c.texte('on élève au carré', 396, 132, { couleur: 'faible', taille: 16 });
+    c.texte('T₀² = 4π²·L·C', 380, 176, { couleur: 'blanc', taille: 30, align: 'center' });
+    c.repere('carre', 260, 112, 300, 76, 'T₀² = 4π²·L·C');
+    marque(c, 'carre'); c.pause(.4);
+    c.fleche(320, 190, 230, 214, { couleur: 'faible', largeur: 1.6, tete: 8 }).fleche(440, 190, 530, 214, { couleur: 'faible', largeur: 1.6, tete: 8 });
+    const r1 = encadre(c, 'C = T₀²/(4π²·L)', 210, 248, { taille: 27, couleur: 'rouge' });
+    const r2 = encadre(c, 'L = T₀²/(4π²·C)', 550, 248, { taille: 27, couleur: 'vert' });
+    c.repere('isoler', r1.x - 4, 190, r2.x + r2.w - r1.x + 8, r1.y + r1.h - 186, 'C = T₀²/(4π²·L) ; L = T₀²/(4π²·C)');
+    marque(c, 'isoler'); c.pause(.4);
+    c.texte('2020 N : T ≈ T₀ = 10 ms = 10⁻² s ; L = 1 H ; π² = 10', 60, 300, { couleur: 'blanc', taille: 19, max: 640 });
+    const r3 = encadre(c, 'C = (10⁻²)²/(40 × 1) = 2,5·10⁻⁶ F = 2,5 µF', 60, 338, { taille: 21, align: 'left', couleur: 'rouge' });
+    c.repere('an', 52, 280, 660, r3.y + r3.h - 276, 'C = (10⁻²)²/(40 × 1) = 2,5 µF');
+    marque(c, 'an'); c.pause(.3);
+    c.texte('⚠ élever au carré d’abord ; T₀ en secondes.', 60, 382, { couleur: 'orange', taille: 18 });
+    c.repere('fin', 52, 364, 420, 26, 'élever au carré d’abord');
+    marque(c, 'fin');
+  },
+
+  fig_2023N(c) {
+    titre(c, 'u_C(t) dans un circuit LC (national 2023 N)', 'national 2023 N : T₀, puis C, puis E_m');
+    c.texte('Circuit LC idéal ; L = 1 H ; on enregistre u_C(t)', 40, 72, { couleur: 'blanc', taille: 19, max: 680 });
+    c.repere('enonce', 32, 54, 712, 28, 'LC idéal ; L = 1 H');
+    marque(c, 'enonce'); c.pause(.4);
+    // un carreau = 0,25 ms × 2,5 V ; les flèches d’échelle couvrent deux carreaux (0,5 ms ; 5 V), comme sur la figure du sujet
+    const g = { x: 54, y: 100, w: 338, h: 250, xmin: 0, xmax: 3.25, ymin: -12.5, ymax: 12.5, dx: .25, dy: 2.5 };
+    const X = v => g.x + (v - g.xmin) / (g.xmax - g.xmin) * g.w, Y = v => g.y + (g.ymax - v) / (g.ymax - g.ymin) * g.h;
+    peindre(c, ctx => quadrillage(ctx, g, X, Y));
+    c.fleche(X(0), Y(0), X(3.25) + 16, Y(0), { couleur: 'blanc', largeur: 2 }).fleche(X(0), Y(-12.5), X(0), Y(12.5) - 6, { couleur: 'blanc', largeur: 2 });
+    c.texte('u_C (V)', X(0) + 8, Y(12.5) - 6, { couleur: 'cyan', taille: 15 });
+    c.texte('t (ms)', X(3.25) + 16, Y(0) - 8, { couleur: 'cyan', taille: 14, align: 'right' });
+    c.texte('0', X(0) - 6, Y(0) + 5, { couleur: 'blanc', taille: 13, align: 'right' });
+    c.courbe(u => [X(3.25 * u), Y(10 * Math.cos(2 * Math.PI * 3.25 * u / 2))], 120, { couleur: 'rouge', largeur: 2.6 });
+    c.fleche(X(1), Y(5), X(1), Y(10), { couleur: 'blanc', largeur: 2, tete: 8 }).fleche(X(1), Y(5), X(1.5), Y(5), { couleur: 'blanc', largeur: 2, tete: 8 });
+    c.texte('5 V', X(1) - 6, Y(7.5) + 5, { couleur: 'blanc', taille: 14, align: 'right' });
+    c.texte('0,5 ms', X(1.25), Y(5) + 18, { couleur: 'blanc', taille: 14, align: 'center' });
+    c.repere('courbe', 40, 92, 370, 266, 'u_C(t) : cosinus, flèches d’échelle 5 V et 0,5 ms');
+    marque(c, 'courbe'); c.pause(.4);
+    const x = 428;
+    c.cote(X(0), Y(11.6), X(2), Y(11.6), '', { couleur: 'jaune', largeur: 1.6 });
+    c.texte('T₀', X(1.5), Y(11.6) - 4, { couleur: 'jaune', taille: 14, align: 'center' });
+    c.texte('T₀ = 4 × 0,5 = 2 ms', x, 130, { couleur: 'blanc', taille: 20 });
+    c.texte('U_m = 2 × 5 = 10 V', x, 158, { couleur: 'blanc', taille: 20 });
+    c.repere('lecture', x - 8, 110, 316, 58, 'T₀ = 2 ms ; U_m = 10 V');
+    marque(c, 'lecture'); c.pause(.4);
+    c.texte('C = T₀²/(4π²·L) = (2·10⁻³)²/(40 × 1)', x, 204, { couleur: 'blanc', taille: 18, max: 316 });
+    const r = encadre(c, 'C = 10⁻⁷ F = 0,1 µF', x, 240, { taille: 21, align: 'left', couleur: 'rouge' });
+    c.repere('C', x - 8, 184, 316, r.y + r.h - 180, 'C = 0,1 µF');
+    marque(c, 'C'); c.pause(.4);
+    c.point(X(1.8), Y(10 * Math.cos(1.8 * Math.PI)), 5, 'jaune');
+    c.ligne(X(1.8), Y(0), X(1.8), Y(8.09), { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+    c.texte('8 V', X(1.8) - 6, Y(8.09) - 8, { couleur: 'jaune', taille: 14, align: 'right' });
+    c.texte('à 1,8 ms : u_C = 8 V ; E_m = E − ½·C·u_C²', x, 288, { couleur: 'blanc', taille: 17, max: 316 });
+    const r2 = encadre(c, 'E_m = ½·C·(10² − 8²) = 1,8·10⁻⁶ J', x, 324, { taille: 19, align: 'left', couleur: 'vert', max: 290 });
+    c.repere('Em', x - 8, 268, 316, r2.y + r2.h - 264, 'E_m = 1,8·10⁻⁶ J');
+    marque(c, 'Em'); c.pause(.3);
+    c.texte('E = ½·C·U_m² = 5·10⁻⁶ J : constante', x, 372, { couleur: 'cyan', taille: 16, max: 316 });
+    c.repere('fin', x - 8, 354, 316, 26, 'E constante');
+    marque(c, 'fin');
+  },
+
+  fig_2020N(c) {
+    titre(c, 'Du pseudo-périodique à l’entretien (national 2020 N)', 'national 2020 N : régime, C, entretien, φ, énergie');
+    c.texte('Bobine L = 1 H, r = 10 Ω ; R = 90 Ω ; condensateur C chargé, puis décharge', 40, 70, { couleur: 'blanc', taille: 18, max: 600 });
+    peindre(c, ctx => bobinePeinte(ctx, 670, 56));
+    c.repere('enonce', 32, 52, 712, 28, 'L = 1 H ; r = 10 Ω ; R = 90 Ω');
+    marque(c, 'enonce'); c.pause(.4);
+    const gu = graphe(c, { x: 54, y: 90, w: 270, h: 100, xmax: 30, ymin: -5.5, ymax: 5.5, dx: 2.5, dy: 1, xt: [10, 20, 30], yt: [], xl: 't (ms)', yl: 'u_C (V)' });
+    const fu = amortie(5, 10, .6);
+    c.courbe(u => [gu.X(30 * u), gu.Y(fu(30 * u))], 140, { couleur: 'rouge', largeur: 2.4 });
+    c.repere('courbe_uC', 30, 78, 310, 128, 'u_C(t) pseudo-périodique, T = 10 ms');
+    marque(c, 'courbe_uC'); c.pause(.4);
+    const x = 364;
+    c.texte('régime pseudo-périodique (R + r = 100 Ω)', x, 102, { couleur: 'blanc', taille: 18, max: 380 });
+    c.repere('regime', x - 8, 84, 388, 26, 'régime pseudo-périodique');
+    marque(c, 'regime'); c.pause(.4);
+    c.texte('LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0', x, 132, { couleur: 'blanc', taille: 18, max: 380 });
+    c.repere('equation', x - 8, 114, 388, 26, 'LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0');
+    marque(c, 'equation'); c.pause(.4);
+    const r1 = encadre(c, 'T ≈ T₀ = 10 ms : C = T₀²/(4π²·L) = 2,5·10⁻⁶ F', x, 170, { taille: 17, align: 'left', couleur: 'rouge', max: 360 });
+    c.repere('C', r1.x - 4, r1.y - 4, r1.w + 8, r1.h + 8, 'C = 2,5·10⁻⁶ F');
+    marque(c, 'C'); c.pause(.4);
+    peindre(c, ctx => boiteG(ctx, 694, 192));
+    c.texte('on ajoute G : u_G = k·i', x, 210, { couleur: 'blanc', taille: 18, max: 320 });
+    c.texte('sinusoïdal pour k_0 = R + r = 100 Ω', x, 236, { couleur: 'blanc', taille: 18, max: 320 });
+    c.repere('entretien', x - 8, 190, 388, 54, 'u_G = k·i ; k₀ = R + r = 100 Ω');
+    marque(c, 'entretien'); c.pause(.4);
+    const gi = graphe(c, { x: 54, y: 222, w: 270, h: 128, xmax: 30, ymin: -9.5, ymax: 9.5, dx: 2.5, dy: 2, xt: [10, 20, 30], yt: [8, 4, -4, -8], xl: 't (ms)', yl: 'i (mA)' });
+    const fi = t => -8 * Math.sin(2 * Math.PI * t / 10);
+    c.courbe(u => [gi.X(30 * u), gi.Y(fi(30 * u))], 140, { couleur: 'vert', largeur: 2.4 });
+    c.texte('i(t) entretenue : I_m = 8 mA ; T₀ = 10 ms', x, 270, { couleur: 'vert', taille: 17, max: 380 });
+    c.repere('courbe_i', 30, 210, 310, 160, 'i(t) entretenue : I_m = 8 mA, T₀ = 10 ms');
+    marque(c, 'courbe_i'); c.pause(.4);
+    c.texte('i(0) = 0 → cos φ = 0 → φ = ±π/2', x, 298, { couleur: 'blanc', taille: 17, max: 380 });
+    c.texte('i descend → sin φ > 0 → φ = +π/2 rad', x, 322, { couleur: 'blanc', taille: 17, max: 380 });
+    c.repere('phase', x - 8, 280, 388, 50, 'φ = +π/2 rad');
+    marque(c, 'phase'); c.pause(.4);
+    c.texte('E_t = ½·L·I_m² = ½ × 1 × (8·10⁻³)² = 3,2·10⁻⁵ J', x, 350, { couleur: 'blanc', taille: 17, max: 380 });
+    c.repere('energie', x - 8, 332, 388, 26, 'E_t = 3,2·10⁻⁵ J');
+    marque(c, 'energie'); c.pause(.4);
+    c.point(gi.X(16), gi.Y(fi(16)), 5, 'jaune');
+    c.texte('4,8', gi.X(16) + 6, gi.Y(fi(16)) - 6, { couleur: 'jaune', taille: 13 });
+    const r2 = encadre(c, 'à 16 ms : E_e = 3,2·10⁻⁵ − ½ × 1 × (4,8·10⁻³)² ≈ 2,05·10⁻⁵ J', x, 384, { taille: 16, align: 'left', couleur: 'rouge', max: 360 });
+    c.repere('Ee', r2.x - 4, r2.y - 4, r2.w + 8, r2.h + 8, 'E_e ≈ 2,05·10⁻⁵ J');
+    marque(c, 'Ee'); c.pause(.3);
+    c.texte('k_0 = R + r : oscillations à T₀', 40, 392, { couleur: 'cyan', taille: 16 });
+    c.repere('fin', 32, 376, 290, 24, 'oscillations entretenues à T₀');
+    marque(c, 'fin');
+  },
+
+  fig_2025N(c) {
+    titre(c, 'Pseudo-période et énergie perdue (national 2025 N)', 'national 2025 N : T, signe de i, dE_T/dt, énergie perdue');
+    c.texte('Condensateur C_0 = 1 µF chargé à U_0 = 10 V ; décharge dans une bobine (L, r) seule', 40, 70, { couleur: 'blanc', taille: 18, max: 610 });
+    peindre(c, ctx => bobinePeinte(ctx, 670, 56));
+    c.repere('enonce', 32, 52, 712, 28, 'C₀ = 1 µF ; U₀ = 10 V ; bobine (L, r)');
+    marque(c, 'enonce'); c.pause(.4);
+    c.texte('L·C_0·d²u_C/dt² + r·C_0·du_C/dt + u_C = 0', 40, 100, { couleur: 'blanc', taille: 20, max: 680 });
+    c.repere('equation', 32, 82, 440, 28, 'L·C₀·d²u_C/dt² + r·C₀·du_C/dt + u_C = 0');
+    marque(c, 'equation'); c.pause(.4);
+    // un carreau = 7·10⁻⁵ s ; T = 4 carreaux ; le sommet suivant vaut 7 V (0,7 du départ)
+    const g = graphe(c, { x: 50, y: 124, w: 380, h: 226, xmax: 10, ymin: -10.5, ymax: 11, dx: .5, dy: 1, xt: [], yt: [7, 4, -4], xl: 't', yl: 'u_C (V)' });
+    const f = amortie(10, 4, .7), tB = 4 + .29 * 4;
+    c.courbe(u => [g.X(10 * u), g.Y(f(10 * u))], 160, { couleur: 'rouge', largeur: 2.6 });
+    c.ligne(g.X(0), g.Y(7), g.X(4), g.Y(7), { couleur: 'faible', largeur: 1.2, pointille: [4, 4] });
+    c.ligne(g.X(4), g.Y(7), g.X(4), g.Y(0), { couleur: 'faible', largeur: 1.2, pointille: [4, 4] });
+    c.ligne(g.X(tB), g.Y(f(tB)) - 12, g.X(tB), g.Y(0) + 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 4] });
+    c.texte('t_A', g.X(4), g.Y(0) + 20, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('t_B', g.X(tB) + 4, g.Y(0) + 20, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.cote(g.X(5.5), g.Y(9.6), g.X(6.5), g.Y(9.6), '', { couleur: 'blanc', largeur: 1.6 });
+    c.texte('7·10⁻⁵ s', g.X(6), g.Y(9.6) - 8, { couleur: 'blanc', taille: 14, align: 'center' });
+    c.repere('courbe', 30, 114, 416, 252, 'u_C(t) pseudo-périodique ; t_A sommet à 7 V ; flèche 7·10⁻⁵ s = 1 carreau');
+    marque(c, 'courbe'); c.pause(.4);
+    const x = 458;
+    c.cote(g.X(0), g.Y(-9.6), g.X(4), g.Y(-9.6), '', { couleur: 'jaune', largeur: 1.6 });
+    c.texte('T', g.X(2), g.Y(-9.6) + 17, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte('T = 4 × 7·10⁻⁵ = 2,8·10⁻⁴ s', x, 146, { couleur: 'blanc', taille: 19, max: 290 });
+    c.repere('periode', x - 8, 128, 296, 26, 'T = 2,8·10⁻⁴ s');
+    marque(c, 'periode'); c.pause(.4);
+    c.texte('de t_A à t_B : u_C décroît', x, 184, { couleur: 'blanc', taille: 18, max: 290 });
+    c.texte('i = C_0·du_C/dt < 0', x, 210, { couleur: 'vert', taille: 19, max: 290 });
+    c.repere('signe_i', x - 8, 166, 296, 52, 'i < 0 entre t_A et t_B');
+    marque(c, 'signe_i'); c.pause(.4);
+    c.texte('dE_T/dt = C_0·u_C·du_C/dt + L·i·di/dt', x, 248, { couleur: 'blanc', taille: 17, max: 290 });
+    c.texte('= i·(u_C + L·di/dt) = −r·i²', x + 30, 274, { couleur: 'blanc', taille: 18, max: 260 });
+    c.repere('dE_dt', x - 8, 230, 296, 52, 'dE_T/dt = −r·i²');
+    marque(c, 'dE_dt'); c.pause(.4);
+    c.texte('|E_th| = ½·C_0·(U_0² − u_C(t_A)²)', x, 312, { couleur: 'blanc', taille: 18, max: 284 });
+    c.texte('= ½ × 10⁻⁶ × (10² − 7²) = 2,55·10⁻⁵ J', x, 340, { couleur: 'blanc', taille: 18, max: 284 });
+    c.rect(x - 8, 292, 298, 58, { couleur: 'jaune', arrondi: 8, largeur: 2 });
+    c.repere('energie', x - 10, 290, 302, 62, '|E_th| = 2,55·10⁻⁵ J');
+    marque(c, 'energie'); c.pause(.3);
+    c.texte('Chaleur dans r : effet Joule.', x, 380, { couleur: 'cyan', taille: 17, max: 290 });
+    c.repere('fin', x - 8, 362, 296, 26, 'effet Joule dans r');
+    marque(c, 'fin');
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(41);
+  MM = {};
+  DESSINS[fig](c);
+  M = MM;
+  return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
+}
+
+// ───────────────────────── Ce que le tuteur voit et peut faire ─────────────────────────
+/* Texte pour la bulle (lu par l’élève) : jamais de « _ » ni d’accolades visibles. */
+const BAS = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
+const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS) ? [...g].map(ch => BAS[ch]).join('') : g));
+const etapes = () => FIGS[fig].etapes.map(e => e[0]);
+const info = nom => FIGS[fig].etapes.find(e => e[0] === nom) || [nom, nom, ''];
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : 'Rejouer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.tw += dt * VITESSE;
+  if (S.jusqua != null && S.tw >= S.jusqua) {
+    S.tw = S.jusqua; S.jusqua = null; S.running = false;
+    if (M.fin !== undefined && S.tw >= M.fin - 1e-6) { S.pause = false; S.fait = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : figure complète.'); pont.noter('measurement', { figure: fig }); pont.emettre(); return true; }
+    S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + lisible(S.motif || 'instant choisi') + '.'); pont.noter('pause', { moment: S.motif }); pont.emettre();
+    return true;
+  }
+  if (M.fin !== undefined && S.tw >= M.fin + 0.05) {
+    S.running = false; S.pause = false; S.fait = true; etiquette(); pont.noter('measurement', { figure: fig }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  calculer();
+  const nom = p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
+  S.jusqua = cible; S.motif = nom ? info(nom)[1] : `t = ${cible.toFixed(1).replace('.', ',')} s d’écriture`; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), '');
+  pont.noter('play_until', { moment: nom, time_s: +cible.toFixed(2) }); pont.emettre();
+}
+function setTime(p) {
+  calculer(); const t = Math.max(0, Math.min(+p.time_s, M.fin ?? 0)); if (!Number.isFinite(t)) return;
+  S.tw = t; S.jusqua = null; S.running = false; S.fait = t >= (M.fin ?? 0) - 1e-6; S.pause = !S.fait; scene.sale = true; etiquette();
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.fait ? 'figure complète' : `t = ${t.toFixed(1).replace('.', ',')} s d’écriture`) + '.'); pont.noter('set_time', { time_s: t }); pont.emettre();
+}
+function setParameters(p) {
+  const f = p.fig || p.figure || p.variant;
+  if (!f || !FIGS[f] || f === fig) return;
+  fig = f; M = {}; config.title = 'Figure — ' + lisible(FIGS[fig].titre); config.variants = [{ id: fig, label: lisible(FIGS[fig].titre) }];
+  config.command_schema.play_until.moment = etapes().join(' | ') + ' (réécrit la figure et s’arrête après cette étape)';
+  start(); setTimeout(() => pont.manifeste(), 400);
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+function ceQuiSeVoit() {
+  const faites = etapes().filter(n => vu(n));
+  const m = [`Figure « ${fig} » : ${lisible(FIGS[fig].titre)}.`];
+  if (!faites.length) m.push(S.running ? 'La figure est en train de s’écrire à la craie (première étape pas encore finie).' : 'Rien d’écrit encore.');
+  faites.forEach(n => { const d = info(n)[2]; if (d) m.push(lisible(d)); });
+  m.push(S.running ? 'La craie écrit encore.' : S.pause ? `Écriture arrêtée après l’étape « ${faites.length ? faites[faites.length - 1] : 'aucune'} ».` : 'Figure complète.');
+  return m.join(' ');
+}
+window.Tableau.explication(Object.fromEntries(Object.keys(FIGS).map(f => [f, FIGS[f].etapes.map(([e, , d]) => ({ repere: e, texte: d }))])));
+const commandes = ['start', 'reset', 'pause', 'resume', 'play_until', 'set_time', 'set_parameters'];
+const config = { id: 'circuit_rlc_figures', version: '1.0', title: 'Figure — ' + lisible(FIGS[fig].titre), variants: [{ id: fig, label: lisible(FIGS[fig].titre) }], commands: commandes,
+  command_schema: { play_until: { moment: etapes().join(' | ') + ' (réécrit la figure et s’arrête après cette étape)', time_s: 'instant d’écriture (s)' },
+    set_time: { time_s: 'instant d’écriture (s), figé' }, set_parameters: { fig: Object.keys(FIGS).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Figure du cours « Oscillations libres d’un circuit RLC série » : ${lisible(FIGS[fig].titre)}. Étapes d’écriture : ${etapes().join(', ')}.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: fig,
+    time_s: +S.tw.toFixed(2), parameters: { fig },
+    moments: (calculer(), Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)]))), etapes_ecrites: etapes().filter(n => vu(n)) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+etiquette();
+window.__figures = { FIGS, S, scene };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
