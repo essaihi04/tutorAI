@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La bobine — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une bobine : un fil de cuivre enroulé en spires sur un mandrin, un noyau de fer qu’on enfonce (L augmente), son symbole à la craie avec L (henry, H) et r ; puis un ohmmètre branché à ses bornes qui lit r = 10 Ω, et la convention récepteur : i entre, u_b en sens contraire, u_b = L·di/dt + r·i"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La bobine (cours « Dipôle RL », RL1). Bobine du cours : L = 0,12 H, r = 10 Ω.
+ * Vues (?vue=) :
+ *  - objet (défaut) : la bobine peinte (spires de cuivre sur un mandrin) ; le noyau de fer qu’on enfonce (« L augmente ») ;
+ *    le symbole à la craie avec L (inductance, en henry H) et r (résistance du fil, en ohm Ω).
+ *    Moments : objet, noyau, symbole, fin.
+ *  - mesure : un ohmmètre branché aux bornes lit r = 10 Ω ; puis la convention récepteur (flèche i entrante, flèche u_b
+ *    en sens contraire) et « u_b = L·di/dt + r·i » sous la bobine. Moments : ohmmetre, convention, fin.
+ * Paramètres : vue (objet | mesure). Poignées : les deux étiquettes de vue en haut à droite (clic = changer de vue).
+ */
+/* ── Moteur du déroulé (commun aux pages « appareils » des dossiers dipole-rc-tableau et dipole-rl-tableau, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+/* ── Appareils du dipôle RL (peints : bobine, noyau de fer, lampe, oscilloscope, ohmmètre, GBF) ── */
+Object.assign(Peint, {
+  /**
+   * Bobine couchée : mandrin clair (deux joues) et fil de cuivre enroulé en spires orangées.
+   * Renvoie les deux bornes (bout des fils de sortie, sous les joues). Le noyau se peint AVANT (il passe dans le mandrin).
+   */
+  bobine(ctx, x, y, w, h, a = 1) {
+    const j = Math.max(6, h * .2), n = Math.max(7, Math.round((w - 2 * j) / 6.5));
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 9, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    // Fils de sortie (cuivre nu) : de chaque joue vers le bas.
+    ctx.strokeStyle = '#d98a3d'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + j + 3, y + h - 3); ctx.quadraticCurveTo(x + j - 2, y + h + 8, x + j * .5, y + h + 14);
+    ctx.moveTo(x + w - j - 3, y + h - 3); ctx.quadraticCurveTo(x + w - j + 2, y + h + 8, x + w - j * .5, y + h + 14); ctx.stroke();
+    // Enroulement : cylindre de cuivre (clair au milieu, sombre aux bords).
+    const g = ctx.createLinearGradient(0, y + 3, 0, y + h - 3);
+    g.addColorStop(0, '#4a2207'); g.addColorStop(.22, '#b8621f'); g.addColorStop(.45, '#ffbe7a'); g.addColorStop(.62, '#d9802f'); g.addColorStop(1, '#3d1b05');
+    ctx.fillStyle = g; ctx.fillRect(x + j, y + 3, w - 2 * j, h - 6);
+    // Les spires : un trait sombre légèrement penché, puis un reflet.
+    const pas = (w - 2 * j) / n;
+    for (let k = 0; k <= n; k++) {
+      const sx = x + j + k * pas;
+      ctx.strokeStyle = 'rgba(60,25,5,.75)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(sx, y + 3); ctx.lineTo(sx + pas * .35, y + h - 3); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,225,180,.35)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(sx + pas * .45, y + h * .3); ctx.lineTo(sx + pas * .55, y + h * .55); ctx.stroke();
+    }
+    // Joues du mandrin (plastique clair), avec le trou du mandrin au milieu.
+    for (const jx of [x, x + w - j]) {
+      const gj = ctx.createLinearGradient(jx, 0, jx + j, 0); gj.addColorStop(0, '#9c9378'); gj.addColorStop(.5, '#e8dfc4'); gj.addColorStop(1, '#a89e82');
+      ctx.fillStyle = gj; ctx.beginPath(); ctx.roundRect(jx, y - 4, j, h + 8, 3); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(20,20,20,.55)'; ctx.beginPath(); ctx.ellipse(x + w - j / 2, y + h / 2, j * .32, h * .22, 0, 0, 7); ctx.fill();
+    ctx.restore();
+    return [[x + j * .5, y + h + 14], [x + w - j * .5, y + h + 14]];
+  },
+  /** Noyau de fer doux : barre grise (dégradé métallique). */
+  noyau(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 3, y + 4, w, h);
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#5d646b'); g.addColorStop(.35, '#c9cfd4'); g.addColorStop(.6, '#8b9298'); g.addColorStop(1, '#3a3f44');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 3, y + h * .3); ctx.lineTo(x + w - 3, y + h * .3); ctx.stroke();
+    ctx.restore();
+  },
+  /**
+   * Lampe à incandescence sur son support : socle sombre, deux bornes (à gauche et à droite, à la hauteur `yf` du fil),
+   * culot, ampoule de verre ; `eclat` de 0 à 1 (∝ i²) : filament qui rougit puis blanchit, halo.
+   */
+  lampe(ctx, cx, yf, eclat = 0, a = 1) {
+    const e = clamp(eclat, 0, 1), gy = yf - 30, R = 14;
+    ctx.save(); ctx.globalAlpha = a;
+    if (e > .01) {
+      const h = ctx.createRadialGradient(cx, gy, 2, cx, gy, R + 50 * Math.sqrt(e));
+      h.addColorStop(0, `rgba(255,236,160,${.75 * e})`); h.addColorStop(.35, `rgba(255,214,110,${.32 * e})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, gy, R + 50 * Math.sqrt(e), 0, 7); ctx.fill();
+    }
+    // Socle et bornes.
+    const gs = ctx.createLinearGradient(0, yf - 9, 0, yf + 9); gs.addColorStop(0, '#4a5058'); gs.addColorStop(1, '#1d2125');
+    ctx.fillStyle = gs; ctx.beginPath(); ctx.roundRect(cx - 21, yf - 8, 42, 16, 4); ctx.fill();
+    Peint.plot(ctx, cx - 21, yf, a); Peint.plot(ctx, cx + 21, yf, a);
+    // Culot vissé.
+    const gc = ctx.createLinearGradient(cx - 7, 0, cx + 7, 0); gc.addColorStop(0, '#7d7a6e'); gc.addColorStop(.5, '#e4e0d0'); gc.addColorStop(1, '#6c695e');
+    ctx.fillStyle = gc; ctx.fillRect(cx - 7, yf - 19, 14, 11);
+    ctx.strokeStyle = 'rgba(40,40,40,.5)'; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(cx - 7, yf - 17 + k * 3.5); ctx.lineTo(cx + 7, yf - 15.5 + k * 3.5); ctx.stroke(); }
+    // Ampoule de verre (plus chaude quand elle brille).
+    const gv = ctx.createRadialGradient(cx - 4, gy - 5, 1, cx, gy, R);
+    gv.addColorStop(0, `rgba(255,255,255,${.55 + .4 * e})`); gv.addColorStop(.6, `rgba(${200 + 55 * e},${215 + 30 * e},${230 - 70 * e},${.18 + .55 * e})`); gv.addColorStop(1, `rgba(190,205,220,${.28 + .4 * e})`);
+    ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(cx, gy, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(230,240,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
+    // Filament : sombre éteint, rouge puis blanc-jaune.
+    const f = e < .3 ? [120 + 400 * e, 70 + 100 * e, 60] : [255, 150 + 105 * Math.min(1, (e - .3) / .7), 60 + 150 * Math.min(1, (e - .3) / .7)];
+    ctx.strokeStyle = `rgb(${f.map(Math.round).join(',')})`; ctx.lineWidth = 1.3 + e;
+    if (e > .05) { ctx.shadowColor = 'rgba(255,230,150,.9)'; ctx.shadowBlur = 10 * e; }
+    ctx.beginPath(); ctx.moveTo(cx - 5, yf - 19); ctx.lineTo(cx - 5, gy + 2);
+    for (let k = 0; k <= 6; k++) ctx.lineTo(cx - 5 + k * 10 / 6, gy + (k % 2 ? -3 : 2));
+    ctx.lineTo(cx + 5, yf - 19); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(cx - 5, gy - 7, 3.5, 2, -.6, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Oscilloscope : coffret, écran vert sombre quadrillé (rect `e`), boutons ; prises voie 1, voie 2 et masse (liste de points). */
+  oscillo(ctx, x, y, w, h, e, prises, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 12); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#59636d'); g.addColorStop(.5, '#3a424a'); g.addColorStop(1, '#23292f');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1; ctx.stroke();
+    const ge = ctx.createRadialGradient(e.x + e.w / 2, e.y + e.h / 2, 10, e.x + e.w / 2, e.y + e.h / 2, e.w * .7);
+    ge.addColorStop(0, '#0d3a22'); ge.addColorStop(1, '#03160c');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 6); ctx.fill();
+    ctx.strokeStyle = '#1b2228'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,255,170,.09)'; ctx.lineWidth = 1;   // quadrillage de l’écran (pour l’œil)
+    for (let k = 1; k < 10; k++) { const gx = e.x + k * e.w / 10; ctx.beginPath(); ctx.moveTo(gx, e.y + 3); ctx.lineTo(gx, e.y + e.h - 3); ctx.stroke(); }
+    for (let k = 1; k < 8; k++) { const gy = e.y + k * e.h / 8; ctx.beginPath(); ctx.moveTo(e.x + 3, gy); ctx.lineTo(e.x + e.w - 3, gy); ctx.stroke(); }
+    for (const [px, py, noire] of prises) {
+      Peint.sphere(ctx, px, py, 6.5, noire ? ['#9aa0a6', '#2b2f33', '#050607'] : ['#fff3c4', '#d8a92e', '#5b4108']);
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  },
+  /** Ohmmètre numérique : coque jaune, afficheur à cristaux liquides, sélecteur, prises Ω (rouge) et COM (noire). */
+  ohmmetre(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 12); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#f6c84a'); g.addColorStop(1, '#b8861a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.fillStyle = '#2a2d31'; ctx.beginPath(); ctx.roundRect(x + 7, y + 7, w - 14, h - 14, 8); ctx.fill();
+    const lx = x + 14, ly = y + 15, lw = w - 28, lh = h * .26;
+    const gl = ctx.createLinearGradient(0, ly, 0, ly + lh); gl.addColorStop(0, '#c9d3c0'); gl.addColorStop(1, '#a9b49e');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, 3); ctx.fill();
+    ctx.fillStyle = '#1b1f1a'; ctx.font = `600 ${Math.round(lh * .62)}px monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, lx + lw - 8, ly + lh / 2 + 1);
+    // Sélecteur rotatif (sur Ω).
+    const sx = x + w / 2, sy = y + h * .6, sr = w * .17;
+    Peint.sphere(ctx, sx, sy, sr, ['#9aa0a6', '#3a3f45', '#0d0f11']);
+    ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + sr * .8 * Math.cos(-2.2), sy + sr * .8 * Math.sin(-2.2)); ctx.stroke();
+    ctx.fillStyle = '#e8e8e8'; ctx.font = `700 ${Math.round(w * .12)}px serif`; ctx.textAlign = 'center';
+    ctx.fillText('Ω', sx + sr * 1.55 * Math.cos(-2.2), sy + sr * 1.55 * Math.sin(-2.2));
+    // Prises.
+    const py = y + h - 20;
+    Peint.sphere(ctx, x + w * .3, py, 6, ['#9aa0a6', '#2b2f33', '#050607']); Peint.sphere(ctx, x + w * .7, py, 6, ['#ffd0d0', '#e0393e', '#6d0f12']);
+    ctx.restore();
+    return [[x + w * .3, py], [x + w * .7, py]];
+  },
+  /** Cordon souple peint (rouge ou noir) entre deux points, qui pend un peu. */
+  cordon(ctx, x1, y1, x2, y2, rouge, pend = 30, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    const mx = (x1 + x2) / 2, my = Math.max(y1, y2) + pend;
+    ctx.strokeStyle = rouge ? '#7a1418' : '#050607'; ctx.lineWidth = 4.2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+    ctx.strokeStyle = rouge ? '#e0393e' : '#3b4045'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+    ctx.restore();
+  },
+  /** GBF : coffret, petit écran où défile un signal triangulaire, deux boutons, bornes de sortie. */
+  gbf(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#4f6a86'); g.addColorStop(.5, '#34495f'); g.addColorStop(1, '#202e3c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + 8, ey = y + 8, ew = w * .55, eh = h * .42;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.strokeStyle = '#7dfc8a'; ctx.lineWidth = 1.4; ctx.beginPath();
+    for (let k = 0; k <= 4; k++) { const px = ex + 4 + k * (ew - 8) / 4, py = k % 2 ? ey + 5 : ey + eh - 5; if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.stroke();
+    Peint.sphere(ctx, x + w * .82, y + h * .25, Math.min(9, w * .09), ['#cfd4d9', '#59616a', '#14181c']);
+    Peint.sphere(ctx, x + w * .82, y + h * .58, Math.min(7, w * .07), ['#cfd4d9', '#59616a', '#14181c']);
+    ctx.restore();
+  },
+});
+/** Symbole de la bobine à la craie, couché entre (x1, y) et (x2, y) : fils, puis créneaux arrondis (boucles). */
+function symboleBobine(c, x1, y, x2, o = {}) {
+  const n = o.n ?? 4, larg = o.largeur ?? 80, xa = (x1 + x2) / 2 - larg / 2, xb = xa + larg, h = o.h ?? 16, coul = o.couleur ?? 'blanc';
+  c.ligne(x1, y, xa, y, { largeur: 2, couleur: o.fil ?? 'blanc' });
+  c.courbe(u => { const k = u * n, f = k - Math.floor(k), xx = xa + u * larg; return [xx, y - Math.sin(Math.min(1, f) * Math.PI) * h]; }, n * 14, { couleur: coul, largeur: 2.4 });
+  c.ligne(xb, y, x2, y, { largeur: 2, couleur: o.fil ?? 'blanc' });
+  return [xa, xb];
+}
+/** Le même symbole, debout entre (x, y1) en haut et (x, y2) en bas (boucles vers la droite). */
+function symboleBobineV(c, x, y1, y2, o = {}) {
+  const n = o.n ?? 4, haut = o.hauteur ?? 76, ya = (y1 + y2) / 2 - haut / 2, yb = ya + haut, h = o.h ?? 15, coul = o.couleur ?? 'blanc';
+  c.ligne(x, y1, x, ya, { largeur: 2 });
+  c.courbe(u => { const k = u * n, f = k - Math.floor(k); return [x + Math.sin(Math.min(1, f) * Math.PI) * h, ya + u * haut]; }, n * 14, { couleur: coul, largeur: 2.4 });
+  c.ligne(x, yb, x, y2, { largeur: 2 });
+  return [ya, yb];
+}
+
+const VUES = ['objet', 'mesure'];
+const TITRES = { objet: 'l’objet', mesure: 'la mesure' };
+const LH = 0.12, RB = 10;
+const ETAPES = {
+  objet: [
+    { nom: 'objet', anim: .8, motif: 'la bobine : un fil de cuivre enroulé en spires sur un mandrin', bulle: () => 'Voici une bobine.' },
+    { nom: 'noyau', anim: 1.6, motif: 'le noyau de fer enfoncé : L augmente', bulle: () => 'On enfonce un noyau de fer…' },
+    { nom: 'symbole', anim: 0, motif: 'le symbole de la bobine, avec L et r', bulle: () => 'Au tableau, on la dessine ainsi.' },
+  ],
+  mesure: [
+    { nom: 'ohmmetre', anim: 1.2, motif: 'l’ohmmètre lit r = 10 Ω', bulle: () => 'On branche un ohmmètre aux bornes de la bobine…' },
+    { nom: 'convention', anim: 0, motif: 'convention récepteur : u_b = L·di/dt + r·i', bulle: () => 'On oriente : i, puis u_b.' },
+  ],
+};
+const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const BOB = { x: 70, y: 110, w: 300, h: 80 }, BOB2 = { x: 50, y: 150, w: 220, h: 56 };
+const OHM = { x: 300, y: 104, w: 110, h: 160 };
+const TAG = { objet: { x: 584, y: 12, w: 60, h: 24 }, mesure: { x: 664, y: 12, w: 84, h: 24 } };
+const SY = { a: 460, b: 730, y: 210 };
+let MO = null;
+/** Position du noyau (vue objet) : 0 dehors, 1 enfoncé. */
+const enfonce = () => (MO.S.vue === 'objet' ? lisse(MO.p('noyau')) : 0);
+const barre = () => { const f = enfonce(); return { x: 420 + (BOB.x + 10 - 420) * f, y: BOB.y + BOB.h / 2 - 17, w: 330, h: 34 }; };
+const lecture = () => (MO.S.vue === 'mesure' && MO.p('ohmmetre') >= .7 ? RB : null);
+
+function etiquettesVues(c, v) {
+  for (const w of VUES) {
+    const t = TAG[w], ici = w === v;
+    c.texte(TITRES[w], t.x + t.w / 2, t.y + 18, { couleur: ici ? 'cyan' : 'faible', taille: 16, align: 'center' });
+    if (ici) c.ligne(t.x + 4, t.y + 23, t.x + t.w - 4, t.y + 23, { couleur: 'cyan', largeur: 1.6 });
+  }
+}
+
+/* ── Vue objet ───────────────────────────────────────────────────────── */
+function dessinerObjet(c, M) {
+  const a = lisse(M.p('objet')), b = barre();
+  c.direct(() => { Peint.noyau(c.ctx, b.x, b.y, b.w, b.h, a); Peint.bobine(c.ctx, BOB.x, BOB.y, BOB.w, BOB.h, a); });
+  M.etape(c, 'objet', () => {
+    c.fleche(180, 76, 214, 108, { couleur: 'orange', largeur: 1.8, tete: 9 });
+    c.texte('spires : un long fil de cuivre enroulé', 40, 68, { couleur: 'orange', taille: 16 });
+    c.fleche(46, 236, 74, 206, { couleur: 'blanc', largeur: 1.6, tete: 8 });
+    c.texte('mandrin (tube isolant)', 14, 256, { couleur: 'blanc', taille: 15 });
+    c.texte('une bobine : un fil conducteur enroulé en spires', 14, 300, { couleur: 'blanc', taille: 16, max: 405 });
+  });
+  M.etape(c, 'noyau', () => {
+    c.fleche(BOB.x + BOB.w + 120, 88, BOB.x + BOB.w + 50, 88, { couleur: 'blanc', largeur: 1.8, tete: 9 });
+    c.texte('noyau de fer', BOB.x + BOB.w + 128, 93, { couleur: 'blanc', taille: 16 });
+    c.texte('noyau de fer enfoncé : L augmente', 14, 330, { couleur: 'vert', taille: 17, max: 405 });
+  });
+  M.etape(c, 'symbole', () => {
+    c.point(SY.a, SY.y + 60, 3.4); c.point(SY.b, SY.y + 60, 3.4);
+    symboleBobine(c, SY.a, SY.y + 60, SY.b, { largeur: 110, h: 18 });
+    c.texte('(L, r)', (SY.a + SY.b) / 2, SY.y + 90, { taille: 18, align: 'center' });
+    c.texte('le symbole', (SY.a + SY.b) / 2, SY.y + 20, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte('L : inductance, en henry (H)', 440, 340, { couleur: 'blanc', taille: 16, max: 310 });
+    c.texte('r : résistance du fil, en ohm (Ω)', 440, 364, { couleur: 'blanc', taille: 16, max: 310 });
+  });
+}
+
+/* ── Vue mesure ──────────────────────────────────────────────────────── */
+function dessinerMesure(c, M) {
+  const p = M.p('ohmmetre'), a = lisse(clamp(p / .4, 0, 1)), r = lecture();
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.noyau(ctx, 40, 112, 160, 20, 1);
+    const [t1, t2] = Peint.bobine(ctx, BOB2.x, BOB2.y, BOB2.w, BOB2.h, 1);
+    if (a > 0) {
+      const [com, ohm] = Peint.ohmmetre(ctx, OHM.x, OHM.y, OHM.w, OHM.h, r === null ? (p > .45 ? '- - -' : '') : `${r.toFixed(1)}Ω`, a);
+      if (p > .4) { Peint.cordon(ctx, ohm[0], ohm[1], t2[0], t2[1], true, 26); Peint.cordon(ctx, com[0], com[1], t1[0], t1[1], false, 44); }
+    }
+  });
+  c.texte('noyau sorti', 208, 127, { couleur: 'faible', taille: 13 });
+  M.etape(c, 'ohmmetre', () => {
+    c.texte('ohmmètre', OHM.x + OHM.w / 2, OHM.y + OHM.h + 36, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte(`l’ohmmètre lit r = ${RB} Ω : la résistance du fil`, 14, 340, { couleur: 'blanc', taille: 17, max: 410 });
+  });
+  M.etape(c, 'convention', () => {
+    c.point(SY.a, SY.y, 3.4); c.point(SY.b, SY.y, 3.4);
+    symboleBobine(c, SY.a, SY.y, SY.b, { largeur: 110, h: 18 });
+    c.texte('(L, r)', (SY.a + SY.b) / 2, SY.y + 30, { taille: 18, align: 'center' });
+    c.fleche(472, SY.y, 516, SY.y, { couleur: 'blanc', largeur: 2.4, tete: 9 }); c.texte('i', 494, SY.y - 10, { taille: 18, align: 'center' });
+    c.fleche(650, SY.y - 44, 540, SY.y - 44, { couleur: 'violet', largeur: 2, tete: 10 }); c.texte('u_b', 595, SY.y - 54, { couleur: 'violet', taille: 18, align: 'center' });
+    c.texte('u_b = L·di/dt + r·i', (SY.a + SY.b) / 2, SY.y + 76, { couleur: 'blanc', taille: 24, align: 'center' });
+    c.texte('convention récepteur : u_b opposée à i', 440, 340, { couleur: 'violet', taille: 16, max: 310 });
+  });
+}
+
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(41);
+  const v = M.S.vue;
+  c.texte(`La bobine : ${TITRES[v]}`, 14, 30, { couleur: 'cyan', taille: 20 });
+  etiquettesVues(c, v);
+  if (v === 'objet') dessinerObjet(c, M); else dessinerMesure(c, M);
+  reperes(c, M);
+  return c.fin();
+}
+function reperes(c, M) {
+  const v = M.S.vue, b = barre(), ailleurs = w => ` (vue « ${w} »)`;
+  const zone = { x: 10, y: 44, w: 740, h: 370 };
+  for (const w of VUES) {
+    const r = w === v ? zone : TAG[w];
+    c.repere('vue_' + w, r.x, r.y, r.w, r.h, w === 'objet' ? `vue « objet » : la bobine, son noyau de fer, son symbole${w === v ? '' : ' (clic pour y aller)'}` : `vue « mesure » : l’ohmmètre, la convention récepteur${w === v ? '' : ' (clic pour y aller)'}`);
+  }
+  if (v === 'objet') {
+    c.repere('fil', BOB.x + 14, BOB.y, BOB.w - 28, BOB.h, 'le fil de cuivre enroulé : les spires');
+    c.repere('noyau', b.x - 4, b.y - 4, Math.min(b.w, 750 - b.x) + 8, b.h + 8, enfonce() > .5 ? 'le noyau de fer, enfoncé dans la bobine : L augmente' : 'le noyau de fer, hors de la bobine');
+    c.repere('symbole', SY.a - 6, SY.y + 34, SY.b - SY.a + 12, 66, 'le symbole de la bobine (L, r)');
+    c.repere('L', 434, 322, 240, 24, 'L : l’inductance de la bobine, en henry (H)');
+    c.repere('r', 434, 346, 260, 24, 'r : la résistance du fil, en ohm (Ω)');
+    c.repere('ohmmetre', TAG.mesure.x, TAG.mesure.y, TAG.mesure.w, TAG.mesure.h, 'l’ohmmètre' + ailleurs('mesure'));
+    c.repere('fleche_i', TAG.mesure.x, TAG.mesure.y, TAG.mesure.w, TAG.mesure.h, 'la flèche i' + ailleurs('mesure'));
+    c.repere('fleche_ub', TAG.mesure.x, TAG.mesure.y, TAG.mesure.w, TAG.mesure.h, 'la flèche u_b' + ailleurs('mesure'));
+  } else {
+    c.repere('fil', BOB2.x + 10, BOB2.y, BOB2.w - 20, BOB2.h, 'le fil de cuivre enroulé : sa résistance est r');
+    c.repere('noyau', 36, 108, 236, 28, 'le noyau de fer, sorti de la bobine');
+    c.repere('symbole', SY.a - 6, SY.y - 26, SY.b - SY.a + 12, 50, 'le symbole de la bobine (L, r)');
+    c.repere('L', (SY.a + SY.b) / 2 - 24, SY.y + 12, 22, 24, 'L : l’inductance, dans le terme L·di/dt');
+    c.repere('r', (SY.a + SY.b) / 2 + 4, SY.y + 12, 22, 24, `r : la résistance du fil, r = ${RB} Ω, dans le terme r·i`);
+    c.repere('ohmmetre', OHM.x - 4, OHM.y - 4, OHM.w + 8, OHM.h + 44, lecture() === null ? 'l’ohmmètre' : `l’ohmmètre : il lit r = ${RB} Ω`);
+    c.repere('fleche_i', 466, SY.y - 30, 56, 36, 'la flèche i : le courant entre dans la bobine');
+    c.repere('fleche_ub', 534, SY.y - 74, 122, 40, 'la flèche u_b, en sens contraire de i (convention récepteur)');
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. En haut à droite, les deux vues : « l’objet » et « la mesure » (la vue en cours soulignée).`], e = [];
+  if (v === 'objet') {
+    const f = enfonce();
+    m.push(`Une bobine peinte : fil de cuivre enroulé en spires orangées sur un mandrin clair ; un noyau de fer gris ${f >= .99 ? 'enfoncé dans la bobine' : f > 0 ? 'en train d’entrer dans la bobine' : 'posé à droite, hors de la bobine'}.`);
+    if (M.vu('objet')) e.push('« spires : un long fil de cuivre enroulé » (flèche vers les spires), « mandrin (tube isolant) », « une bobine : un fil conducteur enroulé en spires »');
+    if (M.vu('noyau')) e.push('« noyau de fer » (flèche), « noyau de fer enfoncé : L augmente »');
+    if (M.vu('symbole')) e.push('« le symbole » : fils et créneaux arrondis, « (L, r) » dessous ; « L : inductance, en henry (H) », « r : résistance du fil, en ohm (Ω) »');
+  } else {
+    const r = lecture();
+    m.push(`Une bobine peinte (noyau sorti, posé au-dessus) ; ${M.commence('ohmmetre') ? `un ohmmètre numérique branché à ses deux bornes par deux cordons (rouge et noir), afficheur : ${r === null ? 'pas encore de valeur' : `${RB},0 Ω`}` : 'pas encore d’ohmmètre'}. Bobine du cours : r = ${RB} Ω, L = ${fx(LH, 2)} H.`);
+    if (M.vu('ohmmetre')) e.push(`« ohmmètre », « l’ohmmètre lit r = ${RB} Ω : la résistance du fil »`);
+    if (M.vu('convention')) e.push('à droite, le symbole de la bobine « (L, r) », la flèche i qui entre (vers la droite), la flèche u_b au-dessus en sens contraire (vers la gauche), « u_b = L·di/dt + r·i » sous la bobine, « convention récepteur : u_b opposée à i »');
+  }
+  if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, L_H: LH, r_ohm: RB, noyau: M.S.vue === 'objet' ? (enfonce() >= .99 ? 'enfoncé' : enfonce() > 0 ? 'entre' : 'dehors') : 'sorti', lecture_ohmmetre: lecture() });
+const MOT = Moteur({
+  id: 'dipole_rl_bobine', titre: 'La bobine : l’objet, le symbole, la mesure de r, la convention récepteur', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ objet: 'Une bobine, qu’est-ce que c’est ?', mesure: 'Que mesure un ohmmètre branché sur une bobine ?' })[M.S.vue],
+  messageFin: M => ({ objet: 'Une bobine : un fil enroulé ; L (en henry) augmente avec un noyau de fer ; r est la résistance du fil.',
+    mesure: `L’ohmmètre lit r = ${RB} Ω ; en convention récepteur, u_b = L·di/dt + r·i.` })[M.S.vue],
+  appliquer: p => (VUES.includes(p.vue) ? { vue: p.vue } : {}),
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'La bobine : un long fil de cuivre enroulé en spires sur un mandrin ; un noyau de fer enfoncé fait augmenter L. Symbole : créneaux arrondis, avec L (inductance, en henry H) et r (résistance du fil, en ohm Ω). Un ohmmètre branché aux bornes lit r = 10 Ω. Convention récepteur : la flèche u_b est opposée à i ; u_b = L·di/dt + r·i. Bobine du cours : L = 0,12 H, r = 10 Ω.',
+  explications: {
+    objet: [
+      { repere: 'fil', texte: 'Une bobine, c’est un long fil de cuivre enroulé : les spires.' },
+      { repere: 'noyau', texte: 'Si on enfonce un noyau de fer, L augmente.' },
+      { repere: 'symbole', texte: 'Au tableau, on la dessine avec ce symbole.' },
+      { repere: 'L', texte: 'L, c’est l’inductance, en henry.' },
+      { repere: 'r', texte: 'r, c’est la résistance du fil.' },
+    ],
+    mesure: [
+      { repere: 'ohmmetre', texte: 'L’ohmmètre branché aux bornes de la bobine lit r = 10 Ω.' },
+      { repere: 'fleche_i', texte: 'On oriente le courant i qui entre dans la bobine.' },
+      { repere: 'fleche_ub', texte: 'u_b en convention récepteur : la flèche est opposée à i.' },
+      { repere: 'symbole', texte: 'u_b = L·di/dt + r·i.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); for (const w of VUES) { const t = TAG[w]; if (w !== MOT.S.vue && x > t.x && x < t.x + t.w && y > t.y && y < t.y + t.h + 4) return w; } return null; },
+  bouger: () => {},
+  lacher: w => { MOT.setParameters({ vue: w }); },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

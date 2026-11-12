@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — dipôle RC</title>
-<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — dipôle RL</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie : pour chaque partie du cours sur le dipôle RC, les formules encadrées, ce qu’il faut savoir et le piège ; deuxième page : ce que l’élève doit retravailler"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie : pour chaque partie du cours sur le dipôle RL, les formules encadrées, ce qu’il faut savoir et le piège ; deuxième page : ce que l’élève doit retravailler"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
     <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
@@ -17,10 +17,11 @@
 <script src="/media/simulations/shared/tableau/imprimer.js"></script>
 <script>
 /*
- * « Ce qu’il faut retenir » du cours « Dipôle RC » (phys_ch6_dipole_RC), même forme et même protocole que
- * radioactivite-tableau/bilan.html. TOUTE la fiche tient sur UNE page : huit blocs en quatre colonnes de deux (un par
- * compétence C1 à C8), chacun avec les formules encadrées (indices « u_C » rendus par le kit, exposants « e^{−t/τ} » par
- * exposants.js), ce qu’il faut savoir et le piège en orange (⚠). Rien n’est écrit sous y = 360 (le bas reste libre).
+ * « Ce qu’il faut retenir » du cours « Dipôle RL » (phys_ch7_dipole_RL), même forme et même protocole que
+ * dipole-rc-tableau/bilan.html. TOUTE la fiche tient sur UNE page : neuf blocs en trois colonnes de trois (bobine, tension,
+ * échelon, équation, solutions, τ, rupture, lecture des courbes, énergie ; compétences C1 à C8), chacun avec les formules
+ * encadrées (indices « u_b » rendus par le kit, exposants « e^{−t/τ} » par exposants.js), ce qu’il faut savoir et le piège
+ * en orange (⚠). Rien n’est écrit sous y = 360 (le bas reste libre pour la barre du lecteur).
  * La voix la parcourt bloc par bloc : play_until {moment: <bloc>} écrit ce bloc à cet instant et le met en lumière ;
  * les blocs déjà dits (ou sautés) sont écrits d’un coup ; « fiche » ou « fin » : tout d’un coup.
  * La deuxième page est celle de l’élève (set_parameters {lacunes, acquis, acquis_ids}), moment « lacunes ».
@@ -29,30 +30,33 @@ const { bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 
 const BLOCS = [
-  { id: 'condensateur', titre: '1 · Le condensateur', comps: ['C1'], formules: ['q = C·u_C', 'i = C·du_C/dt', 'q_A = q ; q_B = −q'],
-    def: 'Deux armatures séparées par un isolant. C en farad (F) ; 1 µF = 10⁻⁶ F.',
-    attention: 'aucun électron ne traverse l’isolant.' },
-  { id: 'associations', titre: '2 · Associations', comps: ['C2'], formules: ['C_eq = C_1 + C_2', '1/C_eq = 1/C_1 + 1/C_2', 'C = I_0/k'],
-    def: 'Parallèle : même u, C augmente. Série : même q, C diminue. Courant constant : u_C = (I_0/C)·t.',
-    attention: 'série : C_eq plus petite que C_1 et C_2.' },
-  { id: 'echelon', titre: '3 · Échelon de tension', comps: ['C3'], formules: ['u_R + u_C = E', 'i = 0 ; u_C = E'],
-    def: 'Régime transitoire : u_C varie. Régime permanent : u_C = E constante et i = 0.',
-    attention: 'u_C est continue, elle ne saute jamais ; i peut sauter.' },
-  { id: 'equation', titre: '4 · Équation différentielle', comps: ['C4'], formules: ['RC·du_C/dt + u_C = E', 'RC·du_C/dt + u_C = 0'],
-    def: 'u_R + u_C = E avec u_R = R·i et i = C·du_C/dt. Décharge : 0 à droite.',
-    attention: 'u_R et i : second membre nul dans les deux cas.' },
-  { id: 'solution', titre: '5 · Solutions', comps: ['C5'], formules: ['u_C(t) = E(1 − e^{−t/τ})', 'u_C(t) = E·e^{−t/τ}', 'i(t) = (E/R)·e^{−t/τ}'],
-    def: 'On remplace dans l’équation : τ = RC et A = E ; la condition initiale fixe le reste.',
-    attention: 'décharge : i(t) = −(E/R)·e^{−t/τ}, i < 0.' },
-  { id: 'tau', titre: '6 · Constante de temps', comps: ['C6'], formules: ['τ = R·C', '[τ] = [T]'],
-    def: 'τ est un temps, en s. À 5τ : u_C ≈ 0,99·E, régime permanent.',
-    attention: 'R en Ω, C en F : 1 kΩ × 220 µF = 0,22 s.' },
-  { id: 'lecture', titre: '7 · Lire τ sur une courbe', comps: ['C7'], formules: ['u_C(τ) = 0,63·E', 'u_C(τ) = 0,37·E (décharge)'],
-    def: 'La tangente à l’origine coupe l’asymptote (ou l’axe des temps) en t = τ.',
-    attention: 'projeter sur l’axe des temps.' },
-  { id: 'energie', titre: '8 · Énergie stockée', comps: ['C8'], formules: ['E_e = ½·C·u_C²', 'E_e = ½·C·E²'],
-    def: 'Le condensateur stocke l’énergie et la rend à la décharge.',
-    attention: 'u_C × 2 → E_e × 4 ; C en F.' },
+  { id: 'bobine', titre: '1 · La bobine', comps: ['C1'], formules: ['L en henry (H)', 'r en ohm (Ω)'],
+    def: 'Fil de cuivre enroulé : inductance L et résistance r. Un noyau de fer augmente L.',
+    attention: 'bobine idéale (r = 0) seulement si l’énoncé le dit.' },
+  { id: 'tension', titre: '2 · La tension u_b', comps: ['C1'], formules: ['u_b = L·di/dt + r·i', 'u_b = r·I_0'],
+    def: 'Convention récepteur. Régime permanent : di/dt = 0, donc u_b = r·I_0.',
+    attention: 'u_b = 0 en permanent seulement si r = 0.' },
+  { id: 'echelon', titre: '3 · Échelon de tension', comps: ['C2', 'C3'], formules: ['u_R + u_b = E', 'I_0 = E/(R + r)'],
+    def: 'La bobine retarde i ; i est continu. u_R = R·i : image de i à l’oscilloscope.',
+    attention: 'I_0 = E/(R + r), pas E/R.' },
+  { id: 'equation', titre: '4 · Équation différentielle', comps: ['C4'], formules: ['L·di/dt + (R + r)·i = E', 'di/dt + ((R + r)/L)·i = E/L'],
+    def: 'Additivité, u_R = R·i et u_b = L·di/dt + r·i, puis on divise par L.',
+    attention: 'en u_R : R·E/L à droite.' },
+  { id: 'solution', titre: '5 · Solution', comps: ['C5'], formules: ['i(t) = I_0(1 − e^{−t/τ})', 'i(t) = A + B·e^{−t/τ}'],
+    def: 'On remplace : τ = L/(R + r) et A = I_0 ; i(0) = 0 donne B = −A.',
+    attention: 'deux conditions, pour tout t.' },
+  { id: 'tau', titre: '6 · Constante de temps', comps: ['C6'], formules: ['τ = L/(R + r)', '[τ] = [T]'],
+    def: 'τ en s. L plus grand : plus lent. À 5τ : i ≈ 0,99·I_0.',
+    attention: 'L en H, τ en s : L = τ·(R + r).' },
+  { id: 'rupture', titre: '7 · Rupture', comps: ['C2', 'C4'], formules: ['u_R + u_b = 0', 'i(t) = I_0·e^{−t/τ}'],
+    def: 'K en 2 : plus de générateur. i part de I_0 (continu) et tend vers 0.',
+    attention: 'second membre 0, pas E.' },
+  { id: 'lecture', titre: '8 · Lire les courbes', comps: ['C7'], formules: ['i(τ) = 0,63·I_0', 'r = E/I_0 − R', 'L = τ·(R + r)'],
+    def: 'Tangente à l’origine et asymptote : t = τ. Rupture : i(τ) = 0,37·I_0.',
+    attention: '63 % de la valeur finale lue.' },
+  { id: 'energie', titre: '9 · Énergie', comps: ['C8'], formules: ['E_m = ½·L·i²', 'E_m = ½·L·I_0²'],
+    def: 'La bobine stocke l’énergie quand i passe ; elle la rend à la rupture.',
+    attention: 'i en A ; i × 2 → E_m × 4.' },
 ];
 const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
 const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
@@ -86,8 +90,8 @@ function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
   return y;
 }
 
-// Quatre colonnes de deux blocs, dans le cadre 760 × 420, rien sous y = 360 ; hauteurs mesurées, réparties dans la colonne.
-const COL = [{ x: 16, w: 168 }, { x: 204, w: 168 }, { x: 392, w: 168 }, { x: 580, w: 164 }], HAUT = 52, BAS = 358;
+// Trois colonnes de trois blocs, dans le cadre 760 × 420, rien sous y = 360 ; hauteurs mesurées, réparties dans la colonne.
+const COL = [{ x: 16, w: 228 }, { x: 266, w: 228 }, { x: 516, w: 228 }], HAUT = 50, BAS = 358, PAR_COL = 3;
 const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
 const TF = 12.5;  // taille des formules
 const TD = 11.5;  // taille du texte
@@ -115,10 +119,10 @@ function contenu(c, b, x, y0, w, st, dessiner) {
   return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
 }
 function placer(c) {
-  for (let k = 0; k < 4; k++) {
-    const { x, w } = COL[k], ids = [2 * k, 2 * k + 1];
+  for (let k = 0; k < COL.length; k++) {
+    const { x, w } = COL[k], ids = Array.from({ length: PAR_COL }, (_, j) => PAR_COL * k + j).filter(i => BLOCS[i]);
     const h = ids.map(i => contenu(c, BLOCS[i], x, 0, w, true, false) + 6);
-    const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / 2);
+    const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / ids.length);
     if (libre < 0) ids.forEach(i => { if (!window.__debordeBlocs.includes(BLOCS[i].id)) window.__debordeBlocs.push(BLOCS[i].id); });
     let y = HAUT;
     ids.forEach((i, j) => { POS[i] = { x, w, y0: y, h: h[j] + g * .6 }; y += h[j] + g; });
@@ -142,9 +146,9 @@ function bloc(c, b, i) {
 function dessinerFiche(c) {
   placer(c);
   if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
-  c.texte('Ce qu’il faut retenir · le dipôle RC', 16, 30, { couleur: 'cyan', taille: 22 });
+  c.texte('Ce qu’il faut retenir · le dipôle RL', 16, 30, { couleur: 'cyan', taille: 22 });
   c.texte('formules · à savoir · ⚠ piège', 744, 28, { couleur: 'faible', taille: 12, align: 'right' });
-  c.ligne(16, 38, 744, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.ligne(16, 37, 744, 37, { couleur: 'tresfaible', largeur: 1.4 });
   c.repere('fiche', 10, 10, 740, BAS - 4, 'la fiche du chapitre');
   const debut = c.cur;
   let fin = c.cur;
@@ -238,13 +242,13 @@ function ceQuiSeVoit() {
   if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
   const f = S.focus && BLOCS.find(b => b.id === S.focus);
   const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
-  return lisible(`Page 1/2, la fiche du chapitre « Dipôle RC » : ${ecrits}/8 blocs écrits (formules encadrées, ce qu’il faut savoir, piège)${f ? ` ; en lumière « ${f.titre} » : formules ${f.formules.join(' ; ')}. ${f.def} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`);
+  return lisible(`Page 1/2, la fiche du chapitre « Dipôle RL » : ${ecrits}/${BLOCS.length} blocs écrits (formules encadrées, ce qu’il faut savoir, piège)${f ? ` ; en lumière « ${f.titre} » : formules ${f.formules.join(' ; ')}. ${f.def} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`);
 }
 $('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
 // Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
 $('imprimer').onclick = () => {
   const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
-  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — dipôle RC', scene,
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — dipôle RL', scene,
     pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } },
             { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
     restaurer: () => { Object.assign(S, avant); } });
@@ -261,16 +265,16 @@ canvas.addEventListener('pointerdown', e => {
 
 window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: lisible(b.formules.join(' ; ') + '. ' + b.def + ' Piège : ' + b.attention) })) });
 const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
-const config = { id: 'dipole_rc_bilan', version: '1.0', title: 'Ce qu’il faut retenir — dipôle RC', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+const config = { id: 'dipole_rl_bilan', version: '1.0', title: 'Ce qu’il faut retenir — dipôle RL', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
   command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche ou fin = toute la fiche ; lacunes = la page de l’élève)' },
     set_parameters: { lacunes: '[{id: C1..C8, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Dipôle RC », sur une page (huit blocs : le condensateur, les associations, l’échelon de tension, l’équation différentielle, les solutions, la constante de temps, la lecture de τ, l’énergie ; chacun avec formules encadrées, ce qu’il faut savoir, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Dipôle RL », sur une page (neuf blocs : la bobine, la tension de la bobine, l’échelon de tension, l’équation différentielle, la solution, la constante de temps, la rupture, la lecture des courbes, l’énergie ; chacun avec formules encadrées, ce qu’il faut savoir, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
   etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.page / 2,
-  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'condensateur'), reset: () => aller(1, 'reset', 'condensateur'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'bobine'), reset: () => aller(1, 'reset', 'bobine'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
     next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
-aller(1, 'start', 'condensateur');   // la voix commence par le condensateur : le premier bloc s'écrit et est en lumière
+aller(1, 'start', 'bobine');   // la voix commence par la bobine : le premier bloc s'écrit et est en lumière
 window.__bilan = { S, scene, BLOCS, POS, lisible };   // pour les vérifications automatiques
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

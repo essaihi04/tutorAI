@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La rupture du courant — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rupture du courant dans un dipôle RL : la courbe i(t) qui descend en bleu à partir de I₀ = 100 mA, ou un circuit avec un interrupteur qui s’ouvre (étincelle) puis une diode et R₁ en parallèle sur la bobine"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Rupture du courant dans un dipôle RL (cours « Dipôle RL », 2e Bac PC BIOF, 12 novembre 2026).
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - descente (défaut) : E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H → I₀ = 100 mA, τ = 2 ms. K bascule de 1 à 2 à t = 0.
+ *    Moments : bascule (i(0) = I₀ = 100 mA, point marqué : continuité), descente (i = I₀·e^{−t/τ}, en bleu),
+ *    ligne_37 (0,37·I₀ = 37 mA jusqu’à la courbe → τ ≈ 2 ms), tangente (la tangente à l’origine coupe l’axe des temps en τ), fin.
+ *  - diode (2025 R : E = 10 V, R = 100 Ω, bobine idéale → I₀ = 0,1 A) : etincelle (un interrupteur simple s’ouvre :
+ *    étincelle peinte entre les contacts, « surtension »), diode (on ajoute une diode et R₁ = 1 kΩ en parallèle sur la bobine ;
+ *    K refermé : la diode bloque), surtension (K s’ouvre : le courant passe dans la diode et R₁ ; u_b = −R₁·I₀ = −100 V), fin.
+ * Rendu réel : générateur, résistors, bobine (spires de cuivre sur un mandrin), diode (petit composant noir à bague) et étincelle
+ * sont peints ; la craie garde les fils, les symboles, les lettres, les flèches. Le peint ne change pas la physique.
+ * Couleurs : bleu = rupture ; vert = établissement ; jaune = surlignage seulement.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const VUES = { descente: ['bascule', 'descente', 'ligne_37', 'tangente', 'fin'], diode: ['etincelle', 'diode', 'surtension', 'fin'] };
+const TITRES = { descente: 'i(t) quand K bascule', diode: 'interrupteur ouvert : étincelle, puis diode' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'descente', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '' };
+let M = {}, MM = {};
+const VITESSE = 2;
+
+/* ── Physique ──────────────────────────────────────────────────────────── */
+const E = 6, R = 50, r = 10, L = .12;
+const I0 = E / (R + r) * 1000, TAU = L / (R + r) * 1000;    // 100 mA, 2 ms
+const iT = t => I0 * Math.exp(-t / TAU);
+const T37 = -TAU * Math.log(.37);
+const D = { E: 10, R: 100, R1: 1000 }, D_I0 = D.E / D.R, D_UB = -D.R1 * D_I0;   // 0,1 A ; −100 V
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
+const O = { x: 66, y: 352 }, AXL = 396, AYL = 268, TMAX = 12, IMAX = 120;
+const PX = t => O.x + t * AXL / TMAX, PY = i => O.y - i * AYL / IMAX;
+const LX = RL.x + 8, LW = RL.w - 16;
+const PC = { x: 8, y: 40, w: 480, h: 372 }, PL = { x: 496, y: 40, w: 256, h: 372 }, DX = PL.x + 8, DW = PL.w - 16;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+const lireD = (c, y, s, o = {}) => c.texte(s, DX, y, { couleur: 'blanc', taille: 15, max: DW, ...o });
+/** Part (0..1) d’un geste commencé à `debut` (s de scène) et durant `d` s. */
+const geste = (c, debut, d = .5) => (debut === undefined ? 0 : clamp((c.t - debut) / d));
+
+function dessiner(c) {
+  scene.cadre(61); MM = {};
+  (S.vue === 'descente' ? vueDescente : vueDiode)(c);
+  c.pause(.8); marque(c, 'fin');
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+
+/* ── Vue « descente » ──────────────────────────────────────────────────── */
+function interrupteurK(c) {
+  const px = LX + 96, py = 124, x1 = LX + 40, y1 = 106, y2 = 142;
+  c.ligne(LX + 4, y1, x1, y1, { couleur: 'blanc', largeur: 1.8 });
+  c.ligne(LX + 4, y2, x1, y2, { couleur: 'blanc', largeur: 1.8 });
+  c.ligne(px, py, px + 50, py, { couleur: 'blanc', largeur: 1.8 });
+  c.point(x1, y1, 3.5); c.point(x1, y2, 3.5); c.point(px, py, 3.5);
+  c.texte('1', x1 - 4, y1 - 6, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('2', x1 - 4, y2 + 18, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('K', px + 26, py - 8, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('avec E', LX + 152, y1 + 4, { couleur: 'faible', taille: 13 });
+  c.texte('sans E', LX + 152, y2 + 4, { couleur: 'faible', taille: 13 });
+  MM._k = c.cur;
+  c.direct(() => { const f = geste(c, M._k, .6), y = y1 + (y2 - y1) * f; c.ligne(px, py, x1, y, { couleur: f >= 1 ? 'bleu' : 'blanc', largeur: 2.4 }); });
+}
+function vueDescente(c) {
+  c.texte(`Rupture : ${TITRES.descente}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  const LT = AXL + 16, tg = [], LY = AYL + 14, yg = [];
+  for (let k = 1; k <= TMAX; k++) tg.push([(PX(k) - O.x) / LT, k % 5 === 0 ? String(k) : null]);
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 13 });
+  for (let v = 10; v <= IMAX; v += 10) yg.push([(O.y - PY(v)) / LY, v % 20 === 0 ? String(v) : null]);
+  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: 16 });
+  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: 16, align: 'right' });
+  lire(c, 64, 'E = 6 V ; R = 50 Ω ; r = 10 Ω', { couleur: 'faible', taille: 14, duree: .6 });
+  lire(c, 84, 'L = 0,12 H', { couleur: 'faible', taille: 14, duree: .3 });
+  c.pause(.3);
+  // bascule : K passe de 1 à 2 ; i(0) = I₀ (le courant de la bobine ne saute pas).
+  interrupteurK(c);
+  c.pause(.7);
+  c.direct(() => { if (c.t >= M._k + .6) { c.ctx.globalAlpha = .9; c.point(O.x, PY(I0), 6, 'bleu'); c.ctx.globalAlpha = 1; } });
+  c.cercle(O.x, PY(I0), 9, { couleur: 'bleu', largeur: 2 });
+  c.texte('i(0) = I_0 = 100 mA', O.x + 16, PY(I0) - 12, { couleur: 'bleu', taille: 15 });
+  lire(c, 172, 'K passe de 1 à 2 à t = 0', { couleur: 'bleu', taille: 15 });
+  lire(c, 194, 'i(0) = I_0 = 100 mA', { couleur: 'blanc', taille: 16 });
+  lire(c, 214, 'i ne saute pas : continuité', { couleur: 'faible', taille: 14 });
+  marque(c, 'bascule');
+  c.pause(.4);
+  c.courbe(u => { const t = u * TMAX; return [PX(t), PY(iT(t))]; }, 90, { couleur: 'bleu', largeur: 2.6, duree: 1.6 });
+  lire(c, 248, 'i(t) = I_0·e^{−t/τ}', { couleur: 'bleu', taille: 18 });
+  marque(c, 'descente');
+  c.pause(.4);
+  const y37 = PY(.37 * I0), x37 = PX(T37);
+  c.ligne(O.x, y37, x37, y37, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
+  c.cercle(x37, y37, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.ligne(x37, y37, x37, O.y, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
+  c.texte('0,37·I_0', x37 + 12, y37 - 8, { couleur: 'cyan', taille: 15 });
+  c.cercle(PX(TAU), O.y, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.texte('τ', PX(TAU), O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+  lire(c, 280, 'i(τ) = 0,37·I_0 = 37 mA', { couleur: 'cyan', taille: 16 });
+  lire(c, 306, 'on lit τ ≈ 2 ms', { couleur: 'blanc', taille: 18 });
+  c.rect(LX - 4, 286, 128, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'ligne_37');
+  c.pause(.4);
+  c.ligne(O.x, PY(I0), PX(TAU * 1.1), PY(-I0 * .1), { couleur: 'cyan', largeur: 2.2 });
+  lire(c, 340, 'la tangente à l’origine coupe', { couleur: 'cyan', taille: 15 });
+  lire(c, 362, 'l’axe des temps en t = τ', { couleur: 'cyan', taille: 15 });
+  lire(c, 388, 'τ = L/(R + r) = 0,12/60 = 2 ms', { couleur: 'faible', taille: 14 });
+  marque(c, 'tangente');
+}
+
+/* ── Vue « diode » : le circuit peint ──────────────────────────────────── */
+const C = { g: 70, k1: 118, k2: 168, r1: 196, r2: 256, b: 310, d: 420, h: 110, bas: 330, bob1: 176, bob2: 256 };
+function peindreGenerateur(ctx, x, y) {
+  const w = 44, h = 66;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.roundRect(x - w / 2 + 3, y - h / 2 + 4, w, h, 6); ctx.fill();
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+  g.addColorStop(0, '#334155'); g.addColorStop(.45, '#64748b'); g.addColorStop(1, '#1e293b');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 6); ctx.fill();
+  ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 14, y - 16, 28, 14);
+  ctx.fillStyle = '#86efac'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('10.0', x, y - 5);
+  for (const [yy, col] of [[y + 10, '#ef4444'], [y + 24, '#111827']]) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, yy, 4.5, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+function peindreResistor(ctx, x, y, w, h, vertical = false, chaleur = 0) {
+  ctx.save(); ctx.translate(x, y); if (vertical) ctx.rotate(Math.PI / 2);
+  if (chaleur > .02) {
+    const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, w * .9);
+    halo.addColorStop(0, `rgba(255,90,40,${.55 * chaleur})`); halo.addColorStop(1, 'rgba(255,90,40,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, w * .9, 0, Math.PI * 2); ctx.fill();
+  }
+  const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+  const corps = chaleur > .02 ? `rgb(${Math.round(222 + 33 * chaleur)},${Math.round(196 - 120 * chaleur)},${Math.round(150 - 110 * chaleur)})` : '#dec49a';
+  g.addColorStop(0, '#f5e6c8'); g.addColorStop(.4, corps); g.addColorStop(1, '#8a7350');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
+  for (const [k, col] of [[-.3, '#7c2d12'], [-.12, '#111827'], [.06, '#dc2626'], [.3, '#ca8a04']]) { ctx.fillStyle = col; ctx.fillRect(k * w - 2, -h / 2 + 1, 4, h - 2); }
+  ctx.restore();
+}
+/** Bobine peinte : mandrin clair, spires de cuivre orangées (reflet), noyau de fer gris si `noyau`. */
+function peindreBobine(ctx, x, y, w, h, n = 9, noyau = false) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 4, w / 2 + 4, 4, 0, 0, Math.PI * 2); ctx.fill();
+  if (noyau) { const f = ctx.createLinearGradient(0, y, 0, y + h); f.addColorStop(0, '#9ca3af'); f.addColorStop(.5, '#e5e7eb'); f.addColorStop(1, '#4b5563'); ctx.fillStyle = f; ctx.fillRect(x - 10, y + h * .3, w + 20, h * .4); }
+  const m = ctx.createLinearGradient(0, y, 0, y + h); m.addColorStop(0, '#e7d7b5'); m.addColorStop(1, '#a8916a');
+  ctx.fillStyle = m; ctx.fillRect(x - 3, y - 2, 5, h + 4); ctx.fillRect(x + w - 2, y - 2, 5, h + 4);
+  for (let k = 0; k < n; k++) {
+    const sx = x + 3 + k * (w - 6) / n, sw = (w - 6) / n;
+    const s = ctx.createLinearGradient(0, y, 0, y + h);
+    s.addColorStop(0, '#9a3412'); s.addColorStop(.25, '#fb923c'); s.addColorStop(.45, '#fed7aa'); s.addColorStop(.7, '#ea580c'); s.addColorStop(1, '#7c2d12');
+    ctx.fillStyle = s; ctx.beginPath(); ctx.roundRect(sx, y + 2, sw - .8, h - 4, sw / 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function peindreDiode(ctx, x, y) {
+  ctx.save();
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y - 22); ctx.lineTo(x, y + 22); ctx.stroke();
+  const g = ctx.createLinearGradient(x - 6, 0, x + 6, 0); g.addColorStop(0, '#020617'); g.addColorStop(.45, '#475569'); g.addColorStop(1, '#020617');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 6, y - 12, 12, 24, 4); ctx.fill();
+  ctx.fillStyle = '#e2e8f0'; ctx.fillRect(x - 6, y - 10, 12, 4);    // bague : côté cathode (en haut)
+  ctx.restore();
+}
+/** Étincelle peinte entre deux points : halo bleuté et petits éclairs qui changent avec le temps (pour l’œil). */
+function peindreEtincelle(ctx, x1, y1, x2, y2, t, force) {
+  if (force <= 0) return;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, rr = 16 + 18 * force;
+  ctx.save();
+  const h = ctx.createRadialGradient(cx, cy, 2, cx, cy, rr);
+  h.addColorStop(0, `rgba(255,255,255,${.9 * force})`); h.addColorStop(.35, `rgba(147,197,253,${.55 * force})`); h.addColorStop(1, 'rgba(147,197,253,0)');
+  ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fill();
+  const g = Tableau.graine(1 + Math.floor(t * 12));
+  ctx.strokeStyle = `rgba(224,242,254,${force})`; ctx.lineWidth = 1.6; ctx.shadowColor = '#93c5fd'; ctx.shadowBlur = 8;
+  for (let k = 0; k < 3; k++) {
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    for (let s = 1; s < 6; s++) { const f = s / 6; ctx.lineTo(x1 + (x2 - x1) * f + (g() - .5) * 10, y1 + (y2 - y1) * f + (g() - .5) * 12); }
+    ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  ctx.restore();
+}
+/** Symbole de la bobine à la craie (créneaux arrondis), vertical, de y1 à y2. */
+function symboleBobine(c, x, y1, y2, n = 4) {
+  const hb = (y2 - y1) / n;
+  for (let k = 0; k < n; k++) c.courbe(u => [x + 11 * Math.sin(Math.PI * u), y1 + hb * (k + u)], 10, { couleur: 'blanc', largeur: 2, duree: .12 });
+}
+/** État de K dans la vue diode : 1 = fermé, 0 = ouvert (les gestes suivent l’horloge de la scène). */
+function kFerme(c) {
+  if (M._o1 === undefined) return 1;
+  if (c.t < M._o1) return 1;
+  if (c.t < M._f2) return 1 - geste(c, M._o1, .5);
+  if (c.t < M._o2) return geste(c, M._f2, .5);
+  return 1 - geste(c, M._o2, .5);
+}
+function vueDiode(c) {
+  const ctx = c.ctx, ferme = kFerme(c), avecDiode = M._f2 !== undefined && c.t >= M._dd;
+  const angle = -.6 * (1 - ferme), lx = C.k1 + 50 * Math.cos(angle), ly = C.h + 50 * Math.sin(angle);
+  // Le peint d’abord (la craie reste par-dessus).
+  c.direct(() => {
+    peindreGenerateur(ctx, C.g, 220);
+    peindreResistor(ctx, (C.r1 + C.r2) / 2, C.h, C.r2 - C.r1, 15);
+    peindreBobine(ctx, C.b - 70, 192, 46, 46, 8);
+    if (avecDiode) { peindreDiode(ctx, C.d + 32, 192); peindreResistor(ctx, C.d, 275, 50, 14, true); }
+    const etinc = M._o1 !== undefined && c.t >= M._o1 + .15 && c.t < M._f2;
+    if (etinc) peindreEtincelle(ctx, lx, ly, C.k2, C.h, c.t, Math.min(1, (c.t - M._o1) / .4));
+  });
+  c.texte(`Rupture : ${TITRES.diode}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, max: PC.w - 10, duree: .9 });
+  c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  c.texte('Lecture', PL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(PL.x, PL.y, PL.w, PL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  // Fils à la craie.
+  c.trait([[C.g, 187], [C.g, C.h], [C.k1, C.h]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[C.k2, C.h], [C.r1, C.h]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[C.r2, C.h], [C.b, C.h], [C.b, C.bob1]], { couleur: 'blanc', largeur: 2 });
+  symboleBobine(c, C.b, C.bob1, C.bob2);
+  c.trait([[C.b, C.bob2], [C.b, C.bas], [C.g, C.bas], [C.g, 253]], { couleur: 'blanc', largeur: 2 });
+  c.point(C.k1, C.h, 3.5); c.point(C.k2, C.h, 3.5);
+  c.direct(() => c.ligne(C.k1, C.h, lx, ly, { couleur: 'blanc', largeur: 2.4 }));
+  c.texte('K', (C.k1 + C.k2) / 2, C.h + 26, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('E', C.g - 30, 226, { couleur: 'blanc', taille: 18, align: 'right' });
+  c.texte('+', C.g + 30, 196, { couleur: 'rouge', taille: 16 });
+  c.texte('R', (C.r1 + C.r2) / 2, C.h - 16, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('L', C.b + 18, C.bob1 + 4, { couleur: 'blanc', taille: 17 });
+  c.texte('bobine', C.b - 47, 260, { couleur: 'faible', taille: 13, align: 'center' });
+  c.fleche(C.r2 + 14, C.h - 0, C.r2 + 44, C.h, { couleur: 'vert', largeur: 2.2, tete: 9 });
+  c.texte('i', C.r2 + 28, C.h - 10, { couleur: 'vert', taille: 16, align: 'center' });
+  lireD(c, 64, `2025 R : E = 10 V ; R = 100 Ω`, { couleur: 'faible', taille: 14, duree: .6 });
+  lireD(c, 86, 'bobine idéale (r = 0)', { couleur: 'faible', taille: 14, duree: .4 });
+  lireD(c, 118, 'K fermé : I_0 = E/R = 0,1 A', { taille: 16 });
+  c.pause(.4);
+  // etincelle : K s’ouvre, i doit tomber à 0 d’un coup → étincelle entre les contacts.
+  MM._o1 = c.cur; c.pause(1.2);
+  c.texte('étincelle !', C.k2 + 8, C.h - 34, { couleur: 'cyan', taille: 16 });
+  lireD(c, 150, 'on ouvre K : i doit tomber', { couleur: 'bleu' });
+  lireD(c, 172, 'à 0 d’un coup', { couleur: 'bleu' });
+  lireD(c, 196, 'u_b = L·di/dt très grande', { taille: 15 });
+  lireD(c, 220, 'étincelle : surtension', { couleur: 'cyan', taille: 17 });
+  marque(c, 'etincelle');
+  c.pause(.4);
+  // diode : on ajoute la diode et R₁ en parallèle sur la bobine ; K refermé, la diode bloque.
+  MM._f2 = c.cur; c.pause(.6); MM._dd = c.cur;
+  c.trait([[C.b, C.h], [C.d, C.h], [C.d, 180]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[C.d - 12, 202], [C.d + 12, 202], [C.d, 181], [C.d - 12, 202]], { couleur: 'blanc', largeur: 2 });
+  c.ligne(C.d - 12, 180, C.d + 12, 180, { couleur: 'blanc', largeur: 2.4 });
+  c.trait([[C.d, 202], [C.d, 250]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[C.d, 300], [C.d, C.bas], [C.b, C.bas]], { couleur: 'blanc', largeur: 2 });
+  c.point(C.b, C.h, 3.5); c.point(C.b, C.bas, 3.5);
+  c.texte('D', C.d + 46, 197, { couleur: 'blanc', taille: 17 });
+  c.texte('R_1 = 1 kΩ', C.d - 14, 296, { couleur: 'blanc', taille: 15, align: 'right' });
+  lireD(c, 254, 'on ajoute la diode D et', { taille: 15 });
+  lireD(c, 274, 'R_1 = 1 kΩ en parallèle sur L', { taille: 15 });
+  lireD(c, 296, 'K fermé : la diode bloque', { couleur: 'faible', taille: 14 });
+  marque(c, 'diode');
+  c.pause(.4);
+  // surtension : K s’ouvre ; i(0) = I₀ passe par la diode et R₁ : u_b = −R₁·I₀ = −100 V.
+  MM._o2 = c.cur; c.pause(.7);
+  c.fleche(C.b - 12, 268, C.b - 12, 300, { couleur: 'bleu', largeur: 2.2, tete: 9 });
+  c.fleche(C.b + 30, C.bas + 14, C.b + 80, C.bas + 14, { couleur: 'bleu', largeur: 2.2, tete: 9 });
+  c.fleche(C.d + 14, 238, C.d + 14, 214, { couleur: 'bleu', largeur: 2.2, tete: 9 });
+  c.fleche(C.d - 30, C.h - 14, C.b + 40, C.h - 14, { couleur: 'bleu', largeur: 2.2, tete: 9 });
+  c.fleche(C.b + 38, C.bob2, C.b + 38, C.bob1, { couleur: 'blanc', largeur: 2.2, tete: 10 });
+  c.texte('u_b', C.b + 46, (C.bob1 + C.bob2) / 2 + 6, { couleur: 'blanc', taille: 18 });
+  lireD(c, 326, 'on ouvre K : i(0) = I_0 = 0,1 A', { couleur: 'bleu', taille: 15 });
+  lireD(c, 348, 'i passe dans D et R_1', { couleur: 'bleu', taille: 15 });
+  lireD(c, 372, 'u_b = −R_1·I_0 = −1000 × 0,1', { taille: 15 });
+  lireD(c, 400, 'u_b = −100 V', { taille: 20 });
+  c.rect(DX - 4, 378, 132, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'surtension');
+}
+function declarerReperes(c) {
+  const ici = v => (S.vue === v ? '' : ` (vue « ${v} »)`);
+  if (S.vue === 'descente') {
+    c.repere('axe_t', O.x, O.y - 10, AXL + 18, 58, 'l’axe des temps : t (ms), origine à la bascule de K, graduations de 1 ms');
+    c.repere('axe_i', O.x - 44, 50, 76, O.y - 50, 'l’axe des courants : i (mA), de 0 à 120 mA');
+    c.repere('courbe', O.x - 10, PY(I0) - 10, PX(TMAX) - O.x + 10, O.y - PY(I0) + 10, 'la courbe bleue i(t) = I₀·e^(−t/τ) : de 100 mA vers 0');
+    c.repere('ligne_37', O.x, PY(37) - 12, PX(T37) - O.x + 12, 24, '0,37·I₀ = 37 mA, horizontale jusqu’à la courbe');
+    c.repere('tangente', O.x, PY(I0), PX(TAU * 1.1) - O.x, O.y - PY(I0) + 8, 'la tangente à l’origine : elle coupe l’axe des temps en t = τ');
+    c.repere('tau', PX(TAU) - 20, O.y - 10, 40, 58, 'τ = L/(R + r) = 2 ms');
+    c.repere('interrupteur', LX, 92, 140, 62, 'l’interrupteur K : il bascule de 1 à 2 à t = 0');
+    c.repere('etincelle', LX, 92, 140, 62, `l’étincelle à l’ouverture d’un interrupteur simple${ici('diode')}`);
+    c.repere('diode', LX, 92, 140, 62, `la diode en parallèle sur la bobine${ici('diode')}`);
+    c.repere('R1', LX, 92, 140, 62, `R₁ = 1 kΩ${ici('diode')}`);
+    c.repere('fleche_ub', LX, 92, 140, 62, `la flèche u_b : u_b = −R₁·I₀ = −100 V${ici('diode')}`);
+  } else {
+    c.repere('interrupteur', C.k1 - 10, C.h - 40, C.k2 - C.k1 + 20, 70, 'l’interrupteur K (simple)');
+    c.repere('etincelle', C.k1 + 10, C.h - 50, C.k2 - C.k1 + 60, 60, 'l’étincelle entre les contacts : surtension');
+    c.repere('diode', C.d - 16, 170, 72, 42, 'la diode D en parallèle sur la bobine (bloquée quand K est fermé)');
+    c.repere('R1', C.d - 90, 246, 110, 60, 'R₁ = 1 kΩ, en série avec la diode');
+    c.repere('fleche_ub', C.b + 26, C.bob1 - 4, 50, C.bob2 - C.bob1 + 8, 'la flèche u_b aux bornes de la bobine : u_b = −R₁·I₀ = −100 V');
+    for (const id of ['axe_t', 'axe_i', 'courbe', 'tangente', 'ligne_37', 'tau']) c.repere(id, DX - 4, 104, DW, 22, { axe_t: 'l’axe des temps', axe_i: 'l’axe des courants', courbe: 'la courbe i(t) de la rupture', tangente: 'la tangente à l’origine', ligne_37: '0,37·I₀ = 37 mA', tau: 'τ = 2 ms' }[id] + ' (vue « descente »)');
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  return S.vue === 'descente'
+    ? 'K bascule : i part de I₀ = 100 mA (il ne saute pas) et descend : i(t) = I₀·e^(−t/τ). À t = τ ≈ 2 ms, i = 0,37·I₀ = 37 mA ; la tangente à l’origine coupe l’axe des temps en τ.'
+    : 'Interrupteur simple ouvert : i doit tomber à 0 d’un coup, étincelle (surtension). Avec la diode et R₁ = 1 kΩ : le courant I₀ = 0,1 A passe dans la diode, u_b = −R₁·I₀ = −100 V.';
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  bascule: 'K passe en 2 : i(0) = I₀ = 100 mA', descente: 'i descend en bleu', ligne_37: '0,37·I₀ = 37 mA → τ ≈ 2 ms',
+  tangente: 'la tangente à l’origine coupe l’axe des temps en τ', etincelle: 'K s’ouvre : étincelle entre les contacts',
+  diode: 'on ajoute la diode et R₁ = 1 kΩ', surtension: 'u_b = −R₁·I₀ = −100 V', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`];
+  const Lg = [];
+  if (S.vue === 'descente') {
+    m.push('E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H : I₀ = 100 mA, τ = 2 ms. Axes : t (ms) de 0 à 12 (origine à la bascule, graduations de 1 ms), i (mA) de 0 à 120.');
+    Lg.push(`interrupteur K (positions 1 et 2) ${S.t >= (M._k ?? 1e9) + .6 ? 'en position 2' : 'en position 1'}`);
+    if (vu('bascule')) Lg.push('point bleu à t = 0 : « i(0) = I₀ = 100 mA », i ne saute pas (continuité)');
+    if (vu('descente')) Lg.push('courbe bleue i(t) = I₀·e^(−t/τ) qui descend de 100 mA vers 0');
+    if (vu('ligne_37')) Lg.push('horizontale en pointillé à 0,37·I₀ = 37 mA jusqu’à la courbe, puis verticale : on lit τ ≈ 2 ms (encadré)');
+    if (vu('tangente')) Lg.push('tangente cyan à l’origine : elle part de (0 ; 100 mA) et coupe l’axe des temps en t = τ = 2 ms');
+  } else {
+    m.push('2025 R : E = 10 V, R = 100 Ω, bobine idéale : I₀ = E/R = 0,1 A ; R₁ = 1 kΩ.');
+    const k = S.t >= (M._o2 ?? 1e9) ? 'ouvert' : S.t >= (M._f2 ?? 1e9) ? 'fermé' : S.t >= (M._o1 ?? 1e9) ? 'ouvert' : 'fermé';
+    Lg.push(`circuit peint : générateur E, interrupteur simple K (${k}), résistor R, bobine L (spires de cuivre) avec son symbole, flèche verte i`);
+    if (vu('etincelle')) Lg.push('K s’est ouvert : étincelle entre les contacts ; « u_b = L·di/dt très grande », « étincelle : surtension »');
+    if (vu('diode')) Lg.push('diode D (symbole et petit composant noir à bague) en série avec R₁ = 1 kΩ, en parallèle sur la bobine ; K refermé : la diode bloque');
+    if (vu('surtension')) Lg.push('K ouvert : flèches bleues du courant dans la bobine, la diode et R₁ ; flèche u_b ; « u_b = −R₁·I₀ = −1000 × 0,1 = −100 V » (encadré)');
+  }
+  m.push(`Au tableau : ${Lg.join(' ; ')}.`);
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(S.vue === 'descente' ? 'Le courant est établi ; K va basculer…' : 'Le courant passe ; on va ouvrir K…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; M = {}; calculer(); pont.noter('set_parameters', { vue: S.vue }); start(); return; }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+window.Tableau.explication({
+  descente: [
+    { repere: 'interrupteur', texte: 'K passe de 1 à 2 : le générateur n’est plus dans la maille.' },
+    { repere: 'courbe', texte: 'i part de I₀ = 100 mA : il ne saute pas. Puis il descend : i(t) = I₀·e^(−t/τ).' },
+    { repere: 'ligne_37', texte: 'À t = τ, i = 0,37·I₀ = 37 mA : on lit τ ≈ 2 ms.' },
+    { repere: 'tangente', texte: 'La tangente à l’origine coupe l’axe des temps en t = τ.' },
+  ],
+  diode: [
+    { repere: 'etincelle', texte: 'On ouvre K : i devrait tomber à 0 d’un coup ; u_b = L·di/dt devient très grande : une étincelle.' },
+    { repere: 'diode', texte: 'On ajoute une diode et R₁ en parallèle sur la bobine. K fermé, la diode bloque.' },
+    { repere: 'fleche_ub', texte: 'À l’ouverture, le courant I₀ = 0,1 A passe dans la diode et R₁ : u_b = −R₁·I₀ = −100 V.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'dipole_rl_rupture', version: '1.0', title: 'La rupture du courant', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'descente | diode (change la vue et la retrace depuis le début)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'descente : bascule | descente | ligne_37 | tangente | fin ; diode : etincelle | diode | surtension | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Rupture du courant dans un dipôle RL : L·di/dt + (R + r)·i = 0, i(t) = I₀·e^(−t/τ). Avec I₀ = 100 mA et τ = 2 ms : i(τ) = 0,37·I₀ = 37 mA ; la tangente à l’origine coupe l’axe des temps en τ. Le courant de la bobine ne saute pas. Un interrupteur simple qu’on ouvre fait une étincelle (surtension) ; avec une diode et R₁ = 1 kΩ en parallèle sur la bobine (E = 10 V, R = 100 Ω, I₀ = 0,1 A) : u_b = −R₁·I₀ = −100 V.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: S.vue === 'descente' ? { vue: S.vue, I0_mA: I0, tau_ms: TAU, i37_mA: 37 } : { vue: S.vue, E_V: D.E, R_ohm: D.R, R1_ohm: D.R1, I0_A: D_I0, ub_V: D_UB }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('La rupture du courant…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

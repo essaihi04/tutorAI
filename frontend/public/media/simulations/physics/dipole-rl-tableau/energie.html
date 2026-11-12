@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’énergie de la bobine — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un circuit RL avec une bobine peinte ; à droite la courbe i(t) et une barre E_m = ½·L·i² qui monte pendant l’établissement du courant puis se vide à la rupture pendant que la résistance chauffe ; ou le calcul de l’énergie stockée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * L’énergie stockée dans une bobine (cours « Dipôle RL », 2e Bac PC BIOF, 12 novembre 2026). E_m = ½·L·i².
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - barre (défaut) : E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H → I₀ = 0,1 A, τ = 2 ms.
+ *    Moments : monte (K en 1 : i monte en vert, la barre E_m monte comme i²), maximum (E_m max = ½·L·I₀² =
+ *    ½ × 0,12 × 0,1² = 6·10⁻⁴ J), vide (K en 2 : i descend en bleu, la barre se vide, la résistance rougit : chaleur,
+ *    effet Joule), fin.
+ *  - calcul : L = 0,2 H, I₀ = 0,5 A. Moments : donnees, calcul (E_m = ½·L·I₀² = ½ × 0,2 × 0,5²), resultat (0,025 J), fin.
+ * Rendu réel : générateur, résistor (qui rougit : la teinte suit la chaleur reçue, pour l’œil seulement) et bobine
+ * (spires de cuivre sur un mandrin) peints ; la craie garde les fils, les symboles, les axes, les formules.
+ * Couleurs : vert = établissement du courant, bleu = rupture, jaune = surlignage seulement.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const VUES = { barre: ['monte', 'maximum', 'vide', 'fin'], calcul: ['donnees', 'calcul', 'resultat', 'fin'] };
+const TITRES = { barre: 'la barre E_m suit i²', calcul: 'calculer E_m' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'barre', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '' };
+let M = {}, MM = {};
+const VITESSE = 2, D_PHASE = 3.2;      // durée d’une phase animée (s de scène) : 12 ms de circuit
+
+/* ── Physique ──────────────────────────────────────────────────────────── */
+const E = 6, R = 50, r = 10, L = .12, I0 = E / (R + r), TAU = L / (R + r) * 1000, TPH = 12;   // A, ms
+const EMAX = .5 * L * I0 * I0;                       // 6·10⁻⁴ J
+const iMonte = t => I0 * (1 - Math.exp(-t / TAU)), iVide = t => I0 * Math.exp(-t / TAU);
+const Em = i => .5 * L * i * i;
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const PC = { x: 8, y: 40, w: 300, h: 372 }, PG = { x: 316, y: 40, w: 436, h: 372 };
+const G = { x: 362, y: 306, w: 252, h: 208 }, BAR = { x: 690, w: 30, ax: 676 }, BMAX = 7;   // graphe i(t) ; barre en 10⁻⁴ J
+const PX = t => G.x + t * G.w / (2 * TPH), PY = i => G.y - i * 1000 * G.h / 120, PB = e => G.y - e * 1e4 * G.h / BMAX;
+const CI = { g: 50, p: 160, c1: 118, c2x: 124, c2y: 140, r1: 178, r2: 234, b: 262, h: 100, bas: 320, bob1: 168, bob2: 248 };
+const marque = (c, nom) => { MM[nom] = c.cur; };
+/** Avancement (0..1) d’une phase animée commencée à `debut`. */
+const part = (c, debut, d = D_PHASE) => (debut === undefined ? 0 : clamp((c.t - debut) / d));
+
+function dessiner(c) {
+  scene.cadre(81); MM = {};
+  (S.vue === 'barre' ? vueBarre : vueCalcul)(c);
+  c.pause(.8); marque(c, 'fin');
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+
+/* ── Peint ─────────────────────────────────────────────────────────────── */
+function peindreGenerateur(ctx, x, y) {
+  const w = 40, h = 62;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.roundRect(x - w / 2 + 3, y - h / 2 + 4, w, h, 6); ctx.fill();
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+  g.addColorStop(0, '#334155'); g.addColorStop(.45, '#64748b'); g.addColorStop(1, '#1e293b');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 6); ctx.fill();
+  ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 13, y - 15, 26, 13);
+  ctx.fillStyle = '#86efac'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('6.0', x, y - 5);
+  for (const [yy, col] of [[y + 10, '#ef4444'], [y + 23, '#111827']]) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, yy, 4.5, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+/** Résistor peint ; `chaleur` (0..1) le fait rougir avec un halo (pour l’œil : la chaleur reçue). */
+function peindreResistor(ctx, x, y, w, h, chaleur = 0) {
+  ctx.save(); ctx.translate(x, y);
+  if (chaleur > .02) {
+    const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, w);
+    halo.addColorStop(0, `rgba(255,80,30,${.6 * chaleur})`); halo.addColorStop(1, 'rgba(255,80,30,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, w, 0, Math.PI * 2); ctx.fill();
+  }
+  const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+  const corps = `rgb(${Math.round(222 + 33 * chaleur)},${Math.round(196 - 140 * chaleur)},${Math.round(150 - 120 * chaleur)})`;
+  g.addColorStop(0, chaleur > .3 ? '#fecaca' : '#f5e6c8'); g.addColorStop(.4, corps); g.addColorStop(1, chaleur > .3 ? '#7f1d1d' : '#8a7350');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
+  for (const [k, col] of [[-.3, '#16a34a'], [-.12, '#111827'], [.06, '#111827'], [.3, '#ca8a04']]) { ctx.globalAlpha = 1 - .5 * chaleur; ctx.fillStyle = col; ctx.fillRect(k * w - 2, -h / 2 + 1, 4, h - 2); }
+  ctx.restore();
+}
+/** Bobine peinte : mandrin clair, spires de cuivre orangées avec reflet ; noyau de fer gris si `noyau`. */
+function peindreBobine(ctx, x, y, w, h, n = 9, noyau = false) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 4, w / 2 + 4, 4, 0, 0, Math.PI * 2); ctx.fill();
+  if (noyau) { const f = ctx.createLinearGradient(0, y, 0, y + h); f.addColorStop(0, '#9ca3af'); f.addColorStop(.5, '#e5e7eb'); f.addColorStop(1, '#4b5563'); ctx.fillStyle = f; ctx.fillRect(x - 12, y + h * .3, w + 24, h * .4); }
+  const m = ctx.createLinearGradient(0, y, 0, y + h); m.addColorStop(0, '#e7d7b5'); m.addColorStop(1, '#a8916a');
+  ctx.fillStyle = m; ctx.fillRect(x - 4, y - 3, 6, h + 6); ctx.fillRect(x + w - 2, y - 3, 6, h + 6);
+  for (let k = 0; k < n; k++) {
+    const sx = x + 3 + k * (w - 6) / n, sw = (w - 6) / n;
+    const s = ctx.createLinearGradient(0, y, 0, y + h);
+    s.addColorStop(0, '#9a3412'); s.addColorStop(.25, '#fb923c'); s.addColorStop(.45, '#fed7aa'); s.addColorStop(.7, '#ea580c'); s.addColorStop(1, '#7c2d12');
+    ctx.fillStyle = s; ctx.beginPath(); ctx.roundRect(sx, y + 2, sw - .8, h - 4, sw / 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function symboleBobine(c, x, y1, y2, n = 4) {
+  const hb = (y2 - y1) / n;
+  for (let k = 0; k < n; k++) c.courbe(u => [x + 11 * Math.sin(Math.PI * u), y1 + hb * (k + u)], 10, { couleur: 'blanc', largeur: 2, duree: .12 });
+}
+
+/* ── Vue « barre » ─────────────────────────────────────────────────────── */
+/** Instant du circuit (ms, de 0 à 24) et courant (A) à l’instant d’écriture `c.t`. */
+function etatCircuit(c) {
+  const pm = part(c, M._m0), pv = part(c, M._v0);
+  if (pv > 0) { const t = pv * TPH; return { t: TPH + t, i: iVide(t), phase: 'vide', pm, pv }; }
+  return { t: pm * TPH, i: pm > 0 ? iMonte(pm * TPH) : 0, phase: pm > 0 ? 'monte' : 'avant', pm, pv };
+}
+function vueBarre(c) {
+  const ctx = c.ctx, et = etatCircuit(c), chaleur = et.pv > 0 ? 1 - (et.i / I0) ** 2 : 0;
+  const k2 = M._k2 !== undefined && c.t >= M._k2 ? clamp((c.t - M._k2) / .5) : 0;
+  c.direct(() => {
+    peindreGenerateur(ctx, CI.g, 210);
+    peindreResistor(ctx, (CI.r1 + CI.r2) / 2, CI.h, CI.r2 - CI.r1, 15, chaleur);
+    peindreBobine(ctx, CI.b - 74, 186, 48, 46, 8);
+  });
+  c.texte(`Énergie : ${TITRES.barre}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, max: PC.w + PG.w - 10, duree: .9 });
+  c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.rect(PG.x, PG.y, PG.w, PG.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  // Circuit à la craie : K à deux positions (1 : avec le générateur ; 2 : R et la bobine seuls).
+  c.trait([[CI.g, 179], [CI.g, CI.h], [CI.c1, CI.h]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[CI.p, CI.h], [CI.r1, CI.h]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[CI.r2, CI.h], [CI.b, CI.h], [CI.b, CI.bob1]], { couleur: 'blanc', largeur: 2 });
+  symboleBobine(c, CI.b, CI.bob1, CI.bob2);
+  c.trait([[CI.b, CI.bob2], [CI.b, CI.bas], [CI.g, CI.bas], [CI.g, 241]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[CI.c2x, CI.c2y], [CI.c2x, CI.bas]], { couleur: 'blanc', largeur: 2 });
+  c.point(CI.c1, CI.h, 3.5); c.point(CI.c2x, CI.c2y, 3.5); c.point(CI.p, CI.h, 3.5); c.point(CI.c2x, CI.bas, 3.5);
+  c.direct(() => { const x = CI.c1 + (CI.c2x - CI.c1) * k2, y = CI.h + (CI.c2y - CI.h) * k2; c.ligne(CI.p, CI.h, x, y, { couleur: k2 >= 1 ? 'bleu' : 'vert', largeur: 2.4 }); });
+  c.texte('1', CI.c1 - 4, CI.h - 10, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('2', CI.c2x - 8, CI.c2y + 14, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('K', CI.p + 4, CI.h - 12, { couleur: 'blanc', taille: 17 });
+  c.texte('E', CI.g - 28, 214, { couleur: 'blanc', taille: 18, align: 'right' });
+  c.texte('R', (CI.r1 + CI.r2) / 2, CI.h + 30, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('(L, r)', CI.b + 16, CI.bob1 - 6, { couleur: 'blanc', taille: 15 });
+  c.texte('bobine', CI.b - 50, 256, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('E = 6 V ; R = 50 Ω ; r = 10 Ω', PC.x + 12, 352, { couleur: 'faible', taille: 14 });
+  c.texte('L = 0,12 H ; I_0 = 0,1 A', PC.x + 12, 374, { couleur: 'faible', taille: 14 });
+  // Graphe i(t) et axe de la barre.
+  const LT = G.w + 14, tg = [];
+  for (let k = 2; k <= 2 * TPH; k += 2) tg.push([(PX(k) - G.x) / LT, k % 10 === 0 ? String(k) : null]);
+  c.axe(G.x, G.y, G.x + LT, G.y, tg, { taille: 12 });
+  const LY = G.h + 18, ig = [];
+  for (let v = 20; v <= 120; v += 20) ig.push([(G.y - PY(v / 1000)) / LY, v % 40 === 0 ? String(v) : null]);
+  c.axe(G.x, G.y, G.x, G.y - LY, ig, { taille: 12, vertical: true });
+  c.texte('i (mA)', G.x + 8, G.y - LY + 4, { couleur: 'blanc', taille: 15 });
+  c.texte('t (ms)', G.x + G.w + 4, G.y + 34, { couleur: 'blanc', taille: 14, align: 'right' });
+  const bg = [];
+  for (let v = 1; v <= BMAX; v++) bg.push([(G.y - PB(v * 1e-4)) / LY, v % 2 === 0 ? String(v) : null]);
+  c.axe(BAR.ax, G.y, BAR.ax, G.y - LY, bg, { taille: 12, vertical: true });
+  c.texte('E_m (10⁻⁴ J)', BAR.ax - 8, G.y - LY - 6, { couleur: 'blanc', taille: 14 });
+  c.pause(.3);
+  // monte : K en 1, i monte (vert), la barre monte comme i².
+  MM._m0 = c.cur; c.pause(D_PHASE);
+  c.direct(() => {
+    if (et.pm > 0) c.courbe(u => { const t = u * et.pm * TPH; return [PX(t), PY(iMonte(t))]; }, Math.max(2, Math.round(60 * et.pm)), { couleur: 'vert', largeur: 2.6 });
+    if (et.pv > 0) c.courbe(u => { const t = u * et.pv * TPH; return [PX(TPH + t), PY(iVide(t))]; }, Math.max(2, Math.round(60 * et.pv)), { couleur: 'bleu', largeur: 2.6 });
+    if (et.phase !== 'avant') c.point(PX(et.t), PY(et.i), 4, et.phase === 'vide' ? 'bleu' : 'vert');
+    const y = PB(Em(et.i)), k = ctx;
+    c.rect(BAR.x, PB(EMAX * 1.0001) - 1, BAR.w, G.y - PB(EMAX) + 1, { couleur: 'tresfaible', largeur: 1.2, arrondi: 3 });
+    if (G.y - y > .5) { k.globalAlpha = .5; k.fillStyle = c.couleur(et.phase === 'vide' ? 'bleu' : 'vert'); k.fillRect(BAR.x + 1, y, BAR.w - 2, G.y - y); k.globalAlpha = 1; }
+  });
+  c.texte('E_m = ½·L·i²', PG.x + 12, 352, { couleur: 'blanc', taille: 19 });
+  c.texte('K en 1 : i monte, E_m monte', PG.x + 170, 352, { couleur: 'vert', taille: 15, max: PG.w - 180 });
+  marque(c, 'monte');
+  c.pause(.4);
+  // maximum : E_m max = ½·L·I₀² = 6·10⁻⁴ J.
+  c.ligne(BAR.ax, PB(EMAX), BAR.x + BAR.w + 6, PB(EMAX), { couleur: 'cyan', largeur: 1.5, pointille: [4, 4] });
+  c.texte('max', BAR.x + BAR.w / 2, PB(EMAX) - 8, { couleur: 'cyan', taille: 14, align: 'center' });
+  c.texte('E_m max = ½·L·I_0² = ½ × 0,12 × 0,1² = 6·10⁻⁴ J', PG.x + 12, 384, { couleur: 'cyan', taille: 16, max: PG.w - 24 });
+  marque(c, 'maximum');
+  c.pause(.4);
+  // vide : K en 2, i descend (bleu), la barre se vide, la résistance rougit.
+  MM._k2 = c.cur; c.pause(.6);
+  c.ligne(PX(TPH), G.y, PX(TPH), PY(.112), { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+  c.texte('K en 2', PX(TPH) + 4, PY(.112) + 2, { couleur: 'bleu', taille: 14 });
+  MM._v0 = c.cur; c.pause(D_PHASE);
+  c.texte('chaleur : effet Joule', (CI.r1 + CI.r2) / 2, 72, { couleur: 'rouge', taille: 15, align: 'center' });
+  c.texte('E_m se vide : elle devient', PG.x + 12, 404, { couleur: 'bleu', taille: 15 });
+  c.texte('chaleur dans R et r', PG.x + 196, 404, { couleur: 'bleu', taille: 15, max: PG.w - 206 });
+  marque(c, 'vide');
+}
+
+/* ── Vue « calcul » ────────────────────────────────────────────────────── */
+function vueCalcul(c) {
+  const ctx = c.ctx, X = PG.x + 14;
+  c.direct(() => peindreBobine(ctx, 60, 150, 110, 90, 14, true));
+  c.texte(`Énergie : ${TITRES.calcul}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .9 });
+  c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.rect(PG.x, PG.y, PG.w, PG.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.ligne(230, 110, 230, 150, { couleur: 'blanc', largeur: 2 });
+  symboleBobine(c, 230, 150, 240);
+  c.ligne(230, 240, 230, 280, { couleur: 'blanc', largeur: 2 });
+  c.texte('L', 252, 200, { couleur: 'blanc', taille: 18 });
+  c.texte('la bobine stocke', PC.x + 20, 320, { couleur: 'faible', taille: 16 });
+  c.texte('de l’énergie quand i passe', PC.x + 20, 342, { couleur: 'faible', taille: 16 });
+  c.pause(.3);
+  c.texte('Données :', X, 82, { couleur: 'cyan', taille: 18 });
+  c.texte('L = 0,2 H', X + 10, 112, { couleur: 'blanc', taille: 19 });
+  c.texte('I_0 = 0,5 A (régime permanent)', X + 10, 140, { couleur: 'blanc', taille: 19, max: PG.w - 40 });
+  marque(c, 'donnees');
+  c.pause(.4);
+  c.texte('E_m = ½·L·I_0²', X, 190, { couleur: 'blanc', taille: 22 });
+  c.texte('E_m = ½ × 0,2 × 0,5²', X, 228, { couleur: 'blanc', taille: 20 });
+  c.texte('E_m = 0,1 × 0,25', X, 262, { couleur: 'faible', taille: 18 });
+  marque(c, 'calcul');
+  c.pause(.4);
+  c.texte('E_m = 0,025 J', X, 312, { couleur: 'vert', taille: 24 });
+  c.rect(X - 6, 286, 168, 38, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  c.texte('soit 2,5·10⁻² J', X, 350, { couleur: 'faible', taille: 16 });
+  c.texte('I_0 double → E_m × 4 (I_0 au carré)', X, 384, { couleur: 'faible', taille: 15, max: PG.w - 30 });
+  marque(c, 'resultat');
+}
+function declarerReperes(c) {
+  const ici = v => (S.vue === v ? '' : ` (vue « ${v} »)`);
+  if (S.vue === 'barre') {
+    c.repere('bobine', CI.b - 80, CI.bob1 - 20, 120, CI.bob2 - CI.bob1 + 50, 'la bobine (L = 0,12 H, r = 10 Ω) et son symbole');
+    c.repere('resistance', CI.r1 - 8, CI.h - 40, CI.r2 - CI.r1 + 16, 60, 'la résistance R : elle chauffe à la rupture (effet Joule)');
+    c.repere('barre', BAR.ax - 10, G.y - G.h - 30, BAR.x + BAR.w - BAR.ax + 20, G.h + 40, 'la barre E_m = ½·L·i² (en 10⁻⁴ J), maximum 6·10⁻⁴ J');
+    c.repere('courbe', G.x, PY(I0), G.w, G.y - PY(I0), 'la courbe i(t) : montée en vert (K en 1), descente en bleu (K en 2)');
+    c.repere('formule', PG.x + 8, 334, 150, 26, 'E_m = ½·L·i²');
+    c.repere('calcul', PG.x + 8, 366, PG.w - 16, 26, 'E_m max = ½·L·I₀² = ½ × 0,12 × 0,1²');
+    c.repere('resultat', PG.x + 8, 366, PG.w - 16, 26, 'E_m max = 6·10⁻⁴ J');
+  } else {
+    const X = PG.x + 14;
+    c.repere('bobine', 50, 110, 220, 180, 'la bobine : L = 0,2 H');
+    c.repere('formule', X - 6, 168, 170, 30, 'E_m = ½·L·I₀²');
+    c.repere('calcul', X - 6, 206, 250, 64, 'E_m = ½ × 0,2 × 0,5² = 0,1 × 0,25');
+    c.repere('resultat', X - 6, 286, 168, 38, 'E_m = 0,025 J');
+    for (const id of ['barre', 'courbe', 'resistance']) c.repere(id, X - 6, 64, 200, 90, { barre: 'la barre E_m', courbe: 'la courbe i(t)', resistance: 'la résistance qui chauffe' }[id] + ici('barre'));
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  return S.vue === 'barre'
+    ? 'La bobine stocke E_m = ½·L·i² pendant que i monte : au maximum ½·L·I₀² = ½ × 0,12 × 0,1² = 6·10⁻⁴ J. À la rupture, cette énergie devient de la chaleur dans R et r (effet Joule).'
+    : 'E_m = ½·L·I₀² = ½ × 0,2 × 0,5² = 0,025 J.';
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  monte: 'K en 1 : i monte, la barre E_m monte', maximum: 'E_m max = ½·L·I₀² = 6·10⁻⁴ J', vide: 'K en 2 : la barre se vide, R chauffe',
+  donnees: 'L = 0,2 H ; I₀ = 0,5 A', calcul: 'E_m = ½ × 0,2 × 0,5²', resultat: 'E_m = 0,025 J', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`];
+  const Lg = [];
+  if (S.vue === 'barre') {
+    const et = etatCircuit({ t: S.t }), e = Em(et.i);
+    m.push('Circuit : E = 6 V, K à deux positions, R = 50 Ω, bobine L = 0,12 H, r = 10 Ω (I₀ = 0,1 A, τ = 2 ms). Graphe i(t) : t (ms) de 0 à 24, i (mA) de 0 à 120 ; barre E_m en 10⁻⁴ J de 0 à 7.');
+    Lg.push(`circuit peint (générateur, résistor, bobine de cuivre et son symbole), K en ${et.phase === 'vide' || S.t >= (M._k2 ?? 1e9) ? '2' : '1'}`);
+    if (et.phase !== 'avant') Lg.push(`à t = ${fr(et.t, 1)} ms : i = ${fr(et.i * 1000, 0)} mA, barre E_m = ${fr(e * 1e4, 2)}·10⁻⁴ J`);
+    if (vu('monte')) Lg.push('courbe verte i(t) qui monte vers 100 mA ; la barre verte a monté comme i² ; « E_m = ½·L·i² »');
+    if (vu('maximum')) Lg.push('trait « max » en haut de la barre ; « E_m max = ½·L·I₀² = ½ × 0,12 × 0,1² = 6·10⁻⁴ J »');
+    if (vu('vide')) Lg.push('K en 2 : courbe bleue i(t) qui descend vers 0, la barre bleue s’est vidée, la résistance a rougi : « chaleur : effet Joule » ; « E_m se vide : elle devient chaleur dans R et r »');
+  } else {
+    Lg.push('bobine peinte (spires de cuivre, noyau de fer) et son symbole L');
+    if (vu('donnees')) Lg.push('« Données : L = 0,2 H ; I₀ = 0,5 A (régime permanent) »');
+    if (vu('calcul')) Lg.push('« E_m = ½·L·I₀² = ½ × 0,2 × 0,5² = 0,1 × 0,25 »');
+    if (vu('resultat')) Lg.push('« E_m = 0,025 J » (encadré), soit 2,5·10⁻² J ; « I₀ double → E_m × 4 »');
+  }
+  m.push(`Au tableau : ${Lg.join(' ; ')}.`);
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(S.vue === 'barre' ? 'K en 1 : le courant va s’établir…' : 'On calcule l’énergie stockée…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; M = {}; calculer(); pont.noter('set_parameters', { vue: S.vue }); start(); return; }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+window.Tableau.explication({
+  barre: [
+    { repere: 'courbe', texte: 'K en 1 : le courant s’établit.' },
+    { repere: 'barre', texte: 'La bobine stocke de l’énergie : E_m = ½·L·i² monte avec i.' },
+    { repere: 'calcul', texte: 'Au maximum : ½ × 0,12 × 0,1² = 6·10⁻⁴ J.' },
+    { repere: 'resistance', texte: 'K en 2 : la barre se vide, l’énergie devient de la chaleur dans les résistances.' },
+  ],
+  calcul: [
+    { repere: 'formule', texte: 'E_m = ½·L·I₀² au régime permanent.' },
+    { repere: 'calcul', texte: '½ × 0,2 × 0,5² = 0,1 × 0,25.' },
+    { repere: 'resultat', texte: 'E_m = 0,025 J.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'dipole_rl_energie', version: '1.0', title: 'L’énergie de la bobine', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'barre | calcul (change la vue et la retrace depuis le début)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'barre : monte | maximum | vide | fin ; calcul : donnees | calcul | resultat | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Énergie stockée dans une bobine : E_m = ½·L·i². Pendant l’établissement (E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H), E_m monte jusqu’à ½·L·I₀² = ½ × 0,12 × 0,1² = 6·10⁻⁴ J ; à la rupture, elle devient de la chaleur dans les résistances (effet Joule). Calcul : L = 0,2 H, I₀ = 0,5 A → E_m = ½ × 0,2 × 0,5² = 0,025 J.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: S.vue === 'barre' ? { vue: S.vue, L_H: L, I0_A: I0, Em_max_J: +EMAX.toPrecision(4) } : { vue: S.vue, L_H: .2, I0_A: .5, Em_J: .025 }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('L’énergie de la bobine…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
