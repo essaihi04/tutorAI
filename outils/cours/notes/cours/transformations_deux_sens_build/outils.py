@@ -82,7 +82,8 @@ def controler_voix(id, t, quoi):
 
 def controler_mots_interdits(id, t):
     for mot in HORS_CADRE:
-        if mot.lower() in t.lower():
+        court = len(mot) <= 4   # Qr, Ka, Ke, pKa… : mot entier seulement (sinon « ke » dans « stockée »)
+        if (re.search(r"(?<![\w])" + re.escape(mot) + r"(?![\w])", t) if court else mot.lower() in t.lower()):
             ERREURS.append(f"{id}: mot hors cadre « {mot} » dans « {t[:70]} »")
     for terme, rx in A_NE_PAS_DIRE:
         if rx.search(t):
