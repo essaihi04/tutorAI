@@ -9,6 +9,10 @@ la variante du tuteur, exercice ou question du cours). On en tire, par compéten
   - le trajet : ce qui a été essayé, dans l'ordre, et avec quelle méthode ;
   - les méthodes qui marchent avec CET élève (taux de réussite par méthode) et, pour chaque lacune, la méthode
     avec laquelle la reprendre (la mieux réussie chez lui, différente de celle qui a échoué).
+Une question de PRÉDICTION (`type: "prediction"`, posée avant l'explication, 11 novembre 2026) est gardée dans le
+trajet mais n'entre ni dans le score ni dans les méthodes : se tromper en prévoyant n'est pas une erreur de compétence.
+Une question PASSÉE (bouton « Passer », `passee: true` et `correct: null`, 12 novembre 2026) est notée « passee » : ni
+réussie ni une erreur, hors score et hors méthodes, jamais acquise, sans reprise ; la compétence compte ses `passees`.
 Le bilan nourrit le mode libre (`bloc_prompt`) et la préparation du cours suivant (`lacunes`).
 
 Stockage : un fichier JSONL par élève dans `data/suivi_acquis/` (aucune table avant la validation de
@@ -71,8 +75,9 @@ def methodes_de(evenement: dict) -> list[str]:
 
 
 def score_question(tentatives: list[dict]) -> Optional[float]:
-    """1 : juste du premier coup ; 0,5 : juste au 2e essai ; 0 : jamais juste ; None : rien de jugeable."""
-    juges = [t for t in tentatives if t.get("correct") is not None]
+    """1 : juste du premier coup ; 0,5 : juste au 2e essai ; 0 : jamais juste ; None : rien de jugeable.
+    Une question PASSÉE (`passee: true`, bouton « Passer ») n'est pas jugée : ni réussie, ni une erreur."""
+    juges = [t for t in tentatives if t.get("correct") is not None and not t.get("passee")]
     if not juges:
         return None
     for t in sorted(juges, key=lambda x: x.get("tentative", 1)):
@@ -155,19 +160,23 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
     labels = {c["id"]: c.get("label", c["id"]) for c in comps}
     # question → tentatives
     questions: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    predictions: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for e in evenements:
-        questions[(e.get("slide_id", ""), e.get("cle", "q"))].append(e)
+        cible = predictions if e.get("type") == "prediction" else questions
+        cible[(e.get("slide_id", ""), e.get("cle", "q"))].append(e)
     # `dit` : le nom de la compétence tel que la voix le dit (sans symbole), pour que le tuteur nomme les lacunes à voix haute
-    par_comp: dict[str, dict] = {c["id"]: {"id": c["id"], "label": labels[c["id"]], "dit": c.get("dit") or "", "questions": [], "trajet": []} for c in comps}
+    par_comp: dict[str, dict] = {c["id"]: {"id": c["id"], "label": labels[c["id"]], "dit": c.get("dit") or "", "questions": [], "predictions": [], "trajet": []} for c in comps}
     reussites: dict[str, list[float]] = defaultdict(list)
     for (slide_id, cle), tent in questions.items():
         sc = score_question(tent)
         premier = min(tent, key=lambda t: t.get("tentative", 1))
         meths = methodes_de(premier)
         cibles = (premier.get("competence_ids") or par_diapo.get(slide_id) or [])
+        # passée sans réponse jugée : statut à part (pas une erreur, pas acquise, pas de reprise, hors score)
+        passee = sc is None and any(t.get("passee") for t in tent)
         q = {"slide_id": slide_id, "slide_title": premier.get("slide_title", ""), "cle": cle, "enonce": premier.get("enonce", ""),
-             "score": sc, "statut": statut(sc), "methodes": meths,
-             "essais": [{"tentative": t.get("tentative", 1), "reponse": t.get("reponse", ""), "correct": t.get("correct")} for t in sorted(tent, key=lambda t: t.get("tentative", 1))]}
+             "score": sc, "statut": "passee" if passee else statut(sc), "methodes": meths, "passee": passee,
+             "essais": [{"tentative": t.get("tentative", 1), "reponse": t.get("reponse", ""), "correct": t.get("correct"), "passee": bool(t.get("passee"))} for t in sorted(tent, key=lambda t: t.get("tentative", 1))]}
         if sc is not None:
             for mth in meths:
                 reussites[mth].append(sc)
@@ -175,12 +184,24 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
             if cid in par_comp:
                 par_comp[cid]["questions"].append(q)
                 par_comp[cid]["trajet"].append(f"{q['slide_title'] or slide_id} : {q['statut']} ({', '.join(NOMS_METHODES.get(m, m) for m in meths[:3])})")
+    # Les prédictions : notées pour le trajet (ce que l'élève pensait avant l'explication), jamais dans le score.
+    for (slide_id, cle), tent in predictions.items():
+        premier = min(tent, key=lambda t: t.get("tentative", 1))
+        juste = premier.get("correct")
+        p = {"slide_id": slide_id, "slide_title": premier.get("slide_title", ""), "cle": cle, "enonce": premier.get("enonce", ""),
+             "reponse": premier.get("reponse", ""), "juste_du_premier_coup": juste}
+        for cid in (premier.get("competence_ids") or par_diapo.get(slide_id) or []):
+            if cid in par_comp:
+                par_comp[cid]["predictions"].append(p)
+                verdict = "juste" if juste else "fausse" if juste is False else "non jugée"
+                par_comp[cid]["trajet"].append(f"{p['slide_title'] or slide_id} : prédiction {verdict} (avant l'explication, non notée)")
     taux = {m: round(sum(v) / len(v), 2) for m, v in reussites.items() if v}
     marchent = [m for m, _ in sorted(taux.items(), key=lambda kv: -kv[1]) if taux[m] >= SEUIL_ACQUIS]
     for c in par_comp.values():
         scores = [q["score"] for q in c["questions"] if q["score"] is not None]
         c["score"] = round(sum(scores) / len(scores), 2) if scores else None
         c["statut"] = statut(c["score"])
+        c["passees"] = sum(1 for q in c["questions"] if q.get("passee"))
         if c["statut"] in ("non_acquis", "partiel"):
             ratees = {m for q in c["questions"] if q["score"] is not None and q["score"] < SEUIL_ACQUIS for m in q["methodes"]}
             c["methodes_qui_ont_echoue"] = sorted(ratees)

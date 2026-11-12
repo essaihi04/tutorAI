@@ -58,3 +58,18 @@ def test_enregistrer_et_relire(tmp_path, monkeypatch):
     sa.enregistrer("eleve-1", {**ev("s3", "q", 1, False), "deck_id": "autre"})
     assert len(sa.lire("eleve-1")) == 2 and len(sa.lire("eleve-1", "d1")) == 1 and sa.lire("eleve-2") == []
     assert sa.lire("eleve-1")[0]["quand"]
+
+
+def test_une_prediction_fausse_ne_compte_pas_dans_le_score():
+    pred = {**ev("s1", "q", 1, False), "type": "prediction", "methodes": {"visuel": "prediction", "prediction": True}}
+    evs = [pred, {**pred, "tentative": 2}, ev("s2", "e0", 1, True, exercice=True)]
+    b = sa.bilan(evs, DECK)
+    c1 = b["competences"][0]
+    # seule la question notée compte : la compétence reste acquise malgré la prédiction fausse
+    assert c1["statut"] == "acquis" and c1["score"] == 1.0 and len(c1["questions"]) == 1
+    assert len(c1["predictions"]) == 1 and c1["predictions"][0]["juste_du_premier_coup"] is False
+    assert any("prédiction fausse" in t for t in c1["trajet"])
+    assert "prediction" not in b["taux_par_methode"]
+    # une compétence qui n'a qu'une prédiction reste non évaluée
+    b2 = sa.bilan([pred], DECK)
+    assert b2["competences"][0]["statut"] == "non_evalue" and b2["competences"][0]["score"] is None
