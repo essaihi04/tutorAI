@@ -197,6 +197,21 @@ function attention(c, x, y, o = {}) {
 }
 
 
+/* Indice après une parenthèse (« (dx/dt)₀ ») : le kit ne le découpe que derrière une lettre ; on passe alors par l’écriture
+ * à indices d’exposants.js (qui utilise le découpage « _{…} » ci-dessus). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim(s);
+    if (!/[^A-Za-zτθΔλωφ_]_\{/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
 /* ── Le graphe x(t) de l’exemple A (modèle POUR LE CALCUL : x(t) = 2,0·(1 − e^(−t/8)) mmol, jamais écrit à l’écran) ──── */
 const G = { x0: 70, y0: 300, w: 400, h: 230 };
 const GA = { tmax: 40, dt: 5, ymax: 2.5, dy: .5, nom: 'x (mmol)', dec: 1 };

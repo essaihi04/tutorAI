@@ -197,6 +197,21 @@ function attention(c, x, y, o = {}) {
 }
 
 
+/* Indice après une parenthèse (« (dx/dt)₀ ») : le kit ne le découpe que derrière une lettre ; on passe alors par l’écriture
+ * à indices d’exposants.js (qui utilise le découpage « _{…} » ci-dessus). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim(s);
+    if (!/[^A-Za-zτθΔλωφ_]_\{/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
 /* ── Le graphe x(t) de l’exemple A (modèle POUR LE CALCUL : x(t) = 2,0·(1 − e^(−t/8)) mmol, jamais écrit à l’écran) ──── */
 const G = { x0: 70, y0: 300, w: 400, h: 230 };
 const GA = { tmax: 40, dt: 5, ymax: 2.5, dy: .5, nom: 'x (mmol)', dec: 1 };
@@ -437,7 +452,7 @@ function dessiner(c, M) {
       if (M.commence('deux_points')) {
         c.point(X(tB), Y(2), 5, 'vert');
         c.texte(`A (${dmin(tA)} ; ${lu(tA)})`, X(t) + 26, yLabA, { couleur: 'vert', taille: 16 });
-        c.texte(`B (${dmin(tB)} ; 2,0)`, X(tB), Y(2) - 12, { couleur: 'vert', taille: 16, align: 'center' });
+        c.texte(`B (${dmin(tB)} ; 2,0)`, X(tB) - 8, Y(2) - 12, { couleur: 'vert', taille: 16, align: 'right' });
       }
       if (M.commence('pente')) {
         c.texte(`= (2,0 − ${lu(tA)}) / (${dmin(tB)} − ${dmin(tA)})`, PX, 150, { couleur: 'blanc', ...P });
@@ -567,7 +582,7 @@ function dessiner(c, M) {
     vues = zoneEcriture(c, M, [
       { nom: 'axes', lignes: [['même mélange (exemple A), à 20 °C et à 40 °C', 'blanc']], plus: () => axes(c) },
       { nom: 'courbe_20', lignes: [['à 20 °C : la courbe de l’exemple A', 'bleu']], plus: () => c.texte('20 °C', X(18.4) + 7, Y(1.8) + 14, { couleur: 'bleu', taille: 16 }) },
-      { nom: 'courbe_40', lignes: [['à 40 °C : la courbe monte bien plus vite', 'rouge']], plus: () => c.texte('40 °C', X(6.2) + 7, Y(1.8) + 14, { couleur: 'rouge', taille: 16 }) },
+      { nom: 'courbe_40', lignes: [['à 40 °C : la courbe monte bien plus vite', 'rouge']], plus: () => c.texte('40 °C', X(11), Y(1.74), { couleur: 'rouge', taille: 16 }) },
       { nom: 'tangentes', lignes: [['tangentes à l’origine : pentes 0,25 mmol/min (20 °C) et 0,75 mmol/min (40 °C)', 'vert']], plus: () => {
         c.texte('tangentes à l’origine :', PX, 84, { couleur: 'vert', ...P });
         c.texte('20 °C : pente 0,25 mmol/min', PX, 108, { couleur: 'bleu', ...P });
@@ -640,7 +655,7 @@ function reperes(c, M) {
     R('point_contact', X(t) - 12, Y(xt) - 12, 24, 24, `le point de contact, à t = ${dmin(t)} min (x = ${lu(t)} mmol)${q('point')}`);
     R('tangente', rx - 4, ry - 4, rw + 8, Math.max(16, rh + 8), `la tangente verte à t = ${dmin(t)} min${q('tangente')}`);
     R('point_A', X(t) - 10, Y(xt) - 10, 120, Math.min(Y(xt) + 18, G.y0 - 6) - Y(xt) + 16, `le point A (${dmin(t)} ; ${lu(t)})${q('deux_points')}`);
-    R('point_B', X(t + 8) - 46, Y(2) - 30, 92, 40, `le point B (${dmin(t + 8)} ; 2,0)${q('deux_points')}`);
+    R('point_B', X(t + 8) - 90, Y(2) - 30, 100, 40, `le point B (${dmin(t + 8)} ; 2,0)${q('deux_points')}`);
     R('pente', PX - 6, 64, 252, 132, `la pente = Δx/Δt ≈ ${fp(pA(t))} mmol/min${q('pente')}`);
   } else if (v === 'calcul') {
     R('relation', 24, 60, 420, 32, 'la relation v(t) = (1/V)·dx/dt');
