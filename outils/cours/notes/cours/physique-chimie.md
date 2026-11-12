@@ -505,6 +505,7 @@ contrat : cours/acides_bases_contrat_simulations.md ; tout refaire : `sh outils/
   base (4), acidite (5), comparer (7), predominance (5 ; poignée pH en domaines et distribution), dosage (6 ; poignée V_B en courbe), exploiter (6),
   figures (?fig=fig_2025R|fig_2016N|fig_2022R|fig_2022N|fig_2024R), bilan, carte. node --check OK (10 pages + kit) ; chaque page testée headless par son agent
   (moments, repères, poignées aux deux bouts, hors cadre, captures regardées).
+- Vérification au navigateur (verif_sims.js, Playwright, diapositive par diapositive) : 48/48 ok, « AUCUN PROBLÈME » (moments, repères, encre, pas d'erreur JS, rien hors cadre).
 - programme_semestre1 : acides_bases → « construit », phys_ch13_acides_bases (prog.py).
 - PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
 - Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Le semestre 1 de physique-chimie est entièrement construit.
