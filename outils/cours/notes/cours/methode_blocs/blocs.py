@@ -70,11 +70,12 @@ def protege(s):
     q.pop("prompt", None)        # l'énoncé peut être réécrit pour une prédiction (jamais le texte dit)
     q.pop("reponses", None)
     q.pop("demonstration", None)
+    q.pop("enonce_dit", None)    # énoncé lu, ajouté plus tard par la session principale (12 nov.)
     return {
         "speech_text": h(s.get("speech_text")),
         "paroles": {c: h(p) for c, p in paroles(s)},
         "question": h(q),
-        "exercises": h([{k: v for k, v in e.items() if k != "demonstration"} for e in s.get("exercises") or []]),
+        "exercises": h([{k: v for k, v in e.items() if k not in ("demonstration", "enonce_dit")} for e in s.get("exercises") or []]),
     }
 
 
