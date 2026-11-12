@@ -186,6 +186,8 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
   ~260 mots français rares = termes du programme (désintégration, nucléide, becquerel, positon, polonium, tritium…), gardés.
   Réactions : items seulement → radioactivite_build/items_cours.json (275), items_blocs.json (142), demos_blocs.json (9 démonstrations).
   node --check : OK (scripts des 10 pages + commun.js, exposants.js, noyaux.js). programme_semestre1 : radioactivite → « construit ».
+  Navigateur headless (Playwright/Chromium, script node de la routine) sur les 52 diapositives : AUCUN PROBLÈME (chaque moment play_until
+  existe et se joue, chaque repère cité existe, encre, pas d'erreur JS, rien hors cadre).
   Exploration : déjà faite (10 audits) ; vidéos non réauditées depuis le cloud.
   PRÊT POUR LA VOIX : OUI (52 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord sur le serveur (items) puis à dire.
   À valider (radioactivite, en plus des décisions de l'exploration) : 6 parties (I noyau 11, II désintégrations 12, III loi 12, IV activité
