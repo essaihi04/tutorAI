@@ -61,7 +61,8 @@ jamais la même phrase. 5 à 8 phrases, puis tu annonces une question.
 {sim}
 
 Puis pose une question JUMELLE de type « {genre} » : même compétence, autre forme ou autres valeurs, jamais la même
-question. Énoncé et choix en français écrit, avec les valeurs et unités.
+question. Énoncé et choix ÉCRITS comme au tableau : relations en écriture mathématique (« g(x) = (2x² − 8)/(x − 2) »,
+« lim_{{x→2}} g(x) »), nombres en chiffres (« 8 », pas « huit »), unités en symboles — jamais en toutes lettres.
 
 {REGLES_VOIX}
 
