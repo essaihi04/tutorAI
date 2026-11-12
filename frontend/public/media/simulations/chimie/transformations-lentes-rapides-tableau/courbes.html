@@ -208,7 +208,7 @@ const GR = {
   temperature: { tmax: 30, dt: 5, ymax: 2.5, dy: .5, nom: 'n(I₂) (mmol)', unite: 'mmol', nf: 2, dec: 1,
     courbes: { courbe_froid: { tau: 6, nf: 2, couleur: 'bleu', tag: '20 °C' }, courbe_chaud: { tau: 2, nf: 2, couleur: 'rouge', tag: '40 °C' } } },
   concentration: { tmax: 30, dt: 5, ymax: 4.5, dy: 1, nom: 'n(I₂) (mmol)', unite: 'mmol', nf: 2, dec: 0,
-    courbes: { courbe_dilue: { tau: 6, nf: 2, couleur: 'bleu', tag: '0,1 mol/L' }, courbe_concentre: { tau: 3, nf: 2, couleur: 'violet', tag: '0,2 mol/L' },
+    courbes: { courbe_dilue: { tau: 6, nf: 2, couleur: 'bleu', tag: '0,1 mol/L' }, courbe_concentre: { tau: 3, nf: 2, couleur: 'violet', tag: '0,2 mol/L', tagDessus: true },
       courbe_piege: { tau: 4, nf: 4, couleur: 'orange', tag: null, pointille: [7, 6] } } },
   catalyseur: { tmax: 40, dt: 10, ymax: .4, dy: .1, nom: 'x (mol)', unite: 'mol', nf: .3, dec: 1,
     courbes: { courbe_C2: { tau: 8, nf: .3, couleur: 'bleu', tag: '(C₂)' }, courbe_C1: { tau: 2, nf: .3, couleur: 'vert', tag: '(C₁)' } } },
@@ -280,7 +280,11 @@ function trace(c, id, p) {
   c.courbe(u => [X(u * p * gr().tmax), Y(nDe(k, u * p * gr().tmax))], Math.max(12, Math.round(90 * p)), { couleur: k.couleur, largeur: 2.6, pointille: k.pointille });
 }
 /** Étiquette d’une courbe : juste à droite du point où elle atteint 90 % de son palier (là, les courbes sont bien séparées). */
-function tagXY(id) { const k = gr().courbes[id], t9 = k.tau * Math.LN10; return [X(t9) + 7, Y(.9 * k.nf) + 6]; }
+function tagXY(id) {
+  const k = gr().courbes[id], t9 = k.tau * Math.LN10;
+  if (k.tagDessus) return [X(2 * k.tau), Y(k.nf) - 8];   // courbes trop proches en dessous : l’étiquette passe au-dessus du palier
+  return [X(t9) + 7, Y(.9 * k.nf) + (MO.S.vue === 'lecture' ? 7 : 12)];
+}
 function tag(c, id) { const k = gr().courbes[id], [x, y] = tagXY(id); c.texte(k.tag, x, y, { couleur: k.couleur, taille: 16 }); }
 /** Palier : trait pointillé et sa valeur. */
 function palier(c, nf, texte, col = 'jaune') {
@@ -293,7 +297,7 @@ function debuts(c, ids, L = 46) {
     const k = gr().courbes[id], dx = 1 / gr().tmax * G.w, dy = k.nf / k.tau / gr().ymax * G.h, n = Math.hypot(dx, dy);
     c.ligne(G.x0, G.y0, G.x0 + dx / n * L, G.y0 - dy / n * L, { couleur: 'jaune', largeur: 2.4 });
   }
-  c.cercle(G.x0 + 8, G.y0 - 18, 30, { couleur: 'jaune', largeur: 1.6 });
+  c.cercle(G.x0 + 14, G.y0 - 16, 24, { couleur: 'jaune', largeur: 1.6 });
 }
 function dessiner(c, M) {
   MO = M; M.scene.cadre(53);
