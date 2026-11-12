@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’établissement du courant i(t) — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, la courbe i(t) de l’établissement du courant dans un dipôle RL tracée à la craie verte (t en ms, i en mA), ou la tension u_b(t) aux bornes de la bobine ; à droite, la colonne « Lecture »"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Établissement du courant dans un dipôle RL (cours « Dipôle RL », 2e Bac PC BIOF, 12 novembre 2026).
+ * Valeurs (exactes) : E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H → I₀ = E/(R + r) = 0,1 A = 100 mA ; τ = L/(R + r) = 2 ms ;
+ * 0,63·I₀ = 63 mA (u_R = 3,15 V) ; à 5τ = 10 ms, i ≈ 0,99·I₀ ; u_b(0) = E = 6 V, u_b(∞) = r·I₀ = 1 V.
+ * Graphe : t en ms (0 à 12 ms, graduations de 1 ms, nombres à 5 et 10 ms : aucun nombre ne tombe sur τ) ; i en mA (0 à 120 mA) ;
+ * u_b en V (0 à 7 V).
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - trace (défaut) : trace, asymptote (I₀ = 100 mA), cinq_tau (5τ = 10 ms : i ≈ 0,99·I₀), fin.
+ *  - tangente : courbe, asymptote, tangente (la tangente à l’origine coupe l’asymptote en t = τ), fin.
+ *  - pourcent : courbe, ligne_63 (0,63·I₀ = 63 mA jusqu’à la courbe), projection (verticale vers l’axe : τ), fin.
+ *  - ub : ub_debut (u_b(0) = E = 6 V), ub_descente (u_b descend), ub_fin (palier r·I₀ = 1 V), fin.
+ * L’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase (play_until s’y fige).
+ * Couleurs : vert = établissement du courant ; jaune = surlignage seulement.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const VUES = {
+  trace: ['trace', 'asymptote', 'cinq_tau', 'fin'],
+  tangente: ['courbe', 'asymptote', 'tangente', 'fin'],
+  pourcent: ['courbe', 'ligne_63', 'projection', 'fin'],
+  ub: ['ub_debut', 'ub_descente', 'ub_fin', 'fin'],
+};
+const TITRES = { trace: 'la courbe et son asymptote', tangente: 'la tangente à l’origine', pourcent: 'la méthode des 63 %', ub: 'la tension u_b(t) de la bobine' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'trace', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '' };
+let M = {}, MM = {};
+const VITESSE = 2;
+
+/* ── Physique (valeurs du cours) ───────────────────────────────────────── */
+const E = 6, R = 50, r = 10, L = 0.12;
+const I0 = E / (R + r) * 1000;                 // mA : 100
+const TAU = L / (R + r) * 1000;                // ms : 2
+const iT = t => I0 * (1 - Math.exp(-t / TAU));             // mA, t en ms
+const ubT = t => E - R * iT(t) / 1000;                       // V : L·di/dt + r·i = E − R·i (de 6 V à 1 V)
+const T63 = -TAU * Math.log(1 - .63);                        // ≈ τ
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
+const O = { x: 66, y: 352 }, AXL = 396, AYL = 268, TMAX = 12, IMAX = 120, UMAX = 7;
+const PX = t => O.x + t * AXL / TMAX;
+const PI_ = i => O.y - i * AYL / IMAX;        // ordonnée d’un courant (mA)
+const PU = u => O.y - u * AYL / UMAX;          // ordonnée d’une tension (V)
+const LX = RL.x + 8, LW = RL.w - 16;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+const courbeI = (c, o = {}) => c.courbe(u => { const t = u * TMAX; return [PX(t), PI_(iT(t))]; }, 90, { couleur: 'vert', largeur: 2.6, duree: 1.6, ...o });
+
+function dessiner(c) {
+  scene.cadre(31); MM = {};
+  const ub = S.vue === 'ub';
+  c.texte(ub ? 'Établissement : u_b(t) aux bornes de la bobine' : `Établissement : i(t) — ${TITRES[S.vue]}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  // Axe des temps : graduations de 1 ms, nombres à 5 et 10 ms (aucun nombre sur τ = 2 ms).
+  const LT = AXL + 16, tg = [];
+  for (let k = 1; k <= TMAX; k++) tg.push([(PX(k) - O.x) / LT, k % 5 === 0 ? String(k) : null]);
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 13 });
+  const LY = AYL + 14, yg = [];
+  if (ub) for (let v = 1; v <= UMAX; v++) yg.push([(O.y - PU(v)) / LY, String(v)]);
+  else for (let v = 10; v <= IMAX; v += 10) yg.push([(O.y - PI_(v)) / LY, v % 20 === 0 ? String(v) : null]);
+  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte(ub ? 'u_b (V)' : 'i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: 16 });
+  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: 16, align: 'right' });
+  lire(c, 64, 'E = 6 V ; R = 50 Ω ; r = 10 Ω', { couleur: 'faible', taille: 14, duree: .6 });
+  lire(c, 84, 'L = 0,12 H', { couleur: 'faible', taille: 14, duree: .3 });
+  c.pause(.3);
+  ({ trace: vueTrace, tangente: vueTangente, pourcent: vuePourcent, ub: vueUb })[S.vue](c);
+  c.pause(.8); marque(c, 'fin');
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+function etiquetteTau(c, t, txt = 'τ') {
+  c.cercle(PX(t), O.y, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.texte(txt, PX(t), O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+}
+function asymptote(c) {
+  c.ligne(O.x, PI_(I0), PX(TMAX), PI_(I0), { couleur: 'blanc', largeur: 1.6, pointille: [8, 6] });
+  c.texte('I_0 = 100 mA', PX(8.8), PI_(I0) - 10, { couleur: 'blanc', taille: 15, align: 'right' });
+}
+/** Vue « trace » : la courbe se trace, l’asymptote I₀, puis 5τ. */
+function vueTrace(c) {
+  courbeI(c);
+  lire(c, 120, 'i(t) = I_0(1 − e^{−t/τ})', { couleur: 'vert', taille: 18 });
+  lire(c, 144, 'i part de 0 et monte', { couleur: 'faible', taille: 15 });
+  marque(c, 'trace');
+  c.pause(.4);
+  asymptote(c);
+  lire(c, 180, 'asymptote : i → I_0', { couleur: 'blanc', taille: 16 });
+  lire(c, 206, 'I_0 = E/(R + r) = 6/60', { couleur: 'blanc', taille: 15 });
+  lire(c, 228, 'I_0 = 0,1 A = 100 mA', { couleur: 'blanc', taille: 15 });
+  marque(c, 'asymptote');
+  c.pause(.4);
+  const x5 = PX(5 * TAU), y99 = PI_(.99 * I0);
+  c.ligne(x5, O.y, x5, PI_(112), { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
+  c.cercle(x5, y99, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.texte('5τ', x5, O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+  c.texte('i ≈ 0,99·I_0', x5 + 8, PI_(85), { couleur: 'cyan', taille: 15 });
+  c.texte('régime transitoire', (O.x + x5) / 2 + 40, O.y - 24, { couleur: 'faible', taille: 14, align: 'center' });
+  c.texte('permanent', x5 + 8, O.y - 24, { couleur: 'cyan', taille: 14 });
+  lire(c, 266, 'τ = L/(R + r) = 0,12/60', { couleur: 'faible', taille: 15 });
+  lire(c, 288, 'τ = 2 ms', { couleur: 'faible', taille: 15 });
+  lire(c, 322, 'à 5τ = 10 ms :', { couleur: 'cyan', taille: 17 });
+  lire(c, 346, 'i ≈ 0,99·I_0 ≈ 99 mA', { couleur: 'cyan', taille: 17 });
+  lire(c, 372, 'régime permanent', { couleur: 'cyan', taille: 15 });
+  marque(c, 'cinq_tau');
+}
+/** Vue « tangente » : asymptote, tangente à l’origine qui la coupe en t = τ. */
+function vueTangente(c) {
+  courbeI(c);
+  lire(c, 120, 'i(t) = I_0(1 − e^{−t/τ})', { couleur: 'vert', taille: 18 });
+  marque(c, 'courbe');
+  c.pause(.4);
+  asymptote(c);
+  lire(c, 156, 'asymptote : i = I_0 = 100 mA', { couleur: 'blanc', taille: 15 });
+  marque(c, 'asymptote');
+  c.pause(.4);
+  c.ligne(O.x, O.y, PX(TAU * 1.12), PI_(I0 * 1.12), { couleur: 'cyan', largeur: 2.2 });
+  c.ligne(PX(TAU), PI_(I0), PX(TAU), O.y, { couleur: 'cyan', largeur: 1.5, pointille: [4, 5] });
+  c.cercle(PX(TAU), PI_(I0), 5, { couleur: 'cyan', largeur: 1.8 });
+  etiquetteTau(c, TAU, 't = τ');
+  lire(c, 194, 'la tangente à l’origine', { couleur: 'cyan' });
+  lire(c, 216, 'coupe l’asymptote en t = τ', { couleur: 'cyan' });
+  lire(c, 256, 'on lit τ ≈ 2 ms', { couleur: 'blanc', taille: 19 });
+  c.rect(LX - 4, 234, 140, 32, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  lire(c, 296, 'τ = L/(R + r) = 0,12/60', { couleur: 'faible', taille: 14 });
+  lire(c, 318, 'τ = 2·10⁻³ s = 2 ms', { couleur: 'faible', taille: 14 });
+  marque(c, 'tangente');
+}
+/** Vue « pourcent » : 0,63·I₀ = 63 mA jusqu’à la courbe, puis la verticale vers l’axe des temps : τ. */
+function vuePourcent(c) {
+  const y63 = PI_(.63 * I0), x63 = PX(T63);
+  courbeI(c);
+  lire(c, 120, 'i(t) = I_0(1 − e^{−t/τ})', { couleur: 'vert', taille: 18 });
+  marque(c, 'courbe');
+  c.pause(.4);
+  c.ligne(O.x, y63, x63, y63, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
+  c.cercle(x63, y63, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.texte('0,63·I_0', x63 + 12, y63 + 22, { couleur: 'cyan', taille: 15 });
+  lire(c, 156, 'à t = τ : i = 0,63·I_0', { couleur: 'blanc', taille: 16 });
+  lire(c, 186, '0,63 × 100 = 63 mA', { couleur: 'cyan', taille: 19 });
+  lire(c, 210, 'horizontale jusqu’à la courbe', { couleur: 'faible', taille: 14 });
+  lire(c, 232, '(u_R = R·i = 3,15 V)', { couleur: 'faible', taille: 14 });
+  marque(c, 'ligne_63');
+  c.pause(.4);
+  c.ligne(x63, y63, x63, O.y, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
+  etiquetteTau(c, T63);
+  lire(c, 266, 'puis verticale vers l’axe', { couleur: 'faible', taille: 14 });
+  lire(c, 298, 'τ ≈ 2 ms', { couleur: 'blanc', taille: 21 });
+  c.rect(LX - 4, 274, 100, 34, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'projection');
+}
+/** Vue « ub » : u_b(0) = E = 6 V, descente, palier r·I₀ = 1 V. */
+function vueUb(c) {
+  c.cercle(O.x, PU(E), 6, { couleur: 'vert', largeur: 2.4 });
+  c.ligne(O.x, PU(E), O.x + 26, PU(E), { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+  c.texte('E = 6 V', O.x + 14, PU(E) - 12, { couleur: 'vert', taille: 16 });
+  lire(c, 120, 'u_b = L·di/dt + r·i', { couleur: 'blanc', taille: 18 });
+  lire(c, 150, 'à t = 0 : i = 0 et u_R = 0', { couleur: 'faible', taille: 15 });
+  lire(c, 174, 'u_b(0) = E = 6 V', { couleur: 'vert', taille: 17 });
+  marque(c, 'ub_debut');
+  c.pause(.4);
+  c.courbe(u => { const t = u * TMAX; return [PX(t), PU(ubT(t))]; }, 90, { couleur: 'vert', largeur: 2.6, duree: 1.6 });
+  lire(c, 210, 'i monte : u_R = R·i monte,', { couleur: 'faible', taille: 15 });
+  lire(c, 232, 'u_b = E − u_R descend', { couleur: 'vert', taille: 16 });
+  marque(c, 'ub_descente');
+  c.pause(.4);
+  c.ligne(O.x, PU(r * I0 / 1000), PX(TMAX), PU(r * I0 / 1000), { couleur: 'blanc', largeur: 1.6, pointille: [8, 6] });
+  c.texte('r·I_0 = 1 V', PX(TMAX) - 4, PU(1) - 10, { couleur: 'blanc', taille: 15, align: 'right' });
+  lire(c, 268, 'régime permanent : di/dt = 0', { couleur: 'faible', taille: 15 });
+  lire(c, 294, 'u_b = r·I_0 = 10 × 0,1', { couleur: 'blanc', taille: 16 });
+  lire(c, 322, 'u_b = 1 V', { couleur: 'blanc', taille: 20 });
+  c.rect(LX - 4, 300, 92, 32, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  lire(c, 360, 'la bobine agit comme un', { couleur: 'faible', taille: 14 });
+  lire(c, 380, 'résistor de résistance r', { couleur: 'faible', taille: 14 });
+  marque(c, 'ub_fin');
+}
+function declarerReperes(c) {
+  const ub = S.vue === 'ub', ici = (...v) => (v.includes(S.vue) ? '' : ` (vue « ${v[0]} »)`), xm = PX(TMAX);
+  c.repere('axe_t', O.x, O.y - 10, AXL + 18, 58, 'l’axe des temps : t (ms), graduations de 1 ms');
+  c.repere('axe_i', O.x - 44, 50, 76, O.y - 50, ub ? 'l’axe des tensions : u_b (V), de 0 à 7 V' : 'l’axe des courants : i (mA), de 0 à 120 mA');
+  c.repere('courbe', O.x, PI_(I0), xm - O.x, O.y - PI_(I0), `la courbe i(t) = I₀(1 − e^(−t/τ)) : de 0 vers I₀ = 100 mA${ici('trace', 'tangente', 'pourcent')}`);
+  c.repere('asymptote', O.x, PI_(I0) - 14, xm - O.x, 26, `l’asymptote i = I₀ = 100 mA${ici('trace', 'tangente')}`);
+  c.repere('tangente', O.x, PI_(I0 * 1.12), Math.max(24, PX(TAU * 1.12) - O.x), O.y - PI_(I0 * 1.12), `la tangente à l’origine : elle coupe l’asymptote en t = τ = 2 ms${ici('tangente')}`);
+  c.repere('ligne_63', O.x, PI_(63) - 12, PX(T63) - O.x + 12, 24, `0,63·I₀ = 63 mA, horizontale jusqu’à la courbe${ici('pourcent')}`);
+  c.repere('projection', PX(T63) - 12, PI_(63), 24, O.y - PI_(63), `la verticale vers l’axe des temps : τ ≈ 2 ms${ici('pourcent')}`);
+  c.repere('tau', PX(TAU) - 20, O.y - 10, 40, 58, 'τ = L/(R + r) = 2 ms');
+  c.repere('cinq_tau', PX(5 * TAU) - 18, PI_(112), 36, O.y + 48 - PI_(112), `5τ = 10 ms : i ≈ 0,99·I₀${ici('trace')}`);
+  c.repere('courbe_ub', O.x, PU(E), xm - O.x, O.y - PU(E), `la courbe u_b(t) : de E = 6 V à r·I₀ = 1 V${ici('ub')}`);
+  c.repere('point_E', O.x - 14, PU(E) - 14, 28, 28, `u_b(0) = E = 6 V${ici('ub')}`);
+  c.repere('palier_rI0', O.x, PU(1) - 14, xm - O.x, 26, `le palier u_b = r·I₀ = 1 V${ici('ub')}`);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+/** La bulle est du texte HTML : pas de « _ » visible (I_0 → I₀, u_b → ub). */
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  return {
+    trace: 'i(t) = I₀(1 − e^(−t/τ)) monte de 0 vers I₀ = E/(R + r) = 100 mA ; à 5τ = 10 ms, i ≈ 0,99·I₀ : régime permanent.',
+    tangente: 'La tangente à l’origine coupe l’asymptote i = I₀ = 100 mA en t = τ ≈ 2 ms (τ = L/(R + r) = 0,12/60).',
+    pourcent: '0,63 × 100 = 63 mA : horizontale jusqu’à la courbe, verticale vers l’axe des temps : τ ≈ 2 ms.',
+    ub: 'u_b part de E = 6 V (i = 0) et descend vers le palier r·I₀ = 10 × 0,1 = 1 V (régime permanent : di/dt = 0).',
+  }[S.vue];
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  trace: 'la courbe i(t) monte de 0', courbe: 'la courbe i(t) est tracée', asymptote: 'l’asymptote i = I₀ = 100 mA',
+  cinq_tau: 'à 5τ = 10 ms : i ≈ 0,99·I₀', tangente: 'la tangente à l’origine coupe l’asymptote en t = τ',
+  ligne_63: '0,63·I₀ = 63 mA jusqu’à la courbe', projection: 'la verticale vers l’axe des temps : τ ≈ 2 ms',
+  ub_debut: 'u_b(0) = E = 6 V', ub_descente: 'u_b descend', ub_fin: 'le palier u_b = r·I₀ = 1 V', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const ub = S.vue === 'ub';
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`,
+    `Dipôle RL : E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H ; I₀ = E/(R + r) = 100 mA, τ = L/(R + r) = 2 ms. Axes : t (ms) de 0 à 12, graduations de 1 ms (nombres à 5 et 10) ; ${ub ? 'u_b (V) de 0 à 7' : 'i (mA) de 0 à 120, graduations de 10 mA'}.`];
+  const Lg = [];
+  if (S.vue === 'trace') {
+    if (vu('trace')) Lg.push('courbe verte i(t) = I₀(1 − e^(−t/τ)) : elle part de 0, monte vite puis de plus en plus lentement');
+    if (vu('asymptote')) Lg.push('asymptote horizontale en pointillé i = I₀ = 100 mA ; « I₀ = E/(R + r) = 6/60 = 0,1 A »');
+    if (vu('cinq_tau')) Lg.push('trait vertical à 5τ = 10 ms : « i ≈ 0,99·I₀ ≈ 99 mA », régime transitoire avant, régime permanent après ; « τ = L/(R + r) = 2 ms »');
+  } else if (!ub && vu('courbe')) Lg.push('courbe verte i(t) = I₀(1 − e^(−t/τ)), de 0 vers 100 mA');
+  if (S.vue === 'tangente') {
+    if (vu('asymptote')) Lg.push('asymptote horizontale en pointillé i = I₀ = 100 mA');
+    if (vu('tangente')) Lg.push('tangente cyan à l’origine : elle coupe l’asymptote en t = τ ; verticale vers l’axe : on lit τ ≈ 2 ms (encadré)');
+  }
+  if (S.vue === 'pourcent') {
+    if (vu('ligne_63')) Lg.push('0,63 × 100 = 63 mA : horizontale en pointillé jusqu’à la courbe (u_R = 3,15 V)');
+    if (vu('projection')) Lg.push('verticale vers l’axe des temps : τ ≈ 2 ms (encadré)');
+  }
+  if (ub) {
+    if (vu('ub_debut')) Lg.push('point vert u_b(0) = E = 6 V sur l’axe des tensions ; « u_b = L·di/dt + r·i » ; à t = 0, i = 0');
+    if (vu('ub_descente')) Lg.push('courbe verte u_b(t) qui descend de 6 V (u_b = E − u_R)');
+    if (vu('ub_fin')) Lg.push('palier en pointillé u_b = r·I₀ = 10 × 0,1 = 1 V (encadré) : régime permanent, di/dt = 0');
+  }
+  m.push(Lg.length ? `Au tableau : ${Lg.join(' ; ')}.` : 'Seuls les axes sont tracés.');
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(S.vue === 'ub' ? 'La craie trace les axes, puis la tension u_b(t)…' : 'La craie trace les axes, puis la courbe i(t)…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; M = {}; calculer(); pont.noter('set_parameters', { vue: S.vue }); start(); return; }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+window.Tableau.explication({
+  trace: [
+    { repere: 'courbe', texte: 'À la fermeture, i part de 0 : il ne saute pas. Il monte vite, puis de plus en plus lentement.' },
+    { repere: 'asymptote', texte: 'i tend vers I₀ = E/(R + r) = 6/60 = 0,1 A, soit 100 mA.' },
+    { repere: 'cinq_tau', texte: 'À 5τ = 10 ms, i ≈ 0,99·I₀ : c’est le régime permanent.' },
+  ],
+  tangente: [
+    { repere: 'asymptote', texte: 'L’asymptote horizontale : i = I₀ = 100 mA.' },
+    { repere: 'tangente', texte: 'La tangente à l’origine coupe l’asymptote à t = τ.' },
+    { repere: 'tau', texte: 'On descend sur l’axe des temps : τ ≈ 2 ms, et τ = L/(R + r) = 0,12/60 = 2 ms.' },
+  ],
+  pourcent: [
+    { repere: 'ligne_63', texte: '0,63 × 100 = 63 mA : on trace l’horizontale jusqu’à la courbe.' },
+    { repere: 'projection', texte: 'Puis la verticale vers l’axe des temps.' },
+    { repere: 'tau', texte: 'On lit τ ≈ 2 ms.' },
+  ],
+  ub: [
+    { repere: 'point_E', texte: 'À t = 0, i = 0 donc u_R = 0 : u_b = E = 6 V.' },
+    { repere: 'courbe_ub', texte: 'i monte, u_R = R·i monte, donc u_b = E − u_R descend.' },
+    { repere: 'palier_rI0', texte: 'Régime permanent : di/dt = 0, donc u_b = r·I₀ = 10 × 0,1 = 1 V.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'dipole_rl_courbe', version: '1.0', title: 'L’établissement du courant i(t)', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'trace | tangente | pourcent | ub (change la vue et la retrace depuis le début)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'trace : trace | asymptote | cinq_tau | fin ; tangente : courbe | asymptote | tangente | fin ; pourcent : courbe | ligne_63 | projection | fin ; ub : ub_debut | ub_descente | ub_fin | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Établissement du courant dans un dipôle RL : i(t) = I₀(1 − e^(−t/τ)), I₀ = E/(R + r), τ = L/(R + r). Avec E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H : I₀ = 0,1 A = 100 mA, τ = 2 ms ; i(τ) = 0,63·I₀ = 63 mA ; à 5τ = 10 ms, i ≈ 0,99·I₀. La tangente à l’origine coupe l’asymptote i = I₀ en t = τ. u_b = L·di/dt + r·i part de E = 6 V et tend vers r·I₀ = 1 V.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: { vue: S.vue, E_V: E, R_ohm: R, r_ohm: r, L_H: L, I0_mA: +I0.toFixed(3), tau_ms: +TAU.toFixed(3), i63_mA: 63, ub0_V: E, ub_inf_V: +(r * I0 / 1000).toFixed(3) }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('La courbe i(t) va s’écrire…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
