@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Réactions rapides, réactions lentes — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Béchers peints : permanganate violet décoloré aussitôt par les ions fer II et lentement par l’acide oxalique ; eau oxygénée et iodure qui jaunit puis brunit ; thiosulfate et acide qui se trouble sur une croix noire ; flèche du temps instantanée, lente, très lente avec un portail rouillé"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Réactions rapides, réactions lentes : les béchers (cours « Transformations lentes et transformations rapides », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/transformations_lentes_rapides_contrat_simulations.md, § 4.
+ * Vues (?vue=) : comparer (défaut) | lente | soufre | echelle. Toutes à 20 °C, en temps accéléré (chronomètre à la craie).
+ *  - comparer : deux béchers de permanganate acidifié ; ions fer II à gauche (décoloré aussitôt), acide oxalique à droite (≈ 7 min).
+ *  - lente : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O ; incolore → jaune (≈ 2 min) → brun (≈ 12 min) → teinte finale (≈ 40 min) ;
+ *    teinte pour l’œil : avancement relatif 1 − e^(−t/6 min) (même τ que courbes.html, jamais écrit à l’écran).
+ *  - soufre : thiosulfate + acide sur une croix noire ; le trouble de soufre cache la croix vers 2 min.
+ *  - echelle : instantanée / lente / très lente ; le classement dépend des moyens d’observation.
+ * Couleurs du contrat : permanganate #7b2a8c, Mn²⁺ presque incolore, Fe³⁺ jaune-orangé pâle, Fe²⁺ vert très pâle, diiode jaune → brun #8a4b12,
+ * soufre : trouble blanc-jaune. Craie : blanc texte, jaune surlignage.
+ */
+/* ── Moteur du déroulé (modèle : physics/circuit-rlc-tableau/circuit-lc.html, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation, puis la craie écrit ce qu’il faut dire ; le moment `nom` est la fin de cette écriture.
+ * Les durées d’écriture sont mesurées au dessin (calculer). Les parties fixes s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/**
+ * Zone d’écriture : comme au tableau, le professeur efface les plus vieilles lignes. `liste` = [{ nom, lignes: [[texte, couleur], …],
+ * plus(c) }] dans l’ordre des étapes ; on garde les lignes des dernières étapes écrites, au plus `n` lignes (aux hauteurs `ys`).
+ * `plus` (annotations près des objets : cotes, valeurs) s’écrit dans la même étape, et reste au tableau.
+ * Renvoie les lignes visibles (pour ce_qui_se_voit).
+ */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 406, taille = o.taille ?? 16, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) ecrireChim(c, t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });   // l’instant même d’un moment n’efface pas encore ses lignes
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { ecrireChim(c, t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Rejoue une seule étape (depuis son début) et se fige à sa fin : un réglage ne refait pas toute l’histoire. */
+function rejouerEtape(M, nom, motif, jusqua) {
+  const e = M.ev(nom); if (!e) return;
+  const S = M.S; S.t = e.debut; S.fait = false; S.pause = false; S.running = true;
+  S.jusqua = jusqua === undefined ? M.Moments()[nom] : jusqua; S.motif = motif || nom;
+  M.etiquette(); M.dire('Observe…'); M.noter('play_until', { moment: nom, time_s: S.jusqua }); M.emettre();
+}
+
+/* ── Écriture chimique à la craie ─────────────────────────────────────────
+ * Les formules s’écrivent en Unicode (MnO₄⁻, Cu²⁺, H₂O₂) ; `chim` les traduit pour le kit : indices « _{4} », charges « ^{2+} ».
+ * exposants.js ne gère pas « ⁺ » : la charge entière (« 2+ », « − ») passe donc par « ^{…} », écrite petite et relevée.
+ * Les flèches → et ⇌ sont DESSINÉES au trait (la police n’a pas ⇌) : voir `equation`.
+ */
+const SUPS = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const SUBS = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+const chim = s => String(s)
+  .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUBS[ch]).join('') + '}')
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+/** Texte chimique à la craie (mêmes options que craie.texte). */
+const ecrireChim = (c, s, x, y, o = {}) => c.texte(chim(s), x, y, o);
+/** Largeur (unités du dessin) d’un texte chimique : indices et charges plus petits. Avant la mise en page (cadre minuscule), taille nominale. */
+function largeur(c, s, taille = 18) {
+  const k = c.echelle >= .6 && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille, ctx = c.ctx;
+  let w = 0;
+  for (const ch of String(s)) { const p = SUPS[ch] ?? SUBS[ch]; ctx.font = `${p ? k * .62 : k}px ${window.Tableau.POLICE}`; w += ctx.measureText(p ?? ch).width; }
+  return w;
+}
+/** Double flèche des demi-équations : deux demi-flèches (haut : vers la droite, bas : vers la gauche). */
+function doubleFleche(c, x1, x2, y, o = {}) {
+  const h = 3.4, t = 8, col = o.couleur || 'blanc', lw = o.largeur ?? 1.8;
+  c.trait([[x1, y - h], [x2, y - h], [x2 - t, y - h - t * .62]], { couleur: col, largeur: lw });
+  c.trait([[x2, y + h], [x1, y + h], [x1 + t, y + h + t * .62]], { couleur: col, largeur: lw });
+}
+/**
+ * Équation écrite à la craie : `morceaux` = textes et flèches ('→' ou '⇌', dessinées). o : taille, couleur, couleurs[i],
+ * couleurFleche, align ('left' | 'center' | 'right'), fleche (longueur). Renvoie [x début, x fin].
+ */
+function equation(c, morceaux, x, y, o = {}) {
+  const taille = o.taille ?? 18, L = o.fleche ?? 32, esp = 7, estF = m => m === '→' || m === '⇌';
+  const ws = morceaux.map(m => (estF(m) ? L + 2 * esp : largeur(c, m, taille)));
+  const total = ws.reduce((a, b) => a + b, 0);
+  let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+  const x0 = px, ym = y - taille * .3;
+  morceaux.forEach((m, i) => {
+    const col = (o.couleurs && o.couleurs[i]) || o.couleur || 'blanc';
+    if (m === '→') c.fleche(px + esp, ym, px + esp + L, ym, { couleur: o.couleurFleche || col, largeur: 1.8, tete: 8 });
+    else if (m === '⇌') doubleFleche(c, px + esp, px + esp + L, ym, { couleur: o.couleurFleche || col });
+    else ecrireChim(c, m, px, y, { couleur: col, taille });
+    px += ws[i];
+  });
+  return [x0, px];
+}
+/** Une équation en texte simple (bulle, ce_qui_se_voit). */
+const enTexte = morceaux => morceaux.join(' ');
+
+/* ── Verrerie et solutions peintes (règle 7 : elles ressemblent aux vraies ; le peint ne change jamais la chimie) ── */
+const rgba = (k, a = 1) => `rgba(${Math.round(k[0])},${Math.round(k[1])},${Math.round(k[2])},${((k[3] ?? 1) * a).toFixed(3)})`;
+const melange = (a, b, f) => a.map((v, i) => v + ((b[i] ?? 1) - v) * clamp(f, 0, 1));
+/** Couleurs des solutions [r, g, b, opacité] (contrat : permanganate #7b2a8c, Cu²⁺ #3a7bd5, diiode brun #8a4b12, cuivre #b5562b). */
+const COUL = {
+  incolore: [214, 230, 240, .13],
+  permanganate: [123, 42, 140, .9],
+  mn2: [236, 226, 240, .14],          // Mn²⁺ : presque incolore
+  fe3: [246, 214, 120, .2],           // Fe³⁺ : jaune-orangé (très pâle à cette concentration)
+  fe2: [196, 228, 178, .3],           // Fe²⁺ : vert très pâle
+  cu2: [58, 123, 213, .84],
+  cu2pale: [168, 204, 238, .2],
+  jaune: [242, 202, 58, .55],
+  brun: [138, 75, 18, .93],
+  soufre: [238, 232, 196, 1],
+};
+/** Teinte du diiode selon l’avancement relatif f (0 → 1) : incolore → jaune → brun. */
+const teinteIode = f => (f < .3 ? melange(COUL.incolore, COUL.jaune, f / .3) : melange(COUL.jaune, COUL.brun, (f - .3) / .7));
+const Peint = {
+  /** Sphère ombrée. */
+  sphere(ctx, x, y, r, [clair, milieu, sombre], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /**
+   * Bécher vu de côté : B = {x, y (bord), w, h} ; `niv` = hauteur du liquide (fraction de h) ; `coul` = [r,g,b,opacité].
+   * o.trouble (0..1) : soufre en suspension (trouble blanc-jaune) ; o.a : opacité d’ensemble.
+   */
+  becher(ctx, B, niv, coul, o = {}) {
+    const { x, y, w, h } = B, yb = y + h, r = Math.min(14, w * .1), a = o.a ?? 1, yl = yb - h * niv;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 4, yb + 5, w / 2 + 6, 5.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(200,225,255,.05)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [0, 0, r, r]); ctx.fill();
+    if (niv > 0) {
+      const forme = () => { ctx.beginPath(); ctx.roundRect(x + 2.5, yl, w - 5, yb - yl - 2.5, [0, 0, r - 2, r - 2]); };
+      const g = ctx.createLinearGradient(0, yl, 0, yb);
+      g.addColorStop(0, rgba(melange(coul, [255, 255, 255, coul[3]], .22)));
+      g.addColorStop(.35, rgba(coul));
+      g.addColorStop(1, rgba(melange(coul, [0, 0, 0, Math.min(1, coul[3] * 1.08)], .28)));
+      ctx.fillStyle = g; forme(); ctx.fill();
+      if (o.trouble > 0) {
+        // Soufre en suspension : un voile laiteux, un peu plus dense vers le bas (pour l’œil).
+        const gt = ctx.createLinearGradient(0, yl, 0, yb);
+        gt.addColorStop(0, rgba(COUL.soufre, .78 * o.trouble)); gt.addColorStop(1, rgba(COUL.soufre, .97 * o.trouble));
+        ctx.fillStyle = gt; forme(); ctx.fill();
+      }
+      // Ménisque : une ellipse un peu plus claire, et sa ligne brillante.
+      ctx.fillStyle = rgba(melange(coul, [255, 255, 255, Math.max(.18, coul[3])], .4), .8);
+      ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2 - 2.5, 4, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2 - 2.5, 4, 0, 0, Math.PI); ctx.stroke();
+    }
+    // Le verre : contour, bec verseur, bord, graduations et reflet.
+    ctx.strokeStyle = 'rgba(225,238,255,.8)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x - 7, y - 5); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 6);
+    ctx.lineTo(x, yb - r); ctx.arcTo(x, yb, x + r, yb, r); ctx.lineTo(x + w - r, yb); ctx.arcTo(x + w, yb, x + w, yb - r, r); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,255,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = yb - k * h / 5.2; ctx.beginPath(); ctx.moveTo(x + w - 4, gy); ctx.lineTo(x + w - (k % 2 ? 13 : 20), gy); ctx.stroke(); }
+    const gr = ctx.createLinearGradient(x + w * .08, 0, x + w * .2, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.2)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gr; ctx.fillRect(x + w * .08, y + 10, w * .12, h - 22);
+    ctx.restore();
+    return yl;
+  },
+  /** Burette graduée : axe x, tube de y1 à y2, robinet en y2, pointe jusqu’à y2 + 20 ; liquide depuis `yLiq`. */
+  burette(ctx, x, y1, y2, yLiq, coul, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const w = 13;
+    ctx.fillStyle = 'rgba(200,225,255,.06)'; ctx.fillRect(x - w / 2, y1, w, y2 - y1);
+    const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+    g.addColorStop(0, rgba(melange(coul, [0, 0, 0, coul[3]], .2))); g.addColorStop(.5, rgba(melange(coul, [255, 255, 255, coul[3]], .25))); g.addColorStop(1, rgba(melange(coul, [0, 0, 0, coul[3]], .2)));
+    ctx.fillStyle = g; ctx.fillRect(x - w / 2 + 1.5, yLiq, w - 3, y2 - yLiq);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - w / 2 + 2, yLiq); ctx.lineTo(x + w / 2 - 2, yLiq); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,255,.8)'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y1); ctx.lineTo(x - w / 2, y2); ctx.lineTo(x - 2, y2 + 20); ctx.moveTo(x + w / 2, y1); ctx.lineTo(x + w / 2, y2); ctx.lineTo(x + 2, y2 + 20); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,255,.4)'; ctx.lineWidth = 1;
+    for (let gy = y1 + 8; gy < y2 - 4; gy += 9) { ctx.beginPath(); ctx.moveTo(x - w / 2, gy); ctx.lineTo(x - w / 2 + ((gy - y1) % 45 < 9 ? 7 : 4), gy); ctx.stroke(); }
+    // Robinet : boisseau et clé.
+    Peint.sphere(ctx, x, y2 + 6, 5, ['#f4f4f4', '#b9c0c7', '#4b5157']);
+    ctx.fillStyle = '#2f6fd0'; ctx.beginPath(); ctx.roundRect(x + 4, y2 + 3, 14, 6, 2); ctx.fill();
+    ctx.restore();
+  },
+  /** Goutte qui tombe (forme de larme). */
+  goutte(ctx, x, y, coul, r = 3.4) {
+    ctx.save();
+    ctx.fillStyle = rgba(melange(coul, [255, 255, 255, Math.max(.45, coul[3] * 1.6)], .25));
+    ctx.beginPath(); ctx.moveTo(x, y - r * 2.1); ctx.quadraticCurveTo(x + r, y - r * .4, x + r, y); ctx.arc(x, y, r, 0, Math.PI); ctx.quadraticCurveTo(x - r, y - r * .4, x, y - r * 2.1); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(x - r * .35, y - r * .2, r * .3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+};
+/** Chronomètre à la craie : cadran, aiguille (une minute par tour, `tours` = minutes simulées), lecture dessous. */
+function chrono(c, x, y, r, minutes, lignes = []) {
+  c.cercle(x, y, r, { couleur: 'blanc', largeur: 2 });
+  c.rect(x - 6, y - r - 9, 12, 7, { arrondi: 2, largeur: 1.6 });
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; c.ligne(x + Math.cos(a) * r * .8, y + Math.sin(a) * r * .8, x + Math.cos(a) * r * .92, y + Math.sin(a) * r * .92, { largeur: 1.2, couleur: 'faible', duree: .02 }); }
+  c.direct(() => {
+    const a = -Math.PI / 2 + (minutes % 1) * Math.PI * 2;
+    c.ligne(x, y, x + Math.cos(a) * r * .74, y + Math.sin(a) * r * .74, { couleur: 'jaune', largeur: 2.4 });
+    c.point(x, y, 3, 'jaune');
+    lignes.forEach(([t, col, taille], i) => c.texte(t, x, y + r + 24 + i * 22, { couleur: col || 'blanc', taille: taille || 17, align: 'center' }));
+  });
+}
+/** Durée simulée lisible : « 45 s », « 2 min 40 s », « 12 min », « 1 h 05 ». */
+function duree(min) {
+  const s = Math.round(min * 60);
+  if (s < 60) return `${s} s`;
+  if (min < 10) { const m = Math.floor(s / 60), r = s % 60; return r ? `${m} min ${String(r).padStart(2, '0')} s` : `${m} min`; }
+  if (min < 60) return `${Math.round(min)} min`;
+  const h = Math.floor(min / 60), m = Math.round(min - 60 * h); return `${h} h ${String(m).padStart(2, '0')}`;
+}
+
+/* ── Réactions rapides, réactions lentes : les béchers ─────────────────────── */
+const VUES = ['comparer', 'lente', 'soufre', 'echelle'];
+const TITRES = { comparer: 'rapide ou lente ?', lente: 'eau oxygénée et ions iodure', soufre: 'thiosulfate et acide', echelle: 'l’échelle des durées' };
+const ETAPES = {
+  comparer: [
+    { nom: 'depart', anim: .8, motif: 'deux béchers de permanganate acidifié, violets', bulle: () => 'Deux béchers de la même solution violette de permanganate acidifié.' },
+    { nom: 'verser', anim: 2.6, ecritDes: 0, motif: 'on verse : ions fer II à gauche, acide oxalique à droite', bulle: () => 'On verse en même temps : ions fer II à gauche, acide oxalique à droite.' },
+    { nom: 'rapide_fini', anim: .4, motif: 'à gauche : décoloré aussitôt, réaction rapide', bulle: () => 'Regarde à gauche !' },
+    { nom: 'lente_continue', anim: 4, motif: 'à droite : le violet pâlit peu à peu (≈ 3 min)', bulle: () => 'Et à droite ? Le temps passe (accéléré)…' },
+    { nom: 'lente_finie', anim: 3, motif: 'à droite : décoloré après ≈ 7 min, réaction lente', bulle: () => 'À droite, ça continue…' },
+  ],
+  lente: [
+    { nom: 'melange', anim: 1.6, ecritDes: 0, motif: 'on mélange eau oxygénée acidifiée et ions iodure : incolore', bulle: () => 'On verse la solution d’iodure dans l’eau oxygénée acidifiée.' },
+    { nom: 'jaune', anim: 3, motif: 'le diiode I₂ apparaît : jaune (t ≈ 2 min)', bulle: () => 'Le temps passe (accéléré)…' },
+    { nom: 'brun', anim: 4, motif: 'de plus en plus de I₂ : brun (t ≈ 12 min)', bulle: () => 'La couleur fonce…' },
+    { nom: 'palier', anim: 3, motif: 'la teinte ne change plus (t ≈ 40 min) : fin de la réaction', bulle: () => 'Est-ce que ça fonce encore ?' },
+  ],
+  soufre: [
+    { nom: 'melange', anim: 1.6, ecritDes: 0, motif: 'on verse l’acide sur le thiosulfate : limpide, la croix se voit', bulle: () => 'On verse l’acide dans la solution de thiosulfate, posée sur une croix noire.' },
+    { nom: 'trouble', anim: 4, motif: 'un trouble blanc-jaune monte : du soufre solide se forme (t ≈ 1 min)', bulle: () => 'Regarde la croix, vue de dessus…' },
+    { nom: 'croix_cachee', anim: 3, motif: 'la croix n’est plus visible (t ≈ 2 min)', bulle: () => 'Le trouble épaissit…' },
+  ],
+  echelle: [
+    { nom: 'axe', anim: 0, motif: 'la flèche du temps, trois cases', bulle: () => 'Classons les réactions selon leur durée.' },
+    { nom: 'rapide', anim: 1.6, motif: 'instantanée (moins d’une seconde) : le bécher se décolore d’un coup', bulle: () => 'Une goutte… et c’est fini !' },
+    { nom: 'lente', anim: 3, motif: 'lente (secondes → heures) : le bécher brunit peu à peu', bulle: () => 'Ici, on voit la couleur changer peu à peu.' },
+    { nom: 'tres_lente', anim: 2.6, motif: 'très lente (jours, années) : le portail rouille', bulle: () => 'Et le fer d’un portail ?' },
+    { nom: 'appareils', anim: 0, motif: 'le classement dépend des moyens d’observation', bulle: () => 'Rapide pour l’œil… mais pour un appareil de mesure ?' },
+  ],
+};
+const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+let MO = null;
+const ZY = [376, 402];
+const lignesChrono = min => [[`t = ${duree(min)}`, 'blanc', 18], ['(temps accéléré)', 'faible', 14], ['20 °C', 'faible', 15]];
+
+/* ── Vue comparer ──────────────────────────────────────────────────────── */
+const BR = { x: 70, y: 196, w: 170, h: 134 }, BLT = { x: 520, y: 196, w: 170, h: 134 }, NB = .6, YLB = BR.y + BR.h * (1 - NB);
+const XBF = 155, XBO = 605, CH = [380, 150];
+/** Temps simulé (min) : on verse pendant 20 s ; le bécher de droite pâlit jusqu’à 7 min. Température 20 °C. */
+const tComparer = () => (MO.commence('lente_finie') ? 3 + 4 * MO.p('lente_finie') : MO.commence('lente_continue') ? 1 / 3 + 8 / 3 * MO.p('lente_continue') : MO.p('verser') / 3);
+const violetRapide = () => 1 - lisse(MO.p('verser'));                 // chaque goutte d’ions fer II décolore aussitôt
+const violetLent = () => (MO.commence('lente_finie') ? .55 * (1 - lisse(MO.p('lente_finie'))) : 1 - .45 * MO.p('lente_continue'));
+const coulRapide = () => melange(COUL.fe3, COUL.permanganate, violetRapide());   // fin : Mn²⁺ presque incolore + Fe³⁺ jaune pâle
+const coulLent = () => melange(COUL.mn2, COUL.permanganate, violetLent());
+const mots = k => (k > .75 ? 'violet' : k > .35 ? 'violet pâle' : k > .06 ? 'rose très pâle' : 'décoloré');
+function dessinerComparer(c, M) {
+  const a = lisse(M.p('depart')), pv = M.p('verser'), coule = pv > 0 && pv < 1;
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, BR, NB, coulRapide(), { a }); Peint.becher(ctx, BLT, NB, coulLent(), { a });
+    Peint.burette(ctx, XBF, 44, 166, 58 + 34 * pv, COUL.fe2, a); Peint.burette(ctx, XBO, 44, 166, 58 + 34 * pv, COUL.incolore, a);
+    if (coule) for (const [x, k] of [[XBF, COUL.fe2], [XBO, COUL.incolore]]) for (let i = 0; i < 3; i++) {
+      const f = (M.S.t * 1.6 + i / 3) % 1; Peint.goutte(ctx, x, 190 + f * (YLB - 194), k);
+    }
+  });
+  c.texte('Réaction rapide ou réaction lente ?', 14, 28, { couleur: 'cyan', taille: 21 });
+  ecrireChim(c, 'Fe²⁺', XBF + 18, 76, { couleur: 'blanc', taille: 19 }); c.texte('ions fer II', XBF + 18, 98, { couleur: 'faible', taille: 15 });
+  ecrireChim(c, 'H₂C₂O₄', XBO + 18, 76, { couleur: 'blanc', taille: 19 }); c.texte('acide oxalique', XBO + 18, 98, { couleur: 'faible', taille: 15 });
+  for (const B of [BR, BLT]) ecrireChim(c, 'permanganate acidifié (MnO₄⁻ + H⁺)', B.x + B.w / 2, 356, { couleur: 'faible', taille: 15, align: 'center' });
+  chrono(c, CH[0], CH[1], 36, tComparer(), lignesChrono(tComparer()));
+  M.etape(c, 'rapide_fini', () => c.texte('réaction rapide', BR.x + BR.w / 2, 384, { couleur: 'jaune', taille: 21, align: 'center' }));
+  M.etape(c, 'lente_finie', () => c.texte('réaction lente', BLT.x + BLT.w / 2, 384, { couleur: 'jaune', taille: 21, align: 'center' }));
+  return zoneEcriture(c, M, [
+    { nom: 'depart', lignes: [['même solution violette de permanganate (MnO₄⁻) dans les deux béchers', 'blanc']] },
+    { nom: 'verser', lignes: [['on verse : ions fer II (Fe²⁺) à gauche, acide oxalique à droite', 'blanc']] },
+    { nom: 'rapide_fini', lignes: [['à gauche : décoloré aussitôt, à chaque goutte', 'jaune']] },
+    { nom: 'lente_continue', lignes: [['à droite : le violet pâlit lentement…', 'blanc']] },
+    { nom: 'lente_finie', lignes: [['à droite : décoloré après ≈ 7 min', 'jaune']] },
+  ], [410], { x: 14, max: 732 });
+}
+function reperesComparer(c, M) {
+  const plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  c.repere('becher_rapide', BR.x - 10, BR.y - 8, BR.w + 20, BR.h + 16, `le bécher de gauche (ions fer II) : ${mots(violetRapide())}`);
+  c.repere('becher_lent', BLT.x - 10, BLT.y - 8, BLT.w + 20, BLT.h + 16, `le bécher de droite (acide oxalique) : ${mots(violetLent())}`);
+  c.repere('burette_fer', XBF - 14, 38, 120, 156, 'la burette d’ions fer II (Fe²⁺)');
+  c.repere('burette_oxalique', XBO - 14, 38, 140, 156, 'la burette d’acide oxalique (H₂C₂O₄)');
+  c.repere('chrono', CH[0] - 70, CH[1] - 48, 140, 160, `le chronomètre : t = ${duree(tComparer())} (temps accéléré)`);
+  c.repere('etiquette_rapide', BR.x, 364, BR.w, 28, `« réaction rapide »${plus('rapide_fini')}`);
+  c.repere('etiquette_lente', BLT.x, 364, BLT.w, 28, `« réaction lente »${plus('lente_finie')}`);
+}
+function voirComparer(M) {
+  const m = [`Deux béchers de permanganate acidifié (MnO₄⁻ + H⁺), même solution, 20 °C ; chronomètre au milieu : t = ${duree(tComparer())} (temps accéléré).`];
+  m.push(`Bécher de gauche (burette d’ions fer II Fe²⁺ au-dessus) : ${mots(violetRapide())}${violetRapide() < .06 ? ' (jaune très pâle : ions Fe³⁺)' : ''}. Bécher de droite (burette d’acide oxalique H₂C₂O₄) : ${mots(violetLent())}.`);
+  const pv = M.p('verser'); if (pv > 0 && pv < 1) m.push('Les deux burettes coulent : des gouttes tombent dans les béchers.');
+  if (M.vu('rapide_fini')) m.push('Sous le bécher de gauche : « réaction rapide » (jaune).');
+  if (M.vu('lente_finie')) m.push('Sous le bécher de droite : « réaction lente » (jaune).');
+  return m;
+}
+
+/* ── Vue lente : eau oxygénée + ions iodure ─────────────────────────────── */
+const BI = { x: 110, y: 160, w: 200, h: 170 }, XBI = 250, BARRE = { x: 362, y: 160, w: 26, h: 170 }, CHL = [600, 150];
+const EQ_IODE = ['H₂O₂ + 2I⁻ + 2H⁺', '→', 'I₂ + 2H₂O'];
+/** Temps simulé (min) et avancement relatif f = 1 − e^(−t/6 min) (pour l’œil : la teinte suit la quantité de I₂ formé). */
+const tLente = () => (MO.commence('palier') ? 12 + 28 * MO.p('palier') : MO.commence('brun') ? 2 + 10 * MO.p('brun') : 2 * MO.p('jaune'));
+const fIode = () => 1 - Math.exp(-tLente() / 6);
+const nomTeinte = f => (f < .06 ? 'incolore' : f < .2 ? 'jaune très pâle' : f < .45 ? 'jaune' : f < .7 ? 'orangé' : f < .97 ? 'brun' : 'brun (teinte finale)');
+function dessinerLente(c, M) {
+  const pm = M.p('melange'), coule = pm > 0 && pm < 1, f = fIode(), niv = .34 + .28 * lisse(pm);
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, BI, niv, teinteIode(f));
+    Peint.burette(ctx, XBI, 44, 122, 56 + 40 * pm, COUL.incolore);
+    if (coule) for (let i = 0; i < 4; i++) { const g = (M.S.t * 2 + i / 4) % 1; Peint.goutte(ctx, XBI, 146 + g * (BI.y + BI.h * (1 - niv) - 150), COUL.incolore); }
+    // La barre de teinte : du bas (incolore) au haut (brun final).
+    const g = ctx.createLinearGradient(0, BARRE.y + BARRE.h, 0, BARRE.y);
+    for (const s of [0, .15, .3, .5, .75, 1]) g.addColorStop(s, rgba(teinteIode(s), 1));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(BARRE.x, BARRE.y, BARRE.w, BARRE.h, 4); ctx.fill();
+  });
+  c.texte('Une réaction lente', 14, 28, { couleur: 'cyan', taille: 21 });
+  ecrireChim(c, 'I⁻ (iodure de potassium)', XBI + 16, 74, { couleur: 'blanc', taille: 16 });
+  ecrireChim(c, 'eau oxygénée acidifiée (H₂O₂ + H⁺)', BI.x + BI.w / 2, 354, { couleur: 'faible', taille: 15, align: 'center' });
+  c.rect(BARRE.x, BARRE.y, BARRE.w, BARRE.h, { couleur: 'faible', largeur: 1.4, arrondi: 4 });
+  c.texte('brun', BARRE.x + BARRE.w + 10, BARRE.y + 12, { couleur: '#c08040', taille: 15 });
+  c.texte('jaune', BARRE.x + BARRE.w + 10, BARRE.y + BARRE.h * .72, { couleur: 'jaune', taille: 15 });
+  c.texte('incolore', BARRE.x + BARRE.w + 10, BARRE.y + BARRE.h, { couleur: 'faible', taille: 15 });
+  c.texte('teinte', BARRE.x + BARRE.w / 2, BARRE.y - 10, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.direct(() => {   // le repère de la teinte actuelle sur la barre
+    const y = BARRE.y + BARRE.h * (1 - f);
+    c.trait([[BARRE.x - 14, y - 6], [BARRE.x - 3, y], [BARRE.x - 14, y + 6]], { couleur: 'jaune', largeur: 2.2 });
+  });
+  chrono(c, CHL[0], CHL[1], 36, tLente(), lignesChrono(tLente()));
+  M.etape(c, 'melange', () => equation(c, EQ_IODE, 590, 304, { taille: 19, align: 'center' }));
+  M.etape(c, 'palier', () => c.texte('réaction lente : ≈ 40 min', 590, 340, { couleur: 'jaune', taille: 20, align: 'center' }));
+  return zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['on mélange : la solution est incolore', 'blanc']] },
+    { nom: 'jaune', lignes: [['le diiode I₂ se forme : la solution devient jaune (t ≈ 2 min)', 'jaune']] },
+    { nom: 'brun', lignes: [['de plus en plus de I₂ : brun (t ≈ 12 min)', '#d08a48']] },
+    { nom: 'palier', lignes: [['la teinte ne change plus : la réaction est finie (t ≈ 40 min)', 'blanc']] },
+  ], ZY, { max: 732 });
+}
+function reperesLente(c, M) {
+  const plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  c.repere('becher', BI.x - 10, BI.y - 8, BI.w + 20, BI.h + 16, `le bécher : ${nomTeinte(fIode())}`);
+  c.repere('teinte', BARRE.x - 18, BARRE.y - 26, 90, BARRE.h + 34, `la barre de teinte : ${nomTeinte(fIode())}`);
+  c.repere('chrono', CHL[0] - 70, CHL[1] - 48, 140, 160, `le chronomètre : t = ${duree(tLente())} (temps accéléré)`);
+  c.repere('etiquette', 470, 320, 240, 28, `« réaction lente : ≈ 40 min »${plus('palier')}`);
+}
+function voirLente(M) {
+  const f = fIode(), pm = M.p('melange');
+  const m = [`Un bécher d’eau oxygénée acidifiée (H₂O₂ + H⁺) ; burette d’ions iodure I⁻ au-dessus${pm > 0 && pm < 1 ? ' qui coule' : ''}. 20 °C ; t = ${duree(tLente())} (temps accéléré).`];
+  m.push(`Solution : ${nomTeinte(f)} (le diiode I₂ formé colore). Barre de teinte à côté (incolore en bas, jaune, brun en haut) : le repère jaune est à ${Math.round(f * 100)} % de la hauteur.`);
+  if (M.vu('melange')) m.push(`Équation écrite à droite : ${enTexte(EQ_IODE)}.`);
+  if (M.vu('palier')) m.push('« réaction lente : ≈ 40 min » écrit en jaune.');
+  return m;
+}
+
+/* ── Vue soufre : thiosulfate + acide sur une croix ─────────────────────── */
+const BS = { x: 80, y: 176, w: 170, h: 140 }, XBS = 200, DS = [575, 204], RS = 78, CHS = [380, 150];
+/** Temps simulé (s) ; trouble 0 → 1 (soufre solide en suspension) : la croix est cachée vers 2 min. */
+const tSoufre = () => (MO.commence('croix_cachee') ? 60 + 60 * MO.p('croix_cachee') : 60 * MO.p('trouble'));
+const trouble = () => (MO.commence('croix_cachee') ? .55 + .45 * MO.p('croix_cachee') : .55 * lisse(MO.p('trouble')));
+const vueCroix = tr => (tr < .05 ? 'bien nette' : tr < .4 ? 'encore visible, un peu voilée' : tr < .75 ? 'à peine visible' : tr < .97 ? 'presque cachée' : 'cachée : on ne la voit plus');
+function dessinerSoufre(c, M) {
+  const pm = M.p('melange'), coule = pm > 0 && pm < 1, tr = trouble(), niv = .4 + .2 * lisse(pm);
+  c.direct(() => {
+    const ctx = c.ctx;
+    // La feuille blanche sous le bécher (vue de côté).
+    ctx.fillStyle = 'rgba(238,236,226,.85)'; ctx.beginPath(); ctx.moveTo(52, BS.y + BS.h - 2); ctx.lineTo(282, BS.y + BS.h - 2); ctx.lineTo(300, BS.y + BS.h + 18); ctx.lineTo(34, BS.y + BS.h + 18); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(140, BS.y + BS.h + 3); ctx.lineTo(196, BS.y + BS.h + 15); ctx.moveTo(196, BS.y + BS.h + 3); ctx.lineTo(140, BS.y + BS.h + 15); ctx.stroke();
+    Peint.becher(ctx, BS, niv, COUL.incolore, { trouble: tr });
+    Peint.burette(ctx, XBS, 44, 126, 56 + 40 * pm, COUL.incolore);
+    if (coule) for (let i = 0; i < 4; i++) { const g = (M.S.t * 2 + i / 4) % 1; Peint.goutte(ctx, XBS, 150 + g * (BS.y + BS.h * (1 - niv) - 154), COUL.incolore); }
+    // Vu de dessus : la feuille, la croix noire, puis le liquide du bécher et son trouble par-dessus.
+    const [cx, cy] = DS;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(cx - 92 + 4, cy - 92 + 5, 184, 184);
+    ctx.fillStyle = '#ecebe2'; ctx.fillRect(cx - 92, cy - 92, 184, 184);
+    ctx.strokeStyle = '#121212'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx - 48, cy - 48); ctx.lineTo(cx + 48, cy + 48); ctx.moveTo(cx + 48, cy - 48); ctx.lineTo(cx - 48, cy + 48); ctx.stroke();
+    ctx.fillStyle = 'rgba(200,220,235,.14)'; ctx.beginPath(); ctx.arc(cx, cy, RS, 0, 7); ctx.fill();
+    if (tr > 0) { const gt = ctx.createRadialGradient(cx, cy, 10, cx, cy, RS); gt.addColorStop(0, rgba(COUL.soufre, Math.min(1, tr * 1.04))); gt.addColorStop(1, rgba([226, 220, 180, 1], Math.min(1, tr * 1.04))); ctx.fillStyle = gt; ctx.beginPath(); ctx.arc(cx, cy, RS, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(160,190,215,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, RS, 0, 7); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, RS - 4, Math.PI * 1.1, Math.PI * 1.45); ctx.stroke();
+  });
+  c.texte('La croix disparaît', 14, 28, { couleur: 'cyan', taille: 21 });
+  ecrireChim(c, 'acide (H⁺)', XBS + 16, 72, { couleur: 'blanc', taille: 16 });
+  c.texte('thiosulfate', BS.x + BS.w + 8, 286, { couleur: 'faible', taille: 15 }); ecrireChim(c, '(S₂O₃²⁻)', BS.x + BS.w + 8, 308, { couleur: 'faible', taille: 15 });
+  c.texte('croix noire sous le bécher', 306, BS.y + BS.h + 14, { couleur: 'faible', taille: 14 });
+  c.texte('vu de dessus', DS[0], DS[1] - 104, { couleur: 'jaune', taille: 17, align: 'center' });
+  chrono(c, CHS[0], CHS[1], 32, tSoufre() / 60, lignesChrono(tSoufre() / 60));
+  M.etape(c, 'croix_cachee', () => c.texte('la croix est cachée : t ≈ 2 min', DS[0], 334, { couleur: 'jaune', taille: 19, align: 'center' }));
+  return zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['on verse l’acide sur le thiosulfate : la solution est limpide, la croix se voit', 'blanc']] },
+    { nom: 'trouble', lignes: [['du soufre solide se forme : un trouble blanc-jaune monte', 'blanc']] },
+    { nom: 'croix_cachee', lignes: [['le trouble cache la croix vers 2 min : réaction lente', 'jaune']] },
+  ], ZY, { max: 732 });
+}
+function reperesSoufre(c, M) {
+  c.repere('becher', BS.x - 12, BS.y - 8, BS.w + 24, BS.h + 30, `le bécher (vu de côté) : ${trouble() < .05 ? 'limpide' : 'trouble blanc-jaune'}`);
+  c.repere('croix', DS[0] - 92, DS[1] - 92, 184, 184, `la croix noire vue de dessus : ${vueCroix(trouble())}`);
+  c.repere('trouble', DS[0] - RS, DS[1] - RS, 2 * RS, 2 * RS, `le trouble de soufre : ${Math.round(trouble() * 100)} %`);
+  c.repere('chrono', CHS[0] - 70, CHS[1] - 44, 140, 156, `le chronomètre : t = ${duree(tSoufre() / 60)} (temps accéléré)`);
+}
+function voirSoufre(M) {
+  const tr = trouble(), pm = M.p('melange');
+  const m = [`À gauche, vu de côté : un bécher de thiosulfate (S₂O₃²⁻) posé sur une feuille blanche marquée d’une croix noire ; burette d’acide au-dessus${pm > 0 && pm < 1 ? ' qui coule' : ''}. 20 °C ; t = ${duree(tSoufre() / 60)} (temps accéléré).`];
+  m.push(`Solution : ${tr < .05 ? 'limpide, incolore' : `trouble blanc-jaune (soufre solide), ${Math.round(tr * 100)} %`}. À droite, vu de dessus : la croix est ${vueCroix(tr)}.`);
+  if (M.vu('croix_cachee')) m.push('Écrit en jaune sous la vue de dessus : « la croix est cachée : t ≈ 2 min ».');
+  return m;
+}
+
+/* ── Vue echelle : la flèche des durées ─────────────────────────────────── */
+const YA = 150, SEP = [258, 506], CX3 = [141, 382, 625];
+const VR = { x: 86, y: 196, w: 110, h: 100 }, VL = { x: 327, y: 196, w: 110, h: 100 }, PORTAIL = { x: 556, y: 182, w: 138, h: 118 };
+const violetEclair = () => { const p = MO.p('rapide'); return p < .36 ? 1 : 1 - clamp((p - .36) / .06, 0, 1); };
+const fEchelle = () => 1 - Math.exp(-3.2 * MO.p('lente'));
+const rouille = () => lisse(MO.p('tres_lente'));
+function peindrePortail(ctx, P, r) {
+  const { x, y, w, h } = P, acier = [92, 104, 116], rouil = [150, 72, 30];
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 4, y + h + 5, w / 2 + 8, 5, 0, 0, 7); ctx.fill();
+  const barre = (bx, by, bw, bh, rr) => {
+    const k = melange(acier, rouil, rr), g = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    g.addColorStop(0, rgba(melange(k, [0, 0, 0], .35))); g.addColorStop(.5, rgba(melange(k, [255, 255, 255], .25))); g.addColorStop(1, rgba(melange(k, [0, 0, 0], .4)));
+    ctx.fillStyle = g; ctx.fillRect(bx, by, bw, bh);
+  };
+  barre(x, y - 8, 10, h + 8, r); barre(x + w - 10, y - 8, 10, h + 8, r);              // les deux piliers
+  for (let k = 0; k < 7; k++) barre(x + 16 + k * (w - 38) / 6, y + 8, 6, h - 14, r * (.8 + .2 * ((k * 37) % 5) / 4));
+  for (const by of [y + 16, y + h - 20]) { ctx.save(); ctx.translate(0, 0); const k = melange(acier, rouil, r); ctx.fillStyle = rgba(melange(k, [255, 255, 255], .1)); ctx.fillRect(x + 10, by, w - 20, 7); ctx.restore(); }
+  // Taches de rouille (fixes, pour l’œil) qui apparaissent peu à peu.
+  const rnd = window.Tableau.graine(23);
+  for (let k = 0; k < 46; k++) {
+    const px = x + 4 + rnd() * (w - 8), py = y + rnd() * h, pr = 1.5 + rnd() * 3.2, s = k / 46;
+    if (r > s) { ctx.fillStyle = `rgba(${130 + 50 * rnd() | 0},${50 + 30 * rnd() | 0},${18 + 14 * rnd() | 0},${Math.min(.9, (r - s) * 3).toFixed(2)})`; ctx.beginPath(); ctx.arc(px, py, pr, 0, 7); ctx.fill(); }
+  }
+  ctx.restore();
+}
+function dessinerEchelle(c, M) {
+  c.direct(() => {
+    const ctx = c.ctx, pr = M.p('rapide');
+    if (M.commence('rapide')) {
+      Peint.becher(ctx, VR, .6, melange(COUL.mn2, COUL.permanganate, violetEclair()));
+      if (pr < .36) Peint.goutte(ctx, VR.x + VR.w / 2, VR.y - 20 + (pr / .36) * 60, COUL.fe2, 4);
+    }
+    if (M.commence('lente')) Peint.becher(ctx, VL, .6, teinteIode(fEchelle()));
+    if (M.commence('tres_lente')) peindrePortail(ctx, PORTAIL, rouille());
+  });
+  c.texte('Rapide ? Lente ? Classer selon la durée', 14, 28, { couleur: 'cyan', taille: 21 });
+  M.etape(c, 'axe', () => {
+    c.fleche(22, YA, 744, YA, { couleur: 'blanc', largeur: 2.4, tete: 14 });
+    for (const x of SEP) c.ligne(x, 66, x, 340, { couleur: 'tresfaible', largeur: 1.4, pointille: [6, 6] });
+    c.texte('durée', 742, YA - 12, { couleur: 'faible', taille: 15, align: 'right' });
+  });
+  M.etape(c, 'rapide', () => {
+    c.texte('instantanée', CX3[0], 92, { couleur: 'blanc', taille: 22, align: 'center' });
+    c.texte('(moins d’une seconde)', CX3[0], 118, { couleur: 'faible', taille: 15, align: 'center' });
+    ecrireChim(c, 'Fe²⁺ + MnO₄⁻ : d’un coup', CX3[0], 330, { couleur: 'blanc', taille: 15, align: 'center' });
+  });
+  M.etape(c, 'lente', () => {
+    c.texte('lente', CX3[1], 92, { couleur: 'blanc', taille: 22, align: 'center' });
+    equation(c, ['(secondes', '→', 'heures)'], CX3[1], 118, { couleur: 'faible', taille: 15, align: 'center', fleche: 22 });
+    ecrireChim(c, 'H₂O₂ + I⁻ : des minutes', CX3[1], 330, { couleur: 'blanc', taille: 15, align: 'center' });
+  });
+  M.etape(c, 'tres_lente', () => {
+    c.texte('très lente', CX3[2], 92, { couleur: 'blanc', taille: 22, align: 'center' });
+    c.texte('(jours, années)', CX3[2], 118, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('le fer rouille : des années', CX3[2], 330, { couleur: 'blanc', taille: 15, align: 'center' });
+  });
+  M.etape(c, 'appareils', () => {
+    c.texte('le classement dépend des moyens d’observation', 380, 378, { couleur: 'jaune', taille: 21, align: 'center' });
+    c.texte('(à l’œil, avec un chronomètre, avec un appareil de mesure…)', 380, 404, { couleur: 'faible', taille: 15, align: 'center' });
+  });
+  return [];
+}
+function reperesEchelle(c, M) {
+  const plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  c.repere('axe_temps', 18, YA - 14, 730, 28, `la flèche du temps (durée)${plus('axe')}`);
+  c.repere('case_rapide', 24, 70, SEP[0] - 28, 270, `instantanée (moins d’une seconde) : le bécher violet se décolore d’un coup${plus('rapide')}`);
+  c.repere('case_lente', SEP[0] + 4, 70, SEP[1] - SEP[0] - 8, 270, `lente (secondes → heures) : le bécher brunit peu à peu${plus('lente')}`);
+  c.repere('case_tres_lente', SEP[1] + 4, 70, 744 - SEP[1] - 4, 270, `très lente (jours, années) : un portail qui rouille${plus('tres_lente')}`);
+  c.repere('portail', PORTAIL.x - 6, PORTAIL.y - 12, PORTAIL.w + 12, PORTAIL.h + 18, `le portail en fer : ${rouille() > .6 ? 'rouillé' : rouille() > .05 ? 'il rouille peu à peu' : 'pas encore rouillé'}${plus('tres_lente')}`);
+  c.repere('phrase', 60, 358, 640, 54, `« le classement dépend des moyens d’observation »${plus('appareils')}`);
+}
+function voirEchelle(M) {
+  const m = [];
+  if (M.vu('axe')) m.push('Une flèche du temps (durée) à la craie, de gauche à droite, coupée en trois cases.'); else m.push('La flèche du temps se dessine.');
+  if (M.commence('rapide')) m.push(`Case 1 « instantanée (moins d’une seconde) » : bécher de permanganate ${violetEclair() > .5 ? 'violet (une goutte d’ions fer II tombe)' : 'décoloré d’un coup'} ; « Fe²⁺ + MnO₄⁻ : d’un coup ».`);
+  if (M.commence('lente')) m.push(`Case 2 « lente (secondes → heures) » : bécher eau oxygénée + iodure ${nomTeinte(fEchelle())} ; « H₂O₂ + I⁻ : des minutes ».`);
+  if (M.commence('tres_lente')) m.push(`Case 3 « très lente (jours, années) » : un portail en fer ${rouille() > .6 ? 'couvert de rouille' : 'qui rouille peu à peu'} (temps accéléré : des années) ; « le fer rouille : des années ».`);
+  if (M.vu('appareils')) m.push('En bas, en jaune : « le classement dépend des moyens d’observation » (à l’œil, avec un chronomètre, avec un appareil de mesure).');
+  m.push('Température ambiante (≈ 20 °C).');
+  return m;
+}
+
+/* ── Dessin et ce que voit le tuteur ─────────────────────────────────────── */
+const PAGES = {
+  comparer: [dessinerComparer, reperesComparer, voirComparer], lente: [dessinerLente, reperesLente, voirLente],
+  soufre: [dessinerSoufre, reperesSoufre, voirSoufre], echelle: [dessinerEchelle, reperesEchelle, voirEchelle],
+};
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(29);
+  const [d, r] = PAGES[M.S.vue];
+  M.vues = d(c, M); r(c, M);
+  return c.fin();
+}
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`, ...PAGES[v][2](M)];
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(t => `« ${t} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue;
+  if (v === 'comparer') return { vue: v, temps_simule_min: +tComparer().toFixed(2), temperature_C: 20, violet_gauche: +violetRapide().toFixed(2), violet_droite: +violetLent().toFixed(2) };
+  if (v === 'lente') return { vue: v, temps_simule_min: +tLente().toFixed(1), temperature_C: 20, avancement_relatif: +fIode().toFixed(3) };
+  if (v === 'soufre') return { vue: v, temps_simule_s: Math.round(tSoufre()), temperature_C: 20, trouble: +trouble().toFixed(2) };
+  return { vue: v };
+};
+const MOT = Moteur({
+  id: 'tlr_bechers', titre: 'Réactions rapides, réactions lentes : les béchers', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ comparer: 'Deux béchers violets : versons deux réducteurs différents.', lente: 'Eau oxygénée et ions iodure : suivons la couleur.', soufre: 'Thiosulfate et acide sur une croix noire.', echelle: 'Rapide, lente, très lente : une flèche du temps.' })[M.S.vue],
+  messageFin: M => ({ comparer: 'Ions fer II : décoloré aussitôt (réaction rapide). Acide oxalique : ≈ 7 min (réaction lente).',
+    lente: 'La couleur fonce pendant ≈ 40 min puis ne change plus : réaction lente.',
+    soufre: 'Le soufre trouble la solution : la croix est cachée après ≈ 2 min. Réaction lente.',
+    echelle: 'Instantanée, lente, très lente : et le classement dépend des moyens d’observation.' })[M.S.vue],
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Réactions rapides et lentes, à 20 °C, en temps accéléré. Vue comparer : deux béchers de permanganate acidifié (violet) ; ions fer II versés à gauche : décoloré aussitôt (réaction rapide) ; acide oxalique à droite : le violet pâlit et disparaît en ≈ 7 min (réaction lente). Vue lente : eau oxygénée acidifiée + ions iodure, H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O ; incolore, jaune (≈ 2 min), brun (≈ 12 min), teinte finale vers 40 min. Vue soufre : thiosulfate + acide sur une croix noire : le soufre solide trouble la solution, la croix est cachée vers 2 min. Vue echelle : instantanée (moins d’une seconde), lente (secondes → heures), très lente (jours, années : un portail qui rouille) ; le classement dépend des moyens d’observation.',
+  explications: {
+    comparer: [
+      { repere: 'becher_rapide', texte: 'Même solution violette dans les deux béchers.' },
+      { repere: 'burette_fer', texte: 'À gauche, on verse des ions fer II : décoloré aussitôt.' },
+      { repere: 'etiquette_rapide', texte: 'C’est une réaction rapide.' },
+      { repere: 'burette_oxalique', texte: 'À droite, on verse de l’acide oxalique.' },
+      { repere: 'chrono', texte: 'Il faut plusieurs minutes pour que le violet disparaisse.' },
+      { repere: 'etiquette_lente', texte: 'C’est une réaction lente.' },
+    ],
+    lente: [
+      { repere: 'becher', texte: 'Au mélange, la solution est incolore.' },
+      { repere: 'teinte', texte: 'Le diiode formé la colore : jaune, puis brun.' },
+      { repere: 'chrono', texte: 'Il faut des dizaines de minutes : la réaction est lente.' },
+      { repere: 'etiquette', texte: 'La teinte ne change plus : la réaction est finie.' },
+    ],
+    soufre: [
+      { repere: 'croix', texte: 'Au début, on voit bien la croix à travers la solution.' },
+      { repere: 'trouble', texte: 'Le soufre solide forme un trouble qui monte.' },
+      { repere: 'chrono', texte: 'Vers 2 minutes, la croix est cachée : réaction lente.' },
+    ],
+    echelle: [
+      { repere: 'case_rapide', texte: 'Instantanée : moins d’une seconde, l’œil ne peut pas suivre.' },
+      { repere: 'case_lente', texte: 'Lente : de quelques secondes à quelques heures, on la suit.' },
+      { repere: 'portail', texte: 'Très lente : le fer d’un portail rouille en des années.' },
+      { repere: 'phrase', texte: 'Le classement dépend des moyens d’observation.' },
+    ],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
