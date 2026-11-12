@@ -4,7 +4,8 @@ Cours (ordre programme_semestre1.json) : limites_continuite, derivation_etude_fo
 
 ## État
 - [construit, réactions à générer] limites_continuite → math_ch1_limites_continuite (détail : section ## limites_continuite).
-- [construit, réactions à générer] fonctions_ln → math_ch5_fonctions_ln (12 nov., section ## fonctions_ln (cours)). Prochain : operations_formes.
+- [construit, réactions à générer] fonctions_ln → math_ch5_fonctions_ln (12 nov., section ## fonctions_ln (cours)).
+- [construit, réactions à générer] operations_formes → math_ch6_nombres_complexes (12 nov., section ## operations_formes (cours)). Maths du semestre 1 : tous construits.
 
 ## Décisions à faire valider (agent maths, tranchées selon le cadre 2BAC PC BIOF et les nationaux 2016-2025)
 - limites_continuite — dichotomie : GARDÉE, bloc court d1–d4 « pour les devoirs, pas demandé au national » (encadrement à une amplitude donnée, sans algorithme ni majoration d'erreur) ; capacité LC7 marquée « programme, hors examen national ». perimetre.json (motif « méthode de dichotomie » hors programme) NON modifié : à changer par l'utilisateur s'il valide.
@@ -157,3 +158,34 @@ corpus_fix.py, virgules.py, verif_sims.py, items.json, gen_reponses_vps.py (copi
 - PRÊT POUR LA VOIX : OUI pour les 53 pistes speech_text.mixed et les démonstrations ; réactions à écrire d'abord (items).
 - À valider (en plus des décisions de l'exploration) : ln_b1 (bilan) porte une question comme le bilan de primitives ; « bilan et carte » rattachés à K1 ;
   couleurs dites « بلون jaune / بلون orange » (orange reste rare dans le corpus) ; l8 rattachée à une seule compétence.
+
+## operations_formes (cours)
+- 12 nov. (routine cloud, 3ᵉ passage) : COURS ÉCRIT → backend/data/courses/math_ch6_nombres_complexes.json (draft, concentration) : 48 diapositives
+  (plan de l'exploration, préfixe nc_ ; bilan nc_b1_bilan, carte nc_b2_carte), 48 questions, 93 exercices, 89 démonstrations, 14 vues de calculs
+  (operations-formes-tableau/calculs-vues.js écrit par build.py) ; 12 parties (ouverture, I nombre i, II calcul algébrique, III plan, IV conjugué,
+  V module, VI argument, VII forme trigonométrique, VIII produit et Moivre, IX géométrie, X deux nationaux, XI bilan + carte) ; compétences K1–K8
+  (cadre NC1–NC10). Build : maths_build/operations_formes/ (p1…p4.py écrits par 4 sous-agents, contrôlés par check_part.py ; refaire :
+  `python3 build.py --garder-reponses` puis `blocs.py appliquer`).
+- Cadre : chapitres.operations_formes ajoutée (cadre.py : relit, ajoute la seule clé, réécrit ; NC1–NC10, 29 formules, 26 mots hors cadre, 4 décisions).
+  programme_semestre1 : operations_formes → construit, cours math_ch6_nombres_complexes.
+- Simulations (frontend/public/media/simulations/maths/operations-formes-tableau/, contrat CONTRAT_SIMULATIONS.md, 3 sous-agents) : ouverture (carte) ;
+  nombre-i (droite, quart, cycle[n]) ; plan (placer[a,b], affixe, purs) ; vecteur (vecteur, milieu, distance) ; conjugue (miroir[a,b], reel, distances) ;
+  module (triangle, cercle) ; argument (angle[t], tour, axes, projections, quadrants) ; angles (tableau) ; trig (passage, signes, faux, retour) ;
+  produit (carre, regle[t1,t2], fois_i, inverses) ; moivre (spirale[n], reel, national) ; alignement (alignes[cx,cy], national) ; calculs.html ;
+  bilan.html (8 blocs, page 2 de l'élève) ; carte.html. Barre du conjugué dessinée au trait partout (la barre combinante n'est pas sûre dans la police).
+  node --check OK (15 pages + calculs-vues.js) ; test_page.js (headless Linux, node) : toutes les vues sans erreur, moments et repères du contrat, rien hors cadre.
+- Méthode des blocs : ajouts.py → methode_blocs/ajouts/math_ch6_nombres_complexes.json : 4 séances × 3 blocs de 4 (découpage de l'exploration),
+  30 rappels (ceux du plan, bonne réponse des QCM déplacée), 23 prédictions / 48. blocs.py verifier → « cadre : OK », « blocs : OK »
+  (avis : partie ouverture sans prédiction). controler_cadre → « cadre : OK » (296 « à relire » non bloquants : applications numériques, lectures de formules).
+- preparer_reponses verifier : seulement « pas de piste audio » (48) et « réaction manquante » (750).
+- verifier_texte_corpus (copie avec backend/kaggle_tts/texte_parle.py) : darija rare remplacée dans les p*.py (بالليموني → بلون orange, بالأصفر →
+  بلون jaune, كتزلق → كتمشي, اللفوق/اللتحت, الفليشة → السهم, مشطب → عليه خط…) ; restent ≈ 250 mots, surtout des termes du programme
+  (argument, modulo, congru, affixe, Moivre, réel…) et de la darija rare une fois chacune (الصومعة, عقارب…), gardés.
+- Réactions : items seulement → maths_build/operations_formes/items.json (750), items_blocs.json (91), demos_blocs.json (0). À écrire sur le serveur.
+- PRÊT POUR LA VOIX : OUI pour les 48 pistes speech_text.mixed et les démonstrations ; réactions à écrire d'abord (items).
+- Exploration : déjà faite (10 profs) ; vidéos non réauditées depuis le cloud.
+- À valider (en plus des décisions de l'exploration) : bilan et carte portent une question (comme fonctions_ln) et sont rattachés à K1 ; une seule
+  compétence par diapositive (la première du plan : t6 → K5, n1 → K2) ; dans les lignes de calculs.html le conjugué est écrit en mots
+  (« son conjugué : … ») et non z̄ (police) ; exemples à la craie différents de la question (a5, c1, c3, c4) pour ne pas souffler la réponse ;
+  module?vue=cercle passe par 5i (le contrat disait 4i, faux) ; nombre-i vues quart/cycle sans les petits vecteurs u et v (ils tomberaient sur 1 et i) ;
+  « ↔ » et « Ω » écrits à la craie (police à confirmer à l'œil) ; carte.html : partie2 demandée d'un coup → ≈ 15 s d'écriture (comme ln).
