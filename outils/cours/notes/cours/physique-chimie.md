@@ -151,7 +151,7 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
 - Simulations (frontend/public/media/simulations/physics/dipole-rl-tableau/, contrat cours/dipole_RL_contrat_simulations.md, 3 sous-agents) :
   lampes, bobine (objet|mesure), triangle, circuit-rl (montage|etablissement|rupture), courbe (trace|tangente|pourcent|ub), influence (L|R),
   rupture (descente|diode), droite, energie (barre|calcul), figures (16 ?fig=), bilan (9 blocs), carte. node --check OK ; chaque page testée en
-  headless par son agent. verif_sims.js sur les 48 diapositives : voir ligne suivante.
+  headless par son agent. verif_sims.js (Playwright node, headless) sur les 48 diapositives : 48 ok, « AUCUN PROBLÈME ».
 - À valider (cours) : prédictions ajoutées sur e3, b8, l1 (une par bloc) ; t1 sur circuit-rl?vue=rupture (fig_ed_rupture non utilisée) ;
   lampes : à l'ouverture les DEUX lampes s'éteignent en retard (le courant de la bobine passe aussi par R et L₁ — physique juste, le tableau le dit) ;
   oscilloscope : voie 2 donne −u_b avec la masse au point commun, seule u_R est tracée ; couleurs u_R orange, u_b violet ; question de la carte
