@@ -4,6 +4,7 @@ Cours (ordre programme_semestre1.json) : limites_continuite, derivation_etude_fo
 
 ## État
 - [construit, réactions à générer] limites_continuite → math_ch1_limites_continuite (détail : section ## limites_continuite).
+- [construit, réactions à générer] fonctions_ln → math_ch5_fonctions_ln (12 nov., section ## fonctions_ln (cours)). Prochain : operations_formes.
 
 ## Décisions à faire valider (agent maths, tranchées selon le cadre 2BAC PC BIOF et les nationaux 2016-2025)
 - limites_continuite — dichotomie : GARDÉE, bloc court d1–d4 « pour les devoirs, pas demandé au national » (encadrement à une amplitude donnée, sans algorithme ni majoration d'erreur) ; capacité LC7 marquée « programme, hors examen national ». perimetre.json (motif « méthode de dichotomie » hors programme) NON modifié : à changer par l'utilisateur s'il valide.
@@ -136,3 +137,23 @@ corpus_fix.py, virgules.py, verif_sims.py, items.json, gen_reponses_vps.py (copi
 
 ## fonctions_ln (cours)
 - 11 nov. (agent maths) : cours math_ch5_fonctions_ln lancé (un sous-agent opus), d'après exploration/fonctions_ln.json ; build maths_build/fonctions_ln/.
+- 12 nov. (routine cloud, 2ᵉ passage) : COURS ÉCRIT → backend/data/courses/math_ch5_fonctions_ln.json (draft, concentration) : 53 diapositives
+  (plan de l'exploration, préfixe ln_), 53 questions, 87 exercices, 100 démonstrations, 17 vues de calculs (ln-tableau/calculs-vues.js écrit par
+  build.py) ; 12 parties (ouverture, I naissance, II courbe, III domaine, IV règles, V équations, VI limites, VII dérivée, VIII primitives u'/u,
+  IX étude, X log, XI bilan + carte) ; compétences K1–K9 (cadre LN1–LN10). Contenu : maths_build/fonctions_ln/p1…p5.py (écrits par 5 sous-agents,
+  un par partie, contrôlés par check_part.py) ; refaire : `python build.py --garder-reponses` puis `blocs.py appliquer`.
+- Méthode des blocs : ajouts.py → methode_blocs/ajouts/math_ch5_fonctions_ln.json : 5 séances (3+3+3+3+2 blocs, 14 blocs de 3–4 diapositives,
+  découpage de l'exploration), 32 rappels (ceux du plan), 28 prédictions / 53. blocs.py verifier → « cadre : OK », « blocs : OK »
+  (avis : séance 5 à 2 blocs ; partie ouverture sans prédiction). controler_cadre → « cadre : OK » (400 « à relire » non bloquants :
+  applications numériques, équations lues « y égale … »).
+- preparer_reponses verifier : seulement « pas de piste audio » et « réaction manquante ». node --check OK (14 pages + calculs-vues.js).
+  Navigateur headless (verif_sims.js, Playwright node) : 53/53 diapositives jouées, moments et repères présents, pas d'erreur JS, rien hors cadre ;
+  seul « peu d'encre » sur ln_b1 (page 2 de l'élève vide sans lacunes, normal).
+- verifier_texte_corpus (copie avec backend/kaggle_tts/texte_parle.py : le module manque à côté du script dans outils/cours/voxtts/) :
+  83 mots darija rares remplacés (اللفوق, بالأصفر → بلون jaune, كتزلق → كتمشي, العلو → الارتفاع…) ; restent ≈ 100 darija rares
+  (une fois chacun : كيتنول, ديريفي, المراية…) et des termes français du programme (logarithme, décimal, népérien…), gardés.
+- Réactions : items seulement → maths_build/fonctions_ln/items.json (766), items_blocs.json (87), demos_blocs.json (0). À écrire sur le serveur.
+- programme_semestre1.json : fonctions_ln → « construit », cours math_ch5_fonctions_ln.
+- PRÊT POUR LA VOIX : OUI pour les 53 pistes speech_text.mixed et les démonstrations ; réactions à écrire d'abord (items).
+- À valider (en plus des décisions de l'exploration) : ln_b1 (bilan) porte une question comme le bilan de primitives ; « bilan et carte » rattachés à K1 ;
+  couleurs dites « بلون jaune / بلون orange » (orange reste rare dans le corpus) ; l8 rattachée à une seule compétence.
