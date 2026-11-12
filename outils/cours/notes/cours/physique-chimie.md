@@ -104,6 +104,7 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
   condensateur (plaques|charge), intensite, generateur-courant, circuit-rc (montage|charge|decharge), courbe-charge (tableau|R|tangente|pourcent),
   quatre-courbes (q_i|uC_uR|quatre|descente), continuite (enchaine|decharge), energie (lampe|calcul), figures (23 ?fig=), bilan (8 blocs), carte.
   node --check OK ; chaque page testée en headless par son agent (moments, repères, rien hors cadre).
+  verif_sims.js (Playwright node, headless) sur les 48 diapositives : 48 ok, « AUCUN PROBLÈME » (moments play_until joués, repères, encre, pas d'erreur JS, rien hors cadre).
 - Méthode des blocs : ajouts.py (blocs_s1..s4.json des agents + rappels du plan de l'exploration, C2_r4 réécrit pour ne pas écrire « I₀ = q/C »)
   → methode_blocs/ajouts/phys_ch6_dipole_RC.json : 4 séances × 3 blocs × 4 diapositives, 29 rappels, 25 prédictions / 48. blocs.py verifier →
   « cadre : OK », « blocs : OK ». preparer_reponses verifier : seulement voix et réactions manquantes.
@@ -111,6 +112,7 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
 - verifier_texte_corpus : 272 mots à revoir ; darija rare surtout des formes conjuguées ou négatives (كتنقزش, كيدوزش, فالطلوع…) une ou deux fois
   chacune, et termes du programme (additivité, échelon, transitoire, microfarads…) : gardés, à écouter au contrôle des murmures.
 - PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- Reste : réactions (serveur), voix, validation ; manip labo 3D rc non reliée ; lecture dans le lecteur /dev/course-player non faite. Cours suivant : dipole_RL (exploration à faire).
 - À valider (en plus des décisions de l'exploration et du cadre) : bilan et carte en slide_type « evaluation », rattachés à C1 ; e8 (2023 R) répond
   « dq/dt + (1/RC)·q = E/R » et la case décharge de q écrit « RC·dq/dt + q = 0 » (formes hors de la liste du cadre, « à relire ») ; questions de
   prédiction changées pour ne pas être soufflées par la simulation (s6 : u_C à 2τ ; s8 : quelle courbe a la forme de i ; t2 : C doublé) ; c2 « qu'indique » ;
