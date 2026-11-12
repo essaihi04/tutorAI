@@ -477,3 +477,43 @@ contrat : cours/etat_equilibre_contrat_simulations.md ; tout refaire : `sh outil
   analogie du compteur de taxi (i3) sans sa limite ; « [X]éq » et « [X]_éq » selon les diapositives ; simulations : ajouts à la craie hors contrat (pH initial
   2,00 en produits, équation en national_2017, colonne « C ÷ 10 » en bilan_dilution, lignes de rappel), « τ augmente, K ne change pas » écrit en mots (pas de ↑),
   courbe méthanoïque jaune comme K, un seul pH-mètre en ouverture, thermomètre en definition.
+
+## acides_bases
+(routine cloud du 12 nov., nuit ; cours phys_ch13_acides_bases, « Transformations liées aux réactions acide-base » ; outils : cours/acides_bases_build/ ;
+contrat : cours/acides_bases_contrat_simulations.md ; tout refaire : `sh outils/cours/notes/cours/acides_bases_build/refaire.sh` (rien n'est voisé))
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/acides_bases.json (explo.py = explo_a.py + explo_b.py ; toutes les assertions OK).
+  VIDÉOS NON AUDITÉES (YouTube bloqué depuis le cloud). Appui : nationaux PC 2016-2025 (acides_bases_build/nationaux.md) : le chapitre tombe dans 17 sessions
+  sur 20 (0,5 à 4,75 pts, ≈ 2,8 en moyenne) ; le DOSAGE dans 13 sessions ; questions fréquentes : C_A·V_A = C_B·V_BE (13), pH = pKa + log et prédominance (11),
+  pKa par Qr,éq ou Ke/Qr,éq (9), V_E sur la courbe (8), choix de l'indicateur (6), K = Ka₁/Ka₂ ou Ka/Ke (5) ; dosage conductimétrique jamais demandé.
+  Pas d'ancien cours. perimetre.json NON modifié.
+  Erreurs du dépôt relevées : 2020 R 2.5 (pH 4,27 au corrigé, 4,32 au calcul), 2020 N 1.1 (barème 1 pt au lieu de 0,5), 2022 N (dosage écrit avec ⇌),
+  2024 N (corrigés « Démarche… » sans calcul), Henderson nommé (2021 R, 2022 N, 2023 N, 2023 R), OH⁻ au lieu de HO⁻ (2024 R, 2025 R).
+- Cadre : chapitres.acides_bases ajoutée (cadre_ab.py : AB1-AB10 provisoires ; mots hors cadre : Henderson, Hasselbalch, Flood, Lewis, Arrhenius, Ostwald,
+  Kb, pKb, pOH, Le Chatelier, critère d'évolution spontanée…).
+- COURS CONSTRUIT → backend/data/courses/phys_ch13_acides_bases.json (draft, concentration) : 48 diapositives (préfixe ab_), 48 questions, 22 prédictions,
+  50 exercices ; 13 parties (ouverture, rappels, autoprotolyse et Ke, base dans l'eau, Ka et pKa, comparer, K d'une réaction acide-base, prédominance et
+  distribution, indicateurs, dosage, exploiter une courbe, 5 sujets du national, bilan + carte) ; compétences C1-C9. Build : p1…p4.py (4 sous-agents,
+  check_part « AUCUNE ERREUR »), build.py, ajouts.py.
+- Méthode des blocs : methode_blocs/ajouts/phys_ch13_acides_bases.json : 4 séances × 3 blocs × 4 diapositives, 31 rappels, 22 prédictions / 48.
+  blocs.py verifier → « cadre : OK », « blocs : OK » (avis : partie I « Rappels » sans prédiction). controler_cadre → « cadre : OK » (245 « à relire » :
+  applications numériques). preparer_reponses verifier : seulement réactions et pistes audio manquantes.
+- Réactions : items seulement → items_cours.json (562), items_blocs.json (82), demos_blocs.json (0). À écrire sur le serveur.
+- verifier_texte_corpus (texte_parle.py copié de backend/kaggle_tts dans le scratchpad) : 389 mots à revoir, surtout termes de chimie (équivalence, virage,
+  prédominance, chlorhydrique, autoprotolyse…) gardés ; ≈ 40 mots darija rares une fois chacun (الخل, مخفف, الصافي, كيتعمر, وفالسيمستر, مستوية…) : à écouter
+  au contrôle des murmures.
+- Simulations (frontend/public/media/simulations/chimie/acides-bases-tableau/, 4 sous-agents, moteur Math.max) : eau (7 vues ; poignée pH en solutions),
+  base (4), acidite (5), comparer (7), predominance (5 ; poignée pH en domaines et distribution), dosage (6 ; poignée V_B en courbe), exploiter (6),
+  figures (?fig=fig_2025R|fig_2016N|fig_2022R|fig_2022N|fig_2024R), bilan, carte. node --check OK (10 pages + kit) ; chaque page testée headless par son agent
+  (moments, repères, poignées aux deux bouts, hors cadre, captures regardées).
+- programme_semestre1 : acides_bases → « construit », phys_ch13_acides_bases (prog.py).
+- PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Le semestre 1 de physique-chimie est entièrement construit.
+- À valider : dosage gardé DANS ce cours (programme_semestre1 n'a pas de clé dosage) ; une diapositive de dosage conductimétrique (e5, jamais au national,
+  à retirer si on allège) ; pH_E de l'exemple J = 8,3 (calcul 8,25, pas 8,4) → rouge de crésol ; pKa méthanoïque 3,75 (3,8 seulement pour 2020 R) ;
+  « K > 10⁴ : pratiquement totale » dit une fois (k3) ; Kb, pKb, pOH interdits ; k4 (2020 R) garde la notation du sujet K = Ka₂/Ka₁ ; lignes écrites hors
+  formules du cadre ([H₃O⁺] = 10^(−pH) en r1, Ka = 10^(−2pH)/(C − 10^(−pH)) en a3, K = Ka/Ke = 10^(14 − pKa), τ₁ = [CH₃COO⁻]_éq/C en p4) ;
+  questions de bl et cr réécrites pour avoir une bonne réponse ; exercices inventés (e2 méthanoïque V_BE = 14,0 mL ; e5 conductimétrie C_A = 1,5·10⁻² mol/L ;
+  ammoniac 1,0·10⁻³ mol/L pH 10,07) ; minuscules du sujet gardées en n2, n3 (C_b, V_aE) ; voix « le B B T », « H Ind » ; analogie de la bouteille au robinet (d4) ;
+  simulations : K_a, pK_a, K_e écrits avec indice ; burette 0-50 mL ; tangentes de pente fixée (E à (20,0 ; 8,25)) ; bilan et carte gardent le 2ᵉ bouton
+  « Imprimer / PDF » des modèles (règle : un seul bouton) ; exposant « 10^{pKa2 − pKa1} » sans indice dans le bilan (limite du kit) ; petits ajouts à la craie
+  hors contrat (justifications courtes, bande de l'indicateur à côté des courbes).
