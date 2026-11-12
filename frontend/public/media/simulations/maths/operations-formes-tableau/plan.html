@@ -100,6 +100,12 @@ function plan(c, o) {
   c.texte('v', X(0) - 11, Y(.5) + 5, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(0) - 11, Y(.5) - 8, 9);
   return G;
 }
+/** Nom d’un point : au-dessus s’il est en haut, dessous s’il est un peu bas, à côté s’il est tout en bas (rien sous y = 360). */
+function etiq(c, G, x, y, s, couleur, taille) {
+  const px = G.X(x), py = G.Y(y);
+  if (y >= 0 || y >= -2) c.texte(s, Math.min(425, Math.max(50, px)), y >= 0 ? py - 13 : py + 26, { couleur, taille, align: 'center' });
+  else c.texte(s, px < 330 ? px + 13 : px - 13, py + 6, { couleur, taille, align: px < 330 ? 'left' : 'right' });
+}
 /** Le cadre d’un repère entier (pour c.repere). */
 const cadreRep = (G) => [G.x0, G.y0, G.w, G.h];
 
@@ -126,12 +132,11 @@ MathsTableau.page({
         c.pause(.2);
         if (b !== 0) {
           K.anime(1, p => c.fleche(G.X(a), G.Y(0), G.X(a), G.Y(b * p), { couleur: 'orange', largeur: 3.4, tete: 10 }));
-          c.texte((b > 0 ? 'monter de ' : 'descendre de ') + fr(Math.abs(b)), G.X(a) + (a >= 0 ? 10 : -10), G.Y(b / 2) + 5, { couleur: 'orange', taille: 16, align: a >= 0 ? 'left' : 'right' });
+          c.texte((b > 0 ? 'monter de ' : 'descendre de ') + fr(Math.abs(b)), G.X(a) + (G.X(a) < 330 ? 10 : -10), G.Y(b / 2) + 5, { couleur: 'orange', taille: 16, align: G.X(a) < 330 ? 'left' : 'right' });
         }
         c.pause(.2);
         c.point(G.X(a), G.Y(b), 6, 'cyan');
-        const lx = Math.min(420, Math.max(50, G.X(a))), ly = b >= 0 ? G.Y(b) - 13 : G.Y(b) + 26;
-        c.texte(`M(${fr(a)} ; ${fr(b)})`, lx, ly, { couleur: 'cyan', taille: 17, align: 'center' });
+        etiq(c, G, a, b, `M(${fr(a)} ; ${fr(b)})`, 'cyan', 17);
         c.pause(.2);
         const parts = [['z = ', 'blanc']];
         if (b === 0) parts.push([fr(a), 'vert']);
