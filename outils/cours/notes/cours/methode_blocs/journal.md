@@ -95,3 +95,11 @@ Reste : écrire les réactions sur le VPS (gen_reponses_vps.py, crédit DeepSeek
 en_c1_cas_types). Exercices de blocs : 8 repris des diapositives, 3 écrits (dont 1 avec démonstration). Items : 230 (cours,
 energie_nucleaire_build/items_cours.json) + 112 (blocs, items_blocs.json) + 1 démonstration (demos_blocs.json), à faire écrire.
 verifier : « cadre : OK », « blocs : OK ». Les seances/rappels/prédictions sont aussi gardés par build.py --garder-reponses.
+
+## phys_ch4_radioactivite — FAIT (routine cloud, 12 novembre 2026)
+5 séances (3 + 3 + 3 + 3 + 2 blocs ; 14 blocs de 3-4 diapositives ; la dernière séance a 2 blocs de 3 : cas types 2021 N/2022 N,
+puis 2025 N + bilan + carte), 29 rappels (3-4 par compétence C1-C9, formes libre/qcm/vrai_faux), 20 prédictions / 52, aucun
+énoncé réécrit (les prédictions sont posées directement dans p*.py et dans ajouts). Exercices de blocs : 2 repris (ra_x2_2021N/e0,
+ra_x4_2025N/e0), 12 écrits (9 avec démonstration). Items : 275 (cours, radioactivite_build/items_cours.json) + 142 (blocs,
+items_blocs.json) + 9 démonstrations (demos_blocs.json), à faire écrire sur le serveur. verifier : « cadre : OK », « blocs : OK ».
+Le cours étant neuf, la photo base/ a été prise après la dernière retouche de la darija (aucune voix encore).
