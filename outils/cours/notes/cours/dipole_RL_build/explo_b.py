@@ -1,0 +1,111 @@
+# -*- coding: utf-8 -*-
+"""Partie B de l'exploration dipole_RL : compétences, séances et plan des diapositives."""
+
+def R(id, type, prompt, **kw):
+    d = {"id": id, "type": type, "prompt": prompt}; d.update(kw); return d
+
+competences = [
+ {"id": "C1", "verbe": "Décrire la bobine (inductance L en henry, résistance r, symbole) et utiliser u_b = L·di/dt + r·i en convention récepteur", "cadre_ids": ["RL1"],
+  "rappels": [R("C1_r1", "libre", "Bobine idéale, L = 0,2 H, i augmente de 30 A par seconde. u_b = ?", attendu="u_b = L·di/dt = 0,2 × 30 = 6 V"),
+              R("C1_r2", "qcm", "L'unité de l'inductance est :", options=["le farad", "le henry", "l'ohm", "le tesla"], correct=1),
+              R("C1_r3", "vrai_faux", "Une bobine parcourue par un courant constant a une tension nulle à ses bornes, même si r ≠ 0.", correct=False),
+              R("C1_r4", "libre", "L = 0,1 H, r = 10 Ω, i = 0,5 A, di/dt = 20 A/s. u_b = ?", attendu="u_b = 0,1 × 20 + 10 × 0,5 = 2 + 5 = 7 V")]},
+ {"id": "C2", "verbe": "Expliquer le rôle de la bobine : elle s'oppose aux variations de i (retard à l'établissement et à la rupture), i est continue, en régime permanent elle se comporte comme une résistance r", "cadre_ids": ["RL2"],
+  "rappels": [R("C2_r1", "qcm", "Juste après la fermeture de K, l'intensité dans une bobine initialement sans courant vaut :", options=["0", "E/R", "E/(R + r)", "elle est infinie"], correct=0),
+              R("C2_r2", "vrai_faux", "Une bobine diminue la valeur finale du courant.", correct=False),
+              R("C2_r3", "libre", "En régime permanent, I = 0,2 A et la tension de la bobine vaut 2 V. r = ?", attendu="u_b = r·I → r = 2/0,2 = 10 Ω"),
+              R("C2_r4", "qcm", "La bobine s'oppose :", options=["à l'intensité i", "aux variations de i", "à la tension E"], correct=1)]},
+ {"id": "C3", "verbe": "Décrire la réponse d'un dipôle RL à un échelon de tension (régime transitoire, régime permanent, I₀ = E/(R + r)) et visualiser i par u_R = R·i", "cadre_ids": ["RL3"],
+  "rappels": [R("C3_r1", "libre", "E = 12 V, R = 40 Ω, r = 8 Ω. Intensité en régime permanent ?", attendu="I₀ = E/(R + r) = 12/48 = 0,25 A"),
+              R("C3_r2", "qcm", "Pour voir la forme de i à l'oscilloscope, on visualise :", options=["u_b", "u_R", "E"], correct=1),
+              R("C3_r3", "vrai_faux", "Le régime permanent est pratiquement atteint après 5τ.", correct=True)]},
+ {"id": "C4", "verbe": "Établir l'équation différentielle vérifiée par i (ou u_R) à l'établissement et à la rupture du courant", "cadre_ids": ["RL4"],
+  "rappels": [R("C4_r1", "libre", "Écris l'équation différentielle de i à l'établissement (E, R, bobine L, r).", attendu="u_R + u_b = E → L·di/dt + (R + r)·i = E"),
+              R("C4_r2", "qcm", "À la rupture, le second membre de l'équation vaut :", options=["E", "0", "E/L", "R·E"], correct=1),
+              R("C4_r3", "libre", "Divise L·di/dt + (R + r)·i = E par L.", attendu="di/dt + ((R + r)/L)·i = E/L"),
+              R("C4_r4", "vrai_faux", "Dans l'équation différentielle du RL, on oublie r car la bobine n'est pas une résistance.", correct=False)]},
+ {"id": "C5", "verbe": "Vérifier qu'une expression est solution de l'équation différentielle, déterminer A et τ, et écrire i(t), u_R(t), u_b(t)", "cadre_ids": ["RL5"],
+  "rappels": [R("C5_r1", "libre", "Dérive i(t) = A(1 − e^(−t/τ)).", attendu="di/dt = (A/τ)·e^(−t/τ)"),
+              R("C5_r2", "qcm", "En identifiant, la constante A vaut :", options=["E/R", "E/(R + r)", "L/(R + r)", "E/L"], correct=1),
+              R("C5_r3", "libre", "Rupture : I₀ = 0,2 A, τ = 4 ms. i(4 ms) = ?", attendu="i(τ) = I₀·e^(−1) ≈ 0,37 × 0,2 = 0,074 A")]},
+ {"id": "C6", "verbe": "Connaître τ = L/(R + r), montrer qu'elle est un temps, et prévoir l'influence de L et de R", "cadre_ids": ["RL6"],
+  "rappels": [R("C6_r1", "libre", "L = 0,5 H, R = 90 Ω, r = 10 Ω. τ = ?", attendu="τ = L/(R + r) = 0,5/100 = 5·10⁻³ s = 5 ms"),
+              R("C6_r2", "qcm", "Si on double L (R et r inchangés) :", options=["τ double, I₀ inchangé", "τ double, I₀ moitié", "τ inchangé, I₀ double"], correct=0),
+              R("C6_r3", "vrai_faux", "Le quotient L/R s'exprime en secondes.", correct=True)]},
+ {"id": "C7", "verbe": "Exploiter les courbes i(t), u_R(t), u_b(t) ou di/dt = f(i) : τ (tangente, 63 %, 37 %), I₀, E, r, L", "cadre_ids": ["RL7"],
+  "rappels": [R("C7_r1", "qcm", "La tangente à l'origine de i(t) coupe l'asymptote I₀ à l'instant :", options=["τ/2", "τ", "5τ", "0,63·τ"], correct=1),
+              R("C7_r2", "libre", "E = 6 V, R = 50 Ω, U_Rmax = 5 V. r = ?", attendu="I₀ = 5/50 = 0,1 A ; R + r = 6/0,1 = 60 Ω ; r = 10 Ω"),
+              R("C7_r3", "libre", "τ = 2 ms, R + r = 60 Ω. L = ?", attendu="L = τ·(R + r) = 2·10⁻³ × 60 = 0,12 H"),
+              R("C7_r4", "qcm", "Sur la droite di/dt = f(i), l'ordonnée à l'origine vaut :", options=["E/L", "I₀", "τ", "−1/τ"], correct=0)]},
+ {"id": "C8", "verbe": "Connaître et exploiter l'énergie magnétique E_m = ½·L·i² emmagasinée dans une bobine", "cadre_ids": ["RL8"],
+  "rappels": [R("C8_r1", "libre", "L = 0,2 H, I₀ = 0,5 A. E_m = ?", attendu="E_m = ½·L·I₀² = ½ × 0,2 × 0,25 = 0,025 J"),
+              R("C8_r2", "qcm", "Si i double, l'énergie de la bobine est multipliée par :", options=["2", "4", "½", "1"], correct=1),
+              R("C8_r3", "vrai_faux", "À la rupture, l'énergie de la bobine est dissipée par effet Joule dans les résistances.", correct=True)]},
+]
+
+def D(id, title, lead, marche, visuel, question, comp, demo, prediction=False, **kw):
+    d = {"id": id, "title": title, "lead": lead, "marche": marche, "visuel": visuel, "question": question,
+         "prediction": prediction, "competences": comp, "demonstration": demo}
+    d.update(kw); return d
+
+diapositives = [
+ # Séance 1 — la bobine
+ D("o1", "La carte du chapitre : une bobine qui freine le courant", "Que va-t-on savoir faire avec une bobine ?", "carte : bobine → u_b → échelon → équation → solution → τ → rupture → courbes → énergie ; « le RL tombe dans X sujets sur 20 »", "v_carte (centre, branches)", "Au national, quelle grandeur est presque toujours demandée dans l'exercice RL ?", ["C1"], ["Le plus souvent : τ lue sur une courbe, puis L ou r."]),
+ D("o2", "Trois gestes à avoir en main", "Vérifions les bases avant de commencer.", "une question par prérequis : loi d'Ohm u_R = R·i, additivité des tensions, dérivée de e^(−t/τ) ; un échec déclenche le rappel ; on rappelle que la méthode du RC va servir", "v_circuit_rl (montage)", "Dérive f(t) = e^(−t/τ).", ["C4"], ["f′(t) = −(1/τ)·e^(−t/τ)."]),
+ D("b1", "La bobine : un fil enroulé", "Qu'est-ce qu'une bobine, et comment la dessine-t-on ?", "objet réel (fil de cuivre enroulé, noyau de fer), symbole ; deux grandeurs : L (inductance, en henry H) et r (résistance du fil) ; l'ohmmètre lit r", "v_bobine (objet, symbole, ohmmetre)", "Un ohmmètre branché aux bornes de la bobine mesure :", ["C1"], ["Il mesure r, la résistance du fil de la bobine."]),
+ D("b2", "Deux lampes, une surprise", "Que se passe-t-il quand on ferme K ?", "deux branches en parallèle : lampe + résistance, lampe + bobine ; on ferme K : la lampe de la bobine s'allume en retard", "v_lampes (k_ouvert, k_ferme, retard)", "Laquelle des deux lampes va s'allumer en retard ?", ["C2"], ["La lampe en série avec la bobine : la bobine retarde l'établissement du courant."], prediction=True),
+ D("b3", "À la fin, le même éclat", "La bobine bloque-t-elle le courant ?", "quelques instants après : les deux lampes brillent pareil ; en régime permanent la bobine se comporte comme une résistance r ; u_b = r·I", "v_lampes (egal)", "En régime permanent, I = 0,2 A et r = 10 Ω. Que vaut u_b ?", ["C2", "C1"], ["u_b = r·I = 10 × 0,2 = 2 V."], prediction=True),
+ D("b4", "On ouvre K : un retard aussi", "Que fait la lampe de la bobine à l'ouverture ?", "à l'ouverture, i ne tombe pas à zéro d'un coup : la bobine s'oppose aussi à la diminution du courant", "v_lampes (ouverture)", "L'intensité dans la bobine peut-elle passer brusquement de 0,2 A à 0 ?", ["C2"], ["Non : l'intensité dans une bobine est continue, elle varie progressivement."], prediction=True),
+ D("b5", "Auto-induction et continuité de i", "Comment s'appelle ce comportement ?", "écrit au cahier : la bobine s'oppose aux VARIATIONS de i (auto-induction) ; i est continue ; juste après la fermeture i = 0", "v_lampes (retard)", "À quoi la bobine s'oppose-t-elle ?", ["C2"], ["Aux variations de l'intensité i, pas à i elle-même."]),
+ D("b6", "Un courant en triangle", "Que devient u_b si i monte puis descend régulièrement ?", "GBF : i(t) en dents de scie dans une bobine de résistance négligeable ; u_b(t) est en créneaux : palier positif quand i monte, négatif quand i descend", "v_triangle (courant, palier_haut, palier_bas)", "Quand i monte à vitesse constante, à quoi ressemble u_b ?", ["C1"], ["u_b est constante (un palier) tant que la pente de i est constante."], prediction=True),
+ D("b7", "u = L·di/dt", "Quel lien entre le palier et la pente ?", "pente lue ΔI/Δt, palier lu ; leur rapport est le même : L ; bobine idéale (r = 0) : u_b = L·di/dt ; L en henry", "v_triangle (pente_montee, rapport)", "Pente 20 A/s, palier 0,4 V. L = ?", ["C1"], ["L = u_b/(di/dt) = 0,4/20 = 0,02 H = 20 mH."]),
+ D("b8", "La bobine réelle : u_b = L·di/dt + r·i", "Comment écrire la tension d'une bobine qui a une résistance ?", "convention récepteur (flèches i et u_b opposées) ; on ajoute le terme r·i ; expression admise", "v_bobine (convention)", "En régime permanent, quel terme de u_b disparaît ?", ["C1"], ["di/dt = 0 donc L·di/dt = 0 ; il reste u_b = r·i."]),
+ D("b9", "Calculer u_b sur une courbe", "Comment lire di/dt puis calculer u_b ?", "courbe i(t) en segments ; sur chaque segment on lit la pente, on calcule u_b = L·di/dt (+ r·i) ; segment horizontal → u_b = r·i", "v_figures (fig=segments)", "L = 0,1 H, r = 0 ; i passe de 0 à 0,2 A en 10 ms. u_b = ?", ["C1"], ["di/dt = 0,2/0,01 = 20 A/s.", "u_b = L·di/dt = 0,1 × 20 = 2 V."]),
+ D("b10", "Exercice du national : trouver L", "Comment le national fait-il calculer L ?", "exercice national (à choisir dans nationaux.md : u_b et di/dt donnés, ou courbe) ; lignes de la correction", "v_figures", "(question du national choisi)", ["C1"], ["(lignes de la correction)"]),
+ # Séance 2 — établissement et équation
+ D("m1", "Le montage RL", "Comment étudier l'établissement du courant ?", "E, K, R, bobine (L, r) en série ; oscilloscope : voie 1 sur R (u_R image de i), voie 2 sur la bobine ; flèches i, u_R, u_b", "v_circuit_rl (montage, fleches, oscillo)", "Pourquoi visualise-t-on u_R pour voir i ?", ["C3"], ["u_R = R·i : u_R a la même forme que i (i = u_R/R)."]),
+ D("m2", "On ferme K : ce qu'on voit", "Comment i évolue-t-il après la fermeture ?", "u_R (donc i) part de 0, monte vite puis de plus en plus lentement vers une valeur limite", "v_circuit_rl (etablissement)", "La courbe de i après la fermeture : saut, droite, ou montée qui s'aplatit ?", ["C3"], ["Une montée qui s'aplatit : i part de 0 et tend vers I₀."], prediction=True),
+ D("m3", "Régime transitoire, régime permanent", "Comment appelle-t-on les deux parties de la courbe ?", "partie qui monte = régime transitoire ; plateau = régime permanent (i = I₀ constant)", "v_courbe (trace, asymptote)", "Pendant le régime permanent, que vaut di/dt ?", ["C3"], ["i = I₀ est constant, donc di/dt = 0."]),
+ D("m4", "La valeur finale I₀", "Combien vaut le courant à la fin ?", "en régime permanent : u_b = r·I₀ ; additivité : R·I₀ + r·I₀ = E → I₀ = E/(R + r) ; L n'y apparaît pas", "v_courbe (asymptote)", "E = 12 V, R = 40 Ω, r = 8 Ω. I₀ = ?", ["C3"], ["R·I₀ + r·I₀ = E.", "I₀ = E/(R + r) = 12/48 = 0,25 A."], prediction=True),
+ D("e1", "Loi d'additivité", "Quelle relation relie les tensions du circuit ?", "flèches u_R et u_b : u_R + u_b = E", "v_circuit_rl (fleches)", "Écris la loi d'additivité des tensions pour ce circuit.", ["C4"], ["u_R + u_b = E."]),
+ D("e2", "Remplacer chaque tension", "Que met-on à la place de u_R et u_b ?", "u_R = R·i ; u_b = L·di/dt + r·i → R·i + L·di/dt + r·i = E", "v_circuit_rl (fleches)", "Quels termes contiennent i sans dérivée ?", ["C4"], ["R·i et r·i."]),
+ D("e3", "L'équation différentielle", "Comment ranger l'équation ?", "on regroupe : L·di/dt + (R + r)·i = E", "cahier", "Quel coefficient est devant i ?", ["C4"], ["L·di/dt + (R + r)·i = E : le coefficient de i est R + r."]),
+ D("e4", "Les formes des énoncés", "Comment le national écrit-il cette équation ?", "diviser par L : di/dt + ((R + r)/L)·i = E/L ; diviser par R + r : (L/(R + r))·di/dt + i = E/(R + r) → apparition de τ et I₀", "cahier", "Divise L·di/dt + (R + r)·i = E par R + r.", ["C4"], ["(L/(R + r))·di/dt + i = E/(R + r)."]),
+ D("e5", "L'équation en u_R", "Et si l'énoncé demande l'équation vérifiée par u_R ?", "i = u_R/R, di/dt = (1/R)·du_R/dt ; on remplace : (L/R)·du_R/dt + ((R + r)/R)·u_R = E", "cahier", "Remplace i par u_R/R dans L·di/dt + (R + r)·i = E.", ["C4"], ["L·(1/R)·du_R/dt + (R + r)·u_R/R = E.", "Multiplier par R : L·du_R/dt + (R + r)·u_R = R·E."]),
+ D("e6", "u_b au début et à la fin", "Que vaut u_b juste après la fermeture et en régime permanent ?", "à t = 0 : i = 0 (continuité) donc u_R = 0 et u_b = E ; en régime permanent u_b = r·I₀", "v_courbe (ub)", "Juste après la fermeture de K, que vaut u_b ?", ["C4", "C2"], ["i(0) = 0 donc u_R(0) = 0.", "u_b(0) = E − u_R(0) = E."], prediction=True),
+ D("e7", "Exercice du national : établir l'équation", "Comment rédiger comme le corrigé ?", "exercice national (nationaux.md) : quatre lignes attendues", "v_figures", "(question du national choisi)", ["C4"], ["(lignes de la correction)"]),
+ D("e8", "Exercice du national : u_b et I₀", "Comment exploiter u_b au début et à la fin ?", "exercice national : u_b(0) = E, u_b(∞) = r·I₀ → r", "v_figures", "(question du national choisi)", ["C4", "C3"], ["(lignes de la correction)"]),
+ # Séance 3 — solution, τ, rupture
+ D("s1", "La forme de la solution", "Quelle fonction monte puis s'aplatit ?", "i(t) = A(1 − e^(−t/τ)) : à t = 0, i = 0 ; quand t grandit, i tend vers A", "v_courbe (trace, asymptote)", "Quand t devient très grand, i(t) = A(1 − e^(−t/τ)) tend vers :", ["C5"], ["e^(−t/τ) tend vers 0, donc i tend vers A."], prediction=True),
+ D("s2", "Dériver la solution", "Que vaut di/dt ?", "di/dt = (A/τ)·e^(−t/τ)", "cahier", "Dérive i(t) = A(1 − e^(−t/τ)).", ["C5"], ["di/dt = A·(1/τ)·e^(−t/τ) = (A/τ)·e^(−t/τ)."]),
+ D("s3", "Remplacer et identifier τ", "Pourquoi τ = L/(R + r) ?", "dans L·di/dt + (R + r)·i = E : A·e^(−t/τ)·(L/τ − (R + r)) + (R + r)·A = E ; vrai à chaque instant → L/τ − (R + r) = 0", "cahier", "De L/τ − (R + r) = 0, tire τ.", ["C5", "C6"], ["L/τ = R + r.", "τ = L/(R + r)."]),
+ D("s4", "Identifier A", "Que vaut A ?", "(R + r)·A = E → A = E/(R + r) = I₀ ; solution : i(t) = I₀(1 − e^(−t/τ))", "cahier", "E = 6 V, R + r = 30 Ω. A = ?", ["C5"], ["A = E/(R + r) = 6/30 = 0,2 A."]),
+ D("s5", "τ est un temps", "Comment montrer que L/(R + r) s'exprime en secondes ?", "[L] = [U]·[T]/[I] (de u = L·di/dt) ; [R] = [U]/[I] ; [L]/[R] = [T]", "cahier", "De u = L·di/dt, quelle est la dimension de L ?", ["C6"], ["[L] = [U]·[T]/[I].", "[R] = [U]/[I].", "[τ] = [L]/[R] = [T] : un temps."]),
+ D("s6", "63 % à τ, presque tout à 5τ", "Où en est i à t = τ ?", "i(τ) = I₀(1 − e^(−1)) ≈ 0,63·I₀ ; à 5τ i ≈ 0,99·I₀ : régime permanent", "v_courbe (pourcent, cinq_tau)", "I₀ = 0,25 A. Que vaut i à t = τ ?", ["C5", "C6"], ["i(τ) = 0,63 × 0,25 ≈ 0,16 A."], prediction=True),
+ D("s7", "Si L double", "Que deviennent τ et I₀ si on double L ?", "trois courbes, même plateau, montée plus lente pour L grand", "v_influence (L_double)", "On double L. La courbe i(t) monte-t-elle plus vite, moins vite, et le plateau change-t-il ?", ["C6"], ["τ = L/(R + r) double : montée plus lente.", "I₀ = E/(R + r) ne change pas."], prediction=True),
+ D("s8", "Si R augmente", "Que deviennent τ et I₀ si R augmente ?", "plateau plus bas ET montée plus rapide", "v_influence (R_double, comparer)", "On augmente R. Que deviennent I₀ et τ ?", ["C6"], ["I₀ = E/(R + r) diminue.", "τ = L/(R + r) diminue."], prediction=True),
+ D("t1", "La rupture du courant", "Que se passe-t-il quand on enlève le générateur ?", "K bascule : le circuit R, bobine se ferme sur lui-même ; u_R + u_b = 0 → L·di/dt + (R + r)·i = 0", "v_rupture (bascule)", "À la rupture, écris l'équation différentielle de i.", ["C4"], ["u_R + u_b = 0.", "L·di/dt + (R + r)·i = 0."]),
+ D("t2", "i descend : 37 % à τ", "Comment i diminue-t-il ?", "i(t) = I₀·e^(−t/τ) : i part de I₀ (continuité) et tend vers 0 ; i(τ) ≈ 0,37·I₀", "v_rupture (descente, trente_sept)", "I₀ = 0,2 A. Que vaut i à t = τ après la rupture ?", ["C5"], ["i(τ) = I₀·e^(−1) ≈ 0,37 × 0,2 = 0,074 A."], prediction=True),
+ D("t3", "Étincelle et diode", "Pourquoi une étincelle quand on coupe brutalement ?", "interrupteur simplement ouvert : pas de chemin, la bobine s'oppose à l'arrêt brusque → surtension, étincelle ; une diode en parallèle sur la bobine donne un chemin au courant", "v_rupture (etincelle, diode)", "À quoi sert la diode branchée en parallèle sur la bobine ?", ["C2"], ["Elle laisse passer le courant de la bobine à l'ouverture : i diminue progressivement, pas de surtension."], prediction=True),
+ D("t4", "Exercice du national : la rupture", "Comment le national pose-t-il la rupture ?", "exercice national (nationaux.md)", "v_figures", "(question du national choisi)", ["C5"], ["(lignes de la correction)"]),
+ # Séance 4 — courbes et énergie
+ D("l1", "τ par la tangente à l'origine", "Comment lire τ avec la tangente ?", "tangente à l'origine de u_R(t) coupe l'asymptote ; on descend sur l'axe du temps", "v_courbe (tangente)", "Où la tangente à l'origine coupe-t-elle l'asymptote ?", ["C7"], ["À l'instant t = τ."]),
+ D("l2", "τ par les 63 %", "Autre méthode : laquelle ?", "horizontale à 0,63 × valeur finale jusqu'à la COURBE puis verticale", "v_courbe (pourcent)", "U_Rmax = 5 V. À quelle hauteur trace-t-on l'horizontale ?", ["C7"], ["0,63 × 5 = 3,15 V."]),
+ D("l3", "Trouver r", "Comment trouver la résistance de la bobine ?", "I₀ = U_Rmax/R ; R + r = E/I₀ → r ; ou r = u_b(∞)/I₀", "v_courbe (asymptote)", "E = 6 V, R = 50 Ω, U_Rmax = 5 V. r = ?", ["C7"], ["I₀ = U_Rmax/R = 5/50 = 0,1 A.", "R + r = E/I₀ = 60 Ω.", "r = 60 − 50 = 10 Ω."]),
+ D("l4", "Trouver L", "Comment trouver L ?", "L = τ·(R + r)", "cahier", "τ = 2 ms, R + r = 60 Ω. L = ?", ["C7"], ["L = τ·(R + r) = 2·10⁻³ × 60 = 0,12 H."]),
+ D("l5", "La droite di/dt = f(i)", "Que montre la courbe di/dt en fonction de i ?", "de l'équation : di/dt = E/L − ((R + r)/L)·i : droite ; ordonnée à l'origine E/L, pente −1/τ, coupe l'axe en i = I₀", "v_droite (points, droite, ordonnee, pente)", "Sur cette droite, où lit-on I₀ ?", ["C7"], ["Là où di/dt = 0 : la droite coupe l'axe des i en I₀."], prediction=True),
+ D("l6", "La courbe u_b(t)", "Que lit-on sur u_b(t) ?", "u_b part de E (t = 0) et descend vers r·I₀ ; si r = 0, u_b = E·e^(−t/τ)", "v_courbe (ub)", "u_b(0) = 6 V, u_b(∞) = 1 V, I₀ = 0,1 A. E et r ?", ["C7"], ["E = u_b(0) = 6 V.", "r = u_b(∞)/I₀ = 1/0,1 = 10 Ω."], prediction=True),
+ D("l7", "L'énergie de la bobine", "Où va l'énergie fournie pendant l'établissement ?", "E_m = ½·L·i² (admise) ; en joule ; maximale en régime permanent", "v_energie (monte, maximum)", "L = 0,2 H, i = 0,5 A. E_m = ?", ["C8"], ["E_m = ½·L·i² = ½ × 0,2 × 0,5² = 0,025 J."]),
+ D("l8", "Si I₀ double", "L'énergie double-t-elle aussi ?", "i au carré : I₀ double → E_m × 4 ; à la rupture E_m se dissipe en chaleur (effet Joule)", "v_energie (vide, calcul)", "Si I₀ double, l'énergie maximale est multipliée par :", ["C8"], ["E_m = ½·L·I₀² : I₀ × 2 donne E_m × 4."], prediction=True),
+ D("n1", "Un sujet national complet (1)", "On refait un vrai sujet.", "exercice national (nationaux.md) : équation, τ, r, L", "v_figures", "(questions du national choisi)", ["C7", "C4"], ["(lignes de la correction)"]),
+ D("n2", "Un sujet national complet (2)", "Un deuxième sujet, une autre façon de poser.", "exercice national (nationaux.md) : droite di/dt = f(i) ou énergie", "v_figures", "(questions du national choisi)", ["C7", "C8"], ["(lignes de la correction)"]),
+ D("bl", "Ce qu'il faut retenir", "La fiche du chapitre.", "fiche : u_b, I₀, équation, solution, τ, 63 %/37 %, r et L, énergie", "v_bilan", "Quelle formule donne τ ?", ["C1"], ["τ = L/(R + r)."]),
+ D("cr", "La carte du dipôle RL", "Tout le chapitre sur une carte.", "carte complète ; acquis de l'élève (concentration.acquis)", "v_carte (complete)", "Quelle partie de la carte te semble la plus difficile ?", ["C1"], []),
+]
+
+seances = [
+ {"n": 1, "titre": "La bobine s'oppose aux variations du courant", "blocs": [["o1", "o2", "b1", "b2"], ["b3", "b4", "b5", "b6"], ["b7", "b8", "b9", "b10"]]},
+ {"n": 2, "titre": "Établissement du courant : l'équation différentielle", "blocs": [["m1", "m2", "m3", "m4"], ["e1", "e2", "e3", "e4"], ["e5", "e6", "e7", "e8"]]},
+ {"n": 3, "titre": "La solution, τ et la rupture", "blocs": [["s1", "s2", "s3", "s4"], ["s5", "s6", "s7", "s8"], ["t1", "t2", "t3", "t4"]]},
+ {"n": 4, "titre": "Lire les courbes, l'énergie, deux nationaux", "blocs": [["l1", "l2", "l3", "l4"], ["l5", "l6", "l7", "l8"], ["n1", "n2", "bl", "cr"]]},
+]
