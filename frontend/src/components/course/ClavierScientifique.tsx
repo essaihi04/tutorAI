@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
 
 /**
  * Le clavier scientifique (user rule, 10 novembre 2026) : à côté de chaque champ où l'élève écrit (réponse libre,
@@ -7,10 +7,11 @@ import { useState, type RefObject } from 'react';
  * ensembles et opérateurs des maths. Le même bouton le referme. Touches de 44 px au moins : au doigt, sur téléphone.
  */
 
-type Touche = string | { l: string; t: string; titre?: string };
+export type Touche = string | { l: string; t: string; titre?: string };
 
 /** `t` : ce qui est inséré ; `l` : ce qui est affiché sur la touche (quand ils diffèrent). */
-const ONGLETS: Record<'Physique' | 'Chimie' | 'Maths', { titre: string; touches: Touche[] }[]> = {
+export type Onglet = 'Physique' | 'Chimie' | 'Maths' | 'SVT';
+const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {
   Physique: [
     { titre: 'Lettres grecques', touches: ['λ', 'τ', 'θ', 'ω', 'φ', 'Δ', 'μ', 'ρ', 'σ', 'ε', 'α', 'β', 'γ', 'π'] },
     { titre: 'Opérations', touches: ['·', '×', '÷', '±', '≈', '≠', '≤', '≥', '∝', '√', { l: 'a/b', t: '/' }, '=', '(', ')'] },
@@ -32,12 +33,32 @@ const ONGLETS: Record<'Physique' | 'Chimie' | 'Maths', { titre: string; touches:
     { titre: 'Complexes', touches: [{ l: '|z|', t: '|z|' }, { l: 'z̄', t: 'z̄' }, { l: 'arg', t: 'arg(' }, 'i', { l: 'e^(iθ)', t: 'e^(iθ)' }, 'θ', 'Re', 'Im'] },
     { titre: 'Exposants et indices', touches: ['²', '³', 'ⁿ', '⁻¹', '₀', '₁', 'ₙ', 'ₙ₊₁', { l: 'a/b', t: '/' }, '(', ')'] },
   ],
+  // SVT (12 novembre 2026) : métabolisme, génétique, nerf et muscle, géologie — ce que l'élève de 2ᵉ Bac écrit.
+  SVT: [
+    { titre: 'Molécules', touches: ['ATP', 'ADP', 'Pi', 'NAD⁺', 'NADH,H⁺', 'FAD', 'FADH₂', 'O₂', 'CO₂', 'H₂O', 'C₆H₁₂O₆', 'acétyl-CoA', 'pyruvate', 'ADN', 'ARNm', 'ARNt'] },
+    { titre: 'Ions et réactions', touches: ['→', '⇌', '+', 'Ca²⁺', 'Na⁺', 'K⁺', 'Cl⁻', 'H⁺', 'e⁻', '²⁺', '⁺', '⁻', '↑', '↓'] },
+    { titre: 'Génétique', touches: [{ l: 'A//a', t: '//' }, '×', '♂', '♀', 'F₁', 'F₂', 'P', '%', '¼', '½', '¾', '[ ]', 'XX', 'XY', 'Xᴬ', 'Xᵃ'] },
+    { titre: 'Unités et grandeurs', touches: [{ l: 'mV', t: ' mV' }, { l: 'ms', t: ' ms' }, { l: 'μm', t: ' μm' }, { l: 'nm', t: ' nm' }, { l: 'kJ', t: ' kJ' }, { l: 'kJ·mol⁻¹', t: ' kJ·mol⁻¹' }, { l: 'mol', t: ' mol' }, { l: 'g·L⁻¹', t: ' g·L⁻¹' }, { l: '°C', t: ' °C' }, { l: 'Ma', t: ' Ma' }, 'pH', 'Δ', '≈', '≤', '≥'] },
+  ],
 };
+
+/** La matière d'un cours (id `phys_`, `chem_`, `svt_`, `math_`, ou son champ `subject`) : les onglets du clavier. */
+export type MatiereClavier = 'physique-chimie' | 'svt' | 'maths' | '';
+export function matiereDuClavier(id = '', subject = ''): MatiereClavier {
+  const sujet = (subject || '').toLowerCase(), c = (id || '').toLowerCase();
+  if (/svt|biolog|g[ée]olog/.test(sujet) || c.startsWith('svt')) return 'svt';
+  if (/math/.test(sujet) || c.startsWith('math')) return 'maths';
+  if (/phys|chim|chem/.test(sujet) || /^(phys|chem|chim|pc_)/.test(c)) return 'physique-chimie';
+  return '';
+}
+export function ongletsDe(m: MatiereClavier): Onglet[] {
+  return m === 'physique-chimie' ? ['Physique', 'Chimie'] : m === 'svt' ? ['SVT'] : m === 'maths' ? ['Maths'] : ['Physique', 'Chimie', 'Maths', 'SVT'];
+}
 
 type Champ = HTMLInputElement | HTMLTextAreaElement;
 
 /** Insère au curseur du champ (ou remplace la sélection) et y replace le curseur, après le rendu de React. */
-function insererAuCurseur(champ: Champ | null, valeur: string, texte: string, poser: (v: string) => void) {
+export function insererAuCurseur(champ: Champ | null, valeur: string, texte: string, poser: (v: string) => void) {
   const debut = champ?.selectionStart ?? valeur.length;
   const fin = champ?.selectionEnd ?? debut;
   const suite = valeur.slice(0, debut) + texte + valeur.slice(fin);
@@ -63,46 +84,36 @@ export function BoutonSymboles({ ouvert, onClick, petit = false }: { ouvert: boo
   );
 }
 
-export default function ClavierScientifique({ cible, valeur, onChange, onFermer }: {
-  /** Le champ où l'élève écrit (le curseur y est lu, puis replacé après l'insertion). */
-  cible: RefObject<Champ | null>;
-  valeur: string;
-  onChange: (v: string) => void;
-  onFermer?: () => void;
-}) {
-  const [onglet, setOnglet] = useState<keyof typeof ONGLETS>(() => {
-    try { return (localStorage.getItem('clavier-scientifique:onglet') as keyof typeof ONGLETS) || 'Physique'; } catch { return 'Physique'; }
+/** Les onglets et les touches (sans cadre) : le clavier sous un champ, et le clavier flottant à droite. */
+export function Touches({ matiere = '', onTaper, desactive = false }: { matiere?: MatiereClavier; onTaper: (texte: string) => void; desactive?: boolean }) {
+  const onglets = useMemo(() => ongletsDe(matiere), [matiere]);
+  const cle = `clavier-scientifique:onglet:${matiere || 'tout'}`;
+  const [onglet, setOnglet] = useState<Onglet>(() => {
+    try { const o = localStorage.getItem(cle) as Onglet | null; return o && onglets.includes(o) ? o : onglets[0]; } catch { return onglets[0]; }
   });
-  const choisir = (o: keyof typeof ONGLETS) => {
-    setOnglet(o);
-    try { localStorage.setItem('clavier-scientifique:onglet', o); } catch { /* sans mémoire locale */ }
-  };
-  const taper = (t: Touche) => {
-    const texte = typeof t === 'string' ? (t === '[ ]' ? '[]' : t) : t.t;
-    insererAuCurseur(cible.current, valeur, texte, onChange);
-  };
+  const actuel = onglets.includes(onglet) ? onglet : onglets[0];
+  const choisir = (o: Onglet) => { setOnglet(o); try { localStorage.setItem(cle, o); } catch { /* sans mémoire locale */ } };
   return (
-    <div className="question-apparait mt-2 rounded-xl border border-amber-200/30 bg-[#0b1912] p-2 text-white" role="group" aria-label="Clavier scientifique"
-      style={{ fontFamily: 'system-ui, "Segoe UI Symbol", "Cambria Math", sans-serif' }}
-      // un appui sur le clavier ne doit jamais faire perdre le curseur du champ
-      onMouseDown={e => e.preventDefault()}>
-      <div className="mb-2 flex items-center gap-1">
-        {(Object.keys(ONGLETS) as (keyof typeof ONGLETS)[]).map(o => (
-          <button key={o} type="button" onClick={() => choisir(o)} role="tab" aria-selected={onglet === o}
-            className={`min-h-[40px] rounded-lg px-3 text-sm ${onglet === o ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{o}</button>
-        ))}
-        {onFermer && <button type="button" onClick={onFermer} aria-label="Fermer le clavier" className="ml-auto min-h-[40px] min-w-[40px] rounded-lg text-white/60 hover:bg-white/10">×</button>}
-      </div>
-      <div className="max-h-[38vh] space-y-2 overflow-y-auto pr-1">
-        {ONGLETS[onglet].map(g => (
+    <>
+      {onglets.length > 1 && (
+        <div className="mb-2 flex items-center gap-1" role="tablist">
+          {onglets.map(o => (
+            <button key={o} type="button" onClick={() => choisir(o)} role="tab" aria-selected={actuel === o}
+              className={`min-h-[36px] rounded-lg px-3 text-sm ${actuel === o ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{o}</button>
+          ))}
+        </div>
+      )}
+      <div className="space-y-2">
+        {ONGLETS[actuel].map(g => (
           <div key={g.titre}>
             <div className="mb-1 text-[11px] uppercase tracking-wide text-white/45">{g.titre}</div>
             <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}>
               {g.touches.map((t, i) => {
                 const l = typeof t === 'string' ? t : t.l;
                 return (
-                  <button key={`${l}-${i}`} type="button" onClick={() => taper(t)} title={typeof t === 'string' ? t : t.titre || t.t.trim()}
-                    className="min-h-[44px] rounded-lg border border-white/10 bg-white/[0.06] px-1 text-[17px] leading-none hover:bg-white/15 active:bg-amber-200/30"
+                  <button key={`${l}-${i}`} type="button" disabled={desactive}
+                    onClick={() => onTaper(typeof t === 'string' ? (t === '[ ]' ? '[]' : t) : t.t)} title={typeof t === 'string' ? t : t.titre || t.t.trim()}
+                    className="min-h-[44px] rounded-lg border border-white/10 bg-white/[0.06] px-1 text-[17px] leading-none hover:bg-white/15 active:bg-amber-200/30 disabled:opacity-40"
                     style={{ touchAction: 'manipulation', gridColumn: l.length > 4 ? 'span 2' : undefined }}>
                     {l}
                   </button>
@@ -111,6 +122,28 @@ export default function ClavierScientifique({ cible, valeur, onChange, onFermer 
             </div>
           </div>
         ))}
+      </div>
+    </>
+  );
+}
+
+/** Le clavier posé sous un champ (là où le clavier flottant du lecteur de cours n'existe pas). */
+export default function ClavierScientifique({ cible, valeur, onChange, onFermer, matiere = '' }: {
+  /** Le champ où l'élève écrit (le curseur y est lu, puis replacé après l'insertion). */
+  cible: RefObject<Champ | null>;
+  valeur: string;
+  onChange: (v: string) => void;
+  onFermer?: () => void;
+  matiere?: MatiereClavier;
+}) {
+  return (
+    <div className="question-apparait mt-2 rounded-xl border border-amber-200/30 bg-[#0b1912] p-2 text-white" role="group" aria-label="Clavier scientifique"
+      style={{ fontFamily: 'system-ui, "Segoe UI Symbol", "Cambria Math", sans-serif' }}
+      // un appui sur le clavier ne doit jamais faire perdre le curseur du champ
+      onMouseDown={e => e.preventDefault()}>
+      {onFermer && <div className="flex justify-end"><button type="button" onClick={onFermer} aria-label="Fermer le clavier" className="min-h-[36px] min-w-[36px] rounded-lg text-white/60 hover:bg-white/10">×</button></div>}
+      <div className="max-h-[38vh] overflow-y-auto pr-1">
+        <Touches matiere={matiere} onTaper={t => insererAuCurseur(cible.current, valeur, t, onChange)} />
       </div>
     </div>
   );

@@ -6,6 +6,9 @@ import { useMemoireDuCours } from './memoire/useMemoireDuCours';
 import { MINUTES_PAR_BLOC } from './memoire/CycleBloc';
 import { saveCourseProgress } from '../../services/api';
 import { slideVersScript } from './slideVersScript';
+import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from './ClavierFlottant';
+import { matiereDuClavier } from './ClavierScientifique';
+import { enteteDuCahier } from './cahier';
 
 /**
  * Les questions posées à l'élève sur chaque diapositive sont suspendues pour
@@ -295,6 +298,9 @@ export default function CoursePlayer({
 
   // La mémoire longue (11 novembre 2026) : rappel de début de séance, fin de bloc (cahier → retrouver → exercice),
   // fin de séance et saturation. Un cours sans `seances` n'est pas touché.
+  // le clavier flottant ouvert : la fin de bloc (cahier, retrouver, exercice) lui laisse sa place à droite
+  const clavierOuvert = useClavier().ouvert;
+  const placeClavier = largeurClavier(clavierOuvert);
   const memoire = useMemoireDuCours({
     deck, deckId: deck.stable_id || deck.id, slideId: current?.slide.id, actif: started && mode === 'concentration' && !courseCompleted,
     onAvancer: goToNext,
@@ -365,6 +371,8 @@ export default function CoursePlayer({
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#07101f] text-white flex flex-col">
+      {/* le clavier prend les touches de la matière du cours */}
+      <MatiereDuClavier id={deck.stable_id || deck.id} subject={(deck as { subject?: string }).subject} />
       {/* Avancement dans le DECK : deux pixels, comme le fil du tableau. Le
           tableau, lui, compte ses propres étapes dans sa barre d'outils. */}
       <div className="absolute top-0 left-0 right-0 z-20 h-0.5 bg-white/10">
@@ -391,12 +399,16 @@ export default function CoursePlayer({
             finDeBloc={memoire.blocAFermer}
             onFermerBloc={memoire.fermerBloc}
             onReponseJugee={memoire.signalerReponse}
+            entete={enteteDuCahier(deck, current.slide.id)}
           />
         )}
+        {/* le clavier scientifique flottant, à droite (diapositives, cahier, retrouver, exercices, rappels) */}
+        {started && mode === 'concentration' && <ClavierFlottant droite={tuteur3D ? COLONNE_TUTEUR : 0} bas={memoire.ecran ? 16 : 76} />}
         {started && memoire.ecran && (
           // le tuteur 3D garde sa colonne à droite : il reste visible et parle pendant le cahier, le rappel, l'exercice
           <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-3 backdrop-blur-sm sm:p-6 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)]' : ''}`}
-            style={{ ['--colonne-tuteur' as string]: `${COLONNE_TUTEUR}px` }}>
+            style={{ ['--colonne-tuteur' as string]: `${COLONNE_TUTEUR + placeClavier}px`, paddingRight: !tuteur3D && placeClavier ? placeClavier : undefined,
+              paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
             <div className="h-full w-full max-w-3xl">{memoire.ecran}</div>
           </div>
         )}
@@ -461,4 +473,10 @@ export default function CoursePlayer({
       )}
     </div>
   );
+}
+
+/** La matière du cours donnée au clavier scientifique (`phys_`/`chem_`/`svt_`/`math_` ou le champ `subject`). */
+function MatiereDuClavier({ id, subject }: { id: string; subject?: string }) {
+  useEffect(() => { clavier.matiere(matiereDuClavier(id, subject)); }, [id, subject]);
+  return null;
 }

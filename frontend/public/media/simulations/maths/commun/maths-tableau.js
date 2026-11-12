@@ -46,21 +46,57 @@
   const VW = 760, VH = 420;
   const $ = (id) => document.getElementById(id);
 
-  /* Scène : même cadre que les ondes (760 × 420 mis à l'échelle, rien de coupé) ; boucle d'image à la demande. */
-  function Scene(canvas, dessiner) {
-    const scene = { sale: true };
+  /* Scène : même cadre que les ondes (760 × 420 mis à l'échelle, rien de coupé) ; boucle d'image à la demande.
+   * `ajuster` (12 novembre 2026, « l'écriture est trop petite au milieu d'un grand tableau vide ») : le cadre n'est plus
+   * mis à l'échelle en entier, c'est CE QUI EST ÉCRIT qui remplit le tableau. La boîte de l'encre de la construction
+   * complète (mesurée une fois, sans rien changer aux moments) est agrandie jusqu'aux bords, avec une marge, et centrée ;
+   * l'agrandissement est borné (ZOOM_MAX × le cadre entier) pour qu'une vue d'une ligne ne devienne pas énorme.
+   * La boîte ne fait que grandir pendant la vue (un point glissé hors de la boîte l'élargit au lâcher) : rien ne saute. */
+  const MARGE = 14, ZOOM_MAX = 2.2;
+  function Scene(canvas, dessiner, options = {}) {
+    const scene = { sale: true, boite: null, mesurant: false };
     const craie = new T.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* La boîte de l'encre (coordonnées du cadre) : la construction complète dessinée une fois, chaque trait et chaque
+     * texte relevés au passage. Le dessin de mesure est effacé par l'image suivante. */
+    function mesurer() {
+      const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+      const pt = (x, y, m = 0) => { if (!Number.isFinite(x) || !Number.isFinite(y)) return; b.x0 = Math.min(b.x0, x - m); b.y0 = Math.min(b.y0, y - m); b.x1 = Math.max(b.x1, x + m); b.y1 = Math.max(b.y1, y + m); };
+      const { trait, texte, point } = craie;
+      craie.trait = function (pts, o = {}) { const m = (o.largeur ?? 2.4) / 2 + 1; for (const p of pts || []) pt(p[0], p[1], m); return trait.call(this, pts, o); };
+      craie.point = function (x, y, r = 4, c) { pt(x, y, r); return point.call(this, x, y, r, c); };
+      craie.texte = function (s, x, y, o = {}) {
+        const t = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${t}px ${T.POLICE}`;
+        let l = this.ctx.measureText(String(s).replace(/_/g, '')).width; if (o.max && l > o.max) l = o.max;
+        const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
+        pt(x0, y - t * 0.95); pt(x0 + l, y + t * 0.35);
+        return texte.call(this, s, x, y, o);
+      };
+      const h = scene.horloge, t = scene.ouvert;
+      scene.mesurant = true; scene.horloge = null; scene.ouvert = -1e9;
+      try { dessiner(craie, scene); } catch (e) { console.warn('[maths] mesure de la boîte', e); }
+      finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.horloge = h; scene.ouvert = t; }
+      if (!(b.x1 > b.x0 && b.y1 > b.y0)) return null;
+      const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(VW, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
+      const a = scene.boite;
+      return a ? { x0: Math.min(a.x0, n.x0), y0: Math.min(a.y0, n.y0), x1: Math.max(a.x1, n.x1), y1: Math.max(a.y1, n.y1) } : n;
+    }
     Object.assign(scene, {
       craie, ouvert: performance.now(), s: 1, ox: 0, oy: 0, horloge: null,
       cadre(graine = 7) {
         const W = craie.W, H = craie.H;
+        if (options.ajuster && !scene.mesurant && !scene.boite && W > 1) scene.boite = mesurer();
         craie.debut(graine, scene.horloge ? scene.horloge() : (performance.now() - scene.ouvert) / 1000);
-        const s = Math.min(W / VW, H / VH);
-        scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+        if (scene.mesurant) { scene.s = 1; scene.ox = 0; scene.oy = 0; craie.echelle = 1; craie.tailleMin = 0; craie.cadre = null; return craie; }
+        const k = scene.boite || { x0: 0, y0: 0, x1: VW, y1: VH };
+        const sCadre = Math.min(W / VW, H / VH), bw = k.x1 - k.x0, bh = k.y1 - k.y0;
+        const s = Math.min(W / bw, H / bh, sCadre * ZOOM_MAX);
+        scene.s = s; scene.ox = (W - bw * s) / 2 - k.x0 * s; scene.oy = (H - bh * s) / 2 - k.y0 * s;
         craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
         craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
         return craie;
       },
+      /** La construction a changé de forme (réglage, vue) : la boîte sera remesurée (elle ne fait que grandir). */
+      remesurer() { if (options.ajuster) { const n = mesurer(); if (n) scene.boite = n; scene.sale = true; } },
       local(x, y) { return [(x - scene.ox) / scene.s, (y - scene.oy) / scene.s]; },
       reecrire() { scene.ouvert = performance.now(); scene.sale = true; },
       image() {
@@ -187,15 +223,19 @@
 
     document.body.insertAdjacentHTML('afterbegin', '');
     const canvas = $('canvas');
-    const scene = Scene(canvas, dessiner);
+    const scene = Scene(canvas, dessiner, { ajuster: def.ajuster !== false && V.ajuster !== false });
     scene.horloge = () => S.tw;
     const craie = scene.craie;
 
     function dessiner(c) {
+      // la mesure de la boîte (kit) dessine la construction complète : temps, moments et repères gardés tels quels
+      const mesure = scene.mesurant, tw = S.tw, MM = S._MM;
+      if (mesure) S.tw = 1e6;
       scene.cadre(def.graine || 23);
       S._MM = {};
       const K = aide(c, S, M);
       V.dessiner(c, K);
+      if (mesure) { S._MM = MM; S.tw = tw; return true; }
       M = S._MM;
       if (M.fin === undefined) M.fin = c.cur;
       return c.fin() || !S.running;
@@ -252,7 +292,7 @@
       let change = false;
       for (const [k, v] of Object.entries(p || {})) { const b = borne(k, v); if (b !== null && Number.isFinite(b) && b !== S.P[k]) { S.P[k] = b; change = true; } }
       if (!change) return;
-      calculer();
+      calculer(); scene.remesurer();
       if (S.fait) S.tw = M.fin;     // construction finie : elle reste entière, avec les nouvelles valeurs
       scene.sale = true; pont.noter('set_parameters', { ...S.P, par }); pont.emettre();
     }
@@ -275,7 +315,7 @@
           for (const [k, v] of Object.entries(nv)) { const b = borne(k, v); if (b !== null) S.P[k] = b; }
           calculer(); S.tw = M.fin; scene.sale = true;
         },
-        lacher() { pont.noter('set_parameters', { ...S.P }); T.bulle($('feedback'), V.lecture ? V.lecture(aide(craie, S, M)) : 'Nouveau réglage.'); pont.emettre(); },
+        lacher() { scene.remesurer(); pont.noter('set_parameters', { ...S.P }); T.bulle($('feedback'), V.lecture ? V.lecture(aide(craie, S, M)) : 'Nouveau réglage.'); pont.emettre(); },
       });
     }
 

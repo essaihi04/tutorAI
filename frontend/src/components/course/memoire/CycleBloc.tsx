@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionMemoire, { CRAIE, Formule, type ResultatQuestion } from './QuestionMemoire';
 import { noter, type BlocCours, type QuestionMemoire as Q, type ReponsesPreparees } from './api';
 import type { ReactionPreparee } from '../types';
+import type { EnteteCahier } from '../cahier';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -44,9 +45,15 @@ export function OuEnEstOn({ seance, nbSeances, bloc, nbBlocs, etape }: { seance:
 }
 
 /** Le tableau du cahier : les lignes du bloc, écrites à la craie ; l'élève copie puis appuie « C'est écrit ». */
-export function TableauCahier({ bloc, onEcrit }: { bloc: BlocCours; onEcrit: (dureeS: number) => void }) {
+export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onEcrit: (dureeS: number) => void;
+  /** le plan du cahier (12 novembre 2026) : titre du cours, parties numérotées, diapositives numérotées */
+  entetes?: (slideId: string) => EnteteCahier | undefined }) {
   const debut = useRef(Date.now());
   const lignes = bloc.cahier || [];
+  // Une ligne par diapositive du bloc : chaque ligne sous le titre de sa diapositive (et de sa partie quand on y entre) ;
+  // sinon les titres d'abord, puis les lignes. Un titre déjà copié dans le bloc ne se répète pas.
+  const plan = entetes ? bloc.slide_ids.map(id => entetes(id)) : [];
+  const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length;
   useEffect(() => { debut.current = Date.now(); }, [bloc.id]);
   return (
     <div className="flex flex-col gap-4">
@@ -55,12 +62,34 @@ export function TableauCahier({ bloc, onEcrit }: { bloc: BlocCours; onEcrit: (du
         {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{bloc.titre}</h3>}
       </div>
       <div className="rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-5 shadow-inner" style={{ fontFamily: CRAIE }}>
-        {lignes.length ? (
-          <ol className="space-y-3">
+        {plan.length > 0 && (() => {
+          const tete = plan.find(e => e?.cours)?.cours;
+          return tete ? (
+            <div className="mb-3 text-center">
+              <p className="text-3xl text-amber-200 underline decoration-amber-200/50 decoration-2 underline-offset-8">{tete.titre}</p>
+              {tete.sousTitre && <p className="mt-2 text-lg italic text-[#e7e5c9]">{tete.sousTitre}</p>}
+            </div>
+          ) : null;
+        })()}
+        {parLigne ? (
+          <div className="space-y-3">
             {lignes.map((l, i) => (
-              <li key={i} className="text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={l.texte} /></li>
+              <div key={i}>
+                {plan[i]?.partie && <p className="mb-1 text-2xl text-rose-300">{plan[i]!.partie}</p>}
+                <p className="pl-3 text-lg text-amber-100 underline decoration-amber-200/30 underline-offset-4">{plan[i]!.diapo}</p>
+                <p className="pl-6 text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={l.texte} /></p>
+              </div>
             ))}
-          </ol>
+          </div>
+        ) : lignes.length ? (
+          <>
+            {plan.filter(e => e?.partie).map((e, i) => <p key={i} className="mb-1 text-2xl text-rose-300">{e!.partie}</p>)}
+            <ol className="space-y-3">
+              {lignes.map((l, i) => (
+                <li key={i} className="text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={l.texte} /></li>
+              ))}
+            </ol>
+          </>
         ) : <p className="text-lg text-white/60">Écris avec tes mots ce que tu viens de comprendre.</p>}
       </div>
       <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
@@ -79,8 +108,9 @@ export interface PlaceBloc { coursId: string; seanceId: string; seance: number; 
  * `onSaturation` : deux réponses fausses de suite, réponses trop rapides ou longue inactivité (déjà noté ici) ;
  * le lecteur passe alors à la pause s'il le veut. `onFini` : le bloc est bouclé.
  */
-export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titreCours = '', onDire, onJouer, reactions, onFini, onSaturation }: {
+export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titreCours = '', onDire, onJouer, reactions, onFini, onSaturation, entetes }: {
   bloc: BlocCours; place: PlaceBloc; etapeInitiale?: EtapeBloc; titreCours?: string;
+  entetes?: (slideId: string) => EnteteCahier | undefined;
   onDire?: (parole: string) => void; onJouer?: (r: ReactionPreparee) => void;
   /** les réactions préparées d'une question (`reactionsDe`), `j` : l'affirmation d'un vrai/faux */
   reactions?: (q: Q, j?: number) => ReponsesPreparees | undefined;
@@ -117,7 +147,8 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
 
   const resultat = (genre: 'retrouver' | 'exercice_bloc', q: { prompt: string; competence_id?: string; type?: string }, r: ResultatQuestion) => {
     void noter({ evenement: genre, ...base, competence_id: q.competence_id, enonce: q.prompt, type: q.type,
-      reponse: r.reponse, reponse_2: r.reponse_2, correct: r.correct, correct_2: r.correct_2 ?? null, duree_s: r.duree_s });
+      reponse: r.reponse, reponse_2: r.reponse_2, correct: r.correct, correct_2: r.correct_2 ?? null, duree_s: r.duree_s, passee: r.passee || undefined });
+    if (r.passee) return;   // passée : ni erreur ni signe de saturation
     const lecture = tempsDeLectureMs(q.prompt);
     let cause = detecteur.current.reponse({ correct: r.correct, dureeMs: r.duree_s * 1000, lectureMs: lecture });
     if (!cause && r.correct === false) cause = detecteur.current.reponse({ correct: r.correct_2 ?? null });
@@ -126,19 +157,20 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
 
   if (!etape) return null;
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-5 text-white md:p-7">
+    <div className="relative flex h-full min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-5 text-white md:p-7">
       <OuEnEstOn seance={place.seance} nbSeances={place.nbSeances} bloc={place.bloc} nbBlocs={place.nbBlocs} etape={etape} />
       {alerte && <p className="rounded-lg bg-sky-400/10 px-3 py-2 text-sm text-sky-100" style={{ fontFamily: 'system-ui, sans-serif' }}>{PHRASES_SATURATION[alerte]}</p>}
       {etape === 'cahier' && (
-        <TableauCahier bloc={bloc} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
+        <TableauCahier bloc={bloc} entetes={entetes} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
       )}
       {etape === 'retrouver' && bloc.retrouver && (
         <QuestionMemoire mode="retrouver" question={bloc.retrouver} titre={bloc.titre || titreCours} deckId={place.coursId} onDire={onDire}
+          suggestions={{ deck_id: place.coursId, slide_id: bloc.id, cle: 'retrouver' }}
           onJouer={onJouer} onResultat={r => resultat('retrouver', bloc.retrouver!, r)} onSuite={suivante} />
       )}
       {etape === 'exercice' && bloc.exercice && (
         <ExerciceDuBloc exercice={bloc.exercice} competenceId={bloc.exercice.competence_id || bloc.retrouver?.competence_id}
-          titre={bloc.titre || titreCours} deckId={place.coursId} onDire={onDire} onJouer={onJouer} reactions={reactions}
+          titre={bloc.titre || titreCours} deckId={place.coursId} onDire={onDire} onJouer={onJouer} reactions={reactions} blocId={bloc.id}
           onResultat={(q, r) => resultat('exercice_bloc', q, r)} onSuite={suivante}
           libelleFin={place.bloc + 1 >= place.nbBlocs ? 'Terminer la séance ✓' : 'Bloc suivant →'} />
       )}
@@ -147,14 +179,17 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
 }
 
 /** L'exercice du bloc : QCM, réponse libre, ou vrai/faux en affirmations posées une par une (`statements`). */
-function ExerciceDuBloc({ exercice, competenceId, titre, deckId, onDire, onJouer, reactions, onResultat, onSuite, libelleFin }: {
-  exercice: Q; competenceId?: string; titre: string; deckId: string;
+function ExerciceDuBloc({ exercice, competenceId, titre, deckId, onDire, onJouer, reactions, onResultat, onSuite, libelleFin, blocId }: {
+  exercice: Q; competenceId?: string; titre: string; deckId: string; blocId: string;
   onDire?: (parole: string) => void; onJouer?: (r: ReactionPreparee) => void;
   reactions?: (q: Q, j?: number) => ReponsesPreparees | undefined;
   onResultat: (q: Q & { competence_id?: string }, r: ResultatQuestion) => void; onSuite: () => void; libelleFin: string;
 }) {
   const parties = useMemo<{ q: Q; j?: number }[]>(() => exercice.statements?.length
-    ? exercice.statements.map((st, j) => ({ j, q: { id: `s${j}`, type: 'vrai_faux', prompt: st.text, correct: st.correct, explanation: st.explanation } }))
+    ? exercice.statements.map((st, j) => ({ j, q: { id: `s${j}`, type: 'vrai_faux', prompt: st.text, correct: st.correct, explanation: st.explanation,
+      enonce_audio: st.enonce_audio, enonce_dit: st.enonce_dit,
+      // la démonstration de l'exercice s'écrit après sa dernière affirmation
+      demonstration: j === (exercice.statements?.length ?? 0) - 1 ? exercice.demonstration : undefined } }))
     : [{ q: exercice }], [exercice]);
   const [k, setK] = useState(0);
   const p = parties[Math.min(k, parties.length - 1)];
@@ -167,7 +202,7 @@ function ExerciceDuBloc({ exercice, competenceId, titre, deckId, onDire, onJouer
         </p>
       ) : null}
       <QuestionMemoire key={k} mode="exercice" question={p.q} titre={titre} deckId={deckId} onDire={onDire} onJouer={onJouer}
-        reponses={reactions?.(exercice, p.j)}
+        reponses={reactions?.(exercice, p.j)} suggestions={{ deck_id: deckId, slide_id: blocId, cle: 'exercice_bloc' }}
         onResultat={r => onResultat({ ...p.q, competence_id: competenceId }, r)}
         onSuite={() => (derniere ? onSuite() : setK(x => x + 1))} libelleSuite={derniere ? libelleFin : 'Affirmation suivante →'} />
     </>

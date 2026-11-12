@@ -89,7 +89,7 @@ const VISITEUR = (() => {
 })();
 const PUBLIC = '/api/v1/public/cours-ondes';
 /** Les routes publiques qui existent ; les autres appels du lecteur (progression d'un compte…) n'ont pas lieu ici. */
-const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis', 'memoire'];
+const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis', 'memoire', 'clavier-suggestions'];
 
 // Le lecteur parle au serveur comme pour un élève connecté (/course-player/…, /tts/speak) : ici, les mêmes demandes
 // partent vers les routes publiques (plafonnées), avec l'identifiant du visiteur à la place du jeton.
@@ -169,10 +169,11 @@ function Relecture({ deckId, diapo: vue, ordre }: { deckId: string; diapo: Diapo
   if (!diapo) return null;
   const mien = avis[diapo.id];
   const notees = Object.keys(avis).length;
-  // Replié : une petite barre en bas à gauche, au-dessus des commandes du lecteur — un clic pour voter, 💬 pour écrire.
+  // Replié : une petite barre dans la barre du HAUT, à droite de la liste des cours (12 novembre 2026 : posée en bas
+  // à gauche, elle recouvrait la dernière ligne des tableaux) — un clic pour voter, 💬 pour écrire.
   if (!ouvert) {
     return (
-      <div className="fixed bottom-[7rem] left-2 z-[300] flex items-center gap-1 rounded-full bg-[#14142a]/90 border border-amber-400/60 shadow-lg px-1.5 py-1 text-xs text-white">
+      <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#14142a]/90 border border-amber-400/60 shadow-lg px-1.5 py-1 text-xs text-white">
         <span className="px-1.5 text-amber-300 font-semibold" title="Diapositives notées">📝 {notees}/{diapo.total}</span>
         <button onClick={() => void envoyer('bon', mien?.commentaire || '')} title="Diapositive bonne"
           className={`rounded-full px-2 py-0.5 ${mien?.vote === 'bon' ? 'bg-green-500 text-black' : 'hover:bg-green-500/25'}`}>👍</button>
@@ -186,7 +187,7 @@ function Relecture({ deckId, diapo: vue, ordre }: { deckId: string; diapo: Diapo
     );
   }
   return (
-    <div className="fixed bottom-[7rem] left-2 z-[300] w-[min(20rem,calc(100vw-1rem))] rounded-xl bg-[#14142a]/95 border border-amber-400/60 shadow-2xl p-3 text-white text-sm space-y-2">
+    <div className="fixed top-12 right-2 z-[300] w-[min(20rem,calc(100vw-1rem))] rounded-xl bg-[#14142a]/95 border border-amber-400/60 shadow-2xl p-3 text-white text-sm space-y-2">
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="text-[11px] text-amber-300">Relecture · diapositive {diapo.position}/{diapo.total} · {notees} notée(s)</div>
@@ -218,7 +219,7 @@ function Liste({ matiere }: { matiere: string | null }) {
   return (
     <div className="min-h-[100dvh] bg-[#0a0a18] text-white p-6">
       <h1 className="text-xl font-semibold mb-1">Cours à relire</h1>
-      <p className="mb-5 text-sm text-white/60">Sur chaque diapositive : 👍 / 👎 et un commentaire (barre en bas à gauche).</p>
+      <p className="mb-5 text-sm text-white/60">Sur chaque diapositive : 👍 / 👎 et un commentaire (barre en haut à droite).</p>
       {MATIERES.filter(m => !matiere || m.cle === matiere).map(m => (
         <section key={m.cle} className="mb-6">
           <h2 className="mb-2 font-semibold text-amber-200">{m.nom}</h2>
@@ -250,11 +251,14 @@ function CoursOndes() {
   if (!cours) return <div className="h-[100dvh] grid place-items-center bg-[#0a0a18] text-white/70">Chargement du cours…</div>;
   return (
     <div className="flex h-[100dvh] w-screen flex-col bg-[#0a0a18] text-white p-1 sm:p-2">
-      <Navigation id={id} matiere={matiere} />
+      {/* la barre du haut porte aussi la relecture : elle ne recouvre jamais le contenu des tableaux */}
+      <div className="flex min-w-0 shrink-0 items-center gap-2 pr-1">
+        <div className="min-w-0 flex-1"><Navigation id={id} matiere={matiere} /></div>
+        <Relecture deckId={cours.id} diapo={diapo} ordre={ordre} />
+      </div>
       <div className="min-h-0 w-full flex-1 overflow-hidden rounded-2xl border border-white/10">
         <CoursePlayer deck={cours} language="mixed" mode="concentration" tuteur3D onSlideChange={setDiapo} />
       </div>
-      <Relecture deckId={cours.id} diapo={diapo} ordre={ordre} />
     </div>
   );
 }

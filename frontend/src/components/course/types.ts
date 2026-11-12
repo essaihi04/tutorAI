@@ -12,7 +12,7 @@ export type CourseSlideType =
   | 'synthesis'
   | 'evaluation';
 
-export interface CourseQuestion {
+export interface CourseQuestion extends EnonceLu {
   type?: 'qcm' | 'prediction' | 'true_false' | 'select' | 'open' | 'ordering' | 'association';
   prompt?: string;
   options?: string[];
@@ -28,6 +28,21 @@ export interface CourseQuestion {
    * n'est pas une erreur de compétence (suivi des acquis : `type: 'prediction'`, hors score).
    */
   prediction?: boolean;
+}
+
+/**
+ * Ce qui accompagne l'énoncé d'une question (12 novembre 2026), sur `question`, sur un exercice (et chacune de ses
+ * affirmations), sur le « retrouver » et l'exercice d'un bloc, sur un rappel :
+ *  - le tuteur LIT l'énoncé quand la question s'ouvre : `enonce_audio` (piste préparée, voix Bodi, même forme que les
+ *    autres pistes `audio` : l'URL du son), sinon `enonce_dit` (le texte à dire, sans symboles : « lim de x carré… »)
+ *    par la voix en direct, sinon l'énoncé écrit passé par la normalisation de la voix (serveur, `normalize_for_speech`) ;
+ *  - `clavier` : les suggestions du clavier scientifique pour CETTE question (aides justes et pièges plausibles, jamais
+ *    la formule complète ni la réponse) ; sans elles, le serveur les génère (`/course-player/clavier-suggestions`).
+ */
+export interface EnonceLu {
+  enonce_audio?: string;
+  enonce_dit?: string;
+  clavier?: { aides?: string[]; pieges?: string[] };
 }
 
 /**
@@ -62,7 +77,7 @@ export interface ReactionPreparee { parole: string; ecrit: string; audio?: strin
  * (`boardLines`), donc la correction voyage avec l'énoncé : ces exercices
  * s'auto-corrigent dans le navigateur, ils ne notent pas.
  */
-export interface CourseExercise {
+export interface CourseExercise extends EnonceLu {
   type: 'qcm' | 'vrai_faux' | 'association';
   /** L'énoncé. Pour une association, la consigne de mise en relation. */
   prompt: string;
@@ -70,7 +85,7 @@ export interface CourseExercise {
   choices?: string[];
   correct?: number;
   /** `vrai_faux` : les affirmations à trancher une par une. */
-  statements?: { text: string; correct: boolean; explanation?: string }[];
+  statements?: ({ text: string; correct: boolean; explanation?: string } & EnonceLu)[];
   /** `association` : les paires à reformer (la colonne de droite est battue). */
   pairs?: { left: string; right: string }[];
   /** Le mot de la fin, affiché une fois l'élève fixé. */

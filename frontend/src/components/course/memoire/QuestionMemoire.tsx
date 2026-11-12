@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ChampReponse from '../SaisieReponse';
 import { jugerReponseLibre, type QuestionMemoire as Q, type ReponsesPreparees } from './api';
-import type { ReactionPreparee } from '../types';
+import type { Demonstration, ReactionPreparee } from '../types';
+import type { CleSuggestions } from '../ClavierFlottant';
+import DemonstrationPleine, { type LectureDemo } from '../DemonstrationPleine';
+import { Formule } from '../Formule';
+import { attendreLaFin, lireDemonstration, lireEnonce, taire } from './voix';
 
 /**
  * Une question du cycle de mémoire : rappel de début de séance, « retrouver » d'un bloc (cahier fermé) ou exercice
@@ -10,19 +14,8 @@ import type { ReactionPreparee } from '../types';
  */
 export const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 
-/** « y_M(t) » s'écrit avec M en indice : jamais de « _ » devant l'élève. */
-export function Formule({ t }: { t: string }) {
-  const parts: ReactNode[] = [];
-  const re = /([A-Za-zτθΔλωφ])_(\{[^}]+\}|[A-Za-z0-9]+)/g;
-  let i = 0, m: RegExpExecArray | null, k = 0;
-  while ((m = re.exec(t))) {
-    if (m.index > i) parts.push(t.slice(i, m.index));
-    parts.push(m[1], <sub key={k++} className="text-[0.7em]">{m[2].replace(/[{}]/g, '')}</sub>);
-    i = re.lastIndex;
-  }
-  if (i < t.length) parts.push(t.slice(i));
-  return <>{parts}</>;
-}
+/** « y_M(t) », « lim_{x→1} » : jamais de « _ » devant l'élève (module commun). */
+export { Formule };
 
 export interface ResultatQuestion {
   reponse: string; reponse_2?: string;
@@ -30,6 +23,8 @@ export interface ResultatQuestion {
   correct: boolean | null; correct_2?: boolean | null;
   /** secondes jusqu'à la première réponse */
   duree_s: number;
+  /** l'élève a passé la question (12 novembre 2026) : `correct: null`, ni juste ni erreur */
+  passee?: boolean;
 }
 
 type Mode = 'rappel' | 'retrouver' | 'exercice';
@@ -43,8 +38,10 @@ const choixDe = (q: Q): string[] | null => {
 
 const REFLECHIS_S = 8;
 
-export default function QuestionMemoire({ question, mode, titre = '', deckId, onResultat, onSuite, onDire, onJouer, reponses, libelleSuite = 'Suite →' }: {
+export default function QuestionMemoire({ question, mode, titre = '', deckId, onResultat, onSuite, onDire, onJouer, reponses, libelleSuite = 'Suite →', suggestions }: {
   question: Q; mode: Mode; titre?: string; deckId?: string;
+  /** où chercher les suggestions du clavier (bloc ou compétence, et la clé de la question) */
+  suggestions?: CleSuggestions;
   onResultat: (r: ResultatQuestion) => void; onSuite: () => void; libelleSuite?: string;
   /** la voix en direct (réponse libre jugée) ; `onJouer` : une réaction préparée (sa piste, sans serveur) */
   onDire?: (parole: string) => void; onJouer?: (r: ReactionPreparee) => void;
@@ -62,11 +59,21 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
   const [message, setMessage] = useState('');
   const [fini, setFini] = useState<null | ResultatQuestion>(null);
   const premier = useRef<{ reponse: string; correct: boolean | null; duree_s: number } | null>(null);
+  /** passée (12 novembre 2026) : notée seulement si l'élève s'en va sans y revenir (« ← Y revenir » l'annule) */
+  const [passee, setPassee] = useState(false);
+  // la démonstration, sur un tableau à part par-dessus la question, après la réaction (12 novembre 2026)
+  const demo = (question.demonstration as Demonstration | undefined)?.lignes?.length ? question.demonstration as Demonstration : null;
+  const [lectureDemo, setLectureDemo] = useState<LectureDemo | null>(null);
+  const [demoOuverte, setDemoOuverte] = useState<'non' | 'dite' | 'revoir'>('non');
 
   useEffect(() => {
     debut.current = Date.now();
     premier.current = null;
-    setReflexion(choix ? REFLECHIS_S : 0); setTentative(1); setExclus([]); setMessage(''); setFini(null);
+    setReflexion(choix ? REFLECHIS_S : 0); setTentative(1); setExclus([]); setMessage(''); setFini(null); setPassee(false);
+    setDemoOuverte('non'); setLectureDemo(null);
+    // le tuteur lit l'énoncé à l'ouverture de la question (pas les options) ; il se tait si elle se ferme
+    const id = window.setTimeout(() => lireEnonce(question), 300);
+    return () => { window.clearTimeout(id); taire(); };
   }, [question.prompt, question.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (reflexion <= 0) return;
@@ -74,10 +81,26 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
     return () => window.clearTimeout(t);
   }, [reflexion]);
 
-  const terminer = (r: ResultatQuestion) => { setFini(r); onResultat(r); };
+  const terminer = (r: ResultatQuestion) => {
+    setFini(r); onResultat(r);
+    // la démonstration s'écrit après la réaction dite, sur son propre tableau
+    if (demo && !r.passee) {
+      void attendreLaFin().then(() => { setLectureDemo(lireDemonstration(demo)); setDemoOuverte('dite'); });
+    }
+  };
+  const passer = () => { if (fini || attente) return; taire(); setPassee(true); };
+  const suite = () => {
+    if (passee && !fini) {
+      const r: ResultatQuestion = { reponse: '', correct: null, duree_s: Math.round((Date.now() - debut.current) / 100) / 10, passee: true };
+      setFini(r); onResultat(r);
+    }
+    onSuite();
+  };
+  const fermerDemo = () => { lectureDemo?.arreter(); setLectureDemo(null); setDemoOuverte('non'); };
 
   const repondre = async (reponse: string, verdict: boolean | null, indice: number | null) => {
     if (fini || attente) return;
+    taire();   // la lecture de l'énoncé s'arrête
     let correct = verdict;
     let ecrit = '';
     // un QCM ou un vrai/faux : la réaction préparée de cette option, s'il y en a une (indice d'abord, réponse au 2e essai)
@@ -122,12 +145,33 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
   return (
     <div className="flex flex-col gap-3" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <p className="text-xs uppercase tracking-wide text-white/45">{ton}</p>
-      <p className="text-xl leading-snug md:text-2xl" style={{ fontFamily: CRAIE, color: '#fef3c7' }} dir="auto"><Formule t={question.prompt} /></p>
+      <div className="flex items-start gap-2">
+        <p className="min-w-0 flex-1 text-xl leading-snug md:text-2xl" style={{ fontFamily: CRAIE, color: '#fef3c7' }} dir="auto"><Formule t={question.prompt} /></p>
+        {!fini && (
+          <button type="button" onClick={() => lireEnonce(question)} title="Réécouter l’énoncé" aria-label="Réécouter l’énoncé"
+            className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-sm text-white/70 hover:bg-white/20">🔊</button>
+        )}
+      </div>
 
       {choix && reflexion > 0 && !fini && (
         <p className="text-sm text-sky-200/80">🤔 Réfléchis d’abord… les choix arrivent dans {reflexion} s</p>
       )}
-      {choix && reflexion <= 0 && (
+      {passee && !fini ? (
+        <div className="flex flex-col gap-3">
+          <p className="rounded-lg bg-white/5 px-3 py-2 text-sm text-white/60">⏭ Question passée : elle reviendra plus tard.</p>
+          {mode !== 'rappel' && question.attendu && (
+            <div className="rounded-lg border border-amber-200/30 bg-amber-200/5 px-3 py-2">
+              <p className="text-xs text-amber-100/70">Ce qu’il fallait retrouver :</p>
+              <p className="text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }} dir="auto"><Formule t={question.attendu} /></p>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={() => setPassee(false)} className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20">← Y revenir</button>
+            <button type="button" onClick={suite} className="rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300">{libelleSuite}</button>
+          </div>
+        </div>
+      ) : null}
+      {choix && reflexion <= 0 && !(passee && !fini) && (
         <div className={question.type === 'vrai_faux' || choix.length === 2 ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
           {choix.map((c, i) => {
             const estBonne = bonne === i;
@@ -143,8 +187,9 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
           })}
         </div>
       )}
-      {!choix && !fini && (
-        <ChampReponse key={tentative} disabled={attente} libelle={attente ? 'Le professeur lit…' : 'Répondre'}
+      {!choix && !fini && !passee && (
+        <ChampReponse key={tentative} disabled={attente} libelle={attente ? 'Le professeur lit…' : 'Répondre'} clavierAuto
+          suggestions={suggestions ? { ...suggestions, deck_id: suggestions.deck_id || deckId, enonce: question.prompt, clavier: question.clavier } : { deck_id: deckId, enonce: question.prompt, clavier: question.clavier }}
           placeholder={mode === 'retrouver' ? 'La formule ou la définition, de mémoire…' : 'Ta réponse…'}
           contexte={{ deck_id: deckId, title: titre, enonce: question.prompt }}
           onEnvoyer={t => void repondre(t, null, null)} />
@@ -158,8 +203,19 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
         </div>
       )}
       {fini && question.explanation && <p className="text-sm text-white/70" dir="auto"><Formule t={question.explanation} /></p>}
+      {!fini && !passee && !attente && (
+        // discret : l'élève peut ne pas répondre ; noté passé (ni juste ni erreur), il peut y revenir avant de continuer
+        <button type="button" onClick={passer} className="self-start text-sm text-white/40 underline-offset-4 hover:text-white/80 hover:underline">Passer ⏭</button>
+      )}
+      {fini && demo && demoOuverte === 'non' && !fini.passee && (
+        <button type="button" onClick={() => setDemoOuverte('revoir')} className="self-start rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20">✍️ Revoir la démonstration</button>
+      )}
+      {demo && demoOuverte !== 'non' && (
+        <DemonstrationPleine d={demo} lecture={demoOuverte === 'dite' ? lectureDemo : null} complet={demoOuverte === 'revoir'} enonce={question.prompt}
+          onFermer={fermerDemo} />
+      )}
       {fini && (
-        <button type="button" onClick={onSuite} autoFocus
+        <button type="button" onClick={suite} autoFocus
           className="self-end rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300">
           {libelleSuite}
         </button>

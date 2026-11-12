@@ -6,10 +6,10 @@
  * Format des cours : skill `cours-concentration`, section « Memory and rhythm » → « Data ».
  */
 
-import type { CourseDeck, ReactionPreparee } from '../types';
+import type { CourseDeck, EnonceLu, ReactionPreparee } from '../types';
 
 /** Une question de rappel (`competences[].rappels`), d'exercice de bloc ou de « retrouver ». */
-export interface QuestionMemoire {
+export interface QuestionMemoire extends EnonceLu {
   id?: string;
   type?: 'libre' | 'qcm' | 'vrai_faux' | string;
   prompt: string;
@@ -23,7 +23,7 @@ export interface QuestionMemoire {
   /** Exercice de bloc : `choices` (forme des exercices de diapositive) vaut `options`. */
   choices?: string[];
   /** Exercice de bloc vrai/faux : les affirmations, une par une (chacune ses réactions préparées). */
-  statements?: { text: string; correct: boolean; explanation?: string; reponses?: ReponsesPreparees }[];
+  statements?: ({ text: string; correct: boolean; explanation?: string; reponses?: ReponsesPreparees } & EnonceLu)[];
   /** Le mot de la fin, montré une fois la question finie. */
   explanation?: string;
   /** L'exercice reprend celui d'une diapositive (`<slide>/e<i>`) : ses réactions préparées y sont lues. */
@@ -79,6 +79,8 @@ export interface EvenementMemoire {
   enonce?: string; reponse?: string; reponse_2?: string; correct?: boolean | null; correct_2?: boolean | null;
   duree_s?: number; en_avance?: boolean; complete?: boolean; cause?: string; action?: string;
   bloc_index?: number; seance_index?: number; type?: string;
+  /** l'élève a passé la question (12 novembre 2026) : ni juste ni erreur, pas de reprise ; `correct: null` */
+  passee?: boolean;
 }
 
 const jeton = () => { try { return localStorage.getItem('token') || ''; } catch { return ''; } };

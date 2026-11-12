@@ -185,6 +185,8 @@ class AcquisEvent(BaseModel):
     reponse: str = Field(default="", max_length=500)
     tentative: int = Field(default=1, ge=1, le=5)
     correct: Optional[bool] = None
+    #: l'élève a passé la question (bouton « Passer », avec `correct: null`) : ni réussie ni une erreur, pas acquise
+    passee: bool = False
     reaction_preparee: bool = False
     competence_ids: list[str] = Field(default_factory=list)
     methodes: dict = Field(default_factory=dict)
@@ -334,6 +336,41 @@ async def ocr_reponse(body: OcrReponseRequest, student: dict = Depends(get_curre
         # 422 et pas 5xx : main.py remplace le texte de toute réponse 5xx par « Erreur interne du service ».
         raise HTTPException(status_code=422, detail="Je n’ai pas pu lire la photo : prends-la de plus près, bien éclairée, ou écris ta réponse.")
     return {"texte": texte}
+
+
+class ClavierSuggestionsRequest(BaseModel):
+    """La question à réponse libre (ou le « retrouver » d'un bloc) qui vient de s'ouvrir : le clavier veut ses suggestions.
+    La réponse attendue est lue dans le cours, jamais reçue d'ici ; `enonce` sert seulement si la question est introuvable."""
+    deck_id: str = Field(default="", max_length=120)
+    slide_id: str = Field(default="", max_length=120)
+    cle: str = Field(default="q", max_length=80)
+    enonce: str = Field(default="", max_length=800)
+    matiere: str = Field(default="", max_length=40)
+
+
+async def suggestions_du_clavier(body: ClavierSuggestionsRequest, student_id: Optional[str] = None, avant_llm=None) -> dict:
+    """Celles du cours, sinon du cache, sinon du LLM (`avant_llm()` est appelé juste avant : le plafond du lien libre).
+    Jamais bloquant : sans suggestion, `{aides: [], pieges: [], source: "aucune"}`."""
+    from app.services import clavier_suggestions as cs, suivi_acquis
+
+    deck = suivi_acquis.charger_deck(body.deck_id) if body.deck_id else None
+    matiere = matiere_du_cours(body.deck_id, deck) if deck else (body.matiere.strip().lower() or matiere_du_cours(body.deck_id, None))
+    d = cs.preparer(deck, body.deck_id, body.slide_id, body.cle or "q", body.enonce, matiere)
+    if d is None:
+        return {"aides": [], "pieges": [], "source": "aucune"}
+    pretes = cs.deja_pretes(d)
+    if pretes is not None:
+        return pretes
+    if avant_llm is not None:
+        avant_llm()
+    return await cs.generer(d, student_id)
+
+
+@router.post("/clavier-suggestions")
+async def clavier_suggestions(body: ClavierSuggestionsRequest, student: dict = Depends(get_current_student)):
+    """Les touches proposées en haut du clavier scientifique pour CET exercice : des aides justes et des pièges
+    plausibles, jamais la réponse attendue ni une relation complète (12 novembre 2026)."""
+    return await suggestions_du_clavier(body, _compte(student))
 
 
 class QuestionEleveRequest(BaseModel):

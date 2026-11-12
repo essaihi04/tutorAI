@@ -6,6 +6,7 @@ import RappelDebutSeance from './RappelDebutSeance';
 import { lireDebutSeance, noter, placeDansLesSeances, reactionsDe, seancesDe, type BlocCours, type QuestionMemoire, type RappelsDuJour } from './api';
 import { DetecteurSaturation, useInactivite, type CauseSaturation } from './saturation';
 import { direTexte, jouerReaction, taire } from './voix';
+import { enteteDuCahier } from '../cahier';
 
 /**
  * La mémoire longue dans le lecteur (11 novembre 2026), au niveau du COURS (`CoursePlayer`) :
@@ -115,6 +116,7 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
     if (b) {
       const e = ecran;
       rendu = <CycleBloc key={`${s.id}:${b.id}`} bloc={b} etapeInitiale={e.etape} titreCours={deck?.title} onDire={direTexte} onJouer={jouerReaction} reactions={reactions}
+        entetes={id => enteteDuCahier(deck, id)}
         place={{ coursId: deckId, seanceId: s.id, seance: e.seance, nbSeances: seances.length, bloc: e.bloc, nbBlocs: s.blocs.length }}
         onFini={() => finDuCycle(e)} />;
     }

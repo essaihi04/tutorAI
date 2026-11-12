@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
+import { clavier, useChampClavier, useClavier, type CleSuggestions } from './ClavierFlottant';
 
 /**
  * Une réponse libre se donne écrite, parlée ou photographiée (user rule, 10 novembre 2026).
@@ -129,24 +130,34 @@ export function BoutonMicro({ onTexte, onErreur, disabled, petit = false }: {
  * Le champ d'une réponse libre (question sans options, réponse directe d'une simulation) : écrit, parlé, photographié,
  * avec le clavier scientifique. « Répondre » n'envoie que ce que l'élève a relu.
  */
-export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholder = 'Ta réponse…', libelle = 'Répondre' }: {
+export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholder = 'Ta réponse…', libelle = 'Répondre', clavierAuto = false, suggestions, actif = true }: {
   onEnvoyer: (texte: string) => void; disabled?: boolean; contexte: ContexteOcr; placeholder?: string; libelle?: string;
+  /** le clavier flottant s'ouvre seul quand ce champ apparaît (question à réponse libre, « retrouver ») — 12 novembre 2026 */
+  clavierAuto?: boolean;
+  /** où chercher les suggestions du clavier pour cette question */
+  suggestions?: CleSuggestions;
+  /** le champ est celui qu'on voit (carrousel) : lui seul se déclare au clavier flottant */
+  actif?: boolean;
 }) {
   const [texte, setTexte] = useState('');
-  const [clavier, setClavier] = useState(false);
+  const [clavierDessous, setClavier] = useState(false);
+  const flottant = useClavier();
+  // Dans le lecteur de cours, le clavier flotte à droite ; ailleurs il reste sous le champ, comme avant.
+  const avecFlottant = flottant.hotes > 0;
   const [aVerifier, setAVerifier] = useState(false);
   const [erreur, setErreur] = useState<string | undefined>();
   const champ = useRef<HTMLTextAreaElement>(null);
+  const toucher = useChampClavier(champ, texte, setTexte, { auto: clavierAuto && !disabled, actif: avecFlottant && actif && !disabled, suggestions });
   const ajouter = useCallback((t: string) => {
     setTexte(x => [x.trim(), t].filter(Boolean).join(x.trim() ? '\n' : ''));
     setAVerifier(true);
     requestAnimationFrame(() => champ.current?.focus());
   }, []);
-  const envoyer = () => { const t = texte.trim(); if (t && !disabled) { setClavier(false); onEnvoyer(t); } };
+  const envoyer = () => { const t = texte.trim(); if (t && !disabled) { setClavier(false); if (avecFlottant) clavier.fermer(); onEnvoyer(t); } };
   return (
     <div className="mt-2" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="flex gap-2">
-        <textarea ref={champ} value={texte} onChange={e => setTexte(e.target.value)} disabled={disabled} placeholder={placeholder} rows={2} dir="auto"
+        <textarea ref={champ} value={texte} onChange={e => setTexte(e.target.value)} onFocus={toucher} disabled={disabled} placeholder={placeholder} rows={2} dir="auto"
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
           className="min-w-0 flex-1 resize-none rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-base outline-none focus:border-cyan-300" />
         <button type="button" onClick={envoyer} disabled={disabled || !texte.trim()} className="self-stretch rounded-lg bg-cyan-500/30 px-4 py-2 text-sm disabled:opacity-40">{libelle}</button>
@@ -155,11 +166,13 @@ export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholde
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <BoutonMicro petit onTexte={ajouter} onErreur={setErreur} />
           <BoutonPhoto petit contexte={contexte} onTexte={ajouter} onErreur={setErreur} />
-          <BoutonSymboles petit ouvert={clavier} onClick={() => setClavier(c => !c)} />
+          {avecFlottant
+            ? <BoutonSymboles petit ouvert={flottant.ouvert} onClick={() => { toucher(); clavier.basculer(); }} />
+            : <BoutonSymboles petit ouvert={clavierDessous} onClick={() => setClavier(c => !c)} />}
           {texte.trim() && <button type="button" onClick={() => { setTexte(''); setAVerifier(false); }} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70 hover:bg-rose-500/30">✕ Effacer</button>}
         </div>
       )}
-      {clavier && !disabled && <ClavierScientifique cible={champ} valeur={texte} onChange={setTexte} onFermer={() => setClavier(false)} />}
+      {clavierDessous && !avecFlottant && !disabled && <ClavierScientifique cible={champ} valeur={texte} onChange={setTexte} onFermer={() => setClavier(false)} />}
       {aVerifier && !disabled && <p className="mt-1 text-xs text-sky-200/80">Relis ce qui a été lu ou entendu ; corrige si besoin, puis {libelle}.</p>}
       {erreur && <p className="mt-1 text-xs text-rose-200">{erreur}</p>}
     </div>

@@ -175,6 +175,16 @@ async def sim_reaction(body: cp.SimReactionRequest, request: Request, x_visiteur
     return await cp.simulation_reaction(body, _autoriser("llm", _visiteur(x_visiteur), request))
 
 
+@router.post("/clavier-suggestions")
+async def clavier_suggestions(body: cp.ClavierSuggestionsRequest, request: Request, x_visiteur: str | None = Header(default=None)):
+    """Les suggestions du clavier : celles du cours ou du cache sont libres ; seul un appel au LLM compte dans le plafond."""
+    visiteur = _visiteur(x_visiteur)
+    if not body.deck_id:
+        raise HTTPException(404, "Cours introuvable")
+    _ce_cours(body.deck_id)
+    return await cp.suggestions_du_clavier(body, None, lambda: _autoriser("llm", visiteur, request))
+
+
 @router.post("/acquis")
 async def acquis(body: cp.AcquisEvent, request: Request, x_visiteur: str | None = Header(default=None)):
     _ce_cours(body.deck_id)

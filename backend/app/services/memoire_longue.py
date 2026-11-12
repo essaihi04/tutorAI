@@ -7,7 +7,7 @@ sections 6 à 8). Ce module :
     de la saturation (cause, ce que le tuteur a fait), des rappels et des notifications — au même endroit que les
     réponses du cours (`suivi_acquis.enregistrer`, un JSONL par élève, aucune table) ;
   - tient, par élève et par compétence, l'échelle des rappels (J+1, J+3, J+7, J+21, puis avant l'examen) : réussi du
-    premier coup → marche suivante, raté → retour à J+1, réussi au deuxième essai → même marche ;
+    premier coup → marche suivante, raté → retour à J+1, réussi au deuxième essai → même marche, passé → retour à J+1 (noté « passe », pas une erreur) ;
   - choisit les 3 à 5 rappels qui ouvrent une séance, UNIQUEMENT dans la matière du cours ouvert, les plus en retard
     d'abord, avec une autre formulation que la dernière fois ;
   - décide de la notification du jour (matière, nombre, durée ; à l'heure habituelle ; une par jour au plus ; plus
@@ -143,7 +143,9 @@ def due_apres(marche: int, jour: date) -> date:
 
 
 def resultat_rappel(e: dict) -> Optional[str]:
-    """premier_coup, second_essai, rate, ou None (rien de jugeable)."""
+    """premier_coup, second_essai, rate, passe (l'élève a passé la question : ni réussie ni erreur), ou None."""
+    if e.get("passee") and e.get("correct") is not True:
+        return "passe"
     if e.get("correct") is True:
         return "premier_coup"
     if e.get("correct") is False:
@@ -194,7 +196,7 @@ def planning(evenements: Iterable[dict], cours: Optional[dict[str, dict]] = None
             avant = p["marche"]
             if r == "premier_coup" and not e.get("en_avance"):
                 p["marche"] = min(avant + 1, MARCHE_EXAMEN)
-            elif r == "rate":
+            elif r in ("rate", "passe"):         # passé : revient bientôt, comme un raté, mais noté « passe »
                 p["marche"] = 0
             j = jour_local(t)
             p["derniere"], p["due"] = j.isoformat(), due_apres(p["marche"], j).isoformat()

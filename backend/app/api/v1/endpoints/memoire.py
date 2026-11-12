@@ -32,6 +32,9 @@ class EvenementMemoire(BaseModel):
     #: le premier essai ; `correct_2` : le second (un rappel réussi au 2ᵉ essai reste sur sa marche)
     correct: Optional[bool] = None
     correct_2: Optional[bool] = None
+    #: l'élève a passé la question (bouton « Passer », avec `correct: null`) : ni réussie ni une erreur ; un rappel
+    #: passé revient bientôt (retour à J+1, comme un raté, mais noté « passe »)
+    passee: bool = False
     #: secondes : temps passé à écrire le cahier, à répondre, durée de la séance
     duree_s: Optional[float] = Field(default=None, ge=0, le=86400)
     en_avance: bool = False

@@ -37,11 +37,12 @@ export default function RappelDebutSeance({ rappels: donnes, matiere, onFini, on
 
   const resultat = (res: ResultatQuestion) => {
     setBilan(b => ({ premier: b.premier + (res.correct === true ? 1 : 0), total: b.total + 1 }));
-    setMot(res.correct === true ? 'Bien ancré.' : res.correct_2 === true ? 'Retrouvé : on la consolide.' : res.correct === null ? '' : 'On la revoit bientôt.');
+    setMot(res.passee ? 'Passée : on la revoit bientôt.' : res.correct === true ? 'Bien ancré.' : res.correct_2 === true ? 'Retrouvé : on la consolide.' : res.correct === null ? '' : 'On la revoit bientôt.');
     void noter({
       evenement: 'rappel', cours_id: r.cours_id, competence_id: r.competence_id, rappel_id: r.question.id, matiere: rappels.matiere,
       enonce: r.question.prompt, type: r.question.type, en_avance: r.en_avance,
       reponse: res.reponse, reponse_2: res.reponse_2, correct: res.correct, correct_2: res.correct_2 ?? null, duree_s: res.duree_s,
+      passee: res.passee || undefined,
     }).then(x => {
       if (x?.prochaine && res.correct === true) {
         const jours = Math.round((new Date(x.prochaine).getTime() - Date.now()) / 86_400_000) + 1;
@@ -51,7 +52,7 @@ export default function RappelDebutSeance({ rappels: donnes, matiere, onFini, on
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-5 text-white md:p-7">
+    <div className="relative flex h-full min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-5 text-white md:p-7">
       <div className="flex flex-wrap items-center gap-2 text-xs text-white/60" style={{ fontFamily: 'system-ui, sans-serif' }}>
         <span className="rounded-full bg-amber-300/15 px-2.5 py-1 text-amber-100">🔁 Rappel de {rappels.nom_matiere}</span>
         <span className="rounded-full bg-white/10 px-2.5 py-1">{termine ? qs.length : i + 1}/{qs.length}</span>
@@ -64,7 +65,8 @@ export default function RappelDebutSeance({ rappels: donnes, matiere, onFini, on
             {r.cours_titre} · <span className="text-white/75">{r.competence}</span>
           </p>
           <QuestionMemoire key={`${r.cours_id}:${r.competence_id}`} mode="rappel" question={r.question} titre={r.cours_titre} deckId={r.cours_id}
-            onDire={onDire} onJouer={onJouer} reponses={r.question.reponses} onResultat={resultat} onSuite={() => { setMot(''); setI(k => k + 1); }}
+            onDire={onDire} onJouer={onJouer} reponses={r.question.reponses} onResultat={resultat}
+            suggestions={{ deck_id: r.cours_id, slide_id: r.competence_id, cle: r.question.id }} onSuite={() => { setMot(''); setI(k => k + 1); }}
             libelleSuite={i + 1 < qs.length ? 'Suite →' : 'Voir le bilan →'} />
           {mot && <p className="text-sm text-white/60" style={{ fontFamily: 'system-ui, sans-serif' }}>{mot}</p>}
         </>
