@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le logarithme décimal</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le logarithme décimal à la craie : les courbes de ln et de log, une règle graduée en puissances de 10, le pH"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : le logarithme décimal.
+ * Vues : ?vue=regle (moments deux_courbes, points, regle, formule ; repères deux_courbes, regle, formule)
+ *        ?vue=ph (moments equation, regle, ph ; repères equation, regle, ph).
+ */
+const fr = MathsTableau.fr;
+const L10 = Math.log(10);
+const log = x => Math.log(x) / L10;
+const OPT = { x0: 50, y0: 50, w: 400, h: 190, xmin: 0, xmax: 12, ymin: -1.4, ymax: 2.7,
+  gx: [[1, '1'], [5, '5'], [10, '10']], gy: [[-1, '−1'], [1, '1'], [2, '2']], nomx: 'x', nomy: 'y' };
+const XR = 484;
+
+/* Une règle graduée : en haut les valeurs du haut, en bas celles du bas, une graduation par case. */
+function regle(c, x0, y, w, haut, bas, coulH, coulB) {
+  c.ligne(x0, y, x0 + w, y, { couleur: 'blanc', largeur: 2 });
+  const n = haut.length, pas = w / (n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = x0 + i * pas;
+    c.ligne(x, y - 8, x, y + 8, { couleur: 'blanc', largeur: 2 });
+    c.texte(haut[i], x, y - 14, { couleur: coulH, taille: 18, align: 'center' });
+    c.texte(bas[i], x, y + 30, { couleur: coulB, taille: 18, align: 'center' });
+    c.pause(.12);
+  }
+}
+
+MathsTableau.page({
+  id: 'ln_log', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie du logarithme décimal : log x = ln x / ln 10, courbe plus aplatie que ln, log 10 = 1, « × 10 ⇒ + 1 » ; 10ˣ = a ⇔ x = log a ; pH = −log[H₃O⁺]',
+  vues: {
+    regle: {
+      titre: 'Le logarithme décimal',
+      dessiner(c, K) {
+        K.titre('Le logarithme décimal');
+        const G = K.axes(OPT);
+        K.anime(1.3, p => K.courbePart(G, Math.log, 0.08, 11.8, p, { couleur: 'rouge' }));
+        c.texte('ln', G.X(11.2), G.Y(Math.log(11.2)) - 8, { couleur: 'rouge', taille: 19 });
+        c.pause(.2);
+        K.anime(1.3, p => K.courbePart(G, log, 0.05, 11.8, p, { couleur: 'cyan' }));
+        c.texte('log', G.X(11.2), G.Y(log(11.2)) + 22, { couleur: 'cyan', taille: 19 });
+        c.repere('deux_courbes', G.x0, G.y0, G.w, G.h, 'ln et log');
+        K.marque('deux_courbes');
+        c.pause(.3);
+        K.rond(G, 1, 0, true, 'jaune');
+        c.texte('(1 ; 0)', G.X(1) + 8, G.Y(0) + 22, { couleur: 'jaune', taille: 16 });
+        K.proj(G, 10, 1, { lx: '10', ly: '1' });
+        K.rond(G, 10, 1, true, 'jaune');
+        c.texte('(10 ; 1)', G.X(10) - 30, G.Y(1) - 12, { couleur: 'jaune', taille: 16 });
+        K.marque('points');
+        c.pause(.3);
+        regle(c, 80, 302, 330, ['1', '10', '100', '1000'], ['0', '1', '2', '3'], 'blanc', 'cyan');
+        c.texte('x', 50, 288, { couleur: 'blanc', taille: 17 });
+        c.texte('log x', 30, 332, { couleur: 'cyan', taille: 15 });
+        c.texte('× 10 ⇒ + 1', 300, 268, { couleur: 'jaune', taille: 18 });
+        c.repere('regle', 30, 262, 400, 80, '× 10 ⇒ + 1');
+        K.marque('regle');
+        c.pause(.3);
+        c.rect(XR - 8, 70, 268, 52, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('log x = ln x / ln 10', XR, 104, { couleur: 'jaune', taille: 21 });
+        K.lignes(XR, 156, [
+          { t: 'log 1 = 0', couleur: 'blanc', taille: 19 },
+          { t: 'log 10 = 1', couleur: 'blanc', taille: 19 },
+          { t: 'log(10ⁿ) = n', couleur: 'blanc', taille: 19 },
+          { t: 'mêmes règles que ln', couleur: 'vert', taille: 18 },
+        ], 30);
+        c.repere('formule', XR - 8, 70, 268, 190, 'log x = ln x / ln 10');
+        K.marque('formule');
+      },
+      decrire: {
+        deux_courbes: 'Un repère : la courbe de ln en rouge et celle de log en cyan, plus aplatie, sur [0 ; 12].',
+        points: 'Le point (1 ; 0), commun aux deux courbes, et le point (10 ; 1) de la courbe de log, avec ses pointillés.',
+        regle: 'Sous le repère, une règle graduée : en haut 1, 10, 100, 1000 ; en bas 0, 1, 2, 3 ; « × 10 ⇒ + 1 ».',
+        formule: 'À droite, l’encadré « log x = ln x / ln 10 », puis « log 1 = 0 », « log 10 = 1 », « log(10ⁿ) = n », « mêmes règles que ln ».',
+      },
+      motifs: { deux_courbes: 'ln et log', points: 'log 10 = 1', regle: 'multiplier par 10, ajouter 1', formule: 'la définition de log' },
+      explication: [
+        { repere: 'deux_courbes', texte: 'log est ln divisée par ln 10 ≈ 2,30 : même allure, plus aplatie.' },
+        { repere: 'regle', texte: 'Multiplier x par 10, c’est ajouter 1 à log x.' },
+        { repere: 'formule', texte: 'log x = ln x / ln 10 ; log 10 = 1.' },
+      ],
+    },
+    ph: {
+      titre: '10ˣ = a ; le pH',
+      dessiner(c, K) {
+        K.titre('10ˣ = a ; le pH');
+        K.lignes(60, 92, [
+          { t: '10ˣ = 5', couleur: 'blanc', taille: 22 },
+          { t: '⇔ x = log 5', couleur: 'blanc', taille: 22 },
+          { t: 'x ≈ 0,70', couleur: 'jaune', taille: 22 },
+        ], 36);
+        c.repere('equation', 50, 66, 260, 120, '10ˣ = 5 ⇔ x = log 5');
+        K.marque('equation');
+        c.pause(.3);
+        regle(c, 80, 250, 330, ['10⁻¹', '10⁻²', '10⁻³', '10⁻⁴'], ['1', '2', '3', '4'], 'blanc', 'vert');
+        c.texte('[H₃O⁺]', 20, 236, { couleur: 'blanc', taille: 15 });
+        c.texte('pH', 36, 280, { couleur: 'vert', taille: 16 });
+        c.repere('regle', 20, 210, 420, 90, '[H₃O⁺] et pH');
+        K.marque('regle');
+        c.pause(.3);
+        c.rect(XR - 8, 74, 264, 52, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('pH = −log[H₃O⁺]', XR, 108, { couleur: 'jaune', taille: 21 });
+        K.lignes(XR, 162, [
+          { t: 'pH = 3', couleur: 'blanc', taille: 19 },
+          { t: '⇒ [H₃O⁺] = 10⁻³ mol/L', couleur: 'vert', taille: 18 },
+        ], 30);
+        c.repere('ph', XR - 8, 74, 264, 120, 'pH = −log[H₃O⁺]');
+        K.marque('ph');
+      },
+      decrire: {
+        equation: 'En haut à gauche : « 10ˣ = 5 », « ⇔ x = log 5 », « x ≈ 0,70 » en jaune.',
+        regle: 'Une règle : en haut 10⁻¹, 10⁻², 10⁻³, 10⁻⁴ ([H₃O⁺]), en bas 1, 2, 3, 4 (pH) en vert.',
+        ph: 'À droite, l’encadré « pH = −log[H₃O⁺] », puis « pH = 3 ⇒ [H₃O⁺] = 10⁻³ mol/L ».',
+      },
+      motifs: { equation: '10ˣ = a', regle: 'puissances de 10 et pH', ph: 'la formule du pH' },
+      explication: [
+        { repere: 'equation', texte: '10ˣ = a (a > 0) équivaut à x = log a.' },
+        { repere: 'regle', texte: 'Chaque fois que [H₃O⁺] est divisée par 10, le pH augmente de 1.' },
+        { repere: 'ph', texte: 'pH = −log[H₃O⁺] : le signe moins est devant.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

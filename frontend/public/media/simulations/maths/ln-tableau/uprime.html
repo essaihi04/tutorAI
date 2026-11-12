@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Primitives de u’/u</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le tableau des primitives prolongé par u’/u → ln u, puis le miroir qui donne ln|x| pour x négatif"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : primitives de u’/u.
+ * Vues : ?vue=tableau (moments ancien, nouveau, exemple, verifier ; repères nouveau, exemple, verifier)
+ *        ?vue=miroir (moments inverse, ln, miroir, valeur_absolue, exemple ; repères miroir, valeur_absolue, exemple).
+ */
+const OPT = { x0: 40, y0: 52, w: 400, h: 290, xmin: -5, xmax: 5, ymin: -3, ymax: 3,
+  gx: [[-4, '−4'], [-2, '−2'], [2, '2'], [4, '4']], gy: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], nomx: 'x', nomy: 'y' };
+const XR = 462;
+
+MathsTableau.page({
+  id: 'ln_uprime', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie : le tableau des primitives du chapitre précédent, prolongé par 1/x → ln x et u’/u → ln u (u > 0) ; exemple 2x/(x² + 1) → ln(x² + 1) ; puis ln(−x) pour x < 0, symétrique de ln x, d’où 1/x → ln|x| et u’/u → ln|u|',
+  vues: {
+    tableau: {
+      titre: 'À l’envers : u’/u a pour primitive ln u',
+      dessiner(c, K) {
+        K.titre('À l’envers : u’/u a pour primitive ln u');
+        c.texte('fonction', 90, 84, { couleur: 'faible', taille: 17 });
+        c.texte('une primitive', 360, 84, { couleur: 'faible', taille: 17 });
+        c.ligne(60, 94, 640, 94, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(330, 66, 330, 300, { couleur: 'faible', largeur: 1.2 });
+        const L = [['xⁿ', 'xⁿ⁺¹/(n + 1)'], ['u’uⁿ', 'uⁿ⁺¹/(n + 1)'], ['u’/u²', '−1/u']];
+        let y = 126;
+        for (const [a, b] of L) { c.texte(a, 90, y, { couleur: 'blanc', taille: 20 }); c.texte(b, 360, y, { couleur: 'blanc', taille: 20 }); y += 32; c.pause(.15); }
+        K.marque('ancien');
+        c.pause(.3);
+        c.texte('1/x', 90, y, { couleur: 'vert', taille: 21 }); c.texte('ln x   (x > 0)', 360, y, { couleur: 'vert', taille: 21 }); y += 34;
+        c.pause(.15);
+        c.texte('u’/u', 90, y, { couleur: 'vert', taille: 21 }); c.texte('ln u   (u > 0)', 360, y, { couleur: 'vert', taille: 21 });
+        c.repere('nouveau', 70, y - 58, 560, 70, 'les lignes nouvelles : 1/x → ln x, u’/u → ln u');
+        K.marque('nouveau');
+        c.pause(.3);
+        K.lignes(60, 300, [
+          { t: '2x/(x² + 1) : u = x² + 1 > 0, u’ = 2x  →  ln(x² + 1)', couleur: 'jaune', taille: 19 },
+        ], 30);
+        c.repere('exemple', 50, 280, 640, 30, 'exemple : 2x/(x² + 1) → ln(x² + 1)');
+        K.marque('exemple');
+        c.pause(.3);
+        c.texte('(ln(x² + 1))’ = 2x/(x² + 1) ✓', 60, 340, { couleur: 'vert', taille: 19 });
+        c.repere('verifier', 50, 320, 420, 30, 'on vérifie en dérivant');
+        K.marque('verifier');
+      },
+      decrire: {
+        ancien: 'Un tableau à deux colonnes « fonction » et « une primitive » : xⁿ → xⁿ⁺¹/(n + 1), u’uⁿ → uⁿ⁺¹/(n + 1), u’/u² → −1/u.',
+        nouveau: 'Deux lignes nouvelles en vert : « 1/x → ln x (x > 0) » et « u’/u → ln u (u > 0) ».',
+        exemple: 'En jaune : « 2x/(x² + 1) : u = x² + 1 > 0, u’ = 2x → ln(x² + 1) ».',
+        verifier: 'En vert, la vérification : « (ln(x² + 1))’ = 2x/(x² + 1) ✓ ».',
+      },
+      motifs: { ancien: 'le tableau des primitives', nouveau: 'u’/u → ln u', exemple: 'un exemple', verifier: 'la vérification' },
+      explication: [
+        { repere: 'nouveau', texte: 'Quand le haut est la dérivée du bas, la primitive est ln du bas.' },
+        { repere: 'exemple', texte: 'u = x² + 1, u’ = 2x : 2x/(x² + 1) a pour primitive ln(x² + 1).' },
+        { repere: 'verifier', texte: 'On vérifie toujours en dérivant.' },
+      ],
+    },
+    miroir: {
+      titre: 'ln|u| quand u est négatif',
+      dessiner(c, K) {
+        K.titre('ln|u| quand u est négatif');
+        const G = K.axes(OPT);
+        K.anime(1.2, p => { K.courbePart(G, x => 1 / x, 0.34, 5, p, { couleur: 'jaune', largeur: 2 }); K.courbePart(G, x => 1 / x, -5, -0.34, p, { couleur: 'jaune', largeur: 2 }); });
+        c.texte('1/x', G.X(0.5) + 6, G.Y(2.6), { couleur: 'jaune', taille: 18 });
+        K.marque('inverse');
+        c.pause(.3);
+        K.anime(1.2, p => K.courbePart(G, Math.log, 0.06, 5, p, { couleur: 'rouge' }));
+        c.texte('ln x', G.X(4.2), G.Y(Math.log(4.2)) - 10, { couleur: 'rouge', taille: 18 });
+        K.marque('ln');
+        c.pause(.3);
+        c.ligne(G.X(0), G.y0, G.X(0), G.y0 + G.h, { couleur: 'orange', largeur: 1.6, pointille: [6, 6] });
+        c.texte('miroir', G.X(0) + 6, G.y0 + 16, { couleur: 'orange', taille: 15 });
+        K.anime(1.2, p => K.courbePart(G, x => Math.log(-x), -0.06, -5, p, { couleur: 'cyan' }));
+        c.texte('ln(−x)', G.X(-4.6), G.Y(Math.log(4.6)) - 10, { couleur: 'cyan', taille: 18 });
+        c.repere('miroir', G.x0, G.y0, G.w, G.h, 'ln(−x) est le reflet de ln x');
+        K.marque('miroir');
+        c.pause(.3);
+        c.rect(XR - 8, 70, 286, 74, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        K.lignes(XR, 100, [
+          { t: '1/x → ln|x| sur chaque intervalle', couleur: 'jaune', taille: 17 },
+          { t: 'u’/u → ln|u|', couleur: 'jaune', taille: 19 },
+        ], 30);
+        c.repere('valeur_absolue', XR - 8, 70, 286, 74, '1/x → ln|x| ; u’/u → ln|u|');
+        K.marque('valeur_absolue');
+        c.pause(.3);
+        K.lignes(XR, 186, [
+          { t: 'sur ]−∞ ; 3[ :', couleur: 'blanc', taille: 18 },
+          { t: '1/(x − 3) → ln|x − 3|', couleur: 'vert', taille: 18 },
+          { t: '= ln(3 − x)', couleur: 'vert', taille: 18 },
+        ], 30);
+        c.repere('exemple', XR - 8, 166, 286, 100, 'exemple : 1/(x − 3) → ln(3 − x) sur ]−∞ ; 3[');
+        K.marque('exemple');
+      },
+      decrire: {
+        inverse: 'Un repère : la courbe de 1/x en jaune, sur les deux intervalles ]−∞ ; 0[ et ]0 ; +∞[.',
+        ln: 'La courbe de ln x en rouge, pour x > 0.',
+        miroir: 'L’axe des ordonnées en pointillé orange « miroir » ; la courbe de ln(−x) en cyan pour x < 0, symétrique de ln x.',
+        valeur_absolue: 'À droite, un encadré jaune : « 1/x → ln|x| sur chaque intervalle » et « u’/u → ln|u| ».',
+        exemple: 'Dessous : « sur ]−∞ ; 3[ : 1/(x − 3) → ln|x − 3| = ln(3 − x) ».',
+      },
+      motifs: { inverse: '1/x sur deux intervalles', ln: 'ln x pour x > 0', miroir: 'ln(−x) pour x < 0', valeur_absolue: 'ln|u|', exemple: 'un exemple avec u < 0' },
+      explication: [
+        { repere: 'miroir', texte: 'ln(−x) est définie pour x < 0 ; sa dérivée est 1/x aussi.' },
+        { repere: 'valeur_absolue', texte: 'Sur un intervalle où u ne s’annule pas, u’/u a pour primitive ln|u|.' },
+        { repere: 'exemple', texte: 'Sur ]−∞ ; 3[, x − 3 < 0 : ln|x − 3| = ln(3 − x).' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
