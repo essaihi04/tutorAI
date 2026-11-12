@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — transformations lentes et rapides</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie : pour chaque partie du cours sur les transformations lentes et rapides, la définition, la formule encadrée et le piège ; deuxième page : ce que l’élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * « Ce qu’il faut retenir » du cours « Transformations lentes et transformations rapides » (phys_ch9_transformations_lentes_rapides),
+ * même forme et même protocole que physics/circuit-rlc-tableau/bilan.html (contrat transformations_lentes_rapides_contrat_simulations.md,
+ * § 7). TOUTE la fiche tient sur UNE page : neuf blocs en trois colonnes (3, 3, 3) : oxydant et réducteur, demi-équation, équation
+ * bilan, rapide ou lente, facteur cinétique, température, concentration, catalyseur, trempe ; chacun avec la définition, la formule
+ * encadrée (indices et charges rendus, flèches → et ⇌ dessinées au trait) et le piège en orange (⚠). Compétences C1 à C7 du cours :
+ * C1 oxydoreduction, C2 demi_equation, C3 equation, C4 rapide_lente, C5 facteur + temperature, C6 concentration, C7 catalyseur + trempe.
+ * La voix la parcourt bloc par bloc : play_until {moment: <bloc>} écrit ce bloc à cet instant et le met en lumière ;
+ * les blocs déjà dits (ou sautés) sont écrits d’un coup ; « fiche » ou « fin » : tout d’un coup.
+ * La deuxième page est celle de l’élève (set_parameters {lacunes, acquis, acquis_ids}), moment « lacunes ».
+ * Couleurs : jaune = cadres (surlignage) seulement, orange = piège, rouge/orange/vert = état de l’élève.
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'oxydoreduction', titre: '1 · Oxydant et réducteur', comps: ['C1'], formules: ['Ox + n e⁻ ⇌ Red'],
+    def: 'Un oxydant capte un ou plusieurs électrons ; un réducteur en cède.',
+    attention: 'oxydation = perte d’électrons (subie par le réducteur) ; réduction = gain d’électrons.' },
+  { id: 'demi_equation', titre: '2 · Demi-équation', comps: ['C2'], formules: ['MnO₄⁻ + 8H⁺ + 5e⁻ ⇌ Mn²⁺ + 4H₂O'],
+    def: 'Quatre gestes : les éléments, O avec H₂O, H avec H⁺, les charges avec e⁻.',
+    attention: 'les électrons sont du côté de l’oxydant.' },
+  { id: 'equation', titre: '3 · Équation bilan', comps: ['C3'], formules: [['2MnO₄⁻ + 5H₂C₂O₄ + 6H⁺', '→ 2Mn²⁺ + 10CO₂ + 8H₂O']],
+    def: 'Même nombre d’électrons dans les deux demi-équations, puis on les additionne.',
+    attention: 'aucun électron dans le bilan.' },
+  { id: 'rapide_lente', titre: '4 · Rapide ou lente', comps: ['C4'], formules: ['rapide', 'lente'],
+    def: 'Rapide : achevée dès que les réactifs se rencontrent, on ne peut pas suivre son évolution. Lente : elle dure de quelques secondes à plusieurs minutes ou heures.',
+    attention: 'le classement dépend des moyens d’observation.' },
+  { id: 'facteur', titre: '5 · Facteur cinétique', comps: ['C5'], formules: ['température', 'concentration', 'catalyseur'],
+    def: 'Un facteur cinétique est un paramètre qui modifie la vitesse d’évolution d’une transformation.',
+    attention: 'un seul paramètre change entre deux expériences.' },
+  { id: 'temperature', titre: '6 · Température', comps: ['C5'], formules: ['plus chaud : plus rapide'],
+    def: 'Plus la température est élevée, plus la transformation est rapide.',
+    attention: 'même état final.' },
+  { id: 'concentration', titre: '7 · Concentration', comps: ['C6'], formules: ['plus concentré : plus rapide'],
+    def: 'Plus la concentration initiale des réactifs est grande, plus la transformation est rapide.',
+    attention: 'si on change le réactif limitant, l’état final change.' },
+  { id: 'catalyseur', titre: '8 · Catalyseur', comps: ['C7'], formules: ['absent de l’équation'],
+    def: 'Un catalyseur accélère la transformation sans figurer dans l’équation et sans changer l’état final.',
+    attention: 'national : la courbe la plus rapide, pas le palier le plus haut.' },
+  { id: 'trempe', titre: '9 · Trempe', comps: ['C7'], formules: ['eau glacée + dilution'],
+    def: 'Refroidir brusquement (eau glacée) et diluer pour bloquer la transformation avant un dosage.',
+    attention: 'le dosage qui suit doit être rapide.' },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
+// apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
+const S = { page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre ou une colonne trop pleine
+
+/* Formules chimiques à la craie : indices (₄) et charges (²⁺, ⁻) en notation du kit (« O_{4} », « ^{2+} », écrits plus petits
+ * par le kit et exposants.js : la police du tableau n’a ni « ₄ » ni « ⁺ ») ; les flèches « → » et « ⇌ » sont DESSINÉES au trait. */
+const IND = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+const EXPO = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const chimie = s => String(s)
+  .replace(/([A-Za-z])([₀-₉]+)/g, (m, l, g) => l + '_{' + [...g].map(ch => IND[ch]).join('') + '}')
+  .replace(/[₀-₉]+/g, g => [...g].map(ch => IND[ch]).join(''))
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => EXPO[ch]).join('') + '}');
+const FLECHE = /(⇌|→)/;
+const longFleche = taille => taille * 1.5, marge = taille => taille * .32;
+/** Largeur d'un morceau de texte (indices et charges plus petits, comme le kit les écrit). */
+function largeurMorceau(c, t, taille) {
+  return window.Tableau.Craie.segments(chimie(t)).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
+}
+/** Largeur d'une ligne qui peut contenir des flèches dessinées. */
+function largeur(c, s, taille) {
+  return String(s).split(FLECHE).reduce((w, p, i) => w + (i % 2 ? longFleche(taille) + 2 * marge(taille) : p.trim() ? largeurMorceau(c, p.trim(), taille) : 0), 0);
+}
+/** Flèche de réaction (→) ou double flèche des demi-équations (⇌ : deux demi-flèches), au trait. */
+function flecheDessinee(c, x0, y, taille, type, o) {
+  const x1 = x0 + longFleche(taille), yc = y - taille * .3, t = Math.max(4, taille * .32), st = { couleur: o.couleur || 'blanc', largeur: Math.max(1.1, taille * .1), alpha: o.alpha, duree: .18 };
+  if (type === '→') {
+    c.trait([[x0, yc], [x1, yc]], st);
+    c.trait([[x1 - t, yc - t * .6], [x1, yc], [x1 - t, yc + t * .6]], { ...st, duree: .08 });
+  } else {
+    const e = taille * .14;
+    c.trait([[x0, yc - e], [x1, yc - e], [x1 - t, yc - e - t * .6]], st);
+    c.trait([[x1, yc + e], [x0, yc + e], [x0 + t, yc + e + t * .6]], st);
+  }
+}
+/** Écrit une ligne (formule ou phrase) : morceaux de craie et flèches dessinées. o : couleur, taille, align, max, alpha, duree. */
+function ecrire(c, s, x, y, o = {}) {
+  let taille = o.taille ?? 18;
+  const total = largeur(c, s, taille);
+  if (o.max && total > o.max) taille = Math.max(9, taille * o.max / total);
+  if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);   // même plancher que le kit : morceaux et flèches restent alignés
+  const L = largeur(c, s, taille);
+  let px = o.align === 'center' ? x - L / 2 : o.align === 'right' ? x - L : x;
+  String(s).split(FLECHE).forEach((p, i) => {
+    if (i % 2) { px += marge(taille); flecheDessinee(c, px, y, taille, p, o); px += longFleche(taille) + marge(taille); return; }
+    const t = p.trim(); if (!t) return;
+    c.texte(chimie(t), px, y, { couleur: o.couleur, taille, alpha: o.alpha, gras: o.gras, duree: o.duree });
+    px += largeurMorceau(c, t, taille);
+  });
+  return L;
+}
+
+/* Coupe un texte en lignes qui tiennent dans `max` px. */
+function lignes(c, texte, taille, max) {
+  const out = []; let ligne = '';
+  const t = String(texte).replace(/ ([=\/·→⇌<>≥≤≈≠−+×]) /g, ' $1 ');   // une formule dans la phrase ne se coupe pas
+  for (const mot of t.split(/[ \t\n]+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (largeur(c, essai, taille) > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
+  for (const l of lignes(c, texte, taille, max)) { if (dessiner) ecrire(c, l.replace(/ /g, ' '), x, y, { taille, ...o }); y += taille * 1.2; }
+  return y;
+}
+
+// Trois colonnes de trois blocs dans le cadre 760 × 420 ; hauteurs mesurées, réparties dans la colonne.
+const COL = [{ x: 16, w: 228 }, { x: 266, w: 228 }, { x: 516, w: 228 }], HAUT = 52, BAS = 408, PAR_COL = [3, 3, 3];
+const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
+const TF = 12.5;  // taille des formules
+const TD = 11.5;  // taille du texte
+const HL = 16;    // interligne dans un cadre de formule sur deux lignes
+
+/* Écrit (ou mesure seulement) le contenu d'un bloc ; rend l'ordonnée de fin. */
+function contenu(c, b, x, y0, w, st, dessiner) {
+  let y = y0 + 12;
+  if (dessiner) c.texte(b.titre, x, y, { couleur: 'cyan', taille: 14, max: st ? w - 62 : w });
+  y += 19;
+  // formules encadrées, à la ligne quand la suivante ne tient plus ; une formule en tableau = un cadre sur plusieurs lignes
+  let fx = x, hMax = 0;
+  for (const f of b.formules) {
+    const ls = Array.isArray(f) ? f : [f];
+    const l = Math.min(w, Math.max(...ls.map(s => largeur(c, s, TF))) + 14), h = 19 + HL * (ls.length - 1);
+    if (fx > x && fx + l > x + w) { fx = x; y += hMax + 3; hMax = 0; }
+    if (dessiner) {
+      c.rect(fx, y - 13, l, h, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
+      ls.forEach((s, k) => ecrire(c, s, fx + 7, y + 1 + k * HL, { couleur: 'blanc', taille: TF, max: l - 12 }));
+    }
+    fx += l + 7; hMax = Math.max(hMax, h);
+  }
+  y += hMax + 3;
+  y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc', alpha: .9 }, dessiner);
+  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
+  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 }, dessiner);
+  return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
+}
+function placer(c) {
+  for (let k = 0; k < COL.length; k++) {
+    const debut = PAR_COL.slice(0, k).reduce((a, b) => a + b, 0);
+    const { x, w } = COL[k], ids = Array.from({ length: PAR_COL[k] }, (_, j) => debut + j).filter(i => BLOCS[i]);
+    const h = ids.map(i => contenu(c, BLOCS[i], x, 0, w, true, false) + 6);
+    const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / ids.length);
+    if (libre < 0) ids.forEach(i => { if (!window.__debordeBlocs.includes(BLOCS[i].id)) window.__debordeBlocs.push(BLOCS[i].id); });
+    let y = HAUT;
+    ids.forEach((i, j) => { POS[i] = { x, w, y0: y, h: h[j] + g * .6 }; y += h[j] + g; });
+  }
+}
+function bloc(c, b, i) {
+  const { x, w, y0, h } = POS[i], enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = h + 4;
+  // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  c.direct(() => {
+    if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
+    else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: 15 });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+  });
+  const fin = contenu(c, b, x, y0, w, st, true);
+  if (fin > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  c.repere(b.id, cx, cy, cw, ch, b.titre.replace(/^\d+ · /, ''));
+}
+
+function dessinerFiche(c) {
+  placer(c);
+  if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
+  c.texte('Ce qu’il faut retenir · transformations lentes et rapides', 16, 30, { couleur: 'cyan', taille: 21, max: 520 });
+  c.texte('à savoir · formule · ⚠ piège', 744, 28, { couleur: 'faible', taille: 12, align: 'right' });
+  c.ligne(16, 38, 744, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.repere('fiche', 10, 10, 740, BAS - 4, 'la fiche du chapitre');
+  const debut = c.cur;
+  let fin = c.cur;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] == null) return;   // pas encore dit : il attend son moment
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, b, i); fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'cyan', taille: 22 });
+  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    y = paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' }, true);
+    c.repere('lacunes', 18, 50, 720, y - 50, 'ta page : pas encore de bilan');
+    return;
+  }
+  const y0 = y - 18;
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' }, true);
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 }, true);
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    y = paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 }, true);
+  }
+  c.repere('lacunes', 18, y0, 720, Math.max(30, y - y0), 'ce qu’il reste à retravailler');
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(91 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+const nomBloc = b => b.titre.replace(/^\d+ · /, '');
+
+/* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
+function aller(n, par, focus, tout) {
+  n = n === 2 ? 2 : 1;
+  if (par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // rejouer : la fiche se réécrit depuis le début
+  else if (n !== S.page) {
+    // changement de page : on repart d'une page vierge, mais les blocs déjà dits restent écrits (d'un coup)
+    scene.reecrire(); S.apparu = S.apparu.map(a => (a == null ? null : AVANT));
+  }
+  if (n === 1) {
+    const k = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+    if (tout) BLOCS.forEach((b, i) => { if (S.apparu[i] == null) S.apparu[i] = AVANT; });
+    if (k >= 0) {
+      for (let i = 0; i < k; i++) if (S.apparu[i] == null) S.apparu[i] = AVANT;   // sautés : écrits d'un coup
+      if (S.apparu[k] == null) S.apparu[k] = par === 'start' || par === 'reset' ? 0 : maintenant();
+    }
+  }
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? nomBloc(BLOCS.find(b => b.id === focus)) : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+// Les moments sont des pages (1 = la fiche, 2 = la page de l'élève) ; « fin » = la fiche entière écrite.
+function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; m.fin = 1; return m; }
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fiche' || nom === 'fin' || !nom) aller(1, 'play_until', null, true);
+  else aller(1, 'play_until', nom);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+const formulesTexte = b => b.formules.map(f => (Array.isArray(f) ? f.join(' ') : f)).join(' ; ');
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
+  return `Page 1/2, la fiche du chapitre « Transformations lentes et transformations rapides » : ${ecrits}/${BLOCS.length} blocs écrits (définition, formule encadrée en jaune, piège en orange)${f ? ` ; en lumière « ${nomBloc(f)} » : ${f.def} Encadré : ${formulesTexte(f)}. Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(nomBloc).join(', ') || 'aucun'}.` : ''}`;
+}
+$('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — transformations lentes et rapides', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } },
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const i = BLOCS.findIndex((b, k) => { const p = POS[k]; return p && S.apparu[k] != null && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def + ' Encadré : ' + formulesTexte(b) + '. Piège : ' + b.attention })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'transformations_lentes_rapides_bilan', version: '1.0', title: 'Ce qu’il faut retenir — transformations lentes et rapides', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche ou fin = toute la fiche ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1..C7, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Transformations lentes et transformations rapides », sur une page (neuf blocs : oxydant et réducteur Ox + n e⁻ ⇌ Red ; demi-équation MnO₄⁻ + 8H⁺ + 5e⁻ ⇌ Mn²⁺ + 4H₂O ; équation bilan 2MnO₄⁻ + 5H₂C₂O₄ + 6H⁺ → 2Mn²⁺ + 10CO₂ + 8H₂O ; rapide ou lente ; facteur cinétique ; température ; concentration ; catalyseur ; trempe ; chacun avec définition, formule encadrée, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'oxydoreduction'), reset: () => aller(1, 'reset', 'oxydoreduction'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
+aller(1, 'start', 'oxydoreduction');   // la voix commence par l’oxydoréduction : le premier bloc s'écrit et est en lumière
+window.__bilan = { S, scene, BLOCS, POS };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
