@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le conjugué — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le plan complexe à la craie : le point M d’affixe z et son reflet M’ par rapport à l’axe réel, d’affixe le conjugué de z"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes, première partie » (math_ch6_nombres_complexes) : le conjugué, reflet par rapport à l’axe réel.
+ * Vues : ?vue=miroir (params a, b) | reel | distances.
+ * miroir : point, miroir, deplace (repères du même nom).
+ * reel : point, miroir, sur_l_axe, somme (repères du même nom).
+ * distances : points, omega, egal (repères du même nom).
+ * La barre du conjugué est toujours DESSINÉE au trait (fonction barre), jamais confiée à la police.
+ */
+/*AIDES*/
+/** Petit trait de « même longueur » au milieu d’un segment (n traits). */
+function codage(c, x1, y1, x2, y2, n = 1, couleur = 'blanc') {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, l = Math.hypot(x2 - x1, y2 - y1) || 1, dx = (x2 - x1) / l, dy = (y2 - y1) / l;
+  for (let k = 0; k < n; k++) {
+    const o = (k - (n - 1) / 2) * 5, cx = mx + dx * o, cy = my + dy * o;
+    c.ligne(cx - dy * 7, cy + dx * 7, cx + dy * 7, cy - dx * 7, { couleur, largeur: 1.8, duree: .05 });
+  }
+}
+
+const PM = { ox: 230, oy: 205, u: 45, xmin: -4.4, xmax: 4.6, ymin: -3.3, ymax: 3.3, quadrillage: true };
+const PR = { ox: 70, oy: 205, u: 45, xmin: -0.8, xmax: 7, ymin: -3.3, ymax: 3.3, quadrillage: true };
+const PD = { ox: 90, oy: 203, u: 55, xmin: -1.2, xmax: 3.9, ymin: -2.6, ymax: 2.6, quadrillage: true };
+const Z = 'z̄';   // z barre (la barre est dessinée par ecrire)
+
+MathsTableau.page({
+  id: 'nc_conjugue', titre: 'Nombres complexes',
+  texte: 'Construction à la craie : le conjugué de z = a + ib est z̄ = a − ib ; dans le plan, M’(z̄) est le reflet de M(z) par rapport à l’axe réel (même abscisse, ordonnée opposée) ; z̄ = z ⇔ z réel ; z + z̄ = 2a, z − z̄ = 2ib ; exercice 2025 N : ΩA = ΩB = 5/2',
+  vues: {
+    miroir: {
+      titre: 'Le conjugué : le reflet',
+      params: { a: { min: -4, max: 4, pas: 0.5, defaut: 3, sens: 'partie réelle de z, abscisse de M' }, b: { min: -3, max: 3, pas: 0.5, defaut: 2, sens: 'partie imaginaire de z, ordonnée de M' } },
+      dessiner(c, K) {
+        K.titre('Le conjugué : le reflet');
+        const G = plan(c, PM), { a, b } = K.P, XR = 470;
+        c.pause(.3);
+        c.point(G.X(a), G.Y(b), 6, 'cyan');
+        const lx = Math.min(425, Math.max(45, G.X(a)));
+        c.texte('M(z)', lx, b >= 0 ? G.Y(b) - 13 : G.Y(b) + 26, { couleur: 'cyan', taille: 18, align: 'center' });
+        c.texte('z = ' + zs(a, b), XR, 100, { couleur: 'cyan', taille: 28 });
+        c.repere('point', G.X(a) - 30, G.Y(b) - 30, 60, 60, `M(z), z = ${zs(a, b)}`);
+        K.marque('point');
+        c.pause(.4);
+        c.ligne(G.X(-4.3), G.Y(0), G.X(4.4), G.Y(0), { couleur: 'blanc', largeur: 5, alpha: .5 });
+        c.texte('miroir', G.X(-3.5), G.Y(0) - 10, { couleur: 'blanc', taille: 15, align: 'center' });
+        K.anime(1.2, p => {
+          const y = b - 2 * b * p;
+          c.ligne(G.X(a), G.Y(b), G.X(a), G.Y(y), { couleur: 'faible', largeur: 1.4, pointille: [5, 5] });
+          c.point(G.X(a), G.Y(y), 6, 'jaune');
+        });
+        if (b !== 0) { codage(c, G.X(a), G.Y(b), G.X(a), G.Y(0), 1, 'blanc'); codage(c, G.X(a), G.Y(0), G.X(a), G.Y(-b), 1, 'blanc'); }
+        c.texte('M’', lx, b >= 0 ? G.Y(-b) + 26 : G.Y(-b) - 13, { couleur: 'jaune', taille: 18, align: 'center' });
+        ecrire(c, Z + ' = ' + zs(a, -b), XR, 146, { couleur: 'jaune', taille: 28 });
+        c.texte('même abscisse,', XR, 184, { couleur: 'blanc', taille: 18 });
+        c.texte('ordonnée opposée', XR, 210, { couleur: 'blanc', taille: 18 });
+        c.repere('miroir', G.X(a) - 30, G.Y(Math.abs(b)) - 30, 60, 2 * Math.abs(b) * PM.u + 60, `M’ reflet de M : ${'z̄'} = ${zs(a, -b)}`);
+        K.marque('miroir');
+        c.pause(.4);
+        c.cercle(G.X(a), G.Y(b), 14, { couleur: 'cyan', largeur: 1.4, pointille: [4, 4] });
+        const r = [XR - 10, 240, 275, 80];
+        c.rect(...r, { couleur: 'jaune', arrondi: 9, largeur: 1.7 });
+        ecrire(c, 'z = a + ib  →  ' + Z + ' = a − ib', XR, 270, { couleur: 'jaune', taille: 20 });
+        c.texte('glisse M : M’ suit en reflet', XR, 304, { couleur: 'faible', taille: 17 });
+        c.repere('deplace', G.X(a) - 20, G.Y(b) - 20, 40, 40, 'M à glisser, M’ suit');
+        K.marque('deplace');
+      },
+      poignees(K) { const G = rep(PM); return [{ id: 'M', x: G.X(K.P.a), y: G.Y(K.P.b), bouger: (px, py) => { const [a, b] = G.inv(px, py); return { a, b }; } }]; },
+      lecture: K => `z = ${zs(K.P.a, K.P.b)} : son conjugué z̄ = ${zs(K.P.a, -K.P.b)} ; M’(${fr(K.P.a)} ; ${fr(-K.P.b)}) est le reflet de M(${fr(K.P.a)} ; ${fr(K.P.b)}) par rapport à l’axe réel.`,
+      decrire: K => ({
+        point: `Le plan complexe (axe réel, axe imaginaire, O, u, v) ; le point M(z) en cyan ; à droite « z = ${zs(K.P.a, K.P.b)} ».`,
+        miroir: `L’axe réel est épaissi (« miroir ») ; un point jaune descend de M à travers l’axe jusqu’à M’, même abscisse, ordonnée opposée (les deux moitiés du pointillé sont codées égales) ; à droite, en jaune, « z̄ = ${zs(K.P.a, -K.P.b)} » avec la barre dessinée, puis « même abscisse, ordonnée opposée ».`,
+        deplace: 'M est entouré d’un cercle pointillé (on peut le glisser) ; encadré jaune « z = a + ib → z̄ = a − ib » ; dessous « glisse M : M’ suit en reflet ».',
+      }),
+      motifs: { point: 'le point M(z)', miroir: 'le reflet M’', deplace: 'M à glisser' },
+      explication: [
+        { repere: 'point', texte: 'Le point M a pour affixe z = 3 + 2i.' },
+        { repere: 'miroir', texte: 'Son reflet par l’axe réel, M’, a la même abscisse et l’ordonnée opposée : z̄ = 3 − 2i.' },
+        { repere: 'deplace', texte: 'Glisse M : M’ le suit toujours en reflet, on change le signe de la partie imaginaire.' },
+      ],
+    },
+    reel: {
+      titre: 'z̄ = z : un réel',
+      dessiner(c, K) {
+        c.texte('z = z : un réel', 20, 30, { couleur: 'cyan', taille: 20 });
+        barre(c, 20, 30 - tv(c, 20) * .66, L(c, 'z', tv(c, 20)), 'cyan');
+        const G = plan(c, PR), XR = 410, a = 3;
+        c.pause(.3);
+        const pa = K.anime(.3, () => {});
+        c.texte('z = 3 + 2i', XR, 92, { couleur: 'cyan', taille: 24 });
+        c.repere('point', G.X(a) - 30, G.Y(2) - 30, 60, 60, 'M(z), z = 3 + 2i');
+        K.marque('point');
+        c.pause(.4);
+        c.ligne(G.X(-.7), G.Y(0), G.X(6.8), G.Y(0), { couleur: 'blanc', largeur: 5, alpha: .5 });
+        const pm = K.anime(1.2, () => {});
+        ecrire(c, Z + ' = 3 − 2i', XR, 126, { couleur: 'jaune', taille: 24 });
+        c.repere('miroir', G.X(a) - 30, G.Y(2) - 30, 60, 4 * PR.u + 60, 'M’ reflet de M : z̄ = 3 − 2i');
+        K.marque('miroir');
+        c.pause(.4);
+        const pd = K.anime(1.4, () => {});
+        const r1 = encadre(c, Z + ' = z ⇔ z réel', XR + 9, 178, 22, 'vert', 'vert');
+        c.texte('M sur l’axe réel : M’ = M', XR, 212, { couleur: 'vert', taille: 17 });
+        c.repere('sur_l_axe', r1[0], r1[1], Math.max(r1[2], 220), 212 - r1[1] + 8, 'z̄ = z ⇔ z réel');
+        K.marque('sur_l_axe');
+        c.pause(.4);
+        const pr = K.anime(1.2, () => {});
+        c.fleche(G.X(0), G.Y(0), G.X(a), G.Y(2), { couleur: 'cyan', largeur: 2.2, tete: 9 });
+        c.fleche(G.X(0), G.Y(0), G.X(a), G.Y(-2), { couleur: 'cyan', largeur: 2.2, tete: 9 });
+        c.ligne(G.X(a), G.Y(2), G.X(2 * a), G.Y(0), { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+        c.ligne(G.X(a), G.Y(-2), G.X(2 * a), G.Y(0), { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+        c.fleche(G.X(0), G.Y(0) + 3, G.X(2 * a), G.Y(0) + 3, { couleur: 'jaune', largeur: 3, tete: 10 });
+        c.texte('2a = 6', G.X(2 * a), G.Y(0) + 40, { couleur: 'jaune', taille: 17, align: 'center' });
+        ecrire(c, 'z + ' + Z + ' = 2a', XR, 256, { couleur: 'jaune', taille: 22 });
+        c.texte('= 6, sur l’axe réel', XR + 130, 256, { couleur: 'jaune', taille: 17 });
+        c.pause(.2);
+        c.fleche(G.X(a) + 12, G.Y(-2), G.X(a) + 12, G.Y(2), { couleur: 'orange', largeur: 2.4, tete: 9 });
+        c.texte('2b = 4', G.X(a) + 18, G.Y(-1) + 5, { couleur: 'orange', taille: 16 });
+        ecrire(c, 'z − ' + Z + ' = 2ib', XR, 296, { couleur: 'orange', taille: 22 });
+        c.texte('= 4i', XR + 130, 296, { couleur: 'orange', taille: 17 });
+        c.repere('somme', XR - 6, 232, 330, 76, 'z + z̄ = 2a ; z − z̄ = 2ib');
+        K.marque('somme');
+        // Les points M et M’ : ils descendent sur l’axe (sur_l_axe) puis remontent (somme).
+        if (pa > 0) c.direct(() => {
+          const b = pd <= 0 ? 2 : pd < 1 ? 2 * (1 - pd) : 2 * pr;
+          if (pm > 0) {
+            const yb = pd > 0 ? -b : 2 - 4 * pm;
+            c.ligne(G.X(a), G.Y(b), G.X(a), G.Y(yb), { couleur: 'faible', largeur: 1.4, pointille: [5, 5] });
+            c.point(G.X(a), G.Y(yb), 6, 'jaune');
+            if (pm >= 1 && b > .3) c.texte('M’', G.X(a) - 12, G.Y(-b) + 24, { couleur: 'jaune', taille: 18, align: 'center' });
+          }
+          c.point(G.X(a), G.Y(b), 6, 'cyan');
+          if (b > .3 || pm < 1) c.texte('M', G.X(a) - 12, G.Y(b) - 12, { couleur: 'cyan', taille: 18, align: 'center' });
+          else c.texte('M = M’', G.X(a), G.Y(0) - 14, { couleur: 'vert', taille: 18, align: 'center' });
+        });
+      },
+      decrire: {
+        point: 'Le plan complexe (axe réel, axe imaginaire, O, u, v) ; le point M(3 ; 2) en cyan ; à droite « z = 3 + 2i ».',
+        miroir: 'L’axe réel est épaissi ; M’ descend à travers l’axe jusqu’à (3 ; −2), en jaune ; à droite « z̄ = 3 − 2i » avec la barre dessinée.',
+        sur_l_axe: 'M descend sur l’axe réel et M’ remonte à sa rencontre : ils se confondent en 3, écrit « M = M’ » ; à droite, encadré vert : « z̄ = z ⇔ z réel », dessous « M sur l’axe réel : M’ = M ».',
+        somme: 'M et M’ reviennent en 3 + 2i et 3 − 2i ; les vecteurs OM et OM’ en cyan et leur somme en jaune le long de l’axe réel jusqu’à 6 (« 2a = 6 ») ; une flèche orange de M’ à M (« 2b = 4 ») ; à droite « z + z̄ = 2a = 6, sur l’axe réel » et, en orange, « z − z̄ = 2ib = 4i ».',
+      },
+      motifs: { point: 'le point M', miroir: 'le reflet M’', sur_l_axe: 'M sur l’axe réel', somme: 'z + z̄ et z − z̄' },
+      explication: [
+        { repere: 'point', texte: 'M a pour affixe z = 3 + 2i.' },
+        { repere: 'miroir', texte: 'Son reflet M’ a pour affixe z̄ = 3 − 2i.' },
+        { repere: 'sur_l_axe', texte: 'Si M est sur l’axe réel, son reflet est lui-même : z̄ = z exactement quand z est réel.' },
+        { repere: 'somme', texte: 'z + z̄ = 2a est réel ; z − z̄ = 2ib est imaginaire pur.' },
+      ],
+    },
+    distances: {
+      titre: 'ΩA = ΩB (2025 N)',
+      dessiner(c, K) {
+        K.titre('ΩA = ΩB (2025 N)');
+        const G = plan(c, PD), XR = 340;
+        c.pause(.3);
+        c.ligne(G.X(1), G.Y(2), G.X(1), G.Y(-2), { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+        c.point(G.X(1), G.Y(2), 6, 'cyan'); c.texte('A(1 + 2i)', G.X(1) + 10, G.Y(2) - 10, { couleur: 'cyan', taille: 17 });
+        c.point(G.X(1), G.Y(-2), 6, 'cyan'); c.texte('B(1 − 2i)', G.X(1) + 10, G.Y(-2) + 24, { couleur: 'cyan', taille: 17 });
+        ecrire(c, 'z_{B} = ' + Z + '_{A} : B reflet de A', XR, 90, { couleur: 'cyan', taille: 20 });
+        c.repere('points', G.X(1) - 20, G.Y(2) - 30, 110, 4 * PD.u + 60, 'A et B, reflets l’un de l’autre');
+        K.marque('points');
+        c.pause(.4);
+        c.point(G.X(2.5), G.Y(0), 6, 'jaune');
+        c.texte('Ω(5/2)', G.X(2.5) + 4, G.Y(0) + 38, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('ω = 5/2 : un réel', XR, 124, { couleur: 'jaune', taille: 20 });
+        c.repere('omega', G.X(2.5) - 30, G.Y(0) - 16, 60, 60, 'Ω(5/2) sur l’axe réel');
+        K.marque('omega');
+        c.pause(.4);
+        c.ligne(G.X(2.5), G.Y(0), G.X(1), G.Y(2), { couleur: 'jaune', largeur: 2.4 });
+        c.ligne(G.X(2.5), G.Y(0), G.X(1), G.Y(-2), { couleur: 'jaune', largeur: 2.4 });
+        codage(c, G.X(2.5), G.Y(0), G.X(1), G.Y(2), 2, 'jaune');
+        codage(c, G.X(2.5), G.Y(0), G.X(1), G.Y(-2), 2, 'jaune');
+        K.lignes(XR, 164, [
+          { t: 'ΩA = |1 + 2i − 5/2| = |−3/2 + 2i|', couleur: 'blanc', taille: 18 },
+          { t: '= √(9/4 + 4) = √(25/4) = 5/2', couleur: 'blanc', taille: 18, dx: 34 },
+          { t: 'ΩB = |1 − 2i − 5/2| = |−3/2 − 2i| = 5/2', couleur: 'blanc', taille: 18 },
+        ], 30);
+        const r = encadre(c, 'ΩA = ΩB = 5/2', XR + 9, 280, 24, 'jaune', 'jaune');
+        c.repere('egal', r[0], r[1], r[2], r[3], 'ΩA = ΩB = 5/2');
+        K.marque('egal');
+      },
+      decrire: {
+        points: 'Le plan complexe (axe réel, axe imaginaire, O, u, v) ; A(1 + 2i) et B(1 − 2i) en cyan, reliés par un pointillé vertical coupé par l’axe réel : B est le reflet de A ; à droite « z_B = z̄_A : B reflet de A » (barre dessinée).',
+        omega: 'Le point Ω(5/2) en jaune sur l’axe réel ; à droite « ω = 5/2 : un réel ».',
+        egal: 'Les segments ΩA et ΩB en jaune, chacun marqué du même double trait ; à droite le calcul « ΩA = |1 + 2i − 5/2| = |−3/2 + 2i| = √(9/4 + 4) = √(25/4) = 5/2 », « ΩB = |1 − 2i − 5/2| = |−3/2 − 2i| = 5/2 », et encadré jaune « ΩA = ΩB = 5/2 ».',
+      },
+      motifs: { points: 'A et B reflets', omega: 'le point Ω', egal: 'ΩA = ΩB' },
+      explication: [
+        { repere: 'points', texte: 'z_B est le conjugué de z_A : B est le reflet de A par l’axe réel.' },
+        { repere: 'omega', texte: 'Ω est sur l’axe réel, le miroir : il est à la même distance de A et de B.' },
+        { repere: 'egal', texte: 'Le calcul le confirme : ΩA = ΩB = 5/2.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
