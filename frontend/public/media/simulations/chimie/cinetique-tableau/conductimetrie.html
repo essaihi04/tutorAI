@@ -266,6 +266,20 @@ function tSim(M = MO) {
 
 /* ── Pièces peintes et graphes de ce dossier (appareils, cellule, bulles, ions, chrono, axes) ─────────────────────────── */
 let MO = null;
+/* « σ_f », « σ_{0} » : la lettre σ n’est pas dans la liste des lettres à indice du kit ; on écrit alors l’indice nous-mêmes. */
+(function () {
+  const T = window.Tableau, P = T.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    s = window.chim(String(s)).replace(/σ_([A-Za-z0-9]+)/g, 'σ_{$1}');
+    if (/σ_\{/.test(s) && !/\^|[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(s)) {
+      let taille = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;
+      this._verifierCadre(s.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+      if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+      return this._texteIndices(s, x, y, o, taille);
+    }
+    return avant.call(this, s, x, y, o);
+  };
+})();
 const ZY = [352, 376, 400];
 const NA = ['#f1e1ff', '#a855f7', '#4c1d95'], HO = ['#ffd4d4', '#e04848', '#6a1010'], AC = ['#d6ffe0', '#3fbf62', '#0f5a23'], CL = ['#d9f7ff', '#22b8d6', '#0b4a5a'];
 /** Appareil de mesure peint (conductimètre, manomètre) : boîtier sombre, écran vert, valeur affichée. */
@@ -484,7 +498,7 @@ function vueCellule(c, M) {
       plus: () => { c.texte('solution', BC.x + BC.w / 2, BC.y + BC.h + 22, { couleur: 'faible', taille: 16, align: 'center' }); c.texte('conductimètre', AC1.x + AC1.w / 2, AC1.y + AC1.h + 22, { couleur: 'faible', taille: 16, align: 'center' });
         c.texte('cellule', cx + 16, BC.y - 14, { couleur: 'faible', taille: 16 }); } },
     { nom: 'plaques', lignes: [['la cellule : deux plaques de surface S, séparées d’une distance L, plongées dans la solution', 'jaune']],
-      plus: () => { c.cote(cx - 13, yP + 56, cx + 13, yP + 56, '', { couleur: 'jaune', largeur: 1.4 }); c.texte('L', cx, yP + 74, { couleur: 'jaune', taille: 16, align: 'center' });
+      plus: () => { c.cote(cx - 13, yP + 56, cx + 13, yP + 56, '', { couleur: 'jaune', largeur: 1.4 }); c.texte('L', cx - 20, yP + 62, { couleur: 'jaune', taille: 16, align: 'right' });
         c.fleche(cx + 58, yP + 6, cx + 18, yP + 18, { couleur: 'jaune', largeur: 1.6, tete: 7 }); c.texte('plaque', cx + 62, yP + 2, { couleur: 'jaune', taille: 16 }); c.texte('(surface S)', cx + 62, yP + 20, { couleur: 'jaune', taille: 15 }); } },
     { nom: 'afficheur', lignes: [['le conductimètre affiche la conductance G de la portion de solution : G = 2,49 mS', 'blanc']],
       plus: () => c.texte('G (en mS)', AC1.x + AC1.w + 8, AC1.y + 70, { couleur: 'jaune', taille: 16 }) },
@@ -630,13 +644,13 @@ function vueCalcul(c, M) {
   if (M.commence('date')) c.direct(() => {
     const ctx = c.ctx; ctx.save(); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(xs, GS.y0, 8, 0, 7); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(xs - 18, GS.y0 - 4); ctx.lineTo(xs - 24, GS.y0); ctx.lineTo(xs - 18, GS.y0 + 4); ctx.moveTo(xs + 18, GS.y0 - 4); ctx.lineTo(xs + 24, GS.y0); ctx.lineTo(xs + 18, GS.y0 + 4); ctx.stroke(); ctx.restore();
-    c.texte(`t = ${t} min`, clamp(xs, GS.x0 + 40, GS.x0 + GS.w - 20), GS.y0 - 12, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.texte(`t = ${t} min`, t > 30 ? xs - 28 : xs + 28, GS.y0 - 8, { couleur: 'jaune', taille: 16, align: t > 30 ? 'right' : 'left' });
     const p = M.p('date'); c.ligne(xs, GS.y0, xs, lerp(GS.y0, ysg, p), { couleur: 'jaune', largeur: 1.4, pointille: [5, 5] });
   });
   if (M.commence('lecture')) c.direct(() => {
     const p = M.p('lecture'); c.point(xs, ysg, 4.5, 'jaune');
     c.ligne(xs, ysg, lerp(xs, GS.x0, p), ysg, { couleur: 'jaune', largeur: 1.4, pointille: [5, 5] });
-    if (p >= 1) c.texte(`σ = ${fr(L.s, 3)} S/m`, GS.x0 + 8, ysg + 20, { couleur: 'jaune', taille: 16 });
+    if (p >= 1) { if (t <= 26) c.texte(`σ = ${fr(L.s, 3)} S/m`, xs + 10, ysg - 10, { couleur: 'jaune', taille: 16 }); else c.texte(`σ = ${fr(L.s, 3)} S/m`, xs - 10, ysg + 22, { couleur: 'jaune', taille: 16, align: 'right' }); }
   });
   if (M.commence('report')) c.direct(() => { const p = lisse(M.p('report')); c.point(GX.X(t), GX.Y(L.x), 5.5 * p + .1, 'jaune');
     if (p >= 1) c.texte(`${fr(L.x, 2)} mmol`, GX.X(t) + (t > 30 ? -10 : 10), GX.Y(L.x) + 22, { couleur: 'jaune', taille: 16, align: t > 30 ? 'right' : 'left' }); });
@@ -693,7 +707,7 @@ function reperes(c, M) {
     const t = tVu(), L = lecture(t);
     R('courbe_sigma', GS.x0, GS.Y(S0) - 8, GS.w, GS.Y(sigmaDe(40)) - GS.Y(S0) + 16, 'la courbe σ(t), décroissante de 0 à 40 min');
     R('poignee_t', GS.X(t) - 14, GS.y0 - 14, 28, 28, `la poignée t (glisser le long de l’axe des temps, de 1 à 40 min) : t = ${t} min`);
-    R('valeur_sigma', GS.x0 - 4, GS.Y(L.s) - 6, 130, 30, `la valeur lue : σ = ${fr(L.s, 3)} S/m${quand('lecture')}`);
+    R('valeur_sigma', t <= 26 ? GS.X(t) + 6 : GS.X(t) - 140, GS.Y(L.s) - (t <= 26 ? 28 : -4), 136, 26, `la valeur lue : σ = ${fr(L.s, 3)} S/m${quand('lecture')}`);
     R('calcul', 10, ZY[0] - 20, 700, 72, `le calcul : x = ${fr(L.x, 2)} mmol${quand('calcul')}`);
     R('courbe_x', GX.x0, GX.y0 - GX.h, GX.w, GX.h, `la petite courbe x(t)${quand('report')}`);
     R('point_x', GX.X(t) - 12, GX.Y(L.x) - 12, 24, 24, `le point reporté (${t} min ; ${fr(L.x, 2)} mmol)${quand('report')}`);
