@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Demi-équation — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Écriture d’une demi-équation électronique en quatre gestes, une ligne de craie par geste (ajouts en jaune), avec une balance des charges à droite"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Demi-équation électronique en quatre gestes (cours « Transformations lentes et transformations rapides », 2e Bac PC BIOF, novembre 2026).
+ * Vues (?vue=) : permanganate (défaut) | eau_oxygenee | iode | oxalique. Moments : couple atomes oxygene hydrogene charges verifier fin.
+ * Une ligne de craie par geste, les ajouts en jaune ; oxydant rouge, réducteur vert ; à droite une balance des charges (gauche / droite).
+ * Équilibrages vérifiés (éléments et charges) par un script python avant d’être écrits ici.
+ */
+/* ── Moteur du déroulé (recopié de physics/circuit-rlc-tableau/circuit-lc.html) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Formules chimiques à la craie (recopié dans demi-equation.html et equation.html) ─────────────────────────────
+ * Les formules s’écrivent en Unicode dans les données (MnO₄⁻, Cu²⁺, H₂O₂…). Au tableau, la police n’a ni les indices
+ * ni « ⁺ » : `chim` les traduit pour le kit (« O_{4} » : indice plus petit et plus bas ; « ^{2+} » : exposant, exposants.js).
+ * Une ligne d’équation est une suite de termes séparés par des espaces : « MnO₄⁻ [+] [8H⁺] ⇌ Mn²⁺ ».
+ *   [ … ] = ajout (jaune), { … } = oxydant (rouge), < … > = réducteur (vert) ; « ⇌ » et « → » sont DESSINÉES (la police n’a pas ⇌).
+ */
+const POLICE = window.Tableau.POLICE;
+const CH_SUB = '₀₁₂₃₄₅₆₇₈₉';
+const CH_SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const chim = s => String(s)
+  .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => CH_SUB.indexOf(ch)).join('') + '}')
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => CH_SUP[ch]).join('') + '}');
+/** Écrit un texte qui peut contenir des formules (indices, charges). */
+const ecrit = (c, s, x, y, o = {}) => c.texte(chim(s), x, y, o);
+/** Texte simple (bulle, ce_qui_se_voit) : on enlève le balisage des couleurs. */
+const nu = s => String(s).replace(/[[\]{}<>]/g, '');
+/** Largeur écrite d’un texte (mêmes tailles que le kit : indice et exposant à 62 %, taille minimale lisible). */
+function largeur(c, s, taille) {
+  const t = c.echelle && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille, ctx = c.ctx;
+  let w = 0;
+  for (const seg of window.Tableau.Craie.segments(chim(s))) { ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${POLICE}`; w += ctx.measureText(seg.t).width; }
+  return w;
+}
+const MARQUES = { '[': 'ajout', '{': 'oxydant', '<': 'reducteur' };
+function termes(spec) {
+  return spec.split(' ').filter(Boolean).map(t => {
+    if (t === '⇌' || t === '→') return { fleche: t, txt: t };
+    const parts = [];
+    t.replace(/\[([^\]]*)\]|\{([^}]*)\}|<([^>]*)>|([^[{<]+)/g, (m, a, o, r, n) => {
+      parts.push(a != null ? [a, 'ajout'] : o != null ? [o, 'oxydant'] : r != null ? [r, 'reducteur'] : [n, '']); return m;
+    });
+    return { parts, txt: parts.map(p => p[0]).join(''), ajout: parts.some(p => p[1] === 'ajout') };
+  });
+}
+const ECART = 7, LFLECHE = 40;
+/** Place les termes d’une ligne (sans rien écrire) : renvoie { T, x0, x1, taille } ; chaque terme a x et w. */
+function disposer(c, spec, x, taille = 21, align = 'left') {
+  const T = termes(spec);
+  for (const t of T) {
+    if (t.fleche) t.w = LFLECHE;
+    else { t.ws = t.parts.map(p => largeur(c, p[0], taille)); t.w = t.ws.reduce((a, b) => a + b, 0); }
+  }
+  const W = T.reduce((a, t) => a + t.w, 0) + ECART * (T.length - 1);
+  let px = align === 'center' ? x - W / 2 : align === 'right' ? x - W : x;
+  for (const t of T) { t.x = px; px += t.w + ECART; }
+  return { T, x0: T[0].x, x1: px - ECART, taille, fleche: T.find(t => t.fleche) };
+}
+/** Flèche de réaction dessinée : → simple, ou ⇌ en deux demi-flèches (haut vers la droite, bas vers la gauche). */
+function flecheChim(c, x1, x2, y, double, couleur) {
+  if (double) {
+    c.trait([[x1, y - 3], [x2, y - 3], [x2 - 8, y - 9]], { couleur, largeur: 2 });
+    c.trait([[x2, y + 3], [x1, y + 3], [x1 + 8, y + 9]], { couleur, largeur: 2 });
+  } else c.fleche(x1, y, x2, y, { couleur, largeur: 2, tete: 8 });
+}
+/** Écrit les termes d’une ligne placée (`filtre(t)` : seulement certains termes). Couleurs : base, ajout (jaune), oxydant, réducteur. */
+function tracer(c, L, y, o = {}) {
+  const base = o.couleur || 'blanc';
+  const coul = { '': base, ajout: o.ajout || 'jaune', oxydant: o.oxydant || base, reducteur: o.reducteur || base };
+  for (const t of L.T) {
+    if (o.filtre && !o.filtre(t)) continue;
+    if (t.fleche) { flecheChim(c, t.x + 5, t.x + t.w - 5, y - L.taille * .3, t.fleche === '⇌', base); continue; }
+    let px = t.x;
+    t.parts.forEach(([s, k], i) => { ecrit(c, s, px, y, { couleur: coul[k], taille: L.taille }); px += t.ws[i]; });
+  }
+}
+/** Rectangle d’un terme (pour un repère ou un trait qui le barre). */
+const boite = (L, t, y) => [t.x - 3, y - L.taille * .95, t.w + 6, L.taille * 1.35];
+/** Barre un terme d’un trait de craie oblique. */
+function barrer(c, L, t, y, couleur = 'jaune') { c.ligne(t.x - 3, y + 4, t.x + t.w + 3, y - L.taille * .8, { couleur, largeur: 2.2 }); }
+/** Texte d’une ligne pour le tuteur (la double flèche dite « ⇌ »). */
+const texteLigne = spec => nu(spec);
+const signe = q => (q > 0 ? `+${q}` : q < 0 ? `−${-q}` : '0');
+
+/* ── Les quatre demi-équations du cours (vérifiées : éléments et charges, script python du 12 novembre 2026) ── */
+const VUES = ['permanganate', 'eau_oxygenee', 'iode', 'oxalique'];
+const ORDRE = ['couple', 'atomes', 'oxygene', 'hydrogene', 'charges', 'verifier'];
+const LIBELLES = { couple: 'le couple', atomes: '1. atomes', oxygene: '2. O : H₂O', hydrogene: '3. H : H⁺', charges: '4. charges : e⁻', verifier: 'vérifier' };
+const D = {
+  permanganate: {
+    couple: 'MnO₄⁻ / Mn²⁺', ox: 'MnO₄⁻', red: 'Mn²⁺',
+    lignes: {
+      couple: ['{MnO₄⁻} ⇌ <Mn²⁺>', 'oxydant à gauche, réducteur à droite'],
+      atomes: ['MnO₄⁻ ⇌ Mn²⁺', 'Mn : 1 et 1, rien à ajouter'],
+      oxygene: ['MnO₄⁻ ⇌ Mn²⁺ [+] [4H₂O]', '4 O à gauche : 4H₂O à droite'],
+      hydrogene: ['MnO₄⁻ [+] [8H⁺] ⇌ Mn²⁺ + 4H₂O', '8 H à droite : 8H⁺ à gauche'],
+      charges: ['MnO₄⁻ + 8H⁺ [+] [5e⁻] ⇌ Mn²⁺ + 4H₂O', '5e⁻ à gauche'],
+    },
+    gauche: '−1 + 8 = +7', droite: '+2', qG: 7, qD: 2, ne: 5,
+    resultat: '{MnO₄⁻} + 8H⁺ + [5e⁻] ⇌ <Mn²⁺> + 4H₂O',
+    verifAtomes: 'atomes : Mn 1 = 1 ; O 4 = 4 ; H 8 = 8',
+    verifCharges: 'charges : +7 − 5 = +2 à gauche ; +2 à droite',
+  },
+  eau_oxygenee: {
+    couple: 'H₂O₂ / H₂O', ox: 'H₂O₂', red: 'H₂O',
+    lignes: {
+      couple: ['{H₂O₂} ⇌ <H₂O>', 'oxydant à gauche, réducteur à droite'],
+      atomes: [null, 'seulement O et H : rien à faire'],
+      oxygene: ['H₂O₂ ⇌ [2]H₂O', '2 O à gauche : 2H₂O à droite'],
+      hydrogene: ['H₂O₂ [+] [2H⁺] ⇌ 2H₂O', '4 H à droite : 2H⁺ à gauche'],
+      charges: ['H₂O₂ + 2H⁺ [+] [2e⁻] ⇌ 2H₂O', '2e⁻ à gauche'],
+    },
+    gauche: '+2', droite: '0', qG: 2, qD: 0, ne: 2,
+    resultat: '{H₂O₂} + 2H⁺ + [2e⁻] ⇌ <2H₂O>',
+    verifAtomes: 'atomes : O 2 = 2 ; H 4 = 4',
+    verifCharges: 'charges : +2 − 2 = 0 à gauche ; 0 à droite',
+  },
+  iode: {
+    couple: 'I₂ / I⁻', ox: 'I₂', red: 'I⁻',
+    lignes: {
+      couple: ['{I₂} ⇌ <I⁻>', 'oxydant à gauche, réducteur à droite'],
+      atomes: ['I₂ ⇌ [2]I⁻', 'I : 2 à gauche, donc 2I⁻'],
+      oxygene: [null, 'pas d’oxygène : rien à faire'],
+      hydrogene: [null, 'pas d’hydrogène : rien à faire'],
+      charges: ['I₂ [+] [2e⁻] ⇌ 2I⁻', '2e⁻ à gauche'],
+    },
+    gauche: '0', droite: '2 × (−1) = −2', qG: 0, qD: -2, ne: 2,
+    resultat: '{I₂} + [2e⁻] ⇌ <2I⁻>',
+    verifAtomes: 'atomes : I 2 = 2',
+    verifCharges: 'charges : 0 − 2 = −2 à gauche ; −2 à droite',
+  },
+  oxalique: {
+    couple: 'CO₂ / H₂C₂O₄', ox: 'CO₂', red: 'H₂C₂O₄',
+    lignes: {
+      couple: ['{CO₂} ⇌ <H₂C₂O₄>', 'oxydant à gauche, réducteur à droite'],
+      atomes: ['[2]CO₂ ⇌ H₂C₂O₄', 'C : 2 à droite, donc 2CO₂'],
+      oxygene: ['2CO₂ ⇌ H₂C₂O₄', 'O : 4 et 4, rien à faire'],
+      hydrogene: ['2CO₂ [+] [2H⁺] ⇌ H₂C₂O₄', '2 H à droite : 2H⁺ à gauche'],
+      charges: ['2CO₂ + 2H⁺ [+] [2e⁻] ⇌ H₂C₂O₄', '2e⁻ à gauche'],
+    },
+    gauche: '+2', droite: '0', qG: 2, qD: 0, ne: 2,
+    resultat: '{2CO₂} + 2H⁺ + [2e⁻] ⇌ <H₂C₂O₄>',
+    verifAtomes: 'atomes : C 2 = 2 ; O 4 = 4 ; H 2 = 2',
+    verifCharges: 'charges : +2 − 2 = 0 à gauche ; 0 à droite',
+  },
+};
+const TITRES = Object.fromEntries(VUES.map(v => [v, `couple ${D[v].couple}`]));
+/* Mise en page (cadre 760 × 420) : les lignes à gauche, la balance des charges en bas à droite. */
+const XL = 14, XE = 150, TAILLE = 21;
+const Y = { couple: 74, atomes: 118, oxygene: 162, hydrogene: 206, charges: 250, resultat: 332, verifA: 372, verifC: 398 };
+const BAL = { x: 672, y: 300, l: 60, pend: 40, base: 392 };
+const ETAPES = Object.fromEntries(VUES.map(v => {
+  const d = D[v], L = d.lignes, rien = k => !L[k][0];
+  return [v, [
+    { nom: 'couple', anim: .3, motif: `le couple ${d.couple} : oxydant ${d.ox} à gauche, réducteur ${d.red} à droite`,
+      bulle: () => `Le couple ${d.couple} : on écrit l’oxydant ${d.ox} à gauche, le réducteur ${d.red} à droite.` },
+    { nom: 'atomes', anim: 0, motif: `1. les atomes autres que O et H : ${nu(L.atomes[1])}`,
+      bulle: () => (rien('atomes') ? 'Geste 1 : les atomes autres que O et H… il n’y en a pas ici.' : 'Geste 1 : on équilibre les atomes autres que O et H.') },
+    { nom: 'oxygene', anim: 0, motif: `2. l’oxygène : ${nu(L.oxygene[1])}`,
+      bulle: () => (rien('oxygene') ? 'Geste 2 : l’oxygène… pas d’oxygène : rien à faire.' : 'Geste 2 : l’oxygène, avec des molécules d’eau H₂O.') },
+    { nom: 'hydrogene', anim: 0, motif: `3. l’hydrogène : ${nu(L.hydrogene[1])}`,
+      bulle: () => (rien('hydrogene') ? 'Geste 3 : l’hydrogène… pas d’hydrogène : rien à faire.' : 'Geste 3 : l’hydrogène, avec des ions H⁺ (milieu acide).') },
+    { nom: 'charges', anim: 1.4, motif: `4. les charges : ${d.gauche.split('= ').pop()} à gauche, ${d.droite.split('= ').pop()} à droite ; on ajoute ${d.ne}e⁻ à gauche`,
+      bulle: () => `Geste 4 : on compte les charges. La balance penche : ${signe(d.qG)} à gauche, ${signe(d.qD)} à droite.` },
+    { nom: 'verifier', anim: 1.2, motif: `vérification : ${nu(d.resultat)} est équilibrée (atomes et charges)`,
+      bulle: () => `On vérifie : avec ${d.ne}e⁻ à gauche, les charges sont égales. La balance est droite.` },
+  ]];
+}));
+const MOTIFS = { fin: 'la demi-équation est écrite et vérifiée' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+let MO = null;
+
+/* ── La balance des charges (craie) : penche du côté le plus chargé, droite quand les charges sont égales ── */
+function etatBalance(M) {
+  const d = D[M.S.vue], pc = lisse(M.p('charges')), pv = lisse(M.p('verifier'));
+  const penche = d.qG === d.qD ? 0 : (d.qG > d.qD ? 1 : -1) * .2;
+  if (!M.commence('charges')) return { g: '?', d: '?', angle: 0, mot: 'vide (pas encore de charges)' };
+  const apres = pv > .5;
+  return { g: apres ? signe(d.qG - d.ne) : signe(d.qG), d: signe(d.qD), angle: penche * (pc - pv), apres,
+    mot: pv >= 1 ? 'droite : charges égales' : pv > 0 ? 'qui se redresse' : pc >= 1 ? `penchée vers la ${penche > 0 ? 'gauche' : 'droite'}` : 'qui penche' };
+}
+function balance(c, M) {
+  const { x, y, l, pend, base } = BAL;
+  ecrit(c, 'balance des charges', x, 238, { couleur: 'cyan', taille: 15, align: 'center' });
+  c.ligne(x, y + 6, x, base, { largeur: 2.4 });
+  c.ligne(x - 34, base, x + 34, base, { largeur: 2.6 });
+  c.direct(() => {
+    const b = etatBalance(M), ca = Math.cos(b.angle), sa = Math.sin(b.angle);
+    const G = [x - l * ca, y + l * sa], Dr = [x + l * ca, y - l * sa];
+    c.ligne(G[0], G[1], Dr[0], Dr[1], { largeur: 3, couleur: 'blanc' });
+    c.trait([[x - 7, y + 10], [x, y - 2], [x + 7, y + 10]], { largeur: 2 });
+    const egal = b.angle === 0 && b.g !== '?';
+    for (const [[px, py], val, mot, coul] of [[G, b.g, 'gauche', b.apres ? 'vert' : 'rouge'], [Dr, b.d, 'droite', b.apres ? 'vert' : 'rouge']]) {
+      const yp = py + pend;
+      c.ligne(px, py, px - 22, yp, { largeur: 1.4, couleur: 'faible' });
+      c.ligne(px, py, px + 22, yp, { largeur: 1.4, couleur: 'faible' });
+      c.courbe(u => [px - 26 + 52 * u, yp + Math.sin(u * Math.PI) * 9], 16, { largeur: 2.4 });
+      ecrit(c, val, px, yp - 6, { couleur: b.g === '?' ? 'faible' : egal ? 'vert' : coul, taille: 19, align: 'center' });
+      ecrit(c, mot, px, yp + 26, { couleur: 'faible', taille: 13, align: 'center' });
+    }
+  });
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dispo(c, v) {
+  const d = D[v], out = {};
+  for (const k of ORDRE.slice(0, 5)) { const [eq] = d.lignes[k]; out[k] = eq ? disposer(c, eq, XE, TAILLE) : null; }
+  out.resultat = disposer(c, d.resultat, 300, 22, 'center');
+  return out;
+}
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(43);
+  const v = M.S.vue, d = D[v], P = dispo(c, v);
+  ecrit(c, `Écrire la demi-équation du couple ${d.couple}`, XL, 30, { couleur: 'cyan', taille: 20 });
+  balance(c, M);
+  M.notes = {};
+  for (const k of ORDRE.slice(0, 5)) {
+    const [eq, note] = d.lignes[k], L = P[k], y = Y[k];
+    M.etape(c, k, () => {
+      ecrit(c, LIBELLES[k], XL, y, { couleur: k === 'charges' ? 'blanc' : 'faible', taille: 15 });
+      if (!L) { ecrit(c, note, XE, y, { couleur: 'blanc', taille: 18 }); return; }
+      if (k === 'couple') tracer(c, L, y, { oxydant: 'rouge', reducteur: 'vert' });
+      else if (k === 'charges') {
+        // D’abord la ligne sans les électrons, puis les charges de chaque côté, enfin les électrons ajoutés (jaune).
+        tracer(c, L, y, { filtre: t => !t.ajout });
+        const gx = (L.x0 + L.fleche.x - ECART) / 2, dx = (L.fleche.x + L.fleche.w + ECART + L.x1) / 2;
+        ecrit(c, d.gauche, gx, y + 24, { couleur: 'rouge', taille: 15, align: 'center' });
+        ecrit(c, d.droite, dx, y + 24, { couleur: 'rouge', taille: 15, align: 'center' });
+        tracer(c, L, y, { filtre: t => t.ajout });
+      } else tracer(c, L, y);
+      ecrit(c, note, L.x1 + 18, y, { couleur: 'jaune', taille: 14, alpha: .85, max: (k === 'charges' ? 590 : 748) - L.x1 - 18 });
+    });
+  }
+  M.etape(c, 'verifier', () => {
+    const L = P.resultat, y = Y.resultat;
+    ecrit(c, LIBELLES.verifier, XL, y, { couleur: 'faible', taille: 15 });
+    tracer(c, L, y, { oxydant: 'rouge', reducteur: 'vert' });
+    c.rect(L.x0 - 12, y - 28, L.x1 - L.x0 + 24, 40, { couleur: 'jaune', largeur: 1.8, arrondi: 6 });
+    ecrit(c, d.verifAtomes, XE, Y.verifA, { couleur: 'blanc', taille: 16, max: 440 });
+    ecrit(c, d.verifCharges, XE, Y.verifC, { couleur: 'vert', taille: 16, max: 440 });
+  });
+  reperes(c, M, P);
+  return c.fin();
+}
+function reperes(c, M, P) {
+  const v = M.S.vue, d = D[v], plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const rectLigne = (k, bas = 8) => { const L = P[k]; const fin = L ? L.x1 + 18 + Math.min(largeur(c, d.lignes[k][1], 14), (k === 'charges' ? 590 : 748) - L.x1 - 18) : XE + largeur(c, d.lignes[k][1], 18); return [8, Y[k] - 22, Math.min(fin, 750) - 6, 22 + bas]; };
+  const l = k => `${LIBELLES[k]} : ${d.lignes[k][0] ? nu(d.lignes[k][0]) : ''}${d.lignes[k][0] ? ' — ' : ''}${d.lignes[k][1]}`;
+  c.repere('ligne_couple', ...rectLigne('couple'), `ligne du couple : ${l('couple')}${plus('couple')}`);
+  c.repere('ligne_atomes', ...rectLigne('atomes'), `geste 1, les atomes autres que O et H : ${d.lignes.atomes[1]}${plus('atomes')}`);
+  c.repere('ligne_oxygene', ...rectLigne('oxygene'), `geste 2, l’oxygène avec H₂O : ${d.lignes.oxygene[1]}${plus('oxygene')}`);
+  c.repere('ligne_hydrogene', ...rectLigne('hydrogene'), `geste 3, l’hydrogène avec H⁺ : ${d.lignes.hydrogene[1]}${plus('hydrogene')}`);
+  c.repere('ligne_charges', ...rectLigne('charges', 32), `geste 4, les charges avec e⁻ : ${nu(d.lignes.charges[0])}${plus('charges')}`);
+  const L = P.charges, y = Y.charges;
+  const gx = (L.x0 + L.fleche.x - ECART) / 2, dx = (L.fleche.x + L.fleche.w + ECART + L.x1) / 2;
+  const wg = largeur(c, d.gauche, 15) + 16, wd = largeur(c, d.droite, 15) + 16;
+  c.repere('charge_gauche', gx - wg / 2, y + 8, wg, 22, `charge à gauche : ${d.gauche}${plus('charges')}`);
+  c.repere('charge_droite', dx - wd / 2, y + 8, wd, 22, `charge à droite : ${d.droite}${plus('charges')}`);
+  const te = L.T.find(t => /e⁻/.test(t.txt));
+  c.repere('electrons', ...boite(L, te, y), `les ${d.ne} électrons ajoutés à gauche (jaune) : ${d.ne}e⁻${plus('charges')}`);
+  const R = P.resultat;
+  c.repere('resultat', R.x0 - 14, Y.resultat - 30, R.x1 - R.x0 + 28, 44, `la demi-équation : ${nu(d.resultat)}${plus('verifier')}`);
+  c.repere('balance', BAL.x - 80, 222, 160, BAL.base - 222 + 8, `la balance des charges : ${etatBalance(M).mot}`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, d = D[v], b = etatBalance(M);
+  const m = [`Vue « ${v} » : demi-équation du couple ${d.couple} (oxydant ${d.ox}, réducteur ${d.red}), ${M.etat()}. Temps de la scène : t = ${fx(M.S.t, 1)} s (écriture au tableau : pas d’expérience, pas de température). Titre cyan en haut ; une ligne de craie par geste à gauche, les ajouts en jaune ; double flèche dessinée (deux demi-flèches) ; balance des charges en bas à droite.`];
+  const ecrites = [];
+  for (const k of ORDRE.slice(0, 5)) {
+    if (!M.commence(k)) break;
+    const [eq, note] = d.lignes[k], ici = M.vu(k) ? '' : ' (en train de s’écrire)';
+    if (k === 'charges') ecrites.push(`« ${LIBELLES[k]} : ${nu(eq)} » avec ${d.ne}e⁻ en jaune, charges écrites en rouge dessous : ${d.gauche} à gauche, ${d.droite} à droite${ici}`);
+    else if (eq) ecrites.push(`« ${LIBELLES[k]} : ${nu(eq)} » (${note}${k === 'couple' ? ` ; ${d.ox} en rouge, ${d.red} en vert` : ''})${ici}`);
+    else ecrites.push(`« ${LIBELLES[k]} : ${note} »${ici}`);
+  }
+  if (M.commence('verifier')) ecrites.push(`demi-équation encadrée en jaune : « ${nu(d.resultat)} », puis « ${d.verifAtomes} » et « ${d.verifCharges} »${M.vu('verifier') ? '' : ' (en train de s’écrire)'}`);
+  m.push(ecrites.length ? `Lignes écrites : ${ecrites.join(' ; ')}.` : 'Rien d’écrit encore à gauche.');
+  m.push(b.g === '?' ? 'Balance des charges : plateaux marqués « ? », fléau horizontal.' : `Balance des charges : gauche ${b.g}, droite ${b.d}, ${b.mot}.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, couple: D[M.S.vue].couple, electrons: D[M.S.vue].ne, charge_gauche: D[M.S.vue].qG, charge_droite: D[M.S.vue].qD });
+const MOT = Moteur({
+  id: 'transformations_lentes_rapides_demi_equation', titre: 'Écrire une demi-équation électronique en quatre gestes', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => `Le couple ${D[M.S.vue].couple} : écrivons sa demi-équation, geste par geste.`,
+  messageFin: M => `Demi-équation écrite et vérifiée : ${nu(D[M.S.vue].resultat)} (atomes et charges équilibrés).`,
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) { r.vue = p.vue; r.change = p.vue !== M.S.vue; } return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Écrire une demi-équation électronique (milieu acide) en quatre gestes : 1. les atomes autres que O et H ; 2. l’oxygène avec des molécules H₂O ; 3. l’hydrogène avec des ions H⁺ ; 4. les charges avec des électrons e⁻, ajoutés du côté le plus chargé ; puis on vérifie. Une balance des charges montre gauche et droite. Exemples : MnO₄⁻ + 8H⁺ + 5e⁻ ⇌ Mn²⁺ + 4H₂O ; H₂O₂ + 2H⁺ + 2e⁻ ⇌ 2H₂O ; I₂ + 2e⁻ ⇌ 2I⁻ ; 2CO₂ + 2H⁺ + 2e⁻ ⇌ H₂C₂O₄.',
+  explications: Object.fromEntries(VUES.map(v => {
+    const d = D[v];
+    return [v, [
+      { repere: 'ligne_couple', texte: `On écrit le couple ${d.couple} : l’oxydant ${d.ox} à gauche, le réducteur ${d.red} à droite.` },
+      { repere: 'ligne_atomes', texte: `Geste 1, les atomes autres que O et H : ${d.lignes.atomes[1]}.` },
+      { repere: 'ligne_oxygene', texte: `Geste 2, l’oxygène : ${d.lignes.oxygene[1]}.` },
+      { repere: 'ligne_hydrogene', texte: `Geste 3, l’hydrogène : ${d.lignes.hydrogene[1]}.` },
+      { repere: 'charge_gauche', texte: `On compte les charges à gauche : ${d.gauche}.` },
+      { repere: 'charge_droite', texte: `Et à droite : ${d.droite}.` },
+      { repere: 'electrons', texte: `On ajoute ${d.ne} électrons à gauche.` },
+      { repere: 'balance', texte: 'La balance est droite : les charges sont égales.' },
+      { repere: 'resultat', texte: `La demi-équation : ${nu(d.resultat)}.` },
+    ]];
+  })),
+});
+MOT.lancer();
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les facteurs cinétiques — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les facteurs cinétiques : deux béchers du même mélange peints (incolore, jaune puis brun), bains, thermomètres, chronomètre, loupe ; la trempe, le tableau des trois expériences, le réfrigérateur et l’autocuiseur, le catalyseur"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Les facteurs cinétiques (cours « Transformations lentes et transformations rapides », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/transformations_lentes_rapides_contrat_simulations.md § 5.
+ * Vues (?vue=) : temperature (défaut) | concentration | trempe | une_variable | vie | catalyseur.
+ * Modèle POUR L’ŒIL (jamais écrit à l’écran) : la teinte du diiode suit l’avancement x/x_f = 1 − e^(−t/τ), ramené à 1 à t = 5τ
+ * (« teinte finale atteinte »). τ = 6 min (20 °C ; [I⁻]₀ = 0,1 mol/L) → teinte finale à 30 min ; 0,2 mol/L : τ = 3 min ;
+ * bain chaud θ_c : τ = 6·3^((20 − θ_c)/20) min (40 °C → 2 min, trois fois plus tôt). Ce n’est pas une loi : seulement pour que
+ * l’écart se voie. Catalyseur (S₂O₈²⁻ + I⁻, ions Fe²⁺) : sans τ = 8 min, avec τ = 2 min. Temps accéléré (la bulle le dit).
+ * Poignée : le thermomètre du bain chaud (vue temperature) → set_parameters { theta_c } de 30 à 60 °C.
+ */
+
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de physics/circuit-rlc-tableau/circuit-lc.html, + M.evs) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+/* ── Le monde peint (règle 7 : les solutions ont leurs vraies couleurs ; le peint ne change jamais la chimie) ───────────── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [222, 234, 244, .12];
+/** Teinte du diiode : incolore → jaune → brun (#8a4b12 au maximum), selon la part f (0 → 1) de la teinte finale. */
+const TEINTE = [[0, EAU], [.2, [246, 226, 120, .40]], [.5, [226, 160, 48, .64]], [.8, [168, 96, 26, .80]], [1, [138, 75, 18, .90]]];
+function teinte(f) {
+  f = clamp(f, 0, 1);
+  for (let i = 1; i < TEINTE.length; i++) if (f <= TEINTE[i][0]) { const [a, ca] = TEINTE[i - 1], [b, cb] = TEINTE[i]; return melange(ca, cb, (f - a) / (b - a)); }
+  return TEINTE[TEINTE.length - 1][1];
+}
+const nomTeinte = f => (f < .04 ? 'incolore' : f < .25 ? 'jaune pâle' : f < .55 ? 'jaune' : f < .85 ? 'orangé, qui brunit' : f < .999 ? 'brune' : 'brune (teinte finale)');
+/** Part de la teinte finale à t (min) pour τ (min) : 1 − e^(−t/τ), ramenée à 1 à t = 5τ (pour l’œil). */
+const avance = (t, tau) => clamp((1 - Math.exp(-t / tau)) / (1 - Math.exp(-5)), 0, 1);
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, foncé);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Eau d’un bain (cristallisoir) peinte PAR-DESSUS le bécher : il paraît plongé dedans. */
+  bain(ctx, B, ySurf, col, a = 1) {
+    const { x, y, w, h } = B, fond = y + h;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, ySurf, 0, fond); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .3)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 3, ySurf, w - 6, fond - ySurf - 3, [0, 0, 12, 12]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 5, ySurf); ctx.lineTo(x + w - 5, ySurf); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, fond - 14); ctx.quadraticCurveTo(x, fond, x + 14, fond); ctx.lineTo(x + w - 14, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 14); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 7, y + 8, 4, h - 22);
+    ctx.restore();
+  },
+  /** Vapeur légère au-dessus d’une eau chaude (k : 0 → 1), animée par le temps de la scène. */
+  vapeur(ctx, x0, x1, ySurf, t, k, n = 5, haut = 46) {
+    if (k <= 0) return;
+    ctx.save(); ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const ph = ((t * .45 + i * .37) % 1 + 1) % 1, x = x0 + (i + .5) / n * (x1 - x0) + Math.sin(t * 1.3 + i * 2) * 4, y = ySurf - 6 - ph * haut;
+      ctx.strokeStyle = `rgba(255,255,255,${(.24 * (1 - ph) * Math.min(1, ph * 5) * k).toFixed(3)})`; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x, y + 14); ctx.bezierCurveTo(x - 6, y + 8, x + 6, y + 4, x, y - 4); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  /** Thermomètre : tube de verre, réservoir, colonne rouge (θ en °C sur 0 → θmax). Renvoie l’ordonnée du haut de la colonne. */
+  thermo(ctx, x, yT, yB, theta, thetaMax = 80, a = 1, l = 9) {
+    const yc = yB - 8 - clamp(theta / thetaMax, 0, 1) * (yB - yT - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(235,242,250,.2)'; ctx.strokeStyle = 'rgba(230,240,250,.65)'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.roundRect(x - l / 2, yT, l, yB - yT, l / 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d8323a'; ctx.fillRect(x - l * .18, yc, l * .36, yB - yc);
+    Peint.sphere(ctx, x, yB, l * .85, ['#ffc2c2', '#e0393e', '#6d0f12']);
+    ctx.strokeStyle = 'rgba(230,240,250,.45)'; ctx.lineWidth = 1;
+    for (let th = 0; th <= thetaMax; th += 10) { const gy = yB - 8 - th / thetaMax * (yB - yT - 16); ctx.beginPath(); ctx.moveTo(x + l / 2, gy); ctx.lineTo(x + l / 2 + (th % 50 ? 3 : 6), gy); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x - l * .38, yT + 4, 1.4, yB - yT - 14);
+    ctx.restore();
+    return yc;
+  },
+  glacon(ctx, x, y, s, ang, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(ang);
+    const g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); g.addColorStop(0, 'rgba(245,252,255,.85)'); g.addColorStop(1, 'rgba(170,215,240,.55)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-s / 2, -s / 2, s, s * .85, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(-s / 2 + 3, -s / 2 + 3, s * .3, 2);
+    ctx.restore();
+  },
+  /** Pipette jaugée (pointe en (x, yp)), poire rouge en haut ; `rempli` 0 → 1 de solution `col`. */
+  pipette(ctx, x, yp, rempli, col, a = 1) {
+    if (a <= 0) return;
+    const L = 92, yH = yp - L;
+    ctx.save(); ctx.globalAlpha = a;
+    if (rempli > 0) { ctx.fillStyle = rgba(col, 1.2); ctx.fillRect(x - 2.4, yp - 4 - rempli * (L - 26), 4.8, rempli * (L - 26)); }
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x - 1.2, yp); ctx.lineTo(x - 3.5, yp - 10); ctx.lineTo(x - 3.5, yH + 18); ctx.moveTo(x + 1.2, yp); ctx.lineTo(x + 3.5, yp - 10); ctx.lineTo(x + 3.5, yH + 18); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(x - 5, yp - 58); ctx.lineTo(x + 5, yp - 58); ctx.stroke();   // trait de jauge
+    const g = ctx.createRadialGradient(x - 3, yH + 4, 1, x, yH + 8, 11); g.addColorStop(0, '#ff9a8a'); g.addColorStop(.5, '#d33a2c'); g.addColorStop(1, '#6e1209');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yH + 8, 8, 11, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8e1d12'; ctx.fillRect(x - 4, yH + 17, 8, 4);
+    ctx.restore();
+  },
+  /** Burette graduée sur son support : solution `col` jusqu’à `niveau` (0 → 1), robinet, pointe en (x, yp). */
+  burette(ctx, x, yH, yp, niveau, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = '#5c6670'; ctx.fillRect(x + 46, yH - 10, 5, yp + 120 - yH); ctx.fillRect(x + 6, yH + 30, 44, 5);
+    const yR = yp - 16;
+    ctx.fillStyle = rgba(col, 1.3); const yl = lerp(yR - 4, yH + 6, niveau); ctx.fillRect(x - 4, yl, 8, yR - yl);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(x - 5.5, yH, 11, yR - yH, 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.4)'; ctx.lineWidth = 1;
+    for (let k = 1; k < 10; k++) { const gy = yH + k * (yR - yH) / 10; ctx.beginPath(); ctx.moveTo(x - 5, gy); ctx.lineTo(x, gy); ctx.stroke(); }
+    ctx.fillStyle = '#3b4148'; ctx.fillRect(x - 3, yR, 6, 8); ctx.fillStyle = '#c7ccd2'; ctx.fillRect(x - 11, yR + 2, 22, 4);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - 1.5, yR + 8); ctx.lineTo(x - .6, yp); ctx.moveTo(x + 1.5, yR + 8); ctx.lineTo(x + .6, yp); ctx.stroke();
+    ctx.restore();
+  },
+  /** Compte-gouttes (pointe en (x, yp)), poire noire. */
+  compteGouttes(ctx, x, yp, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = rgba(col, 1.4); ctx.fillRect(x - 2.5, yp - 30, 5, 26);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - 1, yp); ctx.lineTo(x - 4, yp - 14); ctx.lineTo(x - 4, yp - 46); ctx.moveTo(x + 1, yp); ctx.lineTo(x + 4, yp - 14); ctx.lineTo(x + 4, yp - 46); ctx.stroke();
+    const g = ctx.createRadialGradient(x - 3, yp - 58, 1, x, yp - 54, 11); g.addColorStop(0, '#6b6b6b'); g.addColorStop(.5, '#2a2a2a'); g.addColorStop(1, '#050505');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yp - 56, 7.5, 11, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  goutte(ctx, x, y, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 1.5);
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.quadraticCurveTo(x + 4, y, x, y + 3.5); ctx.quadraticCurveTo(x - 4, y, x, y - 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x - 1.2, y - 1, 1.2, 1.6); ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 2.2); ctx.fillRect(x - 1.6, y1, 3.2, y2 - y1); ctx.restore(); },
+  /** Réfrigérateur ouvert (vu de face) : coffre blanc, intérieur éclairé, clayettes. */
+  frigo(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 10); ctx.fill();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#c9d0d6'); g.addColorStop(.3, '#f3f6f8'); g.addColorStop(1, '#aeb6bd');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill();
+    const gi = ctx.createLinearGradient(0, y, 0, y + h); gi.addColorStop(0, '#f4fbff'); gi.addColorStop(1, '#c7dbe8');
+    ctx.fillStyle = gi; ctx.beginPath(); ctx.roundRect(x + 10, y + 10, w - 20, h - 26, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,230,.8)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 16, 14, 4, 0, 0, 7); ctx.fill();   // lampe
+    ctx.strokeStyle = 'rgba(120,150,170,.9)'; ctx.lineWidth = 2.4;
+    for (const f of [.36, .64]) { const sy = y + 10 + f * (h - 26); ctx.beginPath(); ctx.moveTo(x + 12, sy); ctx.lineTo(x + w - 12, sy); ctx.stroke(); }
+    ctx.fillStyle = '#7d868e'; ctx.fillRect(x + 12, y + h - 6, 14, 6); ctx.fillRect(x + w - 26, y + h - 6, 14, 6);
+    ctx.restore();
+  },
+  /** Bouteille de lait (fond en (x, yb)). */
+  lait(ctx, x, yb, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(x - 13, 0, x + 13, 0); g.addColorStop(0, '#d9dde0'); g.addColorStop(.35, '#ffffff'); g.addColorStop(1, '#b8bfc5');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 13, yb); ctx.lineTo(x - 13, yb - 40); ctx.quadraticCurveTo(x - 13, yb - 50, x - 6, yb - 54); ctx.lineTo(x - 6, yb - 60); ctx.lineTo(x + 6, yb - 60); ctx.lineTo(x + 6, yb - 54); ctx.quadraticCurveTo(x + 13, yb - 50, x + 13, yb - 40); ctx.lineTo(x + 13, yb); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2f6fd0'; ctx.fillRect(x - 7, yb - 66, 14, 7);
+    ctx.fillStyle = '#3a7bd5'; ctx.fillRect(x - 13, yb - 32, 26, 14);
+    ctx.fillStyle = '#fff'; ctx.font = '700 9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('LAIT', x, yb - 21.5);
+    ctx.restore();
+  },
+  /** Autocuiseur sur le feu : cuve en inox, couvercle, soupape, poignées, réchaud. */
+  autocuiseur(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = '#1b1e22'; ctx.fillRect(x - 20, y + h + 2, w + 40, 6);
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#6f7880'); g.addColorStop(.3, '#eef2f5'); g.addColorStop(.6, '#aab3ba'); g.addColorStop(1, '#5a636b');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [4, 4, 12, 12]); ctx.fill();
+    const gc = ctx.createLinearGradient(0, y - 18, 0, y); gc.addColorStop(0, '#f2f5f7'); gc.addColorStop(1, '#8c959d');
+    ctx.fillStyle = gc; ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2 + 4, 14, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.fillRect(x + w / 2 - 5, y - 26, 10, 13);
+    ctx.fillRect(x - 30, y + 6, 32, 9); ctx.fillRect(x + w - 2, y + 6, 32, 9);
+    ctx.restore();
+  },
+  /** Flammes bleues du réchaud, qui dansent (temps de la scène). */
+  flamme(ctx, x0, x1, yb, t, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const fx0 = x0 + (i + .5) / n * (x1 - x0), hh = 18 + 5 * Math.sin(t * 9 + i * 1.7);
+      const g = ctx.createLinearGradient(0, yb, 0, yb - hh); g.addColorStop(0, 'rgba(70,120,255,.95)'); g.addColorStop(.6, 'rgba(120,170,255,.7)'); g.addColorStop(1, 'rgba(255,170,60,.6)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(fx0 - 7, yb); ctx.quadraticCurveTo(fx0 - 5, yb - hh * .6, fx0, yb - hh); ctx.quadraticCurveTo(fx0 + 5, yb - hh * .6, fx0 + 7, yb); ctx.fill();
+    }
+    ctx.fillStyle = '#2b2f33'; ctx.fillRect(x0 - 8, yb, x1 - x0 + 16, 6);
+    ctx.restore();
+  },
+};
+const VERT = ['#d6ffe0', '#3fbf62', '#0f5a23'], ROUGE = ['#ffd4d4', '#e04848', '#6a1010'];
+/** Loupe : un cercle partagé en deux moitiés ; dans chacune, des entités (I⁻ vertes, H₂O₂ rouges) qui s’agitent.
+ *  `g` et `d` = { nI, nH, v } (v : vitesse, px/s, pour l’œil). Le temps est celui de la scène : tout se fige à l’arrêt. */
+function entites(ctx, cx, cy, r, g, d, t, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, 7); ctx.clip();
+  const gl = ctx.createRadialGradient(cx - r * .3, cy - r * .3, 4, cx, cy, r); gl.addColorStop(0, 'rgba(230,245,255,.10)'); gl.addColorStop(1, 'rgba(200,225,245,.03)');
+  ctx.fillStyle = gl; ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  const tri = u => { const m = ((u % 2) + 2) % 2; return m < 1 ? m : 2 - m; };
+  for (const [cote, o] of [[-1, g], [1, d]]) {
+    const x0 = cote < 0 ? cx - r * .82 : cx + 7, x1 = cote < 0 ? cx - 7 : cx + r * .82, y0 = cy - r * .55, y1 = cy + r * .55;
+    const n = o.nI + o.nH;
+    for (let i = 0; i < n; i++) {
+      const h1 = ((i * 7919 + (cote > 0 ? 31 : 0)) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
+      const vx = o.v * (.55 + .9 * h3) / (x1 - x0), vy = o.v * (.5 + .9 * h1) / (y1 - y0);
+      const x = x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (x1 - x0), y = y0 + tri(h2 * 2 + vy * t) * (y1 - y0);
+      Peint.sphere(ctx, x, y, i < o.nI ? 4.2 : 5, i < o.nI ? VERT : ROUGE);
+    }
+  }
+  ctx.restore();
+}
+
+/* ── Les vues, leurs étapes ─────────────────────────────────────────── */
+const q0 = new URLSearchParams(location.search);
+const VUES = ['temperature', 'concentration', 'trempe', 'une_variable', 'vie', 'catalyseur'];
+const TITRES = { temperature: 'la température', concentration: 'la concentration', trempe: 'la trempe', une_variable: 'un seul facteur à la fois', vie: 'dans la vie courante', catalyseur: 'le catalyseur' };
+const TITRE_TABLEAU = { temperature: 'Facteur cinétique : la température', concentration: 'Facteur cinétique : la concentration', trempe: 'La trempe : bloquer une réaction pour la doser',
+  une_variable: 'Un seul facteur à la fois', vie: 'Les facteurs cinétiques dans la vie courante', catalyseur: 'Facteur cinétique : le catalyseur' };
+const PAR = { theta_c: clamp(Math.round(+(q0.get('theta_c') ?? 40)) || 40, 30, 60) };
+let DRAG = null;                                   // θ pendant que l’élève glisse la poignée (pas encore appliqué)
+const thetaVu = () => DRAG ?? PAR.theta_c;
+const RT = .2;                                     // temps accéléré : 1 min simulée dure 0,2 s
+const TAU_F = 6;                                   // 20 °C, 0,1 mol/L : teinte finale à 5τ = 30 min
+const tauC = () => 6 * Math.pow(3, (20 - PAR.theta_c) / 20);   // pour l’œil, pas une loi : 40 °C → 2 min (trois fois plus tôt)
+const TAU_CONC = 3, TAU_SANS = 8, TAU_AVEC = 2, TP = 8;   // TP : instant du prélèvement (trempe), en min
+const min = v => `${fx(v, 1)} min`;
+function ETAPES(v) {
+  const TC = 5 * tauC(), TF = 5 * TAU_F;
+  return ({
+    temperature: [
+      { nom: 'melange', anim: 1.6, motif: 'le même mélange (H₂O₂ + I⁻ acidifié), incolore, dans les deux béchers', bulle: () => 'On verse le même mélange dans les deux béchers.' },
+      { nom: 'depart', anim: .3, sim: [0, 0], motif: 't = 0 : les deux solutions sont incolores', bulle: () => 'Top chrono ! (temps accéléré : 1 min dure 0,2 s)' },
+      { nom: 'chaud_avance', anim: RT * TC / 2, sim: [0, TC / 2], motif: `t = ${min(TC / 2)} : le bécher chaud est déjà bien plus foncé`, bulle: () => 'Regarde les deux teintes…' },
+      { nom: 'chaud_fini', anim: RT * TC / 2, sim: [TC / 2, TC], motif: `t = ${min(TC)} : à ${PAR.theta_c} °C, la teinte finale est atteinte`, bulle: () => `Le bécher à ${PAR.theta_c} °C fonce encore…` },
+      { nom: 'froid_fini', anim: RT * (TF - TC), sim: [TC, TF], motif: 't = 30 min : à 20 °C aussi, la teinte finale est atteinte', bulle: () => 'Et le bécher à 20 °C ?' },
+      { nom: 'meme_final', anim: .3, motif: 'les deux béchers ont le même brun final', bulle: () => 'Compare les deux teintes finales.' },
+      { nom: 'agitation', anim: 3, ecritDes: 0, motif: 'loupe : au chaud, les entités s’agitent plus vite', bulle: () => 'Regardons de très près, à la loupe…' },
+    ],
+    concentration: [
+      { nom: 'melange', anim: 1.6, motif: 'deux mélanges à 20 °C : [I⁻]₀ = 0,1 et 0,2 mol/L, même quantité de H₂O₂', bulle: () => 'Deux mélanges, même température, même quantité de H₂O₂.' },
+      { nom: 'depart', anim: .3, sim: [0, 0], motif: 't = 0 : les deux solutions sont incolores', bulle: () => 'Top chrono ! (temps accéléré)' },
+      { nom: 'concentre_avance', anim: RT * 7.5, sim: [0, 7.5], motif: 't = 7,5 min : le plus concentré est en avance', bulle: () => 'Lequel brunit le plus vite ?' },
+      { nom: 'concentre_fini', anim: RT * 7.5, sim: [7.5, 15], motif: 't = 15 min : 0,2 mol/L, teinte finale atteinte', bulle: () => 'Le plus concentré fonce encore…' },
+      { nom: 'dilue_fini', anim: RT * 15, sim: [15, 30], motif: 't = 30 min : 0,1 mol/L, teinte finale atteinte', bulle: () => 'Et le moins concentré ?' },
+      { nom: 'meme_final', anim: .3, motif: 'même brun final : H₂O₂ limitant, même quantité de I₂', bulle: () => 'Compare les teintes finales.' },
+      { nom: 'rencontres', anim: 3, ecritDes: 0, motif: 'loupe : plus d’entités I⁻ dans le même volume', bulle: () => 'À la loupe : combien d’ions I⁻ dans le même volume ?' },
+    ],
+    trempe: [
+      { nom: 'reaction', anim: RT * TP * 1.25, sim: [0, TP], motif: `t = ${TP} min : le grand bécher brunit`, bulle: () => 'Le mélange réagit dans le grand bécher (temps accéléré)…' },
+      { nom: 'prelevement', anim: 2.2, sim: [TP, TP + .5], motif: 'la pipette prélève un peu du mélange', bulle: () => 'On prélève un peu du mélange à la pipette.' },
+      { nom: 'eau_glacee', anim: 2.2, sim: [TP + .5, TP + 1], motif: 'le prélèvement est versé dans l’eau glacée', bulle: () => 'On le verse dans de l’eau glacée.' },
+      { nom: 'fige', anim: .5, motif: 'la teinte du prélèvement ne bouge plus', bulle: () => 'Regarde la teinte du prélèvement…' },
+      { nom: 'continue', anim: RT * 21, sim: [TP + 1, 30], motif: 't = 30 min : le grand bécher a continué de foncer, le prélèvement non', bulle: () => 'Pendant ce temps, le grand bécher…' },
+      { nom: 'titrage', anim: 3.6, motif: 'titrage du diiode du prélèvement par le thiosulfate : la teinte disparaît à l’équivalence', bulle: () => 'On dose le diiode du prélèvement.' },
+    ],
+    une_variable: [
+      { nom: 'tableau', anim: .2, motif: 'le tableau des trois expériences', bulle: () => 'Trois expériences avec le même mélange.' },
+      { nom: 'comparer_1_2', anim: .3, motif: '1 et 2 : seule la température change', bulle: () => 'Comparons 1 et 2.' },
+      { nom: 'comparer_2_3', anim: .3, motif: '2 et 3 : seule la concentration change', bulle: () => 'Comparons 2 et 3.' },
+      { nom: 'comparer_1_3', anim: .3, motif: '1 et 3 : deux changements, on ne conclut pas', bulle: () => 'Et 1 avec 3 ?' },
+      { nom: 'conclusion', anim: .2, motif: 'un seul facteur à la fois', bulle: () => 'La règle à retenir…' },
+    ],
+    vie: [
+      { nom: 'frigo', anim: 1, motif: 'le réfrigérateur (≈ 4 °C)', bulle: () => 'Dans la cuisine : le réfrigérateur…' },
+      { nom: 'lait', anim: .8, motif: 'au froid, le lait se conserve plus longtemps', bulle: () => 'Pourquoi met-on le lait au frais ?' },
+      { nom: 'autocuiseur', anim: 1, motif: 'l’autocuiseur sur le feu', bulle: () => 'Et l’autocuiseur ?' },
+      { nom: 'vapeur', anim: 2.4, motif: 'la vapeur sort : plus de 100 °C dans la cuve', bulle: () => 'La soupape siffle : plus de 100 °C à l’intérieur.' },
+      { nom: 'conclusion', anim: .2, motif: 'plus chaud : plus rapide ; plus froid : plus lent', bulle: () => 'Conclusion…' },
+    ],
+    catalyseur: [
+      { nom: 'melange', anim: 1.6, sim: [0, 0], motif: 'deux béchers du même mélange (S₂O₈²⁻ + I⁻), incolore, à 20 °C', bulle: () => 'Le même mélange dans les deux béchers, à 20 °C.' },
+      { nom: 'ajout', anim: 1.8, sim: [0, 0], motif: 'quelques gouttes d’ions Fe²⁺ dans le second bécher', bulle: () => 'Dans le second, quelques gouttes d’ions fer II.' },
+      { nom: 'catalyse_avance', anim: RT * 5, sim: [0, 5], motif: 't = 5 min : avec Fe²⁺, déjà bien brun', bulle: () => 'Top chrono ! (temps accéléré)' },
+      { nom: 'catalyse_fini', anim: RT * 5, sim: [5, 10], motif: 't = 10 min : avec catalyseur, teinte finale atteinte', bulle: () => 'Le bécher avec Fe²⁺…' },
+      { nom: 'sans_fini', anim: RT * 30, sim: [10, 40], motif: 't = 40 min : sans catalyseur, teinte finale atteinte', bulle: () => 'Et sans catalyseur ?' },
+      { nom: 'meme_final', anim: .3, motif: 'même brun final', bulle: () => 'Compare les teintes finales.' },
+      { nom: 'equation', anim: .2, motif: 'l’équation : le catalyseur n’y figure pas', bulle: () => 'Écrivons l’équation de la réaction.' },
+    ],
+  })[v];
+}
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}).motif) });
+let MO = null;
+/** Temps simulé (min) : il avance pendant l’animation des étapes qui ont `sim: [début, fin]`, pas pendant l’écriture. */
+function tSim(M = MO) {
+  let t = 0;
+  for (const e of M.evs()) {
+    if (!e.sim) continue; if (!M.commence(e.nom)) break;
+    t = e.sim[0] + (e.sim[1] - e.sim[0]) * (e.anim > 0 ? clamp((M.S.t - e.debut) / e.anim, 0, 1) : 1);
+  }
+  return t;
+}
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const ZY = [352, 376, 400];
+const BA1 = { x: 28, y: 200, w: 204, h: 100 }, BA2 = { x: 258, y: 200, w: 204, h: 100 }, YEAU = 216;
+const BK1 = { x: 66, y: 120, w: 104, h: 172 }, BK2 = { x: 296, y: 120, w: 104, h: 172 };
+const TH1 = { x: 206, yT: 108, yB: 286 }, TH2 = { x: 436, yT: 108, yB: 286 };
+const BC1 = { x: 76, y: 132, w: 108, h: 168 }, BC2 = { x: 286, y: 132, w: 108, h: 168 };   // béchers posés (concentration, catalyseur)
+const CHR = { x: 548, y: 84, r: 26 };
+const LP = { x: 640, y: 248, r: 68 };
+const GB = { x: 40, y: 150, w: 160, h: 150 }, BG = { x: 300, y: 200, w: 120, h: 100 }, BUR = { x: 360, yH: 46, yp: 190 };
+const NIV = .58;
+
+/* ── Pièces communes ─────────────────────────────────────────────────── */
+function chrono(c, M, t) {
+  c.cercle(CHR.x, CHR.y, CHR.r, { largeur: 2 }); c.ligne(CHR.x, CHR.y - CHR.r, CHR.x, CHR.y - CHR.r - 6, { largeur: 3 });
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; c.ligne(CHR.x + Math.sin(a) * (CHR.r - 5), CHR.y - Math.cos(a) * (CHR.r - 5), CHR.x + Math.sin(a) * (CHR.r - 1), CHR.y - Math.cos(a) * (CHR.r - 1), { largeur: 1.2, couleur: 'faible', duree: .02 }); }
+  c.direct(() => {
+    const a = t / 60 * Math.PI * 2;
+    c.ligne(CHR.x, CHR.y, CHR.x + Math.sin(a) * (CHR.r - 7), CHR.y - Math.cos(a) * (CHR.r - 7), { couleur: 'jaune', largeur: 2.2 });
+    c.texte(`t = ${min(t)}`, CHR.x + CHR.r + 12, CHR.y + 7, { couleur: 'jaune', taille: 20 });
+  });
+}
+/** Les deux béchers (et le versement du mélange). `cols` = [couleur gauche, couleur droite]. */
+function deuxBechers(c, M, B1, B2, cols, niveau) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    for (const [B, col] of [[B1, cols[0]], [B2, cols[1]]]) {
+      Peint.becher(ctx, B, niveau, col);
+      if (M.commence('melange') && M.p('melange') < 1) { const yS = B.y + B.h - 3 - niveau * (B.h - 16); Peint.filet(ctx, B.x + B.w * .4, 64, yS, EAU); }
+    }
+  });
+}
+function loupe(c, M, nom, gauche, droite, g, d) {
+  if (!M.commence(nom)) return;
+  const a = lisse(clamp(M.p(nom) * 3, 0, 1));
+  c.direct(() => entites(c.ctx, LP.x, LP.y, LP.r, g, d, M.S.t, a));
+}
+function loupeCraie(c, gauche, droite) {
+  c.cercle(LP.x, LP.y, LP.r, { largeur: 2.6 });
+  c.ligne(LP.x + LP.r * .72, LP.y + LP.r * .72, LP.x + LP.r * .72 + 22, LP.y + LP.r * .72 + 22, { largeur: 6 });
+  c.ligne(LP.x, LP.y - LP.r + 6, LP.x, LP.y + LP.r - 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+  c.texte(gauche, LP.x - 36, LP.y - LP.r - 8, { couleur: 'bleu', taille: 15, align: 'center' });
+  c.texte(droite, LP.x + 36, LP.y - LP.r - 8, { couleur: 'rouge', taille: 15, align: 'center' });
+}
+function legende(c, y) {
+  c.direct(() => { Peint.sphere(c.ctx, 520, y - 5, 4.6, VERT); Peint.sphere(c.ctx, 606, y - 5, 5.2, ROUGE); });
+  c.texte('I⁻', 530, y, { couleur: 'vert', taille: 16 });
+  c.texte('H₂O₂', 616, y, { couleur: 'rouge', taille: 16 });
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(41);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  M.vues = ({ temperature: vueTemperature, concentration: vueConcentration, trempe: vueTrempe, une_variable: vueUneVariable, vie: vueVie, catalyseur: vueCatalyseur })[v](c, M) || [];
+  reperes(c, M);
+  return c.fin();
+}
+function vueTemperature(c, M) {
+  const t = tSim(), th = thetaVu(), tc = tauC(), fF = avance(t, TAU_F), fC = avance(t, tc), niv = NIV * lisse(M.p('melange'));
+  eqn(c, 746, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 16 });
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, BK1, niv, teinte(fF)); Peint.becher(ctx, BK2, niv, teinte(fC));
+    if (M.commence('melange') && M.p('melange') < 1) for (const B of [BK1, BK2]) Peint.filet(ctx, B.x + B.w * .4, 64, B.y + B.h - 3 - niv * (B.h - 16), EAU);
+    Peint.bain(ctx, BA1, YEAU, [120, 175, 215, .26]); Peint.bain(ctx, BA2, YEAU, [150, 180, 210, .26]);
+    Peint.vapeur(ctx, BA2.x + 12, BA2.x + BA2.w - 12, YEAU, M.S.t, clamp((th - 20) / 30, .25, 1));
+    Peint.thermo(ctx, TH1.x, TH1.yT, TH1.yB, 20);
+    const yc = Peint.thermo(ctx, TH2.x, TH2.yT, TH2.yB, th);
+    // Poignée : un anneau jaune au haut de la colonne (glisser vers le haut ou le bas).
+    ctx.save(); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.globalAlpha = .95; ctx.beginPath(); ctx.arc(TH2.x, yc, 8, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(TH2.x + 14, yc - 4); ctx.lineTo(TH2.x + 18, yc - 10); ctx.lineTo(TH2.x + 22, yc - 4); ctx.moveTo(TH2.x + 14, yc + 4); ctx.lineTo(TH2.x + 18, yc + 10); ctx.lineTo(TH2.x + 22, yc + 4); ctx.stroke(); ctx.restore();
+    c.texte(`${th} °C`, TH2.x, TH2.yT - 10, { couleur: 'rouge', taille: 17, align: 'center' });
+    c.texte(`bain à ${th} °C`, BA2.x + BA2.w / 2, 324, { couleur: 'rouge', taille: 17, align: 'center' });
+  });
+  c.texte('20 °C', TH1.x, TH1.yT - 10, { couleur: 'bleu', taille: 17, align: 'center' });
+  c.texte('bain à 20 °C', BA1.x + BA1.w / 2, 324, { couleur: 'bleu', taille: 17, align: 'center' });
+  chrono(c, M, t);
+  legende(c, 140);
+  loupe(c, M, 'agitation', '20 °C', `${th} °C`, { nI: 6, nH: 4, v: 16 }, { nI: 6, nH: 4, v: 16 * (1 + (th - 20) / 16) });   // vitesses pour l’œil
+  const TC = 5 * tc;
+  return zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['même mélange dans les deux béchers : H₂O₂ + I⁻ en milieu acide (incolore)', 'blanc']] },
+    { nom: 'depart', lignes: [['seule différence : la température du bain', 'blanc']] },
+    { nom: 'chaud_avance', lignes: [[`à ${PAR.theta_c} °C, le diiode I₂ (brun) apparaît plus vite`, 'rouge']] },
+    { nom: 'chaud_fini', lignes: [[`à ${PAR.theta_c} °C : teinte finale atteinte vers t ≈ ${min(TC)}`, 'rouge']] },
+    { nom: 'froid_fini', lignes: [[`à 20 °C : teinte finale vers t ≈ 30 min, ${fx(30 / TC, 1)} fois plus tard`, 'bleu']] },
+    { nom: 'meme_final', lignes: [['même brun final : la température change la durée, pas l’état final', 'jaune']] },
+    { nom: 'agitation', lignes: [['au chaud, les entités s’agitent plus vite : la transformation est plus rapide', 'blanc']], plus: () => loupeCraie(c, '20 °C', `${PAR.theta_c} °C`) },
+  ], ZY);
+}
+function vueConcentration(c, M) {
+  const t = tSim(), fD = avance(t, TAU_F), fC = avance(t, TAU_CONC), niv = NIV * lisse(M.p('melange'));
+  eqn(c, 746, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 16 });
+  c.ligne(30, 302, 460, 302, { couleur: 'faible', largeur: 1.6 });
+  deuxBechers(c, M, BC1, BC2, [teinte(fD), teinte(fC)], niv);
+  c.texte('[I⁻]₀ = 0,1 mol/L', BC1.x + BC1.w / 2, 326, { couleur: 'bleu', taille: 17, align: 'center' });
+  c.texte('[I⁻]₀ = 0,2 mol/L', BC2.x + BC2.w / 2, 326, { couleur: 'violet', taille: 17, align: 'center' });
+  c.texte('les deux à 20 °C', 235, 108, { couleur: 'faible', taille: 16, align: 'center' });
+  chrono(c, M, t);
+  legende(c, 140);
+  loupe(c, M, 'rencontres', '', '', { nI: 6, nH: 4, v: 16 }, { nI: 12, nH: 4, v: 16 });
+  return zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['même température, même quantité de H₂O₂ (réactif limitant) ; seule [I⁻]₀ change', 'blanc']] },
+    { nom: 'depart', lignes: [['t = 0 : les deux solutions sont incolores', 'blanc']] },
+    { nom: 'concentre_avance', lignes: [['le plus concentré brunit plus vite', 'violet']] },
+    { nom: 'concentre_fini', lignes: [['0,2 mol/L : teinte finale atteinte vers t ≈ 15 min', 'violet']] },
+    { nom: 'dilue_fini', lignes: [['0,1 mol/L : teinte finale vers t ≈ 30 min', 'bleu']] },
+    { nom: 'meme_final', lignes: [['même brun final : même quantité de H₂O₂, donc même quantité de I₂ formée', 'jaune']] },
+    { nom: 'rencontres', lignes: [['plus d’entités dans le même volume : elles se rencontrent plus souvent', 'blanc']],
+      plus: () => { c.cercle(LP.x, LP.y, LP.r, { largeur: 2.6 }); c.ligne(LP.x + LP.r * .72, LP.y + LP.r * .72, LP.x + LP.r * .72 + 22, LP.y + LP.r * .72 + 22, { largeur: 6 });
+        c.ligne(LP.x, LP.y - LP.r + 6, LP.x, LP.y + LP.r - 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+        c.texte('0,1 mol/L', LP.x - 36, LP.y - LP.r - 8, { couleur: 'bleu', taille: 15, align: 'center' });
+        c.texte('0,2 mol/L', LP.x + 36, LP.y - LP.r - 8, { couleur: 'violet', taille: 15, align: 'center' }); } },
+  ], ZY);
+}
+/** Trempe : position de la pipette (pointe), son remplissage et sa visibilité. */
+function pipetteEtat(M) {
+  const R = [245, 252], A = [120, 150], dansGB = [120, 262], B = [360, 150], dansBG = [360, 258];
+  const P = (p, a, b) => [lerp(a[0], b[0], lisse(p)), lerp(a[1], b[1], lisse(p))];
+  if (!M.commence('prelevement')) return { pos: R, rempli: 0, a: 1 };
+  if (!M.commence('eau_glacee')) {
+    const p = M.p('prelevement');
+    if (p < .3) return { pos: P(p / .3, R, A), rempli: 0, a: 1 };
+    if (p < .5) return { pos: P((p - .3) / .2, A, dansGB), rempli: 0, a: 1 };
+    if (p < .7) return { pos: dansGB, rempli: (p - .5) / .2, a: 1 };
+    return { pos: P((p - .7) / .3, dansGB, A), rempli: 1, a: 1 };
+  }
+  if (!M.commence('fige')) {
+    const p = M.p('eau_glacee');
+    if (p < .35) return { pos: P(p / .35, A, B), rempli: 1, a: 1 };
+    if (p < .55) return { pos: P((p - .35) / .2, B, dansBG), rempli: 1, a: 1 };
+    if (p < .9) return { pos: dansBG, rempli: 1 - (p - .55) / .35, a: 1 };
+    return { pos: dansBG, rempli: 0, a: 1 };
+  }
+  const p = M.p('fige');
+  return { pos: P(p, dansBG, B), rempli: 0, a: 1 - p };
+}
+function vueTrempe(c, M) {
+  const t = tSim(), fG = avance(t, TAU_F), fP = avance(TP, TAU_F), pip = pipetteEtat(M);
+  // Teinte du bécher glacé : eau froide, puis le prélèvement s’y mélange (un peu dilué), puis le titrage l’efface.
+  const verse = M.commence('fige') ? 1 : M.commence('eau_glacee') ? clamp((M.p('eau_glacee') - .55) / .35, 0, 1) : 0;
+  const titre = M.commence('titrage') ? clamp((M.p('titrage') - .25) / .7, 0, 1) : 0;
+  const EAU_FROIDE = [200, 228, 245, .16], figee = teinte(fP * .9);
+  const colBG = melange(melange(EAU_FROIDE, figee, verse), EAU_FROIDE, lisse(titre));
+  c.ligne(20, 302, 470, 302, { couleur: 'faible', largeur: 1.6 });
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, GB, .66, teinte(fG));
+    const yS = Peint.becher(ctx, BG, .5, colBG);
+    [[322, -.2], [346, .25], [392, -.1], [372, .4]].forEach(([gx, ang], i) => Peint.glacon(ctx, gx, yS - 1 + (i % 2) * 3, 17 - (i % 2) * 3, ang));
+    Peint.pipette(ctx, pip.pos[0], pip.pos[1], pip.rempli, teinte(fP), pip.a);
+    if (M.commence('titrage')) {
+      const a = lisse(clamp(M.p('titrage') / .2, 0, 1)), pt = M.p('titrage');
+      Peint.burette(ctx, BUR.x, BUR.yH, BUR.yp, 1 - .35 * clamp((pt - .2) / .75, 0, 1), [235, 240, 248, .14], a);
+      if (pt > .2 && pt < .95) for (let k = 0; k < 2; k++) { const ph = ((pt * 9 + k * .5) % 1); Peint.goutte(ctx, BUR.x, BUR.yp + 4 + ph * (yS - BUR.yp - 6), [235, 240, 248, .3]); }
+    }
+  });
+  c.texte('grand bécher', GB.x + GB.w / 2, 326, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('eau glacée', BG.x + BG.w / 2, 326, { couleur: 'bleu', taille: 17, align: 'center' });
+  chrono(c, M, t);
+  // Deux pastilles de teinte (le prélèvement figé ; le grand bécher qui continue).
+  const pastille = (x, col, l1, l2, coul) => {
+    c.direct(() => { const ctx = c.ctx; ctx.save(); const g = ctx.createLinearGradient(0, 150, 0, 196); g.addColorStop(0, rgba(eclair(col, .15))); g.addColorStop(1, rgba(sombre(col, .2))); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, 150, 92, 46, 8); ctx.fill(); ctx.restore(); });
+    c.rect(x, 150, 92, 46, { arrondi: 8, largeur: 1.6, couleur: 'faible' });
+    c.texte(l1, x + 46, 218, { couleur: coul, taille: 15, align: 'center' }); c.texte(l2, x + 46, 236, { couleur: coul, taille: 15, align: 'center' });
+  };
+  return zoneEcriture(c, M, [
+    { nom: 'reaction', lignes: [['le mélange H₂O₂ + I⁻ (milieu acide) brunit : du diiode I₂ se forme', 'blanc']] },
+    { nom: 'prelevement', lignes: [[`à t = ${TP} min, on prélève un volume connu du mélange`, 'blanc']] },
+    { nom: 'eau_glacee', lignes: [['on le verse dans de l’eau glacée : refroidi et dilué d’un coup', 'bleu']] },
+    { nom: 'fige', lignes: [['sa teinte ne bouge plus : la réaction y est presque arrêtée (trempe)', 'jaune']],
+      plus: () => { pastille(500, figee, 'prélèvement', 'figé', 'bleu');
+        c.texte('trempe : refroidir et diluer', 500, 262, { couleur: 'jaune', taille: 15 }); c.texte('brusquement, pour bloquer', 500, 280, { couleur: 'jaune', taille: 15 }); c.texte('l’évolution du système', 500, 298, { couleur: 'jaune', taille: 15 }); } },
+    { nom: 'continue', lignes: [['pendant ce temps, le grand bécher continue de foncer', 'blanc']],
+      plus: () => c.direct(() => pastille(620, teinte(avance(tSim(), TAU_F)), 'grand bécher', 'continue', 'blanc')) },
+    { nom: 'titrage', lignes: [['on titre le diiode du prélèvement par le thiosulfate (réaction rapide) :', 'blanc'], [`on connaît n(I₂) formé à t = ${TP} min`, 'blanc']],
+      plus: () => { c.texte('S₂O₃²⁻', BUR.x - 14, BUR.yH + 24, { couleur: 'blanc', taille: 15, align: 'right' }); eqn(c, 500, 328, 'I₂ + 2S₂O₃²⁻', '2I⁻ + S₄O₆²⁻', { taille: 16 }); } },
+  ], ZY);
+}
+function vueUneVariable(c, M) {
+  const X = [40, 130, 250, 400], Y = [70, 112, 162, 212, 262];
+  const cell = (s, i, j, col = 'blanc') => c.texte(s, (X[i] + X[i + 1]) / 2, Y[j] + 32, { couleur: col, taille: 19, align: 'center' });
+  return zoneEcriture(c, M, [
+    { nom: 'tableau', lignes: [['même mélange H₂O₂ + I⁻ (milieu acide), trois expériences', 'blanc']], plus: () => {
+      c.rect(X[0], Y[0], X[3] - X[0], Y[4] - Y[0], { arrondi: 4, largeur: 1.8 });
+      for (const y of Y.slice(1, 4)) c.ligne(X[0], y, X[3], y, { largeur: 1.4, couleur: 'faible' });
+      for (const x of X.slice(1, 3)) c.ligne(x, Y[0], x, Y[4], { largeur: 1.4, couleur: 'faible' });
+      cell('exp.', 0, 0, 'cyan'); cell('θ (°C)', 1, 0, 'cyan'); cell('[I⁻]₀ (mol/L)', 2, 0, 'cyan');
+      [['1', '20', '0,1'], ['2', '40', '0,1'], ['3', '40', '0,2']].forEach((r, j) => r.forEach((s, i) => cell(s, i, j + 1)));
+    } },
+    { nom: 'comparer_1_2', lignes: [['1 et 2 : même concentration, θ change : on voit l’effet de la température', 'jaune']], plus: () => {
+      c.rect(X[1] + 6, Y[1] + 5, X[2] - X[1] - 12, Y[3] - Y[1] - 10, { couleur: 'jaune', largeur: 2.2, arrondi: 10 });
+      c.courbe(u => [X[3] + 8 + Math.sin(u * Math.PI) * 26, lerp(Y[1] + 25, Y[2] + 25, u)], 18, { couleur: 'jaune', largeur: 2 });
+      c.fleche(X[3] + 14, Y[2] + 21, X[3] + 8, Y[2] + 25, { couleur: 'jaune', largeur: 2, tete: 8 });
+      eqn(c, 450, Y[2] + 6, '1', '2 : seule la température change', { couleur: 'jaune', taille: 16 });
+    } },
+    { nom: 'comparer_2_3', lignes: [['2 et 3 : même température, la concentration change : effet de la concentration', 'vert']], plus: () => {
+      c.rect(X[2] + 6, Y[2] + 5, X[3] - X[2] - 12, Y[4] - Y[2] - 10, { couleur: 'vert', largeur: 2.2, arrondi: 10 });
+      c.courbe(u => [X[3] + 8 + Math.sin(u * Math.PI) * 26, lerp(Y[2] + 29, Y[3] + 25, u)], 18, { couleur: 'vert', largeur: 2 });
+      c.fleche(X[3] + 14, Y[3] + 21, X[3] + 8, Y[3] + 25, { couleur: 'vert', largeur: 2, tete: 8 });
+      eqn(c, 450, Y[3] + 6, '2', '3 : seule la concentration change', { couleur: 'vert', taille: 16 });
+    } },
+    { nom: 'comparer_1_3', lignes: [['1 et 3 : θ ET concentration changent : on ne sait pas lequel agit', 'orange']], plus: () => {
+      c.courbe(u => [X[3] + 8 + Math.sin(u * Math.PI) * 48, lerp(Y[1] + 20, Y[3] + 30, u)], 24, { couleur: 'orange', largeur: 2, pointille: [6, 5] });
+      c.fleche(X[3] + 18, Y[3] + 27, X[3] + 8, Y[3] + 30, { couleur: 'orange', largeur: 2, tete: 8 });
+      attention(c, 40, Y[4] + 30);
+      eqn(c, 66, Y[4] + 30, '1', '3 : deux changements, on ne conclut pas', { couleur: 'orange', taille: 16 });
+    } },
+    { nom: 'conclusion', lignes: [], plus: () => {
+      c.rect(X[0], 302, 690, 32, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+      c.texte('Pour étudier un facteur, on ne change que lui : les autres restent les mêmes.', X[0] + 345, 324, { couleur: 'jaune', taille: 18, align: 'center', max: 670 });
+    } },
+  ], ZY);
+}
+function vieThermoY(th) { return 300 - 8 - th / 120 * (300 - 70 - 16); }
+function vueVie(c, M) {
+  const aF = lisse(M.p('frigo')), aA = lisse(M.p('autocuiseur')), vap = M.commence('vapeur') ? lisse(clamp(M.p('vapeur') * 2, 0, 1)) : 0;
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (aF > 0) Peint.frigo(ctx, 40, 70, 170, 232, aF);
+    if (M.commence('lait')) { const a = lisse(M.p('lait')); Peint.lait(ctx, 92, 284, a); Peint.lait(ctx, 128, 284, a); }
+    if (aA > 0) { Peint.flamme(ctx, 560, 680, 296, M.S.t, aA); Peint.autocuiseur(ctx, 540, 196, 160, 80, aA); }
+    if (vap > 0) {
+      ctx.save(); ctx.lineCap = 'round';
+      for (let i = 0; i < 6; i++) {
+        const ph = ((M.S.t * .7 + i / 6) % 1), x = 620 + Math.sin(M.S.t * 2 + i) * 6 * ph, y = 168 - ph * 86;
+        ctx.strokeStyle = `rgba(255,255,255,${(.32 * (1 - ph) * vap).toFixed(3)})`; ctx.lineWidth = 5 + ph * 8;
+        ctx.beginPath(); ctx.moveTo(x, y + 10); ctx.quadraticCurveTo(x + 8, y + 2, x, y - 8); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    Peint.thermo(ctx, 380, 70, 300, 20, 120, 1, 12);
+  });
+  c.texte('0 °C', 400, vieThermoY(0) + 5, { couleur: 'faible', taille: 14 });
+  c.texte('50 °C', 400, vieThermoY(50) + 5, { couleur: 'faible', taille: 14 });
+  c.texte('100 °C', 400, vieThermoY(100) + 5, { couleur: 'faible', taille: 14 });
+  return zoneEcriture(c, M, [
+    { nom: 'frigo', lignes: [['au réfrigérateur, environ 4 °C', 'bleu']], plus: () => {
+      c.texte('réfrigérateur ≈ 4 °C', 125, 58, { couleur: 'bleu', taille: 17, align: 'center' });
+      c.fleche(368, vieThermoY(4), 222, vieThermoY(4), { couleur: 'bleu', largeur: 2, tete: 9 });
+      c.texte('4 °C', 300, vieThermoY(4) - 7, { couleur: 'bleu', taille: 15, align: 'center' });
+    } },
+    { nom: 'lait', lignes: [['au froid, le lait tourne beaucoup plus lentement : il se conserve plus longtemps', 'bleu']], plus: () => c.texte('au froid : plus lent', 125, 328, { couleur: 'bleu', taille: 18, align: 'center' }) },
+    { nom: 'autocuiseur', lignes: [['l’autocuiseur, fermé, chauffe l’eau au-delà de 100 °C', 'rouge']], plus: () => {
+      c.texte('autocuiseur ≈ 120 °C', 620, 58, { couleur: 'rouge', taille: 17, align: 'center' });
+      c.fleche(392, vieThermoY(120), 520, 120, { couleur: 'rouge', largeur: 2, tete: 9 });
+    } },
+    { nom: 'vapeur', lignes: [['plus de 100 °C : la cuisson est bien plus rapide', 'rouge']], plus: () => c.texte('plus de 100 °C : plus rapide', 620, 328, { couleur: 'rouge', taille: 18, align: 'center' }) },
+    { nom: 'conclusion', lignes: [['la température est un facteur cinétique : plus elle est élevée, plus la transformation est rapide', 'jaune']] },
+  ], ZY);
+}
+function vueCatalyseur(c, M) {
+  const t = tSim(), fS = avance(t, TAU_SANS), fA = avance(t, TAU_AVEC), niv = NIV * lisse(M.p('melange'));
+  const FE2 = [205, 238, 205, .35];
+  c.ligne(30, 302, 460, 302, { couleur: 'faible', largeur: 1.6 });
+  deuxBechers(c, M, BC1, BC2, [teinte(fS), teinte(fA)], niv);
+  c.direct(() => {
+    if (!M.commence('melange')) return;
+    const ctx = c.ctx, xg = BC2.x + BC2.w / 2, a = M.commence('ajout') ? 1 : lisse(M.p('melange'));
+    Peint.compteGouttes(ctx, xg, 112, FE2, a);
+    if (M.commence('ajout') && M.p('ajout') < 1) {
+      const yS = BC2.y + BC2.h - 3 - niv * (BC2.h - 16), p = M.p('ajout');
+      for (let k = 0; k < 3; k++) { const ph = p * 3 - k * .8; if (ph > 0 && ph < 1) Peint.goutte(ctx, xg, 118 + ph * (yS - 120), FE2); }
+    }
+  });
+  c.texte('sans catalyseur', BC1.x + BC1.w / 2, 326, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('avec ions Fe²⁺', BC2.x + BC2.w / 2, 326, { couleur: 'vert', taille: 17, align: 'center' });
+  c.texte('les deux à 20 °C', 140, 108, { couleur: 'faible', taille: 16, align: 'center' });
+  chrono(c, M, t);
+  return zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['même mélange S₂O₈²⁻ + I⁻ (incolore), même température', 'blanc']] },
+    { nom: 'ajout', lignes: [['dans le second : quelques gouttes d’ions fer II, Fe²⁺ (catalyseur)', 'vert']],
+      plus: () => { c.texte('ions Fe²⁺', BC2.x + BC2.w / 2 + 18, 70, { couleur: 'vert', taille: 16 }); c.texte('(catalyseur)', BC2.x + BC2.w / 2 + 18, 90, { couleur: 'vert', taille: 16 }); } },
+    { nom: 'catalyse_avance', lignes: [['avec Fe²⁺, le diiode I₂ apparaît beaucoup plus vite', 'vert']] },
+    { nom: 'catalyse_fini', lignes: [['avec catalyseur : teinte finale vers t ≈ 10 min', 'vert']],
+      plus: () => c.texte('• le catalyseur accélère', 500, 180, { couleur: 'jaune', taille: 18 }) },
+    { nom: 'sans_fini', lignes: [['sans catalyseur : teinte finale vers t ≈ 40 min', 'blanc']] },
+    { nom: 'meme_final', lignes: [['même brun final : le catalyseur ne change pas l’état final', 'jaune']],
+      plus: () => c.texte('• même état final', 500, 240, { couleur: 'jaune', taille: 18 }) },
+    { nom: 'equation', lignes: [['l’équation ne contient pas Fe²⁺ : il est retrouvé intact à la fin', 'blanc']],
+      plus: () => { c.texte('• il ne figure pas dans l’équation', 500, 210, { couleur: 'jaune', taille: 18, max: 250 });
+        eqn(c, 620, 292, 'S₂O₈²⁻ + 2I⁻', '2SO₄²⁻ + I₂', { align: 'center', taille: 18 }); } },
+  ], ZY);
+}
+
+/* ── Repères (tous déclarés dès le début ; le libellé dit quand l’objet apparaît) ── */
+function reperes(c, M) {
+  const v = M.S.vue, t = tSim(), quand = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l);
+  const sol = B => [B.x + 3, B.y + B.h - 3 - NIV * (B.h - 16), B.w - 6, NIV * (B.h - 16)];
+  if (v === 'temperature') {
+    const th = thetaVu(), yc = TH2.yB - 8 - clamp(th / 80, 0, 1) * (TH2.yB - TH2.yT - 16);
+    R('becher_froid', BK1.x - 8, BK1.y - 6, BK1.w + 16, BK1.h + 12, 'le bécher dans le bain à 20 °C');
+    R('becher_chaud', BK2.x - 8, BK2.y - 6, BK2.w + 16, BK2.h + 12, `le bécher dans le bain à ${th} °C`);
+    R('thermometre_froid', TH1.x - 14, TH1.yT - 28, 28, TH1.yB - TH1.yT + 40, 'le thermomètre du bain froid : 20 °C');
+    R('thermometre_chaud', TH2.x - 14, TH2.yT - 28, 28, TH2.yB - TH2.yT + 40, `le thermomètre du bain chaud : ${th} °C`);
+    R('chrono', CHR.x - CHR.r - 4, CHR.y - CHR.r - 10, 170, 2 * CHR.r + 16, `le chronomètre : t = ${min(t)} (temps accéléré)`);
+    R('teinte_froid', ...sol(BK1), `la teinte à 20 °C : ${nomTeinte(avance(t, TAU_F))}`);
+    R('teinte_chaud', ...sol(BK2), `la teinte à ${th} °C : ${nomTeinte(avance(t, tauC()))}`);
+    R('loupe', LP.x - LP.r - 6, LP.y - LP.r - 26, 2 * LP.r + 36, 2 * LP.r + 50, `la loupe : les entités s’agitent plus vite au chaud${quand('agitation')}`);
+    R('poignee_theta', TH2.x - 14, yc - 14, 42, 28, `la poignée : glisser pour changer la température du bain chaud (${th} °C, de 30 à 60 °C)`);
+  } else if (v === 'concentration') {
+    R('becher_dilue', BC1.x - 8, BC1.y - 6, BC1.w + 16, BC1.h + 12, 'le bécher à [I⁻]₀ = 0,1 mol/L');
+    R('becher_concentre', BC2.x - 8, BC2.y - 6, BC2.w + 16, BC2.h + 12, 'le bécher à [I⁻]₀ = 0,2 mol/L');
+    R('etiquette_dilue', BC1.x - 20, 308, BC1.w + 40, 26, '[I⁻]₀ = 0,1 mol/L');
+    R('etiquette_concentre', BC2.x - 20, 308, BC2.w + 40, 26, '[I⁻]₀ = 0,2 mol/L');
+    R('chrono', CHR.x - CHR.r - 4, CHR.y - CHR.r - 10, 170, 2 * CHR.r + 16, `le chronomètre : t = ${min(t)} (temps accéléré)`);
+    R('loupe', LP.x - LP.r - 6, LP.y - LP.r - 26, 2 * LP.r + 36, 2 * LP.r + 50, `la loupe : deux fois plus d’ions I⁻ dans le même volume à droite${quand('rencontres')}`);
+  } else if (v === 'trempe') {
+    const pip = pipetteEtat(M);
+    R('grand_becher', GB.x - 8, GB.y - 6, GB.w + 16, GB.h + 12, `le grand bécher : teinte ${nomTeinte(avance(t, TAU_F))}`);
+    R('pipette', pip.pos[0] - 14, pip.pos[1] - 106, 28, 110, `la pipette${pip.a > .5 ? '' : ' (déjà vidée dans l’eau glacée)'}`);
+    R('becher_glace', BG.x - 8, BG.y - 6, BG.w + 16, BG.h + 12, 'le bécher d’eau glacée');
+    R('glacons', BG.x + 6, BG.y + BG.h - 3 - .5 * (BG.h - 16) - 14, BG.w - 12, 26, 'les glaçons');
+    R('teinte_figee', 494, 144, 104, 98, `la teinte figée du prélèvement (celle de t = ${TP} min)${quand('fige')}`);
+    R('teinte_continue', 614, 144, 104, 98, `la teinte du grand bécher, qui continue de foncer${quand('continue')}`);
+    R('burette', BUR.x - 30, BUR.yH - 6, 96, BUR.yp - BUR.yH + 12, `la burette de thiosulfate S₂O₃²⁻${quand('titrage')}`);
+    R('phrase', 494, 246, 250, 58, `« trempe : refroidir et diluer brusquement, pour bloquer l’évolution du système »${quand('fige')}`);
+  } else if (v === 'une_variable') {
+    R('tableau', 36, 66, 368, 200, 'le tableau des trois expériences');
+    R('ligne_1', 36, 112, 368, 50, 'expérience 1 : 20 °C ; 0,1 mol/L');
+    R('ligne_2', 36, 162, 368, 50, 'expérience 2 : 40 °C ; 0,1 mol/L');
+    R('ligne_3', 36, 212, 368, 50, 'expérience 3 : 40 °C ; 0,2 mol/L');
+    R('colonne_theta', 130, 70, 120, 192, 'la colonne de la température θ');
+    R('colonne_c', 250, 70, 150, 192, 'la colonne de la concentration [I⁻]₀');
+    R('fleche_12', 404, 130, 340, 52, `« 1 → 2 : seule la température change »${quand('comparer_1_2')}`);
+    R('fleche_23', 404, 182, 340, 52, `« 2 → 3 : seule la concentration change »${quand('comparer_2_3')}`);
+    R('fleche_13', 404, 128, 340, 170, `« 1 → 3 : deux changements, on ne conclut pas »${quand('comparer_1_3')}`);
+    R('conclusion', 36, 298, 698, 40, `« on ne change qu’un facteur à la fois »${quand('conclusion')}`);
+  } else if (v === 'vie') {
+    R('frigo', 34, 40, 184, 270, 'le réfrigérateur (≈ 4 °C)');
+    R('lait', 74, 212, 74, 76, `les bouteilles de lait${quand('lait')}`);
+    R('autocuiseur', 506, 40, 228, 244, `l’autocuiseur (plus de 100 °C)${quand('autocuiseur')}`);
+    R('flamme', 548, 270, 144, 34, `la flamme du réchaud${quand('autocuiseur')}`);
+    R('thermometre', 366, 62, 84, 248, 'le thermomètre : 4 °C au réfrigérateur, ≈ 120 °C dans l’autocuiseur');
+    R('conclusion', 10, 336, 740, 74, `la conclusion écrite en bas${quand('conclusion')}`);
+  } else {
+    R('becher_sans', BC1.x - 8, BC1.y - 6, BC1.w + 16, BC1.h + 12, 'le bécher sans catalyseur');
+    R('becher_avec', BC2.x - 8, BC2.y - 6, BC2.w + 16, BC2.h + 12, 'le bécher avec des ions Fe²⁺ (catalyseur)');
+    R('gouttes', BC2.x + BC2.w / 2 - 14, 46, 120, 74, `les gouttes d’ions Fe²⁺ (catalyseur)${quand('ajout')}`);
+    R('chrono', CHR.x - CHR.r - 4, CHR.y - CHR.r - 10, 170, 2 * CHR.r + 16, `le chronomètre : t = ${min(t)} (temps accéléré)`);
+    R('teinte_sans', ...sol(BC1), `la teinte sans catalyseur : ${nomTeinte(avance(t, TAU_SANS))}`);
+    R('teinte_avec', ...sol(BC2), `la teinte avec catalyseur : ${nomTeinte(avance(t, TAU_AVEC))}`);
+    R('equation', 494, 270, 254, 30, `S₂O₈²⁻ + 2I⁻ → 2SO₄²⁻ + I₂ : pas de Fe²⁺${quand('equation')}`);
+    R('phrase', 494, 160, 254, 90, '« le catalyseur accélère », « il ne figure pas dans l’équation », « même état final »');
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, t = tSim(), m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  const etape = (() => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; })();
+  m.push(`Étape en cours : ${etape}.`);
+  if (v === 'temperature') {
+    const th = thetaVu();
+    m.push(`Deux béchers du même mélange (H₂O₂ + I⁻ en milieu acide) : à gauche dans un bain d’eau à 20 °C, à droite dans un bain à ${th} °C (vapeur légère), un thermomètre dans chaque bain (poignée jaune sur celui du bain chaud, 30 à 60 °C).`);
+    m.push(`Chronomètre : t = ${min(t)} (temps accéléré). Teinte à 20 °C : ${nomTeinte(avance(t, TAU_F))} (${Math.round(100 * avance(t, TAU_F))} % de la teinte finale) ; à ${th} °C : ${nomTeinte(avance(t, tauC()))} (${Math.round(100 * avance(t, tauC()))} %).`);
+    m.push(`Teinte finale atteinte à t ≈ ${min(5 * tauC())} au chaud et à t ≈ 30 min à 20 °C : même brun final.`);
+    if (M.commence('agitation')) m.push(`Loupe à droite : à gauche (20 °C) des ions I⁻ verts et des molécules H₂O₂ rouges qui bougent lentement, à droite (${th} °C) les mêmes qui bougent plus vite.`);
+  } else if (v === 'concentration') {
+    m.push('Deux béchers à 20 °C, même quantité de H₂O₂ (limitant) : à gauche [I⁻]₀ = 0,1 mol/L, à droite [I⁻]₀ = 0,2 mol/L.');
+    m.push(`Chronomètre : t = ${min(t)} (temps accéléré). Teinte à 0,1 mol/L : ${nomTeinte(avance(t, TAU_F))} (${Math.round(100 * avance(t, TAU_F))} %) ; à 0,2 mol/L : ${nomTeinte(avance(t, TAU_CONC))} (${Math.round(100 * avance(t, TAU_CONC))} %). Teinte finale vers 15 min (0,2 mol/L) et 30 min (0,1 mol/L), même brun final.`);
+    if (M.commence('rencontres')) m.push('Loupe : à gauche 6 ions I⁻ (verts) et 4 H₂O₂ (rouges), à droite 12 ions I⁻ et 4 H₂O₂ dans le même volume, même agitation.');
+  } else if (v === 'trempe') {
+    const pip = pipetteEtat(M);
+    m.push(`Grand bécher (H₂O₂ + I⁻ acidifié) à gauche, teinte ${nomTeinte(avance(t, TAU_F))} ; chronomètre t = ${min(t)} (temps accéléré). Au milieu, un bécher d’eau glacée avec des glaçons.`);
+    m.push(M.commence('fige') ? `Le prélèvement (pris à t = ${TP} min) est dans l’eau glacée : teinte ${M.commence('titrage') && M.p('titrage') > .9 ? 'disparue (titrage fini)' : 'jaune-orangé figée'}.` : pip.rempli > 0 ? 'La pipette contient le prélèvement.' : 'La pipette est vide.');
+    if (M.commence('continue')) m.push('À droite, deux pastilles : « prélèvement figé » (ne change plus) et « grand bécher » (continue de foncer).');
+    if (M.commence('titrage')) m.push('Une burette de thiosulfate S₂O₃²⁻ (incolore) goutte dans le prélèvement ; équation à droite : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻.');
+  } else if (v === 'une_variable') {
+    m.push('Tableau à la craie : exp. 1 (20 °C ; 0,1 mol/L), exp. 2 (40 °C ; 0,1 mol/L), exp. 3 (40 °C ; 0,2 mol/L).');
+    if (M.commence('comparer_1_2')) m.push('Colonne θ entourée en jaune pour 1 et 2 ; flèche « 1 → 2 : seule la température change ».');
+    if (M.commence('comparer_2_3')) m.push('Colonne [I⁻]₀ entourée en vert pour 2 et 3 ; flèche « 2 → 3 : seule la concentration change ».');
+    if (M.commence('comparer_1_3')) m.push('Flèche orange en pointillé de 1 à 3 avec ⚠ « deux changements, on ne conclut pas ».');
+    if (M.commence('conclusion')) m.push('Cadre jaune : « on ne change que lui : les autres restent les mêmes ».');
+  } else if (v === 'vie') {
+    m.push('Thermomètre au milieu (0 à 120 °C). ' + (M.commence('frigo') ? 'À gauche, un réfrigérateur ouvert (≈ 4 °C) ' : '') + (M.commence('lait') ? 'avec deux bouteilles de lait ; « au froid : plus lent ». ' : '') + (M.commence('autocuiseur') ? 'À droite, un autocuiseur sur la flamme bleue (≈ 120 °C) ' : '') + (M.commence('vapeur') ? 'dont la soupape lâche de la vapeur ; « plus de 100 °C : plus rapide ».' : ''));
+  } else {
+    m.push('Deux béchers du même mélange S₂O₈²⁻ + I⁻ à 20 °C ; au-dessus du second, un compte-gouttes d’ions Fe²⁺ (catalyseur).');
+    m.push(`Chronomètre : t = ${min(t)} (temps accéléré). Teinte sans catalyseur : ${nomTeinte(avance(t, TAU_SANS))} (${Math.round(100 * avance(t, TAU_SANS))} %) ; avec Fe²⁺ : ${nomTeinte(avance(t, TAU_AVEC))} (${Math.round(100 * avance(t, TAU_AVEC))} %). Teinte finale vers 10 min avec catalyseur, 40 min sans ; même brun final.`);
+    if (M.commence('equation')) m.push('À droite : « le catalyseur accélère », « il ne figure pas dans l’équation », « même état final », et S₂O₈²⁻ + 2I⁻ → 2SO₄²⁻ + I₂.');
+  }
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, t = +tSim(M).toFixed(2), p = { vue: v, t_min: t };
+  if (v === 'temperature') Object.assign(p, { theta_froid_C: 20, theta_c: PAR.theta_c, teinte_finale_chaud_min: +(5 * tauC()).toFixed(2), teinte_finale_froid_min: 30 });
+  if (v === 'concentration') Object.assign(p, { theta_C: 20, c_dilue_mol_L: .1, c_concentre_mol_L: .2, teinte_finale_concentre_min: 15, teinte_finale_dilue_min: 30 });
+  if (v === 'catalyseur') Object.assign(p, { theta_C: 20, teinte_finale_avec_min: 10, teinte_finale_sans_min: 40 });
+  if (v === 'trempe') Object.assign(p, { t_prelevement_min: TP });
+  return p;
+};
+const MOT = Moteur({
+  id: 'tlr_facteurs', titre: 'Les facteurs cinétiques : température, concentration, trempe, un seul facteur à la fois, vie courante, catalyseur', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ temperature: 'Même mélange, deux températures.', concentration: 'Même mélange, deux concentrations en ions iodure.', trempe: 'Comment « arrêter » une réaction pour la doser ?',
+    une_variable: 'Trois expériences : lesquelles peut-on comparer ?', vie: 'La température dans la cuisine…', catalyseur: 'Même mélange, avec ou sans catalyseur.' })[M.S.vue],
+  messageFin: M => ({ temperature: `Plus la température est élevée, plus la transformation est rapide (à ${PAR.theta_c} °C : teinte finale vers ${min(5 * tauC())} au lieu de 30 min) ; même état final.`,
+    concentration: 'Plus la concentration d’un réactif est grande, plus la transformation est rapide ; même état final (H₂O₂ limitant).',
+    trempe: 'La trempe (refroidir et diluer brusquement) bloque l’évolution : on dose ensuite le diiode formé à cet instant.',
+    une_variable: 'On ne fait varier qu’un facteur à la fois.', vie: 'Froid : transformations plus lentes ; chaud : plus rapides.',
+    catalyseur: 'Le catalyseur accélère la transformation, ne figure pas dans l’équation et ne change pas l’état final.' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    if (p.theta_c != null && p.theta_c !== '' && Number.isFinite(+p.theta_c)) {
+      PAR.theta_c = clamp(Math.round(+p.theta_c), 30, 60); DRAG = null; r.vue = 'temperature'; r.change = true;
+    } else r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', theta_c: '30..60 (°C, pas 1 ; température du bain chaud de la vue temperature, défaut 40 ; relance)' },
+  texte: 'Les facteurs cinétiques. Température : même mélange H₂O₂ + I⁻ acidifié dans deux bains (20 °C et θ_c, défaut 40 °C) : au chaud, la teinte brune du diiode apparaît plus vite (teinte finale trois fois plus tôt à 40 °C), même brun final ; loupe : les entités s’agitent plus vite au chaud. Concentration : à 20 °C, [I⁻]₀ = 0,1 et 0,2 mol/L avec la même quantité de H₂O₂ (limitant) : le plus concentré brunit plus vite, même brun final. Trempe : prélèvement versé dans l’eau glacée, sa teinte se fige ; titrage du diiode par le thiosulfate (réaction rapide). Un seul facteur à la fois : 1 → 2 seule la température change, 2 → 3 seule la concentration, 1 → 3 deux changements, on ne conclut pas. Vie courante : réfrigérateur (plus lent), autocuiseur (plus de 100 °C, plus rapide). Catalyseur : quelques gouttes d’ions Fe²⁺ dans S₂O₈²⁻ + I⁻ : beaucoup plus rapide, ne figure pas dans l’équation, même état final. Temps accéléré : 1 min dure 0,2 s.',
+  explications: {
+    temperature: [
+      { repere: 'becher_froid', texte: 'Le même mélange dans les deux béchers.' },
+      { repere: 'thermometre_chaud', texte: 'Seule différence : le bain chaud.' },
+      { repere: 'teinte_chaud', texte: 'Au chaud, le brun du diiode apparaît plus vite.' },
+      { repere: 'teinte_froid', texte: 'À 20 °C, la même teinte finale arrive plus tard.' },
+      { repere: 'loupe', texte: 'Au chaud, les entités s’agitent plus vite.' },
+      { repere: 'poignee_theta', texte: 'Tu peux changer la température du bain chaud en glissant ici.' },
+    ],
+    concentration: [
+      { repere: 'etiquette_concentre', texte: 'À droite, deux fois plus d’ions iodure.' },
+      { repere: 'becher_concentre', texte: 'Le plus concentré brunit plus vite.' },
+      { repere: 'becher_dilue', texte: 'Même brun final : H₂O₂ est limitant, en même quantité.' },
+      { repere: 'loupe', texte: 'Plus d’entités dans le même volume : elles se rencontrent plus souvent.' },
+    ],
+    trempe: [
+      { repere: 'pipette', texte: 'On prélève un peu du mélange.' },
+      { repere: 'glacons', texte: 'Dans l’eau glacée, la réaction est presque arrêtée.' },
+      { repere: 'teinte_figee', texte: 'Sa teinte ne bouge plus…' },
+      { repere: 'teinte_continue', texte: '… alors que le grand bécher continue de foncer.' },
+      { repere: 'burette', texte: 'On dose le diiode par le thiosulfate, une réaction rapide.' },
+    ],
+    une_variable: [
+      { repere: 'fleche_12', texte: '1 et 2 : seule la température change.' },
+      { repere: 'fleche_23', texte: '2 et 3 : seule la concentration change.' },
+      { repere: 'fleche_13', texte: '1 et 3 : deux changements, on ne peut pas conclure.' },
+      { repere: 'conclusion', texte: 'Un seul facteur à la fois.' },
+    ],
+    vie: [
+      { repere: 'frigo', texte: 'Au froid, les transformations sont plus lentes.' },
+      { repere: 'autocuiseur', texte: 'Au-delà de 100 °C, la cuisson est plus rapide.' },
+    ],
+    catalyseur: [
+      { repere: 'gouttes', texte: 'Quelques gouttes d’ions fer II : le catalyseur.' },
+      { repere: 'teinte_avec', texte: 'Avec le catalyseur, le brun arrive beaucoup plus vite.' },
+      { repere: 'equation', texte: 'Le catalyseur ne figure pas dans l’équation.' },
+      { repere: 'phrase', texte: 'Même état final.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => {
+    if (MOT.S.vue !== 'temperature') return null;
+    const [x, y] = MOT.scene.local(px, py);
+    return Math.abs(x - TH2.x) < 22 && y > TH2.yT - 12 && y < TH2.yB + 4 ? 'theta' : null;
+  },
+  bouger: (id, px, py) => {
+    const [, y] = MOT.scene.local(px, py);
+    DRAG = clamp(Math.round(80 * (TH2.yB - 8 - y) / (TH2.yB - TH2.yT - 16)), 30, 60); MOT.scene.sale = true;
+  },
+  lacher: () => { if (DRAG != null) { const th = DRAG; MOT.setParameters({ theta_c: th }); } },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

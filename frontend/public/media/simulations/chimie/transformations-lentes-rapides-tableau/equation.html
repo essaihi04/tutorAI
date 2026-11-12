@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Équation d’oxydoréduction — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Écriture de l’équation d’une réaction d’oxydoréduction : la réduction de l’oxydant en rouge, l’oxydation du réducteur en vert, les facteurs en jaune, l’addition, la simplification et la vérification des charges"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Équation d’une réaction d’oxydoréduction à partir de deux demi-équations (cours « Transformations lentes et transformations rapides »,
+ * 2e Bac PC BIOF, novembre 2026). Vues (?vue=) : zinc_cuivre (défaut) | eau_oxygenee | permanganate | fer.
+ * Moments : couples reduction oxydation multiplier additionner simplifier verifier fin.
+ * Réduction de l’oxydant en rouge, oxydation du réducteur en vert (dans le sens de la réaction), facteurs « × n » en jaune,
+ * électrons barrés, H⁺ simplifiés, vérification des charges. Équilibrages vérifiés par un script python avant d’être écrits ici.
+ */
+/* ── Moteur du déroulé (recopié de physics/circuit-rlc-tableau/circuit-lc.html) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Formules chimiques à la craie (recopié dans demi-equation.html et equation.html) ─────────────────────────────
+ * Les formules s’écrivent en Unicode dans les données (MnO₄⁻, Cu²⁺, H₂O₂…). Au tableau, la police n’a ni les indices
+ * ni « ⁺ » : `chim` les traduit pour le kit (« O_{4} » : indice plus petit et plus bas ; « ^{2+} » : exposant, exposants.js).
+ * Une ligne d’équation est une suite de termes séparés par des espaces : « MnO₄⁻ [+] [8H⁺] ⇌ Mn²⁺ ».
+ *   [ … ] = ajout (jaune), { … } = oxydant (rouge), < … > = réducteur (vert) ; « ⇌ » et « → » sont DESSINÉES (la police n’a pas ⇌).
+ */
+const POLICE = window.Tableau.POLICE;
+const CH_SUB = '₀₁₂₃₄₅₆₇₈₉';
+const CH_SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const chim = s => String(s)
+  .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => CH_SUB.indexOf(ch)).join('') + '}')
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => CH_SUP[ch]).join('') + '}');
+/** Écrit un texte qui peut contenir des formules (indices, charges). */
+const ecrit = (c, s, x, y, o = {}) => c.texte(chim(s), x, y, o);
+/** Texte simple (bulle, ce_qui_se_voit) : on enlève le balisage des couleurs. */
+const nu = s => String(s).replace(/[[\]{}<>]/g, '');
+/** Largeur écrite d’un texte (mêmes tailles que le kit : indice et exposant à 62 %, taille minimale lisible). */
+function largeur(c, s, taille) {
+  const t = c.echelle && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille, ctx = c.ctx;
+  let w = 0;
+  for (const seg of window.Tableau.Craie.segments(chim(s))) { ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${POLICE}`; w += ctx.measureText(seg.t).width; }
+  return w;
+}
+const MARQUES = { '[': 'ajout', '{': 'oxydant', '<': 'reducteur' };
+function termes(spec) {
+  return spec.split(' ').filter(Boolean).map(t => {
+    if (t === '⇌' || t === '→') return { fleche: t, txt: t };
+    const parts = [];
+    t.replace(/\[([^\]]*)\]|\{([^}]*)\}|<([^>]*)>|([^[{<]+)/g, (m, a, o, r, n) => {
+      parts.push(a != null ? [a, 'ajout'] : o != null ? [o, 'oxydant'] : r != null ? [r, 'reducteur'] : [n, '']); return m;
+    });
+    return { parts, txt: parts.map(p => p[0]).join(''), ajout: parts.some(p => p[1] === 'ajout') };
+  });
+}
+const ECART = 7, LFLECHE = 40;
+/** Place les termes d’une ligne (sans rien écrire) : renvoie { T, x0, x1, taille } ; chaque terme a x et w. */
+function disposer(c, spec, x, taille = 21, align = 'left') {
+  const T = termes(spec);
+  for (const t of T) {
+    if (t.fleche) t.w = LFLECHE;
+    else { t.ws = t.parts.map(p => largeur(c, p[0], taille)); t.w = t.ws.reduce((a, b) => a + b, 0); }
+  }
+  const W = T.reduce((a, t) => a + t.w, 0) + ECART * (T.length - 1);
+  let px = align === 'center' ? x - W / 2 : align === 'right' ? x - W : x;
+  for (const t of T) { t.x = px; px += t.w + ECART; }
+  return { T, x0: T[0].x, x1: px - ECART, taille, fleche: T.find(t => t.fleche) };
+}
+/** Flèche de réaction dessinée : → simple, ou ⇌ en deux demi-flèches (haut vers la droite, bas vers la gauche). */
+function flecheChim(c, x1, x2, y, double, couleur) {
+  if (double) {
+    c.trait([[x1, y - 3], [x2, y - 3], [x2 - 8, y - 9]], { couleur, largeur: 2 });
+    c.trait([[x2, y + 3], [x1, y + 3], [x1 + 8, y + 9]], { couleur, largeur: 2 });
+  } else c.fleche(x1, y, x2, y, { couleur, largeur: 2, tete: 8 });
+}
+/** Écrit les termes d’une ligne placée (`filtre(t)` : seulement certains termes). Couleurs : base, ajout (jaune), oxydant, réducteur. */
+function tracer(c, L, y, o = {}) {
+  const base = o.couleur || 'blanc';
+  const coul = { '': base, ajout: o.ajout || 'jaune', oxydant: o.oxydant || base, reducteur: o.reducteur || base };
+  for (const t of L.T) {
+    if (o.filtre && !o.filtre(t)) continue;
+    if (t.fleche) { flecheChim(c, t.x + 5, t.x + t.w - 5, y - L.taille * .3, t.fleche === '⇌', base); continue; }
+    let px = t.x;
+    t.parts.forEach(([s, k], i) => { ecrit(c, s, px, y, { couleur: coul[k], taille: L.taille }); px += t.ws[i]; });
+  }
+}
+/** Rectangle d’un terme (pour un repère ou un trait qui le barre). */
+const boite = (L, t, y) => [t.x - 3, y - L.taille * .95, t.w + 6, L.taille * 1.35];
+/** Barre un terme d’un trait de craie oblique. */
+function barrer(c, L, t, y, couleur = 'jaune') { c.ligne(t.x - 3, y + 4, t.x + t.w + 3, y - L.taille * .8, { couleur, largeur: 2.2 }); }
+/** Texte d’une ligne pour le tuteur (la double flèche dite « ⇌ »). */
+const texteLigne = spec => nu(spec);
+const signe = q => (q > 0 ? `+${q}` : q < 0 ? `−${-q}` : '0');
+
+/* ── Les quatre réactions du cours (vérifiées : éléments et charges, script python du 12 novembre 2026) ── */
+const VUES = ['zinc_cuivre', 'eau_oxygenee', 'permanganate', 'fer'];
+const D = {
+  zinc_cuivre: {
+    nom: 'zinc et ions cuivre II', couples: 'couples : Cu²⁺/Cu et Zn²⁺/Zn', ox: 'Cu²⁺', red: 'Zn',
+    d1: 'Cu²⁺ + 2e⁻ → Cu', d2: 'Zn → Zn²⁺ + 2e⁻', f1: 1, f2: 1, ne: 2,
+    bilan: 'Zn + Cu²⁺ → Zn²⁺ + Cu', simpl: null, rien: 'rien à simplifier : ni H⁺ ni H₂O',
+    gauche: '+2', droite: '+2', q: '+2',
+  },
+  eau_oxygenee: {
+    nom: 'eau oxygénée et ions iodure', couples: 'couples : H₂O₂/H₂O et I₂/I⁻', ox: 'H₂O₂', red: 'I⁻',
+    d1: 'H₂O₂ + 2H⁺ + 2e⁻ → 2H₂O', d2: '2I⁻ → I₂ + 2e⁻', f1: 1, f2: 1, ne: 2,
+    bilan: 'H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O', simpl: null, rien: 'rien à simplifier : H⁺ et H₂O d’un seul côté',
+    gauche: '2 × (−1) + 2 = 0', droite: '0', q: '0',
+  },
+  permanganate: {
+    nom: 'ions permanganate et acide oxalique', couples: 'couples : MnO₄⁻/Mn²⁺ et CO₂/H₂C₂O₄', ox: 'MnO₄⁻', red: 'H₂C₂O₄',
+    d1: 'MnO₄⁻ + 8H⁺ + 5e⁻ → Mn²⁺ + 4H₂O', d2: 'H₂C₂O₄ → 2CO₂ + 2H⁺ + 2e⁻', f1: 2, f2: 5, ne: 10,
+    bilan: '2MnO₄⁻ + 16H⁺ + 5H₂C₂O₄ → 2Mn²⁺ + 8H₂O + 10CO₂ + 10H⁺', barres: ['16H⁺', '10H⁺'],
+    simpl: '2MnO₄⁻ + 5H₂C₂O₄ + [6H⁺] → 2Mn²⁺ + 10CO₂ + 8H₂O', calcul: '16H⁺ à gauche − 10H⁺ à droite : il reste 6H⁺ à gauche',
+    gauche: '2 × (−1) + 6 = +4', droite: '2 × (+2) = +4', q: '+4',
+  },
+  fer: {
+    nom: 'ions permanganate et ions fer II', couples: 'couples : MnO₄⁻/Mn²⁺ et Fe³⁺/Fe²⁺', ox: 'MnO₄⁻', red: 'Fe²⁺',
+    d1: 'MnO₄⁻ + 8H⁺ + 5e⁻ → Mn²⁺ + 4H₂O', d2: 'Fe²⁺ → Fe³⁺ + e⁻', f1: 1, f2: 5, ne: 5,
+    bilan: 'MnO₄⁻ + 5Fe²⁺ + 8H⁺ → Mn²⁺ + 5Fe³⁺ + 4H₂O', simpl: null, rien: 'rien à simplifier : H⁺ et H₂O d’un seul côté',
+    gauche: '−1 + 5 × (+2) + 8 = +17', droite: '+2 + 5 × (+3) = +17', q: '+17',
+  },
+};
+const TITRES = Object.fromEntries(VUES.map(v => [v, D[v].nom]));
+/* Mise en page (cadre 760 × 420). */
+const XL = 14, XE = 122, TAILLE = 20;
+const Y = { couples: 66, d1: 118, d2: 162, trait: 182, bilan: 220, simpl: 270, verif: 336, phrase: 370 };
+const ne1 = d => d.ne / d.f1, ne2 = d => d.ne / d.f2;   // électrons de chaque demi-équation avant multiplication
+const ETAPES = Object.fromEntries(VUES.map(v => {
+  const d = D[v];
+  return [v, [
+    { nom: 'couples', anim: .3, motif: `${d.couples} ; oxydant ${d.ox}, réducteur ${d.red}`,
+      bulle: () => `Deux couples. L’oxydant ${d.ox} réagit avec le réducteur ${d.red}.` },
+    { nom: 'reduction', anim: 0, motif: `réduction de ${d.ox} (rouge) : ${d.d1}`,
+      bulle: () => `${d.ox} capte des électrons : c’est la réduction (en rouge).` },
+    { nom: 'oxydation', anim: 0, motif: `oxydation de ${d.red} (vert) : ${d.d2}`,
+      bulle: () => `${d.red} cède des électrons : c’est l’oxydation (en vert), écrite dans le sens de la réaction.` },
+    { nom: 'multiplier', anim: 0, motif: `× ${d.f1} et × ${d.f2} : ${d.ne} électrons captés = ${d.ne} électrons cédés`,
+      bulle: () => (d.f1 === 1 && d.f2 === 1 ? `Autant d’électrons captés que cédés : ${d.ne} et ${d.ne}. On garde × 1.` : `Il faut autant d’électrons captés que cédés : on multiplie par ${d.f1} et par ${d.f2}.`) },
+    { nom: 'additionner', anim: 0, motif: `addition : ${d.bilan} (électrons barrés)`,
+      bulle: () => `On additionne membre à membre : les ${d.ne} électrons se simplifient.` },
+    { nom: 'simplifier', anim: 0, motif: d.simpl ? `simplification : ${nu(d.simpl)}` : d.rien,
+      bulle: () => (d.simpl ? 'Des H⁺ des deux côtés : on simplifie.' : 'Y a-t-il quelque chose à simplifier ? Non.') },
+    { nom: 'verifier', anim: 0, motif: `vérification des charges : ${d.q} à gauche et ${d.q} à droite`,
+      bulle: () => `On vérifie les charges : ${d.q} de chaque côté.` },
+  ]];
+}));
+const MOTIFS = { fin: 'l’équation de la réaction est écrite et vérifiée' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+let MO = null;
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dispo(c, v) {
+  const d = D[v], P = {};
+  P.d1 = disposer(c, d.d1, XE, TAILLE); P.d2 = disposer(c, d.d2, XE, TAILLE);
+  P.xf = Math.max(P.d1.x1, P.d2.x1) + 26;                       // colonne des facteurs « × n »
+  P.xn = P.xf + 56;                                               // colonne « électrons captés / cédés »
+  P.bilan = disposer(c, d.bilan, XE, TAILLE);
+  P.simpl = d.simpl ? disposer(c, d.simpl, XE, TAILLE) : null;
+  P.final = P.simpl || P.bilan; P.yFinal = d.simpl ? Y.simpl : Y.bilan;
+  const wo = largeur(c, `oxydant : ${d.ox}`, 17);
+  P.xo = Math.max(XL + largeur(c, d.couples, 17) + 26, 330); P.xr = P.xo + wo + 26;
+  return P;
+}
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(47);
+  const v = M.S.vue, d = D[v], P = dispo(c, v);
+  ecrit(c, `L’équation de la réaction : ${d.nom}`, XL, 30, { couleur: 'cyan', taille: 20 });
+  M.etape(c, 'couples', () => {
+    ecrit(c, d.couples, XL, Y.couples, { couleur: 'blanc', taille: 17 });
+    ecrit(c, `oxydant : ${d.ox}`, P.xo, Y.couples, { couleur: 'rouge', taille: 17 });
+    ecrit(c, `réducteur : ${d.red}`, P.xr, Y.couples, { couleur: 'vert', taille: 17 });
+  });
+  M.etape(c, 'reduction', () => {
+    ecrit(c, 'réduction', XL, Y.d1, { couleur: 'rouge', taille: 16 });
+    tracer(c, P.d1, Y.d1, { couleur: 'rouge' });
+  });
+  M.etape(c, 'oxydation', () => {
+    ecrit(c, 'oxydation', XL, Y.d2, { couleur: 'vert', taille: 16 });
+    tracer(c, P.d2, Y.d2, { couleur: 'vert' });
+  });
+  M.etape(c, 'multiplier', () => {
+    ecrit(c, `× ${d.f1}`, P.xf, Y.d1, { couleur: 'jaune', taille: 21 });
+    ecrit(c, `× ${d.f2}`, P.xf, Y.d2, { couleur: 'jaune', taille: 21 });
+    ecrit(c, `${d.ne}e⁻ captés`, P.xn, Y.d1, { couleur: 'rouge', taille: 15 });
+    ecrit(c, `${d.ne}e⁻ cédés`, P.xn, Y.d2, { couleur: 'vert', taille: 15 });
+  });
+  M.etape(c, 'additionner', () => {
+    c.ligne(XE - 6, Y.trait, P.xf + 44, Y.trait, { largeur: 2.2 });
+    ecrit(c, '+', XE - 16, (Y.d1 + Y.d2) / 2 + 6, { couleur: 'blanc', taille: 20, align: 'center' });
+    barrer(c, P.d1, P.d1.T.find(t => /e⁻/.test(t.txt)), Y.d1);
+    barrer(c, P.d2, P.d2.T.find(t => /e⁻/.test(t.txt)), Y.d2);
+    ecrit(c, 'bilan', XL, Y.bilan, { couleur: 'blanc', taille: 16 });
+    tracer(c, P.bilan, Y.bilan);
+  });
+  M.etape(c, 'simplifier', () => {
+    if (!d.simpl) { ecrit(c, d.rien, XE, Y.simpl, { couleur: 'jaune', taille: 17 }); return; }
+    for (const s of d.barres) barrer(c, P.bilan, P.bilan.T.find(t => t.txt === s), Y.bilan);
+    ecrit(c, 'simplifié', XL, Y.simpl, { couleur: 'blanc', taille: 16 });
+    tracer(c, P.simpl, Y.simpl);
+    ecrit(c, d.calcul, XE, Y.simpl + 26, { couleur: 'jaune', taille: 14 });
+  });
+  M.etape(c, 'verifier', () => {
+    const L = P.final;
+    c.rect(L.x0 - 10, P.yFinal - 26, L.x1 - L.x0 + 20, 36, { couleur: 'jaune', largeur: 1.8, arrondi: 6 });
+    ecrit(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, XE, Y.verif, { couleur: 'blanc', taille: 17, max: 620 });
+    ecrit(c, `${d.q} = ${d.q} : l’équation est équilibrée (atomes et charges)`, XE, Y.phrase, { couleur: 'vert', taille: 17, max: 620 });
+  });
+  reperes(c, M, P);
+  return c.fin();
+}
+function reperes(c, M, P) {
+  const v = M.S.vue, d = D[v], plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const ligne = (L, y) => [L.x0 - 6, y - 22, L.x1 - L.x0 + 12, 30];
+  c.repere('demi_1', ...ligne(P.d1, Y.d1), `la réduction de l’oxydant (rouge) : ${d.d1}${plus('reduction')}`);
+  c.repere('demi_2', ...ligne(P.d2, Y.d2), `l’oxydation du réducteur (vert) : ${d.d2}${plus('oxydation')}`);
+  c.repere('facteur_1', P.xf - 6, Y.d1 - 22, 44, 30, `le facteur × ${d.f1} de la réduction${plus('multiplier')}`);
+  c.repere('facteur_2', P.xf - 6, Y.d2 - 22, 44, 30, `le facteur × ${d.f2} de l’oxydation${plus('multiplier')}`);
+  const e1 = P.d1.T.find(t => /e⁻/.test(t.txt)), e2 = P.d2.T.find(t => /e⁻/.test(t.txt));
+  c.repere('electrons_1', ...boite(P.d1, e1, Y.d1), `les électrons captés : ${e1.txt} × ${d.f1} = ${d.ne}e⁻${M.vu('additionner') ? ' (barrés)' : ''}`);
+  c.repere('electrons_2', ...boite(P.d2, e2, Y.d2), `les électrons cédés : ${e2.txt} × ${d.f2} = ${d.ne}e⁻${M.vu('additionner') ? ' (barrés)' : ''}`);
+  c.repere('trait', XE - 30, Y.trait - 8, P.xf + 44 - XE + 30, 16, `le trait d’addition${plus('additionner')}`);
+  c.repere('bilan', ...ligne(P.bilan, Y.bilan), `le bilan de l’addition : ${d.bilan}${plus('additionner')}`);
+  if (d.simpl) c.repere('simplification', XL - 4, Y.simpl - 22, P.simpl.x1 + 10 - XL, 56, `après simplification des H⁺ : ${nu(d.simpl)}${plus('simplifier')}`);
+  else c.repere('simplification', XE - 6, Y.simpl - 22, largeur(c, d.rien, 17) + 12, 30, `${d.rien}${plus('simplifier')}`);
+  c.repere('charges', XE - 6, Y.verif - 22, Math.min(620, largeur(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, 17)) + 12, 30, `vérification des charges : ${d.q} à gauche, ${d.q} à droite${plus('verifier')}`);
+  c.repere('oxydant', P.xo - 6, Y.couples - 22, largeur(c, `oxydant : ${d.ox}`, 17) + 12, 30, `l’oxydant ${d.ox} (en rouge) : il capte des électrons`);
+  c.repere('reducteur', P.xr - 6, Y.couples - 22, largeur(c, `réducteur : ${d.red}`, 17) + 12, 30, `le réducteur ${d.red} (en vert) : il cède des électrons`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, d = D[v], ici = nom => (M.vu(nom) ? '' : ' (en train de s’écrire)');
+  const m = [`Vue « ${v} » : équation de la réaction entre ${d.nom}, ${M.etat()}. Temps de la scène : t = ${fx(M.S.t, 1)} s (écriture au tableau : pas d’expérience, pas de température). Titre cyan en haut ; flèches → dessinées à la craie.`];
+  const w = [];
+  if (M.commence('couples')) w.push(`en haut « ${d.couples} », « oxydant : ${d.ox} » en rouge, « réducteur : ${d.red} » en vert${ici('couples')}`);
+  if (M.commence('reduction')) w.push(`ligne rouge « réduction : ${d.d1} »${ici('reduction')}`);
+  if (M.commence('oxydation')) w.push(`dessous, ligne verte « oxydation : ${d.d2} »${ici('oxydation')}`);
+  if (M.commence('multiplier')) w.push(`à droite en jaune « × ${d.f1} » et « × ${d.f2} », puis « ${d.ne}e⁻ captés » (rouge) et « ${d.ne}e⁻ cédés » (vert)${ici('multiplier')}`);
+  if (M.commence('additionner')) w.push(`trait d’addition, électrons des deux demi-équations barrés en jaune, ligne « bilan : ${d.bilan} »${ici('additionner')}`);
+  if (M.commence('simplifier')) w.push(d.simpl ? `${d.barres.join(' et ')} barrés en jaune dans le bilan, ligne « simplifié : ${nu(d.simpl)} » avec 6H⁺ en jaune et « ${d.calcul} »${ici('simplifier')}` : `en jaune « ${d.rien} »${ici('simplifier')}`);
+  if (M.commence('verifier')) w.push(`équation finale « ${nu(d.simpl || d.bilan)} » encadrée en jaune ; « charges : à gauche ${d.gauche} ; à droite ${d.droite} » ; en vert « ${d.q} = ${d.q} : l’équation est équilibrée »${ici('verifier')}`);
+  m.push(w.length ? `Écrit au tableau : ${w.join(' ; ')}.` : 'Rien d’écrit encore.');
+  return m.join(' ');
+}
+const params = M => { const d = D[M.S.vue]; return { vue: M.S.vue, oxydant: d.ox, reducteur: d.red, facteur_1: d.f1, facteur_2: d.f2, electrons: d.ne, equation: nu(d.simpl || d.bilan) }; };
+const MOT = Moteur({
+  id: 'transformations_lentes_rapides_equation', titre: 'Écrire l’équation d’une réaction d’oxydoréduction à partir de deux demi-équations', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => `Réaction entre ${D[M.S.vue].nom} : écrivons son équation.`,
+  messageFin: M => `Équation de la réaction : ${nu(D[M.S.vue].simpl || D[M.S.vue].bilan)} (charges ${D[M.S.vue].q} de chaque côté).`,
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) { r.vue = p.vue; r.change = p.vue !== M.S.vue; } return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Équation d’une réaction d’oxydoréduction : on écrit la réduction de l’oxydant et l’oxydation du réducteur (dans le sens de la réaction), on multiplie pour avoir autant d’électrons captés que cédés, on additionne (les électrons se simplifient), on simplifie les H⁺ et H₂O présents des deux côtés, puis on vérifie les charges. Exemples : Zn + Cu²⁺ → Zn²⁺ + Cu ; H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O ; 2MnO₄⁻ + 5H₂C₂O₄ + 6H⁺ → 2Mn²⁺ + 10CO₂ + 8H₂O ; MnO₄⁻ + 5Fe²⁺ + 8H⁺ → Mn²⁺ + 5Fe³⁺ + 4H₂O.',
+  explications: Object.fromEntries(VUES.map(v => {
+    const d = D[v];
+    return [v, [
+      { repere: 'oxydant', texte: `L’oxydant ${d.ox} : il va capter des électrons.` },
+      { repere: 'reducteur', texte: `Le réducteur ${d.red} : il va céder des électrons.` },
+      { repere: 'demi_1', texte: `La réduction de ${d.ox} : ${d.d1}.` },
+      { repere: 'demi_2', texte: `L’oxydation de ${d.red}, dans le sens de la réaction : ${d.d2}.` },
+      { repere: 'facteur_1', texte: `On multiplie par ${d.f1}…` },
+      { repere: 'facteur_2', texte: `… et par ${d.f2} : ${d.ne} électrons de chaque côté.` },
+      { repere: 'trait', texte: 'On additionne : les électrons se simplifient.' },
+      { repere: 'bilan', texte: `Le bilan : ${d.bilan}.` },
+      { repere: 'simplification', texte: d.simpl ? `On simplifie les H⁺ : ${nu(d.simpl)}.` : d.rien + '.' },
+      { repere: 'charges', texte: `Vérification : ${d.q} à gauche, ${d.q} à droite.` },
+    ]];
+  })),
+});
+MOT.lancer();
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
