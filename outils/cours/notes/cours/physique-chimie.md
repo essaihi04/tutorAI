@@ -518,3 +518,19 @@ contrat : cours/acides_bases_contrat_simulations.md ; tout refaire : `sh outils/
   simulations : K_a, pK_a, K_e écrits avec indice ; burette 0-50 mL ; tangentes de pente fixée (E à (20,0 ; 8,25)) ; bilan et carte gardent le 2ᵉ bouton
   « Imprimer / PDF » des modèles (règle : un seul bouton) ; exposant « 10^{pKa2 − pKa1} » sans indice dans le bilan (limite du kit) ; petits ajouts à la craie
   hors contrat (justifications courtes, bande de l'indicateur à côté des courbes).
+
+## Contrôle d'ensemble (routine cloud, 12 nov. vers 23 h UTC)
+- Tous les cours de la liste de la routine sont construits (radioactivite → acides_bases, primitives, fonctions_ln, operations_formes) : ce passage
+  n'a construit aucun cours nouveau ; il a refait les contrôles sur les 13 cours non voisés.
+- Problème trouvé : `blocs.py verifier` disait « blocs : à corriger » sur 10 cours. Cause : la session principale a ajouté `question.enonce_dit`
+  et `exercises[].enonce_dit` (commits 80f8966, ec0ff67), que la photo comptait comme texte protégé modifié (aucun speech_text ni parole changé :
+  vérifié par comparaison). Correction : blocs.py ignore `enonce_dit` (comme `prompt`). Les anciennes photos restent valides.
+- Photos manquantes (fichiers .json ignorés par git) pour phys_ch4_radioactivite, phys_ch10_cinetique, math_ch6_nombres_complexes : refaites
+  (`blocs.py base`) et ajoutées avec `git add -f`. Items de cinetique (items_cours 519, items_blocs 74, demos_blocs 1) non commités : refaits, ajoutés.
+  RÈGLE : tout fichier .json d'outil (base/, items) doit être ajouté avec `git add -f`.
+- Résultat sur les 13 cours (+ ondes_lumineuses, math_ch1-ch3) : « blocs : OK » et « cadre : OK » partout ; preparer_reponses verifier : seulement
+  voix et réactions manquantes ; node --check OK sur les 46 scripts des dossiers *-tableau.
+- À signaler : programme_semestre1 garde ondes_mecaniques_periodiques au statut « a_explorer » alors que phys_ch2_ondes_periodiques (témoin, voisé)
+  existe : statut à corriger par la session principale (non touché ici).
+- Reste pour tous : réactions (serveur), voix, validation, lecture dans /dev/course-player.
+
