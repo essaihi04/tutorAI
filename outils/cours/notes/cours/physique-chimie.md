@@ -466,7 +466,7 @@ contrat : cours/etat_equilibre_contrat_simulations.md ; tout refaire : `sh outil
   equilibre), quotient (10 vues : definition … pile ; poignée x en au_cours), equilibre (concentrations|qr_eq|expression|national_2017|base|national_2021),
   constante (trois_c|produits|definition|inverse|c_tau|autre_acide), conductimetrie (relation|calcul|national), facteurs (dilution|nature|courbe[poignée C,
   set_parameters {C} en mol/L]|bilan_dilution), figures (?fig=fig_2017R), bilan, carte. node --check OK (9 pages + commun.js) ; chaque page testée headless
-  par son agent ; verif_sims.js diapositive par diapositive : VOIR LIGNE SUIVANTE.
+  par son agent ; verif_sims.js (Playwright) diapositive par diapositive : 36/36 ok, « AUCUN PROBLÈME » (moments, repères, encre, pas d'erreur JS).
 - programme_semestre1 : etat_equilibre → « construit », phys_ch12_etat_equilibre (prog.py).
 - PRÊT POUR LA VOIX : OUI (36 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
 - Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : acides_bases (exploration à faire).
