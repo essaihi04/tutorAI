@@ -3,6 +3,8 @@ import QuestionMemoire, { CRAIE, Formule, type ResultatQuestion } from './Questi
 import { noter, type BlocCours, type QuestionMemoire as Q, type ReponsesPreparees } from './api';
 import type { ReactionPreparee } from '../types';
 import type { EnteteCahier } from '../cahier';
+import { taire } from './voix';
+import SansDefilement from '../SansDefilement';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -108,7 +110,9 @@ export interface PlaceBloc { coursId: string; seanceId: string; seance: number; 
  * `onSaturation` : deux réponses fausses de suite, réponses trop rapides ou longue inactivité (déjà noté ici) ;
  * le lecteur passe alors à la pause s'il le veut. `onFini` : le bloc est bouclé.
  */
-export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titreCours = '', onDire, onJouer, reactions, onFini, onSaturation, entetes }: {
+export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titreCours = '', onDire, onJouer, reactions, onFini, onSaturation, entetes, onFermer }: {
+  /** × en haut à droite (12 novembre 2026) : l'élève ferme la fenêtre et revient au cours */
+  onFermer?: () => void;
   bloc: BlocCours; place: PlaceBloc; etapeInitiale?: EtapeBloc; titreCours?: string;
   entetes?: (slideId: string) => EnteteCahier | undefined;
   onDire?: (parole: string) => void; onJouer?: (r: ReactionPreparee) => void;
@@ -158,10 +162,19 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
   if (!etape) return null;
   return (
     <div className="relative flex h-full min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-5 text-white md:p-7">
-      <OuEnEstOn seance={place.seance} nbSeances={place.nbSeances} bloc={place.bloc} nbBlocs={place.nbBlocs} etape={etape} />
+      {onFermer && (
+        <button type="button" onClick={() => { taire(); onFermer(); }} title="Fermer et revenir au cours" aria-label="Fermer"
+          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 hover:bg-white/20 hover:text-white">×</button>
+      )}
+      <div className={onFermer ? 'pr-10' : ''}>
+        <OuEnEstOn seance={place.seance} nbSeances={place.nbSeances} bloc={place.bloc} nbBlocs={place.nbBlocs} etape={etape} />
+      </div>
       {alerte && <p className="rounded-lg bg-sky-400/10 px-3 py-2 text-sm text-sky-100" style={{ fontFamily: 'system-ui, sans-serif' }}>{PHRASES_SATURATION[alerte]}</p>}
       {etape === 'cahier' && (
-        <TableauCahier bloc={bloc} entetes={entetes} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
+        // tout le cahier du bloc dans l'écran, sans défiler (user rule, 12 novembre 2026)
+        <SansDefilement agrandirMax={1.25}>
+          <TableauCahier bloc={bloc} entetes={entetes} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
+        </SansDefilement>
       )}
       {etape === 'retrouver' && bloc.retrouver && (
         <QuestionMemoire mode="retrouver" question={bloc.retrouver} titre={bloc.titre || titreCours} deckId={place.coursId} onDire={onDire}

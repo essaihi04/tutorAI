@@ -34,7 +34,15 @@ REGLES_VOIX = """RÈGLES DU TEXTE DIT (« parole ») — il est lu tel quel par 
   « trois millisecondes », « un virgule zéro deux mètre », « trois cent quarante mètres par seconde » ;
 - aucun chiffre, aucun symbole (= / × τ), aucun markdown, aucun tashkil ;
 - une phrase toute en français de plus de dix mots se coupe par des virgules.
-Exemple : « شوف، بعدتي M deux. دابا la distance هي un virgule zéro deux mètre، و tau ولا trois millisecondes. »"""
+Exemple : « شوف، بعدتي M deux. دابا la distance هي un virgule zéro deux mètre، و tau ولا trois millisecondes. »
+
+RÈGLES DE TOUT CE QUI EST ÉCRIT À L'ÉCRAN (« ecrit », « enonce », « choix », « affirmations », « explication »,
+« tableau », « cahier ») — l'élève le LIT, comme au tableau du prof (user rule, 12 novembre 2026) :
+- les relations et les calculs en ÉCRITURE MATHÉMATIQUE, avec chiffres et symboles, jamais en toutes lettres :
+  « g(x) = (2x² − 8)/(x − 2), x ≠ 2 », « lim_{x→2} g(x) = 8 », « τ = d/v », « f′(x) = 3x² », « √x », « eˣ », « +∞ » ;
+- les nombres en chiffres et les unités en symboles : « 8 », « 0,5 », « 3 ms », « 340 m/s » ;
+- les mots des règles de la voix (« égale », « au carré », « divisé par », « tend vers », « huit ») n'apparaissent
+  JAMAIS dans l'écrit : ils ne vont que dans « parole »."""
 
 
 RETOUR = '{"ecrit": "...", "parole": "..."}'

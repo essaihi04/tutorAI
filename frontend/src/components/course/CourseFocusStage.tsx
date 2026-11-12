@@ -11,6 +11,7 @@ import { Formule } from './Formule';
 import DemonstrationPleine, { type LectureDemo } from './DemonstrationPleine';
 import type { EnteteCahier } from './cahier';
 import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
+import SansDefilement from './SansDefilement';
 
 /**
  * Le mode CONCENTRATION d'une diapositive (8 novembre 2026, demande de l'utilisateur).
@@ -1578,11 +1579,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         )}
 
         {/* ── La question de l'élève expliquée au tableau ── */}
-        {tableauProf?.mode === 'diapo' && tableauProf.etape !== 'exercice' && (
-          <TableauDuProf t={tableauProf} lignesRef={lignesProfRef} onTexte={() => setTableauProf(t => t && { ...t, texte: !t.texte })}
-            onAutre={autreQuestion} onContinuer={reprendreApresQuestion} />
-        )}
-        {(tableauProf?.mode === 'efface' || tableauProf?.etape === 'exercice') && (
+        {/* Grand tableau devant la diapositive, toujours (user rule, 12 novembre 2026) : plus de petit cadre sous la figure. */}
+        {tableauProf && (
           <div className="absolute inset-y-0 left-3 z-30 flex flex-col pb-2" style={{ right: tuteur3D ? COLONNE_TUTEUR + 4 : 12 }}>
             <TableauDuProf t={tableauProf!} lignesRef={lignesProfRef} plein onFini={exerciceFini} onTexte={() => setTableauProf(t => t && { ...t, texte: !t.texte })}
               onAutre={autreQuestion} onContinuer={reprendreApresQuestion} />
@@ -2209,7 +2207,7 @@ function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContin
   const brosse = t.etape === 'brosse';
   const fond = '#0f2219';
   return (
-    <section className={`relative flex flex-col overflow-hidden rounded-2xl ${plein ? 'flex-1' : 'tableau-questions w-full max-w-4xl shrink-0'} ${brosse ? '' : 'border-2 border-amber-200/40 shadow-2xl'}`}
+    <section className={`relative flex flex-col overflow-hidden rounded-2xl ${plein ? (brosse ? 'flex-1' : 'tableau-questions flex-1') : 'tableau-questions w-full max-w-4xl shrink-0'} ${brosse ? '' : 'border-2 border-amber-200/40 shadow-2xl'}`}
       style={{ fontFamily: CRAIE, background: brosse ? 'transparent' : fond, maxHeight: plein ? undefined : '42%', minHeight: plein ? undefined : 120 }}>
       {brosse && (
         <>
@@ -2241,11 +2239,14 @@ function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContin
               <button onClick={onContinuer} className="rounded-full bg-emerald-500/30 px-3 py-1 hover:bg-emerald-500/40">Continuer le cours</button>
             </div>
           </div>
-          <div className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4 ${plein && !enExercice ? 'justify-center' : ''}`}>
+          {/* Tout le tableau dans l'écran, sans défiler (user rule, 12 novembre 2026) : l'écriture prend la taille qui
+              tient avec TOUTES ses lignes (les lignes pas encore écrites gardent leur place, invisibles : rien ne saute). */}
+          <SansDefilement className="px-6 py-4" centrer={plein && !enExercice} agrandirMax={enExercice ? 1 : 1.6}>
+           <div className="flex flex-col gap-2">
             {t.etape === 'prepare' && <p className="animate-pulse text-xl text-white/60">Le professeur prépare le tableau…</p>}
-            {t.lignes.slice(0, t.vues).map((l, i) => (
-              <p key={i} ref={el => { lignesRef.current[i] = el; }} className="craie-ecrit" dir="auto"
-                style={{ fontSize: enExercice ? 18 : plein ? 30 : 24, color: /[=→]/.test(l) ? '#fef9c3' : '#f1f5e9', lineHeight: 1.35, opacity: enExercice ? .7 : 1 }}>
+            {t.lignes.map((l, i) => (
+              <p key={i} ref={el => { lignesRef.current[i] = el; }} className={i < t.vues ? 'craie-ecrit' : ''} dir="auto" aria-hidden={i >= t.vues || undefined}
+                style={{ fontSize: enExercice ? 18 : 26, color: /[=→]/.test(l) ? '#fef9c3' : '#f1f5e9', lineHeight: 1.35, opacity: enExercice ? .7 : 1, visibility: i < t.vues ? 'visible' : 'hidden' }}>
                 <Formule t={l} />
               </p>
             ))}
@@ -2258,7 +2259,8 @@ function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContin
                 {t.parole && <p dir="auto" className="mt-2 whitespace-pre-wrap text-white/60">{t.parole}</p>}
               </div>
             )}
-          </div>
+           </div>
+          </SansDefilement>
         </>
       )}
     </section>

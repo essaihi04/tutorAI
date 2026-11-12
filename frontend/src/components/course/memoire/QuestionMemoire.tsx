@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ChampReponse from '../SaisieReponse';
 import { jugerReponseLibre, type QuestionMemoire as Q, type ReponsesPreparees } from './api';
 import type { Demonstration, ReactionPreparee } from '../types';
@@ -38,6 +38,22 @@ const choixDe = (q: Q): string[] | null => {
 
 const REFLECHIS_S = 8;
 
+/** La correction d'un « retrouver » écrite au tableau : la formule attendue coupée en lignes, puis l'explication. */
+function correctionDe(attendu: string, explication?: string): Demonstration {
+  const lignes = [...attendu.split(/\s*(?:[;\n]|(?<=\.)\s+(?=[A-ZÀ-Ý]))\s*/), ...(explication ? [explication] : [])]
+    .map(t => t.trim()).filter(Boolean).map(texte => ({ texte, mot: '' }));
+  return { parole: lignes.map(l => l.texte).join(' '), lignes };
+}
+
+/** Sans piste : les lignes s'écrivent à la craie, une toutes les 2,5 s (la voix vient de dire la réaction). */
+function lectureMuette(d: Demonstration): LectureDemo {
+  const n = Math.max(1, d.parole.length), duree = d.lignes.length * 2500 + 800, t0 = performance.now();
+  let finir: () => void = () => {};
+  const fin = new Promise<void>(ok => { finir = ok; });
+  const id = window.setTimeout(() => finir(), duree);
+  return { position: () => Math.min(1, (performance.now() - t0) / duree) * n, fin, arreter: () => { window.clearTimeout(id); finir(); } };
+}
+
 export default function QuestionMemoire({ question, mode, titre = '', deckId, onResultat, onSuite, onDire, onJouer, reponses, libelleSuite = 'Suite →', suggestions }: {
   question: Q; mode: Mode; titre?: string; deckId?: string;
   /** où chercher les suggestions du clavier (bloc ou compétence, et la clé de la question) */
@@ -62,7 +78,10 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
   /** passée (12 novembre 2026) : notée seulement si l'élève s'en va sans y revenir (« ← Y revenir » l'annule) */
   const [passee, setPassee] = useState(false);
   // la démonstration, sur un tableau à part par-dessus la question, après la réaction (12 novembre 2026)
-  const demo = (question.demonstration as Demonstration | undefined)?.lignes?.length ? question.demonstration as Demonstration : null;
+  const demoPreparee = (question.demonstration as Demonstration | undefined)?.lignes?.length ? question.demonstration as Demonstration : null;
+  // « Retrouver » sans démonstration : la correction s'écrit quand même au tableau, ligne par ligne (12 novembre 2026)
+  const demo = useMemo(() => demoPreparee || (mode === 'retrouver' && question.attendu ? correctionDe(question.attendu, question.explanation) : null),
+    [demoPreparee, mode, question.attendu, question.explanation]);
   const [lectureDemo, setLectureDemo] = useState<LectureDemo | null>(null);
   const [demoOuverte, setDemoOuverte] = useState<'non' | 'dite' | 'revoir'>('non');
 
@@ -85,7 +104,7 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
     setFini(r); onResultat(r);
     // la démonstration s'écrit après la réaction dite, sur son propre tableau
     if (demo && !r.passee) {
-      void attendreLaFin().then(() => { setLectureDemo(lireDemonstration(demo)); setDemoOuverte('dite'); });
+      void attendreLaFin().then(() => { setLectureDemo(demo === demoPreparee ? lireDemonstration(demo) : lectureMuette(demo)); setDemoOuverte('dite'); });
     }
   };
   const passer = () => { if (fini || attente) return; taire(); setPassee(true); };

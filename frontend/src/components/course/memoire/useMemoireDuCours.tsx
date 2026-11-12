@@ -118,7 +118,9 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
       rendu = <CycleBloc key={`${s.id}:${b.id}`} bloc={b} etapeInitiale={e.etape} titreCours={deck?.title} onDire={direTexte} onJouer={jouerReaction} reactions={reactions}
         entetes={id => enteteDuCahier(deck, id)}
         place={{ coursId: deckId, seanceId: s.id, seance: e.seance, nbSeances: seances.length, bloc: e.bloc, nbBlocs: s.blocs.length }}
-        onFini={() => finDuCycle(e)} />;
+        onFini={() => finDuCycle(e)}
+        // fermé par l'élève (12 novembre 2026) : le cours reprend ; le serveur garde ce qui n'est pas fait (reprise)
+        onFermer={() => finDuCycle({ ...e, puis: 'suite' })} />;
     }
   } else if (ecran?.genre === 'fin') {
     const e = ecran;
