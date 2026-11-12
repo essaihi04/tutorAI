@@ -93,6 +93,31 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
   RC·du_C/dt + u_C = E puis forme des corrigés ; pas de ln u_C = f(t) ; énergie ½ C u_C² admise ; analyse dimensionnelle de τ (1 diapo) ; en décharge
   i < 0 avec le sens de la charge (2018 N fait l'autre choix) ; prérequis « fonction_exponentielle » à ajouter. Erreurs dans 2 corrigés du dépôt :
   2024 R (10⁻⁴ F = 0,10 µF) et 2023 R (7,2·10⁻⁶ J = 0,72 mJ). Reste : cadre, contrat + simulations, cours JSON, blocs, items, contrôles.
+- 12 nov. (routine cloud, 2ᵉ passage) : COURS CONSTRUIT → backend/data/courses/phys_ch6_dipole_RC.json (draft, concentration) : 48 diapositives
+  (plan de l'exploration, préfixe rc_), 48 questions, 25 prédictions, 27 exercices, démonstration sur chaque calcul ; 10 parties (I condensateur,
+  II associations + courant constant, III échelon, IV équation différentielle, V solution, VI τ et décharge, VII lire les courbes, VIII énergie,
+  IX deux nationaux 2019 N / 2021 R, X bilan + carte) ; compétences C1-C8 (cadre RC1-RC9). Build : dipole_RC_build/ (p1…p4.py écrits par 4
+  sous-agents, check_part.py ; refaire : `python3 dipole_RC_build/build.py --garder-reponses` puis ajouts.py + `blocs.py appliquer`).
+- Cadre : chapitres.dipole_RC ajoutée (dipole_RC_build/cadre_rc.py : RC1-RC9, 24 formules, 20 mots hors cadre, 7 décisions).
+  controler_cadre → « cadre : OK » (471 « à relire » non bloquants : applications numériques, lectures dites). programme_semestre1 : construit.
+- Simulations (frontend/public/media/simulations/physics/dipole-rc-tableau/, contrat cours/dipole_RC_contrat_simulations.md, 3 sous-agents) :
+  condensateur (plaques|charge), intensite, generateur-courant, circuit-rc (montage|charge|decharge), courbe-charge (tableau|R|tangente|pourcent),
+  quatre-courbes (q_i|uC_uR|quatre|descente), continuite (enchaine|decharge), energie (lampe|calcul), figures (23 ?fig=), bilan (8 blocs), carte.
+  node --check OK ; chaque page testée en headless par son agent (moments, repères, rien hors cadre).
+- Méthode des blocs : ajouts.py (blocs_s1..s4.json des agents + rappels du plan de l'exploration, C2_r4 réécrit pour ne pas écrire « I₀ = q/C »)
+  → methode_blocs/ajouts/phys_ch6_dipole_RC.json : 4 séances × 3 blocs × 4 diapositives, 29 rappels, 25 prédictions / 48. blocs.py verifier →
+  « cadre : OK », « blocs : OK ». preparer_reponses verifier : seulement voix et réactions manquantes.
+- Réactions : items seulement → dipole_RC_build/items_cours.json (403), items_blocs.json (89), demos_blocs.json (3). À écrire sur le serveur.
+- verifier_texte_corpus : 272 mots à revoir ; darija rare surtout des formes conjuguées ou négatives (كتنقزش, كيدوزش, فالطلوع…) une ou deux fois
+  chacune, et termes du programme (additivité, échelon, transitoire, microfarads…) : gardés, à écouter au contrôle des murmures.
+- PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- À valider (en plus des décisions de l'exploration et du cadre) : bilan et carte en slide_type « evaluation », rattachés à C1 ; e8 (2023 R) répond
+  « dq/dt + (1/RC)·q = E/R » et la case décharge de q écrit « RC·dq/dt + q = 0 » (formes hors de la liste du cadre, « à relire ») ; questions de
+  prédiction changées pour ne pas être soufflées par la simulation (s6 : u_C à 2τ ; s8 : quelle courbe a la forme de i ; t2 : C doublé) ; c2 « qu'indique » ;
+  g2 « que vaut C ? » ; exercice 2018 N placé sur a2 ; fig_energie_2023R non utilisée (l8 garde energie?vue=calcul) ; quelques lectures d'équations
+  dites > 10 mots sans virgule (comme le « dit » du cadre).
+- Note dépôt : les fichiers *.json hors backend/data sont ignorés par .gitignore : les items, ajouts et blocs_s*.json sont ajoutés avec `git add -f`.
+  Les items de radioactivite et operations_formes (perdus aux passages précédents) ont été régénérés et commités ce passage.
 
 ## energie_nucleaire
 (sous-agent Opus du cours phys_ch5_energie_nucleaire, « Noyaux, masse et énergie » ; outils : cours/energie_nucleaire_build/)
