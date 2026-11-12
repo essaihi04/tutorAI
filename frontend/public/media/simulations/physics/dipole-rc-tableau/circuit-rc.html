@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le circuit RC — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le montage RC : un générateur E, un interrupteur K à deux positions (1 : charge, 2 : R et C seuls), un résistor R et un condensateur C ; les flèches i, u_R et u_C ; à droite un écran d’acquisition (entrée Y et masse) où s’enregistre u_C(t) : la charge en rouge, la décharge en bleu"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le montage RC, l’acquisition, la charge et la décharge (cours « Dipôle RC », 2e Bac PC BIOF, novembre 2026).
+ * Valeurs : E = 12 V, R = 1 kΩ, C = 220 µF → τ = R·C = 0,22 s ; u_C(τ) = 0,63·E = 7,56 V.
+ * Vues (?vue=) :
+ *  - montage (défaut) : le circuit se dessine (positions 1 et 2), les flèches i, u_R, u_C (convention récepteur),
+ *    l’acquisition (entrée Y à la tête de flèche de u_C, masse à l’autre borne), les échelons de tension.
+ *  - charge : K passe en position 1 ; u_C(t) = E(1 − e^{−t/τ}) s’enregistre en rouge ; palier E, régimes.
+ *  - decharge : condensateur chargé ; K passe en position 2 ; u_C(t) = E·e^{−t/τ} s’enregistre en bleu.
+ * L’axe des temps de l’écran est gradué en valeurs rondes qui ne tombent pas sur τ. La courbe s’enregistre en 4 s réelles
+ * (ralenti : le temps de l’écran va de 0 à la fin de l’axe pendant l’animation « courbe_charge » / « courbe_decharge »).
+ * Paramètres : vue ; K (1 | 2 : bascule et enregistre) ; R_ohm (100 → 10000) ; C_uF (10 → 1000) ; E (1 → 12 V).
+ * Poignée : l’interrupteur K (un clic le bascule : 1 → charge, 2 → décharge).
+ */
+/* ── Moteur du déroulé (commun aux pages « appareils » de ce dossier, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Condensateur chimique bleu (vu de côté, debout) avec ses deux pattes ; bande claire « − ». */
+  chimique(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 14); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 18); ctx.stroke();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.fillStyle = '#0b2a6b'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .74, y + 10 + k * (h - 20) / 3, w * .08, 2.4);
+    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.2, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+const q0 = new URLSearchParams(location.search);
+const VUES = ['montage', 'charge', 'decharge'];
+const TITRES = { montage: 'le montage', charge: 'la charge', decharge: 'la décharge' };
+const S2 = { R: 1000, C: 220, E: 12 };
+{ const r = +q0.get('R_ohm'), c = +q0.get('C_uF'), e = +q0.get('E'); if (r >= 100 && r <= 10000) S2.R = Math.round(r); if (c >= 10 && c <= 1000) S2.C = Math.round(c); if (e >= 1 && e <= 12) S2.E = Math.round(e * 10) / 10; }
+const tau = () => S2.R * S2.C * 1e-6;
+/** Axe des temps : graduations rondes, ≤ 8, aucune ne tombe sur τ. */
+function axeT() {
+  const v = 6.4 * tau();
+  for (const e of [-4, -3, -2, -1, 0, 1]) for (const m of [1, 2, 2.5, 5]) {
+    const s = m * 10 ** e, n = Math.ceil(v / s - 1e-9), r = tau() / s;
+    if (n <= 8 && Math.abs(r - Math.round(r)) > 1e-6) return { max: n * s, pas: s, n };
+  }
+  return { max: v, pas: v / 5, n: 5 };
+}
+function axeU() { const p = S2.E > 6 ? 2 : S2.E > 3 ? 1 : .5; return { max: (Math.floor(S2.E / p + 1e-9) + 1) * p, pas: p }; }
+const fR = r => (r >= 1000 ? `${fx(r / 1000, 2)} kΩ` : `${r} Ω`);
+const ETAPES = {
+  montage: [
+    { nom: 'montage', anim: .6, motif: 'le montage : positions 1 et 2', bulle: () => 'Le montage : un générateur, un interrupteur à deux positions, R et C.' },
+    { nom: 'fleches', anim: 0, motif: 'i, u_R, u_C en convention récepteur', bulle: () => 'On oriente : le courant i, puis les tensions.' },
+    { nom: 'acquisition', anim: 0, motif: 'entrée Y et masse', bulle: () => 'Pour voir u_C, on le relie à l’écran d’acquisition.' },
+    { nom: 'echelon', anim: 0, motif: 'échelon montant, échelon descendant', bulle: () => 'Quand on bascule K, la tension appliquée saute d’un coup.' },
+  ],
+  charge: [
+    { nom: 'bascule_1', anim: .7, motif: 'K en position 1 : la charge commence', bulle: () => 'K passe en position 1 !' },
+    { nom: 'courbe_charge', anim: 4.0, motif: 'u_C(t) s’enregistre : montée rapide, puis de plus en plus lente', bulle: () => 'u_C(t) s’enregistre…' },
+    { nom: 'regime_permanent', anim: 0, motif: 'régime permanent : u_C = E ; i = 0', bulle: () => 'Au bout d’un moment, u_C ne bouge plus.' },
+  ],
+  decharge: [
+    { nom: 'bascule_2', anim: .7, motif: 'K en position 2 : R et C seuls', bulle: () => 'Le condensateur est chargé ; K passe en position 2 !' },
+    { nom: 'courbe_decharge', anim: 4.0, motif: 'u_C(t) descend de E vers 0', bulle: () => 'u_C(t) s’enregistre…' },
+  ],
+};
+const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const XG = 50, YH = 72, YB = 300, C1 = [140, 72], C2 = [140, 128], PV = [205, 100], LG = 66;
+const GEN = { x: 22, y: 150, w: 56, h: 80 }, RES = { x: 230, y: 91, w: 70, h: 18 }, XC = 360, YA = 180, YBP = 194;
+const SCR = { x: 430, y: 40, w: 320, h: 270 }, O = { x: 480, y: 270, w: 250, h: 190 };
+const EY = [438, 130], MA = [438, YB];
+let MO = null;
+const PX = t => O.x + t * O.w / axeT().max, PY = u => O.y - u * O.h / axeU().max;
+/** Position du levier : 1 ou 2 (fraction de 0 = position 2 à 1 = position 1). */
+function levier() {
+  const S = MO.S;
+  if (S.vue === 'montage') return 0;
+  if (S.vue === 'charge') return lisse(MO.p('bascule_1'));
+  return 1 - lisse(MO.p('bascule_2'));
+}
+const positionK = () => (levier() > .5 ? 1 : 2);
+/** Temps de l’écran (s) et tension u_C affichée. */
+function tEcran() {
+  const S = MO.S, ax = axeT();
+  if (S.vue === 'charge') return MO.commence('courbe_charge') ? ax.max * MO.p('courbe_charge') : 0;
+  if (S.vue === 'decharge') return MO.commence('courbe_decharge') ? ax.max * MO.p('courbe_decharge') : 0;
+  return 0;
+}
+function uC() {
+  const S = MO.S, t = tEcran();
+  if (S.vue === 'charge') return S2.E * (1 - Math.exp(-t / tau()));
+  if (S.vue === 'decharge') return S2.E * Math.exp(-t / tau());
+  return 0;
+}
+const iA = () => { const S = MO.S, t = tEcran(); if (S.vue === 'charge' && MO.commence('courbe_charge')) return S2.E / S2.R * Math.exp(-t / tau()); if (S.vue === 'decharge' && MO.commence('courbe_decharge')) return -S2.E / S2.R * Math.exp(-t / tau()); return 0; };
+
+/* ── Peinture : écran d’acquisition ──────────────────────────────────── */
+function ecranPeint(ctx, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(SCR.x + 4, SCR.y + 5, SCR.w, SCR.h, 12); ctx.fill();
+  const g = ctx.createLinearGradient(SCR.x, SCR.y, SCR.x + SCR.w, SCR.y + SCR.h); g.addColorStop(0, '#16222c'); g.addColorStop(1, '#0a1016');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(SCR.x, SCR.y, SCR.w, SCR.h, 12); ctx.fill();
+  ctx.strokeStyle = '#3d4852'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,200,255,.06)'; ctx.lineWidth = 1;   // grille légère de l’écran (pour l’œil)
+  for (let x = SCR.x + 24; x < SCR.x + SCR.w; x += 24) { ctx.beginPath(); ctx.moveTo(x, SCR.y + 6); ctx.lineTo(x, SCR.y + SCR.h - 6); ctx.stroke(); }
+  for (let y = SCR.y + 24; y < SCR.y + SCR.h; y += 24) { ctx.beginPath(); ctx.moveTo(SCR.x + 6, y); ctx.lineTo(SCR.x + SCR.w - 6, y); ctx.stroke(); }
+  Peint.sphere(ctx, EY[0], EY[1], 5.5, ['#ffd0d0', '#e0393e', '#6d0f12']); Peint.sphere(ctx, MA[0], MA[1], 5.5, ['#9aa0a6', '#2b2f33', '#050607']);
+  ctx.restore();
+}
+function appareils(c, a) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.generateur(ctx, GEN.x, GEN.y, GEN.w, GEN.h, `${fx(S2.E, 1)}V`, a);
+    Peint.borne(ctx, XG, GEN.y, true, a); Peint.borne(ctx, XG, GEN.y + GEN.h, false, a);
+    Peint.resistor(ctx, RES.x, RES.y, RES.w, RES.h, S2.R, a);
+    Peint.chimique(ctx, 292, 166, 26, 44, a);
+    Peint.plot(ctx, C1[0], C1[1], a); Peint.plot(ctx, C2[0], C2[1], a);
+    const a1 = Math.atan2(C1[1] - PV[1], C1[0] - PV[0]), a2 = Math.atan2(C2[1] - PV[1], C2[0] - PV[0]), an = a2 + (a1 - a2) * levier();
+    if (a > .05) Peint.levier(ctx, PV[0], PV[1], PV[0] + LG * Math.cos(an), PV[1] + LG * Math.sin(an), a);
+  });
+}
+
+/* ── La craie ────────────────────────────────────────────────────────── */
+function fils(c) {
+  c.trait([[XG, GEN.y], [XG, YH], [C1[0], YH]], { largeur: 2 });
+  c.ligne(XG, GEN.y + GEN.h, XG, YB, { largeur: 2 });
+  c.ligne(C2[0], C2[1], C2[0], YB, { largeur: 2 });
+  c.ligne(XG, YB, XC, YB, { largeur: 2 });
+  c.ligne(PV[0], PV[1], RES.x, PV[1], { largeur: 2 });
+  c.trait([[RES.x + RES.w, PV[1]], [XC, PV[1]], [XC, YA]], { largeur: 2 });
+  c.ligne(XC, YBP, XC, YB, { largeur: 2 });
+  c.ligne(XC - 22, YA, XC + 22, YA, { largeur: 3.4 }); c.ligne(XC - 22, YBP, XC + 22, YBP, { largeur: 3.4 });
+  c.point(C2[0], YB, 3.4); c.point(XC, YB, 3.4);
+  c.texte('1', C1[0] - 10, C1[1] - 6, { couleur: 'rouge', taille: 18, align: 'right' });
+  c.texte('2', C2[0] - 10, C2[1] + 16, { couleur: 'bleu', taille: 18, align: 'right' });
+  c.texte('K', PV[0] + 4, PV[1] + 26, { couleur: 'blanc', taille: 18 });
+  c.texte(`E = ${fx(S2.E, 1)} V`, 84, 196, { couleur: 'blanc', taille: 15, max: 52 });
+  c.texte(`R = ${fR(S2.R)}`, RES.x + RES.w / 2, 132, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte(`C = ${S2.C} µF`, 300, 254, { couleur: 'blanc', taille: 15, align: 'center' });
+}
+function fleches(c, sansI) {
+  if (!sansI) { c.fleche(310, PV[1], 344, PV[1], { couleur: 'blanc', largeur: 2, tete: 9 }); c.texte('i', 326, PV[1] - 8, { couleur: 'blanc', taille: 17, align: 'center' }); }
+  c.fleche(RES.x + RES.w, 78, RES.x, 78, { couleur: 'vert', largeur: 1.8, tete: 9 }); c.texte('u_R', RES.x + RES.w / 2, 70, { couleur: 'vert', taille: 17, align: 'center' });
+  c.fleche(394, 214, 394, 164, { couleur: 'jaune', largeur: 1.8, tete: 9 }); c.texte('u_C', 400, 196, { couleur: 'jaune', taille: 17 });
+}
+function filsAcquisition(c) {
+  c.ligne(XC, 130, EY[0] - 6, EY[1], { largeur: 1.8 }); c.point(XC, 130, 3.4);
+  c.ligne(XC, YB, MA[0] - 6, MA[1], { largeur: 1.8 });
+  c.texte('entrée Y', 396, 122, { couleur: 'rouge', taille: 14, align: 'center' });
+  c.texte('masse', 396, YB - 8, { couleur: 'blanc', taille: 14, align: 'center' });
+}
+function axesEcran(c) {
+  const ax = axeT(), au = axeU(), tg = [], ug = [];
+  for (let k = 1; k <= ax.n; k++) { const v = k * ax.pas; tg.push([v / ax.max * O.w / (O.w + 12), k % 2 && ax.n > 6 ? null : fx(v, 3)]); }
+  for (let v = au.pas; v <= au.max + 1e-9; v += au.pas) ug.push([v / au.max * O.h / (O.h + 12), fx(v, 1)]);
+  c.axe(O.x, O.y, O.x + O.w + 12, O.y, tg, { taille: 12 });
+  c.axe(O.x, O.y, O.x, O.y - O.h - 12, ug, { taille: 12, vertical: true });
+  c.texte('0', O.x - 6, O.y + 16, { couleur: 'faible', taille: 12, align: 'right' });
+  c.texte('u_C (V)', O.x + 8, O.y - O.h - 2, { couleur: 'blanc', taille: 15 });
+  c.texte('t (s)', SCR.x + SCR.w - 8, O.y - 8, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte('écran d’acquisition', SCR.x + SCR.w - 10, SCR.y + SCR.h - 8, { couleur: 'faible', taille: 13, align: 'right' });
+}
+function echelons(c) {
+  const h = 38, y0 = 388;
+  // Montant : 0 avant t = 0, E après.
+  c.fleche(442, y0, 580, y0, { couleur: 'faible', largeur: 1.3, tete: 7 }); c.fleche(482, y0 + 4, 482, y0 - h - 12, { couleur: 'faible', largeur: 1.3, tete: 7 });
+  c.trait([[444, y0 - 1], [482, y0 - 1], [482, y0 - h], [574, y0 - h]], { couleur: 'rouge', largeur: 2.4 });
+  c.texte('E', 476, y0 - h + 5, { couleur: 'blanc', taille: 14, align: 'right' }); c.texte('t', 584, y0 + 4, { couleur: 'faible', taille: 13 });
+  c.texte('échelon de tension montant', 512, 414, { couleur: 'rouge', taille: 14, align: 'center', max: 150 });
+  // Descendant : E puis 0.
+  c.fleche(606, y0, 744, y0, { couleur: 'faible', largeur: 1.3, tete: 7 }); c.fleche(646, y0 + 4, 646, y0 - h - 12, { couleur: 'faible', largeur: 1.3, tete: 7 });
+  c.trait([[608, y0 - h], [646, y0 - h], [646, y0 - 1], [738, y0 - 1]], { couleur: 'bleu', largeur: 2.4 });
+  c.texte('E', 640, y0 - h + 5, { couleur: 'blanc', taille: 14, align: 'right' }); c.texte('t', 748, y0 + 4, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('échelon descendant', 676, 414, { couleur: 'bleu', taille: 14, align: 'center', max: 130 });
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(19);
+  const v = M.S.vue;
+  c.texte(`Le circuit RC : ${TITRES[v]}`, 14, 28, { couleur: 'cyan', taille: 20 });
+  const a = v === 'montage' ? lisse(M.p('montage')) : 1;
+  if (a > 0) c.direct(() => ecranPeint(c.ctx, a));
+  appareils(c, a);
+  if (v === 'montage') {
+    M.etape(c, 'montage', () => {
+      fils(c); axesEcran(c);
+      c.texte('position 1 : charge (le générateur E est dans le circuit)', 14, 330, { couleur: 'rouge', taille: 15, max: 405 });
+      c.texte('position 2 : R et C seuls (décharge)', 14, 352, { couleur: 'bleu', taille: 15, max: 405 });
+    });
+    M.etape(c, 'fleches', () => { fleches(c); c.texte('convention récepteur : u_R et u_C opposées à i', 14, 376, { couleur: 'vert', taille: 15, max: 405 }); });
+    M.etape(c, 'acquisition', () => { filsAcquisition(c); c.texte('tête de flèche → entrée ; l’autre borne → masse', 14, 402, { couleur: 'jaune', taille: 15, max: 405 }); });
+    M.etape(c, 'echelon', () => echelons(c));
+  } else {
+    fils(c); fleches(c, true); filsAcquisition(c); axesEcran(c);
+    // La flèche i : rouge dès la position 1 (charge), bleue pendant la décharge (i < 0).
+    c.direct(() => {
+      const col = v === 'charge' ? (M.commence('bascule_1') && positionK() === 1 ? 'rouge' : 'faible') : (M.commence('courbe_decharge') ? 'bleu' : 'faible');
+      c.fleche(310, PV[1], 344, PV[1], { couleur: col, largeur: col === 'faible' ? 2 : 2.8, tete: 9 }); c.texte('i', 326, PV[1] - 8, { couleur: col, taille: 17, align: 'center' });
+      if (v === 'decharge' && M.commence('courbe_decharge')) c.texte('i < 0', 350, PV[1] - 26, { couleur: 'bleu', taille: 16 });
+      // L’enregistrement sur l’écran et la lecture.
+      const t = tEcran(), E = S2.E, T = tau();
+      if (v === 'charge' && M.commence('courbe_charge')) c.courbe(u => [PX(u * t), PY(E * (1 - Math.exp(-u * t / T)))], 90, { couleur: 'rouge', largeur: 2.6 });
+      if (v === 'decharge') {
+        if (M.commence('courbe_decharge')) c.courbe(u => [PX(u * t), PY(E * Math.exp(-u * t / T))], 90, { couleur: 'bleu', largeur: 2.6 });
+        else c.point(PX(0), PY(E), 4.5, 'bleu');
+      }
+      c.texte(`u_C = ${fr(uC(), 2)} V`, SCR.x + SCR.w - 10, SCR.y + 22, { couleur: 'jaune', taille: 15, align: 'right' });
+    });
+    if (v === 'charge') {
+      M.etape(c, 'bascule_1', () => c.texte('K en position 1 : la flèche i s’allume, la charge commence', 14, 338, { couleur: 'rouge', taille: 16, max: 405 }));
+      M.etape(c, 'courbe_charge', () => c.texte('u_C monte vite, puis de plus en plus lentement', 14, 364, { couleur: 'blanc', taille: 16, max: 405 }));
+      M.etape(c, 'regime_permanent', () => {
+        const ax = axeT(), x5 = PX(Math.min(5 * tau(), ax.max));
+        c.ligne(O.x, PY(S2.E), O.x + O.w, PY(S2.E), { couleur: 'blanc', largeur: 1.4, pointille: [6, 5] });
+        c.texte(`E = ${fx(S2.E, 1)} V`, O.x + 6, PY(S2.E) - 6, { couleur: 'blanc', taille: 14 });
+        c.cote(O.x, O.y - 34, x5, O.y - 34, '', { couleur: 'orange', largeur: 1.4 });
+        c.texte('régime transitoire', (O.x + x5) / 2 + 10, O.y - 42, { couleur: 'orange', taille: 14, align: 'center' });
+        c.texte('régime permanent', SCR.x + SCR.w - 10, PY(S2.E) + 22, { couleur: 'vert', taille: 14, align: 'right' });
+        c.texte('régime permanent : u_C = E ; i = 0', 14, 390, { couleur: 'vert', taille: 17, max: 405 });
+        c.texte('avant : régime transitoire', 14, 412, { couleur: 'orange', taille: 15, max: 405 });
+      });
+    } else {
+      c.texte(`condensateur chargé : u_C = E = ${fx(S2.E, 1)} V`, 14, 330, { couleur: 'blanc', taille: 15, max: 405 });
+      M.etape(c, 'bascule_2', () => c.texte('K en position 2 : R et C seuls, sans générateur', 14, 356, { couleur: 'bleu', taille: 16, max: 405 }));
+      M.etape(c, 'courbe_decharge', () => {
+        c.texte('u_C descend de E vers 0 : la décharge', 14, 382, { couleur: 'bleu', taille: 16, max: 405 });
+        c.texte('le courant change de sens : i < 0', 14, 406, { couleur: 'bleu', taille: 15, max: 405 });
+      });
+    }
+  }
+  reperes(c, M);
+  return c.fin();
+}
+function reperes(c, M) {
+  const v = M.S.vue, ici = w => (v === w ? '' : ` (vue « ${w} »)`), ax = axeT(), x5 = PX(Math.min(5 * tau(), ax.max));
+  c.repere('generateur', GEN.x - 4, GEN.y - 6, 120, GEN.h + 12, `le générateur : E = ${fx(S2.E, 1)} V`);
+  c.repere('interrupteur', C1[0] - 22, 56, PV[0] - C1[0] + 50, 96, `l’interrupteur K, en position ${positionK()} (poignée : clic pour basculer)`);
+  c.repere('position_1', C1[0] - 24, C1[1] - 24, 34, 32, 'position 1 : charge, avec le générateur E');
+  c.repere('position_2', C2[0] - 24, C2[1] - 8, 34, 32, 'position 2 : R et C seuls (décharge)');
+  c.repere('resistance', RES.x - 4, RES.y - 4, RES.w + 8, 46, `le résistor : R = ${fR(S2.R)}`);
+  c.repere('condensateur', 286, 160, 100, 104, `le condensateur : C = ${S2.C} µF`);
+  c.repere('fleche_i', 306, PV[1] - 26, 42, 34, 'la flèche du courant i');
+  c.repere('fleche_uR', RES.x - 6, 56, RES.w + 12, 30, 'la flèche u_R, opposée à i (convention récepteur)');
+  c.repere('fleche_uC', 384, 158, 44, 62, 'la flèche u_C, opposée à i (convention récepteur)');
+  c.repere('entree_Y', 366, 106, 82, 32, 'l’entrée Y, reliée à la tête de flèche de u_C');
+  c.repere('masse', 366, YB - 26, 82, 34, 'la masse, reliée à l’autre borne du condensateur');
+  c.repere('ecran', SCR.x, SCR.y, SCR.w, SCR.h, 'l’écran d’acquisition : u_C(t)');
+  c.repere('courbe', O.x, O.y - O.h, O.w, O.h, v === 'decharge' ? 'la courbe u_C(t) de la décharge (bleue)' : `la courbe u_C(t) de la charge (rouge)${ici('charge')}`);
+  c.repere('echelon', 436, 330, 316, 88, `les échelons de tension : montant (0 puis E) et descendant (E puis 0)${ici('montage')}`);
+  c.repere('palier_E', O.x, PY(S2.E) - 22, O.w, 30, `le palier u_C = E = ${fx(S2.E, 1)} V${ici('charge')}`);
+  c.repere('regime_transitoire', O.x, PY(S2.E), x5 - O.x, O.y - PY(S2.E), `le régime transitoire : u_C varie${ici('charge')}`);
+  c.repere('regime_permanent', x5, PY(S2.E) - 22, O.x + O.w - x5, 56, `le régime permanent : u_C = E ; i = 0${ici('charge')}`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, T = tau(), ax = axeT(), au = axeU();
+  const m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. E = ${fx(S2.E, 1)} V, R = ${fR(S2.R)}, C = ${S2.C} µF (τ = R·C = ${fx(T, 4)} s, non écrit au tableau).`];
+  m.push(`Montage : générateur (boîtier peint) ; interrupteur K en position ${positionK()} (1 : charge avec E ; 2 : R et C seuls) ; résistor peint (bandes de couleur) ; condensateur (symbole à la craie et condensateur chimique bleu) ; à droite l’écran d’acquisition, axes t (s, 0 à ${fx(ax.max, 3)}, pas ${fx(ax.pas, 3)}) et u_C (V, 0 à ${fx(au.max, 1)}).`);
+  const e = [];
+  if (v === 'montage') {
+    if (M.vu('montage')) e.push('le circuit, « 1 » et « 2 » aux deux positions de K, « position 1 : charge », « position 2 : R et C seuls (décharge) »');
+    if (M.vu('fleches')) e.push('les flèches i (vers le condensateur), u_R et u_C opposées à i, « convention récepteur »');
+    if (M.vu('acquisition')) e.push('l’entrée Y reliée à la borne de la tête de flèche de u_C, la masse à l’autre borne, « tête de flèche → entrée ; l’autre borne → masse »');
+    if (M.vu('echelon')) e.push('deux petits graphes : « échelon de tension montant » (0 puis E à t = 0, rouge) et « échelon descendant » (E puis 0, bleu)');
+  } else {
+    const t = tEcran();
+    m.push(`Écran : t = ${fx(t, 3)} s ; u_C = ${fr(uC(), 2)} V ; i = ${fr(iA() * 1000, 2)} mA. Flèche i ${v === 'charge' ? (M.commence('bascule_1') && positionK() === 1 ? 'allumée en rouge' : 'éteinte') : (M.commence('courbe_decharge') ? 'en bleu, « i < 0 »' : 'éteinte')}.`);
+    if (v === 'charge') {
+      if (M.commence('courbe_charge')) m.push(`Courbe rouge u_C(t) = E(1 − e^{−t/τ}) tracée jusqu’à t = ${fx(t, 3)} s.`);
+      if (M.vu('bascule_1')) e.push('« K en position 1 : la flèche i s’allume, la charge commence »');
+      if (M.vu('courbe_charge')) e.push('« u_C monte vite, puis de plus en plus lentement »');
+      if (M.vu('regime_permanent')) e.push(`palier E = ${fx(S2.E, 1)} V en pointillé, « régime transitoire » (de 0 à 5τ = ${fx(5 * T, 3)} s), « régime permanent », « régime permanent : u_C = E ; i = 0 », « avant : régime transitoire »`);
+    } else {
+      e.push(`« condensateur chargé : u_C = E = ${fx(S2.E, 1)} V »`);
+      if (M.commence('courbe_decharge')) m.push(`Courbe bleue u_C(t) = E·e^{−t/τ} tracée jusqu’à t = ${fx(t, 3)} s.`);
+      if (M.vu('bascule_2')) e.push('« K en position 2 : R et C seuls, sans générateur »');
+      if (M.vu('courbe_decharge')) e.push('« u_C descend de E vers 0 : la décharge », « le courant change de sens : i < 0 »');
+    }
+  }
+  if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, K: positionK(), R_ohm: S2.R, C_uF: S2.C, E: S2.E, tau_s: +tau().toFixed(5), t_ecran_s: +tEcran().toFixed(4), u_C_V: +uC().toFixed(3), i_mA: +(iA() * 1000).toFixed(3) });
+const MOT = Moteur({
+  id: 'dipole_rc_circuit', titre: 'Le circuit RC : montage, acquisition, charge et décharge', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ montage: 'Construisons le montage RC.', charge: 'Le condensateur est déchargé, K est en position 2. On bascule en 1…', decharge: 'Le condensateur est chargé (u_C = E). On bascule en 2…' })[M.S.vue],
+  messageFin: M => ({ montage: 'Le montage : K en 1 pour charger, en 2 pour décharger ; u_C est relié à l’entrée Y.',
+    charge: `Charge : u_C monte de 0 à E = ${fx(S2.E, 1)} V ; régime transitoire, puis régime permanent (u_C = E, i = 0).`,
+    decharge: 'Décharge : u_C descend de E vers 0 ; le courant a changé de sens (i < 0).' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {}; let change = false;
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    const nb = x => (x != null && x !== '' && Number.isFinite(+String(x).replace(',', '.')) ? +String(x).replace(',', '.') : null);
+    const R = nb(p.R_ohm), C = nb(p.C_uF), E = nb(p.E), K = nb(p.K);
+    if (R !== null) { const v = clamp(Math.round(R), 100, 10000); if (v !== S2.R) { S2.R = v; change = true; } }
+    if (C !== null) { const v = clamp(Math.round(C), 10, 1000); if (v !== S2.C) { S2.C = v; change = true; } }
+    if (E !== null) { const v = clamp(Math.round(E * 10) / 10, 1, 12); if (v !== S2.E) { S2.E = v; change = true; } }
+    if (K === 1 || K === 2) { r.vue = K === 1 ? 'charge' : 'decharge'; change = true; }
+    r.change = change || (r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', K: '1 | 2 (1 : vue charge, K bascule en 1 ; 2 : vue décharge, K bascule en 2 ; relance)', R_ohm: '100..10000 (Ω, pas 1 ; relance)', C_uF: '10..1000 (µF, pas 1 ; relance)', E: '1..12 (V, pas 0,1 ; relance)' },
+  texte: 'Le montage RC : générateur E, interrupteur K à deux positions (1 : charge avec E ; 2 : R et C seuls), résistor R, condensateur C ; i, puis u_R et u_C en convention récepteur (flèches opposées à i) ; acquisition : la borne de la tête de flèche de u_C à l’entrée Y, l’autre borne à la masse. Basculer K applique un échelon de tension (montant : 0 puis E ; descendant : E puis 0). Charge : u_C monte vite puis de plus en plus lentement jusqu’au palier E (régime transitoire puis régime permanent : u_C = E, i = 0). Décharge : u_C descend de E vers 0, i < 0. Valeurs : E = 12 V, R = 1 kΩ, C = 220 µF.',
+  explications: {
+    montage: [
+      { repere: 'generateur', texte: 'Le générateur de tension E.' },
+      { repere: 'position_1', texte: 'Position 1 : le générateur est dans le circuit, le condensateur se charge.' },
+      { repere: 'position_2', texte: 'Position 2 : R et C seuls, le condensateur se décharge.' },
+      { repere: 'fleche_i', texte: 'On oriente le courant i.' },
+      { repere: 'fleche_uR', texte: 'u_R en convention récepteur : la flèche est opposée à i.' },
+      { repere: 'fleche_uC', texte: 'Pareil pour u_C.' },
+      { repere: 'entree_Y', texte: 'La borne de la tête de flèche de u_C va à l’entrée Y…' },
+      { repere: 'masse', texte: '… et l’autre borne à la masse.' },
+      { repere: 'echelon', texte: 'Basculer K, c’est appliquer un échelon de tension : montant, ou descendant.' },
+    ],
+    charge: [
+      { repere: 'interrupteur', texte: 'K passe en position 1.' },
+      { repere: 'fleche_i', texte: 'Le courant i circule : la charge commence.' },
+      { repere: 'courbe', texte: 'u_C monte vite au début, puis de plus en plus lentement.' },
+      { repere: 'regime_transitoire', texte: 'Tant que u_C varie, c’est le régime transitoire.' },
+      { repere: 'palier_E', texte: 'Puis u_C reste égale à E.' },
+      { repere: 'regime_permanent', texte: 'C’est le régime permanent : u_C = E et i = 0.' },
+    ],
+    decharge: [
+      { repere: 'ecran', texte: 'Au départ le condensateur est chargé : u_C = E.' },
+      { repere: 'interrupteur', texte: 'K passe en position 2 : R et C seuls.' },
+      { repere: 'courbe', texte: 'u_C descend de E vers 0.' },
+      { repere: 'fleche_i', texte: 'Le courant change de sens : i < 0.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); return x > C1[0] - 14 && x < PV[0] + 12 && y > 56 && y < 146 ? 'K' : null; },
+  bouger: () => {},
+  lacher: () => { MOT.setParameters({ K: positionK() === 1 ? 2 : 1 }); },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

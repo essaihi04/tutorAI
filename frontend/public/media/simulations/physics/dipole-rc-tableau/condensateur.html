@@ -21,8 +21,9 @@
  *    K se ferme : l’aiguille de l’ampèremètre saute puis redescend, celle du voltmètre monte jusqu’à 6 V.
  *    Le temps physique est compté en τ (constante de temps du circuit) : il n’avance que pendant les animations,
  *    l’horloge s’arrête pendant que la craie écrit. i = i(0)·e^{−θ}, u_C = E(1 − e^{−θ}), q ∝ u_C (θ = t/τ).
- *    Électrons (sphères bleues) : 12 électrons de l’armature A ; la distance parcourue est proportionnelle à la charge
- *    passée (q), ils arrivent un par un sur B : aucun ne traverse l’isolant (dessin pour l’œil, la physique reste u_C, i).
+ *    Électrons (sphères bleues) : 12 électrons de l’armature A ; l’électron k part quand q/Q atteint 0,6·k/11, avance
+ *    proportionnellement à la charge passée et arrive sur B à q/Q + 0,35 : aucun ne traverse l’isolant
+ *    (dessin pour l’œil, la physique reste u_C, i).
  * Poignée : l’interrupteur K (un clic ou un glissé le bascule).
  */
 /* ── Moteur du déroulé (commun aux pages « appareils » de ce dossier, recopié dans chaque page) ──────────────
@@ -59,7 +60,7 @@ function Moteur(o) {
     S, ev, Moments: () => TL.M,
     /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
     p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
-    commence(nom) { const e = ev(nom); return !!e && S.t >= e.debut - 1e-6; },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
     vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
     /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
     etape(c, nom, fn) {
@@ -80,7 +81,9 @@ function Moteur(o) {
     try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
     construire(); scene.sale = true;
   }
-  const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), texte, kind); };
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
   const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
   let pont = null;
   const emettre = () => pont && pont.emettre();
@@ -269,7 +272,7 @@ const GEN = { x: 40, y: 150, w: 80, h: 90 }, KP = [160, 70], KB = [210, 70], AMP
 const CA = { x: 390, y: 148, w: 100, h: 12 }, CB = { x: 390, y: 210, w: 100, h: 12 }, CI = { x: 396, y: 160, w: 88, h: 50 };
 const CHEMIN = [[XC, CA.y], [XC, YH], [XG, YH], [XG, YB], [XC, YB], [XC, CB.y + CB.h]];
 const L = CHEMIN.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - CHEMIN[i][0], p[1] - CHEMIN[i][1]), 0);
-const NE = 12, PAS = 34, DMAX = L + NE * PAS;
+const NE = 12, FEN = .35, QK = [...Array(NE).keys()].map(k => .6 * k / (NE - 1));   // électron k : part quand q/Q atteint QK[k], arrive sur B à QK[k] + FEN
 const SLOTS = [...Array(NE).keys()].map(k => 396 + k * 8).sort((a, b) => Math.abs(a - XC) - Math.abs(b - XC));
 function surChemin(s) {
   for (let i = 0; i < CHEMIN.length - 1; i++) {
@@ -396,9 +399,8 @@ function vueCharge(c, M) {
     Peint.cadran(ctx, VOLT.cx, VOLT.cy, VOLT.r, g.u / 10, 'V', ['0', '2', '4', '6', '8', '10']);
     isolant(ctx, CI, 1); plaqueCouchee(ctx, CA); plaqueCouchee(ctx, CB);
     // Électrons : sur A au départ ; en route (distance ∝ charge passée) ; puis entassés sur B.
-    const d = DMAX * g.qf;
     for (let k = 0; k < NE; k++) {
-      const s = d - k * PAS;
+      const s = L * (g.qf - QK[k]) / FEN;
       if (s <= 0) Peint.sphere(ctx, SLOTS[k], CA.y + 6, 3.6);
       else if (s < L) { const [x, y] = surChemin(s); Peint.sphere(ctx, x, y, 4.4); }
       else Peint.sphere(ctx, SLOTS[k], CB.y + 6, 3.6);
@@ -474,7 +476,7 @@ function voir(M) {
     if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
     return m.join(' ');
   }
-  const g = grandeurs(), arrives = Math.max(0, Math.min(NE, Math.floor((DMAX * g.qf - L) / PAS) + 1)), partis = Math.max(0, Math.min(NE, Math.floor(DMAX * g.qf / PAS) + (DMAX * g.qf > 0 ? 1 : 0)));
+  const g = grandeurs(), arrives = QK.filter(q => g.qf >= q + FEN).length, partis = QK.filter(q => g.qf > q).length;
   m.push('Circuit : générateur E = 6 V (borne + reliée à l’armature A), interrupteur K, ampèremètre à cadran, condensateur (A en haut, B en bas, isolant entre), voltmètre à cadran aux bornes du condensateur.');
   m.push(`K ${kFerme() ? 'fermé' : S2.kForce === 0 ? 'rouvert à la main' : 'ouvert'} ; ampèremètre : ${g.i > .005 ? `aiguille à ${Math.round(100 * g.i)} % de son saut du départ (i diminue)` : 'aiguille à 0 (i = 0)'} ; voltmètre : u_C = ${fr(g.u, 1)} V (E = 6 V).`);
   m.push(`Électrons : ${partis} sur 12 ont quitté A, ${arrives} sont arrivés sur B ; aucun ne traverse l’isolant.`);
@@ -496,7 +498,7 @@ function params(M) {
 function basculerK(k, M) {
   const S = M.S;
   if (k === 1) {
-    if (S2.kForce === 0) { S2.kForce = null; M.start(); M.playUntil({ moment: 'fin' }); return; }
+    if (S2.kForce === 0) { S2.kForce = null; S.pause = true; M.resume(); M.dire('On referme K : la charge reprend là où elle s’était arrêtée.'); return; }
     if (kFerme() && !S.fait) { if (!S.running) M.resume(); return; }
     M.playUntil({ moment: 'fin' });
   } else {

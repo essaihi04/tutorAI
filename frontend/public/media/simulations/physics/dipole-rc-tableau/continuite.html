@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>u_C est continue, i change de sens — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux graphes à la craie, même axe des temps : u_C(t) en haut et i(t) en bas ; la charge en rouge, puis la bascule de K en position 2 et la décharge en bleu"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * u_C ne saute pas, i change de sens (cours « Dipôle RC », 2e Bac PC BIOF, 12 novembre 2026).
+ * E = 12 V, R = 1 kΩ, C = 220 µF : τ = 0,22 s ; I₀ = E/R = 12 mA ; 0,37·E = 4,44 V.
+ * Deux graphes l’un au-dessus de l’autre, même axe des temps : u_C(t) en haut, i(t) en bas.
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - enchaine (défaut) : charge (rouge, jusqu’au palier E), bascule (K passe en position 2), nouvelle_origine (t = 0 à la bascule),
+ *    uC_continue (u_C reste à E puis descend en bleu), saut_i (i saute de 0 à −E/R puis remonte vers 0 en bleu), fin.
+ *    Axe des temps : bascule à t_b = 1,4 s (≈ 6,3τ : la charge est finie), axe de 0 à 2,8 s, graduations de 0,2 s.
+ *  - decharge : seulement la décharge (origine à la bascule) : decharge (u_C = E·e^{−t/τ} et i = −(E/R)·e^{−t/τ} en bleu),
+ *    decharge_37 (0,37 × E jusqu’à la courbe → τ ; tangente à l’origine qui coupe l’axe des temps en τ), fin.
+ * Chaque moment = fin de l’écriture de sa phase (play_until s’y fige). Rouge = charge, bleu = décharge, jaune = surlignage.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const sig = (v, n = 3) => fx(Number(v.toPrecision(n)), 6);
+const VUES = {
+  enchaine: ['charge', 'bascule', 'nouvelle_origine', 'uC_continue', 'saut_i', 'fin'],
+  decharge: ['decharge', 'decharge_37', 'fin'],
+};
+const TITRES = { enchaine: 'charge puis décharge', decharge: 'la décharge seule' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'enchaine', R: 1000, C: 220, E: 12, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '' };
+let M = {}, MM = {};
+const VITESSE = 2;
+
+/* ── Physique ──────────────────────────────────────────────────────────── */
+const tau = () => S.R * S.C * 1e-6;
+const I0 = () => S.E / S.R;
+const fR = R => (R >= 1000 ? `${fx(R / 1000, 2)} kΩ` : `${fx(R, 0)} Ω`);
+const fC = C => `${fx(C, 1)} µF`;
+function echelleT(span) {
+  const k = span < 0.1 ? 1000 : 1, u = k === 1 ? 's' : 'ms', v = span * k;
+  const p10 = 10 ** Math.floor(Math.log10(v / 15)); let pas = 10 * p10;
+  for (const m of [1, 2, 5, 10]) if (v / (m * p10) <= 15 + 1e-9) { pas = m * p10; break; }
+  return { k, u, pas: pas / k, max: Math.ceil(v / pas - 1e-9) * pas / k, lab: 2 * pas / k };
+}
+/** Échelle des temps de la vue : enchaine → deux fois la durée de la charge (bascule au milieu). */
+function ET() {
+  const e = echelleT(6.3 * tau());
+  return S.vue === 'enchaine' ? { ...e, tb: e.max, max: 2 * e.max, pas: 2 * e.pas, lab: 4 * e.pas } : { ...e, tb: 0 };
+}
+const fT = t => `${sig(t * ET().k, 3)} ${ET().u}`;
+function echelleY(v) {
+  const p10 = 10 ** Math.floor(Math.log10(v)); let lab = p10;
+  for (const m of [.1, .2, .5, 1, 2, 5, 10]) if (Math.ceil(1.15 * v / (m * p10) - 1e-9) <= 7) { lab = m * p10; break; }
+  return { lab, pas: lab / 2, max: Math.ceil(1.15 * v / lab - 1e-9) * lab };
+}
+/** u_C(t) et i(t) sur l’axe de la vue : charge avant t_b, décharge après (t’ = t − t_b). */
+const uCh = t => S.E * (1 - Math.exp(-t / tau()));
+const iCh = t => I0() * Math.exp(-t / tau());
+const uDe = tp => S.E * Math.exp(-tp / tau());
+const iDe = tp => -I0() * Math.exp(-tp / tau());
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const PU = { x: 8, y: 40, w: 512, h: 186 }, PI_ = { x: 8, y: 232, w: 512, h: 180 }, RL = { x: 528, y: 40, w: 224, h: 372 };
+const LX = RL.x + 8, LW = RL.w - 16;
+const OX = PU.x + 54, AXL = PU.w - 54 - 52;
+const PX = t => OX + t * AXL / ET().max;
+const OU = PU.y + PU.h - 28, AYU = PU.h - 28 - 46;            // graphe u_C : 0 en bas
+const OI = PI_.y + 40 + (PI_.h - 50) / 2, AYI = (PI_.h - 50) / 2; // graphe i : 0 au milieu
+const EU = () => echelleY(S.E), EI = () => echelleY(I0() * 1e3);
+const PYU = u => OU - u * AYU / EU().max, PYI = i => OI - i * 1e3 * AYI / EI().max;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 15, max: LW, ...o });
+
+function axes(c) {
+  const et = ET(), L = AXL + 14;
+  const tg = []; for (let i = 1; i * et.pas <= et.max + 1e-9; i++) { const v = i * et.pas; tg.push([(PX(v) - OX) / L, i % 2 === 0 ? fx(v * et.k, 3) : null]); }
+  c.rect(PU.x, PU.y, PU.w, PU.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.axe(OX, OU, OX + L, OU, tg, { taille: 12 });
+  const eu = EU(), ug = []; for (let i = 1; i * eu.lab <= eu.max + 1e-9; i++) { const v = i * eu.lab; ug.push([(v * AYU / eu.max) / (AYU + 12), i % 2 === 0 ? fx(v, 3) : null]); }
+  c.axe(OX, OU, OX, OU - AYU - 12, ug, { taille: 12, vertical: true });
+  c.texte('u_C (V)', OX + 8, OU - AYU - 8, { couleur: 'blanc', taille: 15, duree: .3 });
+  c.texte(`t (${et.u})`, OX + L + 4, OU + 5, { couleur: 'blanc', taille: 14, duree: .2 });
+  c.rect(PI_.x, PI_.y, PI_.w, PI_.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.axe(OX, OI, OX + L, OI, tg.map(([f]) => [f, null]), { taille: 12 });
+  const ei = EI(), ig = []; for (let i = 1; i * ei.lab <= ei.max + 1e-9; i++) { const v = i * ei.lab; ig.push([v, i % 2 === 0 ? fx(v, 3) : null]); }
+  c.ligne(OX, OI + AYI + 6, OX, OI, { couleur: 'faible', largeur: 1.6, duree: .1 });
+  c.axe(OX, OI, OX, OI - AYI - 12, ig.map(([v, l]) => [(v * AYI / ei.max) / (AYI + 12), l]), { taille: 12, vertical: true });
+  for (const [v, l] of ig) {
+    const y = OI + v * AYI / ei.max; if (y > OI + AYI + 2) continue;
+    c.ligne(OX - 5, y, OX + 5, y, { couleur: 'faible', largeur: 1.4, duree: .03 });
+    if (l != null) c.texte('−' + l, OX - 10, y + 5, { couleur: 'faible', taille: 12, align: 'right', duree: .08 });
+  }
+  c.texte('i (mA)', OX + 8, OI - AYI - 8, { couleur: 'blanc', taille: 15, duree: .3 });
+  c.texte(`t (${et.u})`, OX + L + 4, OI + 5, { couleur: 'blanc', taille: 14, duree: .2 });
+}
+
+function dessiner(c) {
+  scene.cadre(41); MM = {};
+  c.texte(`u_C(t) et i(t) — ${TITRES[S.vue]}`, PU.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .8 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  lire(c, 62, `E = ${fx(S.E, 1)} V ; R = ${fR(S.R)} ; C = ${fC(S.C)}`, { couleur: 'faible', taille: 13, duree: .8 });
+  lire(c, 82, `τ = R·C = ${fT(tau())}`, { couleur: 'faible', taille: 13, duree: .5 });
+  axes(c);
+  c.pause(.3);
+  if (S.vue === 'enchaine') vueEnchaine(c); else vueDecharge(c);
+  c.pause(.6); marque(c, 'fin');
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+const courbe = (c, f, t0, t1, PY, o) => c.courbe(u => { const t = t0 + u * (t1 - t0); return [PX(t), PY(f(t))]; }, 70, { largeur: 2.5, duree: 1.2, ...o });
+function vueEnchaine(c) {
+  const et = ET(), tb = et.tb, xb = PX(tb), E = S.E, I = I0();
+  courbe(c, uCh, 0, tb, PYU, { couleur: 'rouge' });
+  courbe(c, iCh, 0, tb, PYI, { couleur: 'rouge', duree: 1 });
+  c.texte('charge', PX(tb * .55), PYU(E * .55), { couleur: 'rouge', taille: 16 });
+  lire(c, 112, 'K en position 1 : la charge', { couleur: 'rouge' });
+  lire(c, 134, `u_C monte jusqu’au palier E ; i → 0`, { couleur: 'rouge', taille: 14 });
+  marque(c, 'charge');
+  c.pause(.4);
+  c.ligne(xb, PU.y + 34, xb, PI_.y + PI_.h - 6, { couleur: 'cyan', largeur: 1.6, pointille: [8, 6], duree: .6 });
+  c.texte('K passe en position 2', xb + 6, PU.y + 30, { couleur: 'cyan', taille: 15 });
+  lire(c, 166, 'bascule : K passe en position 2', { couleur: 'cyan', taille: 14 });
+  marque(c, 'bascule');
+  c.pause(.4);
+  c.fleche(xb, OU, xb, OU - AYU - 6, { couleur: 'blanc', largeur: 1.8 });
+  c.fleche(xb, OI + AYI, xb, OI - AYI - 6, { couleur: 'blanc', largeur: 1.8 });
+  c.texte('t = 0', xb + 6, OU - 8, { couleur: 'blanc', taille: 15 });
+  c.texte('t = 0', xb + 6, OI + 18, { couleur: 'blanc', taille: 15 });
+  lire(c, 196, 'nouvelle origine des temps :', { couleur: 'blanc', taille: 14 });
+  lire(c, 216, 't = 0 à la bascule', { couleur: 'blanc', taille: 14 });
+  marque(c, 'nouvelle_origine');
+  c.pause(.4);
+  c.cercle(xb, PYU(E), 6, { couleur: 'cyan', largeur: 2 });
+  courbe(c, t => uDe(t - tb), tb, et.max, PYU, { couleur: 'bleu' });
+  c.texte('u_C est continue', xb + 12, PYU(E) - 10, { couleur: 'cyan', taille: 15 });
+  lire(c, 248, `u_C reste à E = ${fx(E, 1)} V`, { couleur: 'bleu', taille: 14 });
+  lire(c, 268, 'puis descend : u_C est continue', { couleur: 'bleu', taille: 14 });
+  marque(c, 'uC_continue');
+  c.pause(.4);
+  c.ligne(xb, OI, xb, PYI(-I), { couleur: 'bleu', largeur: 1.8, pointille: [3, 4], duree: .3 });
+  c.cercle(xb, PYI(-I), 5, { couleur: 'bleu', largeur: 2 });
+  courbe(c, t => iDe(t - tb), tb, et.max, PYI, { couleur: 'bleu' });
+  c.texte(`−E/R = −${sig(I * 1e3, 3)} mA`, xb + 12, PYI(-I) + 6, { couleur: 'bleu', taille: 15 });
+  c.texte('i < 0', PX(tb + (et.max - tb) * .55), PYI(-I * .45), { couleur: 'cyan', taille: 16 });
+  lire(c, 300, `i saute de 0 à −E/R = −${sig(I * 1e3, 3)} mA`, { couleur: 'bleu', taille: 14 });
+  lire(c, 322, 'puis remonte vers 0', { couleur: 'bleu', taille: 14 });
+  lire(c, 354, 'i change de sens : i < 0', { couleur: 'blanc', taille: 17 });
+  c.rect(LX - 4, 334, LW + 4, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'saut_i');
+}
+function vueDecharge(c) {
+  const T = tau(), E = S.E, I = I0(), t37 = -T * Math.log(.37), et = ET();
+  courbe(c, uDe, 0, et.max, PYU, { couleur: 'bleu' });
+  courbe(c, iDe, 0, et.max, PYI, { couleur: 'bleu', duree: 1 });
+  c.texte('nouvelle origine : t = 0 à la bascule', OX + AXL, PU.y + 28, { couleur: 'faible', taille: 13, align: 'right' });
+  lire(c, 114, 'u_C(t) = E·e^{−t/τ}', { couleur: 'bleu', taille: 17 });
+  lire(c, 142, 'i(t) = −(E/R)·e^{−t/τ}', { couleur: 'bleu', taille: 17 });
+  lire(c, 166, `i(0) = −E/R = −${sig(I * 1e3, 3)} mA`, { couleur: 'bleu', taille: 14 });
+  marque(c, 'decharge');
+  c.pause(.4);
+  const y37 = PYU(.37 * E);
+  c.ligne(OX, y37, PX(t37), y37, { couleur: 'vert', largeur: 1.8, pointille: [7, 5] });
+  c.ligne(PX(t37), y37, PX(t37), OU, { couleur: 'vert', largeur: 1.8, pointille: [7, 5] });
+  c.cercle(PX(t37), y37, 5, { couleur: 'vert', largeur: 1.8 });
+  c.texte('0,37·E', PX(t37) + 10, y37 + 4, { couleur: 'vert', taille: 14 });
+  lire(c, 200, 'à t = τ : u_C = 0,37·E', { couleur: 'blanc', taille: 14 });
+  lire(c, 224, `0,37 × ${fx(E, 1)} = ${fx(.37 * E, 2)} V`, { couleur: 'vert', taille: 17 });
+  c.ligne(PX(0), PYU(E), PX(T), OU, { couleur: 'cyan', largeur: 2 });
+  c.cercle(PX(T), OU, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.texte('τ', PX(T) + 8, OU - 8, { couleur: 'cyan', taille: 18 });
+  lire(c, 256, 'la tangente à l’origine', { couleur: 'cyan', taille: 14 });
+  lire(c, 276, 'coupe l’axe des temps en τ', { couleur: 'cyan', taille: 14 });
+  lire(c, 316, `τ ≈ ${fT(T)}`, { couleur: 'blanc', taille: 20 });
+  c.rect(LX - 4, 294, 130, 32, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'decharge_37');
+}
+function declarerReperes(c) {
+  const et = ET(), tb = et.tb, xb = PX(tb), T = tau(), E = S.E, I = I0(), t37 = -T * Math.log(.37), ici = v => (S.vue === v ? '' : ` (vue « ${v} »)`);
+  c.repere('graphe_uC', PU.x, PU.y, PU.w, PU.h, 'le graphe u_C(t) (en haut)');
+  c.repere('graphe_i', PI_.x, PI_.y, PI_.w, PI_.h, 'le graphe i(t) (en bas)');
+  c.repere('bascule', xb - 10, PU.y + 14, 20, PI_.y + PI_.h - PU.y - 20, S.vue === 'enchaine' ? `la bascule : K passe en position 2 (t = ${fT(tb)})` : 'la bascule : origine de la décharge');
+  c.repere('nouvelle_origine', xb - 8, PU.y + 40, 60, PI_.y + PI_.h - PU.y - 46, 'la nouvelle origine des temps : t = 0 à la bascule');
+  c.repere('uC_continue', xb - 14, PYU(E) - 14, 140, 44, `u_C reste à E = ${fx(E, 1)} V à la bascule : u_C est continue${ici('enchaine')}`);
+  c.repere('saut_i', xb - 14, OI - 10, 170, PYI(-I) - OI + 24, `i saute de 0 à −E/R = −${sig(I * 1e3, 3)} mA : i change de sens${ici('enchaine')}`);
+  const x0 = S.vue === 'decharge' ? PX(0) : xb, tt = t => (S.vue === 'decharge' ? PX(t) : PX(tb + t));
+  c.repere('ligne_37', x0, PYU(.37 * E) - 12, Math.max(24, tt(t37) - x0 + 10), 24, `0,37 × ${fx(E, 1)} = ${fx(.37 * E, 2)} V jusqu’à la courbe${ici('decharge')}`);
+  c.repere('tangente', x0, PYU(E), Math.max(24, tt(T) - x0), OU - PYU(E), `la tangente à l’origine de la décharge : elle coupe l’axe des temps en τ${ici('decharge')}`);
+  c.repere('tau', tt(T) - 14, OU - 26, 32, 40, `τ = R·C = ${fT(T)}`);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = r; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+/** La bulle est du texte HTML : pas de « _ » visible (E_e → Eₑ, I_0 → I₀, u_C → uC). */
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  const I = sig(I0() * 1e3, 3);
+  return S.vue === 'enchaine'
+    ? `À la bascule, u_C reste à E = ${fx(S.E, 1)} V (u_C est continue) ; i saute de 0 à −E/R = −${I} mA (i change de sens) puis remonte vers 0.`
+    : `Décharge : u_C = E·e^(−t/τ) ; à t = τ, u_C = 0,37 × ${fx(S.E, 1)} = ${fx(.37 * S.E, 2)} V ; la tangente à l’origine coupe l’axe des temps en τ ≈ ${fT(tau())}.`;
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  charge: 'la charge : u_C monte jusqu’au palier E, i descend vers 0', bascule: 'K passe en position 2', nouvelle_origine: 'nouvelle origine des temps : t = 0 à la bascule',
+  uC_continue: 'u_C reste à E puis descend : u_C est continue', saut_i: 'i saute de 0 à −E/R : i change de sens', decharge: 'la décharge : u_C = E·e^(−t/τ)',
+  decharge_37: '0,37 × E et la tangente à l’origine : τ', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const T = tau(), et = ET(), E = S.E, I = sig(I0() * 1e3, 3);
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`,
+    `E = ${fx(E, 1)} V, R = ${fR(S.R)}, C = ${fC(S.C)}, τ = R·C = ${fT(T)}. Deux graphes, même axe des temps t (${et.u}) de 0 à ${fx(et.max * et.k, 3)} : u_C(t) en haut (V), i(t) en bas (mA, de −${fx(EI().max, 3)} à +${fx(EI().max, 3)}).`];
+  const L = [];
+  if (S.vue === 'enchaine') {
+    if (vu('charge')) L.push(`charge en rouge de 0 à ${fT(et.tb)} : u_C monte jusqu’au palier E = ${fx(E, 1)} V, i descend de ${I} mA vers 0`);
+    if (vu('bascule')) L.push(`trait vertical à t = ${fT(et.tb)} : « K passe en position 2 »`);
+    if (vu('nouvelle_origine')) L.push('nouvel axe vertical à la bascule : « t = 0 » (nouvelle origine des temps)');
+    if (vu('uC_continue')) L.push(`u_C reste à E = ${fx(E, 1)} V juste après la bascule puis descend en bleu vers 0 : « u_C est continue »`);
+    if (vu('saut_i')) L.push(`i saute de 0 à −E/R = −${I} mA puis remonte vers 0 en bleu : « i change de sens : i < 0 »`);
+  } else {
+    if (vu('decharge')) L.push(`décharge en bleu depuis la nouvelle origine : u_C(t) = E·e^(−t/τ) descend de ${fx(E, 1)} V vers 0 ; i(t) = −(E/R)·e^(−t/τ) part de −${I} mA et remonte vers 0`);
+    if (vu('decharge_37')) L.push(`0,37 × ${fx(E, 1)} = ${fx(.37 * E, 2)} V : horizontale verte jusqu’à la courbe, verticale vers l’axe ; tangente cyan à l’origine qui coupe l’axe des temps en τ ; τ ≈ ${fT(T)} (encadré)`);
+  }
+  m.push(L.length ? `Au tableau : ${L.join(' ; ')}.` : 'Seuls les axes sont tracés.');
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('La craie trace u_C(t) et i(t)…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const PLAGES = { R_ohm: [100, 10000], C_uF: [10, 1000], E: [1, 12] };
+function setParameters(p) {
+  p = p || {}; let vue = false, phys = false;
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
+  for (const [k, cle] of [['R_ohm', 'R'], ['C_uF', 'C'], ['E', 'E']]) {
+    if (p[k] === undefined || p[k] === null || p[k] === '' || !Number.isFinite(+p[k])) continue;
+    const v = clamp(+p[k], ...PLAGES[k]); if (v !== S[cle]) { S[cle] = v; phys = true; }
+  }
+  M = {}; calculer();
+  pont.noter('set_parameters', { vue: S.vue, R_ohm: S.R, C_uF: S.C, E: S.E });
+  if (vue) { start(); return; }
+  if (phys) { S.running = false; S.jusqua = null; S.t = M.fin; S.fait = true; S.pause = false; etiquette(); scene.sale = true; dire(`R = ${fR(S.R)}, C = ${fC(S.C)}, E = ${fx(S.E, 1)} V : τ = R·C = ${fT(tau())}.`); }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+window.Tableau.explication({
+  enchaine: [
+    { repere: 'graphe_uC', texte: 'Pendant la charge, u_C monte jusqu’au palier E = 12 V.' },
+    { repere: 'bascule', texte: 'Ici, K passe en position 2 : la décharge commence.' },
+    { repere: 'nouvelle_origine', texte: 'On prend une nouvelle origine des temps : t = 0 à la bascule.' },
+    { repere: 'uC_continue', texte: 'u_C ne saute pas : elle reste à E, puis descend. u_C est continue.' },
+    { repere: 'saut_i', texte: 'i, elle, saute de 0 à −E/R = −12 mA : le courant change de sens.' },
+  ],
+  decharge: [
+    { repere: 'graphe_uC', texte: 'Décharge : u_C = E·e^(−t/τ) descend de 12 V vers 0.' },
+    { repere: 'ligne_37', texte: '0,37 × 12 = 4,44 V : horizontale jusqu’à la courbe, puis verticale.' },
+    { repere: 'tangente', texte: 'La tangente à l’origine coupe l’axe des temps en τ.' },
+    { repere: 'tau', texte: 'On lit τ ≈ 0,22 s.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'dipole_rc_continuite', version: '1.0', title: 'u_C est continue, i change de sens', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'enchaine | decharge (change la vue et la retrace depuis le début)', R_ohm: '100..10000 pas 100 (Ω)', C_uF: '10..1000 pas 10 (µF)', E: '1..12 pas 1 (V)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'enchaine : charge | bascule | nouvelle_origine | uC_continue | saut_i | fin ; decharge : decharge | decharge_37 | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Charge puis décharge (E = 12 V, R = 1 kΩ, C = 220 µF, τ = 0,22 s). Quand K passe en position 2, u_C reste à E puis descend : u_C est continue ; i saute de 0 à −E/R = −12 mA (i change de sens) puis remonte vers 0. Décharge : u_C(t) = E·e^(−t/τ), i(t) = −(E/R)·e^(−t/τ) ; à t = τ, u_C = 0,37·E = 4,44 V ; la tangente à l’origine coupe l’axe des temps en τ.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: { vue: S.vue, R_ohm: S.R, C_uF: S.C, E: S.E, tau_s: +tau().toFixed(6), I0_mA: +(I0() * 1e3).toFixed(3), u37_V: +(.37 * S.E).toFixed(2) }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('u_C(t) et i(t) vont s’écrire…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

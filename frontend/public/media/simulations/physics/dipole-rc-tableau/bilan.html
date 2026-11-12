@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — dipôle RC</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie : pour chaque partie du cours sur le dipôle RC, les formules encadrées, ce qu’il faut savoir et le piège ; deuxième page : ce que l’élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * « Ce qu’il faut retenir » du cours « Dipôle RC » (phys_ch6_dipole_RC), même forme et même protocole que
+ * radioactivite-tableau/bilan.html. TOUTE la fiche tient sur UNE page : huit blocs en quatre colonnes de deux (un par
+ * compétence C1 à C8), chacun avec les formules encadrées (indices « u_C » rendus par le kit, exposants « e^{−t/τ} » par
+ * exposants.js), ce qu’il faut savoir et le piège en orange (⚠). Rien n’est écrit sous y = 360 (le bas reste libre).
+ * La voix la parcourt bloc par bloc : play_until {moment: <bloc>} écrit ce bloc à cet instant et le met en lumière ;
+ * les blocs déjà dits (ou sautés) sont écrits d’un coup ; « fiche » ou « fin » : tout d’un coup.
+ * La deuxième page est celle de l’élève (set_parameters {lacunes, acquis, acquis_ids}), moment « lacunes ».
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'condensateur', titre: '1 · Le condensateur', comps: ['C1'], formules: ['q = C·u_C', 'i = C·du_C/dt', 'q_A = q ; q_B = −q'],
+    def: 'Deux armatures séparées par un isolant. C en farad (F) ; 1 µF = 10⁻⁶ F.',
+    attention: 'aucun électron ne traverse l’isolant.' },
+  { id: 'associations', titre: '2 · Associations', comps: ['C2'], formules: ['C_eq = C_1 + C_2', '1/C_eq = 1/C_1 + 1/C_2', 'C = I_0/k'],
+    def: 'Parallèle : même u, C augmente. Série : même q, C diminue. Courant constant : u_C = (I_0/C)·t.',
+    attention: 'série : C_eq plus petite que C_1 et C_2.' },
+  { id: 'echelon', titre: '3 · Échelon de tension', comps: ['C3'], formules: ['u_R + u_C = E', 'i = 0 ; u_C = E'],
+    def: 'Régime transitoire : u_C varie. Régime permanent : u_C = E constante et i = 0.',
+    attention: 'u_C est continue, elle ne saute jamais ; i peut sauter.' },
+  { id: 'equation', titre: '4 · Équation différentielle', comps: ['C4'], formules: ['RC·du_C/dt + u_C = E', 'RC·du_C/dt + u_C = 0'],
+    def: 'u_R + u_C = E avec u_R = R·i et i = C·du_C/dt. Décharge : 0 à droite.',
+    attention: 'u_R et i : second membre nul dans les deux cas.' },
+  { id: 'solution', titre: '5 · Solutions', comps: ['C5'], formules: ['u_C(t) = E(1 − e^{−t/τ})', 'u_C(t) = E·e^{−t/τ}', 'i(t) = (E/R)·e^{−t/τ}'],
+    def: 'On remplace dans l’équation : τ = RC et A = E ; la condition initiale fixe le reste.',
+    attention: 'décharge : i(t) = −(E/R)·e^{−t/τ}, i < 0.' },
+  { id: 'tau', titre: '6 · Constante de temps', comps: ['C6'], formules: ['τ = R·C', '[τ] = [T]'],
+    def: 'τ est un temps, en s. À 5τ : u_C ≈ 0,99·E, régime permanent.',
+    attention: 'R en Ω, C en F : 1 kΩ × 220 µF = 0,22 s.' },
+  { id: 'lecture', titre: '7 · Lire τ sur une courbe', comps: ['C7'], formules: ['u_C(τ) = 0,63·E', 'u_C(τ) = 0,37·E (décharge)'],
+    def: 'La tangente à l’origine coupe l’asymptote (ou l’axe des temps) en t = τ.',
+    attention: 'projeter sur l’axe des temps.' },
+  { id: 'energie', titre: '8 · Énergie stockée', comps: ['C8'], formules: ['E_e = ½·C·u_C²', 'E_e = ½·C·E²'],
+    def: 'Le condensateur stocke l’énergie et la rend à la décharge.',
+    attention: 'u_C × 2 → E_e × 4 ; C en F.' },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
+// apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
+const S = { page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre ou une colonne trop pleine
+
+const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur d'un texte de craie (indices et exposants plus petits, comme le kit les écrit). */
+function largeur(c, t, taille) {
+  t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
+}
+/* Texte pour la bulle et ce_qui_se_voit : pas de « _ » ni d’accolades visibles. */
+const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
+const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
+
+/* Coupe un texte en lignes qui tiennent dans `max` px. */
+function lignes(c, texte, taille, max) {
+  const out = []; let ligne = '';
+  const t = String(texte).replace(/ ([=\/·→<>≥≤≈≠−+×]) /g, '\u00a0$1\u00a0');   // une formule dans la phrase ne se coupe pas
+  for (const mot of t.split(/[ \t\n]+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (largeur(c, essai, taille) > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
+  for (const l of lignes(c, texte, taille, max)) { if (dessiner) c.texte(l, x, y, { taille, ...o }); y += taille * 1.2; }
+  return y;
+}
+
+// Quatre colonnes de deux blocs, dans le cadre 760 × 420, rien sous y = 360 ; hauteurs mesurées, réparties dans la colonne.
+const COL = [{ x: 16, w: 168 }, { x: 204, w: 168 }, { x: 392, w: 168 }, { x: 580, w: 164 }], HAUT = 52, BAS = 358;
+const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
+const TF = 12.5;  // taille des formules
+const TD = 11.5;  // taille du texte
+
+/* Écrit (ou mesure seulement) le contenu d'un bloc ; rend l'ordonnée de fin. */
+function contenu(c, b, x, y0, w, st, dessiner) {
+  let y = y0 + 12;
+  if (dessiner) c.texte(b.titre, x, y, { couleur: 'cyan', taille: 14, max: st ? w - 56 : w });
+  y += 19;
+  // formules encadrées, à la ligne quand la suivante ne tient plus
+  let fx = x;
+  for (const f of b.formules) {
+    const l = Math.min(w, largeur(c, f, TF) + 14);
+    if (fx > x && fx + l > x + w) { fx = x; y += 22; }
+    if (dessiner) {
+      c.rect(fx, y - 13, l, 19, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
+      c.texte(f, fx + 7, y + 1, { couleur: 'blanc', taille: TF, max: l - 10 });
+    }
+    fx += l + 7;
+  }
+  y += 22;
+  y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc', alpha: .9 }, dessiner);
+  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
+  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 }, dessiner);
+  return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
+}
+function placer(c) {
+  for (let k = 0; k < 4; k++) {
+    const { x, w } = COL[k], ids = [2 * k, 2 * k + 1];
+    const h = ids.map(i => contenu(c, BLOCS[i], x, 0, w, true, false) + 6);
+    const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / 2);
+    if (libre < 0) ids.forEach(i => { if (!window.__debordeBlocs.includes(BLOCS[i].id)) window.__debordeBlocs.push(BLOCS[i].id); });
+    let y = HAUT;
+    ids.forEach((i, j) => { POS[i] = { x, w, y0: y, h: h[j] + g * .6 }; y += h[j] + g; });
+  }
+}
+function bloc(c, b, i) {
+  const { x, w, y0, h } = POS[i], enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = h + 4;
+  // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  c.direct(() => {
+    if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
+    else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: 15 });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+  });
+  const fin = contenu(c, b, x, y0, w, st, true);
+  if (fin > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  c.repere(b.id, cx, cy, cw, ch, lisible(b.titre.replace(/^\d+ · /, '')));
+}
+
+function dessinerFiche(c) {
+  placer(c);
+  if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
+  c.texte('Ce qu’il faut retenir · le dipôle RC', 16, 30, { couleur: 'cyan', taille: 22 });
+  c.texte('formules · à savoir · ⚠ piège', 744, 28, { couleur: 'faible', taille: 12, align: 'right' });
+  c.ligne(16, 38, 744, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.repere('fiche', 10, 10, 740, BAS - 4, 'la fiche du chapitre');
+  const debut = c.cur;
+  let fin = c.cur;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] == null) return;   // pas encore dit : il attend son moment
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, b, i); fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'cyan', taille: 22 });
+  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    y = paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' }, true);
+    c.repere('lacunes', 18, 50, 720, y - 50, 'ta page : pas encore de bilan');
+    return;
+  }
+  const y0 = y - 18;
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' }, true);
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 }, true);
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    y = paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 }, true);
+  }
+  c.repere('lacunes', 18, y0, 720, Math.max(30, y - y0), 'ce qu’il reste à retravailler');
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(61 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+
+/* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
+function aller(n, par, focus, tout) {
+  n = n === 2 ? 2 : 1;
+  if (par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // rejouer : la fiche se réécrit depuis le début
+  else if (n !== S.page) {
+    // changement de page : on repart d'une page vierge, mais les blocs déjà dits restent écrits (d'un coup)
+    scene.reecrire(); S.apparu = S.apparu.map(a => (a == null ? null : AVANT));
+  }
+  if (n === 1) {
+    const k = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+    if (tout) BLOCS.forEach((b, i) => { if (S.apparu[i] == null) S.apparu[i] = AVANT; });
+    if (k >= 0) {
+      for (let i = 0; i < k; i++) if (S.apparu[i] == null) S.apparu[i] = AVANT;   // sautés : écrits d'un coup
+      if (S.apparu[k] == null) S.apparu[k] = par === 'start' || par === 'reset' ? 0 : maintenant();
+    }
+  }
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? lisible(BLOCS.find(b => b.id === focus).titre.replace(/^\d+ · /, '')) : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+// Les moments sont des pages (1 = la fiche, 2 = la page de l'élève) ; « fin » = la fiche entière écrite.
+function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; m.fin = 1; return m; }
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fiche' || nom === 'fin' || !nom) aller(1, 'play_until', null, true);
+  else aller(1, 'play_until', nom);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
+  return lisible(`Page 1/2, la fiche du chapitre « Dipôle RC » : ${ecrits}/8 blocs écrits (formules encadrées, ce qu’il faut savoir, piège)${f ? ` ; en lumière « ${f.titre} » : formules ${f.formules.join(' ; ')}. ${f.def} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`);
+}
+$('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — dipôle RC', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } },
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const i = BLOCS.findIndex((b, k) => { const p = POS[k]; return p && S.apparu[k] != null && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), lisible(BLOCS[i].def));
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: lisible(b.formules.join(' ; ') + '. ' + b.def + ' Piège : ' + b.attention) })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'dipole_rc_bilan', version: '1.0', title: 'Ce qu’il faut retenir — dipôle RC', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche ou fin = toute la fiche ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1..C8, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Dipôle RC », sur une page (huit blocs : le condensateur, les associations, l’échelon de tension, l’équation différentielle, les solutions, la constante de temps, la lecture de τ, l’énergie ; chacun avec formules encadrées, ce qu’il faut savoir, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'condensateur'), reset: () => aller(1, 'reset', 'condensateur'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
+aller(1, 'start', 'condensateur');   // la voix commence par le condensateur : le premier bloc s'écrit et est en lumière
+window.__bilan = { S, scene, BLOCS, POS, lisible };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
