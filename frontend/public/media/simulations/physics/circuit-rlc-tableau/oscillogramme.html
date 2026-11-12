@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les régimes d’oscillation — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rlc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un écran d’oscilloscope peint (10 × 8 carreaux, 2 V/div, 2 ms/div) où la tension u_C(t) aux bornes du condensateur se trace en rouge au ralenti ; le régime est écrit à la craie sous l’écran ; à droite, la colonne de lecture et la poignée R"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Oscillogrammes de u_C(t) : les régimes (cours « Oscillations libres d’un circuit RLC série », 2e Bac PC BIOF, 12 novembre 2026).
+ * Physique exacte : L·d²q/dt² + (R + r)·dq/dt + q/C = 0, avec u_C(0) = E = 6 V et i(0) = 0 ; C = 4 µF, L = 0,1 H, r = 10 Ω.
+ *   R + r = 20 Ω : pseudo-période T ≈ 3,98 ms ; sommets de u_C en 0, T, 2T, 3T : 6 ; 4,0 ; 2,7 ; 1,8 V ; creux à T/2 : −4,9 V.
+ *   T₀ = 2π√(LC) ≈ 3,97 ms ≈ 4 ms. R = 1 kΩ : apériodique ; R = 300 Ω : la frontière (aucune formule écrite).
+ * Écran : 10 carreaux × 2 ms = 20 ms ; 8 carreaux × 2 V (−8 V à 8 V). La trace se dessine AU RALENTI : 1 ms du vrai circuit
+ * = 0,5 s de simulation (une période ≈ 2 s) ; les nombres affichés sont ceux du vrai circuit.
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - periodique (défaut, R + r = 0) : trace, sommets_egaux, fin.
+ *  - pseudo (R + r = 20 Ω) : trace, premier_sommet, sommets_decroissants, mesure_nT, T_voisine_T0, fin.
+ *  - aperiodique (R = 1 kΩ) : trace, retour_sans_oscillation, frontiere (la poignée descend à 300 Ω, courbe en pointillés), fin.
+ *  - critique (R = 300 Ω) : trace, frontiere, fin.
+ *  - comparer : trois petits écrans à la même échelle : pseudo, aperiodique, periodique, ordre, fin.
+ * Paramètre R (0 → 2000 Ω, poignée sur la règle « R », vues pseudo, aperiodique, critique).
+ * Couleurs : ROUGE = condensateur (u_C) ; jaune = surlignage seulement ; blanc = craie ordinaire.
+ * La trace de l’écran est peinte (spot lumineux) ; la craie écrit les marques, les cotes et la lecture.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '').replace('-', '−');
+const lisse = f => f * f * (3 - 2 * f);
+const VUES = {
+  periodique: ['trace', 'sommets_egaux', 'fin'],
+  pseudo: ['trace', 'premier_sommet', 'sommets_decroissants', 'mesure_nT', 'T_voisine_T0', 'fin'],
+  aperiodique: ['trace', 'retour_sans_oscillation', 'frontiere', 'fin'],
+  critique: ['trace', 'frontiere', 'fin'],
+  comparer: ['pseudo', 'aperiodique', 'periodique', 'ordre', 'fin'],
+};
+const TITRES = { periodique: 'R + r = 0 (LC idéal)', pseudo: 'R + r = 20 Ω', aperiodique: 'R = 1 kΩ', critique: 'R = 300 Ω, la frontière', comparer: 'les trois régimes, même échelle' };
+const R_DEFAUT = { pseudo: 10, aperiodique: 1000, critique: 300 };
+const AVEC_R = v => v in R_DEFAUT;
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'periodique', R: { ...R_DEFAUT }, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '', anneauR: null, spot: null };
+let M = {}, MM = {};
+const VITESSE = 2;
+const RALENTI = .5, DT = 20 * RALENTI;          // s de simulation par ms du vrai circuit ; un écran (20 ms) = 10 s
+
+/* ── Physique (solution exacte de L·q'' + (R + r)·q' + q/C = 0, u_C(0) = E, i(0) = 0) ───────── */
+const E = 6, C = 4e-6, L = .1, r = 10;
+const W0 = 1 / Math.sqrt(L * C), T0 = 2 * Math.PI / W0 * 1000;      // ms : 3,97
+const FRONTIERE = 2 * Math.sqrt(L / C);                              // ≈ 316 Ω : calcul interne, jamais écrit
+function uC(tms, Rt) {
+  const t = tms / 1000, a = Rt / (2 * L), d = a * a - W0 * W0;
+  if (Math.abs(d) < 1e-6 * W0 * W0) return E * (1 + a * t) * Math.exp(-a * t);
+  if (d < 0) { const w = Math.sqrt(-d); return E * Math.exp(-a * t) * (Math.cos(w * t) + a / w * Math.sin(w * t)); }
+  const s = Math.sqrt(d), s1 = -a + s, s2 = -a - s;
+  return E * (s2 * Math.exp(s1 * t) - s1 * Math.exp(s2 * t)) / (s2 - s1);
+}
+/** Pseudo-période (ms) ou null s’il n’y a pas d’oscillation. */
+function pseudoT(Rt) { const a = Rt / (2 * L), d = W0 * W0 - a * a; return d > 1e-6 * W0 * W0 ? 2 * Math.PI / Math.sqrt(d) * 1000 : null; }
+function regime(Rt) { if (Rt <= 0) return 'periodique'; if (Math.abs(Rt - FRONTIERE) <= 20) return 'critique'; return Rt < FRONTIERE ? 'pseudo' : 'aperiodique'; }
+const NOM_REGIME = { periodique: 'régime périodique', pseudo: 'régime pseudo-périodique', critique: 'régime critique : la frontière', aperiodique: 'régime apériodique' };
+/** Sommets de u_C (t = n·T, u = E·e^(−(R+r)t/2L)) visibles sur l’écran, n ≤ 3. */
+function sommets(Rt) {
+  const T = pseudoT(Rt); if (!T) return [{ n: 0, t: 0, u: E }];
+  const out = [];
+  for (let n = 0; n <= 3 && n * T <= 20 + 1e-9; n++) { const u = uC(n * T, Rt); if (n === 0 || u >= .1) out.push({ n, t: n * T, u }); }
+  return out;
+}
+const RTVUE = { periodique: () => 0, comparer: () => 20 };
+const rtVue = () => (AVEC_R(S.vue) ? S.R[S.vue] + r : RTVUE[S.vue]());
+const fR = R => (R >= 1000 ? `${fx(R / 1000, 2)} kΩ` : `${fx(R, 0)} Ω`);
+/** Le titre de la vue, avec la valeur réelle de R (réglable). */
+function titre() {
+  const v = S.vue; if (!AVEC_R(v)) return TITRES[v];
+  const R = S.R[v];
+  return v === 'pseudo' ? `R + r = ${fR(R + r)}` : `R = ${fR(R)}${regime(R + r) === 'critique' ? ', la frontière' : ''}`;
+}
+const fV = u => (Math.abs(u - 6) < 1e-6 ? '6' : fr(u, 1).replace('-', '−'));
+const fs = (v, d = 1) => fr(v, d).replace('-', '−');
+const fms = v => (Math.abs(v - Math.round(v)) < .1 ? fx(Math.round(v), 0) : fr(v, 1));
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const CAS = { x: 12, y: 44, w: 376, h: 316 }, ECR = { x: 30, y: 56, w: 340, h: 272 };
+const RL = { x: 400, y: 44, w: 352, h: 312 }, LX = RL.x + 10, LW = RL.w - 20;
+const RUL = { x0: 432, x1: 728, y: 396 };
+const xR = R => RUL.x0 + Math.sqrt(clamp(R, 0, 2000) / 2000) * (RUL.x1 - RUL.x0);
+const Rx = x => Math.pow(clamp((x - RUL.x0) / (RUL.x1 - RUL.x0)), 2) * 2000;
+const PX = (e, t) => e.x + t / 20 * e.w;
+const PY = (e, u) => e.y + e.h / 2 - u / 8 * (e.h / 2);
+const PETITS = [0, 1, 2].map(k => { const x = 14 + k * 249; return { cas: { x, y: 66, w: 234, h: 204 }, e: { x: x + 12, y: 76, w: 210, h: 168 } }; });
+// comparer : à gauche périodique, au milieu pseudo-périodique, à droite apériodique (l’amortissement augmente vers la droite)
+const PETIT = { periodique: { ...PETITS[0], Rt: 0, titre: 'R + r = 0 (LC idéal)' }, pseudo: { ...PETITS[1], Rt: 20, titre: 'R + r = 20 Ω' }, aperiodique: { ...PETITS[2], Rt: 1010, titre: 'R = 1 kΩ' } };
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, duree: Math.max(.3, s.length / 30), ...o });
+
+/** Une phase de durée D (s) : renvoie la part écoulée (0 → 1) ; tant qu’elle n’est pas finie, la scène se redessine. */
+function phase(c, D) {
+  const t0 = c.cur; c.pause(D);
+  const f = Number.isFinite(c.t) ? clamp((c.t - t0) / D) : 1;
+  if (f < 1) c.complet = false;
+  return f;
+}
+
+/* ── Peinture : coffret et écran de l’oscilloscope, trace lumineuse ───────── */
+function peindreOscillo(ctx, k, e) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(k.x + 4, k.y + 5, k.w, k.h, 12); ctx.fill();
+  const g = ctx.createLinearGradient(k.x, k.y, k.x + k.w, k.y + k.h); g.addColorStop(0, '#59636d'); g.addColorStop(.5, '#3a424a'); g.addColorStop(1, '#23292f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(k.x, k.y, k.w, k.h, 12); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1; ctx.stroke();
+  const ge = ctx.createRadialGradient(e.x + e.w / 2, e.y + e.h / 2, 10, e.x + e.w / 2, e.y + e.h / 2, e.w * .7);
+  ge.addColorStop(0, '#0d3a22'); ge.addColorStop(1, '#03160c');
+  ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 6); ctx.fill();
+  ctx.strokeStyle = '#1b2228'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 10; i++) { const x = e.x + i * e.w / 10; ctx.strokeStyle = 'rgba(120,255,170,.10)'; ctx.beginPath(); ctx.moveTo(x, e.y + 3); ctx.lineTo(x, e.y + e.h - 3); ctx.stroke(); }
+  for (let j = 1; j < 8; j++) { const y = e.y + j * e.h / 8; ctx.strokeStyle = j === 4 ? 'rgba(120,255,170,.24)' : 'rgba(120,255,170,.10)'; ctx.beginPath(); ctx.moveTo(e.x + 3, y); ctx.lineTo(e.x + e.w - 3, y); ctx.stroke(); }
+  // petites graduations sur l’axe central (5 par carreau), comme sur un vrai écran
+  ctx.strokeStyle = 'rgba(120,255,170,.22)';
+  for (let i = 1; i < 50; i++) { const x = e.x + i * e.w / 50, y = e.y + e.h / 2; ctx.beginPath(); ctx.moveTo(x, y - 2.5); ctx.lineTo(x, y + 2.5); ctx.stroke(); }
+  ctx.restore();
+}
+/** u_C(t) de 0 à f·20 ms, en rouge lumineux, découpée au bord de l’écran ; le spot brille au bout pendant le tracé. */
+function peindreTrace(c, e, Rt, f, o = {}) {
+  if (f <= 0) return;
+  c.direct(() => {
+    const ctx = c.ctx, tm = 20 * f, n = Math.max(2, Math.ceil(tm / .04));
+    ctx.save(); ctx.beginPath(); ctx.rect(e.x + 1, e.y + 1, e.w - 2, e.h - 2); ctx.clip();
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = o.couleur || '#ff7a7a'; ctx.lineWidth = o.largeur || 2.3; ctx.shadowColor = 'rgba(255,90,90,.85)'; ctx.shadowBlur = 7;
+    ctx.globalAlpha = o.alpha ?? 1; ctx.setLineDash(o.pointille || []);
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) { const t = tm * i / n, x = PX(e, t), y = PY(e, uC(t, Rt)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+    if (f < 1) {
+      const x = PX(e, tm), y = PY(e, uC(tm, Rt));
+      ctx.setLineDash([]); ctx.shadowBlur = 14; ctx.fillStyle = '#ffe1e1'; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 7); ctx.fill();
+      if (!o.sansSpot) S.spot = { t: tm, u: uC(tm, Rt) };
+    }
+    ctx.restore();
+  });
+}
+
+function dessiner(c) {
+  scene.cadre(37); MM = {}; S.anneauR = null; S.spot = null;
+  c.texte(`Oscillogramme de u_C(t) : ${titre()}`, 14, 28, { couleur: 'cyan', taille: 19, max: 730, duree: .8 });
+  if (S.vue === 'comparer') vueComparer(c); else vueSimple(c);
+  c.pause(.8); marque(c, 'fin');
+  if (AVEC_R(S.vue)) poignee(c);
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+
+/* ── Vues à un écran ───────────────────────────────────────────────────── */
+function cadreSimple(c, Rt) {
+  c.direct(() => peindreOscillo(c.ctx, CAS, ECR));
+  c.texte('u_C', ECR.x + ECR.w - 10, ECR.y + 20, { couleur: 'rouge', taille: 16, align: 'right', duree: .2 });
+  c.texte('t', ECR.x + ECR.w - 8, ECR.y + ECR.h / 2 - 7, { couleur: 'faible', taille: 14, align: 'right', duree: .1 });
+  c.texte('voie 1 (u_C) : 2 V/div', CAS.x + 16, CAS.y + CAS.h - 11, { couleur: 'blanc', taille: 14, duree: .4 });
+  c.texte('2 ms/div', CAS.x + CAS.w - 16, CAS.y + CAS.h - 11, { couleur: 'blanc', taille: 14, align: 'right', duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  lire(c, 68, 'C = 4 µF ; L = 0,1 H ; u_C(0) = E = 6 V', { couleur: 'faible', taille: 14 });
+  lire(c, 90, AVEC_R(S.vue) ? `r = 10 Ω ; R = ${fR(S.R[S.vue])} : R + r = ${fR(Rt)}` : 'R + r = 0 : circuit LC idéal', { couleur: 'faible', taille: 14 });
+  c.pause(.3);
+}
+const sousEcran = (c, s, ligne = 0, o = {}) => c.texte(s, CAS.x + CAS.w / 2, 386 + ligne * 24, { couleur: 'blanc', taille: 18, align: 'center', max: CAS.w, ...o });
+function tracer(c, Rt, o = {}) { peindreTrace(c, ECR, Rt, phase(c, DT), o); }
+
+function vueSimple(c) {
+  const Rt = rtVue();
+  cadreSimple(c, Rt);
+  ({ periodique: vuePeriodique, pseudo: vuePseudo, aperiodique: vueAperiodique, critique: vueCritique })[S.vue](c, Rt);
+}
+function vuePeriodique(c, Rt) {
+  lire(c, 120, 'u_C(t) au ralenti :', { couleur: 'rouge' });
+  lire(c, 142, 'sinusoïde de 6 V', { couleur: 'rouge' });
+  tracer(c, Rt);
+  marque(c, 'trace');
+  c.pause(.4);
+  c.ligne(ECR.x + 2, PY(ECR, 6), ECR.x + ECR.w - 2, PY(ECR, 6), { couleur: 'jaune', largeur: 1.6, pointille: [8, 6] });
+  for (let n = 0; n * T0 <= 20; n++) c.cercle(PX(ECR, n * T0), PY(ECR, 6), 6, { couleur: 'jaune', largeur: 1.8, duree: .12 });
+  c.texte('6 V', ECR.x + 10, PY(ECR, 6) - 12, { couleur: 'rouge', taille: 14 });
+  lire(c, 180, 'tous les sommets à 6 V :', { couleur: 'blanc' });
+  lire(c, 202, 'l’amplitude ne baisse pas', { couleur: 'blanc' });
+  lire(c, 236, 'pas de résistance :', { couleur: 'faible', taille: 15 });
+  lire(c, 258, 'aucune perte d’énergie', { couleur: 'faible', taille: 15 });
+  sousEcran(c, NOM_REGIME.periodique);
+  marque(c, 'sommets_egaux');
+}
+function vuePseudo(c, Rt) {
+  const T = pseudoT(Rt), som = sommets(Rt), reg = regime(Rt);
+  lire(c, 120, 'u_C(t) au ralenti : départ à 6 V', { couleur: 'rouge' });
+  tracer(c, Rt);
+  marque(c, 'trace');
+  c.pause(.4);
+  // premier sommet (t = T)
+  if (som.length > 1) {
+    const s1 = som[1], x = PX(ECR, s1.t), y = PY(ECR, s1.u);
+    c.cercle(x, y, 6, { couleur: 'jaune', largeur: 1.8 });
+    c.texte(`${fV(s1.u)} V`, x + 8, y - 10, { couleur: 'rouge', taille: 14 });
+    lire(c, 150, `sommet à t = T : u_C ≈ ${fV(s1.u)} V`);
+  } else lire(c, 150, `pas de second sommet : ${NOM_REGIME[reg]}`);
+  marque(c, 'premier_sommet');
+  c.pause(.4);
+  // tous les sommets
+  for (const s of som) if (s.n !== 1) {
+    const x = PX(ECR, s.t), y = PY(ECR, s.u);
+    c.cercle(x, y, 6, { couleur: 'jaune', largeur: 1.8, duree: .15 });
+    c.texte(`${fV(s.u)} V`, x + (s.n === 0 ? 11 : 8), y + (s.n === 0 ? 5 : -10), { couleur: 'rouge', taille: 14 });
+  }
+  if (reg === 'pseudo') {
+    lire(c, 178, `sommets : ${som.map(s => fV(s.u)).join(' ; ')} V`, { couleur: 'rouge' });
+    lire(c, 200, 'ils baissent : régime pseudo-périodique', { couleur: 'blanc', taille: 15 });
+    lire(c, 222, 'T : pseudo-période', { couleur: 'blanc', taille: 15 });
+    sousEcran(c, 'régime pseudo-périodique'); sousEcran(c, 'T : pseudo-période', 1, { taille: 15, couleur: 'faible' });
+  } else {
+    lire(c, 178, `u_C n’oscille pas : ${NOM_REGIME[reg]}`, { couleur: 'blanc', taille: 15 });
+    sousEcran(c, NOM_REGIME[reg]);
+  }
+  marque(c, 'sommets_decroissants');
+  c.pause(.4);
+  // mesure sur plusieurs pseudo-périodes
+  const n = som.length - 1;
+  if (T && n >= 1) {
+    const yc = ECR.y + 16, x0 = PX(ECR, 0), xn = PX(ECR, n * T);
+    c.ligne(x0, yc, x0, PY(ECR, E) - 8, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+    c.ligne(xn, yc, xn, PY(ECR, som[n].u) - 8, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+    c.cote(x0, yc, xn, yc, `${n === 1 ? '' : n}T ≈ ${fms(n * T)} ms`, { couleur: 'blanc', largeur: 1.6, taille: 14, dessous: true });
+    // sommet → creux suivant : T/2, pas T (barré)
+    const xc = PX(ECR, T / 2), yv = PY(ECR, uC(T / 2, Rt)), yb = ECR.y + ECR.h - 26;
+    c.ligne(xc, yv + 6, xc, yb, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+    c.ligne(x0, yv, x0, yb, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+    c.cote(x0, yb, xc, yb, '', { couleur: 'blanc', largeur: 1.5 });
+    c.ligne((x0 + xc) / 2 - 9, yb - 9, (x0 + xc) / 2 + 9, yb + 9, { couleur: 'jaune', largeur: 2 });
+    c.ligne((x0 + xc) / 2 - 9, yb + 9, (x0 + xc) / 2 + 9, yb - 9, { couleur: 'jaune', largeur: 2 });
+    c.texte('T/2, pas T', xc + 8, yb + 5, { couleur: 'blanc', taille: 14 });
+    lire(c, 256, `du 1er au ${n + 1}e sommet : ${n === 1 ? '' : n}T ≈ ${fms(n * T)} ms`, { couleur: 'blanc', taille: 15 });
+    lire(c, 282, `donc T ≈ ${fms(T)} ms`, { couleur: 'blanc', taille: 18 });
+    c.rect(LX - 5, 262, 150, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+    lire(c, 306, 'sommet → creux suivant : T/2, pas T', { couleur: 'faible', taille: 14 });
+  } else lire(c, 256, 'pas de période à mesurer', { couleur: 'faible', taille: 15 });
+  marque(c, 'mesure_nT');
+  c.pause(.4);
+  lire(c, 328, 'T_0 = 2π√(LC) ≈ 4 ms', { couleur: 'blanc', taille: 16 });
+  if (T && Math.abs(T - T0) / T0 < .05) lire(c, 348, 'T ≈ T_0 : amortissement faible', { couleur: 'blanc', taille: 15 });
+  else if (T) lire(c, 348, `T ≈ ${fms(T)} ms > T_0 : amortissement fort`, { couleur: 'blanc', taille: 15 });
+  else lire(c, 348, 'ici, aucune oscillation', { couleur: 'faible', taille: 15 });
+  marque(c, 'T_voisine_T0');
+}
+/** Ce que dit la craie quand u_C revient vers 0, selon le régime réel de R + r. */
+function retour(Rt) {
+  const reg = regime(Rt);
+  return reg === 'pseudo' ? ['u_C oscille autour de 0 :', 'ses sommets baissent'] : ['u_C revient vers 0', 'sans changer de signe'];
+}
+function vueAperiodique(c, Rt) {
+  const [a, b] = retour(Rt), reg = regime(Rt);
+  lire(c, 120, 'u_C(t) au ralenti :', { couleur: 'rouge' });
+  lire(c, 142, a, { couleur: 'rouge' }); lire(c, 164, b, { couleur: 'rouge' });
+  tracer(c, Rt);
+  marque(c, 'trace');
+  c.pause(.4);
+  lire(c, 196, reg === 'pseudo' ? `R + r = ${fR(Rt)} : ${NOM_REGIME.pseudo}` : 'aucune oscillation :', { couleur: 'blanc', max: LW });
+  if (reg !== 'pseudo') lire(c, 218, NOM_REGIME[reg], { couleur: 'blanc', taille: 18 });
+  sousEcran(c, NOM_REGIME[reg]);
+  marque(c, 'retour_sans_oscillation');
+  c.pause(.4);
+  // la poignée R descend à 300 Ω, puis la courbe de la frontière se trace en pointillés
+  const fa = phase(c, 1.6);
+  S.anneauR = S.R.aperiodique + (300 - S.R.aperiodique) * lisse(fa);
+  if (fa >= 1) S.anneauR = 300;
+  peindreTrace(c, ECR, 310, phase(c, DT), { pointille: [7, 5], alpha: .9 });
+  lire(c, 252, 'la poignée R descend à 300 Ω :', { couleur: 'blanc', taille: 15 });
+  lire(c, 274, 'retour le plus rapide sans oscillation', { couleur: 'rouge', taille: 15 });
+  lire(c, 296, '(courbe en pointillés)', { couleur: 'faible', taille: 14 });
+  lire(c, 326, 'régime critique : la frontière', { couleur: 'blanc', taille: 17 });
+  c.rect(LX - 5, 308, 236, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  sousEcran(c, 'pointillés (300 Ω) : la frontière', 1, { taille: 15, couleur: 'faible' });
+  marque(c, 'frontiere');
+}
+function vueCritique(c, Rt) {
+  const reg = regime(Rt), [a, b] = retour(Rt);
+  lire(c, 120, 'u_C(t) au ralenti :', { couleur: 'rouge' });
+  lire(c, 142, a, { couleur: 'rouge' }); lire(c, 164, b, { couleur: 'rouge' });
+  tracer(c, Rt);
+  marque(c, 'trace');
+  c.pause(.4);
+  peindreTrace(c, ECR, 1010, phase(c, DT), { pointille: [7, 5], alpha: .85 });
+  if (reg === 'critique') {
+    lire(c, 198, 'retour le plus rapide', { couleur: 'blanc' });
+    lire(c, 220, 'sans oscillation', { couleur: 'blanc' });
+    lire(c, 252, 'régime critique : la frontière', { couleur: 'blanc', taille: 17 });
+    c.rect(LX - 5, 234, 236, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  } else {
+    lire(c, 198, `R = ${fR(S.R.critique)} : ${NOM_REGIME[reg]}`, { couleur: 'blanc', taille: 15 });
+    lire(c, 220, 'la frontière est vers R ≈ 300 Ω', { couleur: 'blanc', taille: 15 });
+  }
+  lire(c, 286, 'pointillés : R = 1 kΩ,', { couleur: 'faible', taille: 15 });
+  lire(c, 308, 'retour plus lent', { couleur: 'faible', taille: 15 });
+  lire(c, 334, 'R plus petite : u_C oscille', { couleur: 'faible', taille: 15 });
+  sousEcran(c, NOM_REGIME[reg]);
+  sousEcran(c, 'pointillés : R = 1 kΩ (apériodique)', 1, { taille: 15, couleur: 'faible' });
+  marque(c, 'frontiere');
+}
+
+/* ── Vue « comparer » : trois petits écrans à la même échelle ─────────────── */
+function vueComparer(c) {
+  c.direct(() => { for (const k of Object.values(PETIT)) peindreOscillo(c.ctx, k.cas, k.e); });
+  for (const k of Object.values(PETIT)) {
+    c.texte(k.titre, k.cas.x + k.cas.w / 2, 58, { couleur: 'blanc', taille: 15, align: 'center', duree: .3 });
+    c.texte('2 V/div ; 2 ms/div', k.cas.x + k.cas.w / 2, k.cas.y + k.cas.h - 9, { couleur: 'blanc', taille: 13, align: 'center', duree: .3 });
+  }
+  c.texte('C = 4 µF ; L = 0,1 H ; u_C(0) = 6 V', 746, 28, { couleur: 'faible', taille: 13, align: 'right', duree: .3 });
+  c.pause(.3);
+  for (const nom of ['pseudo', 'aperiodique', 'periodique']) {
+    const k = PETIT[nom];
+    peindreTrace(c, k.e, k.Rt, phase(c, DT), { largeur: 2 });
+    c.texte(NOM_REGIME[nom].replace('régime ', ''), k.cas.x + k.cas.w / 2, 296, { couleur: 'rouge', taille: 17, align: 'center' });
+    marque(c, nom);
+    c.pause(.4);
+  }
+  c.fleche(40, 318, 722, 318, { couleur: 'blanc', largeur: 2, tete: 12 });
+  c.texte('l’amortissement augmente avec R + r', 380, 344, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.texte('périodique → pseudo-périodique → apériodique', 380, 368, { couleur: 'faible', taille: 15, align: 'center' });
+  c.texte('L et C font osciller, R + r amortit', 380, 400, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.rect(232, 380, 296, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'ordre');
+}
+
+/* ── La poignée R (règle à la craie, anneau rose) ──────────────────────── */
+function poignee(c) {
+  const R = S.anneauR ?? S.R[S.vue];
+  c.direct(() => {
+    c.ligne(RUL.x0, RUL.y, RUL.x1, RUL.y, { couleur: 'faible', largeur: 1.6 });
+    for (const [v, s] of [[0, '0'], [100, '100'], [500, '500'], [1000, '1 k'], [2000, '2 kΩ']]) {
+      const x = xR(v); c.ligne(x, RUL.y - 4, x, RUL.y + 4, { couleur: 'faible', largeur: 1.3 });
+      c.texte(s, x, RUL.y + 17, { couleur: 'faible', taille: 12, align: 'center' });
+    }
+    c.texte(`poignée R = ${fR(R)} (R + r = ${fR(R + r)})`, RL.x + 10, RUL.y - 16, { couleur: 'blanc', taille: 15, max: RL.w - 20 });
+    c.cercle(xR(R), RUL.y, 8, { couleur: 'rose', largeur: 2.2 });
+  });
+}
+
+function declarerReperes(c) {
+  const v = S.vue, ici = (...vs) => (vs.includes(v) ? '' : ` (vue « ${vs[0]} »)`);
+  if (v === 'comparer') {
+    const P = PETIT;
+    c.repere('ecran', P.periodique.cas.x, P.periodique.cas.y, P.aperiodique.cas.x + P.aperiodique.cas.w - P.periodique.cas.x, P.periodique.cas.h, 'les trois écrans d’oscilloscope, même échelle (2 V/div, 2 ms/div)');
+    c.repere('sensibilites', P.periodique.cas.x, P.periodique.cas.y + P.periodique.cas.h - 24, P.aperiodique.cas.x + P.aperiodique.cas.w - P.periodique.cas.x, 22, 'les sensibilités : 2 V/div et 2 ms/div sur les trois écrans');
+    c.repere('courbe', P.pseudo.e.x, P.pseudo.e.y, P.pseudo.e.w, P.pseudo.e.h, 'u_C(t) pseudo-périodique, R + r = 20 Ω');
+    c.repere('courbe_periodique', P.periodique.e.x, P.periodique.e.y, P.periodique.e.w, P.periodique.e.h, 'à gauche : R + r = 0, régime périodique (sommets égaux, 6 V)');
+    c.repere('courbe_pseudo', P.pseudo.e.x, P.pseudo.e.y, P.pseudo.e.w, P.pseudo.e.h, 'au milieu : R + r = 20 Ω, régime pseudo-périodique (sommets 6 ; 4,0 ; 2,7 ; 1,8 V)');
+    c.repere('courbe_aperiodique', P.aperiodique.e.x, P.aperiodique.e.y, P.aperiodique.e.w, P.aperiodique.e.h, 'à droite : R = 1 kΩ, régime apériodique (retour vers 0 sans oscillation)');
+    c.repere('sommets', P.pseudo.e.x, P.pseudo.e.y, P.pseudo.e.w * .7, P.pseudo.e.h / 2, 'les sommets de u_C qui baissent (écran du milieu)');
+    c.repere('premier_sommet', PX(P.pseudo.e, 3.98) - 12, PY(P.pseudo.e, 4.03) - 12, 24, 24, 'le sommet à t = T : ≈ 4,0 V (écran du milieu)');
+    c.repere('mesure', P.pseudo.e.x, P.pseudo.e.y, P.pseudo.e.w * .65, 24, 'mesure de T sur plusieurs pseudo-périodes (vue « pseudo »)');
+    c.repere('T', P.pseudo.e.x, P.pseudo.e.y, P.pseudo.e.w * .25, P.pseudo.e.h, 'la pseudo-période T ≈ 4 ms (écran du milieu)');
+    c.repere('T0', P.periodique.e.x, P.periodique.e.y, P.periodique.e.w * .25, P.periodique.e.h, 'la période propre T₀ = 2π√(LC) ≈ 4 ms (écran de gauche)');
+    c.repere('regime', 14, 278, 732, 26, 'les régimes : périodique, pseudo-périodique, apériodique');
+    c.repere('ordre', 30, 306, 700, 108, 'l’amortissement augmente avec R + r ; L et C font osciller, R + r amortit');
+    c.repere('poignee_R', 14, 306, 732, 30, 'la poignée R (vues « pseudo », « aperiodique », « critique »)');
+    return;
+  }
+  const Rt = rtVue(), T = pseudoT(Rt), som = sommets(Rt), reg = regime(Rt);
+  c.repere('ecran', CAS.x, CAS.y, CAS.w, CAS.h, 'l’écran de l’oscilloscope : u_C(t) au ralenti');
+  c.repere('sensibilites', CAS.x, CAS.y + CAS.h - 30, CAS.w, 28, 'les sensibilités : 2 V/div (voie 1, u_C) et 2 ms/div');
+  c.repere('courbe', ECR.x, ECR.y, ECR.w, ECR.h, `la courbe rouge u_C(t), R + r = ${fR(Rt)} : ${NOM_REGIME[reg]}`);
+  const xs = som.map(s => PX(ECR, s.t)), ys = som.map(s => PY(ECR, s.u));
+  if (v === 'periodique') c.repere('sommets', ECR.x, PY(ECR, 6) - 14, ECR.w, 28, 'les sommets, tous à 6 V');
+  else c.repere('sommets', Math.min(...xs) - 12, Math.min(...ys) - 22, Math.max(...xs) - Math.min(...xs) + 44, Math.max(...ys) - Math.min(...ys) + 34, `les sommets de u_C : ${som.map(s => fV(s.u)).join(' ; ')} V`);
+  if (T && som.length > 1) c.repere('premier_sommet', xs[1] - 14, ys[1] - 14, 28, 28, `le sommet à t = T : u_C ≈ ${fV(som[1].u)} V${ici('pseudo')}`);
+  else c.repere('premier_sommet', ECR.x, ECR.y, 40, 40, `le sommet à t = T (vue « pseudo »)`);
+  const n = som.length - 1;
+  c.repere('mesure', ECR.x - 4, ECR.y + 2, Math.max(40, (n >= 1 && T ? PX(ECR, n * T) : ECR.x + 120) - ECR.x + 8), 34, T && n >= 1 ? `la cote ${n}T ≈ ${fms(n * T)} ms, donc T ≈ ${fms(T)} ms${ici('pseudo')}` : 'la mesure de T sur plusieurs pseudo-périodes (vue « pseudo »)');
+  c.repere('T', LX - 6, 242, LW + 8, 54, T ? `T ≈ ${fms(T)} ms${ici('pseudo')}` : 'la pseudo-période T (vue « pseudo »)');
+  c.repere('T0', LX - 6, 316, LW + 8, 42, `T₀ = 2π√(LC) ≈ 4 ms${ici('pseudo')}`);
+  c.repere('regime', CAS.x, 366, CAS.w, 50, `le régime écrit sous l’écran : ${NOM_REGIME[reg]}`);
+  if (AVEC_R(v)) c.repere('poignee_R', RL.x, RUL.y - 34, RL.w, 60, `la poignée R : ${fR(S.anneauR ?? S.R[v])} (0 à 2 kΩ)`);
+  else c.repere('poignee_R', RL.x, RUL.y - 34, RL.w, 60, 'la poignée R (vues « pseudo », « aperiodique », « critique »)');
+  c.repere('courbe_periodique', ECR.x, ECR.y, ECR.w, ECR.h, `régime périodique, R + r = 0${ici('periodique', 'comparer')}`);
+  c.repere('courbe_pseudo', ECR.x, ECR.y, ECR.w, ECR.h, `régime pseudo-périodique, R + r = 20 Ω${ici('pseudo', 'comparer')}`);
+  c.repere('courbe_aperiodique', ECR.x, ECR.y, ECR.w, ECR.h, `régime apériodique, R = 1 kΩ${ici('aperiodique', 'comparer')}`);
+  c.repere('ordre', CAS.x, 366, CAS.w, 50, 'l’amortissement augmente avec R + r (vue « comparer »)');
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+/** Les moments (fin de chaque phase) : une image complète, puis l’image de l’instant courant (spot, poignée à jour). */
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); } finally { S.t = t; S.running = rn; } dessiner(craie); scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  const Rt = rtVue(), T = pseudoT(Rt), som = sommets(Rt);
+  return {
+    periodique: 'R + r = 0 : u_C est une sinusoïde de 6 V, tous les sommets sont égaux : régime périodique, période T₀ = 2π√(LC) ≈ 4 ms.',
+    pseudo: regime(Rt) === 'pseudo'
+      ? `R + r = ${fR(Rt)} : les sommets baissent (${som.map(s => fV(s.u)).join(' ; ')} V) : régime pseudo-périodique ; ${som.length - 1}T ≈ ${fms((som.length - 1) * T)} ms donc T ≈ ${fms(T)} ms${Math.abs(T - T0) / T0 < .05 ? ' ≈ T₀' : ''}.`
+      : `R + r = ${fR(Rt)} : ${NOM_REGIME[regime(Rt)]}, u_C n’oscille pas.`,
+    aperiodique: `R = ${fR(S.R.aperiodique)} : ${NOM_REGIME[regime(Rt)]} ; en pointillés, R = 300 Ω : retour le plus rapide sans oscillation, la frontière (régime critique).`,
+    critique: `R = ${fR(S.R.critique)} : ${NOM_REGIME[regime(Rt)]} ; en pointillés, R = 1 kΩ : retour plus lent, régime apériodique.`,
+    comparer: 'Même échelle : R + r = 0, périodique ; 20 Ω, pseudo-périodique ; 1 kΩ, apériodique. L’amortissement augmente avec R + r : L et C font osciller, R + r amortit.',
+  }[S.vue];
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  trace: 'u_C(t) est tracée sur l’écran', sommets_egaux: 'tous les sommets à 6 V : régime périodique', premier_sommet: 'le sommet à t = T : u_C ≈ 4,0 V',
+  sommets_decroissants: 'les sommets baissent : régime pseudo-périodique', mesure_nT: '3T ≈ 12 ms donc T ≈ 4 ms', T_voisine_T0: 'T ≈ T₀ ≈ 4 ms : amortissement faible',
+  retour_sans_oscillation: 'u_C revient vers 0 sans osciller', frontiere: 'R = 300 Ω : la frontière, retour le plus rapide sans oscillation',
+  pseudo: 'l’écran du milieu : pseudo-périodique', aperiodique: 'l’écran de droite : apériodique', periodique: 'l’écran de gauche : périodique',
+  ordre: 'l’amortissement augmente avec R + r', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const v = S.vue, m = [`Vue « ${v} » (${titre()})${S.running ? ', au ralenti, la trace avance' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`];
+  const Lg = [];
+  if (v === 'comparer') {
+    m.push('Trois petits écrans d’oscilloscope côte à côte, même échelle (2 V/div, 2 ms/div ; 20 ms par écran), u_C(0) = 6 V, C = 4 µF, L = 0,1 H : à gauche R + r = 0, au milieu R + r = 20 Ω, à droite R = 1 kΩ.');
+    if (vu('pseudo')) Lg.push('écran du milieu : u_C rouge oscille, sommets 6 ; 4,0 ; 2,7 ; 1,8 V, « pseudo-périodique »');
+    if (vu('aperiodique')) Lg.push('écran de droite : u_C revient vers 0 sans changer de signe, « apériodique »');
+    if (vu('periodique')) Lg.push('écran de gauche : sinusoïde de 6 V, sommets égaux, « périodique »');
+    if (vu('ordre')) Lg.push('flèche de gauche à droite : « l’amortissement augmente avec R + r » ; « périodique → pseudo-périodique → apériodique » ; encadré « L et C font osciller, R + r amortit »');
+  } else {
+    const Rt = rtVue(), T = pseudoT(Rt), som = sommets(Rt), reg = regime(Rt);
+    m.push(`Écran d’oscilloscope : 10 × 8 carreaux, 2 V/div, 2 ms/div (20 ms en tout, u de −8 à 8 V). C = 4 µF, L = 0,1 H, u_C(0) = E = 6 V ; ${AVEC_R(v) ? `r = 10 Ω, R = ${fR(S.R[v])}, R + r = ${fR(Rt)}` : 'R + r = 0 (LC idéal)'}. La trace va au ralenti (1 ms du circuit = 0,5 s ici).`);
+    if (S.spot) Lg.push(`le spot trace u_C : t = ${fs(S.spot.t)} ms, u_C = ${fs(S.spot.u)} V`);
+    if (vu('trace')) Lg.push(`courbe rouge u_C(t) sur tout l’écran (${NOM_REGIME[reg]})`);
+    if (v === 'periodique' && vu('sommets_egaux')) Lg.push('ligne jaune en pointillés à 6 V : tous les sommets dessus, entourés ; « régime périodique » sous l’écran');
+    if (v === 'pseudo') {
+      if (vu('premier_sommet') && som.length > 1) Lg.push(`sommet à t = T ≈ ${fms(T)} ms entouré : ${fV(som[1].u)} V`);
+      if (vu('sommets_decroissants')) Lg.push(reg === 'pseudo' ? `sommets entourés : ${som.map(s => fV(s.u)).join(' ; ')} V ; « régime pseudo-périodique ; T : pseudo-période »` : `« ${NOM_REGIME[reg]} » sous l’écran`);
+      if (vu('mesure_nT') && T && som.length > 1) { const n = som.length - 1; Lg.push(`cote du 1er au ${n + 1}e sommet : « ${n}T ≈ ${fms(n * T)} ms donc T ≈ ${fms(T)} ms » ; cote barrée en jaune entre le premier sommet et le creux suivant (${fs(uC(T / 2, Rt))} V) : « T/2, pas T »`); }
+      if (vu('T_voisine_T0')) Lg.push(T && Math.abs(T - T0) / T0 < .05 ? '« T₀ = 2π√(LC) ≈ 4 ms ; T ≈ T₀ : amortissement faible »' : '« T₀ = 2π√(LC) ≈ 4 ms »');
+    }
+    if (v === 'aperiodique') {
+      if (vu('retour_sans_oscillation')) Lg.push(`« ${NOM_REGIME[reg]} » sous l’écran`);
+      if (vu('frontiere')) Lg.push('la poignée R est descendue à 300 Ω : courbe rouge en pointillés, retour le plus rapide sans oscillation ; « régime critique : la frontière »');
+      else if (S.anneauR != null && S.anneauR !== S.R.aperiodique) Lg.push(`la poignée R descend (${fR(S.anneauR)})`);
+    }
+    if (v === 'critique' && vu('frontiere')) Lg.push(`« ${NOM_REGIME[reg]} » ; en pointillés R = 1 kΩ : retour plus lent`);
+    if (AVEC_R(v)) Lg.push(`poignée R (anneau rose sur la règle) : ${fR(S.anneauR ?? S.R[v])}`);
+  }
+  m.push(Lg.length ? `Au tableau : ${Lg.join(' ; ')}.` : 'L’écran est encore vide.');
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('u_C(t) se trace au ralenti : 1 ms du vrai circuit dure 0,5 s ici…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La trace continue, au ralenti…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe, au ralenti…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const auPasR = v => Math.round(clamp(v, 0, 2000) / 10) * 10;
+/** Après un réglage de R : l’écran montre la nouvelle courbe (vue apériodique : avant que la poignée descende à 300 Ω). */
+function montrerReglage() {
+  M = {}; calculer();
+  S.running = false; S.jusqua = null;
+  if (S.vue === 'aperiodique') { S.t = M.retour_sans_oscillation; S.fait = false; S.pause = true; } else { S.t = M.fin; S.fait = true; S.pause = false; }
+  etiquette(); scene.sale = true;
+  const Rt = rtVue(); dire(`R = ${fR(S.R[S.vue])} : R + r = ${fR(Rt)}, ${NOM_REGIME[regime(Rt)]}.`);
+}
+function setParameters(p) {
+  p = p || {}; let vue = false, phys = false;
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
+  const R = p.R ?? p.R_ohm;
+  if (R !== undefined && R !== null && R !== '' && Number.isFinite(+R) && AVEC_R(S.vue)) { const v = auPasR(+R); if (v !== S.R[S.vue]) { S.R[S.vue] = v; phys = true; } }
+  M = {}; calculer();
+  pont.noter('set_parameters', { vue: S.vue, R: AVEC_R(S.vue) ? S.R[S.vue] : null });
+  if (vue) { start(); return; }
+  if (phys) montrerReglage();
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée R : l’anneau rose se glisse le long de la règle (0 → 2 kΩ). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    if (!AVEC_R(S.vue)) return null;
+    const [x, y] = scene.local(px, py), R = S.anneauR ?? S.R[S.vue];
+    return Math.hypot(x - xR(R), y - RUL.y) < 18 ? 'R' : null;
+  },
+  bouger: (id, px, py) => {
+    if (S.running) pause();
+    const [x] = scene.local(px, py), v = auPasR(Rx(x));
+    if (v !== S.R[S.vue] || S.anneauR !== null) { S.R[S.vue] = v; S.anneauR = null; montrerReglage(); }
+  },
+  lacher: () => { montrerReglage(); pont.noter('set_parameters', { R: S.R[S.vue] }); pont.emettre(); },
+});
+
+window.Tableau.explication({
+  periodique: [
+    { repere: 'ecran', texte: 'L’oscilloscope montre u_C au ralenti : 2 V par carreau, 2 ms par carreau.' },
+    { repere: 'courbe', texte: 'Sans résistance, u_C est une sinusoïde : elle oscille entre 6 V et −6 V.' },
+    { repere: 'sommets', texte: 'Tous les sommets sont à 6 V : c’est le régime périodique.' },
+  ],
+  pseudo: [
+    { repere: 'courbe', texte: 'Avec R + r = 20 Ω, u_C oscille encore, mais de moins en moins.' },
+    { repere: 'premier_sommet', texte: 'Le sommet suivant, à t = T, n’est plus qu’à 4,0 V.' },
+    { repere: 'sommets', texte: '6 ; 4,0 ; 2,7 ; 1,8 V : les sommets baissent. Régime pseudo-périodique, T est la pseudo-période.' },
+    { repere: 'mesure', texte: 'On mesure sur plusieurs pseudo-périodes : du 1er au 4e sommet, 3T ≈ 12 ms, donc T ≈ 4 ms. Entre un sommet et le creux suivant, c’est T/2.' },
+    { repere: 'T0', texte: 'T₀ = 2π√(LC) ≈ 4 ms : T ≈ T₀, car l’amortissement est faible.' },
+  ],
+  aperiodique: [
+    { repere: 'courbe', texte: 'Avec R = 1 kΩ, u_C revient vers 0 sans jamais changer de signe.' },
+    { repere: 'regime', texte: 'Aucune oscillation : c’est le régime apériodique.' },
+    { repere: 'poignee_R', texte: 'On descend R à 300 Ω : u_C revient à 0 le plus vite possible, sans osciller. C’est la frontière, le régime critique.' },
+  ],
+  critique: [
+    { repere: 'courbe', texte: 'Avec R = 300 Ω, u_C revient vers 0 sans osciller, et le plus vite.' },
+    { repere: 'regime', texte: 'C’est la frontière entre les deux régimes : le régime critique.' },
+  ],
+  comparer: [
+    { repere: 'courbe_pseudo', texte: 'Au milieu, R + r = 20 Ω : les sommets baissent, pseudo-périodique.' },
+    { repere: 'courbe_aperiodique', texte: 'À droite, R = 1 kΩ : aucune oscillation, apériodique.' },
+    { repere: 'courbe_periodique', texte: 'À gauche, R + r = 0 : sommets égaux, périodique.' },
+    { repere: 'ordre', texte: 'L’amortissement augmente avec R + r : L et C font osciller, R + r amortit.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'circuit_rlc_oscillogramme', version: '1.0', title: 'Oscillogrammes de u_C(t) : les régimes', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'periodique | pseudo | aperiodique | critique | comparer (change la vue et la retrace)', R: '0..2000 pas 10 (Ω) : la résistance R de la vue pseudo, aperiodique ou critique (r = 10 Ω en plus)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de la simulation, en s ; voir moments)' },
+    play_until: { moment: 'periodique : trace | sommets_egaux | fin ; pseudo : trace | premier_sommet | sommets_decroissants | mesure_nT | T_voisine_T0 | fin ; aperiodique : trace | retour_sans_oscillation | frontiere | fin ; critique : trace | frontiere | fin ; comparer : pseudo | aperiodique | periodique | ordre | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Oscillogrammes de u_C(t) pour un condensateur C = 4 µF chargé sous E = 6 V qui se décharge dans une bobine L = 0,1 H (r = 10 Ω) et un résistor R. Écran : 2 V/div, 2 ms/div ; la trace va au ralenti. R + r = 0 : régime périodique, sinusoïde de 6 V, T₀ = 2π√(LC) ≈ 4 ms. R + r = 20 Ω : régime pseudo-périodique, sommets 6 ; 4,0 ; 2,7 ; 1,8 V aux instants 0, T, 2T, 3T ; 3T ≈ 12 ms donc T ≈ 4 ms ≈ T₀ ; entre un sommet et le creux suivant : T/2. R = 1 kΩ : régime apériodique, u_C revient vers 0 sans changer de signe. R = 300 Ω : la frontière (régime critique), retour le plus rapide sans oscillation. L’amortissement augmente avec R + r.',
+  etat: () => {
+    dessiner(craie);                     // l’image de l’instant courant : le spot et la poignée sont à jour
+    const Rt = rtVue(), T = pseudoT(Rt);
+    return { simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+      time_s: +S.t.toFixed(2), parameters: { vue: S.vue, R_ohm: AVEC_R(S.vue) ? S.R[S.vue] : null, r_ohm: r, R_plus_r_ohm: S.vue === 'comparer' ? null : Rt, C_F: C, L_H: L, E_V: E,
+        regime: S.vue === 'comparer' ? null : regime(Rt), T_ms: S.vue === 'comparer' || !T ? null : +T.toFixed(3), T0_ms: +T0.toFixed(3), sommets_V: S.vue === 'comparer' ? null : sommets(Rt).map(s => +s.u.toFixed(2)), ms_par_div: 2, V_par_div: 2, ralenti_s_par_ms: RALENTI }, moments: moments() };
+  },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('L’oscilloscope va tracer u_C(t), au ralenti…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
