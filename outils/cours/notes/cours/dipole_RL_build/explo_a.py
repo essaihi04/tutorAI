@@ -104,7 +104,6 @@ a_ne_pas_dire = [
  {"terme": "loi de Faraday, loi de Lenz, flux", "motif": "loi de faraday|loi de lenz|flux magn[ée]tique|f\\.?[ée]\\.?m\\.? induite", "dire_plutot": "« on admet que la tension aux bornes de la bobine est u_b = L·di/dt + r·i »"},
  {"terme": "diode de roue libre", "motif": "roue libre", "dire_plutot": "« une diode branchée en parallèle sur la bobine laisse passer le courant à la rupture »"},
  {"terme": "la bobine diminue le courant final", "motif": "bobine (diminue|r[ée]duit) (le )?courant (final|maximal)", "dire_plutot": "« la bobine retarde l'établissement du courant ; I₀ = E/(R + r) ne dépend pas de L »"},
- {"terme": "τ = L/R quand la bobine a une résistance", "motif": "τ ?= ?L ?/ ?R\\b(?! ?\\+)", "dire_plutot": "« τ = L/(R + r), la résistance totale du circuit »"},
  {"terme": "u_b = L·i", "motif": "u_?b? ?= ?L ?· ?i\\b", "dire_plutot": "« u_b = L·di/dt + r·i »"},
  {"terme": "second ordre", "motif": "second ordre|deuxi[èe]me ordre", "dire_plutot": "« le RL est du premier ordre ; le second ordre arrive avec le RLC »"},
 ]
