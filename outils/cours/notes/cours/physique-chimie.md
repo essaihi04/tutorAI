@@ -391,3 +391,48 @@ outils : cours/cinetique_build/ ; contrat : cours/cinetique_contrat_simulations.
   nationaux aussi dans les exercices de v4, h3, h4 (doublons possibles avec n1-n8) ; n2 et n6 : la tangente avant t₁/₂ (ordre des moments) ;
   valeurs inventées hors contrat pour des exercices (V_E = 16,9 mL à 15 min ; n₀(H₂O₂) = 3,0 et n₀(I⁻) = 4,0 mmol) ; n8 (2017 R) sur le texte du
   sujet (0,6 mol → 0,2 mol, x_f = 0,4 mol) ; identifiant phys_ch10 ; bilan et carte : C1… (voir build).
+
+## transformations_deux_sens
+(routine cloud du 12 nov., soir ; cours phys_ch11_transformations_deux_sens, « Transformations chimiques s'effectuant dans les deux sens » ;
+outils : cours/transformations_deux_sens_build/ ; contrat : cours/transformations_deux_sens_contrat_simulations.md)
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/transformations_deux_sens.json (explo.py = explo_a.py + explo_b.py).
+  VIDÉOS NON AUDITÉES (YouTube bloqué depuis le cloud). Appui : nationaux PC 2016-2025 (transformations_deux_sens_build/nationaux.md) : le chapitre
+  tombe dans 17 sessions sur 20, τ calculé dans 11 (par le pH : 2017 N, 2021 N, 2022 N, 2025 R ; conductimétrie 2019 N ; dilution 2021 R, 2025 R ;
+  α = 1 − τ 2023 N ; réaction totale 2017 N, 2024 R) ; τ d'une base (2020 N, 2020 R, 2022 R) renvoyé au chapitre acide-base (il faut Ke).
+  Pas d'ancien cours ; ancienne simulation labs/equilibres non reprise. perimetre.json : pas de clé propre (acides_bases couvre les chapitres 11-13), NON modifié.
+  Erreurs du dépôt relevées (nationaux.md) : 2020 N 2.1 (NH₃ + H₂O → … H₃O⁺ au lieu de HO⁻ ; barème 1.1), 2017 R 7 (aldéhyde au lieu de l'acide),
+  2017 N 1.1 (énoncé coupé), 2019 N (numérotation, τ 0,225 → 0,22), 2021 R / 2022 N / 2023 N / 2023 R (Henderson-Hasselbalch dans les corrigés),
+  2022 N 2.1 (⇌ dans un dosage), 2024 R 1.1 (OH⁻).
+- Cadre : chapitres.transformations_deux_sens ajoutée (cadre_tds.py : TD1-TD8 provisoires, 14 formules, 25 mots hors cadre dont Qr, K, Ka, pKa, Ke,
+  autoprotolyse, Henderson, prédominance, indicateur coloré).
+- COURS CONSTRUIT → backend/data/courses/phys_ch11_transformations_deux_sens.json (draft, concentration) : 36 diapositives (préfixe td_), 36 questions,
+  18 prédictions, 28 exercices ; 10 parties (ouverture, Brønsted, pH, acide + eau, τ, deux sens et équilibre, conductimétrie, dilution et nature de
+  l'acide, 4 sujets du national, bilan + carte) ; compétences C1-C7. Build : p1…p3.py (3 sous-agents, check_part « AUCUNE ERREUR ») ; refaire :
+  `python3 …/transformations_deux_sens_build/build.py` puis ajouts.py, `blocs.py base` (supprimer d'abord base/ : rien n'est voisé) et `appliquer`.
+  Nouveau : outils.py lit les moments et repères directement dans le contrat (plus de tables recopiées) ; mots hors cadre courts (Ka, Ke, Qr) cherchés
+  en mot entier.
+- Méthode des blocs : methode_blocs/ajouts/phys_ch11_transformations_deux_sens.json : 3 séances × 3 blocs × 4 diapositives, 25 rappels, 18 prédictions / 36.
+  blocs.py verifier → « cadre : OK », « blocs : OK ». controler_cadre → « cadre : OK » (83 « à relire » : applications numériques des nationaux).
+  preparer_reponses verifier : seulement réactions et pistes audio manquantes. (Les .json du build, ajouts et base sont ajoutés avec git add -f :
+  *.json est ignoré.)
+- Réactions : items seulement → items_cours.json (359), items_blocs.json (66), demos_blocs.json (0). À écrire sur le serveur.
+- verifier_texte_corpus : 235 mots à revoir, surtout des termes de chimie (éthanoïque, chlorhydrique, conductimétrie, Bronsted écrit sans ø pour la voix…)
+  gardés ; darija rare remplacée (كندخلوها → كنحطوها, كنغسلو → كنرينسيو, يتبت → يولي ثابت, كنسخنو → كنحميو, المتقطع → بالنقط, كنصبو → كنزيدو…) ;
+  restent quelques mots rares une fois (كيساليش, استهلكهم, الوردي, كنهملوهم…) : à écouter au contrôle des murmures.
+- Simulations (frontend/public/media/simulations/chimie/transformations-deux-sens-tableau/, 5 sous-agents) : acides (ouverture|acide|base|couple|reaction),
+  ph (definition|calcul[pH]|phmetre), avancement (11 vues : acide_eau … dosage), equilibre (inverse|double_fleche|etat|dynamique|esterification),
+  conductimetrie (ions|relation|calcul|national), dilution (mesures|taux|nature), figures (?fig=fig_2017N|fig_2021R), bilan, carte. node --check OK
+  (9 pages) ; chaque page testée en headless par son agent (moments, repères, hors cadre, captures regardées).
+  ⚠ Défaut du moteur copié de cinetique-tableau (signalé par l'agent equilibre) : il gardait seulement la durée du DERNIER M.etape d'un même nom,
+  donc un texte pouvait être encore en cours d'écriture à l'arrêt sur image ; corrigé dans equilibre.html et figures.html seulement. À vérifier
+  dans les autres pages de ce dossier ET dans chimie/cinetique-tableau/ (même moteur).
+- PRÊT POUR LA VOIX : OUI (36 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player, défaut du moteur ci-dessus. Cours suivant : etat_equilibre
+  (exploration à faire).
+- À valider : clé perimetre ; τ d'une base renvoyé au ch. 13 (p5 n'écrit que l'équation) ; estérification gardée (e5, e6) « étudiée plus tard » ; pH de
+  l'eau = 7 seulement en réponse ; « ions oxonium » dit, H₃O⁺ écrit ; o1, bl, cr : questions du plan réécrites en QCM (bl : unité de [H₃O⁺] dans σ) ;
+  valeurs d'exercices hors contrat (a3 V = 50 mL ; a5 HCl 5,0·10⁻³ mol/L pH 2,3 ; e5 2018 N x_max = 1,0·10⁻³ mol supposé mélange équimolaire ; p1 [H₃O⁺]
+  = 2,5·10⁻³ mol/L → pH 2,6) ; démonstrations sur a2, e3, a6 sans calcul ; analogie du souk (e4) ; simulations : conductimetrie?vue=ions avec deux
+  cellules identiques, equilibre?vue=inverse avec deux béchers (témoin pH 2,3), esterification axe 0-10 h pour l'allure, ph?vue=calcul poignée pH
+  1-13, avancement?vue=dosage ligne « 10^(−10,2) × 0,026 = 1,6·10⁻¹² mol : négligeable » ; carte : acide_eau → C1, equilibre → C4, national → C7 ;
+  bilan : « C = 10⁻² ; 10⁻³ ; 10⁻⁴ mol/L » raccourci ; identifiant phys_ch11 ; statut programme_semestre1 mis à « construit ».
