@@ -309,3 +309,42 @@ contrat : cours/circuit_RLC_contrat_simulations.md)
   À valider (radioactivite, en plus des décisions de l'exploration) : 6 parties (I noyau 11, II désintégrations 12, III loi 12, IV activité
   et datation 11, V cas types 4, VI bilan + carte 2) ; ra_x1 rattachée à C9 ; ra_a7 (droite ln N) rattachée à C6 ; « x % désintégrés :
   N = (1 − x/100)·N₀ » écrit au cahier (pas une formule du cadre) ; bilan et carte rattachés à C1 (comme le témoin).
+
+## transformations_lentes_rapides
+(routine cloud du 12 nov., cours phys_ch9_transformations_lentes_rapides, « Transformations lentes et transformations rapides » ; outils :
+cours/transformations_lentes_rapides_build/ ; contrat : cours/transformations_lentes_rapides_contrat_simulations.md)
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/transformations_lentes_rapides.json (explo.py = explo_a.py + explo_b.py).
+  VIDÉOS NON AUDITÉES (YouTube bloqué depuis le cloud). Appui : les 20 nationaux PC 2016-2025 (transformations_lentes_rapides_build/nationaux.md :
+  le chapitre tombe dans 10 sessions sur 20, 17 questions, 8 pts au total, 0,25 à 1,25 pt ; rien de 2019 à 2022 ; toujours sur l'estérification /
+  saponification ; catalyseur H₂SO₄ 6 questions dans 5 sessions ; trempe 1 fois (2017 R) ; demi-équations seulement dans les parties piles),
+  perimetre.json (clé cinetique), ancien cours chem_ch1_kinetics_course_v1 (croquis et ancienne simu chimie/labs/cinetique NON repris).
+  Erreurs du dépôt relevées (nationaux.md § 4) : 2018 R 1.3 (reflux = montage (c), pas (a)), 2017 R partie 2 (énoncé réécrit, barèmes faux),
+  2023 R figure non liée, 2019 R schéma de pile faux, 2024 R potentiel standard (hors programme).
+- Cadre : chapitres.transformations_lentes_rapides ajoutée (cadre_tlr.py : TLR1-TLR7, 17 formules, 24 mots hors cadre). perimetre.json NON modifié.
+- COURS CONSTRUIT → backend/data/courses/phys_ch9_transformations_lentes_rapides.json (draft, concentration) : 36 diapositives (préfixe tl_),
+  36 questions, 16 prédictions, 22 exercices, 19 démonstrations ; 11 parties (ouverture, oxydants/réducteurs, demi-équations, équation,
+  rapides/lentes, voir/classer/titrer, température, concentration, trempe/vie/catalyseur, nationaux 2025 N et 2017 R, bilan + carte) ;
+  compétences C1-C7. Build : p1…p3.py (3 sous-agents, check_part « AUCUNE ERREUR ») ; refaire : `python3 …/build.py --garder-reponses`
+  puis ajouts.py + `blocs.py appliquer`.
+- Méthode des blocs : methode_blocs/ajouts/phys_ch9_transformations_lentes_rapides.json : 3 séances × 3 blocs × 4 diapositives, 28 rappels,
+  16 prédictions / 36. blocs.py verifier → « cadre : OK », « blocs : OK » (avis : parties ouverture et V sans prédiction, leurs blocs en ont).
+  controler_cadre → « cadre : OK » (20 « à relire »). preparer_reponses verifier : seulement réactions et pistes audio manquantes.
+  La photo base/ a été refaite après le nettoyage de la darija (rien n'était voisé).
+- Réactions : items seulement → items_cours.json (330), items_blocs.json (89), demos_blocs.json (0). À écrire sur le serveur.
+- Simulations (frontend/public/media/simulations/chimie/transformations-lentes-rapides-tableau/, 4 sous-agents) : transfert (zinc|couple),
+  demi-equation (permanganate|eau_oxygenee|iode|oxalique), equation (zinc_cuivre|eau_oxygenee|permanganate|fer), bechers (comparer|lente|soufre|echelle),
+  facteurs (temperature[theta_c]|concentration|trempe|une_variable|vie|catalyseur), courbes (temperature|concentration|catalyseur|lecture), bilan, carte.
+  Formules chimiques : petit traducteur par page (⁺ et indices), ⇌ et → dessinés au trait. node --check OK ; chaque page testée en headless
+  par son agent ; verif_sims.js : voir la ligne « vérif navigateur » ci-dessous.
+- verifier_texte_corpus : ≈ 420 mots à revoir, surtout les termes de chimie absents du corpus (permanganate, diiode, iodure, thiosulfate, manganèse,
+  bécher, palier, trempe…) gardés ; darija rare remplacée (قهوي → brun, البيشر → le bécher, كتزرب → كتمشي بالزربة, قطرات → شي نقط, الثلاجة →
+  le réfrigérateur…) ; restent des darija rares une fois chacune (بلوكاو, كيبلوكي, السخون, اللاعب…) : à écouter au contrôle des murmures.
+- PRÊT POUR LA VOIX : OUI (36 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- À valider : catalyseur gardé dans ce chapitre (t3, t4 : question de facteur la plus posée au national) ; « chocs efficaces » jamais dit
+  (perimetre) alors que le vrai/faux de 2024 N l'emploie ; 10 diapositives d'oxydoréduction alors que le national ne la demande que dans les
+  piles ; exemples classiques (iodure, permanganate) pour voir, nationaux sur l'estérification (n1 2025 N, n2 2017 R) ; ⇌ dans les demi-équations,
+  → dans les équations ; demi-équations d'oxydation écrites dans le sens de la réaction (Zn ⇌ Zn²⁺ + 2e⁻) en x7-x9 ; identifiant phys_ch9 (chimie
+  sous le préfixe phys, ordre 9 du programme) ; durées des simulations pour l'œil (30 min à 20 °C, 10 min à 40 °C, 15 min à 0,2 mol/L,
+  catalyseur 10 min contre 40 min ; « autocuiseur ≈ 120 °C ») ; vue soufre sans équation ; r7 (titrage) sur bechers?vue=lente ; bilan et carte
+  rattachés à C3 ; définition du facteur cinétique « paramètre qui modifie la vitesse d'évolution (la durée) », sans « même état final ».
+- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : cinetique (exploration à faire).
