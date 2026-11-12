@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le module d’un complexe</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Plan complexe à la craie : le point M(3 ; 4), le triangle rectangle OHM et OM = 5 ; le cercle de centre O de rayon 5"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : le module.
+ * Vues : ?vue=triangle (moments point, triangle, pythagore) | cercle (moments cercle, autres, sans_i).
+ * Repères : les mêmes noms que les moments.
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI;
+/* Mouvements : MOB[nom] = instant d’écriture où un point commence à bouger (d’une image à l’autre) ;
+ * avant(c, nom) : on est avant ce mouvement, la version fixe du point se dessine (sinon c’est le point qui bouge). */
+const MOB = {};
+const avant = (c, nom) => Number.isFinite(c.t) && !(c.t > (MOB[nom] ?? Infinity));
+const debut = (c, nom) => { if (Number.isFinite(c.t)) MOB[nom] = c.cur; };
+/* Nom de vecteur : la lettre et une petite flèche dessinée au-dessus. */
+function vecNom(c, s, x, y, t = 16, couleur = 'blanc', align = 'center') {
+  const w = c.largeurTexte(s, t), xm = align === 'center' ? x : align === 'right' ? x - w / 2 : x + w / 2;
+  c.texte(s, x, y, { couleur, taille: t, align });
+  const yh = y - t * (/[A-Z]/.test(s) ? .9 : .72);
+  c.fleche(xm - w / 2 - 1, yh, xm + w / 2 + 3, yh, { couleur, largeur: 1.2, tete: 4, duree: .06 });
+}
+/* Texte en morceaux : [texte, estUnVecteur] ; un vecteur reçoit sa flèche. */
+function texteVec(c, x, y, parties, o = {}) {
+  const t = o.taille || 19;
+  for (const [s, v] of parties) {
+    if (v) vecNom(c, s, x, y, t, o.couleur, 'left'); else c.texte(s, x, y, { couleur: o.couleur, taille: t });
+    x += c.largeurTexte(s, t);
+  }
+  return x;
+}
+/* Largeur d’un texte avec exposants (écrits plus petits par exposants.js). */
+function larg(c, s, t) {
+  const sup = s.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g) || [];
+  return c.largeurTexte(s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, ''), t) + c.largeurTexte('0'.repeat(sup.length), t * .62);
+}
+/* Plan complexe orthonormé : axes, O, vecteurs u et v, « axe réel », « axe imaginaire ». */
+function plan(c, K, o) {
+  const G = K.axes({ nomx: '', nomy: '', ...o });
+  const U = G.X(1) - G.X(0), x0 = G.X(0), y0 = G.Y(0);
+  c.fleche(x0, y0, x0 + U, y0, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  c.fleche(x0, y0, x0, y0 - U, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  vecNom(c, 'u', x0 + U / 2, y0 + 17, 15, 'cyan');
+  vecNom(c, 'v', x0 - 11, y0 - U / 2 + 5, 15, 'cyan');
+  c.texte('axe réel', G.x0 + G.w + 12, y0 + 36, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', x0 + 8, G.y0 - 2, { couleur: 'faible', taille: 14 });
+  return G;
+}
+/* Coordonnées px d’un point du plan donné par son module r et son angle a (radians). */
+const pol = (G, r, a) => [G.X(r * Math.cos(a)), G.Y(r * Math.sin(a))];
+/* Arc d’angle ORIENTÉ de a0 à a1 (radians, sens direct), rayon r (unités du plan, r1 : rayon d’arrivée
+ * pour une spirale), centré en O, avec une pointe de flèche à l’arrivée. */
+function arc(c, G, r, a0, a1, o = {}) {
+  const cx = G.X(0), cy = G.Y(0), U = G.X(1) - G.X(0), R0 = r * U, R1 = (o.r1 ?? r) * U, d = a1 - a0;
+  if (Math.abs(d) < 1e-3) return;
+  const n = Math.max(6, Math.ceil(Math.abs(d) * Math.max(R0, R1) / 5)), pts = [];
+  for (let i = 0; i <= n; i++) { const f = i / n, a = a0 + d * f, R = R0 + (R1 - R0) * f; pts.push([cx + R * Math.cos(a), cy - R * Math.sin(a)]); }
+  const opt = { couleur: o.couleur || 'jaune', largeur: o.largeur ?? 2, tremble: .3, duree: o.duree };
+  c.trait(pts, opt);
+  const [xa, ya] = pts[n], [xb, yb] = pts[n - 1], th = Math.atan2(ya - yb, xa - xb), t = o.tete ?? 8;
+  c.trait([[xa - t * Math.cos(th - .5), ya - t * Math.sin(th - .5)], [xa, ya], [xa - t * Math.cos(th + .5), ya - t * Math.sin(th + .5)]], { ...opt, duree: .08 });
+}
+/* Texte posé à l’angle a, à la distance r de O (unités du plan). */
+function aAngle(c, G, r, a, s, o = {}) { const [x, y] = pol(G, r, a); c.texte(s, x, y + 6, { align: 'center', taille: 17, couleur: 'jaune', ...o }); }
+/* Angle en radians écrit en fraction de π (degrés multiples de 15). */
+function radPi(deg) {
+  const k = Math.round(deg / 15); if (k === 0) return '0';
+  const pg = (a, b) => (b ? pg(b, a % b) : a), g = pg(Math.abs(k), 12);
+  const n = Math.abs(k) / g, d = 12 / g;
+  return (k < 0 ? '−' : '') + (n === 1 ? '' : n) + 'π' + (d === 1 ? '' : '/' + d);
+}
+/* a + ib écrit à la française. */
+function cplx(a, b, d = 2) {
+  a = +a.toFixed(d); b = +b.toFixed(d);
+  if (b === 0) return fr(a, d);
+  const ib = (Math.abs(b) === 1 ? '' : fr(Math.abs(b), d)) + 'i';
+  if (a === 0) return (b < 0 ? '−' : '') + ib;
+  return `${fr(a, d)} ${b < 0 ? '−' : '+'} ${ib}`;
+}
+
+const OPT_T = { x0: 40, y0: 50, w: 315, h: 305, xmin: -0.9, xmax: 5.4, ymin: -0.9, ymax: 5.2,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']] };
+const OPT_C = { x0: 30, y0: 52, w: 310, h: 297.5, xmin: -6.2, xmax: 6.2, ymin: -5.9, ymax: 6,
+  gx: [[-5, '−5'], [-3, '−3'], [3, '3'], [5, '5']], gy: [[-4, '−4'], [4, '4']] };
+const XR = 400;
+
+MathsTableau.page({
+  id: 'nc_module', titre: 'Nombres complexes : le module',
+  texte: 'Construction à la craie : le module |z| = |a + ib| est la distance OM ; avec le triangle rectangle OHM, OM² = a² + b² ; tous les points de même module sont sur un même cercle de centre O ; |a + ib| = √(a² + b²), sans i dans la racine',
+  vues: {
+    triangle: {
+      titre: 'Le module : une distance',
+      dessiner(c, K) {
+        K.titre('Le module : une distance');
+        const G = plan(c, K, OPT_T);
+        const O = [G.X(0), G.Y(0)], M = [G.X(3), G.Y(4)], H = [G.X(3), G.Y(0)];
+        c.point(M[0], M[1], 5, 'cyan');
+        c.texte('M(3 ; 4)', M[0] + 10, M[1] - 6, { couleur: 'cyan', taille: 18 });
+        c.texte('z = 3 + 4i', XR, 90, { couleur: 'jaune', taille: 21 });
+        c.repere('point', M[0] - 10, M[1] - 26, 90, 36, 'le point M(3 ; 4), d’affixe z = 3 + 4i');
+        K.marque('point');
+        c.pause(.3);
+        c.ligne(O[0], O[1], H[0], H[1], { couleur: 'vert', largeur: 3.4 });
+        c.ligne(H[0], H[1], M[0], M[1], { couleur: 'orange', largeur: 3 });
+        c.trait([[H[0] - 12, H[1]], [H[0] - 12, H[1] - 12], [H[0], H[1] - 12]], { couleur: 'blanc', largeur: 1.4 });
+        c.point(H[0], H[1], 4, 'blanc');
+        c.texte('H', H[0] + 8, H[1] - 8, { couleur: 'blanc', taille: 17 });
+        c.texte('3', (O[0] + H[0]) / 2, O[1] - 8, { couleur: 'vert', taille: 19, align: 'center' });
+        c.texte('4', H[0] + 10, (H[1] + M[1]) / 2 + 6, { couleur: 'orange', taille: 19 });
+        c.ligne(O[0], O[1], M[0], M[1], { couleur: 'cyan', largeur: 2.6 });
+        c.texte('triangle OHM rectangle en H', XR, 135, { couleur: 'blanc', taille: 18 });
+        c.texte('OH = 3 ; HM = 4', XR, 163, { couleur: 'blanc', taille: 18 });
+        c.repere('triangle', O[0] - 4, M[1] - 4, H[0] - O[0] + 30, O[1] - M[1] + 8, 'le triangle rectangle OHM, de côtés 3 et 4');
+        K.marque('triangle');
+        c.pause(.3);
+        K.lignes(XR, 208, [
+          { t: 'OM² = 3² + 4² = 25', couleur: 'blanc', taille: 20 },
+          { t: 'OM = √25 = 5', couleur: 'blanc', taille: 20 },
+        ], 34);
+        c.texte('|z|', (O[0] + M[0]) / 2 - 12, (O[1] + M[1]) / 2 - 8, { couleur: 'jaune', taille: 20, align: 'right' });
+        c.rect(XR - 10, 266, 170, 40, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('|3 + 4i| = 5', XR, 294, { couleur: 'jaune', taille: 24 });
+        c.texte('|z| = OM : la distance de O à M', XR, 336, { couleur: 'blanc', taille: 16 });
+        c.repere('pythagore', XR - 12, 186, 340, 160, 'OM² = 3² + 4² = 25, donc |3 + 4i| = 5');
+        K.marque('pythagore');
+      },
+      decrire: {
+        point: 'Un plan complexe (axe réel, axe imaginaire, O, vecteurs u et v) ; le point M(3 ; 4) en cyan ; à droite « z = 3 + 4i » en jaune.',
+        triangle: 'H, projeté de M sur l’axe réel ; le triangle OHM, rectangle en H : OH = 3 en vert sur l’axe réel, HM = 4 en orange, l’hypoténuse OM en cyan ; à droite « OH = 3 ; HM = 4 ».',
+        pythagore: 'À droite « OM² = 3² + 4² = 25 », « OM = √25 = 5 » ; « |z| » écrit en jaune le long de OM ; encadré jaune « |3 + 4i| = 5 » ; dessous « |z| = OM : la distance de O à M ».',
+      },
+      motifs: { point: 'le point M(3 ; 4)', triangle: 'le triangle OHM', pythagore: 'Pythagore : |z| = 5' },
+      explication: [
+        { repere: 'point', texte: 'Le point M(3 ; 4) a pour affixe z = 3 + 4i.' },
+        { repere: 'triangle', texte: 'H est sur l’axe réel : le triangle OHM est rectangle en H, de côtés 3 et 4.' },
+        { repere: 'pythagore', texte: 'Pythagore : OM² = 9 + 16 = 25, donc OM = 5 : c’est le module |z|.' },
+      ],
+    },
+    cercle: {
+      titre: 'Même module, même cercle',
+      dessiner(c, K) {
+        K.titre('Même module, même cercle');
+        const G = plan(c, K, OPT_C);
+        const O = [G.X(0), G.Y(0)], R = G.X(5) - G.X(0);
+        const fixe = avant(c, 'autres');
+        K.anime(1.4, p => c.courbe(u => [O[0] + R * Math.cos(2 * PI * u * p), O[1] - R * Math.sin(2 * PI * u * p)], 120, { couleur: 'blanc', largeur: 2 }));
+        const a0 = Math.atan2(4, 3), a1 = PI - a0, a2 = PI / 2, a3 = PI;
+        const dessinM = (a, lab) => {
+          const [x, y] = pol(G, 5, a), [mx, my] = pol(G, 2.5, a), [ex, ey] = [-Math.sin(a) * 18, -Math.cos(a) * 18];
+          c.ligne(O[0], O[1], x, y, { couleur: 'cyan', largeur: 2.4 });
+          c.point(x, y, 5.5, 'cyan');
+          c.texte('|z| = 5', mx + ex, my + ey + 5, { couleur: 'jaune', taille: 16, align: 'center' });
+          if (lab) c.texte('M', x + 8, y - 8, { couleur: 'cyan', taille: 17 });
+        };
+        K.anime(.5, p => { if (fixe) dessinM(a0, true); });
+        c.texte('3 + 4i', G.X(3) + 10, G.Y(4) - 12, { couleur: 'faible', taille: 15 });
+        c.texte('cercle de centre O, de rayon 5', XR - 20, 90, { couleur: 'blanc', taille: 18 });
+        c.texte('|3 + 4i| = √(9 + 16) = 5', XR - 20, 118, { couleur: 'blanc', taille: 18 });
+        c.repere('cercle', O[0] - R - 6, O[1] - R - 6, 2 * R + 12, 2 * R + 12, 'le cercle de centre O et de rayon 5');
+        K.marque('cercle');
+        c.pause(.3);
+        // M glisse : 3 + 4i → −3 + 4i → 5i → −5, avec un arrêt sur chaque point.
+        const etapes = [[a0, a1, '−3 + 4i', [G.X(-3) - 10, G.Y(4) - 12, 'right'], '|−3 + 4i| = √(9 + 16) = 5'],
+          [a1, a2, '5i', [G.X(0) + 10, G.Y(5) - 8, 'left'], '|5i| = 5'],
+          [a2, a3, '−5', [G.X(-5) - 8, G.Y(0) - 8, 'right'], '|−5| = 5']];
+        debut(c, 'autres');
+        const DUR = 1.1, ARRET = .6;
+        K.anime(etapes.length * (DUR + ARRET), p => {
+          const t = p * etapes.length * (DUR + ARRET);
+          let a = a0;
+          etapes.forEach(([d, f, nom, [x, y, al], ligne], i) => {
+            const t0 = i * (DUR + ARRET), q = Math.max(0, Math.min(1, (t - t0) / DUR));
+            if (t > t0) a = d + (f - d) * (q < .5 ? 2 * q * q : 1 - 2 * (1 - q) * (1 - q));
+            if (q >= 1) {
+              c.texte(nom, x, y, { couleur: 'cyan', taille: 16, align: al });
+              c.texte(ligne, XR - 20, 156 + 28 * i, { couleur: 'blanc', taille: 18 });
+            }
+          });
+          dessinM(a, false);
+        });
+        c.texte('sur le cercle : |z| = 5 reste', XR - 20, 250, { couleur: 'jaune', taille: 19 });
+        c.repere('autres', XR - 24, 134, 350, 124, 'les points −3 + 4i, 5i, −5 : le même module 5');
+        K.marque('autres');
+        c.pause(.3);
+        const y0 = 296;
+        c.rect(XR - 30, y0 - 26, 216, 38, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('|a + ib| = √(a² + b²)', XR - 20, y0, { couleur: 'jaune', taille: 21 });
+        c.texte('pas de i dans la racine', XR + 200, y0, { couleur: 'blanc', taille: 16 });
+        const y1 = 338, d1 = 'faux : √(a² + ', d2 = 'i²', d3 = 'b²)';
+        let x = XR - 20;
+        c.texte(d1, x, y1, { couleur: 'blanc', taille: 19 }); x += larg(c, d1, 19);
+        const xi = x; c.texte(d2, x, y1, { couleur: 'rouge', taille: 19 }); x += larg(c, d2, 19) + 2;
+        c.texte(d3, x, y1, { couleur: 'blanc', taille: 19 });
+        c.ligne(xi - 3, y1 + 3, xi + larg(c, d2, 19) + 3, y1 - 17, { couleur: 'rouge', largeur: 2.6 });
+        c.ligne(xi - 3, y1 - 17, xi + larg(c, d2, 19) + 3, y1 + 3, { couleur: 'rouge', largeur: 2.6 });
+        c.repere('sans_i', XR - 32, y0 - 28, 340, 76, '|a + ib| = √(a² + b²) : pas de i dans la racine');
+        K.marque('sans_i');
+      },
+      decrire: {
+        cercle: 'Un plan complexe ; le cercle de centre O et de rayon 5 ; le point M en 3 + 4i, relié à O, « |z| = 5 » le long de OM ; à droite « cercle de centre O, de rayon 5 » et « |3 + 4i| = √(9 + 16) = 5 ».',
+        autres: 'M glisse sur le cercle : il s’arrête en −3 + 4i, puis en 5i, puis en −5 ; à chaque arrêt, à droite, « |−3 + 4i| = √(9 + 16) = 5 », « |5i| = 5 », « |−5| = 5 » ; « |z| = 5 » reste écrit le long de OM ; « sur le cercle : |z| = 5 reste » en jaune.',
+        sans_i: 'Encadré jaune « |a + ib| = √(a² + b²) », à côté « pas de i dans la racine » ; dessous la fausse écriture « faux : √(a² + i²b²) » avec le « i² » barré en rouge.',
+      },
+      motifs: { cercle: 'le cercle de rayon 5', autres: 'même module 5', sans_i: 'pas de i dans la racine' },
+      explication: [
+        { repere: 'cercle', texte: 'Tous les points à la distance 5 de O forment le cercle de centre O et de rayon 5.' },
+        { repere: 'autres', texte: '−3 + 4i, 5i et −5 sont sur ce cercle : leur module vaut 5.' },
+        { repere: 'sans_i', texte: '|a + ib| = √(a² + b²) : on prend les carrés de a et de b, jamais i².' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
