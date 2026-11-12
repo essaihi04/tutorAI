@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La courbe x(t) — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Graphe à la craie de l’avancement x (mmol) en fonction du temps t (min) pour l’exemple A : points des mesures, courbe lisse, lecture d’une valeur, palier x_f = x_max = 2,0 mmol"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * courbe.html : vues points | lecture | palier (contrat cinetique_contrat_simulations.md § 3).
+ * Cours phys_ch10_cinetique « Suivi temporel d’une transformation, vitesse de réaction » (2e Bac PC BIOF, novembre 2026).
+ * Exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, V = 100 mL, n₀(H₂O₂) = 2,0 mmol (limitant), x_max = 2,0 mmol.
+ * Modèle POUR LE CALCUL seulement (jamais écrit à l’écran) : x(t) = 2,0·(1 − e^(−t/8)) mmol (20 °C), 2,0·(1 − e^(−3t/8)) (40 °C).
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de chimie/transformations-lentes-rapides-tableau/courbes.html, + M.finir) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette, finir });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+
+/* ── Le graphe x(t) de l’exemple A (modèle POUR LE CALCUL : x(t) = 2,0·(1 − e^(−t/8)) mmol, jamais écrit à l’écran) ──── */
+const G = { x0: 70, y0: 300, w: 400, h: 230 };
+const GA = { tmax: 40, dt: 5, ymax: 2.5, dy: .5, nom: 'x (mmol)', dec: 1 };
+let GC = GA;                                        // graphe courant (la vue « concentration » de vitesse.html en change)
+const X = t => G.x0 + t / GC.tmax * G.w, Y = n => G.y0 - n / GC.ymax * G.h;
+const xA = t => 2 * (1 - Math.exp(-t / 8));         // avancement (mmol), 20 °C
+const x40 = t => 2 * (1 - Math.exp(-3 * t / 8));    // avancement (mmol), 40 °C
+const pA = t => .25 * Math.exp(-t / 8);             // pente dx/dt (mmol/min), 20 °C
+const PX = 500;                                     // panneau de droite
+const ZY = [352, 376, 400];                         // lignes écrites en bas
+const deux = v => fr(v, 2);                         // virgule décimale, deux décimales
+const un = v => fr(v, 1);
+/** Date (min) écrite sans décimale inutile : 8 → « 8 », 5,5 → « 5,5 ». */
+const dmin = t => fx(t, 1);
+function axes(c) {
+  const g = GC;
+  c.fleche(G.x0, G.y0, G.x0 + G.w + 16, G.y0, { largeur: 1.8 });
+  c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 14, { largeur: 1.8 });
+  for (let t = g.dt; t <= g.tmax + 1e-9; t += g.dt) { c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 }); c.texte(String(t), X(t), G.y0 + 21, { couleur: 'faible', taille: 15, align: 'center', duree: .1 }); }
+  c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'faible', taille: 15, align: 'right', duree: .05 });
+  for (let n = g.dy; n <= g.ymax - g.dy / 2; n += g.dy) { c.ligne(G.x0 - 4, Y(n), G.x0 + 4, Y(n), { largeur: 1.4, duree: .03 }); c.texte(fr(n, g.dec), G.x0 - 9, Y(n) + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .1 }); }
+  c.texte('t (min)', G.x0 + G.w + 18, G.y0 + 5, { couleur: 'blanc', taille: 16 });
+  c.texte(g.nom, G.x0 + 10, G.y0 - G.h - 6, { couleur: 'blanc', taille: 16 });
+}
+function quadrillage(c, a) {
+  const g = GC, ctx = c.ctx;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(226,232,240,.09)'; ctx.lineWidth = 1;
+  for (let t = g.dt / 2; t <= g.tmax + 1e-9; t += g.dt / 2) { ctx.beginPath(); ctx.moveTo(X(t), G.y0); ctx.lineTo(X(t), G.y0 - G.h); ctx.stroke(); }
+  for (let n = g.dy / 2; n <= g.ymax + 1e-9; n += g.dy / 2) { ctx.beginPath(); ctx.moveTo(G.x0, Y(n)); ctx.lineTo(G.x0 + G.w, Y(n)); ctx.stroke(); }
+  ctx.restore();
+}
+/** Trace f(t) de 0 à p·tmax (p de 0 à 1). */
+function trace(c, f, p, couleur = 'bleu', o = {}) {
+  if (p <= 0) return;
+  const tm = (o.tmax ?? GC.tmax) * p;
+  c.courbe(u => [X(u * tm), Y(f(u * tm))], Math.max(12, Math.round(100 * p)), { couleur, largeur: 2.6, ...o });
+}
+/** Segment de la tangente à f en t (pente s), de u1 à u2 (min), gardé dans le graphe. */
+function tangente(c, t, xt, s, u1, u2, o = {}) {
+  const lo = Math.max(0, u1, s > 0 ? t - xt / s : -1e9), hi = Math.min(GC.tmax + 2, u2, s > 0 ? t + (GC.ymax - .1 - xt) / s : 1e9);
+  c.ligne(X(lo), Y(xt + s * (lo - t)), X(hi), Y(xt + s * (hi - t)), { couleur: o.couleur ?? 'vert', largeur: o.largeur ?? 2.4, pointille: o.pointille });
+}
+/** Poignée jaune posée sur l’axe des temps (glisser à gauche ou à droite). */
+function poignee(ctx, x, y) {
+  ctx.save(); ctx.strokeStyle = '#facc15'; ctx.fillStyle = 'rgba(250,204,21,.18)'; ctx.lineWidth = 2.2; ctx.globalAlpha = .95;
+  ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 13, y - 4); ctx.lineTo(x - 18, y); ctx.lineTo(x - 13, y + 4); ctx.moveTo(x + 13, y - 4); ctx.lineTo(x + 18, y); ctx.lineTo(x + 13, y + 4); ctx.stroke();
+  ctx.restore();
+}
+/** Pointillé à la craie, tracé jusqu’à la part p. */
+function pointille(c, x1, y1, x2, y2, p, col = 'jaune') {
+  if (p <= 0) return;
+  c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.8, pointille: [5, 5] });
+}
+/** Fraction écrite à la craie : numérateur, trait, dénominateur ; renvoie la largeur. */
+function frac(c, x, yb, num, den, t, col = 'blanc') {
+  const w = Math.max(larg(c, num, t), larg(c, den, t)) + 10;
+  c.texte(num, x + w / 2, yb - t * .22, { couleur: col, taille: t, align: 'center' });
+  c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 2 });
+  c.texte(den, x + w / 2, yb + t * .9, { couleur: col, taille: t, align: 'center' });
+  return w;
+}
+const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+const etapeEnCours = M => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; };
+
+
+/* ── courbe.html : vues points | lecture | palier ─────────────────────────────────────────────────────────────── */
+const q0 = new URLSearchParams(location.search);
+const VUES = ['points', 'lecture', 'palier'];
+const TITRES = { points: 'placer les points', lecture: 'lire x à une date', palier: 'le palier et l’état final' };
+const TITRE_TABLEAU = { points: 'La courbe x(t) : placer les mesures', lecture: 'Lire x(t) sur la courbe', palier: 'Le palier : x_f et x_max' };
+/** Le tableau des mesures (contrat, arrondi à 0,01). */
+const MESURES = [[0, '0'], [2, '0,44'], [4, '0,79'], [6, '1,06'], [8, '1,26'], [10, '1,43'], [15, '1,69'], [20, '1,84'], [30, '1,95'], [40, '1,99']];
+const valeur = s => +s.replace(',', '.');
+/** Date de lecture (poignée), vue lecture : 0 à 40 min, pas 0,5, défaut 8. */
+const tUrl = Number.isFinite(+q0.get('t')) && q0.get('t') !== null ? +q0.get('t') : 8;
+const PAR = { t: clamp(Math.round(tUrl * 2) / 2, 0, 40) };
+let DRAG = null;
+const tVu = () => DRAG ?? PAR.t;
+const lu = t => deux(xA(t));                        // valeur lue, arrondie à 0,01
+
+const ETAPES = {
+  points: [
+    { nom: 'axes', anim: .3, motif: 'les axes : x (mmol) en ordonnée, t (min) en abscisse', bulle: () => 'On place les mesures du tableau sur un graphe.' },
+    { nom: 'premiers_points', anim: 2.5, motif: 'les premiers points : de t = 0 à t = 8 min', bulle: () => 'Un point par mesure…' },
+    { nom: 'tous_points', anim: 2.5, motif: 'les dix points du tableau', bulle: () => 'Et les mesures suivantes.' },
+    { nom: 'courbe', anim: 2.6, motif: 'la courbe lisse passe par les points', bulle: () => 'On trace une courbe lisse.' },
+    { nom: 'allure', anim: .6, motif: 'l’allure : monte vite au début, puis de moins en moins', bulle: () => 'Regarde l’allure de la courbe.' },
+  ],
+  lecture: [
+    { nom: 'axes', anim: .3, motif: 'les axes : x (mmol), t (min)', bulle: () => 'Lire une valeur sur la courbe.' },
+    { nom: 'courbe', anim: 2.6, motif: 'la courbe x(t)', bulle: () => 'La courbe x(t) de l’exemple A.' },
+    { nom: 'date', anim: .5, motif: 'la date choisie sur l’axe des temps', bulle: () => `On choisit une date : t = ${dmin(PAR.t)} min.` },
+    { nom: 'lecture', anim: 1.8, motif: 'les pointillés : de la date à la courbe, puis à l’axe des x', bulle: () => 'On monte jusqu’à la courbe, puis on va à l’axe des x.' },
+    { nom: 'valeur', anim: .4, motif: 'la valeur lue', bulle: () => 'On lit la valeur.' },
+  ],
+  palier: [
+    { nom: 'axes', anim: .3, motif: 'les axes : x (mmol), t (min)', bulle: () => 'Jusqu’où monte la courbe ?' },
+    { nom: 'courbe', anim: 3, motif: 'la courbe jusqu’à 40 min', bulle: () => 'La courbe jusqu’à 40 min.' },
+    { nom: 'palier', anim: .8, motif: 'le palier horizontal : x_f = 2,0 mmol', bulle: () => 'À la fin, la courbe devient horizontale : c’est le palier.' },
+    { nom: 'x_max', anim: .8, motif: 'le trait x_max = 2,0 mmol, confondu avec le palier', bulle: () => 'Et x_max, calculé avec le tableau d’avancement ?' },
+    { nom: 'egalite', anim: .3, motif: 'x_f = x_max : transformation totale', bulle: () => 'Les deux sont égaux.' },
+    { nom: 'etat_final', anim: .8, motif: 'à partir d’environ 30 min, x ne change plus : état final', bulle: () => 'À partir de quand x ne change-t-il plus ?' },
+  ],
+};
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
+let MO = null;
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+/** Combien de points sont placés (0 à 10). */
+function nbPoints(M) {
+  if (!M.commence('premiers_points')) return 0;
+  if (!M.commence('tous_points')) return Math.min(5, Math.floor(M.p('premiers_points') * 5 + 1e-6) + (M.p('premiers_points') > 0 ? 1 : 0));
+  return Math.min(10, 5 + Math.floor(M.p('tous_points') * 5 + 1e-6) + (M.p('tous_points') > 0 ? 1 : 0));
+}
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(61);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  eqn(c, 746, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 16 });
+  if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
+  let vues = [];
+  if (v === 'points') {
+    const n = nbPoints(M);
+    c.direct(() => {
+      if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu');
+      for (let k = 0; k < n; k++) { const [t, s] = MESURES[k]; c.point(X(t), Y(valeur(s)), 4.5, k === n - 1 && !M.commence('courbe') ? 'jaune' : 'blanc'); }
+      // Le tableau des mesures, à droite : une ligne s’allume quand son point est placé.
+      if (M.commence('premiers_points')) {
+        c.rect(PX + 4, 44, 236, 256, { couleur: 'faible', largeur: 1.4, arrondi: 8 });
+        c.ligne(PX + 112, 50, PX + 112, 294, { couleur: 'faible', largeur: 1.2 });
+        c.texte('t (min)', PX + 58, 66, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('x (mmol)', PX + 176, 66, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.ligne(PX + 10, 74, PX + 234, 74, { couleur: 'faible', largeur: 1.2 });
+        MESURES.forEach(([t, s], k) => {
+          const col = k >= n ? 'tresfaible' : k === n - 1 && !M.commence('courbe') ? 'jaune' : 'blanc';
+          c.texte(String(t), PX + 58, 95 + k * 21, { couleur: col, taille: 16, align: 'center' });
+          c.texte(s, PX + 176, 95 + k * 21, { couleur: col, taille: 16, align: 'center' });
+        });
+      }
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'axes', lignes: [['exemple A : on reporte les mesures du tableau (t en min, x en mmol)', 'blanc']], plus: () => axes(c) },
+      { nom: 'premiers_points', lignes: [['t = 0 : x = 0 ; t = 2 min : x = 0,44 mmol ; … ; t = 8 min : x = 1,26 mmol', 'blanc']] },
+      { nom: 'tous_points', lignes: [['puis x = 1,43 ; 1,69 ; 1,84 ; 1,95 ; 1,99 mmol à t = 10, 15, 20, 30 et 40 min', 'blanc']] },
+      { nom: 'courbe', lignes: [['on trace une courbe LISSE qui passe au plus près des points (pas de lignes brisées)', 'bleu']] },
+      { nom: 'allure', lignes: [['la courbe monte vite au début, puis de moins en moins', 'jaune']], plus: () => {
+        c.cercle(X(2.2), Y(.6), 34, { couleur: 'jaune', largeur: 1.8 });
+        c.texte('monte vite', X(2.2) + 40, Y(.6) + 30, { couleur: 'jaune', taille: 16 });
+        c.rect(X(24), Y(2.08), X(40) - X(24) + 10, 30, { couleur: 'jaune', largeur: 1.8, arrondi: 12 });
+        c.texte('de moins en moins', X(40) + 10, Y(2.08) - 8, { couleur: 'jaune', taille: 16, align: 'right' });
+      } },
+    ], ZY);
+  } else if (v === 'lecture') {
+    const t = tVu(), xt = xA(t);
+    c.direct(() => {
+      if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu');
+      if (M.commence('lecture')) {
+        const p = M.p('lecture');
+        pointille(c, X(t), G.y0, X(t), Y(xt), clamp(p * 2, 0, 1));
+        if (p >= .5) { c.point(X(t), Y(xt), 4.5, 'jaune'); pointille(c, X(t), Y(xt), G.x0, Y(xt), clamp(p * 2 - 1, 0, 1)); }
+      }
+      if (M.commence('valeur')) c.point(G.x0, Y(xt), 4.5, 'jaune');
+      if (M.commence('date') || DRAG != null) poignee(c.ctx, X(t), G.y0);
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'axes', lignes: [['exemple A : la courbe x(t) tracée avec les mesures', 'blanc']], plus: () => axes(c) },
+      { nom: 'courbe', lignes: [['pour lire x à une date : partir de la date sur l’axe des temps', 'blanc']] },
+      { nom: 'date', lignes: [[`date choisie : t = ${dmin(PAR.t)} min (poignée jaune, à glisser)`, 'jaune']], plus: () => {
+        c.texte('1) on choisit la date :', PX, 84, { couleur: 'blanc', taille: 17, max: 248 });
+        c.direct(() => c.texte(`t = ${dmin(tVu())} min`, PX + 20, 108, { couleur: 'jaune', taille: 17 }));
+      } },
+      { nom: 'lecture', lignes: [['verticale jusqu’à la courbe, puis horizontale jusqu’à l’axe des x', 'jaune']], plus: () => {
+        c.texte('2) verticale jusqu’à la courbe', PX, 144, { couleur: 'blanc', taille: 17, max: 248 });
+        c.texte('3) horizontale jusqu’à l’axe x', PX, 168, { couleur: 'blanc', taille: 17, max: 248 });
+      } },
+      { nom: 'valeur', lignes: [[`on lit : x(${dmin(PAR.t)} min) ≈ ${lu(PAR.t)} mmol`, 'jaune']], plus: () => {
+        c.texte('4) on lit :', PX, 204, { couleur: 'blanc', taille: 17 });
+        c.direct(() => c.texte(`x(${dmin(tVu())} min) ≈ ${lu(tVu())} mmol`, PX, 236, { couleur: 'jaune', taille: 22, max: 248 }));
+      } },
+    ], ZY);
+  } else {
+    c.direct(() => { if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu'); });
+    vues = zoneEcriture(c, M, [
+      { nom: 'axes', lignes: [['exemple A : n₀(H₂O₂) = 2,0 mmol (limitant), n₀(I⁻) = 10,0 mmol', 'blanc']], plus: () => axes(c) },
+      { nom: 'courbe', lignes: [['la courbe monte de moins en moins vite…', 'bleu']] },
+      { nom: 'palier', lignes: [['… puis devient horizontale : c’est le palier, x_f = 2,0 mmol', 'jaune']], plus: () => {
+        c.ligne(X(27), Y(2), X(40) + 6, Y(2), { couleur: 'jaune', largeur: 3.2 });
+        c.texte('palier : x_f = 2,0 mmol', X(40) + 6, Y(2) - 9, { couleur: 'jaune', taille: 16, align: 'right' });
+        c.texte('palier : x ne varie plus,', PX, 84, { couleur: 'jaune', taille: 17, max: 248 });
+        c.texte('x_f = 2,0 mmol', PX, 108, { couleur: 'jaune', taille: 17 });
+      } },
+      { nom: 'x_max', lignes: [['tableau d’avancement : 2,0 − x_max = 0, donc x_max = 2,0 mmol (H₂O₂ limitant)', 'violet']], plus: () => {
+        c.ligne(G.x0, Y(2), X(40) + 6, Y(2), { couleur: 'violet', largeur: 1.8, pointille: [7, 6] });
+        c.texte('x_max = 2,0 mmol', G.x0 + 8, Y(2) + 20, { couleur: 'violet', taille: 16 });
+        c.texte('x_max = 2,0 mmol (calculé :', PX, 144, { couleur: 'violet', taille: 17, max: 248 });
+        c.texte('H₂O₂ limitant)', PX, 168, { couleur: 'violet', taille: 17 });
+      } },
+      { nom: 'egalite', lignes: [['le palier et le trait x_max sont confondus : x_f = x_max, la transformation est totale', 'jaune']], plus: () => {
+        c.rect(PX - 6, 184, 252, 58, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte('x_f = x_max', PX + 4, 208, { couleur: 'jaune', taille: 20 });
+        c.texte('transformation totale', PX + 4, 232, { couleur: 'jaune', taille: 18 });
+      } },
+      { nom: 'etat_final', lignes: [['à partir d’environ 30 min, x ne change plus : c’est l’état final', 'blanc']], plus: () => {
+        c.ligne(X(30), Y(2), X(30), G.y0, { couleur: 'blanc', largeur: 1.4, pointille: [4, 5] });
+        c.texte('état final', X(35), Y(2) + 26, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('à partir d’environ 30 min,', PX, 270, { couleur: 'blanc', taille: 17, max: 248 });
+        c.texte('x ne change plus : état final', PX, 294, { couleur: 'blanc', taille: 17, max: 248 });
+      } },
+    ], ZY);
+  }
+  reperes(c, M);
+  M.vues = vues;
+  return c.fin();
+}
+
+/* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
+function reperes(c, M) {
+  const v = M.S.vue, R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
+  R('axe_t', G.x0, G.y0 - 10, G.w + 60, 40, 'l’axe des temps t (min), de 0 à 40 min');
+  R('axe_x', G.x0 - 50, G.y0 - G.h - 26, 60, G.h + 36, 'l’axe des ordonnées : x (mmol), de 0 à 2,5 mmol');
+  const etC = v === 'points' ? 'courbe' : 'courbe';
+  R('courbe', G.x0, Y(2.05), G.w + 6, G.y0 - Y(2.05), `la courbe x(t) de l’exemple A, bleue${q(etC)}`);
+  if (v === 'points') {
+    R('points', G.x0 - 8, Y(2.05), G.w + 16, G.y0 - Y(2.05) + 8, `les dix points des mesures (t ; x)${q('tous_points')}`);
+    R('debut', X(2.2) - 36, Y(.6) - 36, 72, 72, `le début de la courbe : elle monte vite${q('allure')}`);
+    R('fin_courbe', X(24), Y(2.08) - 26, X(40) - X(24) + 12, 56, `la fin de la courbe : elle ne monte presque plus${q('allure')}`);
+  } else if (v === 'lecture') {
+    const t = tVu(), xt = xA(t);
+    R('poignee_t', X(t) - 20, G.y0 - 12, 40, 24, `la poignée jaune : la date t = ${dmin(t)} min (glisser de 0 à 40 min)${q('date')}`);
+    R('pointilles', G.x0, Y(xt) - 6, Math.max(12, X(t) - G.x0 + 6), G.y0 - Y(xt) + 6, `les pointillés : de t = ${dmin(t)} min à la courbe, puis à l’axe des x${q('lecture')}`);
+    R('valeur', PX - 4, 186, 252, 60, `la valeur lue : x(${dmin(t)} min) ≈ ${lu(t)} mmol${q('valeur')}`);
+  } else {
+    R('palier', X(26), Y(2) - 28, X(40) - X(26) + 10, 36, `le palier : x_f = 2,0 mmol${q('palier')}`);
+    R('ligne_x_max', G.x0, Y(2) - 6, G.w + 8, 32, `le trait pointillé x_max = 2,0 mmol, confondu avec le palier${q('x_max')}`);
+    R('phrase', PX - 6, 184, 252, 120, `« x_f = x_max : transformation totale » et « à partir d’environ 30 min, x ne change plus : état final »${q('egalite')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  m.push(`Étape en cours : ${etapeEnCours(M)}. Graphe à la craie : x (mmol) en ordonnée de 0 à 2,5, t (min) en abscisse de 0 à 40, quadrillage léger ; exemple A (H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O).`);
+  if (v === 'points') {
+    const n = nbPoints(M);
+    m.push(n ? `Points placés (${n} sur 10) : ${MESURES.slice(0, n).map(([t, s]) => `(${t} min ; ${s} mmol)`).join(', ')}. Le tableau des mesures est écrit à droite.` : 'Aucun point encore.');
+    if (M.commence('courbe')) m.push(`Courbe lisse bleue tracée jusqu’à t = ${dmin(40 * M.p('courbe'))} min, elle passe par les points.`);
+    if (M.commence('allure')) m.push('Cercle jaune au début « monte vite » ; cadre jaune à la fin « de moins en moins » (la courbe s’aplatit vers 2,0 mmol).');
+  } else if (v === 'lecture') {
+    const t = PAR.t;
+    if (M.commence('courbe')) m.push(`Courbe bleue x(t) tracée jusqu’à t = ${dmin(40 * M.p('courbe'))} min.`);
+    if (M.commence('date')) m.push(`Poignée jaune sur l’axe des temps à t = ${dmin(t)} min (glissable de 0 à 40 min).`);
+    if (M.commence('lecture')) m.push(`Pointillés jaunes : verticale de t = ${dmin(t)} min jusqu’à la courbe, puis horizontale jusqu’à l’axe des x, à x ≈ ${lu(t)} mmol.`);
+    if (M.commence('valeur')) m.push(`Valeur écrite : « x(${dmin(t)} min) ≈ ${lu(t)} mmol ».`);
+  } else {
+    if (M.commence('courbe')) m.push(`Courbe bleue tracée jusqu’à t = ${dmin(40 * M.p('courbe'))} min.`);
+    if (M.commence('palier')) m.push('Palier horizontal en jaune : « x_f = 2,0 mmol ».');
+    if (M.commence('x_max')) m.push('Trait violet en pointillé « x_max = 2,0 mmol » : confondu avec le palier.');
+    if (M.commence('egalite')) m.push('Cadre jaune : « x_f = x_max : transformation totale ».');
+    if (M.commence('etat_final')) m.push('Trait vertical en pointillé à t = 30 min, « état final » ; « à partir d’environ 30 min, x ne change plus : état final ».');
+  }
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v };
+  if (v === 'lecture') Object.assign(p, { t: PAR.t, x_lu_mmol: +xA(PAR.t).toFixed(2) });
+  if (v === 'palier') Object.assign(p, { x_f_mmol: 2, x_max_mmol: 2, etat_final_vers_min: 30 });
+  if (v === 'points') p.mesures = MESURES.map(([t, s]) => ({ t_min: t, x_mmol: valeur(s) }));
+  return p;
+};
+const MOT = Moteur({
+  id: 'cin_courbe', titre: 'La courbe x(t) de l’exemple A : placer les points, lire une valeur, le palier', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ points: 'Plaçons les mesures du tableau sur un graphe.', lecture: `Lisons x à la date t = ${dmin(PAR.t)} min.`, palier: 'Où s’arrête la courbe ?' })[M.S.vue],
+  messageFin: M => ({ points: 'La courbe x(t) monte vite au début, puis de moins en moins.',
+    lecture: `Sur la courbe : x(${dmin(PAR.t)} min) ≈ ${lu(PAR.t)} mmol. Glisse la poignée pour lire une autre date.`,
+    palier: 'x_f = x_max = 2,0 mmol : transformation totale ; état final vers 30 min.' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    if (p.t != null && p.t !== '' && Number.isFinite(+p.t)) {
+      PAR.t = clamp(Math.round(+p.t * 2) / 2, 0, 40); DRAG = null; r.vue = 'lecture'; r.change = true;
+      if (M.S.vue === 'lecture') { r.garder = true; r.apres = () => { if (!M.S.running) { M.S.t = M.Moments().fin; M.finir(); } else M.emettre(); }; }
+    } else r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', t: '0..40 (min, pas 0,5 ; date lue dans la vue lecture, défaut 8 ; montre aussitôt la lecture)' },
+  texte: 'La courbe x(t) de l’exemple A (H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, V = 100 mL, n₀(H₂O₂) = 2,0 mmol limitant). Points : les dix mesures (t en min ; x en mmol) 0 ; 0 · 2 ; 0,44 · 4 ; 0,79 · 6 ; 1,06 · 8 ; 1,26 · 10 ; 1,43 · 15 ; 1,69 · 20 ; 1,84 · 30 ; 1,95 · 40 ; 1,99 sont placées, puis une courbe lisse : elle monte vite au début, puis de moins en moins. Lecture : poignée sur la date t (défaut 8 min) ; pointillés de t à la courbe puis à l’axe des x : x(8 min) ≈ 1,26 mmol. Palier : à la fin la courbe est horizontale, x_f = 2,0 mmol ; x_max = 2,0 mmol (tableau d’avancement) : confondus, x_f = x_max, transformation totale ; à partir d’environ 30 min x ne change plus : état final.',
+  explications: {
+    points: [
+      { repere: 'points', texte: 'Chaque mesure du tableau donne un point.' },
+      { repere: 'courbe', texte: 'On trace une courbe lisse qui passe par les points.' },
+      { repere: 'debut', texte: 'Au début, elle monte vite.' },
+      { repere: 'fin_courbe', texte: 'Puis de moins en moins.' },
+    ],
+    lecture: [
+      { repere: 'poignee_t', texte: 'On part de la date sur l’axe des temps.' },
+      { repere: 'pointilles', texte: 'On monte jusqu’à la courbe, puis on va à l’axe des x.' },
+      { repere: 'valeur', texte: 'On lit la valeur de x.' },
+    ],
+    palier: [
+      { repere: 'palier', texte: 'À la fin, la courbe est horizontale : x_f = 2,0 mmol.' },
+      { repere: 'ligne_x_max', texte: 'x_max = 2,0 mmol : le même trait.' },
+      { repere: 'phrase', texte: 'x_f = x_max : la transformation est totale.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => {
+    if (MOT.S.vue !== 'lecture' || !MOT.commence('date')) return null;
+    const [x, y] = MOT.scene.local(px, py);
+    return Math.abs(x - X(tVu())) < 22 && Math.abs(y - G.y0) < 22 ? 't' : null;
+  },
+  bouger: (id, px) => { const [x] = MOT.scene.local(px, 0); DRAG = clamp(Math.round((x - G.x0) / G.w * 40 * 2) / 2, 0, 40); MOT.scene.sale = true; },
+  lacher: () => { if (DRAG != null) { const t = DRAG; MOT.setParameters({ t }); } },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
