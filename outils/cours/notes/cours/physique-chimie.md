@@ -425,12 +425,12 @@ outils : cours/transformations_deux_sens_build/ ; contrat : cours/transformation
   (9 pages) ; chaque page testée en headless par son agent (moments, repères, hors cadre, captures regardées).
   ⚠ Défaut du moteur copié de cinetique-tableau (signalé par l'agent equilibre) : il gardait seulement la durée du DERNIER M.etape d'un même nom,
   donc un texte pouvait être encore en cours d'écriture à l'arrêt sur image. Corrigé dans TOUTES les pages de ce dossier (conductimetrie et dilution
-  par la routine : Math.max + remise à zéro). RESTE dans chimie/cinetique-tableau/ (conductimetrie, courbe, demi-reaction, figures, pression,
-  vitesse) et chimie/transformations-lentes-rapides-tableau/ (toutes) : même correction de deux lignes à faire.
+  par la routine : Math.max + remise à zéro). Corrigé aussi (routine du 12 nov., 19 h) dans chimie/cinetique-tableau/ (6 pages) et
+  chimie/transformations-lentes-rapides-tableau/ (6 pages) : verif_sims des deux cours « AUCUN PROBLÈME » après correction.
 - Vérification au navigateur (verif_sims.js, Playwright, diapositive par diapositive) : 36/36 ok, « AUCUN PROBLÈME » (moments, repères, encre,
   pas d'erreur JS, rien hors cadre).
 - PRÊT POUR LA VOIX : OUI (36 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
-- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player, défaut du moteur ci-dessus. Cours suivant : etat_equilibre
+- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : etat_equilibre (construit le 12 nov. au soir)
   (exploration à faire).
 - À valider : clé perimetre ; τ d'une base renvoyé au ch. 13 (p5 n'écrit que l'équation) ; estérification gardée (e5, e6) « étudiée plus tard » ; pH de
   l'eau = 7 seulement en réponse ; « ions oxonium » dit, H₃O⁺ écrit ; o1, bl, cr : questions du plan réécrites en QCM (bl : unité de [H₃O⁺] dans σ) ;
