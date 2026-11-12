@@ -160,6 +160,46 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
 - PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items). Reste : audits vidéo (PC),
   réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : circuit_RLC (exploration à faire).
 
+## circuit_RLC
+(routine cloud du 12 nov., cours phys_ch8_circuit_RLC, « Oscillations libres d'un circuit RLC série » ; outils : cours/circuit_RLC_build/ ;
+contrat : cours/circuit_RLC_contrat_simulations.md)
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/circuit_RLC.json (explo.py = explo_a.py + explo_b.py + nationaux.md).
+  VIDÉOS NON AUDITÉES : YouTube bloqué depuis le cloud (connexion refusée par le proxy, yt-dlp absent). Appui : les 20 nationaux PC 2016-2025
+  (circuit_RLC_build/nationaux.md : RLC dans 17 sessions sur 20, 2,1 pts en moyenne, de 0,5 à 3,5 ; jamais de RLC forcé, de résonance,
+  de régime critique ni d'homogénéité demandés), perimetre.json, explorations RC/RL. À compléter par 10 audits vidéo depuis le PC avant validation.
+  Ancien matériel : plan de TP database/seed_data/lessons/phys_ch8_l1.json (α = R/2L et R critique hors programme, « périodique avec R presque
+  nulle » faux) ; ancienne simu advanced/electricity?variant=rlc (facteur de qualité, R critique) : non reprises.
+- Erreurs relevées dans le dépôt (nationaux.md) : 2023 R 1.3/2.3 (q lu 12 µC et 8 µC au lieu de 120 et 40 µC ; bonnes valeurs 0,72 mJ et 0,64 mJ,
+  la note RL plus haut sur 2023 R est donc fausse : la grille officielle avait raison) ; 2024 R 2.3 (axe u_R en mV ignoré) ; 2024 N 1.4
+  (u_C(t₂) = −4,4 V, pas 4 V : 1,83·10⁻⁹ J) ; 2021 R III.1 courbes inversées ; 2019 N barème faux dans exam.json ; figures mal liées
+  (2022 N, 2022 R, 2023 R, 2024 N) ; données absentes d'exam.json (C = 0,22 nF en 2024 N, L = 1 H en 2022 R, R = 90 Ω en 2020 N).
+- Étape 5 cadre : chapitres.circuit_RLC ajoutée (cadre_rlc.py : RLC1-RLC8, 21 formules, 20 mots hors cadre). controler_cadre → « cadre : OK »
+  (242 « à relire » non bloquants : applications numériques, valeurs de L lues). programme_semestre1 : circuit_RLC → construit.
+- COURS CONSTRUIT → backend/data/courses/phys_ch8_circuit_RLC.json (draft, concentration) : 48 diapositives (préfixe lc_), 48 questions,
+  23 prédictions, 35 exercices, démonstration sur chaque calcul ; 10 parties (décharge, régimes, équation, solution et T₀, conditions initiales,
+  lecture des oscillogrammes, énergie, amortissement, entretien, nationaux 2020 N et 2025 N, bilan + carte) ; compétences C1-C8.
+  Build : circuit_RLC_build/ (p1…p4.py par 4 sous-agents, check_part « AUCUNE ERREUR » chacun ; refaire : `python3 circuit_RLC_build/build.py
+  --garder-reponses` puis ajouts.py + `blocs.py appliquer`).
+- Méthode des blocs : methode_blocs/ajouts/phys_ch8_circuit_RLC.json : 4 séances × 3 blocs × 4 diapositives, 32 rappels, 23 prédictions / 48.
+  blocs.py verifier → « cadre : OK », « blocs : OK ». preparer_reponses verifier : seulement réactions et pistes audio manquantes.
+- Réactions : items seulement → circuit_RLC_build/items_cours.json (451), items_blocs.json (94), demos_blocs.json (0). À écrire sur le serveur.
+- Simulations (frontend/public/media/simulations/physics/circuit-rlc-tableau/, 3 sous-agents) : circuit-lc (montage|bascule|echange), equation,
+  entretien, oscillogramme (periodique|pseudo|aperiodique|critique|comparer), solution (cos|phase), periode (T0|influence_L|influence_C),
+  energie (echange|amortie), figures (7 ?fig=), bilan (11 blocs), carte. Valeurs : E = 6 V, C = 4 µF, L = 0,1 H, R + r = 20 Ω → T₀ ≈ 4 ms.
+  node --check OK ; chaque page testée en headless par son agent ; verif_sims.js (Playwright, 4 lots) sur les 48 diapositives : 48 ok, « AUCUN PROBLÈME ».
+- verifier_texte_corpus (copie avec backend/kaggle_tts/texte_parle.py) : 362 mots à revoir : termes du programme (apériodique, pseudo,
+  henry, microfarads, microjoules, sinusoïde…) et darija rare une fois chacune (المرجيحة/المرجوحة, كتسخن, شارجي…) : gardés, à écouter au contrôle des murmures.
+- PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items). Reste : audits vidéo (PC),
+  réactions (serveur), voix, validation, lecture dans /dev/course-player.
+- À valider : entretien écrit u_G = k·i (comme les sujets), « résistance négative » jamais dite ; homogénéité de √(LC) en une diapo (p1) ;
+  régime critique en une phrase sans formule ; ω₀ une ligne (e8) ; φ en 4 diapositives (c1-c4) alors qu'une seule session le demande (2020 N) ;
+  nationaux choisis 2020 N et 2025 N ; couleurs rouge = condensateur, vert = bobine, blanc = énergie totale ; question de la carte remplacée
+  (« qui fait osciller, qui amortit ? ») ; « les sujets écrivent aussi u_L » dit en o2 ET en e2 (en enlever un) ; d2 joue la simulation jusqu'au
+  retour, ce qui montre déjà « u_C = 0, i maximal » avant la prédiction de d3 ; c4 cite 2020 N (entretien) avant la séance 4 ; formules écrites
+  hors liste du brief : du_C/dt(0) = −(2π/T₀)·U_m·sin φ, T₀² = 4π²·L·C, E_e = q²/(2C) ; 2020 N i = 4,8 mA lu (calcul 4,70) ; vue echange de
+  circuit-lc en LC idéal (pas de résistor dessiné) ; entretien : k > R + r non montré ; fig_2021R/2022N/2025N recopiées des figures du sujet.
+  Cours suivant : transformations_lentes_rapides (chimie, exploration à faire).
+
 ## energie_nucleaire
 (sous-agent Opus du cours phys_ch5_energie_nucleaire, « Noyaux, masse et énergie » ; outils : cours/energie_nucleaire_build/)
 - Démarré. Outils copiés depuis ondes_lumineuses_build (outils.py, build.py, verif_sims.py, prog.py, cadre_ol.py → à adapter).

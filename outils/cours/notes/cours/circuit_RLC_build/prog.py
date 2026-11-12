@@ -6,7 +6,7 @@ d = json.loads(p.read_text(encoding="utf-8"))
 n = 0
 for c in d["Physique-Chimie"]:
     if c.get("cle") == "circuit_RLC":
-        c["statut"] = "explore"; c["cours"] = "phys_ch8_circuit_RLC"; n += 1
+        c["statut"] = "construit"; c["cours"] = "phys_ch8_circuit_RLC"; n += 1
 assert n == 1, n
 p.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print("ok")
