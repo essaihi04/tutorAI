@@ -657,7 +657,7 @@ function echanges(M, rang) {
   let fini = 0, q = 0, actif = -1;
   fen.forEach(([a, b], i) => { if (M.S.t >= b) fini = i + 1; else if (M.S.t > a) { q = (M.S.t - a) / (b - a); actif = i; } });
   // La flèche du dernier échange reste tracée un moment (jusqu’aux compteurs pour le premier échange de chaque rang).
-  const finDernier = fini ? fen[fini - 1][1] : -1, garde = fini === 1 ? (ec && M.S.t < ec.debut) : (fini > 1 && M.S.t - finDernier < .45 * P_CYCLE);
+  const finDernier = fini ? fen[fini - 1][1] : -1, garde = fini === 1 ? (ec && M.S.t <= ec.debut + .3 * P_CYCLE) : (fini > 1 && M.S.t - finDernier < .45 * P_CYCLE);
   // Rang 1 : molécules au départ → son échange n°0 est un sens 1 ; rang 2 : ions au départ → sens 2. Ensuite les sens alternent.
   const etat = (rang + fini) % 2 === 0 ? 'mol' : 'ion';               // 'mol' : CH₃COOH + H₂O ; 'ion' : CH₃COO⁻ + H₃O⁺
   return { fini, q: actif >= 0 ? q : 0, actif: actif >= 0, etat, sens: etat === 'mol' ? 1 : 2, garde: actif < 0 && garde, sensDernier: etat === 'mol' ? 2 : 1 };
@@ -827,7 +827,7 @@ function dessiner(c, M) {
 function reperes(c, M) {
   const v = M.S.vue, R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
   if (v === 'inverse') {
-    const E = M.etat_inverse || etatInverse(M), { A, B, MET, PX } = VI;
+    const E = etatInverse(M), { A, B, MET, PX } = VI;
     R('becher', A.x - 8, A.y - 8, A.w + 16, A.h + 16, 'le bécher témoin : acide chlorhydrique dilué (50 mL d’acide + 50 mL d’eau), pH = 2,3');
     R('becher_melange', B.x - 8, B.y - 8, B.w + 16, B.h + 16, 'le bécher du mélange : 50 mL du même acide + 50 mL d’éthanoate de sodium');
     R('afficheur', MET.x, MET.y, MET.w, MET.h, `l’afficheur du pH-mètre : ${E.aff === '- -,-' ? 'pas de mesure (sonde hors solution)' : 'pH = ' + E.aff}`);
@@ -869,7 +869,7 @@ function reperes(c, M) {
 function voir(M) {
   const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
   if (v === 'inverse') {
-    const E = M.etat_inverse || etatInverse(M);
+    const E = etatInverse(M);
     m.push('Deux béchers incolores : à gauche le témoin (50 mL d’acide chlorhydrique 1,0·10⁻² mol/L + 50 mL d’eau), à droite 50 mL du même acide' + (M.vu('ajout') ? ' + 50 mL d’éthanoate de sodium versés' : M.commence('ajout') ? ' où l’on verse l’éthanoate de sodium' : ' seul') + '. Flacon d’éthanoate de sodium (Na⁺ + CH₃COO⁻, 1,0·10⁻² mol/L, incolore).');
     m.push(`Sonde du pH-mètre ${E.syB > 250 ? 'dans le bécher ' + (E.sx < 150 ? 'témoin' : 'du mélange') : 'hors des béchers'} ; afficheur : ${E.aff === '- -,-' ? '« - -,- » (pas de mesure)' : 'pH = ' + E.aff}.`);
     if (M.commence('acide_seul')) m.push('Écrit : « témoin : 50 mL d’acide chlorhydrique (1,0·10⁻² mol/L) + 50 mL d’eau ; pH = 2,3 ».');
@@ -889,7 +889,7 @@ function voir(M) {
     if (M.commence('coexistent')) m.push('Sous les barres : « réactif » (CH₃COOH) et « produits » (CH₃COO⁻, H₃O⁺), tous présents.');
     if (M.commence('phrase')) m.push('Cadre jaune : « état d’équilibre : les quantités de matière ne changent plus ; réactifs et produits sont tous présents ».');
   } else if (v === 'dynamique') {
-    const d = M.dyn || { etats: [0, 1].map(r => echanges(M, r)), n: compteur(M) };
+    const d = { etats: [0, 1].map(r => echanges(M, r)), n: compteur(M) };
     if (M.commence('loupe')) m.push(`Loupe ronde : deux rangées de deux paires. Rangée du haut : ${d.etats[0].etat === 'mol' ? 'CH₃COOH + H₂O' : 'CH₃COO⁻ + H₃O⁺'} ; rangée du bas : ${d.etats[1].etat === 'mol' ? 'CH₃COOH + H₂O' : 'CH₃COO⁻ + H₃O⁺'} ; les protons H⁺ sont des boules jaunes.` +
       (d.etats.some(e => e.actif) ? ` En ce moment : ${d.etats.filter(e => e.actif).map(e => e.sens === 1 ? 'un proton saute de CH₃COOH vers H₂O (flèche verte, sens 1)' : 'un proton saute de H₃O⁺ vers CH₃COO⁻ (flèche rose, sens 2)').join(' et ')}.` : '') +
       (d.etats.some(e => e.garde) ? ` Flèche(s) du dernier échange encore tracée(s) : ${d.etats.filter(e => e.garde).map((e, i) => (e.sensDernier === 1 ? 'verte (sens 1, ' : 'rose (sens 2, ') + (d.etats.indexOf(e) === 0 ? 'rangée du haut)' : 'rangée du bas)')).join(' et ')}.` : ''));
@@ -911,7 +911,7 @@ function voir(M) {
 }
 const params = M => {
   const v = M.S.vue, p = { vue: v };
-  if (v === 'inverse') { const E = M.etat_inverse || etatInverse(M); Object.assign(p, { pH_temoin: PH_TEMOIN, pH_melange: PH_MELANGE, pH_affiche: E.ph == null ? null : Math.round(E.ph * 10) / 10 }); }
+  if (v === 'inverse') { const E = etatInverse(M); Object.assign(p, { pH_temoin: PH_TEMOIN, pH_melange: PH_MELANGE, pH_affiche: E.ph == null ? null : Math.round(E.ph * 10) / 10 }); }
   if (v === 'etat') Object.assign(p, { pH: PH_A, t_min: +tChrono(M).toFixed(1), n_CH3COOH_mol: 9.6e-4, n_CH3COO_mol: 4.0e-5, n_H3O_mol: 4.0e-5 });
   if (v === 'dynamique') p.compteurs = compteur(M);
   if (v === 'esterification') Object.assign(p, { n0_mol: .5, x_max_mol: .5, x_f_mol: .33, tau: .66 });
