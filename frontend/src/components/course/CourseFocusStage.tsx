@@ -1508,15 +1508,15 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         }} />
 
       {/* ── Le titre et le sous-titre, seulement ── */}
-      <header className="shrink-0 px-6 pt-4 pb-2 text-center">
-        <h1 className="text-2xl md:text-3xl" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
+      <header className="shrink-0 px-6 pt-2 pb-1 text-center" style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
         {contenu.lead && (
-          <p className="mt-1 text-base md:text-lg text-white/70" style={{ fontFamily: CRAIE }}>{contenu.lead}</p>
+          <p className="text-sm leading-snug md:text-base text-white/70" style={{ fontFamily: CRAIE }}>{contenu.lead}</p>
         )}
       </header>
 
       {/* ── Au centre : ce qu'on regarde ── */}
-      <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 pb-2"
+      <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-3 pb-1"
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>   {/* la colonne de droite est au tuteur 3D */}
         {/* ── Le deuxième tableau : les questions descendent du haut et couvrent la scène, tout tient sans défiler ── */}
         {panneau === 'questions' && (
@@ -1556,7 +1556,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           <div
             ref={visuelRef}
             className="relative w-full flex-1 min-h-0 flex items-center justify-center"
-            style={{ maxWidth: surSim ? 1100 : 900 }}
+            // la simulation prend toute la place (12 novembre 2026) ; une image garde sa largeur de lecture
+            style={{ maxWidth: surSim ? undefined : 900 }}
           >
             {surSim && visuel.url && (
               <iframe
@@ -1568,7 +1569,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 src={visuel.url}
                 scrolling="no"
                 className="h-full w-full border-0 bg-transparent"
-                style={{ aspectRatio: '760 / 470', maxHeight: '100%' }}
+                // les tableaux à la craie se redessinent à la taille du cadre : ils remplissent la zone ; les autres
+                // simulations (dessinées pour 760 × 470) gardent leur format
+                style={/-tableau\//.test(visuel.url) ? undefined : { aspectRatio: '760 / 470', maxHeight: '100%' }}
                 onLoad={() => window.setTimeout(() => setSimPrete(true), 700)}
               />
             )}
@@ -1624,7 +1627,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         )}
 
         {centre.length > 0 && (
-          <div className={`flex ${visuel || table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}>
+          <div className={`flex ${visuel ? 'pointer-events-none absolute inset-x-0 bottom-2 z-10 flex-row flex-wrap justify-center gap-3' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}
+            style={visuel && tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
               return (
@@ -1637,6 +1641,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                     fontSize: visuel || table ? 22 : 30,
                     color: '#fef9c3',
                     border: '1px dashed rgba(254,249,195,0.35)',
+                    background: visuel ? 'rgba(15,34,25,0.92)' : undefined,
                     opacity: vu ? 1 : 0,
                     transform: vu ? 'none' : 'translateY(8px)',
                   }}
@@ -1806,30 +1811,31 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       )}
 
       {/* ── La barre du bas, hors de la scène ── */}
-      <footer ref={piedRef} data-pied-cours className="shrink-0 z-20 flex flex-wrap items-center gap-2 px-3 py-2 border-t border-white/10 bg-black/25">
+      {/* une seule ligne fine (12 novembre 2026) : boutons en icônes (le texte apparaît sur grand écran et au survol) */}
+      <footer ref={piedRef} data-pied-cours className="shrink-0 z-20 flex flex-nowrap items-center gap-1.5 px-2 py-1.5 border-t border-white/10 bg-black/25">
         {piste?.url && (
           <>
-            <button onClick={basculer} className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20" title={enLecture ? 'Pause' : 'Écouter'}>
+            <button onClick={basculer} className="h-9 w-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20" title={enLecture ? 'Pause' : 'Écouter'}>
               {enLecture ? '❚❚' : '▶'}
             </button>
-            <button onClick={reecouter} className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20" title="Réécouter depuis le début">⟲</button>
-            <div className="hidden sm:block w-40 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <button onClick={reecouter} className="h-9 w-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20" title="Réécouter depuis le début">⟲</button>
+            <div className="hidden sm:block min-w-[48px] max-w-[160px] flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full bg-emerald-400/80" style={{ width: `${duree ? Math.min(100, (temps / duree) * 100) : 0}%` }} />
             </div>
           </>
         )}
         <Bulle actif={panneau === 'cahier'} pulse={toutVisible && panneau !== 'cahier' && !!cahier} onClick={() => setPanneau(p => p === 'cahier' ? null : 'cahier')} disabled={!cahier}>
-          📓 À écrire dans le cahier
+          <Libelle icone="📓" texte="À écrire dans le cahier" />
         </Bulle>
         <Bulle actif={panneau === 'explication'} onClick={() => setPanneau(p => p === 'explication' ? null : 'explication')}>
-          📖 Explication écrite
+          <Libelle icone="📖" texte="Explication écrite" />
         </Bulle>
         <Bulle actif={panneau === 'question_eleve'} onClick={leverLaMain}>
-          🙋 Question
+          <Libelle icone="🙋" texte="Question" />
         </Bulle>
         {clavierEtat.hotes > 0 && (
           <Bulle actif={clavierEtat.ouvert} onClick={clavier.basculer}>
-            ⌨ Clavier
+            <Libelle icone="⌨" texte="Clavier" />
           </Bulle>
         )}
         {(questions.length > 0 || predictionEnCours) && (
@@ -1837,12 +1843,12 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             {predictionEnCours ? '🔮 Prévois' : `✏️ À toi (${questions.length})`}
           </Bulle>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {deckControls}
           {/* Le seul bouton qui fait avancer le cours : mis en avant quand l'étape est finie ; il clignote à la relance. */}
           <button onClick={faireSuite} disabled={etapeSuite.quoi === 'rien'} data-suite={etapeSuite.quoi}
             title={etapeSuite.pret ? undefined : 'Passer à la suite'}
-            className={`h-11 rounded-full px-6 text-base font-semibold transition-colors disabled:opacity-40 ${etapeSuite.pret
+            className={`h-10 whitespace-nowrap rounded-full px-5 text-base font-semibold transition-colors disabled:opacity-40 ${etapeSuite.pret
               ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-400'
               : 'bg-white/10 text-white/60 hover:bg-white/20'} ${relance ? 'animate-pulse ring-2 ring-emerald-200' : ''}`}>
             {etapeSuite.quoi === 'bloc' ? '✍️ Au cahier →' : etapeSuite.quoi === 'diapo' && etapeSuite.pret ? libelleSuite : 'Suite →'}
@@ -2463,12 +2469,17 @@ function BoutonResultat({ onClick, className = '' }: { onClick: () => void; clas
   );
 }
 
+/** Le texte d'un bouton de la barre : l'icône toujours, le mot sur grand écran (et au survol, `title`). */
+function Libelle({ icone, texte }: { icone: string; texte: string }) {
+  return <span title={texte} aria-label={texte}>{icone}<span className="hidden 2xl:inline"> {texte}</span></span>;
+}
+
 function Bulle({ children, actif, pulse, disabled, onClick }: { children: ReactNode; actif?: boolean; pulse?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`h-10 rounded-full px-4 text-sm transition-colors disabled:opacity-30 ${actif ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'} ${pulse ? 'animate-pulse ring-2 ring-amber-200/60' : ''}`}
+      className={`h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-colors disabled:opacity-30 ${actif ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'} ${pulse ? 'animate-pulse ring-2 ring-amber-200/60' : ''}`}
     >
       {children}
     </button>

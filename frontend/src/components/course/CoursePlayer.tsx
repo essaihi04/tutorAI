@@ -324,8 +324,10 @@ export default function CoursePlayer({
     const p = memoire.place;
     const nbBlocs = p.seanceCours.blocs.length;
     return (
-      <span className="px-1 text-[11px] tabular-nums text-amber-100/70" title={p.seanceCours.titre || ''}>
-        Séance {p.seance + 1}/{memoire.nbSeances} · Bloc {p.bloc + 1}/{nbBlocs} · ~{(nbBlocs - p.bloc) * MINUTES_PAR_BLOC} min
+      // compact (12 novembre 2026 : la barre du bas tient sur une ligne) ; le détail est dans la bulle d'aide
+      <span className="whitespace-nowrap px-1 text-[11px] tabular-nums text-amber-100/70"
+        title={`Séance ${p.seance + 1}/${memoire.nbSeances} · Bloc ${p.bloc + 1}/${nbBlocs} · encore ~${(nbBlocs - p.bloc) * MINUTES_PAR_BLOC} min${p.seanceCours.titre ? ` — ${p.seanceCours.titre}` : ''}`}>
+        S{p.seance + 1}/{memoire.nbSeances} · B{p.bloc + 1}/{nbBlocs} · ~{(nbBlocs - p.bloc) * MINUTES_PAR_BLOC} min
       </span>
     );
   })() : null;
@@ -334,15 +336,15 @@ export default function CoursePlayer({
     <>
       {ouEnEstOn}
       <span
-        className="px-1 text-[11px] tabular-nums text-white/40 hidden sm:inline"
-        title={`${current.activity.title} — activité ${current.activityIndex + 1}/${deck.activities.length}`}
+        className="px-1 text-[11px] tabular-nums text-white/40 hidden lg:inline"
+        title={`${current.activity.title} — partie ${current.activityIndex + 1}/${deck.activities.length}, diapositive ${current.slideIndex + 1}/${activitySlideCount}`}
       >
-        {current.activityIndex + 1}/{deck.activities.length} · {current.slideIndex + 1}/{activitySlideCount} · {totalProgress}%
+        {totalProgress}%
       </span>
       <button
         onClick={goToPrevious}
         disabled={index === 0}
-        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm hover:scale-105 transition-transform disabled:opacity-25 disabled:hover:scale-100"
+        className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm hover:scale-105 transition-transform disabled:opacity-25 disabled:hover:scale-100"
         style={{ background: 'rgba(13,27,21,0.9)', border: '1px solid rgba(255,255,255,0.18)' }}
         title="Diapositive précédente"
       >
@@ -350,7 +352,7 @@ export default function CoursePlayer({
       </button>
       <button
         onClick={restartFromBeginning}
-        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm hover:scale-105 transition-transform"
+        className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm hover:scale-105 transition-transform"
         style={{ background: 'rgba(13,27,21,0.9)', border: '1px solid rgba(255,255,255,0.18)' }}
         title="Recommencer le cours"
       >
