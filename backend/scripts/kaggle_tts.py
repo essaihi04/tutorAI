@@ -205,7 +205,7 @@ def banc():
 
 def reactions(sortie: str = "/tmp/reactions"):
     """Enregistre les réactions immédiates (kaggle_tts/reactions.json) avec la
-    voix d'Amine, sur le kernel d'essai : un WAV par phrase + manifest.json,
+    voix du modèle réglé (Bodi, academy-v5-bodi), sur le kernel d'essai : un WAV par phrase + manifest.json,
     à copier dans frontend/public/media/audio/reactions/."""
     import httpx
 
@@ -229,7 +229,7 @@ def reactions(sortie: str = "/tmp/reactions"):
             faites.append({**r, "url": f"/media/audio/reactions/{r['id']}.wav"})
             print(r["id"], f"{(len(rep.content) - 44) / 2 / 24000:.1f} s", r["texte"])
     (dossier / "manifest.json").write_text(
-        json.dumps({"voix": "academy-v4-amine-vif", "reactions": faites}, ensure_ascii=False, indent=1),
+        json.dumps({"voix": settings.kaggle_tts_modele, "reactions": faites}, ensure_ascii=False, indent=1),
         encoding="utf-8")
     print(len(faites), "/", len(phrases), "réactions dans", dossier)
 
