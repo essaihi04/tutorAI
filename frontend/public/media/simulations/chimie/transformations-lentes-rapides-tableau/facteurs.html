@@ -76,7 +76,7 @@ function Moteur(o) {
       const e = ev(nom); if (!e) return;
       const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
       c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
-      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
@@ -87,6 +87,7 @@ function Moteur(o) {
   function calculer() {
     construire();
     const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
     try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
     construire(); scene.sale = true;
   }
