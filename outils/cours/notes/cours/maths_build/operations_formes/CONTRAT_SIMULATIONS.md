@@ -99,7 +99,7 @@ b1 bilan.html · b2 carte.html
   rectangle OHM, côtés 3 et 4) ; `pythagore` (« OM² = 3² + 4² = 25 », « OM = 5 », « |z| » écrit sur l'hypoténuse, « |3 + 4i| = 5 »
   encadré jaune).
 - vue `cercle` — « Même module, même cercle ». Moments : `cercle` (cercle de centre O de rayon 5) ; `autres` (M glisse sur −3 + 4i,
-  4i, −5 : « |z| = 5 » reste) ; `sans_i` (« |a + ib| = √(a² + b²) : pas de i dans la racine » encadré, le « i² » d'une fausse écriture
+  5i, −5 : « |z| = 5 » reste) ; `sans_i` (« |a + ib| = √(a² + b²) : pas de i dans la racine » encadré, le « i² » d'une fausse écriture
   barré en rouge).
 
 ### argument.html (id `nc_argument`)
