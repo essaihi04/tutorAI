@@ -376,7 +376,7 @@ function ligneM(c, x, y, morceaux, o = {}) {
 /** Rectangle autour des morceaux i0 → i1 d’une ligne (plus haut s’il y a une fraction). */
 function boite(P, y, morceaux, i0 = 0, i1 = morceaux.length - 1) {
   const t = P.t, f = morceaux.slice(i0, i1 + 1).some(p => p && p.frac);
-  const x = P.xs[i0] - 8, w = P.xs[i1] + P.ws[i1] - P.xs[i0] + 16;
+  const x = P.xs[i0] - 6, w = P.xs[i1] + P.ws[i1] - P.xs[i0] + 12;
   return f ? { x, y: y - t * 1.55 - 8, w, h: t * 2.6 + 12 } : { x, y: y - t - 6, w, h: t + 14 };
 }
 function cadreB(c, b, col = 'jaune') { c.rect(b.x, b.y, b.w, b.h, { couleur: col, largeur: 2, arrondi: 8 }); }
@@ -493,7 +493,7 @@ const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES
 
 /* ── Vue concentrations (exemple A) ─────────────────────────────────── */
 const VC = { MET: { x: 14, y: 44, w: 124, h: 60 }, B: { x: 84, y: 168, w: 120, h: 104 }, SX: 160, OUT: 150, IN: 262, X: 236,
-  G: { x: 236, wl: 120, w: 98, y: 94, h: 30 }, BAR: { x: 380, y: 284, dy: 30, L: 290 } };
+  G: { x: 236, wl: 120, w: 98, y: 94, h: 30 }, BAR: { x: 370, y: 298, dy: 28, L: 240 } };
 function etatConcentrations(M) {
   const r = { syB: VC.OUT, txt: '- -,- -', ph: null };
   if (M.commence('mesure')) {
@@ -530,7 +530,7 @@ function vueConcentrations(c, M) {
   c.texte('acide éthanoïque', cx, 296, { couleur: 'blanc', taille: 15, align: 'center' });
   c.texte('C = 1,0·10⁻² mol/L', cx, 316, { couleur: 'blanc', taille: 15, align: 'center' });
   c.texte('V = 100 mL', cx, 336, { couleur: 'blanc', taille: 15, align: 'center' });
-  M.etape(c, 'mesure', () => c.texte('pH = 3,41', MET.x + MET.w / 2, MET.y + MET.h + 26, { couleur: 'jaune', taille: 19, align: 'center' }));
+  M.etape(c, 'mesure', () => c.texte('pH = 3,41', MET.x + MET.w + 8, MET.y + MET.h - 8, { couleur: 'jaune', taille: 19 }));
   M.etape(c, 'h3o', () => c.texte('[H₃O⁺]_{éq} = 10^{−pH} = 10^{−3,41} = 3,89·10⁻⁴ mol/L', X, 68, { taille: 19, max: 510 }));
   M.etape(c, 'base', () => {
     grilleAB(c, G); enteteEq(c, G, ['CH₃COOH', 'H₂O', 'CH₃COO⁻', 'H₃O⁺']);
@@ -539,7 +539,8 @@ function vueConcentrations(c, M) {
   });
   M.etape(c, 'acide', () => {
     ligneG(c, G, 1, null, ['C − [H₃O⁺]_{éq}'], ['bleu']);
-    c.texte('[CH₃COOH]_{éq} = C − [H₃O⁺]_{éq} = 1,0·10⁻² − 3,89·10⁻⁴ = 9,61·10⁻³ mol/L', X, 216, { taille: 18, couleur: 'bleu', max: 512 });
+    c.texte('[CH₃COOH]_{éq} = C − [H₃O⁺]_{éq} = 1,0·10⁻² − 3,89·10⁻⁴', X, 216, { taille: 18, couleur: 'bleu', max: 512 });
+    c.texte('= 9,61·10⁻³ mol/L', X + larg(c, '[CH₃COOH]_{éq} ', 18), 242, { taille: 18, couleur: 'bleu' });
   });
   if (M.commence('barres')) {
     const p = M.p('barres');
@@ -549,7 +550,7 @@ function vueConcentrations(c, M) {
     }));
   }
   M.etape(c, 'barres', () => {
-    c.texte('concentrations à l’équilibre', X, 254, { couleur: 'cyan', taille: 16 });
+    c.texte('concentrations à l’équilibre', X, 272, { couleur: 'cyan', taille: 16 });
     c.ligne(BAR.x, BAR.y - 24, BAR.x, BAR.y + 2 * BAR.dy + 8, { couleur: 'faible', largeur: 1.4 });
     BARRES_C.forEach(([nom, v, txt, col], i) => {
       const y = BAR.y + i * BAR.dy;
@@ -565,19 +566,19 @@ const DEF_A = ['Q_{r,éq} =', { frac: ['[CH₃COO⁻]_{éq}·[H₃O⁺]_{éq}', 
 const VQ = { X: 40, Y1: 160, Y2: 254, T: 22 };
 function vueQrEq(c, M) {
   const { X, Y1, Y2, T } = VQ;
-  eqf(c, 24, 62, EQ_A[0], EQ_A[1], { taille: 17, type: '⇌', couleur: 'faible' });
-  c.texte('exemple A :', 470, 62, { couleur: 'faible', taille: 16 });
+  c.texte('exemple A :', 24, 62, { couleur: 'faible', taille: 16 });
+  eqf(c, 120, 62, EQ_A[0], EQ_A[1], { taille: 17, type: '⇌', couleur: 'faible' });
   c.texte('[CH₃COO⁻]_{éq} = [H₃O⁺]_{éq} = 3,89·10⁻⁴ mol/L', 24, 90, { couleur: 'faible', taille: 16 });
   c.texte('[CH₃COOH]_{éq} = 9,61·10⁻³ mol/L', 470, 90, { couleur: 'faible', taille: 16 });
-  const P1 = placer(c, X, DEF_A, T, { gap: 10 });
-  M.etape(c, 'definition', () => ligneM(c, X, Y1, DEF_A, { taille: T, gap: 10, cols: ['violet', 'blanc'] }));
+  const P1 = placer(c, X, DEF_A, T, { gap: 13 });
+  M.etape(c, 'definition', () => ligneM(c, X, Y1, DEF_A, { taille: T, gap: 13, cols: ['violet', 'blanc'] }));
   const xEq = P1.xs[0] + larg(c, 'Q_{r,éq} ', T);
   const L2 = ['=', { frac: ['(3,89·10⁻⁴)²', '9,61·10⁻³'] }], L3 = ['=', '1,57·10⁻⁵'];
-  const P2 = placer(c, xEq, L2, T, { gap: 10 });
-  M.etape(c, 'application', () => ligneM(c, xEq, Y2, L2, { taille: T, gap: 10 }));
-  const x3 = P2.xs[1] + P2.ws[1] + 14, P3 = placer(c, x3, L3, T + 2, { gap: 10 });
+  const P2 = placer(c, xEq, L2, T, { gap: 13 });
+  M.etape(c, 'application', () => ligneM(c, xEq, Y2, L2, { taille: T, gap: 13 }));
+  const x3 = P2.xs[1] + P2.ws[1] + 16, P3 = placer(c, x3, L3, T + 2, { gap: 13 });
   M.etape(c, 'resultat', () => {
-    ligneM(c, x3, Y2, L3, { taille: T + 2, gap: 10, couleur: 'jaune' });
+    ligneM(c, x3, Y2, L3, { taille: T + 2, gap: 13, couleur: 'jaune' });
     cadreB(c, boite(P3, Y2, L3, 1, 1));
     c.texte('sans unité', P3.xs[1] + P3.ws[1] + 22, Y2, { couleur: 'jaune', taille: 17 });
   });
@@ -595,19 +596,19 @@ const L_VERIF = ['vérification (exemple A) :', 'Q_{r,éq} =', { frac: ['10^{−
 function vueExpression(c, M) {
   const { X, Y1, Y2, Y3, Y4, Y5 } = VX;
   M.etape(c, 'depart', () => {
-    ligneM(c, X, Y1, DEF_A, { taille: 20, gap: 10, cols: ['violet', 'blanc'] });
+    ligneM(c, X, Y1, DEF_A, { taille: 20, gap: 13, cols: ['violet', 'blanc'] });
     c.texte('pH mesuré :', 470, Y1 - 14, { couleur: 'faible', taille: 16 });
     c.texte('[H₃O⁺]_{éq} = 10^{−pH}', 470, Y1 + 12, { taille: 19 });
   });
   M.etape(c, 'remplacer', () => {
     c.texte('[CH₃COO⁻]_{éq} = [H₃O⁺]_{éq} = 10^{−pH}', X, Y2, { taille: 18, couleur: 'vert' });
     c.texte('[CH₃COOH]_{éq} = C − [H₃O⁺]_{éq} = C − 10^{−pH}', X, Y3, { taille: 18, couleur: 'bleu' });
-    ligneM(c, X, Y4, L_REMP, { taille: 20, gap: 10, seul: [0, 1], cols: ['violet'] });
+    ligneM(c, X, Y4, L_REMP, { taille: 20, gap: 13, seul: [0, 1], cols: ['violet'] });
   });
-  const P = placer(c, X, L_REMP, 20, { gap: 10 });
-  M.etape(c, 'relation', () => { ligneM(c, X, Y4, L_REMP, { taille: 20, gap: 10, seul: [2, 3], couleur: 'jaune' }); cadreB(c, boite(P, Y4, L_REMP, 3, 3)); });
-  M.etape(c, 'verifier', () => ligneM(c, X, Y5, L_VERIF, { taille: 18, gap: 10, cols: ['faible', 'blanc', 'blanc', 'jaune'] }));
-  M.px = { P, PV: placer(c, X, L_VERIF, 18, { gap: 10 }) };
+  const P = placer(c, X, L_REMP, 20, { gap: 13 });
+  M.etape(c, 'relation', () => { ligneM(c, X, Y4, L_REMP, { taille: 20, gap: 13, seul: [2, 3], couleur: 'jaune' }); cadreB(c, boite(P, Y4, L_REMP, 3, 3)); });
+  M.etape(c, 'verifier', () => ligneM(c, X, Y5, L_VERIF, { taille: 18, gap: 13, cols: ['faible', 'blanc', 'blanc', 'jaune'] }));
+  M.px = { P, PV: placer(c, X, L_VERIF, 18, { gap: 13 }) };
 }
 
 /* ── Vue national_2017 (acide butanoïque) ──────────────────────────── */
@@ -622,13 +623,13 @@ function vueN2017(c, M) {
     eqf(c, X, 92, 'C₃H₇COOH + H₂O', 'C₃H₇COO⁻ + H₃O⁺', { taille: 17, type: '⇌', couleur: 'faible' });
     c.texte('question : exprimer Q_{r,éq} en fonction de C et du pH, puis calculer sa valeur', X, 122, { couleur: 'faible', taille: 16, max: 720 });
   });
-  const P4 = placer(c, X, L17_REL, 21, { gap: 10 });
+  const P4 = placer(c, X, L17_REL, 21, { gap: 13 });
   M.etape(c, 'relation', () => {
     c.texte('[C₃H₇COO⁻]_{éq} = [H₃O⁺]_{éq} = 10^{−pH} ; [C₃H₇COOH]_{éq} = C − 10^{−pH}', X, 162, { taille: 17, max: 720 });
-    ligneM(c, X, Y4, L17_REL, { taille: 21, gap: 10, cols: ['violet', 'jaune'] }); cadreB(c, boite(P4, Y4, L17_REL));
+    ligneM(c, X, Y4, L17_REL, { taille: 21, gap: 13, cols: ['violet', 'jaune'] }); cadreB(c, boite(P4, Y4, L17_REL));
   });
-  const P5 = placer(c, X, L17_APP, 21, { gap: 10 });
-  M.etape(c, 'application', () => ligneM(c, X, Y5, L17_APP, { taille: 21, gap: 10, cols: ['violet'] }));
+  const P5 = placer(c, X, L17_APP, 21, { gap: 13 });
+  M.etape(c, 'application', () => ligneM(c, X, Y5, L17_APP, { taille: 21, gap: 13, cols: ['violet'] }));
   const x6 = P5.xs[1] + P5.ws[1] + 70, P6 = placer(c, x6, L17_RES, 23);
   M.etape(c, 'resultat', () => {
     ligneM(c, x6, Y5, L17_RES, { taille: 23, couleur: 'jaune' }); cadreB(c, boite(P6, Y5, L17_RES));
@@ -651,10 +652,10 @@ function vueBase(c, M) {
     c.texte('[CH₃NH₃⁺]_{éq} = [HO⁻]_{éq} = C_b·τ', X, 164, { taille: 18, couleur: 'vert' });
     c.texte('[CH₃NH₂]_{éq} = C_b(1 − τ)', X, 192, { taille: 18, couleur: 'bleu' });
   });
-  const P4 = placer(c, X, LB_REL, 19, { gap: 10 });
-  M.etape(c, 'relation', () => { ligneM(c, X, Y4, LB_REL, { taille: 19, gap: 10, cols: ['violet', , , , , 'jaune'] }); cadreB(c, boite(P4, Y4, LB_REL, 5, 5)); });
-  const P5 = placer(c, X, LB_RES, 20, { gap: 10 });
-  M.etape(c, 'resultat', () => { ligneM(c, X, Y5, LB_RES, { taille: 20, gap: 10, cols: ['violet', 'blanc', 'jaune'] }); cadreB(c, boite(P5, Y5, LB_RES, 2, 2)); });
+  const P4 = placer(c, X, LB_REL, 19, { gap: 13 });
+  M.etape(c, 'relation', () => { ligneM(c, X, Y4, LB_REL, { taille: 19, gap: 13, cols: ['violet', , , , , 'jaune'] }); cadreB(c, boite(P4, Y4, LB_REL, 5, 5)); });
+  const P5 = placer(c, X, LB_RES, 20, { gap: 13 });
+  M.etape(c, 'resultat', () => { ligneM(c, X, Y5, LB_RES, { taille: 20, gap: 13, cols: ['violet', 'blanc', 'jaune'] }); cadreB(c, boite(P5, Y5, LB_RES, 2, 2)); });
   M.pb = { P4, P5 };
 }
 
@@ -669,16 +670,16 @@ function vueN2021(c, M) {
     c.texte('un acide carboxylique AH : C_a = 1,0·10⁻¹ mol/L ; pH = 2,88', X, 60, { taille: 19 });
     eqf(c, X, 90, 'AH + H₂O', 'A⁻ + H₃O⁺', { taille: 17, type: '⇌', couleur: 'faible' });
   });
-  const P2 = placer(c, X, L21_TAU, 20, { gap: 10 });
-  M.etape(c, 'taux', () => { ligneM(c, X, Y2, L21_TAU, { taille: 20, gap: 10, cols: [, , , , 'jaune'] }); c.texte('(1,32 %)', P2.xs[4] + P2.ws[4] + 14, Y2, { couleur: 'faible', taille: 16 }); });
-  const P3 = placer(c, X, L21_REL, 19, { gap: 10 });
+  const P2 = placer(c, X, L21_TAU, 20, { gap: 13 });
+  M.etape(c, 'taux', () => { ligneM(c, X, Y2, L21_TAU, { taille: 20, gap: 13, cols: [, , , , 'jaune'] }); c.texte('(1,32 %)', P2.xs[4] + P2.ws[4] + 14, Y2, { couleur: 'faible', taille: 16 }); });
+  const P3 = placer(c, X, L21_REL, 19, { gap: 13 });
   M.etape(c, 'relation', () => {
     c.texte('[A⁻]_{éq} = [H₃O⁺]_{éq} = C_a·τ ; [AH]_{éq} = C_a(1 − τ)', X, Y3a, { taille: 17 });
-    ligneM(c, X, Y3, L21_REL, { taille: 19, gap: 10, cols: ['violet', , , , , 'jaune'] }); cadreB(c, boite(P3, Y3, L21_REL, 5, 5));
+    ligneM(c, X, Y3, L21_REL, { taille: 19, gap: 13, cols: ['violet', , , , , 'jaune'] }); cadreB(c, boite(P3, Y3, L21_REL, 5, 5));
   });
-  const P4 = placer(c, X, L21_APP, 20, { gap: 10 });
-  M.etape(c, 'application', () => ligneM(c, X, Y4, L21_APP, { taille: 20, gap: 10, seul: [0, 1], cols: ['violet'] }));
-  M.etape(c, 'resultat', () => { ligneM(c, X, Y4, L21_APP, { taille: 20, gap: 10, seul: [2], couleur: 'jaune' }); cadreB(c, boite(P4, Y4, L21_APP, 2, 2)); c.texte('sans unité', P4.xs[2] + P4.ws[2] + 22, Y4, { couleur: 'faible', taille: 16 }); });
+  const P4 = placer(c, X, L21_APP, 20, { gap: 13 });
+  M.etape(c, 'application', () => ligneM(c, X, Y4, L21_APP, { taille: 20, gap: 13, seul: [0, 1], cols: ['violet'] }));
+  M.etape(c, 'resultat', () => { ligneM(c, X, Y4, L21_APP, { taille: 20, gap: 13, seul: [2], couleur: 'jaune' }); cadreB(c, boite(P4, Y4, L21_APP, 2, 2)); c.texte('sans unité', P4.xs[2] + P4.ws[2] + 22, Y4, { couleur: 'faible', taille: 16 }); });
   M.p21 = { P2, P3, P4 };
 }
 
@@ -702,8 +703,8 @@ function reperes(c, M) {
     R('becher', [B.x - 8, B.y - 8, B.w + 16, B.h + 16], 'le bécher d’acide éthanoïque (C = 1,0·10⁻² mol/L, V = 100 mL), la sonde dedans');
     R('h3o', [X - 6, 46, 514, 30], `[H₃O⁺]éq = 10^(−pH) = 10^(−3,41) = 3,89·10⁻⁴ mol/L${q('h3o')}`);
     R('base', [X - 6, G.y - 4, 514, 196 - G.y + 4], `le tableau et [CH₃COO⁻]éq = [H₃O⁺]éq = 3,89·10⁻⁴ mol/L${q('base')}`);
-    R('acide', [X - 6, 196, 516, 28], `[CH₃COOH]éq = C − [H₃O⁺]éq = 9,61·10⁻³ mol/L${q('acide')}`);
-    R('barres', [X - 6, 236, 516, BAR.y + 2 * BAR.dy + 10 - 236], `les trois barres : [CH₃COOH]éq 9,61·10⁻³ mol/L ; [CH₃COO⁻]éq et [H₃O⁺]éq 3,89·10⁻⁴ mol/L${q('barres')}`);
+    R('acide', [X - 6, 196, 516, 54], `[CH₃COOH]éq = C − [H₃O⁺]éq = 9,61·10⁻³ mol/L${q('acide')}`);
+    R('barres', [X - 6, 254, 516, BAR.y + 2 * BAR.dy + 10 - 254], `les trois barres : [CH₃COOH]éq 9,61·10⁻³ mol/L ; [CH₃COO⁻]éq et [H₃O⁺]éq 3,89·10⁻⁴ mol/L${q('barres')}`);
   } else if (v === 'qr_eq') {
     const { P1, P2, P3 } = M.pq || {};
     if (!P1) return;
@@ -714,7 +715,7 @@ function reperes(c, M) {
     R('phrase', [24, 312, 712, 50], `« Qr,éq : quotient de réaction dans l’état d’équilibre »${q('phrase')}`);
   } else if (v === 'expression') {
     if (!M.px) return;
-    const { P, PV } = M.px, bD = boite(placer(c, VX.X, DEF_A, 20, { gap: 10 }), VX.Y1, DEF_A);
+    const { P, PV } = M.px, bD = boite(placer(c, VX.X, DEF_A, 20, { gap: 13 }), VX.Y1, DEF_A);
     R('depart', [bD.x, bD.y, 730, bD.h], `départ : Qr,éq = [CH₃COO⁻]éq·[H₃O⁺]éq / [CH₃COOH]éq et [H₃O⁺]éq = 10^(−pH)${q('depart')}`);
     const bR = boite(P, VX.Y4, L_REMP, 0, 1);
     R('remplacer', [VX.X - 8, VX.Y2 - 22, Math.max(470, bR.w), VX.Y4 + 30 - (VX.Y2 - 22)], `on remplace : [CH₃COO⁻]éq = [H₃O⁺]éq = 10^(−pH), [CH₃COOH]éq = C − 10^(−pH)${q('remplacer')}`);
@@ -774,7 +775,7 @@ const MOT = Moteur({
     national_2017: 'National 2017 N : à toi de suivre la rédaction.', base: 'National 2022 R : une base avec l’eau.', national_2021: 'National 2021 N : Qr,éq à partir de τ.' })[M.S.vue],
   messageFin: M => ({ concentrations: '[H₃O⁺]éq = [CH₃COO⁻]éq = 3,89·10⁻⁴ mol/L ; [CH₃COOH]éq = 9,61·10⁻³ mol/L.',
     qr_eq: 'Qr,éq = 1,57·10⁻⁵ (sans unité).', expression: 'Qr,éq = 10^(−2pH)/(C − 10^(−pH)) ; exemple A : 1,57·10⁻⁵.',
-    national_2017: 'Qr,éq = 1,57·10⁻⁵.', base: 'Qr,éq = C_b·τ²/(1 − τ) = 5,0·10⁻⁴.', national_2021: 'Qr,éq = C_a·τ²/(1 − τ) = 1,77·10⁻⁵.' })[M.S.vue],
+    national_2017: 'Qr,éq = 1,57·10⁻⁵.', base: 'Qr,éq = 1,0·10⁻² × 0,20²/0,80 = 5,0·10⁻⁴.', national_2021: 'Qr,éq = 0,10 × 0,0132²/(1 − 0,0132) = 1,77·10⁻⁵.' })[M.S.vue],
   appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
   schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
   texte: 'État d’équilibre de l’acide éthanoïque (exemple A : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺, C = 1,0·10⁻² mol/L, V = 100 mL, pH = 3,41). ' +
