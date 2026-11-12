@@ -419,12 +419,11 @@ function dessiner(c, M) {
 const BD = { x: 34, y: 112, w: 116, h: 146 }, LD = { x: 288, y: 188, r: 82 }, XT = 396;
 /** Ions H₃O⁺ (et quelques molécules d’eau, pâles) qui bougent dans la loupe ; le temps est celui de la scène (figé à l’arrêt). */
 function ionsLoupe(ctx, L, t, a) {
-  const tri = u => { const m = ((u % 2) + 2) % 2; return m < 1 ? m : 2 - m; };
-  for (let i = 0; i < 13; i++) {
-    const h1 = ((i * 7919 + 3) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, ion = i < 5;
-    const x = L.x - L.r * .62 + tri(h1 * 2 + t * (.05 + .05 * h2)) * L.r * 1.24, y = L.y - L.r * .58 + tri(h2 * 2 + t * (.04 + .05 * h1)) * L.r * 1.16;
-    eau(ctx, x, y, ion ? 1.05 : .8, { proton: ion, a: ion ? a : a * .35 });
-  }
+  const P = [[-.5, -.42, 1], [.08, -.58, 0], [.52, -.36, 1], [-.64, .04, 0], [-.12, -.1, 0], [.36, .02, 1], [.7, .2, 0], [-.42, .44, 0], [.06, .36, 1], [.46, .5, 0], [-.08, .72, 0]];
+  P.forEach(([u, v, ion], i) => {
+    const x = L.x + u * L.r + 5 * Math.sin(t * (.9 + .13 * i) + i * 1.7), y = L.y + v * L.r + 4 * Math.sin(t * (.7 + .11 * i) + i * 2.3);
+    eau(ctx, x, y, ion ? .95 : .78, { proton: !!ion, a: ion ? a : a * .4 });
+  });
 }
 function vueDefinition(c, M) {
   const a = M.commence('ions') ? lisse(clamp(M.p('ions') * 1.6, 0, 1)) : 0, al = M.commence('ions') ? lisse(clamp((M.p('ions') - .3) / .7, 0, 1)) : 0;
@@ -503,19 +502,20 @@ const NIV = { e4: .6, e7: .6, ri: .25, a: .62 };
 const SP = { L: 80, haut: 205, repos: { x: 622, y: 205 } };
 const dans = id => ({ x: BE[id].x + BE[id].w / 2, y: BE[id].y + BE[id].h - 14 });
 const auRincage = { x: BE.ri.x + BE.ri.w / 2, y: BE.ri.y + 20 };
+const lc = x => lisse(clamp(x, 0, 1));
 const PIS = { x: 196, y: 150 };   // pissette (bec)
 /** Position de la sonde et valeur affichée, au temps de la scène. */
 function etatPhmetre(M) {
   let pos = SP.repos, val = null, ou = 'au repos';
   if (M.commence('etalonnage')) {
     const p = M.p('etalonnage');
-    if (p < .5) { pos = trajet(SP.repos, dans('e4'), p / .28, SP.haut); if (p > .28) { val = lerp(6.1, 4.0, lisse((p - .28) / .17)); ou = 'dans l’étalon pH 4,0'; } else ou = 'vers l’étalon pH 4,0'; }
-    else { pos = trajet(dans('e4'), dans('e7'), (p - .5) / .28, SP.haut); if (p > .78) { val = lerp(4.6, 7.0, lisse((p - .78) / .17)); ou = 'dans l’étalon pH 7,0'; } else { val = p < .53 ? 4.0 : null; ou = 'vers l’étalon pH 7,0'; } }
+    if (p < .5) { pos = trajet(SP.repos, dans('e4'), p / .28, SP.haut); if (p > .28) { val = lerp(6.1, 4.0, lc((p - .28) / .17)); ou = 'dans l’étalon pH 4,0'; } else ou = 'vers l’étalon pH 4,0'; }
+    else { pos = trajet(dans('e4'), dans('e7'), (p - .5) / .28, SP.haut); if (p > .78) { val = lerp(4.6, 7.0, lc((p - .78) / .17)); ou = 'dans l’étalon pH 7,0'; } else { val = p < .53 ? 4.0 : null; ou = 'vers l’étalon pH 7,0'; } }
   }
   if (M.commence('rincage')) { const p = M.p('rincage'); pos = trajet(dans('e7'), auRincage, p / .35, SP.haut); val = p < .04 ? 7.0 : null; ou = p < .35 ? 'vers le bécher de rinçage' : 'rincée à l’eau distillée'; }
   if (M.commence('mesure')) {
     const p = M.p('mesure'); pos = trajet(auRincage, dans('a'), p / .38, SP.haut);
-    if (p > .38) { val = 3.4 + (6.4 - 3.4) * (1 - lisse((p - .38) / .62)); ou = 'dans la solution A'; } else ou = 'vers la solution A';
+    if (p > .38) { val = 3.4 + (6.4 - 3.4) * (1 - lc((p - .38) / .62)); ou = 'dans la solution A'; } else ou = 'vers la solution A';
   }
   return { pos, val, ou, txt: val == null ? '- - -' : fr(val, 1) };
 }
@@ -550,9 +550,9 @@ function vuePhmetre(c, M) {
       }
     });
   }
+  if (a > 0 && !M.commence('etalonnage')) c.direct(() => c.texte('sonde de verre', SP.repos.x + 14, SP.repos.y - 14, { couleur: 'faible', taille: 15 }));
   M.etape(c, 'appareil', () => {
     c.texte('pH-mètre', PA.x + PA.w / 2, PA.y + PA.h + 22, { couleur: 'faible', taille: 15, align: 'center' });
-    c.texte('sonde de verre', SP.repos.x + 14, SP.repos.y - 14, { couleur: 'faible', taille: 15 });
   });
   const lab = (id, l1, l2) => { const B = BE[id], x = B.x + B.w / 2; c.texte(l1, x, 354, { taille: 16, align: 'center' }); c.texte(l2, x, 374, { couleur: 'faible', taille: 15, align: 'center' }); };
   M.etape(c, 'etalonnage', () => {
