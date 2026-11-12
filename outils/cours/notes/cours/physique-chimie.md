@@ -439,3 +439,41 @@ outils : cours/transformations_deux_sens_build/ ; contrat : cours/transformation
   cellules identiques, equilibre?vue=inverse avec deux béchers (témoin pH 2,3), esterification axe 0-10 h pour l'allure, ph?vue=calcul poignée pH
   1-13, avancement?vue=dosage ligne « 10^(−10,2) × 0,026 = 1,6·10⁻¹² mol : négligeable » ; carte : acide_eau → C1, equilibre → C4, national → C7 ;
   bilan : « C = 10⁻² ; 10⁻³ ; 10⁻⁴ mol/L » raccourci ; identifiant phys_ch11 ; statut programme_semestre1 mis à « construit ».
+
+## etat_equilibre
+(routine cloud du 12 nov., soir ; cours phys_ch12_etat_equilibre, « État d'équilibre d'un système chimique » ; outils : cours/etat_equilibre_build/ ;
+contrat : cours/etat_equilibre_contrat_simulations.md ; tout refaire : `sh outils/cours/notes/cours/etat_equilibre_build/refaire.sh` (rien n'est voisé))
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/etat_equilibre.json (explo.py = explo_a.py + explo_b.py ; toutes les assertions OK).
+  VIDÉOS NON AUDITÉES (YouTube bloqué depuis le cloud). Appui : nationaux PC 2016-2025 (etat_equilibre_build/nationaux.md) : le chapitre tombe dans
+  12 sessions sur 20, toujours mêlé : Qr,éq / K d'un acide ou d'une base avec l'eau (2017 N, 2019 N, 2020 N, 2020 R, 2021 N, 2022 N, 2022 R ; 0,5-0,75 pt),
+  Qr,i (piles 2017 N, 2018 R, 2019 R ; mélange 2020 R), K d'estérification (2016 R, 2017 R, 2018 R), K avec Ka/Ke (2016 N, 2020 R, 2023 N, 2024 N, 2025 N →
+  renvoyé au ch. 13). Pas d'ancien cours. perimetre.json NON modifié.
+  Erreurs du dépôt relevées : 2018 R (« Q_{t,i} », « Cu²⁺ + Zn ⇌ 2 Zn²⁺ + Cu »), 2017 N / 2019 R (⇌ lue « ⟵(1) »), 2022 N / 2022 R (« Q_{f,gq} », « Q_{r,dq} »),
+  2019 N (numérotation 2.x/3.x), 2020 N 2.1 (H₃O⁺ au lieu de HO⁻), 2024 N 5-4 (corrigé sans démarche), 2023 N 2.3 (Henderson nommé), 2017 R (figure coupée).
+- Cadre : chapitres.etat_equilibre ajoutée (cadre_ee.py : EE1-EE7 provisoires, 12 formules, 30 mots hors cadre dont Ka, pKa, Ke, Le Chatelier, activité,
+  critère d'évolution spontanée, évolution spontanée).
+- COURS CONSTRUIT → backend/data/courses/phys_ch12_etat_equilibre.json (draft, concentration) : 36 diapositives (préfixe ee_), 36 questions,
+  16 prédictions, 27 exercices ; 10 parties (ouverture, rappels, Qr, Qr,i et Qr qui évolue, Qr,éq, K, K par le pH et la conductimétrie, de quoi dépend τ,
+  6 sujets du national, bilan + carte) ; compétences C1-C7. Build : p1…p3.py (3 sous-agents, check_part « AUCUNE ERREUR »), build.py, ajouts.py.
+- Méthode des blocs : methode_blocs/ajouts/phys_ch12_etat_equilibre.json : 3 séances × 3 blocs × 4 diapositives, 23 rappels, 16 prédictions / 36.
+  blocs.py verifier → « cadre : OK », « blocs : OK » (avis : partie I « Rappels » sans prédiction, normal pour deux diapositives de rappel).
+  controler_cadre → « cadre : OK » (171 « à relire » : applications numériques). preparer_reponses verifier : seulement réactions et pistes audio manquantes.
+- Réactions : items seulement → items_cours.json (367), items_blocs.json (61), demos_blocs.json (0). À écrire sur le serveur.
+- verifier_texte_corpus (texte_parle.py copié de backend/kaggle_tts dans le scratchpad : il manque toujours à côté du script) : 234 mots à revoir,
+  surtout termes de chimie (éthanoïque, éthanoate, numérateur, solvant…) gardés ; كنصبو → كنزيدو remplacé ; restent des formes rares (كتتبدل, كيوصف,
+  كنهملوهم, وفالسيمستر, اللتحت…) : à écouter au contrôle des murmures.
+- Simulations (frontend/public/media/simulations/chimie/etat-equilibre-tableau/, 4 sous-agents, moteur avec Math.max dès le départ) : rappel (ouverture|taux|
+  equilibre), quotient (10 vues : definition … pile ; poignée x en au_cours), equilibre (concentrations|qr_eq|expression|national_2017|base|national_2021),
+  constante (trois_c|produits|definition|inverse|c_tau|autre_acide), conductimetrie (relation|calcul|national), facteurs (dilution|nature|courbe[poignée C,
+  set_parameters {C} en mol/L]|bilan_dilution), figures (?fig=fig_2017R), bilan, carte. node --check OK (9 pages + commun.js) ; chaque page testée headless
+  par son agent ; verif_sims.js diapositive par diapositive : VOIR LIGNE SUIVANTE.
+- programme_semestre1 : etat_equilibre → « construit », phys_ch12_etat_equilibre (prog.py).
+- PRÊT POUR LA VOIX : OUI (36 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : acides_bases (exploration à faire).
+- À valider : critère d'évolution (Qr,i comparé à K) renvoyé au semestre 2 (perimetre : piles_electrolyse) ; Qr,i seulement calculé ; pH au centième dans ce
+  chapitre (3,41 ; 3,56 ; 3,93) sinon la constance de K ne se voit pas ; K = 1,6·10⁻⁵, K' = 6,25·10⁴ ; n5 estérification 2017 R (K = 4, eau produit et non
+  solvant) gardée, exercice hydrolyse 2018 R (K = 0,25) ; q4 (Cu²⁺ + Zn) et n4 (pile 2017 N) seulement pour écrire Qr ; n2 méthylamine avec τ donné (pas de Ke) ;
+  m4 2019 N τ = 0,22 (corrigé officiel) ; valeurs d'exercices hors contrat (i2 : 0,10/0,20 mol/L, 100/50 mL → Qr,i = 0,25 ; QCM du bloc s1_b2 : 2Ag⁺ + Cu) ;
+  analogie du compteur de taxi (i3) sans sa limite ; « [X]éq » et « [X]_éq » selon les diapositives ; simulations : ajouts à la craie hors contrat (pH initial
+  2,00 en produits, équation en national_2017, colonne « C ÷ 10 » en bilan_dilution, lignes de rappel), « τ augmente, K ne change pas » écrit en mots (pas de ↑),
+  courbe méthanoïque jaune comme K, un seul pH-mètre en ouverture, thermomètre en definition.
