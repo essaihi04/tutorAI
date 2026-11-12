@@ -91,6 +91,17 @@ corpus_fix.py, virgules.py, verif_sims.py, items.json, gen_reponses_vps.py (copi
 ## fonctions_ln (exploration)
 - 11 nov. : EXPLORATION FAITE (étape 1 seulement, cours non construit) → backend/data/curriculum/exploration/fonctions_ln.json. Dix profs : Driss DOTCOM, Prof fati, maths variés, Aderdour, Math_houara, Ghazouani, MedBrahmi, Moussaoui, biadmostafa, LowDiscovery (Amine Hidane écarté : bac Lettres). Cadre LN1–LN10 (1.2.14–1.2.19, 1.2.22), plan K1–K9 (rappels 3–4 chacune), 53 diapositives (28 prédictions), 5 séances (dernière à 2 blocs). Décisions à valider : eʳ comme nombre seulement (exp au chapitre suivant) ; logarithme de base a exclu ; log décimal (2 diapos) et systèmes (1 diapo) gardés malgré 0 sujet ; lim ln(1+x)/x et ln x/(x−1) montrées comme nombre dérivé ; ln|u| et u'/u gardés ; intégrales/suites des nationaux renvoyées ; ln(ab) montrée (a2) sans être notée. Problème : disque C: à 0 octet pendant ~45 min → images de biadmostafa et des limites de Math_houara non prises ; dossier de travail effacé. Rien d'autre du dépôt modifié.
 
+- 12 nov. (routine cloud) : état réel trouvé dans le dépôt : contrat maths_build/fonctions_ln/CONTRAT_SIMULATIONS.md et outils.py ; pages de la
+  VAGUE 1 déjà écrites (ouverture, naissance, courbe, limites, domaine, signe, calculs.html ; calculs-vues.js sera écrit par build.py).
+  Fait ce passage : fiche du cadre chapitres.fonctions_ln (maths_build/fonctions_ln/cadre.py : relit, ajoute la seule clé, réécrit ;
+  LN1-LN10, 19 formules, 22 mots hors cadre, 5 décisions) ; VAGUE 2 écrite d'après le contrat : produit (translation), inegalite (ecart),
+  etude (position, national), uprime (tableau, miroir), log (regle, ph), bilan (9 blocs, 5 colonnes × 2 rangées, page 2 de l'élève),
+  carte (centre + 9 branches). node --check OK sur toutes les pages. Test navigateur headless (Playwright, script de la routine) : vague 1
+  toutes vues sans erreur, moments et repères du contrat présents, encre, rien hors cadre ; bilan et carte : moments du contrat, page 2
+  avec lacunes, aucun bloc qui déborde, rien hors cadre (blocs 1, 3, 4, 5 raccourcis pour tenir : tangente y = x − 1 au bloc 8 et à la carte,
+  ln(a/b) et ln √a dans la phrase du bloc 3, lim ln x en +∞ et ln(1 + x)/x dans la phrase du bloc 5).
+  Reste : le cours JSON (53 diapositives du plan, p*.py + build.py + calculs-vues.js), la méthode des blocs, les items, les contrôles.
+
 ## primitives
 (agent du cours math_ch4_primitives ; build : maths_build/primitives/ — p1…p4.py, build.py, outils.py (+ CALC, D), ajouts.py, cadre.py, prog.py, verif_sims.py, items.json, items_blocs.json, demos_blocs.json, CONTRAT_SIMULATIONS.md)
 - Cours : backend/data/courses/math_ch4_primitives.json (draft, concentration) — 44 diapositives (préfixe pr_), 44 questions, 66 exercices, 72 démonstrations
@@ -114,6 +125,8 @@ corpus_fix.py, virgules.py, verif_sims.py, items.json, gen_reponses_vps.py (copi
   À faire par la session principale : VPS puis `preparer_reponses.py poser`, puis `build.py --garder-reponses`.
 - Manques du lecteur : aucun nouveau. Disque : pas de reste ; captures effacées ; serveur 8898 arrêté.
 - PRÊT POUR LA VOIX : oui pour le texte (cours, démonstrations, blocs) ; réactions préparées à générer.
+- 12 nov. (routine cloud) : vérifications refaites : blocs.py verifier → « cadre : OK », « blocs : OK » (avis S5 à 2 blocs) ;
+  preparer_reponses verifier : seulement voix et réactions manquantes ; node --check OK (calculs-vues.js). Cours construit : rien à changer.
 
 ## operations_formes (exploration)
 - 11 nov. : EXPLORATION FAITE (étape 1 seulement, cours non construit) → backend/data/curriculum/exploration/operations_formes.json (mêmes clés que fonctions_ln.json). Dix profs : Driss DOTCOM (m9W5z2SGo1I), Mouad Tahiri (fQ9DAZJpXdA, en classe), Prof fati (jMQp1IirBAU), mostapha maths (M6cl9HYFlIA), bacfacile/Benfath (4bp69jLvsw4), Aderdour (Q2ZMGqayHD0), Math & Phys (dIns8ihVX8M), Ghazouani (xTNiTr3vFXA), MedBrahmi (Tfe7Wn6lq9I), maths variés (x9KP-xDiziY, correction 2023 N). 31 images en flux (aucun téléchargement), 1 232 commentaires, 20 nationaux relus (complexes dans 20/20, forme trigonométrique 17/20).

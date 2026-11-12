@@ -129,6 +129,8 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
 - programme_semestre1.json : energie_nucleaire → « construit », cours phys_ch5_energie_nucleaire (prog.py).
 - PRÊT POUR LA VOIX : OUI pour les 38 pistes speech_text.mixed (Bodi) ; les réactions d'abord à écrire (items) puis à dire.
 - À valider : voir « Décisions à faire valider » (energie_nucleaire).
+- 12 nov. (routine cloud) : état réel vérifié : 38 diapositives, draft ; blocs.py verifier → « cadre : OK », « blocs : OK » ; preparer_reponses
+  verifier : seulement voix et réactions manquantes ; node --check OK. Rien à finir côté texte : cours construit, en attente des réactions (items) et de la voix.
 
 ## radioactivite
 - Sous-agent Opus démarré (10 novembre 2026). Clé radioactivite, cours phys_ch4_radioactivite. Outils : cours/radioactivite_build/
@@ -172,3 +174,20 @@ décisions, problèmes, « prêt pour la voix : oui/non »)
   prérequis à créer exponentielle_ln_neperien + conversion_durees_secondes, perimetre.json écrit A(t)/t₁/₂ (à harmoniser : a, t½).
   Note : population.html vue proportion montre ≈ 0,083 (= 1 − 2^(−1/8)) ; λ·Δt = 0,087 → dire « environ λ·Δt ».
   Étape 5 (fiche) : chapitres.radioactivite ajouté au cadre (10 capacités RA1-RA10, 23 formules, 31 mots hors cadre, decisions). programme_semestre1 : statut explore, cours phys_ch4_radioactivite.
+  (12 nov., routine cloud) Étape 3 cours : ÉCRIT → backend/data/courses/phys_ch4_radioactivite.json (draft, concentration) : 52 diapositives
+  (plan de l'exploration, préfixe ra_), 52 questions à clé, 20 prédictions, 3 exercices (2021 N, 2022 N, VF 2025 N), démonstration sur chaque
+  calcul ; 6 parties ; compétences C1-C9 (cadre RA1-RA10, avec « dit »). Généré par radioactivite_build/build.py (p1..p4.py = contenu ;
+  outils.py contrôle mots, moments, repères, noyaux, équations équilibrées, voix sans chiffre/symbole, mots hors cadre).
+  Refaire : `python build.py --garder-reponses` (garde réactions, séances, rappels, prédictions) puis `blocs.py appliquer`.
+  Méthode des blocs : methode_blocs/ajouts/phys_ch4_radioactivite.json : 5 séances (3+3+3+3+2 blocs, 14 blocs de 3-4 diapositives), 29 rappels,
+  20 prédictions / 52, 12 exercices de blocs écrits (9 avec démonstration) + 2 repris. blocs.py verifier → « cadre : OK », « blocs : OK »
+  (avis : séance 5 = 2 blocs). controler_cadre → « cadre : OK » (107 « à relire » non bloquants : applications numériques, Soddy ligne à ligne).
+  preparer_reponses verifier : seulement pistes audio et réactions manquantes. verifier_texte_corpus : darija nettoyée (restent تحبسها, نحبسوه) ;
+  ~260 mots français rares = termes du programme (désintégration, nucléide, becquerel, positon, polonium, tritium…), gardés.
+  Réactions : items seulement → radioactivite_build/items_cours.json (275), items_blocs.json (142), demos_blocs.json (9 démonstrations).
+  node --check : OK (scripts des 10 pages + commun.js, exposants.js, noyaux.js). programme_semestre1 : radioactivite → « construit ».
+  Exploration : déjà faite (10 audits) ; vidéos non réauditées depuis le cloud.
+  PRÊT POUR LA VOIX : OUI (52 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord sur le serveur (items) puis à dire.
+  À valider (radioactivite, en plus des décisions de l'exploration) : 6 parties (I noyau 11, II désintégrations 12, III loi 12, IV activité
+  et datation 11, V cas types 4, VI bilan + carte 2) ; ra_x1 rattachée à C9 ; ra_a7 (droite ln N) rattachée à C6 ; « x % désintégrés :
+  N = (1 − x/100)·N₀ » écrit au cahier (pas une formule du cadre) ; bilan et carte rattachés à C1 (comme le témoin).
