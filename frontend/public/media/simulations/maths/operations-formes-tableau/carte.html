@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carte du chapitre — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte conceptuelle dessinée à la craie : au centre un point M et ses deux écritures a + ib et r(cos θ + i sin θ) ; six branches autour ; en pointillé la partie 2 annoncée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset play_until">Redessiner</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * La carte du chapitre Nombres complexes, première partie (math_ch6_nombres_complexes), forme copiée de
+ * maths/ln-tableau/carte.html. Moments (= repères) : centre (un point M, « a + ib » et « r(cos θ + i sin θ) » reliées par
+ * « module et argument » / « cos et sin ») ; branches (calcul algébrique, conjugué, module, argument, produit et Moivre,
+ * géométrie ; chaque branche est aussi un repère) ; partie2 (en pointillé : écriture exponentielle, équation du second
+ * degré, rotation — annoncés, rien de calculé). Rien sous y = 360. L'élève touche une branche : sa phrase dans la bulle.
+ * Le bilan de l'élève (set_parameters {lacunes, acquis_ids}, K1 à K8) entoure les branches à reprendre.
+ */
+const PI = Math.PI;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie (exposants et indices compris, sans le signe ¯ de la barre). */
+function L(c, s, t = 18) {
+  s = String(s).replace(/¯/g, '').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** La barre du conjugué, dessinée au trait au-dessus de la lettre. */
+function barre(c, x, y, w, couleur) { c.ligne(x + 1, y, x + w - 1, y, { couleur: couleur || 'blanc', largeur: 1.7, tremble: .2, duree: .08 }); }
+/** Texte à la craie ; « z¯ » s’écrit z surmonté d’une barre dessinée. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = o.taille ?? 18, total = L(c, s, t);
+  let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+  const morceaux = String(s).split('¯');
+  morceaux.forEach((m, i) => {
+    if (m) c.texte(m, px, y, { ...o, align: 'left' });
+    const w = L(c, m, t);
+    if (i < morceaux.length - 1 && m) { const lw = L(c, m.slice(-1), t); barre(c, px + w - lw, y - t * .66, lw, o.couleur); }
+    px += w;
+  });
+  return total;
+}
+/** Arc d’angle orienté (angles en radians, sens direct vers le haut), avec sa pointe de flèche au bout. */
+function arc(c, cx, cy, r, a0, a1, o = {}) {
+  const couleur = o.couleur || 'jaune', largeur = o.largeur ?? 1.8;
+  const n = Math.max(6, Math.ceil(Math.abs(a1 - a0) * r / 6)), pts = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push([cx + r * Math.cos(a), cy - r * Math.sin(a)]); }
+  c.trait(pts, { tremble: .3, couleur, largeur, duree: o.duree, pointille: o.pointille });
+  if (o.tete === 0 || Math.abs(a1 - a0) * r < 5) return;
+  const s = Math.sign(a1 - a0), ex = cx + r * Math.cos(a1), ey = cy - r * Math.sin(a1);
+  const ang = Math.atan2(-s * Math.cos(a1), -s * Math.sin(a1)), t = o.tete ?? 8;
+  c.trait([[ex - t * Math.cos(ang - .5), ey - t * Math.sin(ang - .5)], [ex, ey], [ex - t * Math.cos(ang + .5), ey - t * Math.sin(ang + .5)]], { couleur, largeur, duree: .08, tremble: .2 });
+}
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const dit = s => String(s).replace(/(\S)¯/g, '$1 barre');   // pour le tuteur : « z barre »
+/** Texte réduit s'il dépasse `max` px (barre du conjugué comprise). */
+function ecrireMax(c, s, x, y, o) { const t = o.taille ?? 16; ecrire(c, s, x, y, { ...o, taille: o.max ? Math.max(10, Math.min(t, t * o.max / L(c, s, t))) : t, max: undefined }); }
+
+const CENTRE = { x: 330, y: 190, w: 460, h: 148, comps: ['K3', 'K6'],
+  phrase: "Un point M du plan a deux écritures : z = a + ib (forme algébrique) et z = r(cos θ + i sin θ) (forme trigonométrique, r > 0). On passe de la première à la seconde par le module et l’argument (r = √(a² + b²), cos θ = a/r, sin θ = b/r), et de la seconde à la première par cos et sin (a = r cos θ, b = r sin θ)." };
+const NOEUDS = [
+  { id: 'calcul', x: 95, y: 72, w: 180, h: 62, couleur: 'cyan', comps: ['K1', 'K2'], titre: 'Calcul algébrique',
+    lignes: ['i² = −1', 'quotient : × conjugué du bas'],
+    phrase: "On calcule comme avec des réels en remplaçant i² par −1 ; pour un quotient, on multiplie en haut et en bas par le conjugué du dénominateur." },
+  { id: 'conjugue', x: 300, y: 72, w: 180, h: 62, couleur: 'violet', comps: ['K4'], titre: 'Conjugué',
+    lignes: ['z¯ = a − ib : le reflet', 'z·z¯ = a² + b²'],
+    phrase: "z¯ = a − ib : M’(z¯) est le reflet de M(z) par l’axe réel ; z + z¯ = 2a, z − z¯ = 2ib, z·z¯ = a² + b²." },
+  { id: 'module', x: 505, y: 72, w: 180, h: 62, couleur: 'vert', comps: ['K5'], titre: 'Module',
+    lignes: ['|z| = √(a² + b²) = OM', '|zz’| = |z|·|z’|'],
+    phrase: "|z| = √(a² + b²) est la distance OM ; le module d’un produit est le produit des modules, celui d’un quotient le quotient des modules." },
+  { id: 'argument', x: 505, y: 305, w: 180, h: 62, couleur: 'jaune', comps: ['K6'], titre: 'Argument',
+    lignes: ['arg z ≡ θ [2π] : l’angle (u, OM)', 'cos θ = a/r ; sin θ = b/r'],
+    phrase: "Pour z ≠ 0, un argument θ est une mesure de l’angle (u, OM), à 2π près ; cos θ = a/r et sin θ = b/r ; les signes de a et b choisissent le quart." },
+  { id: 'produit', x: 300, y: 305, w: 180, h: 62, couleur: 'orange', comps: ['K7'], titre: 'Produit et Moivre',
+    lignes: ['zz’ : r × r’ et θ + θ’', 'Moivre : r^{n} et nθ'],
+    phrase: "Produit : on multiplie les modules et on ajoute les arguments ; quotient : on divise et on retranche ; Moivre : [r(cos θ + i sin θ)]ⁿ = rⁿ(cos nθ + i sin nθ)." },
+  { id: 'geometrie', x: 95, y: 305, w: 180, h: 62, couleur: 'rose', comps: ['K8', 'K3'], titre: 'Géométrie',
+    lignes: ['AB = |b − a| ; milieu (a + b)/2', '(c − a)/(b − a) réel : alignés'],
+    phrase: "z_AB = b − a ; le milieu de [AB] a pour affixe (a + b)/2 ; AB = |b − a| ; A, B, C sont alignés quand (c − a)/(b − a) est réel." },
+];
+const PARTIE2 = [
+  { id: 'exponentielle', y: 122, titre: 'écriture exponentielle' },
+  { id: 'equation', y: 190, titre: 'équation du second degré' },
+  { id: 'rotation', y: 258, titre: 'rotation' },
+];
+const P2X = 680, P2W = 140, P2H = 46;
+const PHASES = ['centre', 'branches', 'partie2'];
+const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
+const AVANT = -1e9;   // instant d'une partie déjà dite : écrite d'un coup
+
+// ph[nom] : null = pas encore dite ; un nombre = l'instant (s de la scène) où elle commence à s'écrire.
+const S = { ph: { centre: null, branches: null, partie2: null }, lacunes: null, acquis: null, choisi: null };
+
+function statut(comps) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis || []).some(a => comps.includes(a)) ? 'acquis' : null;
+}
+/* Anneau rouge/orange ou coche verte autour d'un cadre (état de l'élève). */
+function etat(c, comps, x, y, w, h) {
+  const st = statut(comps);
+  c.direct(() => {
+    if (st && ANNEAUX[st]) {
+      const [coul, etiq] = ANNEAUX[st];
+      c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
+      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16, { couleur: 'vert', taille: 18 });
+  });
+}
+/* Lien courbe du bord du centre au bord d'un cadre. */
+function lien(c, n, o = {}) {
+  const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, Lg = Math.hypot(dx, dy), ux = dx / Lg, uy = dy / Lg;
+  const d0 = Math.min(CENTRE.w / 2 / Math.max(.05, Math.abs(ux)), CENTRE.h / 2 / Math.max(.05, Math.abs(uy)));
+  const d1 = Math.min(n.w / 2 / Math.max(.05, Math.abs(ux)), n.h / 2 / Math.max(.05, Math.abs(uy)));
+  const a = [CENTRE.x + ux * d0, CENTRE.y + uy * d0], b = [n.x - ux * d1, n.y - uy * d1];
+  const m = [(a[0] + b[0]) / 2 - uy * 8, (a[1] + b[1]) / 2 + ux * 8];
+  c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 20, { couleur: 'faible', largeur: 2, pointille: o.pointille });
+}
+function branche(c, n) {
+  lien(c, n);
+  const x = n.x - n.w / 2, y = n.y - n.h / 2;
+  c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
+  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .7 });
+  n.lignes.forEach((l, k) => ecrireMax(c, l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92 }));
+  c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
+  etat(c, n.comps, x, y, n.w, n.h);
+  if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
+}
+
+function dessinerCentre(c) {
+  const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
+  c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
+  // un petit plan complexe et le point M
+  const O = [140, 240], u = 30, M = [O[0] + 3.2 * u, O[1] - 2.6 * u], th = Math.atan2(2.6, 3.2);
+  c.fleche(O[0] - 12, O[1], O[0] + 118, O[1], { couleur: 'faible', largeur: 1.4, tete: 8 });
+  c.fleche(O[0], O[1] + 10, O[0], O[1] - 108, { couleur: 'faible', largeur: 1.4, tete: 8 });
+  c.texte('O', O[0] - 13, O[1] + 15, { couleur: 'faible', taille: 13 });
+  c.ligne(M[0], M[1], M[0], O[1], { couleur: 'orange', largeur: 1.3, pointille: [5, 5] });
+  c.ligne(M[0], M[1], O[0], M[1], { couleur: 'orange', largeur: 1.3, pointille: [5, 5] });
+  c.texte('a', M[0], O[1] + 17, { couleur: 'vert', taille: 15, align: 'center' });
+  c.texte('b', O[0] - 8, M[1] + 5, { couleur: 'orange', taille: 15, align: 'right' });
+  c.ligne(O[0], O[1], M[0], M[1], { couleur: 'cyan', largeur: 2.4 });
+  c.point(M[0], M[1], 4.5, 'cyan');
+  c.texte('M', M[0] + 7, M[1] - 6, { couleur: 'cyan', taille: 17 });
+  c.texte('r', (O[0] + M[0]) / 2 - 10, (O[1] + M[1]) / 2 - 6, { couleur: 'cyan', taille: 15, align: 'right' });
+  arc(c, O[0], O[1], 26, 0, th, { couleur: 'jaune', tete: 6 });
+  c.texte('θ', O[0] + 38 * Math.cos(th / 2), O[1] - 38 * Math.sin(th / 2) + 5, { couleur: 'jaune', taille: 15, align: 'center' });
+  // les deux écritures et les deux flèches
+  const e1 = 'a + ib', e2 = 'r(cos θ + i sin θ)', w1 = L(c, e1, 18) + 24, w2 = L(c, e2, 17) + 24;
+  c.rect(420 - w1 / 2, 134, w1, 30, { couleur: 'vert', arrondi: 8, largeur: 1.8 });
+  c.texte(e1, 420, 155, { couleur: 'vert', taille: 18, align: 'center' });
+  c.rect(420 - w2 / 2, 220, w2, 30, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+  c.texte(e2, 420, 241, { couleur: 'jaune', taille: 17, align: 'center' });
+  c.fleche(394, 168, 394, 215, { couleur: 'cyan', largeur: 1.8, tete: 8 });
+  c.texte('module et argument', 386, 197, { couleur: 'cyan', taille: 13, align: 'right' });
+  c.fleche(446, 215, 446, 168, { couleur: 'orange', largeur: 1.8, tete: 8 });
+  c.texte('cos et sin', 454, 197, { couleur: 'orange', taille: 13 });
+  c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'un point M, deux écritures : a + ib et r(cos θ + i sin θ)');
+  etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
+  if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
+}
+function dessinerPartie2(c) {
+  c.texte('partie 2 : à venir', P2X, 74, { couleur: 'faible', taille: 15, align: 'center' });
+  for (const q of PARTIE2) {
+    const x = P2X - P2W / 2, y = q.y - P2H / 2;
+    c.ligne(CENTRE.x + CENTRE.w / 2, CENTRE.y + (q.y - CENTRE.y) * .4, x, q.y, { couleur: 'faible', largeur: 1.4, pointille: [5, 6] });
+    c.rect(x, y, P2W, P2H, { couleur: 'faible', arrondi: 12, largeur: 1.8, pointille: [7, 6] });
+    c.texte(q.titre, P2X, q.y - 2, { couleur: 'blanc', taille: 14, align: 'center', max: P2W - 12, alpha: .85 });
+    c.texte('annoncé, pas calculé', P2X, q.y + 15, { couleur: 'faible', taille: 11, align: 'center', max: P2W - 12 });
+    c.repere(q.id, x - 4, y - 4, P2W + 8, P2H + 8, q.titre + ' (partie 2)');
+  }
+  c.repere('partie2', P2X - P2W / 2 - 8, 56, P2W + 16, 236, 'partie 2 : écriture exponentielle, équation du second degré, rotation');
+}
+
+function dessiner(c) {
+  const quand = { centre: dessinerCentre, branches: c2 => { NOEUDS.forEach(n => branche(c2, n)); c2.repere('branches', 4, 34, 600, 310, 'les six branches autour du centre'); }, partie2: dessinerPartie2 };
+  for (const p of PHASES) {
+    const t = S.ph[p];
+    if (t == null) continue;
+    c.cur = t === AVANT ? AVANT : Math.max(c.cur, t);
+    quand[p](c);
+  }
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 742, 18, { couleur: 'faible', taille: 12, align: 'right' }));
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+function moments() { return { centre: 1, branches: 2, partie2: 3 }; }
+const MOTS = { centre: 'Au centre : un point M, a + ib et r(cos θ + i sin θ).', branches: 'Les six branches : calcul algébrique, conjugué, module, argument, produit et Moivre, géométrie.', partie2: 'En pointillé : ce qui viendra dans la partie 2.' };
+/* Écrit la carte jusqu'à la partie k (0 centre, 1 branches, 2 partie2). `pasAPas` : tout s'écrit à la suite (bouton) ;
+ * sinon (la voix) les parties sautées s'écrivent d'un coup et la partie k à cet instant. */
+function montrer(k, par, pasAPas) {
+  k = Math.max(0, Math.min(PHASES.length - 1, k));
+  if (pasAPas || PHASES.some((p, i) => i > k && S.ph[p] != null)) { PHASES.forEach(p => { S.ph[p] = null; }); scene.reecrire(); }
+  PHASES.forEach((p, i) => {
+    if (i > k || S.ph[p] != null) return;
+    S.ph[p] = pasAPas ? 0 : i < k ? AVANT : maintenant();
+  });
+  scene.sale = true;
+  bulle($('feedback'), pasAPas ? 'La carte se dessine…' : MOTS[PHASES[k]]);
+  pont.noter(par || 'play_until', { moment: PHASES[k] }); pont.emettre();
+}
+function playUntil(p) { const M = moments(); const n = p.moment in M ? M[p.moment] : +p.time_s; if (Number.isFinite(n)) montrer(Math.round(n) - 1, 'play_until'); }
+function start() { S.choisi = null; montrer(PHASES.length - 1, 'start', true); }
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || ''), statut: String(l.statut || 'non_acquis') }));
+  if (Array.isArray(p.acquis_ids)) S.acquis = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const m = ['Carte du chapitre des nombres complexes (première partie).'];
+  if (S.ph.centre != null) m.push('Au centre, un petit plan complexe avec un point M (pointillés vers a et b, longueur r, angle θ) et ses deux écritures encadrées, « a + ib » et « r(cos θ + i sin θ) », reliées par deux flèches : « module et argument » vers le bas, « cos et sin » vers le haut.');
+  if (S.ph.branches != null) m.push('Autour, six branches : ' + NOEUDS.map(n => `${n.titre} (${n.lignes.join(' ; ')})`).join(', ') + '.');
+  if (S.ph.partie2 != null) m.push('À droite, en pointillé, « partie 2 : à venir » : écriture exponentielle, équation du second degré, rotation (annoncés, rien de calculé).');
+  if (S.ph.centre == null) m.push('Rien d’écrit encore.');
+  if (S.lacunes) {
+    const r = [...(S.ph.centre != null && statut(CENTRE.comps) && statut(CENTRE.comps) !== 'acquis' ? ['le centre'] : []),
+      ...(S.ph.branches != null ? NOEUDS.filter(n => statut(n.comps) && statut(n.comps) !== 'acquis').map(n => n.titre) : [])];
+    m.push(`Branches à reprendre : ${r.join(', ') || 'aucune'}.`);
+  }
+  if (S.choisi) m.push(`L'élève a touché « ${S.choisi === 'centre' ? 'le centre' : NOEUDS.find(n => n.id === S.choisi).titre} ».`);
+  return dit(m.join(' '));
+}
+$('run').onclick = start;
+// Imprimer / PDF : la carte complète, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { ph: { ...S.ph }, choisi: S.choisi };
+  window.Tableau.imprimer({ titre: 'Carte du chapitre — nombres complexes', scene,
+    pages: [{ nom: 'la carte complète', preparer: () => { PHASES.forEach(p => { S.ph[p] = AVANT; }); S.choisi = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 1 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const n = S.ph.branches != null && NOEUDS.find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  if (n) { S.choisi = n.id; bulle($('feedback'), dit(n.phrase)); }
+  else if (S.ph.centre != null && Math.abs(x - CENTRE.x) <= CENTRE.w / 2 && Math.abs(y - CENTRE.y) <= CENTRE.h / 2) { S.choisi = 'centre'; bulle($('feedback'), CENTRE.phrase); }
+  else return;
+  scene.sale = true; pont.noter('touche', { moment: S.choisi }); pont.emettre();
+});
+
+window.Tableau.explication({ carte: [
+  { repere: 'centre', texte: CENTRE.phrase },
+  { repere: 'branches', texte: 'Autour du point M, six branches : le calcul algébrique, le conjugué, le module, l’argument, le produit et Moivre, la géométrie.' },
+  ...NOEUDS.map(n => ({ repere: n.id, texte: dit(n.phrase) })),
+  { repere: 'partie2', texte: 'En pointillé, la partie 2 du chapitre : l’écriture exponentielle, l’équation du second degré et la rotation ; seulement annoncées ici.' },
+] });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters'];
+const config = { id: 'nc_b2_carte', version: '1.0', title: 'Carte du chapitre — nombres complexes', variants: [{ id: 'carte', label: 'carte' }], commands: commandes,
+  command_schema: { play_until: { moment: 'centre | branches | partie2 (écrit la carte jusqu’à cette partie ; les parties sautées s’écrivent d’un coup)' },
+    set_parameters: { lacunes: '[{id: K1..K8, statut: non_acquis|partiel}] (bilan de l’élève)', acquis_ids: '[K1, ..] compétences acquises' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Carte conceptuelle du chapitre des nombres complexes (première partie) : au centre un point M et ses deux écritures a + ib et r(cos θ + i sin θ), reliées par « module et argument » et « cos et sin » ; six branches autour (calcul algébrique, conjugué, module, argument, produit et Moivre, géométrie) ; en pointillé la partie 2 annoncée (écriture exponentielle, équation du second degré, rotation)',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: PHASES.filter(p => S.ph[p] != null).length,
+    parameters: { parties: PHASES.filter(p => S.ph[p] != null), lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => PHASES.filter(p => S.ph[p] != null).length / PHASES.length,
+  executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+bulle($('feedback'), 'Le professeur va dessiner la carte du chapitre.');
+window.__carte = { S, scene, NOEUDS, CENTRE };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
