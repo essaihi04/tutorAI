@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La forme trigonométrique</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Plan complexe à la craie : passage de a + ib à r(cos θ + i sin θ), l’angle π − π/6, deux fausses formes corrigées, retour à a + ib"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : la forme trigonométrique.
+ * Vues : ?vue=passage | signes (moments point, module, facteur, angle, forme) | faux (module_negatif, correction, moins_cos) |
+ * retour (forme, valeurs, algebrique, point). Repères : les mêmes noms que les moments.
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI;
+/* Mouvements : MOB[nom] = instant d’écriture où un point commence à bouger (d’une image à l’autre) ;
+ * avant(c, nom) : on est avant ce mouvement, la version fixe du point se dessine (sinon c’est le point qui bouge). */
+const MOB = {};
+const avant = (c, nom) => Number.isFinite(c.t) && !(c.t > (MOB[nom] ?? Infinity));
+const debut = (c, nom) => { if (Number.isFinite(c.t)) MOB[nom] = c.cur; };
+/* Nom de vecteur : la lettre et une petite flèche dessinée au-dessus. */
+function vecNom(c, s, x, y, t = 16, couleur = 'blanc', align = 'center') {
+  const w = c.largeurTexte(s, t), xm = align === 'center' ? x : align === 'right' ? x - w / 2 : x + w / 2;
+  c.texte(s, x, y, { couleur, taille: t, align });
+  const yh = y - t * (/[A-Z]/.test(s) ? .9 : .72);
+  c.fleche(xm - w / 2 - 1, yh, xm + w / 2 + 3, yh, { couleur, largeur: 1.2, tete: 4, duree: .06 });
+}
+/* Texte en morceaux : [texte, estUnVecteur] ; un vecteur reçoit sa flèche. */
+function texteVec(c, x, y, parties, o = {}) {
+  const t = o.taille || 19;
+  for (const [s, v] of parties) {
+    if (v) vecNom(c, s, x, y, t, o.couleur, 'left'); else c.texte(s, x, y, { couleur: o.couleur, taille: t });
+    x += c.largeurTexte(s, t);
+  }
+  return x;
+}
+/* Largeur d’un texte avec exposants (écrits plus petits par exposants.js). */
+function larg(c, s, t) {
+  const sup = s.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g) || [];
+  return c.largeurTexte(s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, ''), t) + c.largeurTexte('0'.repeat(sup.length), t * .62);
+}
+/* Plan complexe orthonormé : axes, O, vecteurs u et v, « axe réel », « axe imaginaire ». */
+function plan(c, K, o) {
+  const G = K.axes({ nomx: '', nomy: '', ...o });
+  const U = G.X(1) - G.X(0), x0 = G.X(0), y0 = G.Y(0);
+  c.fleche(x0, y0, x0 + U, y0, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  c.fleche(x0, y0, x0, y0 - U, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  vecNom(c, 'u', x0 + U / 2, y0 + 17, 15, 'cyan');
+  vecNom(c, 'v', x0 - 11, y0 - U / 2 + 5, 15, 'cyan');
+  c.texte('axe réel', G.x0 + G.w + 12, y0 + 36, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', x0 + 8, G.y0 - 2, { couleur: 'faible', taille: 14 });
+  return G;
+}
+/* Coordonnées px d’un point du plan donné par son module r et son angle a (radians). */
+const pol = (G, r, a) => [G.X(r * Math.cos(a)), G.Y(r * Math.sin(a))];
+/* Arc d’angle ORIENTÉ de a0 à a1 (radians, sens direct), rayon r (unités du plan, r1 : rayon d’arrivée
+ * pour une spirale), centré en O, avec une pointe de flèche à l’arrivée. */
+function arc(c, G, r, a0, a1, o = {}) {
+  const cx = G.X(0), cy = G.Y(0), U = G.X(1) - G.X(0), R0 = r * U, R1 = (o.r1 ?? r) * U, d = a1 - a0;
+  if (Math.abs(d) < 1e-3) return;
+  const n = Math.max(6, Math.ceil(Math.abs(d) * Math.max(R0, R1) / 5)), pts = [];
+  for (let i = 0; i <= n; i++) { const f = i / n, a = a0 + d * f, R = R0 + (R1 - R0) * f; pts.push([cx + R * Math.cos(a), cy - R * Math.sin(a)]); }
+  const opt = { couleur: o.couleur || 'jaune', largeur: o.largeur ?? 2, tremble: .3, duree: o.duree };
+  c.trait(pts, opt);
+  const [xa, ya] = pts[n], [xb, yb] = pts[n - 1], th = Math.atan2(ya - yb, xa - xb), t = o.tete ?? 8;
+  c.trait([[xa - t * Math.cos(th - .5), ya - t * Math.sin(th - .5)], [xa, ya], [xa - t * Math.cos(th + .5), ya - t * Math.sin(th + .5)]], { ...opt, duree: .08 });
+}
+/* Texte posé à l’angle a, à la distance r de O (unités du plan). */
+function aAngle(c, G, r, a, s, o = {}) { const [x, y] = pol(G, r, a); c.texte(s, x, y + 6, { align: 'center', taille: 17, couleur: 'jaune', ...o }); }
+/* Angle en radians écrit en fraction de π (degrés multiples de 15). */
+function radPi(deg) {
+  const k = Math.round(deg / 15); if (k === 0) return '0';
+  const pg = (a, b) => (b ? pg(b, a % b) : a), g = pg(Math.abs(k), 12);
+  const n = Math.abs(k) / g, d = 12 / g;
+  return (k < 0 ? '−' : '') + (n === 1 ? '' : n) + 'π' + (d === 1 ? '' : '/' + d);
+}
+/* a + ib écrit à la française. */
+function cplx(a, b, d = 2) {
+  a = +a.toFixed(d); b = +b.toFixed(d);
+  if (b === 0) return fr(a, d);
+  const ib = (Math.abs(b) === 1 ? '' : fr(Math.abs(b), d)) + 'i';
+  if (a === 0) return (b < 0 ? '−' : '') + ib;
+  return `${fr(a, d)} ${b < 0 ? '−' : '+'} ${ib}`;
+}
+
+const OPT_1 = { x0: 30, y0: 80, w: 224, h: 184, xmin: -0.5, xmax: 2.3, ymin: -0.6, ymax: 1.7, gx: [], gy: [] };
+const OPT_2 = { x0: 30, y0: 80, w: 232, h: 184, xmin: -2.3, xmax: 0.6, ymin: -0.6, ymax: 1.7, gx: [], gy: [] };
+const OPT_F = { x0: 487, y0: 75, w: 253, h: 253, xmin: -2.3, xmax: 2.3, ymin: -2.3, ymax: 2.3, gx: [], gy: [] };
+const OPT_R = { x0: 520, y0: 80, w: 210, h: 203, xmin: -1.7, xmax: 1.3, ymin: -0.6, ymax: 2.3, gx: [], gy: [] };
+const S3 = Math.sqrt(3);
+/* Point (a ; b) du plan avec ses pointillés de projection et les valeurs lues sur les axes. */
+function pointProj(c, G, a, b, la, lb) {
+  const px = G.X(a), py = G.Y(b), ox = G.X(0), oy = G.Y(0);
+  c.ligne(px, py, px, oy, { couleur: 'orange', largeur: 1.5, pointille: [5, 5] });
+  c.ligne(px, py, ox, py, { couleur: 'orange', largeur: 1.5, pointille: [5, 5] });
+  c.point(px, py, 5.5, 'cyan');
+  c.texte(la, px, oy + 20, { couleur: 'vert', taille: 17, align: 'center' });
+  c.texte(lb, ox + (a < 0 ? 8 : -8), py + 6, { couleur: 'orange', taille: 17, align: a < 0 ? 'left' : 'right' });
+}
+/* Un texte entouré d’une ellipse (le « −2 » faux). */
+function entoure(c, x, y, w, h, couleur) {
+  c.courbe(u => [x + w / 2 * Math.cos(2 * PI * u * 1.08 - .4), y + h / 2 * Math.sin(2 * PI * u * 1.08 - .4)], 40, { couleur, largeur: 2.2 });
+}
+
+MathsTableau.page({
+  id: 'nc_trig', titre: 'Nombres complexes : la forme trigonométrique',
+  texte: 'Construction à la craie : passer de a + ib à r(cos θ + i sin θ) (r = |z|, on met r en facteur, on reconnaît cos θ et sin θ) ; les signes donnent le quart (π − π/6) ; deux fausses formes (r négatif, −cos θ) et leur correction ; le retour à a + ib',
+  vues: {
+    passage: {
+      titre: 'z = r(cos θ + i sin θ)',
+      dessiner(c, K) {
+        K.titre('z = r(cos θ + i sin θ)');
+        const G = plan(c, K, OPT_1), XT = 320, [mx, my] = [G.X(S3), G.Y(1)];
+        pointProj(c, G, S3, 1, '√3', '1');
+        c.texte('M', mx + 8, my - 8, { couleur: 'cyan', taille: 17 });
+        c.texte('z = √3 + i', XT, 100, { couleur: 'blanc', taille: 21 });
+        c.repere('point', mx - 14, my - 26, 50, 40, 'le point M d’affixe √3 + i');
+        K.marque('point');
+        c.pause(.3);
+        c.ligne(G.X(0), G.Y(0), mx, my, { couleur: 'cyan', largeur: 2.6 });
+        c.texte('2', (G.X(0) + mx) / 2 - 8, (G.Y(0) + my) / 2 - 8, { couleur: 'jaune', taille: 19, align: 'right' });
+        c.texte('r = |z| = √(3 + 1) = 2', XT, 142, { couleur: 'jaune', taille: 20 });
+        c.repere('module', XT - 8, 120, 260, 30, 'r = |z| = √(3 + 1) = 2');
+        K.marque('module');
+        c.pause(.3);
+        c.texte('√3 + i = 2(√3/2 + (1/2)i)', XT, 184, { couleur: 'blanc', taille: 20 });
+        c.repere('facteur', XT - 8, 162, 290, 30, '√3 + i = 2(√3/2 + (1/2)i) : on met 2 en facteur');
+        K.marque('facteur');
+        c.pause(.3);
+        c.texte('√3/2 = cos π/6 ; 1/2 = sin π/6', XT, 226, { couleur: 'blanc', taille: 20 });
+        K.anime(.7, p => arc(c, G, .5, 0, PI / 6 * p));
+        aAngle(c, G, .9, .07, 'π/6', { taille: 16 });
+        c.repere('angle', XT - 8, 204, 320, 30, '√3/2 = cos π/6 et 1/2 = sin π/6');
+        K.marque('angle');
+        c.pause(.3);
+        c.rect(XT - 10, 252, 330, 40, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+        c.texte('√3 + i = 2(cos π/6 + i sin π/6)', XT, 280, { couleur: 'jaune', taille: 21 });
+        c.texte('r = 2 > 0 et θ = π/6', XT, 322, { couleur: 'blanc', taille: 17 });
+        c.repere('forme', XT - 12, 250, 334, 44, '√3 + i = 2(cos π/6 + i sin π/6)');
+        K.marque('forme');
+      },
+      decrire: {
+        point: 'Un plan complexe ; le point M(√3 ; 1) avec ses pointillés vers les axes, « √3 » sur l’axe réel et « 1 » sur l’axe imaginaire ; à droite « z = √3 + i ».',
+        module: 'Le segment OM tracé, marqué « 2 » ; à droite « r = |z| = √(3 + 1) = 2 » en jaune.',
+        facteur: 'Dessous : « √3 + i = 2(√3/2 + (1/2)i) » (2 mis en facteur).',
+        angle: 'Dessous : « √3/2 = cos π/6 ; 1/2 = sin π/6 » ; sur le plan, un arc jaune orienté de u vers OM, marqué « π/6 ».',
+        forme: 'Encadré jaune « √3 + i = 2(cos π/6 + i sin π/6) » ; dessous « r = 2 > 0 et θ = π/6 ».',
+      },
+      motifs: { point: 'le point √3 + i', module: 'r = 2', facteur: '2 en facteur', angle: 'l’angle π/6', forme: 'la forme trigonométrique' },
+      explication: [
+        { repere: 'point', texte: 'Le point M d’affixe √3 + i.' },
+        { repere: 'module', texte: 'D’abord le module : r = √(3 + 1) = 2.' },
+        { repere: 'facteur', texte: 'On met r = 2 en facteur : il reste √3/2 et 1/2.' },
+        { repere: 'angle', texte: 'On reconnaît cos π/6 = √3/2 et sin π/6 = 1/2.' },
+        { repere: 'forme', texte: 'Donc √3 + i = 2(cos π/6 + i sin π/6).' },
+      ],
+    },
+    signes: {
+      titre: '−√3 + i : l’angle π − π/6',
+      dessiner(c, K) {
+        K.titre('−√3 + i : l’angle π − π/6');
+        const G = plan(c, K, OPT_2), XT = 316, [mx, my] = [G.X(-S3), G.Y(1)];
+        pointProj(c, G, -S3, 1, '−√3', '1');
+        c.texte('M', mx - 10, my - 10, { couleur: 'cyan', taille: 17, align: 'right' });
+        c.texte('z = −√3 + i : a < 0, b > 0', XT, 100, { couleur: 'blanc', taille: 20 });
+        c.repere('point', mx - 26, my - 26, 50, 40, 'le point M d’affixe −√3 + i');
+        K.marque('point');
+        c.pause(.3);
+        c.ligne(G.X(0), G.Y(0), mx, my, { couleur: 'cyan', largeur: 2.6 });
+        c.texte('2', (G.X(0) + mx) / 2 + 2, (G.Y(0) + my) / 2 - 10, { couleur: 'jaune', taille: 19 });
+        c.texte('r = √(3 + 1) = 2', XT, 140, { couleur: 'jaune', taille: 20 });
+        c.repere('module', XT - 8, 118, 200, 30, 'r = 2');
+        K.marque('module');
+        c.pause(.3);
+        c.texte('−√3 + i = 2(−√3/2 + (1/2)i)', XT, 180, { couleur: 'blanc', taille: 20 });
+        c.repere('facteur', XT - 8, 158, 300, 30, '−√3 + i = 2(−√3/2 + (1/2)i)');
+        K.marque('facteur');
+        c.pause(.3);
+        c.texte('cos θ = −√3/2 ; sin θ = 1/2', XT, 220, { couleur: 'blanc', taille: 20 });
+        c.texte('θ = π − π/6 = 5π/6', XT, 250, { couleur: 'jaune', taille: 20 });
+        K.anime(.9, p => arc(c, G, .7, 0, 5 * PI / 6 * p));
+        aAngle(c, G, 1.0, 1.92, '5π/6', { taille: 16 });
+        c.repere('angle', XT - 8, 198, 300, 60, 'θ = π − π/6 = 5π/6');
+        K.marque('angle');
+        c.pause(.3);
+        c.rect(XT - 10, 276, 356, 40, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+        c.texte('−√3 + i = 2(cos 5π/6 + i sin 5π/6)', XT, 304, { couleur: 'jaune', taille: 21, max: 340 });
+        c.texte('cos 5π/6 = −√3/2 ; sin 5π/6 = 1/2', XT, 342, { couleur: 'blanc', taille: 16 });
+        c.repere('forme', XT - 12, 274, 360, 44, '2(cos 5π/6 + i sin 5π/6)');
+        K.marque('forme');
+      },
+      decrire: {
+        point: 'Un plan complexe ; le point M(−√3 ; 1) avec ses pointillés, « −√3 » sur l’axe réel et « 1 » sur l’axe imaginaire ; à droite « z = −√3 + i : a < 0, b > 0 ».',
+        module: 'OM tracé, marqué « 2 » ; à droite « r = √(3 + 1) = 2 ».',
+        facteur: 'Dessous : « −√3 + i = 2(−√3/2 + (1/2)i) ».',
+        angle: 'Dessous : « cos θ = −√3/2 ; sin θ = 1/2 » et « θ = π − π/6 = 5π/6 » ; un arc jaune orienté de u vers OM marqué « 5π/6 ».',
+        forme: 'Encadré jaune « −√3 + i = 2(cos 5π/6 + i sin 5π/6) » ; dessous « cos 5π/6 = −√3/2 ; sin 5π/6 = 1/2 ».',
+      },
+      motifs: { point: 'le point −√3 + i', module: 'r = 2', facteur: '2 en facteur', angle: 'θ = π − π/6', forme: 'la forme 2(cos 5π/6 + i sin 5π/6)' },
+      explication: [
+        { repere: 'point', texte: 'a < 0 et b > 0 : M est dans le quart en haut à gauche.' },
+        { repere: 'module', texte: 'Le module : r = √(3 + 1) = 2.' },
+        { repere: 'facteur', texte: 'On met 2 en facteur : −√3/2 et 1/2.' },
+        { repere: 'angle', texte: 'cos θ < 0 et sin θ > 0 : θ = π − π/6 = 5π/6.' },
+        { repere: 'forme', texte: 'Donc −√3 + i = 2(cos 5π/6 + i sin 5π/6).' },
+      ],
+    },
+    faux: {
+      titre: 'Deux fausses formes',
+      dessiner(c, K) {
+        K.titre('Deux fausses formes');
+        const XT = 24;
+        // 1. Le module négatif.
+        const f1 = '−2(cos π/3 + i sin π/3)';
+        c.texte(f1, XT, 92, { couleur: 'blanc', taille: 22 });
+        const w2 = c.largeurTexte('−2', 22);
+        entoure(c, XT + w2 / 2 + 3, 85, w2 + 28, 34, 'rouge');
+        c.texte('r > 0 toujours : −2 n’est pas un module', XT, 128, { couleur: 'rouge', taille: 18 });
+        c.repere('module_negatif', XT - 8, 64, 360, 72, '−2(cos π/3 + i sin π/3) : le −2 est faux, r > 0 toujours');
+        K.marque('module_negatif');
+        c.pause(.3);
+        // 2. La correction : le moins devient un demi-tour (+ π).
+        const G = plan(c, K, OPT_F), a = PI / 3, U = G.X(1) - G.X(0);
+        c.cercle(G.X(0), G.Y(0), 2 * U, { couleur: 'tresfaible', largeur: 1.3 });
+        const [px, py] = pol(G, 2, a), [qx, qy] = pol(G, 2, a + PI);
+        c.ligne(G.X(0), G.Y(0), px, py, { couleur: 'faible', largeur: 1.8, pointille: [5, 5] });
+        c.point(px, py, 4.5, 'faible');
+        c.texte('2(cos π/3 + …)', px + 8, py - 8, { couleur: 'faible', taille: 14, max: 740 - px - 8 });
+        K.anime(.5, p => arc(c, G, .45, 0, a * p, { couleur: 'blanc' }));
+        aAngle(c, G, .72, a / 2, 'π/3', { taille: 15, couleur: 'blanc' });
+        K.anime(.9, p => arc(c, G, .85, a, a + PI * p, { couleur: 'orange' }));
+        aAngle(c, G, 1.12, a + PI / 2, '+ π', { taille: 16, couleur: 'orange' });
+        c.ligne(G.X(0), G.Y(0), qx, qy, { couleur: 'cyan', largeur: 2.6 });
+        c.point(qx, qy, 5.5, 'cyan');
+        c.texte('z', qx - 10, qy + 6, { couleur: 'cyan', taille: 18, align: 'right' });
+        c.texte('le moins rentre dans l’angle : π + π/3 = 4π/3', XT, 178, { couleur: 'blanc', taille: 17 });
+        c.texte('= 2(cos 4π/3 + i sin 4π/3)', XT, 214, { couleur: 'jaune', taille: 22 });
+        c.repere('correction', XT - 8, 158, 400, 66, '= 2(cos 4π/3 + i sin 4π/3) : π + π/3');
+        K.marque('correction');
+        c.pause(.3);
+        // 3. Le −cos θ.
+        const f2 = '2(−cos θ + i sin θ)';
+        c.texte(f2, XT, 268, { couleur: 'blanc', taille: 20 });
+        c.ligne(XT - 4, 262, XT + larg(c, f2, 20) + 4, 256, { couleur: 'rouge', largeur: 2.6 });
+        c.texte('pas une forme trigonométrique', XT + larg(c, f2, 20) + 16, 268, { couleur: 'rouge', taille: 15 });
+        c.texte('= 2(cos(π − θ) + i sin(π − θ))', XT, 304, { couleur: 'vert', taille: 21 });
+        c.texte('car cos(π − θ) = −cos θ et sin(π − θ) = sin θ', XT, 340, { couleur: 'blanc', taille: 15 });
+        c.repere('moins_cos', XT - 8, 246, 420, 102, '2(−cos θ + i sin θ) = 2(cos(π − θ) + i sin(π − θ))');
+        K.marque('moins_cos');
+      },
+      decrire: {
+        module_negatif: 'En haut à gauche « −2(cos π/3 + i sin π/3) », le « −2 » entouré en rouge ; dessous en rouge « r > 0 toujours : −2 n’est pas un module ».',
+        correction: 'Un plan complexe à droite : le point 2(cos π/3 + …) en pâle avec son arc π/3, un arc orange fléché « + π » (un demi-tour) jusqu’au vrai point z, à l’angle 4π/3 ; à gauche « le moins rentre dans l’angle : π + π/3 = 4π/3 » et « = 2(cos 4π/3 + i sin 4π/3) » en jaune.',
+        moins_cos: 'Dessous « 2(−cos θ + i sin θ) » barré en rouge (« pas une forme trigonométrique »), puis en vert « = 2(cos(π − θ) + i sin(π − θ)) » et « car cos(π − θ) = −cos θ et sin(π − θ) = sin θ ».',
+      },
+      motifs: { module_negatif: 'le module négatif', correction: 'la correction π + π/3', moins_cos: 'le −cos θ' },
+      explication: [
+        { repere: 'module_negatif', texte: 'Dans r(cos θ + i sin θ), r est un module : il est toujours positif. −2 ne va pas.' },
+        { repere: 'correction', texte: '−1 = cos π + i sin π : le moins devient un demi-tour, θ = π + π/3 = 4π/3.' },
+        { repere: 'moins_cos', texte: '−cos θ n’est pas un cosinus d’angle écrit : on le remplace par cos(π − θ), et sin θ par sin(π − θ).' },
+      ],
+    },
+    retour: {
+      titre: 'Retour à a + ib',
+      dessiner(c, K) {
+        K.titre('Retour à a + ib');
+        const XT = 24, G = plan(c, K, OPT_R);
+        c.texte('z = 2(cos 2π/3 + i sin 2π/3)', XT, 100, { couleur: 'blanc', taille: 22 });
+        c.repere('forme', XT - 8, 76, 320, 32, 'z = 2(cos 2π/3 + i sin 2π/3)');
+        K.marque('forme');
+        c.pause(.3);
+        c.texte('cos 2π/3 = −1/2 ; sin 2π/3 = √3/2', XT, 150, { couleur: 'blanc', taille: 20 });
+        c.texte('(2π/3 = π − π/3)', XT, 178, { couleur: 'faible', taille: 16 });
+        c.repere('valeurs', XT - 8, 128, 340, 58, 'cos 2π/3 = −1/2 ; sin 2π/3 = √3/2');
+        K.marque('valeurs');
+        c.pause(.3);
+        c.texte('z = 2(−1/2 + i √3/2)', XT, 225, { couleur: 'blanc', taille: 20 });
+        c.rect(XT - 10, 246, 176, 42, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+        c.texte('= −1 + i√3', XT, 275, { couleur: 'jaune', taille: 24 });
+        c.repere('algebrique', XT - 12, 204, 300, 88, 'z = −1 + i√3');
+        K.marque('algebrique');
+        c.pause(.3);
+        const [mx, my] = [G.X(-1), G.Y(S3)];
+        pointProj(c, G, -1, S3, '−1', '√3');
+        c.ligne(G.X(0), G.Y(0), mx, my, { couleur: 'cyan', largeur: 2.4 });
+        c.texte('M', mx - 10, my - 8, { couleur: 'cyan', taille: 17, align: 'right' });
+        K.anime(.8, p => arc(c, G, .75, 0, 2 * PI / 3 * p));
+        aAngle(c, G, 1.05, .3 * PI, '2π/3', { taille: 16 });
+        c.texte('M(−1 ; √3) : OM = 2, angle 2π/3', XT, 330, { couleur: 'blanc', taille: 17 });
+        c.repere('point', G.X(-1.6), G.Y(2.1), G.X(1) - G.X(-1.6), G.Y(-0.4) - G.Y(2.1), 'le point M(−1 ; √3) et l’arc 2π/3');
+        K.marque('point');
+      },
+      decrire: {
+        forme: 'En haut à gauche : « z = 2(cos 2π/3 + i sin 2π/3) » ; à droite, un plan complexe vide.',
+        valeurs: 'Dessous : « cos 2π/3 = −1/2 ; sin 2π/3 = √3/2 » et « (2π/3 = π − π/3) ».',
+        algebrique: 'Dessous : « z = 2(−1/2 + i √3/2) », puis encadré jaune « = −1 + i√3 ».',
+        point: 'Sur le plan : le point M(−1 ; √3), ses pointillés (« −1 » sur l’axe réel, « √3 » sur l’axe imaginaire), OM, un arc jaune orienté de u vers OM marqué « 2π/3 » ; dessous à gauche « M(−1 ; √3) : OM = 2, angle 2π/3 ».',
+      },
+      motifs: { forme: 'la forme trigonométrique', valeurs: 'cos et sin de 2π/3', algebrique: 'z = −1 + i√3', point: 'le point M' },
+      explication: [
+        { repere: 'forme', texte: 'On part de la forme trigonométrique : r = 2, θ = 2π/3.' },
+        { repere: 'valeurs', texte: 'On remplace cos 2π/3 par −1/2 et sin 2π/3 par √3/2.' },
+        { repere: 'algebrique', texte: 'On développe : z = −1 + i√3.' },
+        { repere: 'point', texte: 'Le point M(−1 ; √3) est à la distance 2 de O, à l’angle 2π/3.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

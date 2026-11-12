@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le tableau des angles</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le premier quart du cercle trigonométrique à la craie avec 0, π/6, π/4, π/3, π/2, et le tableau des cosinus et sinus"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : les angles remarquables.
+ * Vue : ?vue=tableau. Moments : cercle, valeurs, astuce, lecture.
+ * Repères : cercle, valeurs, astuce, lecture, pi_6, pi_4, pi_3.
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI;
+/* Mouvements : MOB[nom] = instant d’écriture où un point commence à bouger (d’une image à l’autre) ;
+ * avant(c, nom) : on est avant ce mouvement, la version fixe du point se dessine (sinon c’est le point qui bouge). */
+const MOB = {};
+const avant = (c, nom) => Number.isFinite(c.t) && !(c.t > (MOB[nom] ?? Infinity));
+const debut = (c, nom) => { if (Number.isFinite(c.t)) MOB[nom] = c.cur; };
+/* Nom de vecteur : la lettre et une petite flèche dessinée au-dessus. */
+function vecNom(c, s, x, y, t = 16, couleur = 'blanc', align = 'center') {
+  const w = c.largeurTexte(s, t), xm = align === 'center' ? x : align === 'right' ? x - w / 2 : x + w / 2;
+  c.texte(s, x, y, { couleur, taille: t, align });
+  const yh = y - t * (/[A-Z]/.test(s) ? .9 : .72);
+  c.fleche(xm - w / 2 - 1, yh, xm + w / 2 + 3, yh, { couleur, largeur: 1.2, tete: 4, duree: .06 });
+}
+/* Texte en morceaux : [texte, estUnVecteur] ; un vecteur reçoit sa flèche. */
+function texteVec(c, x, y, parties, o = {}) {
+  const t = o.taille || 19;
+  for (const [s, v] of parties) {
+    if (v) vecNom(c, s, x, y, t, o.couleur, 'left'); else c.texte(s, x, y, { couleur: o.couleur, taille: t });
+    x += c.largeurTexte(s, t);
+  }
+  return x;
+}
+/* Largeur d’un texte avec exposants (écrits plus petits par exposants.js). */
+function larg(c, s, t) {
+  const sup = s.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g) || [];
+  return c.largeurTexte(s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, ''), t) + c.largeurTexte('0'.repeat(sup.length), t * .62);
+}
+/* Plan complexe orthonormé : axes, O, vecteurs u et v, « axe réel », « axe imaginaire ». */
+function plan(c, K, o) {
+  const G = K.axes({ nomx: '', nomy: '', ...o });
+  const U = G.X(1) - G.X(0), x0 = G.X(0), y0 = G.Y(0);
+  c.fleche(x0, y0, x0 + U, y0, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  c.fleche(x0, y0, x0, y0 - U, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  vecNom(c, 'u', x0 + U / 2, y0 + 17, 15, 'cyan');
+  vecNom(c, 'v', x0 - 11, y0 - U / 2 + 5, 15, 'cyan');
+  c.texte('axe réel', G.x0 + G.w + 12, y0 + 36, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', x0 + 8, G.y0 - 2, { couleur: 'faible', taille: 14 });
+  return G;
+}
+/* Coordonnées px d’un point du plan donné par son module r et son angle a (radians). */
+const pol = (G, r, a) => [G.X(r * Math.cos(a)), G.Y(r * Math.sin(a))];
+/* Arc d’angle ORIENTÉ de a0 à a1 (radians, sens direct), rayon r (unités du plan, r1 : rayon d’arrivée
+ * pour une spirale), centré en O, avec une pointe de flèche à l’arrivée. */
+function arc(c, G, r, a0, a1, o = {}) {
+  const cx = G.X(0), cy = G.Y(0), U = G.X(1) - G.X(0), R0 = r * U, R1 = (o.r1 ?? r) * U, d = a1 - a0;
+  if (Math.abs(d) < 1e-3) return;
+  const n = Math.max(6, Math.ceil(Math.abs(d) * Math.max(R0, R1) / 5)), pts = [];
+  for (let i = 0; i <= n; i++) { const f = i / n, a = a0 + d * f, R = R0 + (R1 - R0) * f; pts.push([cx + R * Math.cos(a), cy - R * Math.sin(a)]); }
+  const opt = { couleur: o.couleur || 'jaune', largeur: o.largeur ?? 2, tremble: .3, duree: o.duree };
+  c.trait(pts, opt);
+  const [xa, ya] = pts[n], [xb, yb] = pts[n - 1], th = Math.atan2(ya - yb, xa - xb), t = o.tete ?? 8;
+  c.trait([[xa - t * Math.cos(th - .5), ya - t * Math.sin(th - .5)], [xa, ya], [xa - t * Math.cos(th + .5), ya - t * Math.sin(th + .5)]], { ...opt, duree: .08 });
+}
+/* Texte posé à l’angle a, à la distance r de O (unités du plan). */
+function aAngle(c, G, r, a, s, o = {}) { const [x, y] = pol(G, r, a); c.texte(s, x, y + 6, { align: 'center', taille: 17, couleur: 'jaune', ...o }); }
+/* Angle en radians écrit en fraction de π (degrés multiples de 15). */
+function radPi(deg) {
+  const k = Math.round(deg / 15); if (k === 0) return '0';
+  const pg = (a, b) => (b ? pg(b, a % b) : a), g = pg(Math.abs(k), 12);
+  const n = Math.abs(k) / g, d = 12 / g;
+  return (k < 0 ? '−' : '') + (n === 1 ? '' : n) + 'π' + (d === 1 ? '' : '/' + d);
+}
+/* a + ib écrit à la française. */
+function cplx(a, b, d = 2) {
+  a = +a.toFixed(d); b = +b.toFixed(d);
+  if (b === 0) return fr(a, d);
+  const ib = (Math.abs(b) === 1 ? '' : fr(Math.abs(b), d)) + 'i';
+  if (a === 0) return (b < 0 ? '−' : '') + ib;
+  return `${fr(a, d)} ${b < 0 ? '−' : '+'} ${ib}`;
+}
+
+/* Le premier quart du cercle trigonométrique (rayon R px, centre O) et le tableau des valeurs à droite. */
+const O = [46, 326], R = 220;
+const GC = { X: (x) => O[0] + x * R, Y: (y) => O[1] - y * R };   // repère du cercle : unité = R
+const COLS = [400, 476, 552, 628, 704], HX = 312, CW = 76;
+const ANG = [
+  { a: 0, nom: '0', cos: '1', sin: '0' },
+  { a: PI / 6, nom: 'π/6', cos: '√3/2', sin: '1/2', rep: 'pi_6' },
+  { a: PI / 4, nom: 'π/4', cos: '√2/2', sin: '√2/2', rep: 'pi_4' },
+  { a: PI / 3, nom: 'π/3', cos: '1/2', sin: '√3/2', rep: 'pi_3' },
+  { a: PI / 2, nom: 'π/2', cos: '0', sin: '1' },
+];
+
+MathsTableau.page({
+  id: 'nc_angles', titre: 'Nombres complexes : les angles remarquables',
+  texte: 'Construction à la craie : le premier quart du cercle trigonométrique avec 0, π/6, π/4, π/3, π/2 ; le tableau de cos et sin ; l’astuce √0/2, √1/2, √2/2, √3/2, √4/2 (le sinus monte, le cosinus descend) ; en π/4, cos = sin = √2/2',
+  vues: {
+    tableau: {
+      titre: 'Le tableau des angles',
+      dessiner(c, K) {
+        K.titre('Le tableau des angles');
+        // Le quart de cercle : axes, arc orienté de 0 à π/2, les cinq angles.
+        c.fleche(O[0] - 10, O[1], O[0] + R + 26, O[1], { couleur: 'faible', largeur: 1.6 });
+        c.fleche(O[0], O[1] + 10, O[0], O[1] - R - 24, { couleur: 'faible', largeur: 1.6 });
+        c.texte('cos', O[0] + R + 24, O[1] + 22, { couleur: 'vert', taille: 15, align: 'right' });
+        c.texte('sin', O[0] - 8, O[1] - R - 12, { couleur: 'orange', taille: 15, align: 'right' });
+        c.texte('O', O[0] - 14, O[1] + 18, { couleur: 'faible', taille: 14 });
+        K.anime(1.2, p => arc(c, GC, 1, 0, PI / 2 * p, { couleur: 'blanc', largeur: 2.2, tete: 10 }));
+        for (const q of ANG) {
+          const [x, y] = pol(GC, 1, q.a);
+          if (q.a > 0 && q.a < PI / 2) c.ligne(O[0], O[1], x, y, { couleur: 'tresfaible', largeur: 1.3, duree: .15 });
+          c.point(x, y, 5, 'cyan');
+          if (q.a === 0) c.texte('0', x + 8, y - 8, { couleur: 'cyan', taille: 17 });
+          else if (q.a === PI / 2) c.texte('π/2', x + 12, y + 8, { couleur: 'cyan', taille: 17 });
+          else { const [lx, ly] = pol(GC, 1.09, q.a); c.texte(q.nom, lx, ly + 6, { couleur: 'cyan', taille: 17, align: 'center' }); }
+        }
+        // En-tête du tableau.
+        c.ligne(HX + 50, 68, HX + 50, 208, { couleur: 'faible', largeur: 1.4 });
+        c.ligne(HX - 6, 110, COLS[4] + CW / 2, 110, { couleur: 'faible', largeur: 1.4 });
+        c.ligne(HX - 6, 160, COLS[4] + CW / 2, 160, { couleur: 'faible', largeur: 1.4 });
+        c.texte('θ', HX, 96, { couleur: 'cyan', taille: 20 });
+        ANG.forEach((q, i) => c.texte(q.nom, COLS[i], 96, { couleur: 'cyan', taille: 20, align: 'center' }));
+        c.repere('cercle', O[0] - 10, O[1] - R - 26, R + 50, R + 46, 'le premier quart du cercle : 0, π/6, π/4, π/3, π/2');
+        K.marque('cercle');
+        c.pause(.3);
+        c.texte('cos θ', HX - 4, 146, { couleur: 'vert', taille: 18 });
+        ANG.forEach((q, i) => c.texte(q.cos, COLS[i], 146, { couleur: 'vert', taille: 20, align: 'center' }));
+        c.texte('sin θ', HX - 4, 196, { couleur: 'orange', taille: 18 });
+        ANG.forEach((q, i) => c.texte(q.sin, COLS[i], 196, { couleur: 'orange', taille: 20, align: 'center' }));
+        c.repere('valeurs', HX - 8, 120, COLS[4] + CW / 2 - HX + 8, 86, 'cos et sin de 0, π/6, π/4, π/3, π/2');
+        for (const [i, q] of ANG.entries()) if (q.rep) c.repere(q.rep, COLS[i] - CW / 2, 70, CW, 138, `la colonne ${q.nom} : cos = ${q.cos}, sin = ${q.sin}`);
+        K.marque('valeurs');
+        c.pause(.3);
+        c.texte('sin θ', HX - 4, 250, { couleur: 'orange', taille: 17 });
+        c.texte('monte', HX - 4, 270, { couleur: 'orange', taille: 14 });
+        ANG.forEach((q, i) => c.texte(`√${i}/2`, COLS[i], 250, { couleur: 'orange', taille: 18, align: 'center' }));
+        c.fleche(COLS[0] - 24, 262, COLS[4] + 30, 262, { couleur: 'orange', largeur: 1.6, tete: 8 });
+        c.texte('cos θ', HX - 4, 300, { couleur: 'vert', taille: 17 });
+        c.texte('descend', HX - 4, 320, { couleur: 'vert', taille: 14 });
+        ANG.forEach((q, i) => c.texte(`√${4 - i}/2`, COLS[i], 300, { couleur: 'vert', taille: 18, align: 'center' }));
+        c.fleche(COLS[4] + 30, 312, COLS[0] - 24, 312, { couleur: 'vert', largeur: 1.6, tete: 8 });
+        c.texte('√0/2 = 0 ; √1/2 = 1/2 ; √4/2 = 1', COLS[0] - 20, 346, { couleur: 'blanc', taille: 15 });
+        c.repere('astuce', HX - 8, 230, COLS[4] + CW / 2 - HX + 8, 122, 'l’astuce √0/2 … √4/2 : le sinus monte, le cosinus descend');
+        K.marque('astuce');
+        c.pause(.3);
+        c.rect(COLS[2] - CW / 2 + 2, 70, CW - 4, 138, { couleur: 'jaune', arrondi: 8, largeur: 2.2, fond: 'jaune', fondAlpha: .08 });
+        const [x4, y4] = pol(GC, 1, PI / 4);
+        c.point(x4, y4, 7, 'jaune');
+        c.ligne(x4, y4, x4, O[1], { couleur: 'vert', largeur: 1.6, pointille: [5, 5] });
+        c.ligne(x4, y4, O[0], y4, { couleur: 'orange', largeur: 1.6, pointille: [5, 5] });
+        c.texte('√2/2', x4, O[1] + 20, { couleur: 'vert', taille: 16, align: 'center' });
+        c.texte('√2/2', O[0] - 6, y4 + 5, { couleur: 'orange', taille: 16, align: 'right' });
+        c.texte('cos π/4 = sin π/4 = √2/2', 100, 64, { couleur: 'jaune', taille: 19 });
+        c.repere('lecture', COLS[2] - CW / 2, 68, CW, 142, 'en π/4 : cos = sin = √2/2');
+        K.marque('lecture');
+      },
+      decrire: {
+        cercle: 'À gauche, le premier quart du cercle trigonométrique, parcouru par un arc fléché de 0 à π/2, avec les points 0, π/6, π/4, π/3, π/2 ; l’axe horizontal est marqué « cos », le vertical « sin » ; à droite, la ligne « θ : 0, π/6, π/4, π/3, π/2 » d’un tableau.',
+        valeurs: 'Le tableau se remplit : ligne cos θ (vert) « 1, √3/2, √2/2, 1/2, 0 » ; ligne sin θ (orange) « 0, 1/2, √2/2, √3/2, 1 ».',
+        astuce: 'Dessous, l’astuce : sin θ « √0/2, √1/2, √2/2, √3/2, √4/2 » avec une flèche vers la droite (« monte ») ; cos θ « √4/2, √3/2, √2/2, √1/2, √0/2 » avec une flèche vers la gauche (« descend ») ; « √0/2 = 0 ; √1/2 = 1/2 ; √4/2 = 1 ».',
+        lecture: 'La colonne π/4 s’allume en jaune ; sur le cercle le point π/4 en jaune, ses pointillés vers les deux axes marqués « √2/2 » ; en haut « cos π/4 = sin π/4 = √2/2 ».',
+      },
+      motifs: { cercle: 'le quart de cercle', valeurs: 'les valeurs de cos et sin', astuce: 'l’astuce √n/2', lecture: 'la colonne π/4' },
+      explication: [
+        { repere: 'cercle', texte: 'Les cinq angles à connaître, sur le premier quart du cercle : 0, π/6, π/4, π/3, π/2.' },
+        { repere: 'valeurs', texte: 'Sous chaque angle : son cosinus et son sinus.' },
+        { repere: 'pi_6', texte: 'π/6 : cos = √3/2 et sin = 1/2.' },
+        { repere: 'pi_4', texte: 'π/4 : cos = sin = √2/2.' },
+        { repere: 'pi_3', texte: 'π/3 : cos = 1/2 et sin = √3/2, l’inverse de π/6.' },
+        { repere: 'astuce', texte: 'Le sinus vaut √0/2, √1/2, √2/2, √3/2, √4/2 ; le cosinus, les mêmes à l’envers.' },
+        { repere: 'lecture', texte: 'En π/4, le point est sur la diagonale : cos et sin sont égaux, √2/2.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

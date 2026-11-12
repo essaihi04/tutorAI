@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La carte du chapitre — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La carte du chapitre à la craie : un petit plan complexe au centre, les questions du national autour, les fréquences en bas, la partie 2 annoncée à droite"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes, première partie » (math_ch6_nombres_complexes) : la carte du chapitre (ouverture).
+ * Vue : ?vue=carte. Moments : plan, questions, frequences, partie2 (repères du même nom).
+ */
+const fr = MathsTableau.fr;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+const BARRE = '̄';
+/** Taille réellement écrite par le kit (petit écran : taille minimale). */
+const tv = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).split(BARRE).join('').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Écrit s ; une lettre suivie de U+0304 (z̄) reçoit une barre DESSINÉE au trait au-dessus. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18), barres = []; let net = '';
+  for (const ch of String(s)) { if (ch === BARRE) { if (net) barres.push(net.length - 1); } else net += ch; }
+  const w = L(c, net, t), x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  c.texte(net, x, y, o);
+  for (const i of barres) barre(c, x0 + L(c, net.slice(0, i), t), y - t * .66, L(c, net[i], t), o.couleur);
+  return w;
+}
+/** La barre du conjugué, tracée au trait au-dessus de la lettre. */
+function barre(c, x, y, largeur, couleur) { c.ligne(x + largeur * .05, y, x + largeur * .95, y, { couleur: couleur || 'blanc', largeur: 1.8, duree: .08, tremble: .3 }); }
+/** Morceaux de couleurs différentes sur une ligne : [[texte, couleur], …]. */
+function morceaux(c, parts, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18);
+  let w = parts.reduce((s, [p]) => s + L(c, p, t), 0), px = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  for (const [p, col] of parts) px += ecrire(c, p, px, y, { ...o, align: 'left', couleur: col });
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, tv(c, taille)) + 18;
+  ecrire(c, s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Petite flèche au-dessus d’une lettre (vecteur u, v). */
+function vecL(c, xc, y, w, couleur = 'blanc') {
+  c.ligne(xc - w / 2, y, xc + w / 2, y, { couleur, largeur: 1.3, duree: .05 });
+  c.trait([[xc + w / 2 - 4, y - 3], [xc + w / 2, y], [xc + w / 2 - 4, y + 3]], { couleur, largeur: 1.3, duree: .05 });
+}
+/** z = a + ib écrit à la française. */
+function zs(a, b) {
+  if (b === 0) return fr(a);
+  const B = Math.abs(b) === 1 ? '' : fr(Math.abs(b));
+  if (a === 0) return (b < 0 ? '−' : '') + B + 'i';
+  return fr(a) + (b < 0 ? ' − ' : ' + ') + B + 'i';
+}
+/** Un repère orthonormé : O en (ox ; oy) px, u px par unité. */
+function rep(o) {
+  return MathsTableau.grille({ x0: o.ox + o.xmin * o.u, y0: o.oy - o.ymax * o.u, w: (o.xmax - o.xmin) * o.u, h: (o.ymax - o.ymin) * o.u, xmin: o.xmin, xmax: o.xmax, ymin: o.ymin, ymax: o.ymax });
+}
+/** Le plan complexe : axe réel, axe imaginaire, O, u, v, graduations. */
+function plan(c, o) {
+  const G = rep(o), X = G.X, Y = G.Y, f = { couleur: 'faible', largeur: 1.6 };
+  if (o.quadrillage) {
+    for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) c.ligne(X(k), Y(o.ymin), X(k), Y(o.ymax), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+    for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) c.ligne(X(o.xmin), Y(k), X(o.xmax), Y(k), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+  }
+  c.fleche(X(o.xmin), Y(0), X(o.xmax), Y(0), f);
+  c.fleche(X(0), Y(o.ymin), X(0), Y(o.ymax), f);
+  const pas = o.pas || 1;
+  for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) {
+    c.ligne(X(k), Y(0) - 4, X(k), Y(0) + 4, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(k), Y(0) + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .04 });
+  }
+  for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) {
+    c.ligne(X(0) - 4, Y(k), X(0) + 4, Y(k), { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(0) - 8, Y(k) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .04 });
+  }
+  c.texte('O', X(0) - 13, Y(0) + 18, { couleur: 'faible', taille: 14 });
+  c.texte('axe réel', X(o.xmax) - 2, Y(0) - 9, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', X(0) + 9, Y(o.ymax) + 10, { couleur: 'faible', taille: 14 });
+  c.fleche(X(0), Y(0), X(1), Y(0), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.fleche(X(0), Y(0), X(0), Y(1), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.texte('u', X(.5), Y(0) - 8, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(.5), Y(0) - 21, 9);
+  c.texte('v', X(0) - 11, Y(.5) + 5, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(0) - 11, Y(.5) - 8, 9);
+  return G;
+}
+/** Le cadre d’un repère entier (pour c.repere). */
+const cadreRep = (G) => [G.x0, G.y0, G.w, G.h];
+
+/** Arc orienté de centre (cx ; cy), rayon r, de l’angle a0 à a1 (radians, sens direct = vers le haut), pointe de flèche au bout. */
+function arcF(c, cx, cy, r, a0, a1, o = {}) {
+  const P = a => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+  c.courbe(u => P(a0 + (a1 - a0) * u), Math.max(8, Math.round(Math.abs(a1 - a0) * r / 6)), { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2, pointille: o.pointille, duree: o.duree });
+  if (o.tete === false) return;
+  const [x, y] = P(a1), s = Math.sign(a1 - a0) || 1, dx = -Math.sin(a1) * s, dy = -Math.cos(a1) * s, t = o.tete ?? 9, an = Math.atan2(dy, dx);
+  c.trait([[x - t * Math.cos(an - .45), y - t * Math.sin(an - .45)], [x, y], [x - t * Math.cos(an + .45), y - t * Math.sin(an + .45)]], { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2, duree: .06 });
+}
+const PO = { ox: 300, oy: 232, u: 30, xmin: -0.7, xmax: 4.6, ymin: -0.8, ymax: 3.7, pas: 100 };
+const BULLES = [
+  ['1. forme algébrique', 120, 92], ['2. quotient', 340, 72], ['3. conjugué', 505, 100], ['4. module', 515, 190],
+  ['5. forme trigonométrique', 480, 292], ['6. produit et puissance', 220, 300], ['7. milieu, distance, alignement', 128, 196],
+];
+
+MathsTableau.page({
+  id: 'nc_ouverture', titre: 'Nombres complexes',
+  texte: 'Ouverture du chapitre à la craie : au centre, le plan complexe et un point M d’affixe z = a + ib ; autour, les questions du national dans l’ordre (forme algébrique, quotient, conjugué, module, forme trigonométrique, produit et puissance, milieu, distance, alignement) ; les fréquences (complexes : 20 sujets sur 20 ; forme trigonométrique : 17 sur 20) ; la partie 2 annoncée (équation, écriture exponentielle, rotation)',
+  vues: {
+    carte: {
+      titre: 'Nombres complexes : la carte du chapitre',
+      dessiner(c, K) {
+        K.titre('Nombres complexes : la carte du chapitre');
+        const G = plan(c, PO);
+        c.ligne(G.X(3), G.Y(2), G.X(3), G.Y(0), { couleur: 'vert', largeur: 1.3, pointille: [4, 4] });
+        c.ligne(G.X(3), G.Y(2), G.X(0), G.Y(2), { couleur: 'orange', largeur: 1.3, pointille: [4, 4] });
+        c.texte('a', G.X(3), G.Y(0) + 18, { couleur: 'vert', taille: 16, align: 'center' });
+        c.texte('b', G.X(0) - 8, G.Y(2) + 5, { couleur: 'orange', taille: 16, align: 'right' });
+        c.point(G.X(3), G.Y(2), 6, 'cyan');
+        c.texte('M', G.X(3) - 8, G.Y(2) - 10, { couleur: 'cyan', taille: 18, align: 'right' });
+        c.texte('z = a + ib', G.X(3) + 10, G.Y(2) - 10, { couleur: 'jaune', taille: 19 });
+        c.repere('plan', G.x0 - 10, G.y0 - 6, G.w + 30, G.h + 20, 'le plan complexe : M d’affixe z = a + ib');
+        K.marque('plan');
+        c.pause(.4);
+        let x0 = 999, y0 = 999, x1 = 0, y1 = 0;
+        for (const [s, cx, cy] of BULLES) {
+          const w = L(c, s, tv(c, 16)) + 22, h = 30;
+          c.rect(cx - w / 2, cy - h / 2, w, h, { couleur: 'cyan', arrondi: 14, largeur: 1.5 });
+          c.texte(s, cx, cy + 6, { couleur: 'blanc', taille: 16, align: 'center' });
+          x0 = Math.min(x0, cx - w / 2); y0 = Math.min(y0, cy - h / 2); x1 = Math.max(x1, cx + w / 2); y1 = Math.max(y1, cy + h / 2);
+          c.pause(.12);
+        }
+        c.repere('questions', x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8, 'les questions du national, dans l’ordre');
+        K.marque('questions');
+        c.pause(.4);
+        c.rect(40, 322, 680, 34, { couleur: 'jaune', arrondi: 9, largeur: 1.7, fond: 'jaune', fondAlpha: .08 });
+        c.texte('complexes : 20 sujets sur 20 ; forme trigonométrique : 17 sur 20', 380, 345, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.repere('frequences', 40, 322, 680, 34, 'complexes : 20 sujets sur 20 ; forme trigonométrique : 17 sur 20');
+        K.marque('frequences');
+        c.pause(.4);
+        c.rect(590, 128, 158, 150, { couleur: 'faible', arrondi: 10, largeur: 1.5, pointille: [6, 6] });
+        K.lignes(602, 156, [
+          { t: 'partie 2 :', couleur: 'faible', taille: 18 },
+          { t: 'équation,', couleur: 'faible', taille: 17 },
+          { t: 'écriture', couleur: 'faible', taille: 17 },
+          { t: 'exponentielle,', couleur: 'faible', taille: 17 },
+          { t: 'rotation', couleur: 'faible', taille: 17 },
+        ], 25);
+        c.repere('partie2', 590, 128, 158, 150, 'partie 2 : équation, écriture exponentielle, rotation');
+        K.marque('partie2');
+      },
+      decrire: {
+        plan: 'Au centre, un petit plan complexe (axe réel, axe imaginaire, O, u, v) ; un point M avec ses pointillés vers a (vert) et b (orange) ; à côté, en jaune : « z = a + ib ».',
+        questions: 'Autour du plan, sept bulles cyan dans l’ordre du national : « 1. forme algébrique », « 2. quotient », « 3. conjugué », « 4. module », « 5. forme trigonométrique », « 6. produit et puissance », « 7. milieu, distance, alignement ».',
+        frequences: 'En bas, un bandeau jaune : « complexes : 20 sujets sur 20 ; forme trigonométrique : 17 sur 20 ».',
+        partie2: 'À droite, dans un cadre en pointillé : « partie 2 : équation, écriture exponentielle, rotation » (annoncée, pas pour aujourd’hui).',
+      },
+      motifs: { plan: 'le plan complexe', questions: 'les questions du national', frequences: 'les fréquences', partie2: 'la partie 2' },
+      explication: [
+        { repere: 'plan', texte: 'Le cœur du chapitre : un point M du plan et son affixe z = a + ib.' },
+        { repere: 'questions', texte: 'Les questions du national, dans l’ordre où elles tombent.' },
+        { repere: 'frequences', texte: 'Les complexes tombent tous les ans ; la forme trigonométrique presque toujours.' },
+        { repere: 'partie2', texte: 'La partie 2 viendra plus tard : équation, écriture exponentielle, rotation.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Affixe d’un vecteur — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le plan complexe à la craie : deux points A et B, la flèche de A vers B d’affixe z_B − z_A, glissée jusqu’en O"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes, première partie » (math_ch6_nombres_complexes) : affixe d’un vecteur, milieu, distance.
+ * Vues : ?vue=vecteur | milieu | distance.
+ * vecteur : deux_points, vecteur, translate, somme (repères du même nom).
+ * milieu : deux_points, segment, milieu (repères du même nom).
+ * distance : deux_points, vecteur, translate, module (repères du même nom).
+ */
+const fr = MathsTableau.fr;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+const BARRE = '̄';
+/** Taille réellement écrite par le kit (petit écran : taille minimale). */
+const tv = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).split(BARRE).join('').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Écrit s ; une lettre suivie de U+0304 (z̄) reçoit une barre DESSINÉE au trait au-dessus. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18), barres = []; let net = '';
+  for (const ch of String(s)) { if (ch === BARRE) { if (net) barres.push(net.length - 1); } else net += ch; }
+  const w = L(c, net, t), x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  c.texte(net, x, y, o);
+  for (const i of barres) barre(c, x0 + L(c, net.slice(0, i), t), y - t * .66, L(c, net[i], t), o.couleur);
+  return w;
+}
+/** La barre du conjugué, tracée au trait au-dessus de la lettre. */
+function barre(c, x, y, largeur, couleur) { c.ligne(x + largeur * .05, y, x + largeur * .95, y, { couleur: couleur || 'blanc', largeur: 1.8, duree: .08, tremble: .3 }); }
+/** Morceaux de couleurs différentes sur une ligne : [[texte, couleur], …]. */
+function morceaux(c, parts, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18);
+  let w = parts.reduce((s, [p]) => s + L(c, p, t), 0), px = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  for (const [p, col] of parts) px += ecrire(c, p, px, y, { ...o, align: 'left', couleur: col });
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, tv(c, taille)) + 18;
+  ecrire(c, s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Petite flèche au-dessus d’une lettre (vecteur u, v). */
+function vecL(c, xc, y, w, couleur = 'blanc') {
+  c.ligne(xc - w / 2, y, xc + w / 2, y, { couleur, largeur: 1.3, duree: .05 });
+  c.trait([[xc + w / 2 - 4, y - 3], [xc + w / 2, y], [xc + w / 2 - 4, y + 3]], { couleur, largeur: 1.3, duree: .05 });
+}
+/** z = a + ib écrit à la française. */
+function zs(a, b) {
+  if (b === 0) return fr(a);
+  const B = Math.abs(b) === 1 ? '' : fr(Math.abs(b));
+  if (a === 0) return (b < 0 ? '−' : '') + B + 'i';
+  return fr(a) + (b < 0 ? ' − ' : ' + ') + B + 'i';
+}
+/** Un repère orthonormé : O en (ox ; oy) px, u px par unité. */
+function rep(o) {
+  return MathsTableau.grille({ x0: o.ox + o.xmin * o.u, y0: o.oy - o.ymax * o.u, w: (o.xmax - o.xmin) * o.u, h: (o.ymax - o.ymin) * o.u, xmin: o.xmin, xmax: o.xmax, ymin: o.ymin, ymax: o.ymax });
+}
+/** Le plan complexe : axe réel, axe imaginaire, O, u, v, graduations. */
+function plan(c, o) {
+  const G = rep(o), X = G.X, Y = G.Y, f = { couleur: 'faible', largeur: 1.6 };
+  if (o.quadrillage) {
+    for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) c.ligne(X(k), Y(o.ymin), X(k), Y(o.ymax), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+    for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) c.ligne(X(o.xmin), Y(k), X(o.xmax), Y(k), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+  }
+  c.fleche(X(o.xmin), Y(0), X(o.xmax), Y(0), f);
+  c.fleche(X(0), Y(o.ymin), X(0), Y(o.ymax), f);
+  const pas = o.pas || 1;
+  for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) {
+    c.ligne(X(k), Y(0) - 4, X(k), Y(0) + 4, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(k), Y(0) + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .04 });
+  }
+  for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) {
+    c.ligne(X(0) - 4, Y(k), X(0) + 4, Y(k), { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(0) - 8, Y(k) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .04 });
+  }
+  c.texte('O', X(0) - 13, Y(0) + 18, { couleur: 'faible', taille: 14 });
+  c.texte('axe réel', X(o.xmax) - 2, Y(0) - 9, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', X(0) + 9, Y(o.ymax) + 10, { couleur: 'faible', taille: 14 });
+  c.fleche(X(0), Y(0), X(1), Y(0), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.fleche(X(0), Y(0), X(0), Y(1), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.texte('u', X(.5), Y(0) - 8, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(.5), Y(0) - 21, 9);
+  c.texte('v', X(0) - 11, Y(.5) + 5, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(0) - 11, Y(.5) - 8, 9);
+  return G;
+}
+/** Le cadre d’un repère entier (pour c.repere). */
+const cadreRep = (G) => [G.x0, G.y0, G.w, G.h];
+
+/** Arc orienté de centre (cx ; cy), rayon r, de l’angle a0 à a1 (radians, sens direct = vers le haut), pointe de flèche au bout. */
+function arcF(c, cx, cy, r, a0, a1, o = {}) {
+  const P = a => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+  c.courbe(u => P(a0 + (a1 - a0) * u), Math.max(8, Math.round(Math.abs(a1 - a0) * r / 6)), { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2, pointille: o.pointille, duree: o.duree });
+  if (o.tete === false) return;
+  const [x, y] = P(a1), s = Math.sign(a1 - a0) || 1, dx = -Math.sin(a1) * s, dy = -Math.cos(a1) * s, t = o.tete ?? 9, an = Math.atan2(dy, dx);
+  c.trait([[x - t * Math.cos(an - .45), y - t * Math.sin(an - .45)], [x, y], [x - t * Math.cos(an + .45), y - t * Math.sin(an + .45)]], { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2, duree: .06 });
+}
+/** Petit trait de « même longueur » au milieu d’un segment (n traits). */
+function codage(c, x1, y1, x2, y2, n = 1, couleur = 'blanc') {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, l = Math.hypot(x2 - x1, y2 - y1) || 1, dx = (x2 - x1) / l, dy = (y2 - y1) / l;
+  for (let k = 0; k < n; k++) {
+    const o = (k - (n - 1) / 2) * 5, cx = mx + dx * o, cy = my + dy * o;
+    c.ligne(cx - dy * 7, cy + dx * 7, cx + dy * 7, cy - dx * 7, { couleur, largeur: 1.8, duree: .05 });
+  }
+}
+/** Un point nommé. */
+function pt(c, G, x, y, nom, dx, dy, couleur = 'cyan', o = {}) {
+  c.point(G.X(x), G.Y(y), 6, couleur);
+  if (nom) c.texte(nom, G.X(x) + dx, G.Y(y) + dy, { couleur, taille: 17, ...o });
+}
+
+const PV = { ox: 80, oy: 190, u: 50, xmin: -1, xmax: 5.4, ymin: -3.3, ymax: 2.9, quadrillage: true };
+const PDI = { ox: 128, oy: 273, u: 34, xmin: -2.6, xmax: 3.8, ymin: -2.4, ymax: 6.5, quadrillage: true, pas: 2 };
+const XR = 380;
+
+MathsTableau.page({
+  id: 'nc_vecteur', titre: 'Nombres complexes',
+  texte: 'Construction à la craie : l’affixe du vecteur AB est z_B − z_A (arrivée moins départ) ; la flèche glissée jusqu’en O arrive au point d’affixe z_B − z_A ; somme de deux vecteurs = diagonale du parallélogramme (z + z’) ; milieu de [AB] d’affixe (a + b)/2 ; distance AB = |b − a|',
+  vues: {
+    vecteur: {
+      titre: 'Affixe d’un vecteur : arrivée moins départ',
+      dessiner(c, K) {
+        K.titre('Affixe d’un vecteur : arrivée moins départ');
+        const G = plan(c, PV);
+        c.pause(.3);
+        pt(c, G, 1, 2, 'A(1 + 2i)', 10, -8);
+        pt(c, G, 4, -1, 'B(4 − i)', 8, 24);
+        c.repere('deux_points', G.X(1) - 14, G.Y(2) - 26, G.X(4) - G.X(1) + 80, G.Y(-1) - G.Y(2) + 56, 'A(1 + 2i) et B(4 − i)');
+        K.marque('deux_points');
+        c.pause(.4);
+        c.fleche(G.X(1), G.Y(2), G.X(4) - 6, G.Y(-1) - 6, { couleur: 'cyan', largeur: 2.8, tete: 11 });
+        c.texte('z_{AB} = z_{B} − z_{A}', XR, 92, { couleur: 'blanc', taille: 22 });
+        c.texte('= (4 − i) − (1 + 2i)', XR + 40, 124, { couleur: 'blanc', taille: 20 });
+        const r1 = encadre(c, '= 3 − 3i', XR + 49, 160, 22, 'jaune', 'jaune');
+        c.repere('vecteur', XR - 6, 68, 290, r1[1] + r1[3] - 64, 'z_AB = z_B − z_A = 3 − 3i');
+        K.marque('vecteur');
+        c.pause(.4);
+        K.anime(1.6, p => {
+          const ox = G.X(1 - p), oy = G.Y(2 - 2 * p);
+          c.fleche(ox, oy, ox + 3 * PV.u - 6, oy + 3 * PV.u - 6, { couleur: 'jaune', largeur: 2.8, tete: 11 });
+        });
+        pt(c, G, 3, -3, '3 − 3i', 10, 6, 'jaune');
+        c.texte('la même flèche, partie de O,', XR, 206, { couleur: 'jaune', taille: 18 });
+        c.texte('arrive au point 3 − 3i', XR, 232, { couleur: 'jaune', taille: 18 });
+        c.repere('translate', G.X(0) - 10, G.Y(0) - 10, 3 * PV.u + 80, 3 * PV.u + 24, 'la flèche glissée en O arrive en 3 − 3i');
+        K.marque('translate');
+        c.pause(.4);
+        c.fleche(G.X(0), G.Y(0), G.X(1) - 3, G.Y(2) + 5, { couleur: 'cyan', largeur: 2.4, tete: 10 });
+        c.texte('M', G.X(1) - 12, G.Y(2) + 2, { couleur: 'cyan', taille: 17, align: 'right' });
+        c.texte('M’', G.X(3) - 16, G.Y(-3) - 4, { couleur: 'jaune', taille: 17, align: 'right' });
+        c.ligne(G.X(3), G.Y(-3), G.X(4), G.Y(-1), { couleur: 'faible', largeur: 1.4, pointille: [5, 5] });
+        c.fleche(G.X(0), G.Y(0), G.X(4) - 6, G.Y(-1) + 1, { couleur: 'vert', largeur: 3.2, tete: 11 });
+        c.texte('z + z’', G.X(2.2), G.Y(-.5) + 22, { couleur: 'vert', taille: 18, align: 'center' });
+        c.texte('vecteur OM + vecteur OM’ :', XR, 274, { couleur: 'vert', taille: 18 });
+        c.texte('la diagonale du parallélogramme', XR, 298, { couleur: 'vert', taille: 18 });
+        c.texte('z + z’ = (1 + 2i) + (3 − 3i) = 4 − i', XR, 330, { couleur: 'vert', taille: 18 });
+        c.repere('somme', XR - 6, 254, 370, 86, 'z + z’ : la diagonale du parallélogramme');
+        K.marque('somme');
+      },
+      decrire: {
+        deux_points: 'Le plan complexe (axe réel, axe imaginaire, O, u, v) ; les points A(1 + 2i) et B(4 − i) en cyan.',
+        vecteur: 'Une flèche cyan de A vers B ; à droite « z_AB = z_B − z_A = (4 − i) − (1 + 2i) », et encadré jaune « = 3 − 3i ».',
+        translate: 'Une copie jaune de la flèche glisse jusqu’à partir de O ; son bout est le point 3 − 3i (en jaune) ; à droite « la même flèche, partie de O, arrive au point 3 − 3i ».',
+        somme: 'Le vecteur OM (M = A, z = 1 + 2i) en cyan et le vecteur OM’ (M’ le point 3 − 3i, z’ = 3 − 3i) en jaune forment un parallélogramme O, M, B, M’ ; sa diagonale OB en vert, notée « z + z’ » ; à droite « vecteur OM + vecteur OM’ : la diagonale du parallélogramme », « z + z’ = (1 + 2i) + (3 − 3i) = 4 − i ».',
+      },
+      motifs: { deux_points: 'A et B', vecteur: 'la flèche AB', translate: 'la flèche glissée en O', somme: 'la somme z + z’' },
+      explication: [
+        { repere: 'deux_points', texte: 'Deux points : A d’affixe 1 + 2i et B d’affixe 4 − i.' },
+        { repere: 'vecteur', texte: 'L’affixe du vecteur AB : arrivée moins départ, z_B − z_A = 3 − 3i.' },
+        { repere: 'translate', texte: 'Partie de O, la même flèche arrive au point 3 − 3i : c’est son affixe.' },
+        { repere: 'somme', texte: 'Ajouter deux complexes, c’est ajouter les vecteurs : la diagonale du parallélogramme.' },
+      ],
+    },
+    milieu: {
+      titre: 'Le milieu de [AB]',
+      dessiner(c, K) {
+        K.titre('Le milieu de [AB]');
+        const G = plan(c, PV);
+        c.pause(.3);
+        pt(c, G, 1, 2, 'A(1 + 2i)', 10, -8);
+        pt(c, G, 1, -2, 'B(1 − 2i)', 10, 22);
+        c.texte('a = 1 + 2i', XR, 96, { couleur: 'cyan', taille: 21 });
+        c.texte('b = 1 − 2i', XR, 128, { couleur: 'cyan', taille: 21 });
+        c.repere('deux_points', G.X(1) - 14, G.Y(2) - 26, 110, 4 * PV.u + 56, 'A(1 + 2i) et B(1 − 2i)');
+        K.marque('deux_points');
+        c.pause(.4);
+        c.ligne(G.X(1), G.Y(2), G.X(1), G.Y(-2), { couleur: 'cyan', largeur: 2.6 });
+        c.repere('segment', G.X(1) - 14, G.Y(2), 28, 4 * PV.u, 'le segment [AB]');
+        K.marque('segment');
+        c.pause(.4);
+        codage(c, G.X(1), G.Y(2), G.X(1), G.Y(0), 1, 'jaune');
+        codage(c, G.X(1), G.Y(0), G.X(1), G.Y(-2), 1, 'jaune');
+        c.point(G.X(1), G.Y(0), 7, 'jaune');
+        c.texte('P', G.X(1) + 10, G.Y(0) + 22, { couleur: 'jaune', taille: 19 });
+        K.lignes(XR, 180, [
+          { t: 'p = (a + b)/2', couleur: 'blanc', taille: 20 },
+          { t: '= (1 + 2i + 1 − 2i)/2', couleur: 'blanc', taille: 20, dx: 18 },
+          { t: '= 2/2 = 1', couleur: 'blanc', taille: 20, dx: 18 },
+        ], 30);
+        const r = encadre(c, 'p = (a + b)/2 = 1', XR + 9, 300, 24, 'jaune', 'jaune');
+        c.repere('milieu', r[0], r[1], r[2], r[3], 'p = (a + b)/2 = 1');
+        K.marque('milieu');
+      },
+      decrire: {
+        deux_points: 'Le plan complexe (axe réel, axe imaginaire, O, u, v) ; A(1 + 2i) et B(1 − 2i) en cyan ; à droite « a = 1 + 2i », « b = 1 − 2i ».',
+        segment: 'Le segment [AB] tracé en cyan, vertical, il coupe l’axe réel en 1.',
+        milieu: 'Le milieu P en jaune sur l’axe réel, les deux moitiés codées égales ; à droite « p = (a + b)/2 = (1 + 2i + 1 − 2i)/2 = 2/2 = 1 » et encadré jaune « p = (a + b)/2 = 1 ».',
+      },
+      motifs: { deux_points: 'A et B', segment: 'le segment [AB]', milieu: 'le milieu P' },
+      explication: [
+        { repere: 'deux_points', texte: 'A a pour affixe a = 1 + 2i, B a pour affixe b = 1 − 2i.' },
+        { repere: 'segment', texte: 'On trace le segment [AB].' },
+        { repere: 'milieu', texte: 'Son milieu P a pour affixe la moyenne (a + b)/2 = 1.' },
+      ],
+    },
+    distance: {
+      titre: 'La distance AB = |z_{B} − z_{A}|',
+      dessiner(c, K) {
+        K.titre('La distance AB = |z_{B} − z_{A}|');
+        const G = plan(c, PDI);
+        c.pause(.3);
+        pt(c, G, 3, -2, 'A(3 − 2i)', 10, 6);
+        pt(c, G, 1, 4, 'B(1 + 4i)', 10, -6);
+        c.repere('deux_points', G.X(1) - 14, G.Y(4) - 24, G.X(3) - G.X(1) + 90, G.Y(-2) - G.Y(4) + 40, 'A(3 − 2i) et B(1 + 4i)');
+        K.marque('deux_points');
+        c.pause(.4);
+        c.fleche(G.X(3), G.Y(-2), G.X(1) + 2, G.Y(4) + 6, { couleur: 'cyan', largeur: 2.8, tete: 11 });
+        c.texte('b − a = (1 + 4i) − (3 − 2i)', XR, 92, { couleur: 'blanc', taille: 20 });
+        c.texte('= −2 + 6i', XR + 50, 124, { couleur: 'cyan', taille: 22 });
+        c.repere('vecteur', XR - 6, 70, 300, 64, 'b − a = −2 + 6i');
+        K.marque('vecteur');
+        c.pause(.4);
+        K.anime(1.6, p => {
+          const ox = G.X(3 - 3 * p), oy = G.Y(-2 + 2 * p);
+          c.fleche(ox, oy, ox - 2 * PDI.u + 2, oy - 6 * PDI.u + 6, { couleur: 'jaune', largeur: 2.8, tete: 11 });
+        });
+        pt(c, G, -2, 6, '−2 + 6i', 0, -12, 'jaune', { align: 'center' });
+        c.texte('la flèche glissée en O', XR, 168, { couleur: 'jaune', taille: 18 });
+        c.texte('arrive en −2 + 6i : même longueur', XR, 194, { couleur: 'jaune', taille: 18 });
+        c.repere('translate', G.X(-2) - 20, G.Y(6) - 26, 2 * PDI.u + 40, 6 * PDI.u + 40, 'la flèche glissée en O');
+        K.marque('translate');
+        c.pause(.4);
+        c.texte('|−2 + 6i| = √((−2)² + 6²)', XR, 234, { couleur: 'blanc', taille: 19 });
+        c.texte('= √(4 + 36) = √40', XR + 40, 264, { couleur: 'blanc', taille: 19 });
+        const r = encadre(c, 'AB = |b − a| = √40 = 2√10', XR + 9, 312, 22, 'jaune', 'jaune');
+        c.repere('module', r[0], r[1], r[2], r[3], 'AB = |b − a| = √40 = 2√10');
+        K.marque('module');
+      },
+      decrire: {
+        deux_points: 'Le plan complexe (axe réel, axe imaginaire, O, u, v) ; les points A(3 − 2i) et B(1 + 4i) en cyan.',
+        vecteur: 'Une flèche cyan de A vers B ; à droite « b − a = (1 + 4i) − (3 − 2i) = −2 + 6i ».',
+        translate: 'Une copie jaune de la flèche glisse jusqu’à partir de O : elle arrive au point −2 + 6i ; à droite « la flèche glissée en O arrive en −2 + 6i : même longueur ».',
+        module: 'À droite « |−2 + 6i| = √((−2)² + 6²) = √(4 + 36) = √40 » et encadré jaune « AB = |b − a| = √40 = 2√10 ».',
+      },
+      motifs: { deux_points: 'A et B', vecteur: 'la flèche AB', translate: 'la flèche glissée en O', module: 'AB = |b − a|' },
+      explication: [
+        { repere: 'deux_points', texte: 'A a pour affixe 3 − 2i, B a pour affixe 1 + 4i.' },
+        { repere: 'vecteur', texte: 'Le vecteur AB a pour affixe b − a = −2 + 6i.' },
+        { repere: 'translate', texte: 'Glissée en O, la flèche garde sa longueur : AB est la distance de O au point −2 + 6i.' },
+        { repere: 'module', texte: 'Donc AB = |b − a| = √40 = 2√10.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

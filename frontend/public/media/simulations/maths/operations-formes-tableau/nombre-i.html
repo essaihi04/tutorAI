@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le nombre i — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À la craie : aucun réel n’a un carré négatif ; i, le quart de tour, avec i² = −1 ; le cycle des puissances de i"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes, première partie » (math_ch6_nombres_complexes) : le nombre i.
+ * Vues : ?vue=droite | quart | cycle (param n).
+ * droite : droite, carres, bloque (repères du même nom).
+ * quart : demi_tour, quart_de_tour, deux_quarts, solutions (repères du même nom).
+ * cycle : un, tours, cycle, compteur (repères du même nom).
+ */
+const fr = MathsTableau.fr;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+const BARRE = '̄';
+/** Taille réellement écrite par le kit (petit écran : taille minimale). */
+const tv = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).split(BARRE).join('').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Écrit s ; une lettre suivie de U+0304 (z̄) reçoit une barre DESSINÉE au trait au-dessus. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18), barres = []; let net = '';
+  for (const ch of String(s)) { if (ch === BARRE) { if (net) barres.push(net.length - 1); } else net += ch; }
+  const w = L(c, net, t), x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  c.texte(net, x, y, o);
+  for (const i of barres) barre(c, x0 + L(c, net.slice(0, i), t), y - t * .66, L(c, net[i], t), o.couleur);
+  return w;
+}
+/** La barre du conjugué, tracée au trait au-dessus de la lettre. */
+function barre(c, x, y, largeur, couleur) { c.ligne(x + largeur * .05, y, x + largeur * .95, y, { couleur: couleur || 'blanc', largeur: 1.8, duree: .08, tremble: .3 }); }
+/** Morceaux de couleurs différentes sur une ligne : [[texte, couleur], …]. */
+function morceaux(c, parts, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18);
+  let w = parts.reduce((s, [p]) => s + L(c, p, t), 0), px = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  for (const [p, col] of parts) px += ecrire(c, p, px, y, { ...o, align: 'left', couleur: col });
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, tv(c, taille)) + 18;
+  ecrire(c, s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Petite flèche au-dessus d’une lettre (vecteur u, v). */
+function vecL(c, xc, y, w, couleur = 'blanc') {
+  c.ligne(xc - w / 2, y, xc + w / 2, y, { couleur, largeur: 1.3, duree: .05 });
+  c.trait([[xc + w / 2 - 4, y - 3], [xc + w / 2, y], [xc + w / 2 - 4, y + 3]], { couleur, largeur: 1.3, duree: .05 });
+}
+/** z = a + ib écrit à la française. */
+function zs(a, b) {
+  if (b === 0) return fr(a);
+  const B = Math.abs(b) === 1 ? '' : fr(Math.abs(b));
+  if (a === 0) return (b < 0 ? '−' : '') + B + 'i';
+  return fr(a) + (b < 0 ? ' − ' : ' + ') + B + 'i';
+}
+/** Un repère orthonormé : O en (ox ; oy) px, u px par unité. */
+function rep(o) {
+  return MathsTableau.grille({ x0: o.ox + o.xmin * o.u, y0: o.oy - o.ymax * o.u, w: (o.xmax - o.xmin) * o.u, h: (o.ymax - o.ymin) * o.u, xmin: o.xmin, xmax: o.xmax, ymin: o.ymin, ymax: o.ymax });
+}
+/** Le plan complexe : axe réel, axe imaginaire, O, u, v, graduations. */
+function plan(c, o) {
+  const G = rep(o), X = G.X, Y = G.Y, f = { couleur: 'faible', largeur: 1.6 };
+  if (o.quadrillage) {
+    for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) c.ligne(X(k), Y(o.ymin), X(k), Y(o.ymax), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+    for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) c.ligne(X(o.xmin), Y(k), X(o.xmax), Y(k), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+  }
+  c.fleche(X(o.xmin), Y(0), X(o.xmax), Y(0), f);
+  c.fleche(X(0), Y(o.ymin), X(0), Y(o.ymax), f);
+  const pas = o.pas || 1;
+  for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) {
+    c.ligne(X(k), Y(0) - 4, X(k), Y(0) + 4, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(k), Y(0) + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .04 });
+  }
+  for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) {
+    c.ligne(X(0) - 4, Y(k), X(0) + 4, Y(k), { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(0) - 8, Y(k) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .04 });
+  }
+  c.texte('O', X(0) - 13, Y(0) + 18, { couleur: 'faible', taille: 14 });
+  c.texte('axe réel', X(o.xmax) - 2, Y(0) - 9, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', X(0) + 9, Y(o.ymax) + 10, { couleur: 'faible', taille: 14 });
+  c.fleche(X(0), Y(0), X(1), Y(0), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.fleche(X(0), Y(0), X(0), Y(1), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.texte('u', X(.5), Y(0) - 8, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(.5), Y(0) - 21, 9);
+  c.texte('v', X(0) - 11, Y(.5) + 5, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(0) - 11, Y(.5) - 8, 9);
+  return G;
+}
+/** Le cadre d’un repère entier (pour c.repere). */
+const cadreRep = (G) => [G.x0, G.y0, G.w, G.h];
+
+/** Arc orienté de centre (cx ; cy), rayon r, de l’angle a0 à a1 (radians, sens direct = vers le haut), pointe de flèche au bout. */
+function arcF(c, cx, cy, r, a0, a1, o = {}) {
+  const P = a => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+  c.courbe(u => P(a0 + (a1 - a0) * u), Math.max(8, Math.round(Math.abs(a1 - a0) * r / 6)), { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2, pointille: o.pointille, duree: o.duree });
+  if (o.tete === false) return;
+  const [x, y] = P(a1), s = Math.sign(a1 - a0) || 1, dx = -Math.sin(a1) * s, dy = -Math.cos(a1) * s, t = o.tete ?? 9, an = Math.atan2(dy, dx);
+  c.trait([[x - t * Math.cos(an - .45), y - t * Math.sin(an - .45)], [x, y], [x - t * Math.cos(an + .45), y - t * Math.sin(an + .45)]], { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2, duree: .06 });
+}
+const PUISS = ['1', 'i', '−1', '−i'];
+const XR = 480;
+
+MathsTableau.page({
+  id: 'nc_nombre_i', titre: 'Nombres complexes',
+  texte: 'Construction à la craie : sur la droite des réels, tout carré est positif ou nul, donc x² = −1 n’a pas de solution réelle ; multiplier par −1 fait un demi-tour, multiplier par i un quart de tour : deux quarts de tour font un demi-tour, i² = −1 ; x² = −1 a pour solutions i et −i ; les puissances de i reviennent tous les 4 : i⁰ = 1, i¹ = i, i² = −1, i³ = −i, i⁴ = 1',
+  vues: {
+    droite: {
+      titre: 'Aucun réel n’a un carré négatif',
+      dessiner(c, K) {
+        K.titre('Aucun réel n’a un carré négatif');
+        const X = x => 380 + 80 * x, Y0 = 250;
+        c.fleche(X(-3.4), Y0, X(3.5), Y0, { couleur: 'faible', largeur: 1.8 });
+        for (let k = -3; k <= 3; k++) {
+          c.ligne(X(k), Y0 - 5, X(k), Y0 + 5, { couleur: 'faible', largeur: 1.4, duree: .03 });
+          c.texte(fr(k), X(k), Y0 + 26, { couleur: 'blanc', taille: 17, align: 'center', duree: .06 });
+        }
+        c.repere('droite', X(-3.4), Y0 - 14, X(3.5) - X(-3.4), 50, 'la droite des réels, de −3 à 3');
+        K.marque('droite');
+        c.pause(.4);
+        for (const [x, ligne] of [[-3, 205], [-1, 165], [0, 205], [2, 165]]) {
+          c.point(X(x), Y0, 5, 'cyan');
+          c.ligne(X(x), Y0 - 8, X(x), ligne + 8, { couleur: 'vert', largeur: 1.2, pointille: [4, 5] });
+          const s = (x < 0 ? '(' + fr(x) + ')' : fr(x)) + '² = ' + fr(x * x) + ' ≥ 0';
+          c.texte(s, X(x), ligne, { couleur: 'vert', taille: 18, align: 'center' });
+          c.pause(.15);
+        }
+        c.ligne(X(0), Y0, X(3.4), Y0, { couleur: 'vert', largeur: 5, alpha: .55 });
+        c.texte('les carrés : tous ≥ 0', X(1.7), Y0 + 56, { couleur: 'vert', taille: 18, align: 'center' });
+        c.repere('carres', X(-3.6), 140, X(2.8) - X(-3.6), 130, 'les carrés 9, 1, 0, 4 : tous ≥ 0');
+        K.marque('carres');
+        c.pause(.4);
+        c.ligne(X(-3.4), Y0, X(0) - 6, Y0, { couleur: 'rouge', largeur: 5, alpha: .55 });
+        c.texte('aucun carré ici', X(-1.7), Y0 + 56, { couleur: 'rouge', taille: 18, align: 'center' });
+        const w = morceaux(c, [['x² = −1', 'blanc'], ['  : aucun réel', 'rouge']], 110, 100, { taille: 26 });
+        c.ligne(102, 92, 118 + w, 92, { couleur: 'rouge', largeur: 2.6 });
+        c.texte('il faut un nouveau nombre', 440, 100, { couleur: 'jaune', taille: 20 });
+        c.repere('bloque', 100, 70, w + 30, 42, 'x² = −1 : aucun réel');
+        K.marque('bloque');
+      },
+      decrire: {
+        droite: 'Une droite graduée de −3 à 3, à la craie.',
+        carres: 'Au-dessus de −3, −1, 0 et 2, leurs carrés écrits en vert : « (−3)² = 9 ≥ 0 », « (−1)² = 1 ≥ 0 », « 0² = 0 ≥ 0 », « 2² = 4 ≥ 0 » ; la demi-droite des positifs est repassée en vert : « les carrés : tous ≥ 0 ».',
+        bloque: 'La demi-droite des négatifs est repassée en rouge : « aucun carré ici » ; en haut, « x² = −1 : aucun réel » (« aucun réel » en rouge), toute la ligne barrée en rouge ; à droite, en jaune : « il faut un nouveau nombre ».',
+      },
+      motifs: { droite: 'la droite des réels', carres: 'les carrés, tous positifs', bloque: 'x² = −1 bloqué' },
+      explication: [
+        { repere: 'droite', texte: 'Sur la droite des réels, prenons quelques nombres.' },
+        { repere: 'carres', texte: 'Leurs carrés : 9, 1, 0, 4. Un carré de réel est toujours positif ou nul.' },
+        { repere: 'bloque', texte: 'Donc x² = −1 n’a aucune solution réelle : il faut un nouveau nombre.' },
+      ],
+    },
+    quart: {
+      titre: 'i : un quart de tour',
+      dessiner(c, K) {
+        K.titre('i : un quart de tour');
+        const ox = 270, oy = 210, u = 75, X = x => ox + u * x, Y = y => oy - u * y;
+        const P = (r, a) => [ox + r * u * Math.cos(a), oy - r * u * Math.sin(a)];
+        c.fleche(X(-2.4), oy, X(2.4), oy, { couleur: 'faible', largeur: 1.8 });
+        for (let k = -2; k <= 2; k++) {
+          c.ligne(X(k), oy - 5, X(k), oy + 5, { couleur: 'faible', largeur: 1.4, duree: .03 });
+          if (k) c.texte(fr(k), X(k), oy + 24, { couleur: 'blanc', taille: 16, align: 'center', duree: .06 });
+        }
+        c.texte('O', X(0) - 13, oy + 20, { couleur: 'faible', taille: 15 });
+        c.cercle(X(2), oy, 6, { couleur: 'cyan', largeur: 1.4 });
+        K.anime(1.8, p => {
+          if (p < 1) arcF(c, ox, oy, 2 * u, 0, Math.PI * p, { couleur: 'cyan', largeur: 1.4, pointille: [5, 6], tete: false });
+          else arcF(c, ox, oy, 2 * u, 0.05, Math.PI - .05, { couleur: 'cyan', largeur: 1.4, pointille: [5, 6] });
+          const [x, y] = P(2, Math.PI * p); c.point(x, y, 6, 'cyan');
+        });
+        c.texte('2 × (−1) = −2', XR, 92, { couleur: 'cyan', taille: 20 });
+        c.texte('× (−1) = demi-tour', XR, 122, { couleur: 'jaune', taille: 22 });
+        c.repere('demi_tour', X(-2.2), Y(2) - 8, 4.4 * u, 2 * u + 30, '× (−1) : un demi-tour');
+        K.marque('demi_tour');
+        c.pause(.5);
+        c.cercle(X(1), oy, 6, { couleur: 'jaune', largeur: 1.4 });
+        K.anime(1.4, p => {
+          arcF(c, ox, oy, u, 0.04, Math.PI / 2 * p - .04, { couleur: 'jaune', largeur: 1.8, tete: p > .3 ? 8 : false });
+          const [x, y] = P(1, Math.PI / 2 * p); c.point(x, y, 6, 'jaune');
+        });
+        c.fleche(X(0), Y(-1.8), X(0), Y(2.15), { couleur: 'faible', largeur: 1.8 });
+        c.texte('axe imaginaire', X(0) + 9, Y(1.3), { couleur: 'faible', taille: 14 });
+        c.texte('axe réel', X(2.4) - 2, oy + 46, { couleur: 'faible', taille: 14, align: 'right' });
+        c.texte('i', X(0) - 12, Y(1) - 6, { couleur: 'jaune', taille: 24, align: 'right' });
+        c.texte('× i = un quart de tour', XR, 170, { couleur: 'jaune', taille: 22 });
+        c.repere('quart_de_tour', X(0) - 20, Y(1) - 30, u + 40, u + 46, '× i : un quart de tour, 1 devient i');
+        K.marque('quart_de_tour');
+        c.pause(.5);
+        K.anime(1.4, p => {
+          arcF(c, ox, oy, u, Math.PI / 2 + .04, Math.PI / 2 + Math.PI / 2 * p - .04, { couleur: 'jaune', largeur: 1.8, tete: p > .3 ? 8 : false });
+          const [x, y] = P(1, Math.PI / 2 + Math.PI / 2 * p); c.point(x, y, 6, 'jaune');
+        });
+        const r = encadre(c, 'i × i = i² = −1', XR + 9, 226, 24, 'jaune', 'jaune');
+        c.texte('deux quarts = un demi-tour', XR, 266, { couleur: 'blanc', taille: 18 });
+        c.repere('deux_quarts', r[0], r[1], Math.max(r[2], 240), 266 - r[1] + 8, 'i × i = i² = −1');
+        K.marque('deux_quarts');
+        c.pause(.5);
+        c.point(X(0), Y(-1), 6, 'jaune');
+        c.texte('−i', X(0) + 10, Y(-1) + 18, { couleur: 'jaune', taille: 22 });
+        c.texte('x² = −1 :', XR, 306, { couleur: 'blanc', taille: 20 });
+        c.texte('x = i ou x = −i', XR + 80, 306, { couleur: 'jaune', taille: 22 });
+        c.texte('(−i)² = i² = −1', XR, 336, { couleur: 'faible', taille: 17 });
+        c.repere('solutions', XR - 6, 284, 270, 60, 'x² = −1 : x = i ou x = −i');
+        K.marque('solutions');
+      },
+      decrire: {
+        demi_tour: 'Une droite graduée de −2 à 2 ; le point 2 fait un demi-tour autour de O (arc en pointillé, au-dessus) et arrive en −2 ; à droite « 2 × (−1) = −2 », « × (−1) = demi-tour ».',
+        quart_de_tour: 'Le point 1 tourne d’un quart de tour autour de O (petit arc jaune fléché) et sort de la droite ; un axe vertical se dessine (« axe imaginaire », la droite devient l’« axe réel ») ; le point arrivé en haut est nommé « i » ; à droite « × i = un quart de tour ».',
+        deux_quarts: 'Un second quart de tour : i arrive sur −1 (deuxième arc jaune) ; à droite, encadré jaune « i × i = i² = −1 », dessous « deux quarts = un demi-tour ».',
+        solutions: 'Le point −i est placé en bas sur l’axe vertical ; à droite « x² = −1 : x = i ou x = −i » et « (−i)² = i² = −1 ».',
+      },
+      motifs: { demi_tour: 'le demi-tour × (−1)', quart_de_tour: 'le quart de tour × i', deux_quarts: 'i² = −1', solutions: 'x = i ou x = −i' },
+      explication: [
+        { repere: 'demi_tour', texte: 'Multiplier par −1, c’est faire un demi-tour autour de O : 2 devient −2.' },
+        { repere: 'quart_de_tour', texte: 'Le nombre i, c’est un quart de tour : 1 sort de la droite et devient i.' },
+        { repere: 'deux_quarts', texte: 'Deux quarts de tour font un demi-tour : i × i = i² = −1.' },
+        { repere: 'solutions', texte: 'L’équation x² = −1 a donc deux solutions : i et −i.' },
+      ],
+    },
+    cycle: {
+      titre: 'Les puissances de i',
+      params: { n: { min: 0, max: 12, pas: 1, defaut: 4, sens: 'l’exposant n de iⁿ' } },
+      dessiner(c, K) {
+        K.titre('Les puissances de i');
+        const ox = 250, oy = 200, u = 95, n = Math.round(K.P.n);
+        const P = (a) => [ox + u * Math.cos(a), oy - u * Math.sin(a)];
+        c.fleche(ox - 1.35 * u, oy, ox + 1.5 * u, oy, { couleur: 'faible', largeur: 1.6 });
+        c.fleche(ox, oy + 1.4 * u, ox, oy - 1.45 * u, { couleur: 'faible', largeur: 1.6 });
+        c.texte('O', ox - 13, oy + 18, { couleur: 'faible', taille: 14 });
+        c.texte('axe réel', ox + 1.5 * u - 2, oy + 52, { couleur: 'faible', taille: 14, align: 'right' });
+        c.texte('axe imaginaire', ox + 9, oy - 1.45 * u + 10, { couleur: 'faible', taille: 14 });
+        c.cercle(ox, oy, u, { couleur: 'tresfaible', largeur: 1, pointille: [3, 6], duree: .3 });
+        c.point(ox + u, oy, 6, 'cyan');
+        c.texte('i⁰ = 1', ox + u + 20, oy - 12, { couleur: 'cyan', taille: 19 });
+        c.repere('un', ox + u - 12, oy - 30, 80, 40, 'i⁰ = 1');
+        K.marque('un');
+        c.pause(.4);
+        const LAB = [null, ['i¹ = i', 10, -10, 'left'], ['i² = −1', -10, -10, 'right'], ['i³ = −i', 10, 22, 'left'], ['i⁴ = 1', 22, 30, 'left']];
+        for (let k = 1; k <= 4; k++) {
+          K.anime(.7, p => arcF(c, ox, oy, u, (k - 1) * Math.PI / 2 + .12, (k - 1) * Math.PI / 2 + .12 + (Math.PI / 2 - .24) * p, { couleur: 'blanc', largeur: 1.6, tete: p > .5 ? 8 : false }));
+          const [x, y] = P(k * Math.PI / 2);
+          c.point(x, y, 6, 'cyan');
+          c.texte(LAB[k][0], x + LAB[k][1], y + LAB[k][2], { couleur: 'cyan', taille: 19, align: LAB[k][3] });
+          c.pause(.15);
+        }
+        c.repere('tours', ox - u - 70, oy - u - 30, 2 * u + 150, 2 * u + 60, 'i¹ = i, i² = −1, i³ = −i, i⁴ = 1 : un quart de tour à chaque fois');
+        K.marque('tours');
+        c.pause(.4);
+        const XC = 430;
+        const r = encadre(c, 'tous les 4, on revient : i⁴ = 1', XC + 9, 96, 20, 'jaune', 'jaune');
+        c.texte('i⁵ = i, i⁶ = −1, i⁷ = −i, i⁸ = 1…', XC, 140, { couleur: 'blanc', taille: 18 });
+        c.repere('cycle', r[0], r[1], Math.max(r[2], 300), 140 - r[1] + 8, 'tous les 4, on revient : i⁴ = 1');
+        K.marque('cycle');
+        c.pause(.4);
+        K.anime(Math.max(.8, .35 * n), p => {
+          const [x, y] = P(n * Math.PI / 2 * p);
+          c.cercle(x, y, 11, { couleur: 'jaune', largeur: 2 });
+          c.point(x, y, 7, 'jaune');
+        });
+        const q = Math.floor(n / 4), rr = n % 4;
+        c.texte(`i^{${n}} = ${PUISS[rr]}`, XC, 210, { couleur: 'jaune', taille: 28 });
+        c.texte(`${n} = 4 × ${q} + ${rr} : i^{${n}} = i^{${rr}} = ${PUISS[rr]}`, XC, 248, { couleur: 'blanc', taille: 18 });
+        c.texte('glisse le point jaune : n change', XC, 300, { couleur: 'faible', taille: 16 });
+        const [px, py] = P(n * Math.PI / 2);
+        c.repere('compteur', Math.min(px, XC) - 16, Math.min(py, 180) - 16, Math.max(px, XC + 240) - Math.min(px, XC) + 32, Math.max(py, 256) - Math.min(py, 180) + 32, `i^${n} = ${PUISS[rr]}`);
+        K.marque('compteur');
+      },
+      poignees(K) {
+        const ox = 250, oy = 200, u = 95, n = Math.round(K.P.n), a = n * Math.PI / 2;
+        return [{ id: 'n', x: ox + u * Math.cos(a), y: oy - u * Math.sin(a), bouger: (px, py) => {
+          const k = ((Math.round(Math.atan2(oy - py, px - ox) / (Math.PI / 2)) % 4) + 4) % 4;
+          let best = n, d = 99;
+          for (let m = 0; m <= 12; m++) if (m % 4 === k && Math.abs(m - n) < d) { d = Math.abs(m - n); best = m; }
+          return { n: best };
+        } }];
+      },
+      lecture: K => { const n = Math.round(K.P.n); return `n = ${n} : ${n} = 4 × ${Math.floor(n / 4)} + ${n % 4}, donc i^${n} = i^${n % 4} = ${PUISS[n % 4]}.`; },
+      decrire: K => {
+        const n = Math.round(K.P.n);
+        return {
+          un: 'Deux axes et un cercle pointillé de rayon 1 ; le point 1 sur l’axe réel : « i⁰ = 1 ».',
+          tours: 'Un quart de tour à la fois, une flèche courbe entre chaque : i¹ = i en haut, i² = −1 à gauche, i³ = −i en bas, i⁴ = 1 de retour à droite.',
+          cycle: 'À droite, encadré jaune « tous les 4, on revient : i⁴ = 1 » ; dessous « i⁵ = i, i⁶ = −1, i⁷ = −i, i⁸ = 1… ».',
+          compteur: `Un point jaune tourne de ${n} quart${n > 1 ? 's' : ''} de tour et se pose sur i^${n} = ${PUISS[n % 4]} ; à droite « i^${n} = ${PUISS[n % 4]} » et « ${n} = 4 × ${Math.floor(n / 4)} + ${n % 4} : i^${n} = i^${n % 4} = ${PUISS[n % 4]} ».`,
+        };
+      },
+      motifs: { un: 'i⁰ = 1', tours: 'les quarts de tour', cycle: 'le cycle de 4', compteur: 'iⁿ' },
+      explication: [
+        { repere: 'un', texte: 'On part de 1 : i⁰ = 1.' },
+        { repere: 'tours', texte: 'Chaque multiplication par i fait un quart de tour : i, −1, −i, puis 1.' },
+        { repere: 'cycle', texte: 'Tous les 4, on revient au départ : i⁴ = 1.' },
+        { repere: 'compteur', texte: 'Pour iⁿ, on divise n par 4 et on garde le reste.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
