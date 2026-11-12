@@ -348,3 +348,35 @@ cours/transformations_lentes_rapides_build/ ; contrat : cours/transformations_le
   catalyseur 10 min contre 40 min ; « autocuiseur ≈ 120 °C ») ; vue soufre sans équation ; r7 (titrage) sur bechers?vue=lente ; bilan et carte
   rattachés à C3 ; définition du facteur cinétique « paramètre qui modifie la vitesse d'évolution (la durée) », sans « même état final ».
 - Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player. Cours suivant : cinetique (exploration à faire).
+
+## cinetique
+(routine cloud du 12 nov., après-midi ; cours phys_ch10_cinetique, « Suivi temporel d'une transformation chimique, vitesse de réaction » ;
+outils : cours/cinetique_build/ ; contrat : cours/cinetique_contrat_simulations.md)
+- Étape 1 exploration : FAITE → backend/data/curriculum/exploration/cinetique.json (explo.py = explo_a.py + explo_b.py). VIDÉOS NON AUDITÉES
+  (YouTube bloqué depuis le cloud). Appui : nationaux PC 2016-2025 (cinetique_build/nationaux.md) : suivi temporel dans 10 sessions sur 20
+  (2016 R, 2017 N, 2017 R, 2018 R, 2019 R, 2021 N, 2023 N, 2024 N, 2025 N, 2025 R) ; conductimétrie 3 fois (toujours une saponification),
+  titrage 2 fois, courbe seule 5 fois ; t₁/₂ dans 9 sessions, vitesse par la tangente dans 5 ; AUCUN national par la pression.
+  Erreurs du dépôt : 2024 N corrigés vides, V = 200 mL et t₁ = 60 h absents de exam.json (seulement dans extraction.json) ; 2017 R figure
+  qui part vers 0,5 mol au lieu de 0,6 mol.
+- Cadre : chapitres.cinetique ajoutée (cadre_cin.py : CIN1-CIN8 provisoires, 11 formules, 10 mots hors cadre). perimetre.json NON modifié.
+- COURS CONSTRUIT → backend/data/courses/phys_ch10_cinetique.json (draft, concentration) : 48 diapositives (préfixe ci_), 48 questions,
+  31 prédictions, 43 exercices ; 11 parties (ouverture, suivre au cours du temps, avancement et courbe, conductimétrie, pression et choix de
+  méthode, vitesse, évolution de la vitesse, t₁/₂, 8 sujets du national, pièges de rédaction, bilan + carte) ; compétences C1-C8.
+  Build : p1…p4.py (4 sous-agents, check_part « AUCUNE ERREUR ») ; refaire : `python3 …/cinetique_build/build.py` puis ajouts.py,
+  `blocs.py appliquer` (supprimer d'abord methode_blocs/base/phys_ch10_cinetique.json si la voix a changé : rien n'est voisé).
+- Méthode des blocs : methode_blocs/ajouts/phys_ch10_cinetique.json : 4 séances × 3 blocs × 4 diapositives, 28 rappels, 31 prédictions / 48.
+  blocs.py verifier → « cadre : OK », « blocs : OK ». controler_cadre → « cadre : OK » (120 « à relire » : applications numériques, x_max = C₀·V₀,
+  relation de 2016 R x = −6,3·10⁻³·σ + 1,57·10⁻³ donnée par le sujet). preparer_reponses verifier : seulement réactions et pistes audio manquantes.
+- Réactions : items seulement → cinetique_build/items_cours.json (519), items_blocs.json (74), demos_blocs.json (1). À écrire sur le serveur.
+- verifier_texte_corpus (copie avec backend/kaggle_tts/texte_parle.py, il manque toujours dans outils/cours/voxtts) : ≈ 414 mots à revoir, surtout
+  des termes de chimie absents du corpus (diiode, iodure, thiosulfate, titrage, prélèvement, conductimétrie, manomètre, palier…) gardés ; darija
+  rare remplacée (كنغطسو → كندخلو, كنعايرو → كنديرو le titrage ديال, كيغمق → كيولي brun, مبطوح → plat, كتمس → touche…) ; restent une fois
+  chacune (كتسالى, كيهزو, كيتبدلوش, كنقيسو, سالاتش, كتتأكسد, وكيسولنا…) : à écouter au contrôle des murmures.
+- PRÊT POUR LA VOIX : OUI (48 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
+- À valider : conductimétrie en 6 diapositives (g1-g6) ; pression en 3 courtes (p1-p3, au programme, jamais au national) ; exemple B
+  (saponification) annoncé « étudiée plus tard », voix « ion acétate » ; facteurs cinétiques seulement rappelés (v8, h4) ; « chocs efficaces » :
+  la grille officielle 2024 N les cite, perimetre.json les exclut → non dits (« les entités se rencontrent moins souvent ») ; t₁/₂ défini par
+  x(t₁/₂) = x_f/2 partout (2016 R et 2018 R écrivent x_max/2) ; p4 nomme t₁/₂ avant la séance 3 ; p6 (2024 N) sans la question de vitesse ;
+  nationaux aussi dans les exercices de v4, h3, h4 (doublons possibles avec n1-n8) ; n2 et n6 : la tangente avant t₁/₂ (ordre des moments) ;
+  valeurs inventées hors contrat pour des exercices (V_E = 16,9 mL à 15 min ; n₀(H₂O₂) = 3,0 et n₀(I⁻) = 4,0 mmol) ; n8 (2017 R) sur le texte du
+  sujet (0,6 mol → 0,2 mol, x_f = 0,4 mol) ; identifiant phys_ch10 ; bilan et carte : C1… (voir build).
