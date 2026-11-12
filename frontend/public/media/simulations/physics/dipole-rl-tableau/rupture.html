@@ -78,7 +78,8 @@ function interrupteurK(c) {
   c.texte('avec E', LX + 152, y1 + 4, { couleur: 'faible', taille: 13 });
   c.texte('sans E', LX + 152, y2 + 4, { couleur: 'faible', taille: 13 });
   MM._k = c.cur;
-  c.direct(() => { const f = geste(c, M._k, .6), y = y1 + (y2 - y1) * f; c.ligne(px, py, x1, y, { couleur: f >= 1 ? 'bleu' : 'blanc', largeur: 2.4 }); });
+  const f = geste(c, M._k, .6);   // c.t se lit HORS de c.direct (où l’horloge vaut l’infini)
+  c.direct(() => { const y = y1 + (y2 - y1) * f; c.ligne(px, py, x1, y, { couleur: f >= 1 ? 'bleu' : 'blanc', largeur: 2.4 }); });
 }
 function vueDescente(c) {
   c.texte(`Rupture : ${TITRES.descente}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
@@ -99,7 +100,8 @@ function vueDescente(c) {
   // bascule : K passe de 1 à 2 ; i(0) = I₀ (le courant de la bobine ne saute pas).
   interrupteurK(c);
   c.pause(.7);
-  c.direct(() => { if (c.t >= M._k + .6) { c.ctx.globalAlpha = .9; c.point(O.x, PY(I0), 6, 'bleu'); c.ctx.globalAlpha = 1; } });
+  const pose = M._k !== undefined && c.t >= M._k + .6;
+  c.direct(() => { if (pose) { c.ctx.globalAlpha = .9; c.point(O.x, PY(I0), 6, 'bleu'); c.ctx.globalAlpha = 1; } });
   c.cercle(O.x, PY(I0), 9, { couleur: 'bleu', largeur: 2 });
   c.texte('i(0) = I_0 = 100 mA', O.x + 16, PY(I0) - 12, { couleur: 'bleu', taille: 15 });
   lire(c, 172, 'K passe de 1 à 2 à t = 0', { couleur: 'bleu', taille: 15 });
@@ -214,14 +216,14 @@ function kFerme(c) {
 function vueDiode(c) {
   const ctx = c.ctx, ferme = kFerme(c), avecDiode = M._f2 !== undefined && c.t >= M._dd;
   const angle = -.6 * (1 - ferme), lx = C.k1 + 50 * Math.cos(angle), ly = C.h + 50 * Math.sin(angle);
-  // Le peint d’abord (la craie reste par-dessus).
+  // Le peint d’abord (la craie reste par-dessus). L’horloge c.t se lit hors de c.direct.
+  const tc = c.t, etinc = M._o1 !== undefined && tc >= M._o1 + .15 && tc < M._f2;
   c.direct(() => {
     peindreGenerateur(ctx, C.g, 220);
     peindreResistor(ctx, (C.r1 + C.r2) / 2, C.h, C.r2 - C.r1, 15);
     peindreBobine(ctx, C.b - 70, 192, 46, 46, 8);
     if (avecDiode) { peindreDiode(ctx, C.d + 32, 192); peindreResistor(ctx, C.d, 275, 50, 14, true); }
-    const etinc = M._o1 !== undefined && c.t >= M._o1 + .15 && c.t < M._f2;
-    if (etinc) peindreEtincelle(ctx, lx, ly, C.k2, C.h, c.t, Math.min(1, (c.t - M._o1) / .4));
+    if (etinc) peindreEtincelle(ctx, lx, ly, C.k2, C.h, tc, Math.min(1, (tc - M._o1) / .4));
   });
   c.texte(`Rupture : ${TITRES.diode}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, max: PC.w - 10, duree: .9 });
   c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
