@@ -178,6 +178,7 @@ corpus_fix.py, virgules.py, verif_sims.py, items.json, gen_reponses_vps.py (copi
   30 rappels (ceux du plan, bonne réponse des QCM déplacée), 23 prédictions / 48. blocs.py verifier → « cadre : OK », « blocs : OK »
   (avis : partie ouverture sans prédiction). controler_cadre → « cadre : OK » (296 « à relire » non bloquants : applications numériques, lectures de formules).
 - preparer_reponses verifier : seulement « pas de piste audio » (48) et « réaction manquante » (750).
+- verif_sims.js (Playwright node, headless) sur les 48 diapositives : 48 ok, « AUCUN PROBLÈME » (chaque moment play_until existe et se joue, repères cités présents, encre, pas d'erreur JS, rien hors cadre).
 - verifier_texte_corpus (copie avec backend/kaggle_tts/texte_parle.py) : darija rare remplacée dans les p*.py (بالليموني → بلون orange, بالأصفر →
   بلون jaune, كتزلق → كتمشي, اللفوق/اللتحت, الفليشة → السهم, مشطب → عليه خط…) ; restent ≈ 250 mots, surtout des termes du programme
   (argument, modulo, congru, affixe, Moivre, réel…) et de la darija rare une fois chacune (الصومعة, عقارب…), gardés.
