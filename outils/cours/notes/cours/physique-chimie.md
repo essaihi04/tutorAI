@@ -424,8 +424,11 @@ outils : cours/transformations_deux_sens_build/ ; contrat : cours/transformation
   conductimetrie (ions|relation|calcul|national), dilution (mesures|taux|nature), figures (?fig=fig_2017N|fig_2021R), bilan, carte. node --check OK
   (9 pages) ; chaque page testée en headless par son agent (moments, repères, hors cadre, captures regardées).
   ⚠ Défaut du moteur copié de cinetique-tableau (signalé par l'agent equilibre) : il gardait seulement la durée du DERNIER M.etape d'un même nom,
-  donc un texte pouvait être encore en cours d'écriture à l'arrêt sur image ; corrigé dans equilibre.html et figures.html seulement. À vérifier
-  dans les autres pages de ce dossier ET dans chimie/cinetique-tableau/ (même moteur).
+  donc un texte pouvait être encore en cours d'écriture à l'arrêt sur image. Corrigé dans TOUTES les pages de ce dossier (conductimetrie et dilution
+  par la routine : Math.max + remise à zéro). RESTE dans chimie/cinetique-tableau/ (conductimetrie, courbe, demi-reaction, figures, pression,
+  vitesse) et chimie/transformations-lentes-rapides-tableau/ (toutes) : même correction de deux lignes à faire.
+- Vérification au navigateur (verif_sims.js, Playwright, diapositive par diapositive) : 36/36 ok, « AUCUN PROBLÈME » (moments, repères, encre,
+  pas d'erreur JS, rien hors cadre).
 - PRÊT POUR LA VOIX : OUI (36 pistes speech_text.mixed + démonstrations) ; réactions à écrire d'abord (items).
 - Reste : audits vidéo (PC), réactions (serveur), voix, validation, lecture dans /dev/course-player, défaut du moteur ci-dessus. Cours suivant : etat_equilibre
   (exploration à faire).
