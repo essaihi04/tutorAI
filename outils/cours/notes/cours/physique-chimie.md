@@ -335,7 +335,7 @@ cours/transformations_lentes_rapides_build/ ; contrat : cours/transformations_le
   demi-equation (permanganate|eau_oxygenee|iode|oxalique), equation (zinc_cuivre|eau_oxygenee|permanganate|fer), bechers (comparer|lente|soufre|echelle),
   facteurs (temperature[theta_c]|concentration|trempe|une_variable|vie|catalyseur), courbes (temperature|concentration|catalyseur|lecture), bilan, carte.
   Formules chimiques : petit traducteur par page (⁺ et indices), ⇌ et → dessinés au trait. node --check OK ; chaque page testée en headless
-  par son agent ; verif_sims.js : voir la ligne « vérif navigateur » ci-dessous.
+  par son agent ; verif_sims.js (Playwright, 2 lots) sur les 36 diapositives : 36 ok, « AUCUN PROBLÈME » (moments, repères, encre, pas d'erreur JS, rien hors cadre).
 - verifier_texte_corpus : ≈ 420 mots à revoir, surtout les termes de chimie absents du corpus (permanganate, diiode, iodure, thiosulfate, manganèse,
   bécher, palier, trempe…) gardés ; darija rare remplacée (قهوي → brun, البيشر → le bécher, كتزرب → كتمشي بالزربة, قطرات → شي نقط, الثلاجة →
   le réfrigérateur…) ; restent des darija rares une fois chacune (بلوكاو, كيبلوكي, السخون, اللاعب…) : à écouter au contrôle des murmures.
