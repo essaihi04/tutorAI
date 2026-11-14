@@ -25,8 +25,8 @@ const PHRASES: string[] = [
   'قبل ما ندوزو للي من بعد، كتب هاد الأفكار ورسم le schéma فle cahier. ومن بعد، ملي تراجع، غادي تلقى كلشي واضح قدامك.',
 ];
 
-/** Les phrases qui ont déjà leur piste Bodi (numéros à partir de 1), remplies après la génération. */
-const AVEC_PISTE = new Set<number>([]);
+/** Les phrases qui ont déjà leur piste Bodi (numéros à partir de 1) : les 12, générées le 14 novembre 2026. */
+const AVEC_PISTE = new Set<number>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
 const CLE = 'moalim.invitationsCahier';
 /** On ne redit pas l'une des N dernières : avec 12 phrases, l'élève en entend 8 autres avant qu'une revienne. */
