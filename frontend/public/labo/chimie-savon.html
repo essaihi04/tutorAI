@@ -765,7 +765,7 @@ function camLabel(obj, side = 0, up = 0.55) {
   const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1; return { p: [c.x + Math.sin(side) * d * 0.9, c.y + d * up, c.z + Math.cos(side) * d * 0.9], t: [c.x, c.y, c.z] };
 }
 const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.08 - 0.03 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] }); // k > 1 : recule pour voir aussi le bas (éprouvette)
-function showProduct(obj, after, trigger, side, up) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); ST.q.push({ obj: new THREE.Object3D(), dur: 0.9, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
+function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
 function lookPour(N) { CAMS["@pour"] = camPour(N); look("@pour"); }
 
 /* ------------------------------------------------------------ étapes libres (passer, rétablir, suivre l'élève) */
@@ -938,16 +938,16 @@ function doTare() {
 }
 /* huile : versement maintenu (≈ 2 g/s, huile visqueuse) au-dessus du ballon */
 function startOil() {
-  const F0 = ST.oFlow; if (F0) { if (!F0.back) { F0.on = true; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
+  const F0 = ST.oFlow; if (F0) { if (!F0.back) { F0.on = true; F0.short = null; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
   if (isBusy()) return busyToast(); if (!ballonFree()) return toast("Le réfrigérant bouche le col : verse l'huile avant de monter le réfrigérant.");
   if (ST.heatMin > 0) return toast("Le mélange a déjà été chauffé : vide le ballon pour un nouvel essai.");
-  const j = X.oilB, nt = neckTop(); L.ctl.enabled = false; showProduct(j, camPour(nt));
+  const j = X.oilB, nt = neckTop(); L.ctl.enabled = false; showProduct(j, camPour(nt), null, 0, 0.55, 0); toast("Le flacon s'ouvre et se penche : garde le bouton appuyé, l'huile coule dans le ballon.");
   ST.oFlow = { on: true, ready: false, back: false, idle: 0, m0: ST.mOil };
   capOff(j.userData.cap, [j.position.x + 0.06, 0.009, j.position.z + 0.04]);
   const o = pose(nt.x - 0.004, nt.y + 0.035, -1.95, 0.136);
   go(j, [{ to: [o[0] - 0.02, o[1] + 0.06, nt.z], dur: 0.8, up: 0.06 }, { to: [o[0], o[1], nt.z], rot: [0, 0, -1.95], dur: 0.6, up: 0, at: () => { if (ST.oFlow) ST.oFlow.ready = true; } }]);
 }
-function stopOil() { const F = ST.oFlow; if (!F || !F.on) return; F.on = false; F.idle = 1.4; L.ctl.enabled = true; if (ST.mOil - F.m0 > 0.01) { log("info", "Huile d'olive versée : +" + g2(ST.mOil - F.m0) + " g dans le ballon" + (ST.onBal === "ballon" ? ". Balance : " + g2(shown()) + " g." : " (ballon hors de la balance : masse non lue)."), "oil"); F.m0 = ST.mOil; noteOil(); } }
+function stopOil() { const F = ST.oFlow; if (!F || !F.on) return; if (!F.ready) { F.short = 1.2; return; } F.on = false; F.idle = 1.4; L.ctl.enabled = true; if (ST.mOil - F.m0 > 0.01) { log("info", "Huile d'olive versée : +" + g2(ST.mOil - F.m0) + " g dans le ballon" + (ST.onBal === "ballon" ? ". Balance : " + g2(shown()) + " g." : " (ballon hors de la balance : masse non lue)."), "oil"); F.m0 = ST.mOil; noteOil(); } }
 function oilBack() { const F = ST.oFlow, j = X.oilB; F.back = true; go(j, [Object.assign(homeOf("huile"), { dur: 0.9, up: 0.06, at: () => { ST.oFlow = null; } })]); capOn(j.userData.cap); }
 function oilDrops() {
   if (isBusy()) return busyToast(); if (!ballonFree()) return toast("Le réfrigérant bouche le col."); if (ST.heatMin > 0) return toast("Le mélange a déjà été chauffé.");
@@ -960,15 +960,15 @@ function oilDrops() {
 function noteOil() { if (ST.onBal === "ballon") { ST.mOilRead = +shown().toFixed(2); if (ST.tareWith !== "ballon" || !ST.oilTare) once("noTare", "warn", "Huile pesée sans avoir taré la balance avec le ballon vide : l'afficheur compte aussi le ballon.", "noTare"); renderTable(); } }
 /* soude et éthanol : remplissage maintenu de l'éprouvette (≈ 4 mL/s), puis versement dans le ballon */
 function startEp(kind) {
-  const F0 = ST.epFlow; if (F0) { if (F0.kind === kind && !F0.back) { F0.on = true; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
+  const F0 = ST.epFlow; if (F0) { if (F0.kind === kind && !F0.back) { F0.on = true; F0.short = null; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
   if (isBusy()) return busyToast(); if (ST.ep.s + ST.ep.e >= 25) return toast("L'éprouvette est pleine (25 mL) : verse-la d'abord.");
-  const j = kind === "s" ? X.sodB : X.ethB, e = X.ep.position; L.ctl.enabled = false; showProduct(j, camPour(gpos(X.ep, [0, 0.212, 0]), 1.3));
+  const j = kind === "s" ? X.sodB : X.ethB, e = X.ep.position; L.ctl.enabled = false; showProduct(j, camPour(gpos(X.ep, [0, 0.212, 0]), 1.3), null, 0, 0.55, 0); toast("Le flacon s'ouvre et se penche : garde le bouton appuyé pour remplir l'éprouvette.");
   ST.epFlow = { kind, on: true, ready: false, back: false, idle: 0, v0: ST.ep[kind] };
   capOff(j.userData.cap, [j.position.x + 0.055, 0.009, j.position.z + 0.045]);
   const o = pose(e.x - 0.003, 0.25, -1.85, 0.136);
   go(j, [{ to: [o[0] - 0.02, o[1] + 0.06, e.z], dur: 0.8, up: 0.06 }, { to: [o[0], o[1], e.z], rot: [0, 0, -1.85], dur: 0.6, up: 0, at: () => { if (ST.epFlow) ST.epFlow.ready = true; } }]);
 }
-function stopEp() { const F = ST.epFlow; if (!F || !F.on) return; F.on = false; F.idle = 1.4; L.ctl.enabled = true; const v = ST.ep[F.kind] - F.v0; if (v > 0.05) { log("info", "Éprouvette : " + g1(ST.ep.s + ST.ep.e) + " mL (" + (F.kind === "s" ? "soude" : "éthanol") + ").", "ep"); F.v0 = ST.ep[F.kind]; } }
+function stopEp() { const F = ST.epFlow; if (!F || !F.on) return; if (!F.ready) { F.short = 1.2; return; } F.on = false; F.idle = 1.4; L.ctl.enabled = true; const v = ST.ep[F.kind] - F.v0; if (v > 0.05) { log("info", "Éprouvette : " + g1(ST.ep.s + ST.ep.e) + " mL (" + (F.kind === "s" ? "soude" : "éthanol") + ").", "ep"); F.v0 = ST.ep[F.kind]; } }
 function epBack() { const F = ST.epFlow, j = F.kind === "s" ? X.sodB : X.ethB; F.back = true; go(j, [Object.assign(homeOf(F.kind === "s" ? "soude" : "ethanol"), { dur: 0.9, up: 0.06, at: () => { ST.epFlow = null; } })]); capOn(j.userData.cap); }
 function epAdd(kind, v) { // ajustement : +1 mL au compte-gouttes de flacon
   if (isBusy()) return busyToast(); const j = kind === "s" ? X.sodB : X.ethB, e = X.ep.position; showProduct(j, camPour(gpos(X.ep, [0, 0.212, 0]), 1.3));
@@ -1346,8 +1346,10 @@ function tick(dt) {
   L.g.updateMatrixWorld(); // positions à jour pour les filets (même si l'image n'a pas été redessinée)
   // --- versement d'huile maintenu
   const F = ST.oFlow; X.arcPour.visible = false;
+  if (F && F.ready && F.on && F.short != null && (F.short -= dt) <= 0) { F.short = null; stopOil(); }
   if (F) { if (F.ready && F.on) { const r = 2.0 * (0.85 + Math.random() * 0.3); ST.mOil += r * dt; arcPour(X.arcPour, mouth(X.oilB), gpos(X.ballon, [0, 0.11, 0]), 0.0022, 0.25); setCol(X.arcPourM, COL.oil); X.arcPourM.opacity = 0.85; } else if (!F.on && !F.back) { F.idle -= dt; if (F.idle <= 0 && !ST.q.length) oilBack(); } }
   const E = ST.epFlow;
+  if (E && E.ready && E.on && E.short != null && (E.short -= dt) <= 0) { E.short = null; stopEp(); }
   if (E) { if (E.ready && E.on) { const tot = ST.ep.s + ST.ep.e; if (tot >= 25) { E.on = false; E.idle = 1.4; L.ctl.enabled = true; toast("Éprouvette pleine (25 mL).", "bad"); } else { ST.ep[E.kind] = Math.min(25 - (tot - ST.ep[E.kind]), ST.ep[E.kind] + 4 * (0.9 + Math.random() * 0.2) * dt); arcPour(X.arcPour, mouth(E.kind === "s" ? X.sodB : X.ethB), gpos(X.ep, [0, 0.19, 0]), 0.0017, 0.25); setCol(X.arcPourM, COL.aq); X.arcPourM.opacity = 0.88; } } else if (!E.on && !E.back) { E.idle -= dt; if (E.idle <= 0 && !ST.q.length) epBack(); } }
   if (ST.pourArc) { const P = ST.pourArc; P.t -= dt; const e = arcEnds(P); if (e && P.t > 0) { arcPour(X.arcPour, e[0], e[1], e[3], 0.2); setCol(X.arcPourM, e[2]); X.arcPourM.opacity = 0.82; } else ST.pourArc = null; }
   // --- liquide des flacons renversés : il glisse vers l'épaule et remplit le goulot
