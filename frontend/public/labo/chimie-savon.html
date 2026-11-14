@@ -1433,6 +1433,18 @@ function tick(dt) {
   updGuide();
 }
 /* légende de la plaque de CCM révélée : chaque tache et chaque trait est nommé (vue rapprochée de la plaque) */
+/*leg-btn*/ /* bouton « Masquer / Afficher la légende » (demande de l'enseignant, nov. 2026) : visible dès qu'une légende existe pour la vue ; le choix est gardé d'une manip à l'autre */
+function legBtn(avail) {
+  let b = document.getElementById("legBtn");
+  if (!b) {
+    try { window.__legOff = localStorage.getItem("labLegOff") === "1"; } catch (e) {}
+    const st = document.createElement("style"); st.textContent = '#legBtn{position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:6;font:700 13px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;border:1px solid #c9d2dc;background:#fff;color:#1d2836;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}#legBtn:hover{background:#eef3f8}#legBtn.off{top:62px}#legBtn[hidden]{display:none}@media (max-width:640px){#legBtn,#legBtn.off{top:auto;bottom:86px}}'; document.head.appendChild(st);
+    b = document.createElement("button"); b.id = "legBtn"; b.type = "button"; document.body.appendChild(b);
+    b.onclick = (e) => { e.stopPropagation(); window.__legOff = !window.__legOff; try { localStorage.setItem("labLegOff", window.__legOff ? "1" : "0"); } catch (er) {} legBtn(true); };
+  }
+  if (b.hidden !== !avail) b.hidden = !avail;
+  const t = window.__legOff ? "🏷 Afficher la légende" : "🏷 Masquer la légende"; if (b.textContent !== t) { b.textContent = t; b.classList.toggle("off", !!window.__legOff); }
+}
 function ccmLegend() {
   let el = $("#ccmLeg");
   if (!el) {
@@ -1440,7 +1452,7 @@ function ccmLegend() {
     const st = document.createElement("style"); st.textContent = '#ccmLeg{position:fixed;inset:0;pointer-events:none;z-index:4}#ccmLeg[hidden]{display:none}#ccmLeg svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}#ccmLeg .tag{position:absolute;transform:translateY(-50%);background:rgba(255,255,255,.96);color:#18202b;font:700 13px/1.25 "Atkinson Hyperlegible",Arial,sans-serif;padding:5px 9px;border-radius:7px;border-left:5px solid var(--c);box-shadow:0 2px 10px rgba(0,0,0,.28);max-width:min(300px,40vw)}#ccmLeg .tag small{display:block;font-weight:400;font-size:12px;color:#3c4652}#ccmLeg .tag.L{transform:translate(-100%,-50%);border-left:0;border-right:5px solid var(--c);text-align:right}#ccmLeg .ttl{position:absolute;left:50%;top:62px;transform:translateX(-50%);background:#1d2836;color:#fff;font:700 14px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3)}@media (max-width:640px){#ccmLeg .tag{font-size:11px;padding:3px 6px}#ccmLeg .tag small{font-size:10px}}';
     document.head.appendChild(st);
   }
-  const C = ST.ccm, show = !!(C && C.rev && camFocus === "plate" && !L.tw && !ST.q.some((a) => a.obj === X.plate) && $("#overlay").hidden !== false && !ST.demoHideLeg);
+  const C = ST.ccm, can = !!(C && C.rev && camFocus === "plate" && !L.tw && !ST.q.some((a) => a.obj === X.plate) && $("#overlay").hidden !== false && !ST.demoHideLeg); legBtn(can); const show = can && !window.__legOff;
   el.hidden = !show; if (!show) return;
   const W = window.innerWidth, H = window.innerHeight, pw = X.plateC.width, ph = X.plateC.height, Y = (cm) => ph - cm * PX;
   const pt = (px, py) => { const v = new THREE.Vector3((px / pw - 0.5) * 0.0296, 0.0375 + (0.5 - py / ph) * 0.0746, 0.0006); X.plate.localToWorld(v); v.project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H]; };

@@ -577,6 +577,18 @@ const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "fu
 /*legende*/ /* légende d'une vue d'observation : chaque objet ou résultat est nommé (étiquette + trait de rappel), sans donner la réponse attendue dans le tableau */
 const RESVIEW = {}; // expérience finie (bilan vu) : clic sur un objet → vue de son résultat, légendée (RESVIEW[outil] = clé de vue)
 const LEGS = {}; // LEGS[clé de vue] = [{ at: () => [x, y, z] (repère de la paillasse), t: "nom", m: "précision", c: "#couleur", on: () => vrai si affichée }]
+/*leg-btn*/ /* bouton « Masquer / Afficher la légende » (demande de l'enseignant, nov. 2026) : visible dès qu'une légende existe pour la vue ; le choix est gardé d'une manip à l'autre */
+function legBtn(avail) {
+  let b = document.getElementById("legBtn");
+  if (!b) {
+    try { window.__legOff = localStorage.getItem("labLegOff") === "1"; } catch (e) {}
+    const st = document.createElement("style"); st.textContent = '#legBtn{position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:6;font:700 13px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;border:1px solid #c9d2dc;background:#fff;color:#1d2836;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}#legBtn:hover{background:#eef3f8}#legBtn.off{top:62px}#legBtn[hidden]{display:none}@media (max-width:640px){#legBtn,#legBtn.off{top:auto;bottom:86px}}'; document.head.appendChild(st);
+    b = document.createElement("button"); b.id = "legBtn"; b.type = "button"; document.body.appendChild(b);
+    b.onclick = (e) => { e.stopPropagation(); window.__legOff = !window.__legOff; try { localStorage.setItem("labLegOff", window.__legOff ? "1" : "0"); } catch (er) {} legBtn(true); };
+  }
+  if (b.hidden !== !avail) b.hidden = !avail;
+  const t = window.__legOff ? "🏷 Afficher la légende" : "🏷 Masquer la légende"; if (b.textContent !== t) { b.textContent = t; b.classList.toggle("off", !!window.__legOff); }
+}
 function legendTick() {
   let el = document.getElementById("labLeg");
   if (!el) {
@@ -585,7 +597,7 @@ function legendTick() {
     document.head.appendChild(st);
   }
   const list = (LEGS[camFocus] || []).filter((i) => (!i.on || i.on()) && (!i.fin || ST.fini)), ov = document.getElementById("overlay"); // fin : résultat, montré seulement quand l'expérience est finie
-  const show = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false);
+  const can = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false); legBtn(can); const show = can && !window.__legOff;
   el.hidden = !show; if (!show) return; el.querySelector(".ttl").textContent = list.some((i) => i.fin) ? "Résultat de l'expérience" : "Légende";
   const W = window.innerWidth, H = window.innerHeight, P = (a) => { const v = L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2])).project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H, v.z]; };
   const val = (v) => (typeof v === "function" ? v() : v), it = list.map((i) => { const a = P(i.at()); return { ...i, t: val(i.t), m: val(i.m), a, s: a[0] < W / 2 ? "L" : "R" }; }).filter((i) => i.a[2] < 1);

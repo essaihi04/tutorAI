@@ -714,6 +714,18 @@ const look = (k) => { camFocus = k; const c = CAMS[k]; if (c) focusCam(c); };
 /*legende*/ /* légende d'une vue d'observation : chaque objet ou résultat est nommé (étiquette + trait de rappel), sans donner la réponse attendue dans le tableau */
 const RESVIEW = {}; // expérience finie (bilan vu) : clic sur un objet → vue de son résultat, légendée (RESVIEW[outil] = clé de vue)
 const LEGS = {}; // LEGS[clé de vue] = [{ at: () => [x, y, z] (repère de la paillasse), t: "nom", m: "précision", c: "#couleur", on: () => vrai si affichée }]
+/*leg-btn*/ /* bouton « Masquer / Afficher la légende » (demande de l'enseignant, nov. 2026) : visible dès qu'une légende existe pour la vue ; le choix est gardé d'une manip à l'autre */
+function legBtn(avail) {
+  let b = document.getElementById("legBtn");
+  if (!b) {
+    try { window.__legOff = localStorage.getItem("labLegOff") === "1"; } catch (e) {}
+    const st = document.createElement("style"); st.textContent = '#legBtn{position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:6;font:700 13px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;border:1px solid #c9d2dc;background:#fff;color:#1d2836;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}#legBtn:hover{background:#eef3f8}#legBtn.off{top:62px}#legBtn[hidden]{display:none}@media (max-width:640px){#legBtn,#legBtn.off{top:auto;bottom:86px}}'; document.head.appendChild(st);
+    b = document.createElement("button"); b.id = "legBtn"; b.type = "button"; document.body.appendChild(b);
+    b.onclick = (e) => { e.stopPropagation(); window.__legOff = !window.__legOff; try { localStorage.setItem("labLegOff", window.__legOff ? "1" : "0"); } catch (er) {} legBtn(true); };
+  }
+  if (b.hidden !== !avail) b.hidden = !avail;
+  const t = window.__legOff ? "🏷 Afficher la légende" : "🏷 Masquer la légende"; if (b.textContent !== t) { b.textContent = t; b.classList.toggle("off", !!window.__legOff); }
+}
 function legendTick() {
   let el = document.getElementById("labLeg");
   if (!el) {
@@ -722,7 +734,7 @@ function legendTick() {
     document.head.appendChild(st);
   }
   const list = (LEGS[camFocus] || []).filter((i) => (!i.on || i.on()) && (!i.fin || ST.fini)), ov = document.getElementById("overlay"); // fin : résultat, montré seulement quand l'expérience est finie
-  const show = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false);
+  const can = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false); legBtn(can); const show = can && !window.__legOff;
   el.hidden = !show; if (!show) return; el.querySelector(".ttl").textContent = list.some((i) => i.fin) ? "Résultat de l'expérience" : "Légende";
   const W = window.innerWidth, H = window.innerHeight, P = (a) => { const v = L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2])).project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H, v.z]; };
   const val = (v) => (typeof v === "function" ? v() : v), it = list.map((i) => { const a = P(i.at()); return { ...i, t: val(i.t), m: val(i.m), a, s: a[0] < W / 2 ? "L" : "R" }; }).filter((i) => i.a[2] < 1);
@@ -1399,8 +1411,8 @@ const DEMO = [
   { z: "ph", k: "Papier pH", t: "Avec la baguette, une goutte de chaque surnageant sur une bandelette de papier pH universel.", why: "paper", cam: "paper", run: async () => { doPaper(2); await idle(); doPaper(3); await idle(); }, wait: 1 },
   { z: "ph", k: "Lecture", t: "On approche chaque bandelette de l'échelle de teintes, on compare les couleurs et on écrit le pH dans le tableau : basique pour le sol calcaire, acide pour le sol de forêt.", why: "paper", cam: "chart", run: async () => { doCompare(2); await idle(); await demoWait(1.5); await demoAns("pp2", Math.round(ST.bk[2].strip)); doCompare(3); await idle(); await demoWait(1.5); await demoAns("pp3", Math.round(ST.bk[3].strip)); }, wait: 1 },
   { z: "ph", k: "Étalonnage", t: "On étalonne le pH-mètre : tampon pH 7,00, rinçage, tampon pH 4,01, rinçage.", why: "cal", cam: "pm", run: doCal, wait: 1 },
-  { z: "ph", k: "pH-mètre", t: "La sonde plonge dans le bécher 3 ; on attend la stabilisation puis on note : le pH s'inscrit dans le tableau.", why: "probe", cam: "bk2", run: async () => { doProbe(2); await idle(); await demoWait(4); doReadPM(); }, wait: 1.5 },
-  { z: "ph", k: "Rinçage", t: "On rince la sonde avant de mesurer le bécher 4.", why: "rinse", cam: "pm", run: async () => { doRinse(); await idle(); doProbe(3); await idle(); await demoWait(4); doReadPM(); }, wait: 1.5 },
+  { z: "ph", k: "pH-mètre", t: "La sonde plonge dans le bécher 3 ; on attend la stabilisation puis on note : le pH s'inscrit dans le tableau.", why: "probe", cam: "bk2", run: async () => { doProbe(2); await idle(); await demoWait(2); await waitUntil(() => Math.abs(ST.pm.rd - ST.pm.tgt) < 0.02); await demoWait(0.6); doReadPM(); }, wait: 1.5 },
+  { z: "ph", k: "Rinçage", t: "On rince la sonde avant de mesurer le bécher 4.", why: "rinse", cam: "pm", run: async () => { doRinse(); await idle(); doProbe(3); await idle(); await demoWait(2); await waitUntil(() => Math.abs(ST.pm.rd - ST.pm.tgt) < 0.02); await demoWait(0.6); doReadPM(); }, wait: 1.5 },
   { z: "ph", k: "Nature", t: "pH > 7,5 : sol basique ; pH < 6,5 : sol acide.", why: "nature", cam: "ph", run: async () => { await demoAns("nat2", nature(ST.bk[2].pm)); await demoAns("nat3", nature(ST.bk[3].pm)); }, wait: 1 },
   { z: "hcl", k: "Pincées", t: "Une pincée de chaque sol sur son verre de montre (1 sable, 2 argile, 3 calcaire, 4 sol de forêt).", why: "hcl", cam: "hcl", run: async () => { for (let i = 0; i < 4; i++) { scoopTo(i, "wg"); await idle(); } }, wait: 1 },
   { z: "hcl", k: "Test au HCl", t: "Trois gouttes de HCl dilué sur chaque sol : vive effervescence sur le sol calcaire (CaCO₃ + 2 H⁺ → Ca²⁺ + CO₂ + H₂O), peu ou pas de bulles sur les autres.", why: "hcl", cam: "hcl", run: async () => { for (let i = 0; i < 4; i++) { doHcl(i); await idle(); } for (let i = 0; i < 4; i++) await demoAns("eff" + i, effIdx(SK[i])); }, wait: 1 },

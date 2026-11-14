@@ -610,6 +610,18 @@ const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "fu
 /*legende*/ /* légende d'une vue d'observation : chaque objet ou résultat est nommé (étiquette + trait de rappel), sans donner la réponse attendue dans le tableau */
 const RESVIEW = {}; // expérience finie (bilan vu) : clic sur un objet → vue de son résultat, légendée (RESVIEW[outil] = clé de vue)
 const LEGS = {}; // LEGS[clé de vue] = [{ at: () => [x, y, z] (repère de la paillasse), t: "nom", m: "précision", c: "#couleur", on: () => vrai si affichée }]
+/*leg-btn*/ /* bouton « Masquer / Afficher la légende » (demande de l'enseignant, nov. 2026) : visible dès qu'une légende existe pour la vue ; le choix est gardé d'une manip à l'autre */
+function legBtn(avail) {
+  let b = document.getElementById("legBtn");
+  if (!b) {
+    try { window.__legOff = localStorage.getItem("labLegOff") === "1"; } catch (e) {}
+    const st = document.createElement("style"); st.textContent = '#legBtn{position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:6;font:700 13px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;border:1px solid #c9d2dc;background:#fff;color:#1d2836;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}#legBtn:hover{background:#eef3f8}#legBtn.off{top:62px}#legBtn[hidden]{display:none}@media (max-width:640px){#legBtn,#legBtn.off{top:auto;bottom:86px}}'; document.head.appendChild(st);
+    b = document.createElement("button"); b.id = "legBtn"; b.type = "button"; document.body.appendChild(b);
+    b.onclick = (e) => { e.stopPropagation(); window.__legOff = !window.__legOff; try { localStorage.setItem("labLegOff", window.__legOff ? "1" : "0"); } catch (er) {} legBtn(true); };
+  }
+  if (b.hidden !== !avail) b.hidden = !avail;
+  const t = window.__legOff ? "🏷 Afficher la légende" : "🏷 Masquer la légende"; if (b.textContent !== t) { b.textContent = t; b.classList.toggle("off", !!window.__legOff); }
+}
 function legendTick() {
   let el = document.getElementById("labLeg");
   if (!el) {
@@ -618,7 +630,7 @@ function legendTick() {
     document.head.appendChild(st);
   }
   const list = (LEGS[camFocus] || []).filter((i) => (!i.on || i.on()) && (!i.fin || ST.fini)), ov = document.getElementById("overlay"); // fin : résultat, montré seulement quand l'expérience est finie
-  const show = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false);
+  const can = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false); legBtn(can); const show = can && !window.__legOff;
   el.hidden = !show; if (!show) return; el.querySelector(".ttl").textContent = list.some((i) => i.fin) ? "Résultat de l'expérience" : "Légende";
   const W = window.innerWidth, H = window.innerHeight, P = (a) => { const v = L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2])).project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H, v.z]; };
   const val = (v) => (typeof v === "function" ? v() : v), it = list.map((i) => { const a = P(i.at()); return { ...i, t: val(i.t), m: val(i.m), a, s: a[0] < W / 2 ? "L" : "R" }; }).filter((i) => i.a[2] < 1);
@@ -1181,7 +1193,7 @@ async function weighTo(type, target) {
   while (ST.demo && wbMass() > target + 0.5) { doPinchOut(); await demoWait(0.2); }
 }
 async function fillTo(v) { if (ST.e0 > v + 0.5) { emptyE0(); await demoWait(0.3); } while (ST.demo && ST.e0 < v - 0.5) { addWater(Math.max(1, Math.min(10, Math.floor(v - ST.e0)))); while (ST.demo && ST.pouring) await demoTick(); await demoWait(0.2); } }
-async function waitSim(i, minutes) { const s = ST.st[i], a0 = ST.acc; ST.acc = 120; $("#btnSpeed").textContent = "⏩ ×120"; while (ST.demo && (s.tPour == null || ST.simT - s.tPour < minutes)) await demoTick(); ST.acc = a0; $("#btnSpeed").textContent = "⏩ ×" + a0; }
+async function waitSim(i, minutes) { const s = ST.st[i], a0 = ST.acc; /* fin réelle de l'égouttage : le minuteur s'arrête peu après la dernière goutte (l'étape suivante attend encore ≈ 1,1 min simulée avant le geste) */ if (s.Vin > 0) minutes = Math.max(0.5, simulate(s.ms, s.mc, s.Vin, s.cot).t95 + 0.3 - 1.1); ST.acc = 120; $("#btnSpeed").textContent = "⏩ ×120"; while (ST.demo && (s.tPour == null || ST.simT - s.tPour < minutes)) await demoTick(); ST.acc = a0; $("#btnSpeed").textContent = "⏩ ×" + a0; }
 const DEMO = [
   { k: "Coton", t: "On place un tampon de coton au fond des entonnoirs A et B : il retient le sol et laisse passer l'eau.", why: "cot", cam: "st0", run: async () => { doCotton(0); await demoWait(0.2); doCotton(1); }, wait: 1 },
   { k: "Balance", t: "Bécher de pesée vide sur le plateau : on tare, l'afficheur revient à 0,00 g.", why: "tare", cam: "bal", run: doTare, wait: 1.5 },
@@ -1191,12 +1203,12 @@ const DEMO = [
   { k: "Entonnoir B", t: "On verse les 100 g d'argile dans l'entonnoir B.", why: "soilPour", cam: "st1", run: () => doPourSoil(1), wait: 1 },
   { k: "Eau", t: "On mesure 100 mL d'eau à l'éprouvette graduée (lecture au bas du ménisque).", why: "water", cam: "e0", run: () => fillTo(100), wait: 1 },
   { k: "Sol A", t: "On verse les 100 mL sur le sable : le minuteur A démarre au contact de l'eau (t = 0).", why: "timer", cam: "st0", run: () => doPourWater(0), wait: 1 },
-  { k: "Eau", t: "On mesure à nouveau 100 mL d'eau pour l'argile.", why: "water", cam: "e0", run: () => fillTo(100), wait: 1 },
-  { k: "Sol B", t: "On verse les 100 mL sur l'argile (minuteur B à t = 0) : l'eau stagne en surface et s'infiltre lentement.", why: "clay", cam: "st1", run: () => doPourWater(1), wait: 1 },
   { k: "Sable", t: "Dans le sable, l'eau traverse vite : la première goutte arrive presque aussitôt (t₁ s'inscrit seul dans le tableau), puis un filet et des gouttes de plus en plus espacées. Temps accéléré ×120.", why: "t1", cam: "cyl0", run: () => waitSim(0, 7.9), wait: 0.5 },
   { k: "Dernière goutte A", t: "Les gouttes sont très espacées puis cessent : on arrête le minuteur A. Sa valeur t₂ s'inscrit dans le tableau.", why: "t2", cam: "cyl0", run: () => doTimer(0, "stop"), wait: 1.5 },
   { k: "Lecture A", t: "On lit le volume recueilli au bas du ménisque : V_g ≈ 80 mL, noté dans le tableau.", why: "read", cam: "cyl0", run: () => doRead(0), wait: 1.5 },
   { k: "Calculs A", t: "L'élève calcule et écrit au clavier : V_r = 100 − 80 = 20,00 mL ; P = V_g / (t₂ − t₁). Juste → écrit en vert « Bravo ».", why: "calc", cam: "cyl0", run: () => demoCalc(0), wait: 1.5 },
+  { k: "Eau", t: "On mesure à nouveau 100 mL d'eau pour l'argile.", why: "water", cam: "e0", run: () => fillTo(100), wait: 1 },
+  { k: "Sol B", t: "On verse les 100 mL sur l'argile (minuteur B à t = 0) : l'eau stagne en surface et s'infiltre lentement.", why: "clay", cam: "st1", run: () => doPourWater(1), wait: 1 },
   { k: "Argile", t: "Dans l'argile, l'eau stagne et le sol se gorge d'abord : la première goutte (t₁) n'arrive qu'après plusieurs minutes, puis les gouttes restent rares.", why: "clay", cam: "cyl1", run: () => waitSim(1, 36), wait: 0.5 },
   { k: "Dernière goutte B", t: "Plus aucune goutte : on arrête le minuteur B (t₂).", why: "t2", cam: "cyl1", run: () => doTimer(1, "stop"), wait: 1.5 },
   { k: "Lecture B", t: "V_g ≈ 10 mL seulement : l'argile a retenu presque toute l'eau.", why: "read", cam: "cyl1", run: () => doRead(1), wait: 1.5 },
