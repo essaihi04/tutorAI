@@ -306,6 +306,14 @@ export default function CoursePlayer({
     onAvancer: goToNext,
     onQuitter: (avancer) => { if (avancer) goToNext(); setStarted(false); },
   });
+  // fenêtre de fin de bloc ouverte : sur téléphone, le tuteur 3D (qui n'y a pas de colonne) se cache au lieu de la
+  // couvrir (AIAvatar.css, `body[data-fenetre-bloc]`) ; sa voix continue (14 novembre 2026)
+  const fenetreBloc = started && !!memoire.ecran;
+  useEffect(() => {
+    if (!fenetreBloc) return;
+    document.body.dataset.fenetreBloc = '1';
+    return () => { delete document.body.dataset.fenetreBloc; };
+  }, [fenetreBloc]);
   if (!current) {
     return <div className="h-full grid place-items-center text-white/60">Ce cours ne contient aucune diapositive.</div>;
   }
