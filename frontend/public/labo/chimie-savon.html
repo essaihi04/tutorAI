@@ -416,7 +416,8 @@ const clk = (min) => { const s = Math.max(0, Math.round(min * 60)); return Strin
 const setCol = (mat, hex) => { mat.color.set(hex).convertSRGBToLinear(); };
 const mixHex = (a, b, k) => { const A = new THREE.Color(a), B = new THREE.Color(b); return "#" + A.lerp(B, clamp(k, 0, 1)).getHexString(); };
 const g2 = (x) => fmt(x, 2), g1 = (x) => fmt(x, 1);
-const COL = { oil: "#c9a91c", aq: "#9fc4ea", eth: "#f1f4f6", mixA: "#e6c13a", mixB: "#c47c18", soap: "#f2e8c9", cloudy: "#ece4c4", saltW: "#e6eef4", ponce: 0x8b8d89 };
+const LIQS = []; // matériaux de liquide : leur émissif suit leur couleur
+const COL = { oil: "#e0a800", aq: "#9fc4ea", eth: "#f1f4f6", mixA: "#e6c13a", mixB: "#c47c18", soap: "#f2e8c9", cloudy: "#ece4c4", saltW: "#e6eef4", ponce: 0x8b8d89 };
 
 /* liquide dans le ballon : tranche de sphère entre les hauteurs h0 et h1 (comptées depuis le fond intérieur) */
 function sphBand(h0, h1) {
@@ -445,7 +446,8 @@ function buildBench(g) {
   M.lcdBezel = std(0x111317, 0.35); M.brushed = std(0xcfd4d9, 0.32, 0.95); M.pp = new THREE.MeshPhysicalMaterial({ color: 0x8e98a3, roughness: 0.55, clearcoat: 0.2 });
   M.frost = std(0xeef2f5, 0.75, 0, { transparent: true, opacity: 0.55, depthWrite: false }); M.cork = std(0xb98a5c, 0.85); M.hose = std(0xc98d55, 0.55, 0, { transparent: true, opacity: 0.92 });
   const noShadow = (m, ro) => { m.castShadow = false; if (ro) m.renderOrder = ro; return m; };
-  const liq = (hex, op) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.06, transparent: true, opacity: op, clearcoat: 1, depthWrite: false }); return m; };
+  // liquides mats et colorés : peu de reflets du ciel (sinon la surface paraît blanche), un peu de lumière propre (voir mise à jour dans tick)
+  const liq = (hex, op) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.6, reflectivity: 0.05, envMapIntensity: 0.15, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); LIQS.push(m); return m; };
 
   // --- balance de précision (0,01 g)
   const bal = new THREE.Group(); bal.position.set(-0.44, 0, -0.18); g.add(bal); X.bal = bal;
@@ -472,8 +474,9 @@ function buildBench(g) {
   noShadow(mesh(new THREE.TorusGeometry(0.014, 0.0012, 8, 32), std(0xcfe0ee, 0.1, 0, { transparent: true, opacity: 0.95 }), bl, 0, 0.138, 0), 4).rotation.x = Math.PI / 2;
   mesh(new THREE.CylinderGeometry(0.0412, 0.0412, 0.024, 40, 1, true, -2.2, 1.1), new THREE.MeshStandardMaterial({ map: canvasTex(256, 128, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "rgba(255,255,255,.92)"; x.fillRect(20, 14, 216, 100); x.fillStyle = "#1b2633"; x.textAlign = "center"; x.font = "bold 42px Arial"; x.fillText("250 mL", w / 2, 62); x.font = "24px Arial"; x.fillText("NS 29/32 · DURAN", w / 2, 98); }), transparent: true, depthWrite: false, roughness: 0.5 }), bl, 0, 0.045, 0).renderOrder = 4;
   X.bValet = mesh(new THREE.TorusGeometry(0.03, 0.0085, 10, 32), M.cork, bl, 0, 0.0005, 0); X.bValet.rotation.x = Math.PI / 2; X.bValet.visible = false;
-  X.liqAq = noShadow(mesh(new THREE.BufferGeometry(), liq(0xe9eff4, 0.42), bl), 2); X.liqOil = noShadow(mesh(new THREE.BufferGeometry(), liq(0xc9a91c, 0.9), bl), 2); X.liqAq.visible = X.liqOil.visible = false; X.liqOil.renderOrder = 2.6;
-  X.tiltG = new THREE.Group(); X.tiltG.position.y = BY0 + BR; bl.add(X.tiltG); X.liqTilt = noShadow(mesh(new THREE.BufferGeometry(), liq(0xe6c13a, 0.85), X.tiltG), 2); X.liqTilt.position.y = -(BY0 + BR); X.liqTilt.visible = false;
+  X.liqAq = noShadow(mesh(new THREE.BufferGeometry(), liq(0xe9eff4, 0.42), bl), 2); X.liqOil = noShadow(mesh(new THREE.BufferGeometry(), liq(0xe0a800, 0.96), bl), 2); X.liqAq.visible = X.liqOil.visible = false; X.liqOil.renderOrder = 2.6;
+  X.liqAq.renderOrder = 3.5; X.liqOil.renderOrder = 3.6; X.liqTiltRO = 3.5; // dessinés après le verre du ballon (sinon le verre les blanchit)
+  X.tiltG = new THREE.Group(); X.tiltG.position.y = BY0 + BR; bl.add(X.tiltG); X.liqTilt = noShadow(mesh(new THREE.BufferGeometry(), liq(0xe6c13a, 0.85), X.tiltG), 2); X.liqTilt.position.y = -(BY0 + BR); X.liqTilt.visible = false; X.liqTilt.renderOrder = 3.5;
   X.ponceIn = new THREE.Group(); bl.add(X.ponceIn); const pM = std(COL.ponce, 0.95);
   for (let i = 0; i < 4; i++) { const p = sph(0.0034, pM, X.ponceIn, (i - 1.5) * 0.007, BY0 + 0.003, (i % 2 ? 1 : -1) * 0.004); p.scale.set(1, 0.75, 0.9); p.visible = false; }
   X.bubM = std(0xffffff, 0.1, 0, { transparent: true, opacity: 0.6, depthWrite: false }); X.bubs = new THREE.Group(); bl.add(X.bubs);
@@ -541,7 +544,7 @@ function buildBench(g) {
     noShadow(mesh(new THREE.CylinderGeometry(rr + 0.0005, rr + 0.0005, 0.058, 48, 1, true, -1.3, 2.6), std(0xffffff, 0.6, 0, { map: tex }), b, 0, 0.055, 0));
     tool(name, b, [0, 0.16, 0]); return b;
   };
-  X.oilB = bottle(-0.58, 0.04, M.glass, 0x2f5d2a, 0xbfa52c, 0.85, labelTex("Huile d'olive", ["≈ oléine (C₁₇H₃₃COO)₃C₃H₅", "M = 884 g/mol · ρ = 0,92 g/mL"], "#5b7a1e"), "huile", 0.031);
+  X.oilB = bottle(-0.58, 0.04, M.glass, 0x2f5d2a, 0xe0a800, 0.9, labelTex("Huile d'olive", ["≈ oléine (C₁₇H₃₃COO)₃C₃H₅", "M = 884 g/mol · ρ = 0,92 g/mL"], "#5b7a1e"), "huile", 0.031);
   X.sodB = bottle(-0.47, 0.12, M.hdpe, 0x1e4f9c, null, 0, labelTex("NaOH", ["soude C = 10 mol/L", "corrosive : gants, lunettes"], "#1e4f9c", 768, 384, true), "soude");
   X.ethB = bottle(-0.35, 0.16, M.glass, 0xb52a22, 0xf3f6f8, 0.3, flameLabelTex("Éthanol", ["C₂H₅OH 95 % · solvant", "inflammable : pas de flamme"], "#b52a22"), "ethanol", 0.031);
   const pj = new THREE.Group(); pj.position.set(-0.13, 0, -0.06); g.add(pj); X.ponceJ = pj;
@@ -764,7 +767,7 @@ function camLabel(obj, side = 0, up = 0.55) {
   const b = new THREE.Box3().setFromObject(obj), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3()); L.g.worldToLocal(c);
   const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1; return { p: [c.x + Math.sin(side) * d * 0.9, c.y + d * up, c.z + Math.cos(side) * d * 0.9], t: [c.x, c.y, c.z] };
 }
-const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.08 - 0.03 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] }); // k > 1 : recule pour voir aussi le bas (éprouvette)
+const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.12 - 0.07 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] }); // k > 1 : recule pour voir aussi le bas (éprouvette)
 function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
 function lookPour(N) { CAMS["@pour"] = camPour(N); look("@pour"); }
 
@@ -1328,11 +1331,12 @@ function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENC
 /* ------------------------------------------------------------ simulation : chaque image */
 const dtCCM = (dt) => (dt * ST.acc) / 60 / 2; // l'élution suit le temps accéléré (deux fois moins vite que le chauffage)
 const mouth = (b) => gpos(b, [0, 0.136, 0]);
+const surfB = () => gpos(X.ballon, [0, BY0 + Math.max(0.003, capH(Vball() * (1 - ST.loss))), 0]); // le filet va jusqu'à la surface du liquide dans le ballon
 function arcEnds(P) {
   const bk = (w) => (w === "sale" ? X.bkSale : X.bkDist), surf = (w) => { const R = ST.relg[w]; return gpos(bk(w), [0.004, 0.004 + bkH(Math.max(R.V + R.liq, 5)), 0]); };
-  if (P.k === "oil") return [mouth(X.oilB), gpos(X.ballon, [0, 0.11, 0]), COL.oil, 0.0018];
+  if (P.k === "oil") return [mouth(X.oilB), surfB(), COL.oil, 0.0018];
   if ((P.k === "s" || P.k === "e") && P.to === "ep") return [mouth(P.k === "s" ? X.sodB : X.ethB), gpos(X.ep, [0, 0.19, 0]), COL.aq, 0.0016];
-  if (P.to === "ballon") return [gpos(X.ep, [0.008, 0.212, 0]), gpos(X.ballon, [0, 0.1, 0]), COL.aq, 0.0018];
+  if (P.to === "ballon") return [gpos(X.ep, [0.008, 0.212, 0]), surfB(), COL.aq, 0.0018];
   if (P.k === "mix") return [gpos(X.ballon, [0, 0.139, 0]), P.to === "bin" ? new THREE.Vector3(-0.62, 0.09, -0.38) : surf(P.to), ST.flags.mixCol || COL.mixA, 0.0028];
   if (P.k === "cloudy") return [gpos(bk(P.from || "sale"), [0.036, 0.097, 0]), new THREE.Vector3(0.35, 0.2, 0.03), COL.cloudy, 0.003];
   return null;
@@ -1343,11 +1347,12 @@ function tick(dt) {
   runQueue(dt);
   if (ST.camNext && ST.q[0] && ST.q[0].obj === ST.camNext.obj) { CAMS["@pour"] = ST.camNext.cam; ST.camNext = null; look("@pour"); } else if (ST.camNext && !ST.q.length) ST.camNext = null;
   if (ST.q[0] && ST.q[0].obj && !L.tw && !CAM_FIX.has(camFocus)) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); }
+  for (const m of LIQS) m.emissive.copy(m.color).multiplyScalar(0.45);
   L.g.updateMatrixWorld(); // positions à jour pour les filets (même si l'image n'a pas été redessinée)
   // --- versement d'huile maintenu
   const F = ST.oFlow; X.arcPour.visible = false;
   if (F && F.ready && F.on && F.short != null && (F.short -= dt) <= 0) { F.short = null; stopOil(); }
-  if (F) { if (F.ready && F.on) { const r = 2.0 * (0.85 + Math.random() * 0.3); ST.mOil += r * dt; arcPour(X.arcPour, mouth(X.oilB), gpos(X.ballon, [0, 0.11, 0]), 0.0022, 0.25); setCol(X.arcPourM, COL.oil); X.arcPourM.opacity = 0.85; } else if (!F.on && !F.back) { F.idle -= dt; if (F.idle <= 0 && !ST.q.length) oilBack(); } }
+  if (F) { if (F.ready && F.on) { const r = 2.0 * (0.85 + Math.random() * 0.3); ST.mOil += r * dt; arcPour(X.arcPour, mouth(X.oilB), surfB(), 0.0022, 0.12); setCol(X.arcPourM, COL.oil); X.arcPourM.opacity = 0.85; } else if (!F.on && !F.back) { F.idle -= dt; if (F.idle <= 0 && !ST.q.length) oilBack(); } }
   const E = ST.epFlow;
   if (E && E.ready && E.on && E.short != null && (E.short -= dt) <= 0) { E.short = null; stopEp(); }
   if (E) { if (E.ready && E.on) { const tot = ST.ep.s + ST.ep.e; if (tot >= 25) { E.on = false; E.idle = 1.4; L.ctl.enabled = true; toast("Éprouvette pleine (25 mL).", "bad"); } else { ST.ep[E.kind] = Math.min(25 - (tot - ST.ep[E.kind]), ST.ep[E.kind] + 4 * (0.9 + Math.random() * 0.2) * dt); arcPour(X.arcPour, mouth(E.kind === "s" ? X.sodB : X.ethB), gpos(X.ep, [0, 0.19, 0]), 0.0017, 0.25); setCol(X.arcPourM, COL.aq); X.arcPourM.opacity = 0.88; } } else if (!E.on && !E.back) { E.idle -= dt; if (E.idle <= 0 && !ST.q.length) epBack(); } }
