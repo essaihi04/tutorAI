@@ -58,7 +58,8 @@ const YC = 328, H1 = 105, H2 = 28;  // chaleur : ligne de base, hauteurs des deu
 const MX = 95;                  // axe du muscle
 const SW = { x1: 112, x2: 202, y: 374 };   // interrupteur dioxygène
 
-const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, o2: true, origines: false };
+// conclusions : false pendant une question d'observation du tuteur (14 novembre 2026) : la scène montre, elle n'écrit pas la réponse.
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, o2: true, origines: false, conclusions: true };
 const APPARU = {};
 
 /* ── Peinture du vivant et du matériel (canvas brut, AVANT la craie) ─── */
@@ -241,7 +242,7 @@ function dessiner(c) {
     c.ligne(X(TR), 84, X(TR), YC, { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
     c.texte('fin de la secousse', 368, 126, { couleur: 'faible', taille: 13 });
   });
-  plusTard(c, 'identique', !S.o2 && t >= TR, () => c.texte('identique sans O₂', 376, 254, { couleur: 'rouge', taille: 13 }));
+  plusTard(c, 'identique', S.conclusions && !S.o2 && t >= TR, () => c.texte('identique sans O₂', 376, 254, { couleur: 'rouge', taille: 13 }));
   plusTard(c, 'orig_init', S.origines && t >= TR, () => {
     c.texte('hydrolyse de l’ATP + phosphocréatine', XA, 392, { couleur: 'vert', taille: 14, max: 214 });
     c.texte('(rapide, sans O₂)', XA, 410, { couleur: 'vert', taille: 14 });
@@ -252,7 +253,7 @@ function dessiner(c) {
     c.repere('chaleur_retardee', XC, YC - H2 - 30, XD - XC, H2 + 34, 'la chaleur retardée : basse et longue, après la secousse');
   });
   plusTard(c, 'sans_o2', !S.o2 && t >= 20, () => {
-    c.texte('sans O₂ : pas de chaleur retardée', (XC + XD) / 2, 312, { couleur: 'rouge', taille: 14, align: 'center', max: 206 });
+    if (S.conclusions) c.texte('sans O₂ : pas de chaleur retardée', (XC + XD) / 2, 312, { couleur: 'rouge', taille: 14, align: 'center', max: 206 });
     c.repere('chaleur_retardee', XC, YC - 34, XD - XC, 40, 'sans dioxygène : pas de chaleur retardée');
   });
   plusTard(c, 'orig_ret', S.origines && S.o2 && t >= T_RET, () => {
@@ -273,10 +274,10 @@ scene.avancer = dt => {
   if (S.jusqua != null && S.t >= S.jusqua) {
     S.t = S.jusqua; S.running = false; S.jusqua = null; S.fait = S.t >= FIN - 1e-6;
     $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre';
-    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(expDe(S.t), 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    bulle($('feedback'), S.conclusions ? 'Arrêt sur image : ' + (S.motif || `t = ${fr(expDe(S.t), 3)} s`) + '.' : 'Arrêt sur image : observe la courbe de la chaleur.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
     return true;
   }
-  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; if (S.conclusions) bulle($('feedback'), message(), 'good'); else bulle($('feedback'), 'Fin de l’enregistrement : observe la courbe de la chaleur.'); pont.emettre(); }
   else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
@@ -360,6 +361,10 @@ function setTime(p) {
   bulle($('feedback'), `Arrêt sur image : t = ${fr(expDe(S.t), 3)} s de l’expérience.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
 }
 function setParameters(p) {
+  if ('conclusions' in p) {
+    const v = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+    if (v !== S.conclusions) { S.conclusions = v; scene.sale = true; if (v && S.fait) bulle($('feedback'), message(), 'good'); }
+  }
   if (!('dioxygene' in p) && !('origines' in p)) return;
   const avant = S.o2; appliquer(p);
   bulle($('feedback'), `Dioxygène : ${S.o2 ? 'présent' : 'absent'}${S.origines ? ' ; origines écrites' : ''}.`);
@@ -394,7 +399,7 @@ window.Tableau.explication({ [vue]: [
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'muscle_chaleur', version: '1.0', title: 'Le muscle dégage de la chaleur', variants: [{ id: vue, label: 'chaleur initiale et chaleur retardée' }], commands: commandes,
   command_schema: {
-    set_parameters: { dioxygene: 'true | false (interrupteur « dioxygène : présent / absent »)', origines: 'true | false (écrit sous chaque bosse son origine)' },
+    set_parameters: { dioxygene: 'true | false (interrupteur « dioxygène : présent / absent »)', origines: 'true | false (écrit sous chaque bosse son origine)', conclusions: 'true | false (false : ni « identique sans O₂ » ni « pas de chaleur retardée » écrits, pour une question d’observation)' },
     set_time: { time_s: `0..${fr(FIN, 1)} (instant de la scène, en s ; arrêt sur image)`, t_experience_s: '0..135 (ou un instant de l’expérience, en s)' },
     play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé ; sans_dioxygene, avec_dioxygene et origines (origines = true, dioxygène présent) posent le réglage puis rejouent jusqu’à la fin)', time_s: 'ou un instant de la scène en s' } } };
 const pont = protocole({ id: config.id, commandes, config,

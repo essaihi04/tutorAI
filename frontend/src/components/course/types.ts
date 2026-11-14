@@ -201,6 +201,47 @@ export interface SlideConcentration {
    * acquis_ids}`) et, la voix finie, le tuteur nomme ce qu'il reste à retravailler puis fige la page « lacunes ».
    */
   acquis?: boolean;
+  /**
+   * La question d'OBSERVATION (14 novembre 2026, skill professeur règle 29) : là où l'élève doit remarquer LUI-MÊME
+   * quelque chose dans la simulation (une disparition, l'effet d'un curseur, une comparaison). Rare : une par diapositive
+   * au plus, quelques-unes par cours.
+   */
+  observation?: QuestionObservation;
+}
+
+/**
+ * La voix s'arrête juste après `apres_mot` (extrait exact du texte parlé de la langue jouée ; absent : à la fin de la
+ * voix), le tuteur fait `gestes` dans la simulation, pose `enonce` (écrit + lu) et se tait : l'élève regarde. Sans
+ * réponse, chaque `silence_s` apporte un indice (`indices`, le tuteur peut montrer un repère), puis les cartes `choix`.
+ * L'élève répond au micro de réponse (maintenu, transcrit, jugé comme RÉPONSE à cette question) ou par une carte.
+ * Chaque carte a son retour (`retours[i]`) ; deux erreurs → `solution`. Puis la voix du cours reprend où elle s'était arrêtée.
+ */
+export interface QuestionObservation {
+  apres_mot?: string;
+  /**
+   * Réglages envoyés à la simulation (`set_parameters`, sans geste du tuteur) dès qu'elle est prête et jusqu'à la
+   * réponse : une simulation qui ÉCRIT sa conclusion la tait (`{conclusions: false}`), sinon la réponse est sous les yeux.
+   * `sim_apres` : envoyé quand la question se ferme (`{conclusions: true}`) — la conclusion s'écrit pendant que la voix confirme.
+   */
+  sim_avant?: Record<string, unknown>;
+  sim_apres?: Record<string, unknown>;
+  gestes?: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[];
+  /** La question écrite (courte, au présent : « Qu'est-ce qui a disparu ? »). */
+  enonce: string;
+  /** Sa piste préparée (voix Bodi), sinon `enonce_dit` (règles de la voix) par la voix en direct. */
+  enonce_audio?: string;
+  enonce_dit?: string;
+  /** Silence d'observation avant chaque aide (s, défaut 8). */
+  silence_s?: number;
+  /** Indices progressifs (un ou deux) : du plus vague au plus précis, jamais la réponse. */
+  indices?: { texte: string; dit?: string; audio?: string; repere?: string }[];
+  /** Trois réponses possibles, ou ['Vrai', 'Faux'] (l'énoncé est alors l'affirmation). */
+  choix: string[];
+  bonne: number;
+  /** Le retour de CHAQUE carte (même ordre que `choix`) : juste → ce qu'il fallait voir ; fausse → un indice. */
+  retours?: ReactionPreparee[];
+  /** Après la deuxième erreur : la réponse et ce qu'il fallait regarder. */
+  solution?: ReactionPreparee;
 }
 
 export interface CourseActivity {

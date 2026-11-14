@@ -38,6 +38,8 @@ interface Props {
   onRig?: (rig: ProfessorRig) => void;
   /** Geste d'émotion à jouer (coucou, bras levés, mains sur le cœur, hochement) ; `key` relance le geste. */
   gesture?: { kind: ProfessorGestureKind; key: number } | null;
+  /** L'élève répond au micro (question d'observation) : la main reste derrière l'oreille tant qu'il parle. */
+  holdEar?: boolean;
   onError: () => void;
 }
 /** Durée de chaque geste d'émotion, en secondes. */
@@ -62,9 +64,11 @@ const MOUSTACHE_SCALE = 0.85;
 const FRAME_MARGIN = 1.12;
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const;
 
-export default function Professor3D({ mood, pointing, pointingSide, target, writing = false, motion, onHandPosition, onRig, gesture, onError }: Props) {
+export default function Professor3D({ mood, pointing, pointingSide, target, writing = false, motion, onHandPosition, onRig, gesture, holdEar = false, onError }: Props) {
   const gestureRef = useRef(gesture);
   useEffect(() => { gestureRef.current = gesture; }, [gesture]);
+  const holdEarRef = useRef(holdEar);
+  useEffect(() => { holdEarRef.current = holdEar; }, [holdEar]);
   const host = useRef<HTMLDivElement>(null);
   const moodRef = useRef(mood), pointRef = useRef(pointing), sideRef = useRef(pointingSide), targetRef = useRef(target), writingRef = useRef(writing);
   const motionRef = useRef(motion);
@@ -400,7 +404,7 @@ export default function Professor3D({ mood, pointing, pointingSide, target, writ
           // la main libre va derrière l'oreille (« je t'écoute »), puis redescend.
           const earSide: 'Left' | 'Right' = aim > 0.02 && aimSide === 'Left' ? 'Right' : 'Left';
           const listenAge = time - listenStart;
-          const cup = listen * smooth(0.1, 0.7, listenAge) * (1 - smooth(2.4, 3.2, listenAge));
+          const cup = listen * smooth(0.1, 0.7, listenAge) * (holdEarRef.current ? 1 : 1 - smooth(2.4, 3.2, listenAge));
           if (listen > 0.001) {
             rotateWorld(bone('Head'), Z, (earSide === 'Left' ? -1 : 1) * listen * 0.14);      // penche l'oreille vers l'élève
             rotateWorld(bone('Spine'), X, listen * 0.07);

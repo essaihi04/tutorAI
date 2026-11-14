@@ -32,6 +32,8 @@ interface AIAvatarProps {
    * à hauteur de ce qu'il montre et le relie du doigt et de la baguette, sans jamais se poser sur l'écriture.
    */
   discret?: boolean;
+  /** Question d'observation : l'élève maintient le micro de réponse, le professeur garde la main à l'oreille. */
+  mainOreille?: boolean;
 }
 type Spark = { id: number; emoji: string; x: number; y: number; dx: number; delay: number; size: number };
 const WIDTH = 180;
@@ -79,7 +81,7 @@ function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
-export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false }: AIAvatarProps) {
+export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false, mainOreille = false }: AIAvatarProps) {
   const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
@@ -339,7 +341,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         {!minimized && (!animationFailed
           ? <Suspense fallback={<img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Chargement de Moalim" />}>
               <Professor3D mood={state} pointing={!!target && !minimized} pointingSide={side} target={aimPoint} writing={writing}
-                motion={motion} onHandPosition={onHandPosition} onRig={onRig} gesture={gesture} onError={onAnimationError} />
+                motion={motion} onHandPosition={onHandPosition} onRig={onRig} gesture={gesture} holdEar={mainOreille} onError={onAnimationError} />
             </Suspense>
           : <img className="moalim-avatar__image" src="/media/avatar/moalim-professeur.png" alt="Moalim, ton professeur virtuel" draggable={false} />)}
         {!discret && <div className="moalim-avatar__toolbar">

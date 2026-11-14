@@ -4,7 +4,7 @@ import { observeAvatarMedia } from '../../services/avatarAudio';
 import { audioUnlock } from '../../services/audioUnlock';
 import type { ProfessorEmotionKind } from '../../services/professorEmotion';
 import { focusProfessor } from '../../services/professorFocus';
-import type { CourseSlide, Demonstration, EnonceLu, ReactionPreparee, SlideConcentration } from './types';
+import type { CourseSlide, Demonstration, EnonceLu, QuestionObservation, ReactionPreparee, SlideConcentration } from './types';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, hauteurClavierTelephone, largeurClavier, useChampClavier, useClavier } from './ClavierFlottant';
 import { Formule } from './Formule';
@@ -214,6 +214,20 @@ const CLIP_RELANCE = '/media/audio/reactions/relance-suite.mp3';
  * `pret` : l'étape en cours est terminée, le bouton est mis en avant et la relance peut venir.
  */
 type EtapeSuite = { quoi: 'voix' | 'ouvrir' | 'question' | 'jumelle' | 'reprise' | 'diapo' | 'bloc' | 'rien'; pret: boolean };
+/**
+ * La question d'observation en cours (14 novembre 2026) : `observe` (silence, l'élève regarde ; indices puis cartes),
+ * `ecoute` (il maintient le micro de réponse), `transcrit`, `juge` (le serveur juge sa réponse dite), `fini` (le retour
+ * est dit, la voix du cours va reprendre).
+ */
+type EtatObservation = {
+  etape: 'observe' | 'ecoute' | 'transcrit' | 'juge' | 'fini';
+  indices: number; cartes: boolean; exclus: number[]; essai: number;
+  /** la carte montrée juste (bonne réponse trouvée, ou montrée après la deuxième erreur) */
+  bonneMontree?: boolean;
+  entendu?: string; verdict?: { correct: boolean | null; ecrit: string }; erreur?: string;
+};
+/** Silence d'observation par défaut avant chaque aide (indice, puis cartes). */
+const SILENCE_OBSERVATION_S = 8;
 /** Une phrase préenregistrée existe-t-elle vraiment ? (le serveur de dev renvoie la page HTML pour un fichier absent) */
 async function clipExiste(url: string): Promise<boolean> {
   try {
@@ -361,6 +375,21 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const voixLancee = useRef(false);
   const diapoRef = useRef({ id: slide.id, title: slide.title });
   diapoRef.current = { id: slide.id, title: slide.title };
+  // ── La question d'observation (14 novembre 2026) : le tuteur s'arrête, pose la question et laisse l'élève regarder ──
+  const observation: QuestionObservation | null = conc.observation?.enonce && (conc.observation.choix || []).length >= 2 ? conc.observation : null;
+  const [obs, setObs] = useState<EtatObservation | null>(null);
+  const obsRef = useRef<EtatObservation | null>(null);
+  obsRef.current = obs;
+  /** La question d'observation de cette diapositive est close (répondue ou passée) : la variante et les questions peuvent venir. */
+  const [obsClose, setObsClose] = useState(false);
+  const obsFaite = useRef(false);
+  /** La voix du cours a été arrêtée par la question : elle reprend quand la question se ferme. */
+  const obsPause = useRef(false);
+  const tourObs = useRef(0);
+  const obsAppui = useRef(false);
+  const obsRec = useRef<MediaRecorder | null>(null);
+  const obsDebut = useRef(0);
+  const obsLimite = useRef<number | undefined>(undefined);
 
   /** L'instant d'un mot : sa place dans le texte parlé, rapportée à la durée de la piste. */
   const instant = useCallback((mot: string) => {
@@ -440,6 +469,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     setCycle(null); finies.current = {}; fausses.current = {}; voixLancee.current = false;
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
     setTableauProf(null); setAnnonce(null); tourQuestion.current += 1;
+    setObs(null); setObsClose(false); obsFaite.current = false; obsPause.current = false; tourObs.current += 1;
+    obsAppui.current = false; if (obsRec.current?.state === 'recording') obsRec.current.stop();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `predictionEnCours` est lu au changement de diapositive seulement
   }, [slide.id, piste?.url, piste?.duration_ms]);
 
@@ -1111,11 +1142,12 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const enregistrerPrediction = useCallback((r: ReponseNotee) => enregistrerReponse({ ...r, type: 'prediction' }), [enregistrerReponse]);
 
   /** Une piste déjà prête (réaction préparée) : elle part tout de suite. */
-  const jouer = useCallback((url: string) => {
+  const jouer = useCallback((url: string, secours?: string) => {
     const voix = voixRef.current;
     if (!voix) return;
-    voix.src = url; void voix.play().catch(() => {});
-  }, []);
+    // Piste absente ou illisible (404…) : la réaction est dite par la voix en direct plutôt que de rester muette.
+    voix.src = url; void voix.play().catch((e: unknown) => { if (secours && (e as Error)?.name !== 'AbortError') void dire(secours); });
+  }, [dire]);
 
   /** Un texte dit jusqu'au bout (voix en direct) ; sans voix, le temps de le lire. */
   const direEtAttendre = useCallback(async (url: Promise<string | null>, texte: string) => {
@@ -1358,10 +1390,11 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     return () => window.removeEventListener('message', ecouter);
   }, [noterResultat]);
 
-  // Après la voix, si l'élève n'a rien touché : le tuteur fait la variante lui-même, pour comparer.
+  // Après la voix, si l'élève n'a rien touché : le tuteur fait la variante lui-même, pour comparer
+  // (après la question d'observation, s'il y en a une : la variante ne change pas la scène pendant que l'élève regarde).
   useEffect(() => {
     const v = conc.variante;
-    if (!finie || !v?.etapes?.length || varianteFaite.current || !simPrete) return;
+    if (!finie || !v?.etapes?.length || varianteFaite.current || !simPrete || (observation && !obsClose)) return;
     const id = window.setTimeout(() => {
       if (eleveATouche.current || reactionRef.current || varianteFaite.current) return;
       varianteFaite.current = true;
@@ -1371,16 +1404,245 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       });
     }, (v.apres_s ?? 5) * 1000);
     return () => window.clearTimeout(id);
-  }, [finie, conc.variante, simPrete, parTuteur]);
+  }, [finie, conc.variante, simPrete, parTuteur, observation, obsClose]);
+
+  // ── La question d'observation ──
+  /** L'instant où la voix s'arrête : juste après `apres_mot` (null : la question vient à la fin de la voix). */
+  const tObservation = useMemo(() => {
+    const m = observation?.apres_mot;
+    if (!m || !duree) return null;
+    const i = parole.indexOf(m);
+    if (i < 0) return null;
+    return Math.max(0, ((i + m.length) / Math.max(1, parole.length)) * duree - 0.15);
+  }, [observation?.apres_mot, parole, duree]);
+  /** Un retour dit jusqu'au bout : la piste préparée, sinon la voix en direct ; sans voix, le temps de le lire. */
+  const direRetour = useCallback(async (r?: { parole?: string; ecrit?: string; audio?: string }) => {
+    if (!r) { await attendre(1500); return; }
+    if (r.audio && await jouerEtAttendre(r.audio, 25000)) return;
+    const texte = (r.parole || '').trim();
+    if (texte) {
+      const url = await preparerVoix(texte);
+      if (url && await jouerEtAttendre(url, 25000)) return;
+    }
+    await attendre(Math.min(6000, Math.max(1500, (r.ecrit || texte).length * 45)));
+  }, [jouerEtAttendre, preparerVoix]);
+  /** La question se ferme : la voix du cours reprend où elle s'était arrêtée (ou, à la fin de la voix, les questions s'ouvrent). */
+  const fermerObservation = useCallback(() => {
+    tourObs.current += 1;
+    obsAppui.current = false;
+    if (obsRec.current?.state === 'recording') obsRec.current.stop();
+    voixExplication.current = false; fileVoix.current = [];
+    voixRef.current?.pause();
+    setObs(null); setObsClose(true);
+    if (observation?.sim_apres) envoyerASim('set_parameters', observation.sim_apres);   // la conclusion s'écrit
+    const audio = audioRef.current;
+    if (obsPause.current) { obsPause.current = false; void audio?.play(); return; }
+    if (questions.some(q => !(q.cle in finies.current))) setPanneau('questions');
+  }, [questions, observation?.sim_apres, envoyerASim]);
+  // La simulation se tait sur la réponse (`sim_avant`) dès qu'elle est prête, tant que la question n'est pas close.
+  useEffect(() => {
+    if (simPrete && observation?.sim_avant && !obsClose) envoyerASim('set_parameters', observation.sim_avant);
+  }, [simPrete, observation?.sim_avant, obsClose, envoyerASim]);
+  const finirObservation = useCallback(async (tour: number) => {
+    if (tour !== tourObs.current) return;
+    await attendre(1400);
+    if (tour === tourObs.current) fermerObservation();
+  }, [fermerObservation]);
+  /** Le tuteur s'arrête, fait ce qu'il faut dans la simulation, pose la question… et se tait. */
+  const ouvrirObservation = useCallback(() => {
+    const o = observation;
+    if (!o || obsFaite.current) return;
+    obsFaite.current = true;
+    const tour = ++tourObs.current;
+    setPanneau(p => (p === 'questions' || p === 'cahier' || p === 'explication' ? null : p));
+    let delai = 0;
+    (o.gestes || []).forEach(g => {
+      // la même commande déjà prévue dans le pointage : faite une seule fois (ici, ou déjà faite juste avant l'arrêt)
+      const k = pointage.findIndex(p => !!g.commande && p.commande === g.commande && JSON.stringify(p.parametres || {}) === JSON.stringify(g.parametres || {}));
+      if (k >= 0) { const fait = dejaFaits.current.has(k); dejaFaits.current.add(k); if (fait) return; }
+      if (g.commande) { parTuteur(g.commande, g.parametres || {}); demarree.current = true; }
+      else if (g.repere) parTuteur('highlight', { target: g.repere });
+      delai = 1100;
+    });
+    setObs({ etape: 'observe', indices: 0, cartes: false, exclus: [], essai: 1 });
+    ressentir('think');
+    window.setTimeout(() => {
+      if (tour !== tourObs.current || obsRef.current?.etape !== 'observe') return;
+      if (o.enonce_audio) jouer(o.enonce_audio);
+      else void dire(o.enonce_dit || o.enonce);
+    }, delai);
+  }, [observation, pointage, parTuteur, ressentir, jouer, dire]);
+  // Au milieu de la voix : elle s'arrête juste après `apres_mot` (la simulation, elle, continue : l'élève regarde).
+  useEffect(() => {
+    if (!observation || obsFaite.current || tObservation === null || !enLecture || temps < tObservation) return;
+    const audio = audioRef.current;
+    if (audio && !audio.paused) { audio.pause(); obsPause.current = true; }
+    ouvrirObservation();
+  }, [temps, enLecture, tObservation, observation, ouvrirObservation]);
+  // Sans `apres_mot` (ou introuvable) : à la fin de la voix, une fois la simulation prête.
+  useEffect(() => {
+    if (!observation || obsFaite.current || tObservation !== null || !finie) return;
+    if (visuel?.kind === 'simulation' && !simPrete) return;
+    const id = window.setTimeout(ouvrirObservation, 700);
+    return () => window.clearTimeout(id);
+  }, [observation, tObservation, finie, simPrete, visuel?.kind, ouvrirObservation]);
+  /** Un silence de plus : le prochain indice (le tuteur peut montrer un repère), puis les cartes. */
+  const aiderObservation = useCallback(() => {
+    const o = observation, e = obsRef.current;
+    if (!o || !e || e.etape !== 'observe') return;
+    const indices = o.indices || [];
+    if (e.indices < indices.length) {
+      const ind = indices[e.indices];
+      setObs({ ...e, indices: e.indices + 1 });
+      if (ind.repere) parTuteur('highlight', { target: ind.repere });
+      if (ind.audio) jouer(ind.audio); else void dire(ind.dit || ind.texte);
+      return;
+    }
+    if (!e.cartes) { setObs({ ...e, cartes: true }); ressentir('encourage'); }
+  }, [observation, parTuteur, jouer, dire, ressentir]);
+  // Le silence d'observation se compte quand le tuteur ne parle pas et que l'élève ne répond pas.
+  useEffect(() => {
+    if (!observation || !obs || obs.etape !== 'observe') return;
+    if (obs.cartes && obs.indices >= (observation.indices || []).length) return;   // toutes les aides sont là
+    const silence = (observation.silence_s ?? SILENCE_OBSERVATION_S) * 1000;
+    let calme = 0;
+    const id = window.setInterval(() => {
+      const v = voixRef.current;
+      if (v && !v.paused && !v.ended) { calme = 0; return; }
+      calme += 250;
+      if (calme >= silence) { calme = 0; aiderObservation(); }
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [observation, obs?.etape, obs?.indices, obs?.cartes, aiderObservation]); // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * La réponse à la question d'observation (carte ou micro) : juste → ce qu'il fallait voir, puis la voix reprend ;
+   * fausse au 1er essai → un indice (la carte est barrée), il réessaie ; fausse au 2e → la réponse ; incomprise → « redis-le ».
+   */
+  const reagirObservation = useCallback((correct: boolean | null, rep: { carte?: number; texte: string; micro: boolean; retour?: ReactionPreparee }) => {
+    const o = observation, e = obsRef.current;
+    if (!o || !e) return;
+    const tour = tourObs.current;
+    const entendu = rep.micro ? rep.texte : e.entendu;
+    if (correct === null) {
+      ressentir('think');
+      setObs({ ...e, etape: 'observe', entendu, cartes: true, verdict: { correct: null, ecrit: rep.retour?.ecrit || 'Je n’ai pas bien compris : redis-le, ou choisis une carte.' } });
+      void direRetour(rep.retour);
+      return;
+    }
+    const prepare = (i?: number) => (i === undefined ? undefined : o.retours?.[i]);
+    void appelerApi('/course-player/acquis', {
+      slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: 'obs', type: 'observation', enonce: o.enonce.slice(0, 300),
+      reponse: rep.texte.slice(0, 300), tentative: e.essai, correct, reaction_preparee: !rep.micro && !!prepare(rep.carte),
+      methodes: { visuel: visuel?.kind || 'aucun', observation: true, micro: rep.micro, eleve_a_manipule: eleveATouche.current },
+    }).catch(() => { /* le suivi ne doit jamais gêner l'élève */ });
+    if (correct) {
+      // juste : le retour préparé de la bonne carte (voix du cours) passe avant celui du serveur
+      const retour = prepare(o.bonne) || rep.retour;
+      ressentir(e.essai <= 1 ? 'celebrate' : 'encourage');
+      setObs({ ...e, etape: 'fini', entendu, bonneMontree: true, verdict: { correct: true, ecrit: retour?.ecrit || 'Oui, c’est bien ça !' } });
+      void direRetour(retour).then(() => finirObservation(tour));
+      return;
+    }
+    const exclus = rep.carte !== undefined && !e.exclus.includes(rep.carte) ? [...e.exclus, rep.carte] : e.exclus;
+    if (e.essai < 2) {
+      const retour = (rep.micro ? rep.retour : prepare(rep.carte)) || rep.retour;
+      ressentir('wrong');
+      setObs({ ...e, etape: 'observe', essai: 2, exclus, entendu, cartes: true, verdict: { correct: false, ecrit: retour?.ecrit || 'Pas tout à fait : regarde encore la simulation.' } });
+      void direRetour(retour);
+      return;
+    }
+    const solution = o.solution || prepare(o.bonne);
+    ressentir('encourage');
+    setObs({ ...e, etape: 'fini', exclus, entendu, cartes: true, bonneMontree: true, verdict: { correct: false, ecrit: solution?.ecrit || `La réponse : ${o.choix[o.bonne]}.` } });
+    void direRetour(solution).then(() => finirObservation(tour));
+  }, [observation, slide.id, slide.title, deckId, visuel?.kind, ressentir, direRetour, finirObservation]);
+  const repondreCarte = useCallback((i: number) => {
+    const o = observation, e = obsRef.current;
+    if (!o || !e || e.etape !== 'observe' || e.exclus.includes(i)) return;
+    voixExplication.current = false; fileVoix.current = []; voixRef.current?.pause();
+    reagirObservation(i === o.bonne, { carte: i, texte: o.choix[i], micro: false });
+  }, [observation, reagirObservation]);
+  /** Ce que l'élève a dit au micro de réponse : jugé comme RÉPONSE à la question d'observation (jamais une question libre). */
+  const jugerReponseDite = useCallback(async (texte: string, tour: number) => {
+    const o = observation, e = obsRef.current;
+    if (!o || !e) return;
+    setObs({ ...e, etape: 'juge', entendu: texte, erreur: undefined });
+    ressentir('think');
+    try {
+      const r = await appelerApi<{ correct: boolean | null; parole: string; ecrit: string }>('/course-player/answer-reaction', {
+        diapo: { title: slide.title, speech: parole },
+        question: { type: 'qcm', enonce: `Question d'observation (ce que l'élève voit dans la simulation) : ${o.enonce}`, choix: o.choix, bonne: o.bonne },
+        reponse: texte, tentative: e.essai, verdict: null,
+      });
+      if (tour !== tourObs.current) return;
+      setObs(x => x && { ...x, etape: 'observe' });
+      obsRef.current = { ...obsRef.current!, etape: 'observe' };
+      reagirObservation(r.correct, { texte, micro: true, retour: { parole: r.parole, ecrit: r.ecrit } });
+    } catch {
+      if (tour !== tourObs.current) return;
+      setObs(x => x && { ...x, etape: 'observe', cartes: true, erreur: 'Le professeur n’a pas pu juger ta réponse : choisis une carte.' });
+    }
+  }, [observation, slide.title, parole, ressentir, reagirObservation]);
+  const arreterMicroReponse = useCallback(() => {
+    obsAppui.current = false;
+    window.clearTimeout(obsLimite.current);
+    if (obsRec.current?.state === 'recording') obsRec.current.stop();
+  }, []);
+  /** Le micro de RÉPONSE, maintenu comme un talkie-walkie : le tuteur se tait et écoute, la main à l'oreille. */
+  const demarrerMicroReponse = useCallback(async () => {
+    const e = obsRef.current;
+    if (!e || e.etape !== 'observe' || obsAppui.current || obsRec.current?.state === 'recording') return;
+    obsAppui.current = true;
+    const tour = tourObs.current;
+    voixExplication.current = false; fileVoix.current = []; voixRef.current?.pause();
+    setObs(x => x && { ...x, etape: 'ecoute', erreur: undefined });
+    const revenir = (erreur: string) => setObs(x => x && { ...x, etape: 'observe', erreur });
+    try {
+      const flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!obsAppui.current || tour !== tourObs.current) {
+        flux.getTracks().forEach(t => t.stop());
+        if (tour === tourObs.current) revenir('Garde le bouton appuyé pendant que tu parles, puis relâche.');
+        return;
+      }
+      const rec = new MediaRecorder(flux);
+      const morceaux: Blob[] = [];
+      rec.ondataavailable = ev => { if (ev.data.size) morceaux.push(ev.data); };
+      rec.onstop = async () => {
+        flux.getTracks().forEach(t => t.stop());
+        if (tour !== tourObs.current) return;
+        if (performance.now() - obsDebut.current < 500) { revenir('Garde le bouton appuyé pendant que tu parles, puis relâche.'); return; }
+        setObs(x => x && { ...x, etape: 'transcrit' });
+        const blob = new Blob(morceaux, { type: rec.mimeType || 'audio/webm' });
+        const b64 = await new Promise<string>(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(blob); });
+        try {
+          const { texte } = await appelerApi<{ texte: string }>('/course-player/transcrire', { audio_b64: b64 });
+          if (tour !== tourObs.current) return;
+          if (!texte?.trim()) { revenir('Je n’ai rien entendu : réessaie, ou choisis une carte.'); return; }
+          obsRef.current = { ...obsRef.current!, etape: 'observe' };
+          void jugerReponseDite(texte.trim(), tour);
+        } catch (err) {
+          if (tour !== tourObs.current) return;
+          const m = (err as Error).message;
+          setObs(x => x && { ...x, etape: 'observe', cartes: true, erreur: /^\d+$/.test(m) ? 'La transcription n’a pas abouti : choisis une carte.' : m });
+        }
+      };
+      rec.start(); obsRec.current = rec; obsDebut.current = performance.now();
+      obsLimite.current = window.setTimeout(arreterMicroReponse, 30_000);   // une réponse courte : 30 s au plus
+    } catch {
+      obsAppui.current = false;
+      setObs(x => x && { ...x, etape: 'observe', cartes: true, erreur: 'Le micro n’est pas disponible : choisis une carte.' });
+    }
+  }, [arreterMicroReponse, jugerReponseDite]);
 
   // Pause de la voix = pause de la simulation : l'élève ne rate rien.
   const basculer = useCallback(() => {
     const audio = audioRef.current;
     if (predictionEnCours) { setPanneau('questions'); return; }   // la voix attend la prédiction
+    if (obsRef.current) { fermerObservation(); return; }          // ▶ pendant une observation : la voix reprend
     if (!audio) return;
     if (audio.paused) { void audio.play(); if (demarree.current) envoyerASim('resume'); }
     else { audio.pause(); if (demarree.current) envoyerASim('pause'); }
-  }, [envoyerASim, predictionEnCours]);
+  }, [envoyerASim, predictionEnCours, fermerObservation]);
 
   const reecouter = useCallback(() => {
     const audio = audioRef.current;
@@ -1410,7 +1672,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     return e.quoi === 'diapo' && finDeBloc && onFermerBloc ? { quoi: 'bloc', pret: e.pret } : e;
   })();
   function etapeSuiteDeLaDiapo(): EtapeSuite {
-    const occupe = !!reaction || !!tableauProf || panneau === 'question_eleve';
+    const occupe = !!reaction || !!tableauProf || panneau === 'question_eleve' || !!obs;
     const pret = (e: EtapeSuite): EtapeSuite => ({ ...e, pret: e.pret && !occupe });
     if (predictionEnCours) return pret({ quoi: 'voix', pret: predictionRepondue === slide.id });
     if (cycle?.phase === 'attente') return { quoi: 'rien', pret: false };
@@ -1433,6 +1695,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }
   const faireSuite = () => {
     setRelance(false);
+    if (obsRef.current) { fermerObservation(); return; }   // « Suite → » pendant une observation : elle est passée
     switch (etapeSuite.quoi) {
       case 'voix': lancerVoixApresPrediction(); return;
       case 'ouvrir': setPanneau('questions'); return;
@@ -1531,9 +1794,11 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           // La bouche du tuteur suit le SON de la piste (analyseur partagé), pas seulement l'état « il parle ».
           onPlay={event => { setEnLecture(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }}
           onPause={() => setEnLecture(false)}
+          // en plus de chaque image : un onglet caché n'a plus d'images, et l'arrêt d'une question d'observation ne doit pas être dépassé
+          onTimeUpdate={event => setTemps(event.currentTarget.currentTime)}
           onLoadedMetadata={event => { const d = event.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDuree(d); }}
           // la bulle du cahier s'ouvre à la demande ; les questions, elles, s'affichent tout de suite
-          onEnded={() => { setEnLecture(false); setFinie(true); iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*'); if (conc.acquis) direLesLacunes(); if (questions.length && !reactionRef.current) setPanneau('questions'); }}
+          onEnded={() => { setEnLecture(false); setFinie(true); iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*'); if (conc.acquis) direLesLacunes(); if (questions.length && !reactionRef.current && !(observation && !obsFaite.current)) setPanneau('questions'); }}
         />
       )}
       <audio ref={voixRef} onPlay={event => { setVoixParle(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }} onPause={() => setVoixParle(false)}
@@ -1545,8 +1810,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       {/* ── Le titre et le sous-titre, seulement ── */}
       <header className="shrink-0 px-6 pt-2 pb-1 text-center" style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
         <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
+        {/* pendant une question d'observation, le sous-titre se tait : il dit souvent la réponse (« la lumière s'étale ») */}
         {contenu.lead && (
-          <p className="text-sm leading-snug md:text-base text-white/70" style={{ fontFamily: CRAIE }}>{contenu.lead}</p>
+          <p className="text-sm leading-snug md:text-base text-white/70 transition-opacity" style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}>{contenu.lead}</p>
         )}
       </header>
 
@@ -1614,6 +1880,12 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               <img src={visuel.url} alt={visuel.alt || contenu.alt || ''} className="max-h-full max-w-full object-contain" />
             )}
           </div>
+        )}
+
+        {/* ── La question d'observation : sous la figure, sans la couvrir ; ses cartes et son micro dans la même bande ── */}
+        {obs && observation && (
+          <BandeObservation o={observation} e={obs} etroit={etroit} onCarte={repondreCarte} onCartes={() => setObs(x => x && { ...x, cartes: true })}
+            onMicro={() => void demarrerMicroReponse()} onMicroFin={arreterMicroReponse} onPasser={fermerObservation} />
         )}
 
         {/* ── La question de l'élève expliquée au tableau ── */}
@@ -1898,7 +2170,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         </div>
       </footer>
 
-      {tuteur3D && <AIAvatar isSpeaking={enLecture || voixParle} isProcessing={reaction?.phase === 'reflechit' || cycle?.phase === 'attente'} labControl={labControl} emotion={emotion} discret />}
+      {tuteur3D && <AIAvatar isSpeaking={enLecture || voixParle} isProcessing={reaction?.phase === 'reflechit' || cycle?.phase === 'attente'} labControl={labControl} emotion={emotion} discret
+        isListening={obs?.etape === 'ecoute'} mainOreille={obs?.etape === 'ecoute'} />}
     </div>
   );
 }
@@ -1981,7 +2254,7 @@ function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, rep
   /** La question montrée : tenue par le tableau, elle ne change que par l'élève (« Suite → », points, flèches). */
   index: number; onIndex: (i: number) => void;
   diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
-  jouer: (url: string) => void; reponses?: SlideConcentration['reponses']; onReponse?: (r: ReponseNotee) => void;
+  jouer: (url: string, secours?: string) => void; reponses?: SlideConcentration['reponses']; onReponse?: (r: ReponseNotee) => void;
   onFinie?: (cle: string, correct: boolean, fraiche: boolean, apresDemo?: boolean) => void; essaisMax?: number;
   /** l'élève passe la question (absent : pas de bouton « Passer », ex. la question jumelle d'une reprise) ; `fraiche` :
    *  à l'instant (false : passage retrouvé en mémoire) */
@@ -2040,7 +2313,7 @@ function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, rep
 function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onReponse, onFinie, essaisMax = 2, actif = true, contexte, lireDemo, preparerDemo, attendreVoix,
   lireEnonce, arreterEnonce, slideId, onPasser }: {
   q: QuestionDiapo; diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
-  jouer: (url: string) => void; preparees?: Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>;
+  jouer: (url: string, secours?: string) => void; preparees?: Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>;
   compact?: boolean; onReponse?: (r: ReponseNotee) => void;
   /** Appelé une fois quand la question est terminée ; `fraiche` : terminée à l'instant (pas retrouvée en mémoire) ;
    *  `apresDemo` : la démonstration vient d'être écrite et dite. */
@@ -2159,7 +2432,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       onReponse?.({ cle: q.cle, type: q.type, enonce: q.enonce, reponse, tentative, correct: verdict, preparee: true });
       setPris(indice);
       setRetour({ correct: verdict, ecrit: prete.ecrit });
-      if (prete.audio) { jouer(prete.audio); voixReaction.current = Promise.resolve(); } else voixReaction.current = dire(prete.parole);
+      if (prete.audio) { jouer(prete.audio, prete.parole); voixReaction.current = Promise.resolve(); } else voixReaction.current = dire(prete.parole);
       if (verdict === false) { setExclus(e => [...e, indice!]); setTentative(t => t + 1); }
       return;
     }
@@ -2510,6 +2783,81 @@ function QuestionSurResultat({ reaction, vu, onRepondre, contexte }: {
 }
 
 /** « 🔎 Ton résultat » : clignote tant que l'élève n'a pas demandé l'explication de son nouveau résultat. */
+/**
+ * La bande de la question d'observation (14 novembre 2026), sous la simulation : la question, le micro de RÉPONSE
+ * (distinct du micro des questions libres, visible seulement ici), les indices au fil des silences, puis trois cartes
+ * (ou Vrai / Faux) dans la même bande. Rien ne couvre la figure : l'élève doit pouvoir regarder.
+ */
+function BandeObservation({ o, e, etroit, onCarte, onCartes, onMicro, onMicroFin, onPasser }: {
+  o: QuestionObservation; e: EtatObservation; etroit: boolean;
+  onCarte: (i: number) => void; onCartes: () => void; onMicro: () => void; onMicroFin: () => void; onPasser: () => void;
+}) {
+  const indices = (o.indices || []).slice(0, e.indices);
+  const occupe = e.etape === 'transcrit' || e.etape === 'juge' || e.etape === 'fini';
+  const v = e.verdict;
+  return (
+    <section data-observation className="question-apparait relative z-20 w-full max-w-4xl shrink-0 rounded-2xl border-2 border-amber-200/45 bg-[#0f2219]/95 px-4 py-2.5 shadow-2xl"
+      style={{ fontFamily: CRAIE }}>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-200/80">👀 Observe</div>
+          <p className="text-lg leading-snug text-amber-100 md:text-xl"><Formule t={o.enonce} /></p>
+        </div>
+        <button
+          type="button" data-micro-reponse disabled={occupe}
+          // maintenir pour répondre, relâcher pour finir (souris, doigt, ou barre d'espace)
+          onPointerDown={ev => { ev.preventDefault(); ev.currentTarget.setPointerCapture?.(ev.pointerId); onMicro(); }}
+          onPointerUp={onMicroFin} onPointerCancel={onMicroFin} onLostPointerCapture={onMicroFin}
+          onKeyDown={ev => { if ((ev.key === ' ' || ev.key === 'Enter') && !ev.repeat) { ev.preventDefault(); onMicro(); } }}
+          onKeyUp={ev => { if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); onMicroFin(); } }}
+          onContextMenu={ev => ev.preventDefault()}
+          style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+          title="Maintiens le bouton et dis ta réponse"
+          className={`shrink-0 rounded-full px-4 py-2.5 text-base font-semibold transition-colors disabled:opacity-40 ${e.etape === 'ecoute'
+            ? 'bg-rose-500/60 ring-2 ring-rose-200 animate-pulse' : 'bg-emerald-500/30 ring-1 ring-emerald-300/60 hover:bg-emerald-500/45'}`}>
+          {e.etape === 'ecoute' ? '● Je t’écoute… relâche' : etroit ? '🎙️ Réponds' : '🎙️ Maintiens pour répondre'}
+        </button>
+        {e.etape !== 'fini' && (
+          <button type="button" onClick={onPasser} className="shrink-0 self-end text-xs text-white/35 hover:text-white/80" title="Passer : la voix reprend">Passer ⏭</button>
+        )}
+      </div>
+      {/* les indices se remplacent : seul le dernier reste écrit (la figure garde sa place) */}
+      {indices.length > 0 && !v?.correct && (
+        <p key={indices.length} className="craie-ecrit mt-0.5 text-lg leading-snug text-cyan-200">
+          💡 <Formule t={indices[indices.length - 1].texte} />{(o.indices || []).length > 1 && <span className="ml-2 text-xs text-cyan-200/50">{indices.length}/{(o.indices || []).length}</span>}
+        </p>
+      )}
+      {e.etape === 'observe' && !v && !e.cartes && (
+        <p className="mt-0.5 text-sm text-white/55">Regarde bien la simulation, prends ton temps…
+          <button type="button" onClick={onCartes} className="ml-2 underline decoration-dotted hover:text-white">voir des propositions</button></p>
+      )}
+      {e.etape === 'transcrit' && <p className="mt-0.5 animate-pulse text-sm text-sky-200">✍️ J’écris ce que tu as dit…</p>}
+      {e.etape === 'juge' && <p dir="auto" className="mt-0.5 animate-pulse text-sm text-amber-200">🎙️ « {e.entendu} » — le professeur réfléchit…</p>}
+      {v && (
+        <p className={`craie-ecrit mt-0.5 text-lg leading-snug ${v.correct ? 'text-emerald-300' : v.correct === false ? 'text-rose-200' : 'text-amber-200'}`}>
+          {e.entendu && e.etape !== 'juge' && <span dir="auto" className="mr-2 text-sm text-sky-200/80">🎙️ « {e.entendu} »</span>}
+          {v.correct ? '✔ ' : v.correct === false ? '✘ ' : '? '}<Formule t={v.ecrit} />
+        </p>
+      )}
+      {e.erreur && <p className="mt-1 text-sm text-rose-200">{e.erreur}</p>}
+      {e.cartes && (
+        <div className="question-apparait mt-1.5 grid gap-2" style={{ gridTemplateColumns: `repeat(${etroit && o.choix.length > 2 ? 1 : o.choix.length}, minmax(0, 1fr))` }}>
+          {o.choix.map((c, i) => {
+            const barree = e.exclus.includes(i), bonne = e.bonneMontree && i === o.bonne;
+            return (
+              <button key={i} type="button" data-carte={i} onClick={() => onCarte(i)} disabled={barree || e.etape !== 'observe'}
+                className={`rounded-xl border px-3 py-1.5 text-left text-lg leading-snug transition-colors ${bonne ? 'border-emerald-300 bg-emerald-500/25 text-emerald-100'
+                  : barree ? 'border-rose-300/30 bg-rose-500/10 text-white/40 line-through' : 'border-white/25 bg-white/5 hover:border-amber-200/70 hover:bg-white/10'} disabled:cursor-default`}>
+                <Formule t={c} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function BoutonResultat({ onClick, className = '' }: { onClick: () => void; className?: string }) {
   return (
     <button onClick={onClick} aria-label="Voir ton résultat expliqué par le professeur"
