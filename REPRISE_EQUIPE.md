@@ -58,6 +58,68 @@ Quatre cours de chimie (ch10–ch13) ajoutés au lien libre (réactions et énon
 **Relancer le lot de voix** : arrêter (`pkill -f "[l]anceur_compte2.py"`), puis `bash attendre_compte2.sh` (attend que le
 kernel Kaggle s'éteigne : 2 sessions GPU au plus, sinon le push est refusé et rien ne se fait).
 
+## 3 quater. À reprendre (14 novembre 2026, soir) — cours réécrits en attente de leurs voix
+
+**Ce qui est en ligne** (`main` déployé, lien libre reconstruit sur le serveur) :
+- animations manipulables au lieu des tableaux (règle 28) ;
+- objets peints en couleur (32) ;
+- une seule voix à la fois (29) ;
+- questions d'observation avec micro et cartes (30), et leurs 28 voix ;
+- cahier avec dessins (31) et ses 12 voix ;
+- tableaux de données nés d'une animation (35) ;
+- lien libre remis à zéro à chaque visite.
+
+**Ce qui attend : les 23 cours réécrits selon les règles 33 et 34** (une chose à la fois, départ de zéro).
+- Ils sont dans `backend/data/courses/en_attente/<deck>.json`, un dossier que le site ne sert pas.
+- Les cours en ligne n'ont pas changé.
+- Audit et listes de voix : `docs/audit-rythme/README.md` et un fichier par matière.
+- Griffith (SVT ch3) : le principe, puis les expériences 1, 2 et 3 une par une, la 4ᵉ trouvée par l'élève (question d'observation), puis le bilan des quatre expériences sur un seul écran (`ig_t1f_bilan`).
+
+### Voix (lot du VPS, compte Kaggle `ferdaous04` seul)
+- Le compte 2 (`zouhairessaihi`) n'a plus de quota jusqu'au **21 novembre**, et il reste environ 5,9 h de GPU sur `ferdaous04` cette semaine.
+- **Dossiers du lot** : `/srv/corpus_v4/voix_lot/att_<deck>/` ne contient que les pistes sans voix des cours en attente (891 pistes au départ). Les dossiers `<deck>/` gardent les réactions des cours en ligne.
+- **Ordre de la file** (relance du 14/11 à 18 h 15) : `VOIX_D_ABORD=att_svt_ch3,svt_ch1,svt_ch2,svt_ch3,att_` (script `lancer_compte1_svt3.sh`). Le tri du lot suit l'ordre de la liste.
+- **Suivre** : `ssh moalim-vps tail -f /srv/corpus_v4/voix_lot/voix_compte1.log`.
+- **Compter ce qui reste** : `scp scripts/voix/compter_restant_vps.py moalim-vps:/tmp/ && ssh moalim-vps python3 /tmp/compter_restant_vps.py`.
+- **Relancer le lot** :
+  1. `pkill -f "[v]oix_bodi_lot_nouveau.py"` ;
+  2. attendre que `kaggle kernels status ferdaous04/academy-tts-essai` ne soit plus RUNNING ;
+  3. `bash lancer_compte1_svt3.sh`, qui charge `/etc/moalim/backend.env`.
+
+  Ne jamais relancer pendant que le kernel tourne : le push est refusé et le lot finit « FIN 0 pistes ».
+
+### Mettre un cours réécrit en ligne (un cours à la fois, SVT ch3 d'abord)
+1. **Poser ses voix** : `python -X utf8 scripts/voix/attente_poser.py 12 <deck>`.
+   - Le script reprend le MP3 du cours en ligne quand le texte n'a pas changé, et ne convertit que les voix neuves en `*_v12.mp3`.
+   - Il lit les WAV dans `att_<deck>/`, puis `<deck>/`, puis `_observations/`, et dit ce qui manque.
+   - Il faut **0 diapo manquante**. Une réaction manquante n'empêche pas la mise en ligne : la voix en direct ou l'écrit prend le relais.
+2. **Vérifier dans le lecteur**, avec le panneau du navigateur visible :
+   - copier la version en attente à la place du cours en ligne, en local seulement ;
+   - ouvrir `http://localhost:5173/cours-ondes.html?cours=<deck>&diapo=<id>` ;
+   - pour Griffith : chaque expérience à son rythme, la question avant le résultat de la 4ᵉ, puis le bilan.
+3. **Mettre en ligne** : remplacer `backend/data/courses/<deck>.json` par la copie en attente, puis la supprimer de `en_attente/`. Commiter le cours et ses `*_v12.mp3`.
+4. **Déployer et reconstruire le lien libre, sur le serveur** :
+   - `cd /opt/moalim && bash deploy/deploy-ubuntu.sh` ;
+   - `python3 scripts/publier_cours_ondes.py --sans-envoi` ;
+   - puis remplacer `/var/www/moalim/cours-ondes` par `/tmp/moalim-cours-ondes`.
+5. **Recommencer pour les autres cours** au fil du lot. `phys_ch1_waves_exemple` est le seul cours servi aux élèves connectés : le vérifier en dernier, avec le plus de soin.
+
+### Pièges (vus aujourd'hui)
+- **Le `main` local est en retard** et plusieurs sessions poussent. Commiter avec un index temporaire construit sur le SHA d'`origin/main`, en n'ajoutant que ses fichiers. Pas de `--force`.
+- **Ne jamais commiter** :
+  - `deploy/backend.env` : il contient des secrets ;
+  - `backend/app/services/reponse_eleve.py` et son test : ce sont de vieilles copies locales ;
+  - les copies locales plus anciennes que `main` (comparer avant).
+- **Ne pas publier le lien libre depuis le PC** : le disque local contient du travail en cours. Le construire sur le serveur, à partir de ce qui est déployé.
+- **Disque C: presque plein** (2 à 4 Go libres) : pas de doublons de MP3, et nettoyer les dossiers temporaires.
+- **Restes signalés dans les audits** (non traités) :
+  - `ln_e1` donne encore sa conclusion ;
+  - le réactif limitant est utilisé en ch9 sans être enseigné ;
+  - trois blocs du ch4 de physique n'ont pas de « À toi » ;
+  - quelques sujets du national sont encore longs ;
+  - la voix de `wx_o1_bouee` parle encore de prédiction ;
+  - des réactions écrites à la main sont à faire relire par un professeur.
+
 ## 4. Ce qui attend une décision
 - Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
